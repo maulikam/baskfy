@@ -1,0 +1,17 @@
+# Pinned to the versions this project is verified against. Unpinned ranges let
+# Starlette 1.6 land mid-session and broke the webview with a 500; a trading
+# system should not change behaviour because a transitive release shipped.
+# Refresh deliberately:  uv pip install -U <pkg>  then re-pin.
+fastapi==0.141.1
+uvicorn[standard]==0.52.3
+jinja2==3.1.6
+python-multipart==0.0.32
+pandas==3.0.5
+numpy==2.5.2
+kiteconnect==5.2.1
+python-dotenv==1.2.2
+orjson==3.11.9
+uvloop==0.22.1; sys_platform != 'win32'
+pytest==9.1.1
+# future engines (uncomment when enabling):
+# py_vollib>=1.0.1   # option greeks

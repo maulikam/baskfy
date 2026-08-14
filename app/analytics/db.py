@@ -23,7 +23,7 @@ from typing import Iterator, Sequence
 
 from .. import config as C
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # --- schema ---------------------------------------------------------------------------
 # Column sets are fixed by the analytics spec; extra *indexes* are fine, extra columns are
@@ -200,6 +200,29 @@ _MIGRATIONS: dict[int, Sequence[str]] = {
            )""",
         """CREATE INDEX IF NOT EXISTS ix_book_snapshots_week
                ON regime_book_snapshots(scheduled_week_end)""",
+    ),
+    # --- runtime-editable settings ------------------------------------------------------
+    3: (
+        # Overrides that beat the environment at runtime. Resolution is
+        # DB -> env -> code default, so .env stays the bootstrap and this is the live layer.
+        """CREATE TABLE IF NOT EXISTS settings(
+               key        TEXT PRIMARY KEY,
+               value      TEXT NOT NULL,
+               updated_at TEXT NOT NULL,
+               note       TEXT
+           )""",
+        # Every change to a live trading parameter is recorded. Without this you cannot
+        # answer "what was the stop multiple when that trade was placed?".
+        """CREATE TABLE IF NOT EXISTS settings_audit(
+               id         INTEGER PRIMARY KEY AUTOINCREMENT,
+               key        TEXT NOT NULL,
+               old_value  TEXT,
+               new_value  TEXT NOT NULL,
+               changed_at TEXT NOT NULL,
+               note       TEXT
+           )""",
+        """CREATE INDEX IF NOT EXISTS ix_settings_audit_key
+               ON settings_audit(key, changed_at)""",
     ),
 }
 

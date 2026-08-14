@@ -111,7 +111,7 @@ def test_migration_v2_creates_every_regime_table(conn):
         "SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"index_series", "regime_evaluations", "regime_exposure",
             "breadth_readings", "regime_book_snapshots"} <= names
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == db.SCHEMA_VERSION
 
 
 def test_index_series_columns_match_spec(conn):
@@ -123,8 +123,8 @@ def test_index_series_columns_match_spec(conn):
 def test_migration_is_idempotent_and_preserves_v1_data(conn):
     db.save_snapshot(conn, {"date": "2026-01-01", "nav": 1e6, "invested": 1e6,
                             "cash": 0.0, "holdings_json": "{}"})
-    assert db.migrate(conn) == 2
-    assert db.migrate(conn) == 2
+    assert db.migrate(conn) == db.SCHEMA_VERSION
+    assert db.migrate(conn) == db.SCHEMA_VERSION
     assert len(db.snapshot_series(conn)) == 1
 
 

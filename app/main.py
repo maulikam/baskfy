@@ -30,6 +30,26 @@ except Exception:
 app = FastAPI(title="Kite Momentum Rebalancer", default_response_class=JSONResponse)
 templates = Jinja2Templates(directory="app/templates")
 
+def _apply_stored_settings() -> None:
+    """Push DB overrides onto the config module at startup.
+
+    Without this a restart would silently revert every runtime change to whatever .env
+    says, which is the opposite of what a persisted setting means.
+    """
+    try:
+        from .analytics import db as _db, settings as _st
+        with _db.connect() as conn:
+            _db.migrate(conn)
+            applied = _st.apply_to_config(conn)
+        if applied:
+            logging.info("applied %d stored setting override(s): %s",
+                         len(applied), ", ".join(sorted(applied)))
+    except Exception as exc:
+        logging.warning("could not apply stored settings: %s", exc)
+
+
+_apply_stored_settings()
+
 PLANS: dict[str, dict] = {}          # plan_id -> plan (in-memory, session-scoped)
 _kite: Kite | None = None
 _gateway: OrderGateway | None = None
@@ -240,6 +260,72 @@ def regime_data():
     with _db.connect() as conn:
         _db.migrate(conn)
         return JSONResponse(_rv.build(conn))
+
+
+# --- settings ---------------------------------------------------------------------------
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request, saved: str = "", error: str = ""):
+    from .analytics import db as _db, settings as _st
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        ctx = {"eff": _st.effective(conn), "groups": _st.GROUPS,
+               "locked": _st.locked_view(), "history": _st.history(conn, 25),
+               "saved": saved, "error": error, "dry_run": C.DRY_RUN}
+    return templates.TemplateResponse(request, "settings.html", ctx)
+
+
+@app.post("/settings")
+async def settings_save(request: Request):
+    """Validate, persist, audit and apply. Nothing is written unless everything passes."""
+    from .analytics import db as _db, settings as _st
+    form = await request.form()
+    note = str(form.get("note") or "").strip()
+    updates = {k: v for k, v in form.items()
+               if k in _st.BY_KEY and k not in _st.SECRET_KEYS}
+    # An unchecked box is absent from a form post, so absence means false — but ONLY for
+    # the checkboxes this form actually rendered. Without the marker a partial API post
+    # would silently switch every boolean off.
+    rendered = str(form.get("_form_bools") or "")
+    for key in (k.strip() for k in rendered.split(",") if k.strip()):
+        spec = _st.BY_KEY.get(key)
+        if spec is not None and spec.kind == "bool" and key not in updates:
+            updates[key] = "false"
+    try:
+        with _db.connect() as conn:
+            _db.migrate(conn)
+            res = _st.save(conn, updates, note=note)
+        msg = (f"{len(res['changed'])} changed: {', '.join(res['changed'])}"
+               if res["changed"] else "no changes")
+        return RedirectResponse(f"/settings?saved={msg}", status_code=303)
+    except _st.SettingsError as exc:
+        return RedirectResponse(f"/settings?error={exc}", status_code=303)
+
+
+@app.post("/settings/reset")
+async def settings_reset(request: Request):
+    from .analytics import db as _db, settings as _st
+    form = await request.form()
+    keys = [k for k in form.getlist("key")] or None
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        res = _st.reset(conn, keys)
+    return RedirectResponse(
+        f"/settings?saved=reset {len(res['reset'])} override(s)", status_code=303)
+
+
+@app.get("/settings/data")
+def settings_data():
+    from .analytics import db as _db, settings as _st
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        eff = _st.effective(conn)
+        return JSONResponse({
+            "settings": {k: {"value": v["text"], "source": v["source"],
+                             "group": v["spec"].group, "label": v["spec"].label}
+                         for k, v in eff.items()},
+            "locked": [{"key": r["key"], "value": str(r["value"])}
+                       for r in _st.locked_view()],
+            "history": _st.history(conn, 25)})
 
 
 @app.get("/status")

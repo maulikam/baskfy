@@ -30,7 +30,9 @@ from . import db
 
 log = logging.getLogger("index_cache")
 
-INSTRUMENT_CACHE = "data/.instruments_indices.json"
+# Every instrument. benchmark.py keeps a separate, index-only cache: sharing one
+# filename let whichever module ran last redefine what the other read.
+INSTRUMENT_CACHE = "data/.instruments_all.json"
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 MARKET_CLOSE = dt.time(15, 30)
 # Kite caps a daily-candle request; walk long histories in chunks well inside the limit.

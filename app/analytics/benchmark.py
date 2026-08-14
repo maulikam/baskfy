@@ -39,6 +39,7 @@ from . import db
 
 log = logging.getLogger("benchmark")
 
+# Index-segment rows only. Distinct from index_cache.INSTRUMENT_CACHE.
 INSTRUMENT_CACHE = "data/.instruments_indices.json"
 INDEX_SEGMENTS = ("INDICES", "NSE-INDICES")
 
@@ -68,7 +69,11 @@ async def _index_dump(kite: Kite, limits: KiteLimits, *, refresh: bool = False) 
         try:
             blob = json.load(open(INSTRUMENT_CACHE))
             if blob.get("fetched") == today:
-                return blob["rows"]
+                # Filter on read as well as on write. A cache written by something else
+                # would otherwise put 100k bonds and options into index resolution, where
+                # a partial match could pick the wrong instrument.
+                return [r for r in blob["rows"]
+                        if str(r.get("segment", "")).upper() in INDEX_SEGMENTS]
         except Exception:
             pass
 
@@ -102,19 +107,34 @@ async def resolve_index_token(index_name: str, kite: Kite | None = None) -> dict
     """Resolve a tradingsymbol (or alias) to its instrument token against the live dump."""
     k = kite or Kite()
     rows = await _index_dump(k, KiteLimits())
-    wanted = COMMON_INDICES.get(index_name.lower().replace(" ", ""), index_name).upper()
 
-    exact = [r for r in rows if r["tradingsymbol"].upper() == wanted]
+    # Accept the name, this module's convenience aliases, AND the aliases the regime
+    # config already carries. Two independent alias tables meant a symbol index_cache
+    # could resolve was invisible here: MOMENTM is not an abbreviation any fuzzy match
+    # derives from MOMENTUM.
+    accepted = {index_name.strip().upper()}
+    mapped = COMMON_INDICES.get(index_name.lower().replace(" ", ""))
+    if mapped:
+        accepted.add(mapped.upper())
+    try:
+        for alias in C.regime_config().index_aliases.get(index_name, ()):
+            accepted.add(alias.strip().upper())
+    except Exception:
+        pass
+
+    exact = [r for r in rows if r["tradingsymbol"].upper() in accepted]
     if exact:
         return exact[0]
 
-    # tolerate spacing/abbreviation drift before giving up
-    squashed = wanted.replace(" ", "")
-    loose = [r for r in rows if r["tradingsymbol"].upper().replace(" ", "") == squashed]
+    # tolerate spacing drift before giving up
+    squashed = {a.replace(" ", "") for a in accepted}
+    loose = [r for r in rows if r["tradingsymbol"].upper().replace(" ", "") in squashed]
     if loose:
         log.warning("index %r matched loosely as %r", index_name, loose[0]["tradingsymbol"])
         return loose[0]
+    squashed = next(iter(sorted(squashed)))
 
+    rows = [r for r in rows if str(r.get("segment", "")).upper() in INDEX_SEGMENTS]
     partial = [r for r in rows if squashed in r["tradingsymbol"].upper().replace(" ", "")]
     if len(partial) == 1:
         log.warning("index %r matched partially as %r", index_name, partial[0]["tradingsymbol"])

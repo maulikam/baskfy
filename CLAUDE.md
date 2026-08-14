@@ -49,6 +49,17 @@ GTT stop-losses placed for every position.
    held rejects become capped "runner" positions or exits per config.
 7. SGB / instruments in `config.EXCLUDED_SYMBOLS` are untouchable.
 
+## Daily routine
+`python -m scripts.daily` collects everything for the day: index history, benchmark PRI,
+the EOD snapshot, breadth (with `--scan`), and an observe-mode regime preview. Every step
+is idempotent, so re-running changes nothing, and one failure never stops the rest.
+`--check` reports state without touching anything.
+
+A missed session is NOT recoverable: kc.margins() has no history, so a backfilled snapshot
+cannot know that day's cash, and breadth cannot be rebuilt from a scan you no longer have.
+Kite tokens expire daily with no refresh, so a scheduled run needs you to have logged in
+first — see scripts/com.momentum.daily.plist.example.
+
 ## Commands
 - Run dev server: `uvicorn app.main:app --reload --port 8420`
 - Test scoring on a CSV: `python -m app.scoring data/uploads/scan.csv`

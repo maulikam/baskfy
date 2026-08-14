@@ -755,3 +755,50 @@ def test_env_example_keeps_the_safety_defaults_safe():
                           ("OPTIONS_ENABLED", "false")):
         m = re.search(rf"^{key}=(\S+)", text, re.M)
         assert m and m.group(1) == expected, f"{key} default is not {expected}"
+
+
+# =====================================================================================
+# instrument cache and alias resolution
+# =====================================================================================
+def test_the_two_instrument_caches_use_different_files():
+    """They hold different things: every instrument vs the index segment only. Sharing a
+    filename let whichever module ran last redefine what the other read, and index
+    resolution then searched 100k bonds and options."""
+    from app.analytics import benchmark as BM
+    assert IC.INSTRUMENT_CACHE != BM.INSTRUMENT_CACHE
+
+
+def test_benchmark_cache_is_filtered_on_read(tmp_path, monkeypatch):
+    """A cache written by something else must not leak non-indices into resolution."""
+    import asyncio
+    import json as _json
+    from app.analytics import benchmark as BM
+
+    cache = tmp_path / "idx.json"
+    cache.write_text(_json.dumps({
+        "fetched": dt.date.today().isoformat(),
+        "rows": [{"tradingsymbol": "NIFTY 50", "instrument_token": 1, "segment": "INDICES",
+                  "exchange": "NSE", "name": ""},
+                 {"tradingsymbol": "BHARATBOND-APR30", "instrument_token": 2,
+                  "segment": "BSE", "exchange": "BSE", "name": ""}]}))
+    monkeypatch.setattr(BM, "INSTRUMENT_CACHE", str(cache))
+    rows = asyncio.run(BM._index_dump(FakeKite(FakeKC()), IC.KiteLimits()))
+    assert [r["tradingsymbol"] for r in rows] == ["NIFTY 50"]
+
+
+def test_benchmark_resolution_honours_the_regime_config_aliases(monkeypatch, tmp_path):
+    """MOMENTM is not an abbreviation any fuzzy match derives from MOMENTUM, so the
+    configured alias is the only route. Two separate alias tables hid it."""
+    import asyncio
+    import json as _json
+    from app.analytics import benchmark as BM
+
+    cache = tmp_path / "idx.json"
+    cache.write_text(_json.dumps({
+        "fetched": dt.date.today().isoformat(),
+        "rows": [{"tradingsymbol": "NIFTY500MOMENTM50", "instrument_token": 409609,
+                  "segment": "INDICES", "exchange": "NSE", "name": ""}]}))
+    monkeypatch.setattr(BM, "INSTRUMENT_CACHE", str(cache))
+    got = asyncio.run(BM.resolve_index_token("NIFTY 500 MOMENTUM 50",
+                                             FakeKite(FakeKC())))
+    assert got["instrument_token"] == 409609

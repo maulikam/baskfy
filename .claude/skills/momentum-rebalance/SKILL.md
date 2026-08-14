@@ -40,8 +40,10 @@ Winsorise all return & Sharpe inputs at 1st/99th pct first.
 (no fresh full-size entries) · >78 wait or tranche · >82 high-risk, trim winners.
 
 ## Portfolio construction
-- Positions: dynamic, typically 15–23 at ₹1cr scale. Max single 12.5%, min 4%
-  (exceptions: deliberate half-size for <18-month listings; "runner" positions below).
+- Positions: dynamic, 12–15 at ₹1cr scale. Max single 15%, min 6% (changed 2026-08-14
+  from 15–23 / 12.5% / 4%; exceptions: deliberate half-size for <18-month listings and
+  provisional R2 entries, "runner" positions below).
+  Under the regime overlay these weights are % of the ACTIVE EQUITY SLEEVE, not of NAV.
 - Cluster cap 25% (pharma/CDMO, EMS, auto-comp, cables/pipes, financials, chem, consumer…).
 - **Runners**: held names that fail filters (e.g. circuit-prone) or are parabolic winners
   are capped at fixed rupee value, never added to, trailed with hard stops.

@@ -23,6 +23,10 @@ GTT stop-losses placed for every position.
 - `app/rebalance.py` — target weights, deltas vs holdings, cash reconciliation, stops
 - `app/kite_client.py` — Kite Connect wrapper (auth, holdings incl. pledged qty, margins, LTP, orders, GTT)
 - `app/config.py` — every strategy knob (filters, weights, caps). Change behaviour HERE, not in code.
+- `app/analytics/` — SQLite persistence (data/portfolio.db), EOD snapshots, metrics,
+  PRI/TRI benchmarks, regime adapters/store/view. Read-only w.r.t. the market.
+- `app/core/regime*.py` — regime overlay: pure domain engine + sleeve allocation solver.
+  `/regime` and `/regime/backtest` are read-only status pages.
 - `.claude/skills/momentum-rebalance/SKILL.md` — full strategy spec. READ IT before touching scoring/rebalance logic.
 
 ## Non-negotiable rules (do not "improve" these away)
@@ -38,6 +42,9 @@ GTT stop-losses placed for every position.
 6a. ALL order flow goes through core/gateway.py (guards → risk → rate-limits → journal).
    Never call kc.place_order from a strategy. guards.py blocks SGB*/G-sec at the lowest
    layer — an untouchable instrument raises before any network call.
+   POST /execute routes through the gateway (client_id = plan_id:symbol, so re-posting a
+   plan cannot double-send). GTT stops still use kite_client.place_gtt_stop, which carries
+   its own guard; the gateway has no GTT method yet.
 6. Filter-rejected stocks (circuits, BE series) are never bought, even if user holds them —
    held rejects become capped "runner" positions or exits per config.
 7. SGB / instruments in `config.EXCLUDED_SYMBOLS` are untouchable.
@@ -47,6 +54,12 @@ GTT stop-losses placed for every position.
 - Test scoring on a CSV: `python -m app.scoring data/uploads/scan.csv`
 - Kite MCP (read-only checks while developing) is configured in `.claude/settings.json`;
   order placement in the app goes through kiteconnect (API), not MCP.
+
+## Position sizing (changed 2026-08-14)
+TARGET_POSITIONS (12, 15), MAX_SINGLE_WEIGHT 15%, MIN_POSITION_WEIGHT 6%, cluster cap 25%.
+Under the regime overlay these are percentages of the ACTIVE EQUITY SLEEVE, not of NAV:
+in R3 the sleeve is 40% of NAV, so a 10% sleeve position is 4% of NAV. With the overlay
+disabled the sleeve is 100% and they behave as plain NAV weights.
 
 ## When asked to modify strategy logic
 Update `config.py` constants first; only touch `scoring.py` formulas if the skill file's

@@ -61,6 +61,71 @@ MOMENTUM_BLEND = {"one_month": .10, "three_months": .30, "six_months": .30,
                   "nine_months": .15, "one_year": .15}
 SHARPE_BLEND = {"three_months": .35, "six_months": .35, "nine_months": .15, "one_year": .15}
 
+# ---- Risk limits (core/risk.py; enforced on every order since /execute was routed
+#      through the gateway). Absolute rupee values, or blank to DERIVE from live NAV so
+#      they cannot contradict the strategy's own sizing as the book grows.
+RISK_MAX_POSITION_VALUE = os.getenv("RISK_MAX_POSITION_VALUE", "")      # blank = derive
+RISK_MAX_GROSS_EXPOSURE = os.getenv("RISK_MAX_GROSS_EXPOSURE", "")      # blank = derive
+RISK_MAX_DAILY_LOSS_PCT = float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "5.0"))
+RISK_MAX_ORDERS_PER_DAY = int(os.getenv("RISK_MAX_ORDERS_PER_DAY", "500"))
+# Headroom between the largest position the strategy may hold and the risk cap, for price
+# movement between planning and fill. Without it the cap blocks a legal position.
+RISK_POSITION_HEADROOM = float(os.getenv("RISK_POSITION_HEADROOM", "1.25"))
+RISK_GROSS_MULTIPLE = float(os.getenv("RISK_GROSS_MULTIPLE", "1.5"))
+
+
+def risk_config(nav: float | None = None):
+    """Build RiskConfig, deriving limits from NAV unless explicitly overridden.
+
+    Derivation exists because a hardcoded rupee cap silently contradicts the strategy:
+    MAX_SINGLE_WEIGHT of 15% on a Rs 1.05cr book is a Rs 15.8L position, which the old
+    Rs 15L cap would have blocked outright.
+    """
+    from .core.risk import RiskConfig
+
+    base = float(nav) if nav else 0.0
+    if RISK_MAX_POSITION_VALUE:
+        pos_cap = float(RISK_MAX_POSITION_VALUE)
+    elif base > 0:
+        pos_cap = base * MAX_SINGLE_WEIGHT / 100.0 * RISK_POSITION_HEADROOM
+    else:
+        pos_cap = 1_500_000.0
+    gross_cap = (float(RISK_MAX_GROSS_EXPOSURE) if RISK_MAX_GROSS_EXPOSURE
+                 else (base * RISK_GROSS_MULTIPLE if base > 0 else 12_000_000.0))
+    daily_loss = base * RISK_MAX_DAILY_LOSS_PCT / 100.0 if base > 0 else 100_000.0
+    return RiskConfig(max_daily_loss=round(daily_loss, 2),
+                      max_orders_per_day=RISK_MAX_ORDERS_PER_DAY,
+                      max_position_value=round(pos_cap, 2),
+                      max_gross_exposure=round(gross_cap, 2))
+
+
+def risk_coherence(cfg, nav: float) -> list[str]:
+    """Contradictions between the risk limits and the strategy's own sizing.
+
+    A risk cap is meant to stop the unintended, not to forbid what the strategy is
+    configured to do. Anything reported here would block a legal action.
+    """
+    problems = []
+    if nav > 0:
+        legal_max = nav * MAX_SINGLE_WEIGHT / 100.0
+        if cfg.max_position_value < legal_max:
+            problems.append(
+                f"max_position_value Rs {cfg.max_position_value:,.0f} is below the "
+                f"largest position the strategy permits "
+                f"({MAX_SINGLE_WEIGHT}% of NAV = Rs {legal_max:,.0f}) — it would block a "
+                f"legal position")
+        if cfg.max_gross_exposure < nav:
+            problems.append(
+                f"max_gross_exposure Rs {cfg.max_gross_exposure:,.0f} is below current "
+                f"NAV Rs {nav:,.0f} — every order would be refused")
+        min_positions = TARGET_POSITIONS[0]
+        if cfg.max_orders_per_day < min_positions * 2:
+            problems.append(
+                f"max_orders_per_day {cfg.max_orders_per_day} cannot cover a "
+                f"{min_positions}-position rebalance")
+    return problems
+
+
 # ---- Analytics / persistence (phase 1) ----
 DB_PATH = os.getenv("DB_PATH", "data/portfolio.db")
 INDEX_BASE = 100.0                         # portfolio index value on the inception date

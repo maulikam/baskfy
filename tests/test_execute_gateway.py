@@ -230,3 +230,77 @@ def test_gateway_layer_order_is_unchanged():
              "layer 4: rate limits"]
     positions = [src.index(m) for m in marks]
     assert positions == sorted(positions)
+
+
+# =====================================================================================
+# risk limits must not contradict the strategy they are protecting
+# =====================================================================================
+def test_derived_position_cap_permits_the_largest_legal_position():
+    """MAX_SINGLE_WEIGHT of NAV is a position the strategy is configured to take.
+    A risk cap below it forbids the intended, which is not what a risk cap is for."""
+    nav = 10_531_889.0
+    cfg = C.risk_config(nav)
+    legal_max = nav * C.MAX_SINGLE_WEIGHT / 100.0
+    assert cfg.max_position_value >= legal_max
+    assert C.risk_coherence(cfg, nav) == []
+
+
+def test_the_old_hardcoded_cap_is_detected_as_incoherent():
+    from app.core.risk import RiskConfig
+    problems = C.risk_coherence(RiskConfig(), 10_531_889.0)   # the shipped defaults
+    assert any("max_position_value" in p for p in problems)
+
+
+def test_gross_cap_below_nav_is_flagged():
+    from app.core.risk import RiskConfig
+    problems = C.risk_coherence(RiskConfig(max_gross_exposure=1_000.0), 10_000_000.0)
+    assert any("every order would be refused" in p for p in problems)
+
+
+def test_order_cap_too_small_for_a_rebalance_is_flagged():
+    from app.core.risk import RiskConfig
+    problems = C.risk_coherence(RiskConfig(max_orders_per_day=5), 10_000_000.0)
+    assert any("rebalance" in p for p in problems)
+
+
+def test_explicit_env_override_wins_over_derivation(monkeypatch):
+    monkeypatch.setattr(C, "RISK_MAX_POSITION_VALUE", "2500000")
+    assert C.risk_config(10_000_000.0).max_position_value == 2_500_000.0
+
+
+def test_limits_scale_with_the_book():
+    small, large = C.risk_config(1_000_000.0), C.risk_config(50_000_000.0)
+    assert large.max_position_value > small.max_position_value
+    assert large.max_daily_loss > small.max_daily_loss
+
+
+def test_no_nav_falls_back_to_static_defaults():
+    cfg = C.risk_config(0.0)
+    assert cfg.max_position_value == 1_500_000.0      # the documented fallback
+
+
+def test_daily_loss_cap_is_no_longer_inert(client, monkeypatch, tmp_path):
+    """on_pnl() existed but nothing called it, so day_pnl stayed 0 forever."""
+    c, fake = client
+    monkeypatch.setattr(C, "DRY_RUN", False)
+
+    from app.analytics import db
+    dbpath = str(tmp_path / "p.db")
+    monkeypatch.setattr(C, "DB_PATH", dbpath)
+    with db.connect(dbpath) as conn:
+        db.migrate(conn)
+        db.save_snapshot(conn, {"date": "2026-08-13", "nav": 10_000_000.0,
+                                "invested": 6_000_000.0, "cash": 4_000_000.0,
+                                "holdings_json": "{}"})
+
+    M._gateway = None
+    M._risk = None
+    # book_value collapsed from 60L to 40L -> a Rs 20L intraday loss
+    pid = seed(orders=[order("DIXON", -10)], book_value=4_000_000.0)
+    body = post(c, pid).json()
+
+    assert M._risk.state.day_pnl == pytest.approx(-2_000_000.0)
+    assert M._risk.state.killed is True
+    assert body["orders"][0]["status"] == "RISK_BLOCKED"
+    assert "KILL SWITCH" in body["orders"][0]["error"]
+    assert fake.kc.orders == [], "the kill switch must stop the batch reaching the broker"

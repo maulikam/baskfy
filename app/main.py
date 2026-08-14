@@ -43,12 +43,35 @@ def kite() -> Kite:
     return _kite
 
 
+def _latest_nav() -> float:
+    """NAV from the most recent stored EOD snapshot, for deriving risk limits."""
+    try:
+        from .analytics import db as _db
+        with _db.connect() as conn:
+            _db.migrate(conn)
+            rows = _db.snapshot_series(conn)
+            return float(rows[-1]["nav"]) if rows else 0.0
+    except Exception:
+        return 0.0
+
+
 def gateway() -> OrderGateway:
     """The sole order path. Holds the risk manager so the daily loss cap, the kill switch
-    and the order counter persist across requests rather than resetting per plan."""
+    and the order counter persist across requests rather than resetting per plan.
+
+    Limits are derived from live NAV so they cannot contradict the strategy's own sizing:
+    a fixed rupee cap silently forbids a position MAX_SINGLE_WEIGHT explicitly permits.
+    """
     global _gateway, _risk
     if _gateway is None:
-        _risk = RiskManager()
+        nav = _latest_nav()
+        cfg = C.risk_config(nav)
+        for problem in C.risk_coherence(cfg, nav):
+            logging.warning("RISK LIMIT INCOHERENT: %s", problem)
+        logging.info("risk limits: position<=Rs %,.0f gross<=Rs %,.0f dayloss<=Rs %,.0f"
+                     .replace("%,", "%") % (cfg.max_position_value, cfg.max_gross_exposure,
+                                            cfg.max_daily_loss))
+        _risk = RiskManager(cfg)
         _gateway = OrderGateway(kite().kc, _risk)
     return _gateway
 
@@ -123,6 +146,23 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
 
     k = kite()
     gw = gateway()
+
+    # The daily-loss cap was inert: on_pnl() existed but nothing ever called it, so
+    # day_pnl stayed 0 and the kill switch was manual-only. Measured here BEFORE any
+    # order, so the change since the last EOD snapshot is pure mark-to-market rather
+    # than the effect of today's own trading.
+    nav_prev = _latest_nav()
+    if nav_prev > 0 and _risk is not None:
+        try:
+            from .analytics import db as _db
+            with _db.connect() as conn:
+                rows = _db.snapshot_series(conn)
+            prev_invested = float(rows[-1]["invested"]) if rows else 0.0
+            if prev_invested > 0:
+                _risk.on_pnl(float(plan.get("book_value") or 0.0) - prev_invested)
+        except Exception as exc:
+            logging.warning("could not evaluate the daily loss cap: %s", exc)
+
     results = []
     # Sells first (frees cash), then buys, then GTT stops. Unchanged sequence — only the
     # route changed: every order now goes through core/gateway.py, so guards -> risk ->

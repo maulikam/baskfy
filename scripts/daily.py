@@ -27,6 +27,7 @@ Usage:
     python -m scripts.daily
     python -m scripts.daily --scan data/uploads/scan_2026-08-15.csv
     python -m scripts.daily --check          # report state, change nothing
+    python -m scripts.daily --only "index history"   # one step, same idempotence
 """
 from __future__ import annotations
 
@@ -47,14 +48,21 @@ from app.core import regime as R                                  # noqa: E402
 OK, SKIP, FAIL = "ok", "skipped", "FAILED"
 
 
+STEPS = ("index history", "benchmark PRI", "EOD snapshot", "breadth", "regime preview")
+
+
 class Runner:
     """Collects step outcomes so one failure never hides the rest."""
 
-    def __init__(self, verbose: bool = True):
+    def __init__(self, verbose: bool = True, only: set[str] | None = None):
         self.rows: list[tuple[str, str, str]] = []
         self.verbose = verbose
+        self.only = only          # None runs every step
 
     def step(self, name: str, fn, *, skip_reason: str | None = None):
+        if self.only is not None and name not in self.only:
+            self.rows.append((name, SKIP, "not selected by --only"))
+            return None
         if skip_reason:
             self.rows.append((name, SKIP, skip_reason))
             return None
@@ -101,11 +109,14 @@ def main() -> int:
     ap.add_argument("--db", default=None)
     ap.add_argument("--check", action="store_true", help="report state, change nothing")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--only", action="append", choices=STEPS, metavar="STEP",
+                    help=f"run only these steps ({', '.join(STEPS)}); repeatable. "
+                         "The steps stay independently idempotent either way.")
     a = ap.parse_args()
 
     today = dt.date.today()
     cfg = C.regime_config()
-    run = Runner(verbose=not a.quiet)
+    run = Runner(verbose=not a.quiet, only=set(a.only) if a.only else None)
 
     with db.connect(a.db) as conn:
         db.migrate(conn)

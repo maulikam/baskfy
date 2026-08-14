@@ -23,7 +23,7 @@ from typing import Iterator, Sequence
 
 from .. import config as C
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # --- schema ---------------------------------------------------------------------------
 # Column sets are fixed by the analytics spec; extra *indexes* are fine, extra columns are
@@ -223,6 +223,24 @@ _MIGRATIONS: dict[int, Sequence[str]] = {
            )""",
         """CREATE INDEX IF NOT EXISTS ix_settings_audit_key
                ON settings_audit(key, changed_at)""",
+    ),
+    # --- operations run log --------------------------------------------------------------
+    4: (
+        # Every operation run from the interface, with its exact argv and full output.
+        # An ops page without a record of what it did is just a pile of buttons.
+        """CREATE TABLE IF NOT EXISTS ops_jobs(
+               id          INTEGER PRIMARY KEY AUTOINCREMENT,
+               name        TEXT NOT NULL,
+               argv_json   TEXT NOT NULL,
+               status      TEXT NOT NULL,      -- running | ok | failed | timeout
+               exit_code   INTEGER,
+               started_at  TEXT NOT NULL,
+               finished_at TEXT,
+               duration_s  REAL,
+               output      TEXT,
+               note        TEXT
+           )""",
+        """CREATE INDEX IF NOT EXISTS ix_ops_jobs_started ON ops_jobs(started_at DESC)""",
     ),
 }
 

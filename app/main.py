@@ -29,6 +29,8 @@ except Exception:
     pass
 app = FastAPI(title="Kite Momentum Rebalancer", default_response_class=JSONResponse)
 templates = Jinja2Templates(directory="app/templates")
+# Argv is stored as JSON so the exact command can be shown back without re-quoting it.
+templates.env.filters["fromjson"] = json.loads
 
 def _apply_stored_settings() -> None:
     """Push DB overrides onto the config module at startup.
@@ -260,6 +262,56 @@ def regime_data():
     with _db.connect() as conn:
         _db.migrate(conn)
         return JSONResponse(_rv.build(conn))
+
+
+# --- operations ---------------------------------------------------------------------------
+@app.get("/ops", response_class=HTMLResponse)
+def ops_page(request: Request, started: str = "", error: str = ""):
+    from .analytics import db as _db, ops as _ops
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        ctx = _ops.view(conn)
+    ctx.update({"started": started, "error": error})
+    return templates.TemplateResponse(request, "ops.html", ctx)
+
+
+@app.post("/ops/run")
+async def ops_run(request: Request):
+    """Start one allowlisted operation. Never a free-form command."""
+    from .analytics import db as _db, ops as _ops
+    form = await request.form()
+    name = str(form.get("op") or "")
+    values = {k: v for k, v in form.items() if k != "op"}
+    try:
+        with _db.connect() as conn:
+            _db.migrate(conn)
+            res = _ops.start(conn, name, values)
+        return RedirectResponse(f"/ops?started={res['name']}", status_code=303)
+    except _ops.OpsError as exc:
+        return RedirectResponse(f"/ops?error={exc}", status_code=303)
+
+
+@app.get("/ops/data")
+def ops_data():
+    from .analytics import db as _db, ops as _ops
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        return JSONResponse({"running": _ops.running_job(conn),
+                             "history": _ops.history(conn),
+                             "operations": [{"name": o.name, "label": o.label,
+                                             "group": o.group, "cli": o.cli()}
+                                            for o in _ops.OPERATIONS]})
+
+
+@app.get("/ops/job/{job_id}", response_class=HTMLResponse)
+def ops_job(request: Request, job_id: int):
+    from .analytics import db as _db
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        row = conn.execute("SELECT * FROM ops_jobs WHERE id=?", (job_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "Unknown job")
+    return templates.TemplateResponse(request, "ops_job.html", {"j": dict(row)})
 
 
 # --- performance -------------------------------------------------------------------------

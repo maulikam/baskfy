@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{# While a job is in flight the page refreshes itself. No script, no polling library. #}
+{% if running %}<meta http-equiv="refresh" content="4">{% endif %}
+<title>Momentum Desk — Operations</title>
+<style>
+  :root{
+    --ink:#0b1220; --panel:#111a2e; --panel-2:#0d1626; --line:#22304d; --paper:#e8edf7;
+    --dim:#8593ad; --saffron:#f2a33c; --up:#3ddc97; --down:#ff6b6b; --orange:#ff9f43;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+    --disp:"Archivo",system-ui,sans-serif;
+    --s2:8px; --s3:14px; --s4:22px;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:13.5px;
+       line-height:1.5;min-height:100vh;padding:26px 3.5vw 90px}
+  header{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;
+         gap:var(--s3);border-bottom:2px solid var(--saffron);padding-bottom:12px;
+         margin-bottom:var(--s4)}
+  h1{font-family:var(--disp);font-weight:900;font-size:clamp(21px,3vw,31px);letter-spacing:-.02em}
+  h1 em{color:var(--saffron);font-style:normal}
+  a{color:var(--saffron)}
+  .nav{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+  .nav a{font-family:var(--disp);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+         color:var(--dim);text-decoration:none;padding:6px 13px;border-radius:7px;
+         border:1px solid transparent;transition:color .15s,border-color .15s,background .15s}
+  .nav a:hover{color:var(--paper);border-color:var(--line);background:#152040}
+  .nav a[aria-current="page"]{color:var(--saffron);border-color:var(--saffron)}
+  .nav .api{font-size:11px;opacity:.65}
+  .badge{font-size:12px;color:var(--dim)}
+  .badge b{color:var(--saffron)} .badge b.warn{color:var(--down)}
+
+  section{margin-bottom:var(--s4)}
+  h2{font-family:var(--disp);font-size:12px;text-transform:uppercase;letter-spacing:.15em;
+     color:var(--dim);margin-bottom:var(--s2)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+        padding:15px 17px;min-width:0;max-width:100%}
+  .grid{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+  .grid>*{min-width:0}
+
+  .banner{border:1px solid var(--line);border-radius:9px;padding:12px 16px;
+          margin-bottom:var(--s3);background:#16203a;display:flex;gap:var(--s3);
+          align-items:baseline;flex-wrap:wrap}
+  .banner.ok{border-color:var(--up);background:#12241f}
+  .banner.bad{border-color:var(--down);background:#251722}
+  .banner.run{border-color:var(--saffron);background:#221b12}
+  .banner .tag{font-family:var(--disp);font-size:10px;letter-spacing:.14em;
+               text-transform:uppercase;padding:2px 8px;border-radius:4px;
+               border:1px solid currentColor;white-space:nowrap}
+  .banner.ok .tag{color:var(--up)} .banner.bad .tag{color:var(--down)}
+  .banner.run .tag{color:var(--saffron)}
+
+  .op h3{font-family:var(--disp);font-size:14px;font-weight:700;margin-bottom:3px}
+  .op p{color:var(--dim);font-size:12px;line-height:1.55}
+  .cli{display:block;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;
+       padding:7px 10px;margin:9px 0;color:var(--saffron);font-size:11.5px;
+       overflow-x:auto;white-space:nowrap}
+  .flags{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+  .flag{font-family:var(--disp);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+        border:1px solid currentColor;border-radius:4px;padding:1px 7px;color:var(--dim)}
+  .flag.kite{color:var(--saffron)} .flag.write{color:var(--orange)}
+  .flag.slow{color:var(--dim)} .flag.read{color:var(--up)}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px}
+  label.inline{color:var(--dim);font-size:11.5px;display:flex;align-items:center;gap:6px}
+
+  input[type=text],input[type=date],select{
+    background:var(--panel-2);color:var(--paper);font-family:var(--mono);font-size:12.5px;
+    border:1px solid var(--line);border-radius:6px;padding:6px 9px;max-width:190px}
+  input:focus,select:focus{outline:none;border-color:var(--saffron)}
+  input[type=checkbox]{width:15px;height:15px;accent-color:var(--saffron);cursor:pointer}
+  button{font-family:var(--disp);font-weight:700;border:0;border-radius:7px;padding:8px 16px;
+         cursor:pointer;font-size:12px;transition:filter .15s}
+  button:hover:not(:disabled){filter:brightness(1.12)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .btn-saffron{background:var(--saffron);color:#161006}
+  .btn-ghost{background:transparent;color:var(--paper);border:1px solid var(--line)}
+
+  .st{font-family:var(--disp);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+      border:1px solid currentColor;border-radius:4px;padding:1px 7px}
+  .st.ok{color:var(--up)} .st.failed,.st.timeout{color:var(--down)}
+  .st.running{color:var(--saffron)} .st.interrupted{color:var(--orange)}
+
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th{font-family:var(--disp);font-size:10px;text-transform:uppercase;letter-spacing:.11em;
+     color:var(--dim);text-align:left;padding:7px 9px;border-bottom:1px solid var(--line)}
+  td{padding:6px 9px;border-bottom:1px solid #182240;font-size:12.5px}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover td{background:#152040}
+  pre{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:13px;
+      overflow:auto;max-height:340px;font-size:11.5px;line-height:1.55;color:var(--paper);
+      white-space:pre-wrap;word-break:break-word}
+  .muted{color:var(--dim);font-size:11.5px;line-height:1.6}
+  code{font-size:11.5px;color:var(--saffron);overflow-wrap:anywhere}
+  @media(max-width:780px){body{padding:20px 16px 70px} .card table{display:block;overflow-x:auto}}
+  :focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Desk <em>Operations</em></h1>
+  <nav class="nav" aria-label="Sections">
+    <a href="/">Desk</a>
+    <a href="/performance">Performance</a>
+    <a href="/regime">Regime</a>
+    <a href="/regime/backtest">Backtest</a>
+    <a href="/tradebook">Tradebook</a>
+    <a href="/ops" aria-current="page">Operations</a>
+    <a href="/settings">Settings</a>
+    <a class="api" href="/status">status</a>
+  </nav>
+  <div class="badge">Orders: <b class="{{ 'warn' if not dry_run else '' }}">{{ 'DRY RUN' if dry_run else 'LIVE' }}</b></div>
+</header>
+
+{% if running %}
+  <div class="banner run">
+    <span class="tag">running</span>
+    <b>{{ running.name }}</b>
+    <span class="muted">started {{ running.started_at }}. This page refreshes every few
+      seconds; operations are not run concurrently because they share the database and the
+      broker session.</span>
+  </div>
+{% endif %}
+{% if started %}
+  <div class="banner ok"><span class="tag">started</span><span>{{ started }}</span></div>
+{% endif %}
+{% if error %}
+  <div class="banner bad"><span class="tag">refused</span><span>{{ error }}</span></div>
+{% endif %}
+
+<div class="banner">
+  <span class="tag">how this works</span>
+  <span class="muted">Each button runs one <b>allowlisted</b> command with a fixed argument
+    template — there is deliberately no free-form command box, because a page that runs an
+    arbitrary string is remote code execution on the machine holding your broker
+    credentials. Nothing here places an order; execution stays on the
+    <a href="/">desk</a> behind its confirmation gate. Every run is logged below with its
+    exact command and full output.</span>
+</div>
+
+{% for group in groups %}
+<section>
+  <h2>{{ group }}</h2>
+  <div class="grid">
+    {% for entry in operations %}
+      {% if entry.op.group == group %}
+      <div class="card op">
+        <h3>{{ entry.op.label }}
+          {%- if entry.last %} <span class="st {{ entry.last.status }}">{{ entry.last.status }}</span>{% endif %}</h3>
+        <p>{{ entry.op.summary }}</p>
+        <div class="flags" style="margin-top:9px">
+          {% if entry.op.needs_kite %}<span class="flag kite">needs login</span>{% endif %}
+          {% if entry.op.writes %}<span class="flag write">writes</span>
+          {% else %}<span class="flag read">read only</span>{% endif %}
+          {% if entry.op.long_running %}<span class="flag slow">slow</span>{% endif %}
+          {% if entry.last %}<span class="flag">last {{ entry.last.started_at }}</span>{% endif %}
+        </div>
+        <code class="cli">{{ entry.cli }}</code>
+        <form method="post" action="/ops/run">
+          <input type="hidden" name="op" value="{{ entry.op.name }}">
+          <div class="row">
+            {% for prm in entry.op.params %}
+              {% if prm.kind == 'flag' %}
+                <label class="inline"><input type="checkbox" name="{{ prm.key }}" value="true">
+                  {{ prm.label }}</label>
+              {% elif prm.kind == 'upload' %}
+                <label class="inline">{{ prm.label }}
+                  <select name="{{ prm.key }}">
+                    <option value="">none</option>
+                    {% for f in entry.scans %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+                  </select></label>
+              {% elif prm.kind == 'date' %}
+                <label class="inline">{{ prm.label }}
+                  <input type="text" name="{{ prm.key }}" value="{{ prm.default or '' }}"
+                         placeholder="YYYY-MM-DD"></label>
+              {% endif %}
+            {% endfor %}
+            <button class="btn-saffron" type="submit" {{ 'disabled' if running }}>
+              {{ 'Busy' if running else 'Run' }}</button>
+          </div>
+        </form>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+
+<section>
+  <h2>Run history</h2>
+  <div class="card">
+    {% if history %}
+      <table>
+        <thead><tr><th>Started</th><th>Operation</th><th>Command</th><th>Status</th>
+          <th>Took</th><th>Output</th></tr></thead>
+        <tbody>
+        {% for j in history %}
+          <tr>
+            <td>{{ j.started_at }}</td>
+            <td>{{ j.name }}</td>
+            <td class="muted"><code>python {{ (j.argv_json | fromjson) | join(' ') }}</code></td>
+            <td><span class="st {{ j.status }}">{{ j.status }}</span>
+              {%- if j.exit_code %} <span class="muted">exit {{ j.exit_code }}</span>{% endif %}</td>
+            <td class="muted">{{ '%.1f'|format(j.duration_s) + 's' if j.duration_s else '—' }}</td>
+            <td><a href="/ops/job/{{ j.id }}">view</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Nothing has been run from here yet. Every run is recorded with its
+        exact command, exit code and full output.</p>
+    {% endif %}
+  </div>
+</section>
+
+{% if history and history[0].output %}
+<section>
+  <h2>Last output — {{ history[0].name }}</h2>
+  <div class="card">
+    <pre>{{ history[0].output }}</pre>
+  </div>
+</section>
+{% endif %}
+</body>
+</html>

@@ -714,3 +714,44 @@ def test_bad_regime_config_raises_at_the_factory(monkeypatch):
     monkeypatch.setattr(C, "REGIME_CONFIRM_DAYS", 0)
     with pytest.raises(R.ConfigError, match="confirm_days"):
         C.regime_config()
+
+
+# =====================================================================================
+# configuration discoverability
+# =====================================================================================
+def test_every_env_var_the_code_reads_is_documented():
+    """A setting nobody can discover is a setting nobody will use correctly.
+
+    17 of 25 were undocumented at one point, including REGIME_ENABLED and the two
+    product gates.
+    """
+    import pathlib
+    import re
+
+    code = set()
+    for path in pathlib.Path("app").rglob("*.py"):
+        code |= set(re.findall(r'os\.getenv\("([A-Z0-9_]+)"', path.read_text()))
+    documented = set(re.findall(r"^([A-Z0-9_]+)=", pathlib.Path(".env.example").read_text(),
+                                re.M))
+    missing = sorted(code - documented)
+    assert missing == [], f".env.example does not document: {missing}"
+
+
+def test_env_example_contains_no_real_credentials():
+    import pathlib
+    text = pathlib.Path(".env.example").read_text()
+    assert "your_api_key" in text and "your_api_secret" in text
+    for line in text.splitlines():
+        if line.startswith("KITE_API_KEY=") or line.startswith("KITE_API_SECRET="):
+            assert line.split("=", 1)[1].startswith("your_"), f"real credential: {line}"
+
+
+def test_env_example_keeps_the_safety_defaults_safe():
+    import pathlib
+    import re
+    text = pathlib.Path(".env.example").read_text()
+    for key, expected in (("DRY_RUN", "true"), ("REGIME_ENABLED", "false"),
+                          ("REGIME_MODE", "observe"), ("INTRADAY_ENABLED", "false"),
+                          ("OPTIONS_ENABLED", "false")):
+        m = re.search(rf"^{key}=(\S+)", text, re.M)
+        assert m and m.group(1) == expected, f"{key} default is not {expected}"

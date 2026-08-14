@@ -325,6 +325,59 @@ def coverage(conn, holdings: Iterable[Mapping]) -> dict:
             "missing": sorted(set(held) - recon)}
 
 
+def status(conn, positions: Sequence[Mapping]) -> dict:
+    """Everything the tradebook page shows, from stored rows only.
+
+    `positions` comes from the latest EOD snapshot rather than a live Kite call, so the
+    page never blocks on the broker.
+    """
+    rows = conn.execute(
+        "SELECT symbol, COUNT(*) lots, SUM(qty) qty, MIN(entry_ts) first_ts, "
+        "       MAX(entry_ts) last_ts, SUM(entry_price * qty) cost "
+        "FROM trades WHERE exit_ts IS NULL GROUP BY symbol").fetchall()
+    open_by_symbol = {r["symbol"]: dict(r) for r in rows}
+
+    closed = conn.execute(
+        "SELECT COUNT(*) n, SUM(pnl) pnl, MIN(exit_ts) first_ts, MAX(exit_ts) last_ts "
+        "FROM trades WHERE exit_ts IS NOT NULL").fetchone()
+    total = conn.execute("SELECT COUNT(*) n FROM trades").fetchone()["n"]
+
+    cov = coverage(conn, positions)
+    problems = reconcile_with_holdings(conn, positions)
+
+    detail = []
+    for p in sorted(positions, key=lambda x: -float(x.get("value") or 0)):
+        sym = p["symbol"]
+        o = open_by_symbol.get(sym)
+        mismatch = next((m for m in problems if m["symbol"] == sym), None)
+        detail.append({
+            "symbol": sym,
+            "holding_qty": int(p.get("quantity") or 0),
+            "lot_qty": int(o["qty"]) if o else 0,
+            "lots": int(o["lots"]) if o else 0,
+            "first_acquired": (dt.datetime.fromtimestamp(o["first_ts"]).date().isoformat()
+                               if o and o["first_ts"] else None),
+            "avg_cost": round(o["cost"] / o["qty"], 2) if o and o["qty"] else None,
+            "broker_avg": round(float(p.get("average_price") or 0), 2),
+            "status": ("ok" if o and not mismatch else
+                       "mismatch" if o and mismatch else "missing"),
+            "note": mismatch["likely_cause"] if mismatch else "",
+        })
+
+    return {
+        "has_lots": total > 0,
+        "total_rows": total,
+        "open_lots": sum(int(r["lots"]) for r in rows),
+        "closed_trades": closed["n"] or 0,
+        "realised_pnl": round(closed["pnl"] or 0.0, 2) if closed["n"] else None,
+        "history_from": (dt.datetime.fromtimestamp(min(r["first_ts"] for r in rows))
+                         .date().isoformat() if rows else None),
+        "coverage": cov,
+        "problems": problems,
+        "detail": detail,
+    }
+
+
 # =====================================================================================
 # CLI
 # =====================================================================================

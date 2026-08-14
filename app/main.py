@@ -262,6 +262,84 @@ def regime_data():
         return JSONResponse(_rv.build(conn))
 
 
+# --- performance -------------------------------------------------------------------------
+@app.get("/performance", response_class=HTMLResponse)
+def performance_page(request: Request):
+    from .analytics import db as _db, performance_view as _pv
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        view = _pv.build(conn)
+    return templates.TemplateResponse(request, "performance.html", {"p": view})
+
+
+@app.get("/performance/data")
+def performance_data():
+    from .analytics import db as _db, performance_view as _pv
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        return JSONResponse(_pv.build(conn))
+
+
+# --- tradebook ---------------------------------------------------------------------------
+def _snapshot_positions() -> list[dict]:
+    """Strategy positions from the latest stored snapshot. No broker call."""
+    try:
+        from .analytics import db as _db
+        with _db.connect() as conn:
+            _db.migrate(conn)
+            rows = _db.snapshot_series(conn)
+            if not rows:
+                return []
+            snap = _db.get_snapshot(conn, rows[-1]["date"])
+        return [p for p in json.loads(snap["holdings_json"]).get("positions", [])
+                if not p.get("excluded")]
+    except Exception:
+        return []
+
+
+@app.get("/tradebook", response_class=HTMLResponse)
+def tradebook_page(request: Request, imported: str = "", error: str = ""):
+    from .analytics import db as _db, tradebook as _tb
+    positions = _snapshot_positions()
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        st = _tb.status(conn, positions)
+    return templates.TemplateResponse(request, "tradebook.html",
+                                      {"s": st, "imported": imported, "error": error,
+                                       "have_snapshot": bool(positions)})
+
+
+@app.post("/tradebook")
+async def tradebook_upload(file: UploadFile):
+    """Import a Console tradebook export. Rebuilds lots for the symbols it covers."""
+    import os as _os
+    from .analytics import db as _db, tradebook as _tb
+    _os.makedirs("data/uploads", exist_ok=True)
+    dest = f"data/uploads/tradebook_{int(time.time())}.csv"
+    with open(dest, "wb") as f:
+        f.write(await file.read())
+    try:
+        with _db.connect() as conn:
+            _db.migrate(conn)
+            res = _tb.import_tradebook(conn, dest)
+        msg = (f"{res['fills']} fills, {res['symbols']} symbols, "
+               f"{res['open_lots']} open lots, {res['closed_trades']} closed "
+               f"({res['first_trade']} to {res['last_trade']})")
+        if res["unmatched_sells"]:
+            msg += f" — {len(res['unmatched_sells'])} unmatched sells"
+        return RedirectResponse(f"/tradebook?imported={msg}", status_code=303)
+    except _tb.TradebookError as exc:
+        return RedirectResponse(f"/tradebook?error={exc}", status_code=303)
+
+
+@app.get("/tradebook/data")
+def tradebook_data():
+    from .analytics import db as _db, tradebook as _tb
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        return JSONResponse(_tb.status(conn, _snapshot_positions()))
+
+
 # --- settings ---------------------------------------------------------------------------
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, saved: str = "", error: str = ""):

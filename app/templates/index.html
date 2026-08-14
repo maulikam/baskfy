@@ -93,13 +93,14 @@
 <header>
   <h1>Momentum <em>Desk</em></h1>
 <nav class="nav" aria-label="Sections">
-  <a href="/" aria-current="page">Desk</a>
-  <a href="/regime">Regime</a>
-  <a href="/regime/backtest">Backtest</a>
-  <a href="/settings">Settings</a>
+    <a href="/" aria-current="page">Desk</a>
+    <a href="/performance">Performance</a>
+    <a href="/regime">Regime</a>
+    <a href="/regime/backtest">Backtest</a>
+    <a href="/tradebook">Tradebook</a>
+    <a href="/settings">Settings</a>
     <a class="api" href="/status">status</a>
-  <a class="api" href="/docs">api</a>
-</nav>
+  </nav>
   <div class="badge">
     Kite: <b id="auth" class="{{ '' if authed else 'warn' }}">{{ 'connected' if authed else 'not connected' }}</b>
     &nbsp;·&nbsp; Mode: <b class="{{ 'warn' if not dry_run else '' }}">{{ 'DRY RUN' if dry_run else 'LIVE ORDERS' }}</b>

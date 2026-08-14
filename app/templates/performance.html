@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Momentum Desk — Performance</title>
+<style>
+  :root{
+    --ink:#0b1220; --panel:#111a2e; --panel-2:#0d1626; --line:#22304d; --paper:#e8edf7;
+    --dim:#8593ad; --saffron:#f2a33c; --up:#3ddc97; --down:#ff6b6b; --orange:#ff9f43;
+    --blue:#5b9dff; --violet:#a78bfa;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+    --disp:"Archivo",system-ui,sans-serif;
+    --s2:8px; --s3:14px; --s4:22px;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:13.5px;
+       line-height:1.5;min-height:100vh;padding:26px 3.5vw 90px}
+  header{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;
+         gap:var(--s3);border-bottom:2px solid var(--saffron);padding-bottom:12px;
+         margin-bottom:var(--s4)}
+  h1{font-family:var(--disp);font-weight:900;font-size:clamp(21px,3vw,31px);letter-spacing:-.02em}
+  h1 em{color:var(--saffron);font-style:normal}
+  a{color:var(--saffron)}
+  .nav{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+  .nav a{font-family:var(--disp);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+         color:var(--dim);text-decoration:none;padding:6px 13px;border-radius:7px;
+         border:1px solid transparent;transition:color .15s,border-color .15s,background .15s}
+  .nav a:hover{color:var(--paper);border-color:var(--line);background:#152040}
+  .nav a[aria-current="page"]{color:var(--saffron);border-color:var(--saffron)}
+  .nav .api{font-size:11px;opacity:.65}
+  .badge{font-size:12px;color:var(--dim)}
+
+  section{margin-bottom:var(--s4)}
+  h2{font-family:var(--disp);font-size:12px;text-transform:uppercase;letter-spacing:.15em;
+     color:var(--dim);margin-bottom:var(--s2)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+        padding:16px 18px;min-width:0;max-width:100%}
+  .grid{display:grid;gap:var(--s3)}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  .gm{grid-template-columns:repeat(auto-fit,minmax(168px,1fr))}
+  .grid>*{min-width:0}
+
+  .banner{border:1px solid var(--saffron);border-radius:9px;padding:12px 16px;
+          margin-bottom:var(--s4);background:#221b12;display:flex;gap:var(--s3);
+          align-items:baseline;flex-wrap:wrap}
+  .banner .tag{font-family:var(--disp);font-size:10px;letter-spacing:.14em;
+               text-transform:uppercase;padding:2px 8px;border-radius:4px;
+               border:1px solid var(--saffron);color:var(--saffron);white-space:nowrap}
+
+  /* metric cards: the value is meaningless without its sample size, so they ship together */
+  .metric{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+          padding:13px 15px}
+  .metric.thin{border-style:dashed;opacity:.72}
+  .metric dt{font-family:var(--disp);font-size:10px;letter-spacing:.13em;
+             text-transform:uppercase;color:var(--dim);margin-bottom:3px}
+  .metric dd{font-family:var(--disp);font-weight:900;font-size:26px;line-height:1.1;
+             letter-spacing:-.01em}
+  .metric .sub{color:var(--dim);font-size:11px;line-height:1.5;margin-top:5px}
+  .metric .warn{color:var(--orange);font-size:10.5px;font-family:var(--disp);
+                letter-spacing:.06em;text-transform:uppercase;margin-top:4px;display:block}
+  .pos{color:var(--up)} .neg{color:var(--down)} .na{color:var(--dim)}
+
+  svg{display:block;width:100%;height:auto;overflow:visible}
+  .legend{display:flex;gap:var(--s3);flex-wrap:wrap;font-size:11.5px;color:var(--dim);
+          margin-top:var(--s2)}
+  .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;
+            vertical-align:3px}
+  .axis{display:flex;justify-content:space-between;font-size:10.5px;color:var(--dim);
+        font-family:var(--disp);letter-spacing:.06em;margin-top:5px}
+
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th{font-family:var(--disp);font-size:10px;text-transform:uppercase;letter-spacing:.11em;
+     color:var(--dim);text-align:right;padding:7px 9px;border-bottom:1px solid var(--line);
+     white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:6px 9px;text-align:right;border-bottom:1px solid #182240;font-size:12.5px}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover td{background:#152040}
+  .heat td{border:1px solid var(--ink);border-radius:3px;font-size:11.5px}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:10.5px;
+        font-family:var(--disp);letter-spacing:.08em;border:1px solid currentColor}
+  .pill.warn{color:var(--orange)} .pill.mute{color:var(--dim)}
+  .muted{color:var(--dim);font-size:11.5px;line-height:1.6}
+  .empty{color:var(--dim);font-size:12.5px;line-height:1.7}
+  code{font-size:11.5px;color:var(--saffron);overflow-wrap:anywhere}
+  @media(max-width:780px){body{padding:20px 16px 70px} .card table{display:block;overflow-x:auto}}
+  :focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Portfolio <em>Performance</em></h1>
+  <nav class="nav" aria-label="Sections">
+    <a href="/">Desk</a>
+    <a href="/performance" aria-current="page">Performance</a>
+    <a href="/regime">Regime</a>
+    <a href="/regime/backtest">Backtest</a>
+    <a href="/tradebook">Tradebook</a>
+    <a href="/settings">Settings</a>
+    <a class="api" href="/status">status</a>
+  </nav>
+  {% if p.available %}
+    <div class="badge">{{ p.inception }} → {{ p.as_of }} · {{ p.observations }} sessions</div>
+  {% endif %}
+</header>
+
+{% if not p.available %}
+  <section class="card">
+    <h2>No track record yet</h2>
+    <p class="empty">{{ p.message }} Performance is measured from stored end-of-day
+      snapshots, so the record starts the first time you take one and grows daily.</p>
+    <p class="muted" style="margin-top:10px"><code>{{ p.how_to }}</code></p>
+  </section>
+{% else %}
+
+{% set thin = p.observations < 63 %}
+{% if thin %}
+<div class="banner">
+  <span class="tag">short history</span>
+  <b>{{ p.observations }} sessions since {{ p.inception }}.</b>
+  <span class="muted">Ratios below are arithmetic, not evidence: an annualised figure from
+    a few weeks extrapolates noise. Cards drawn from too little data are marked and
+    dimmed. Volatility needs about 21 sessions, risk-adjusted ratios about 63.</span>
+</div>
+{% endif %}
+
+<!-- METRIC CARDS ================================================================= -->
+<section>
+  <h2>Headline</h2>
+  <dl class="grid gm">
+    {% for m in p.metrics %}
+      <div class="metric {{ '' if m.flag.meaningful else 'thin' }}">
+        <dt>{{ m.label }}</dt>
+        {% if m.value is none %}
+          <dd class="na">—</dd>
+        {% elif m.polarity == 'up' %}
+          <dd class="{{ 'pos' if m.value > 0 else ('neg' if m.value < 0 else '') }}">
+            {{ '%+.2f'|format(m.value) if m.unit == '%' else '%.2f'|format(m.value) }}{{ m.unit }}</dd>
+        {% elif m.polarity == 'loss' %}
+          {# already a bad thing: never green, never a plus sign #}
+          <dd class="{{ 'neg' if m.value|abs > 0.005 else 'na' }}">
+            {{ '%.2f'|format(m.value if m.value < 0 else -m.value) }}{{ m.unit }}</dd>
+        {% else %}
+          <dd>{{ '%.2f'|format(m.value) }}{{ m.unit }}</dd>
+        {% endif %}
+        <span class="sub">{{ m.note }}</span>
+        {% if not m.flag.meaningful %}
+          <span class="warn">{{ m.flag.n }} of {{ m.flag.need }} sessions needed</span>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </dl>
+</section>
+
+<!-- EQUITY CURVE ================================================================== -->
+<section>
+  <h2>Equity curve, rebased to 100 at inception</h2>
+  <div class="card">
+    {% if p.chart.series and p.chart.series[0].points %}
+      {% set colours = ['#f2a33c', '#5b9dff', '#a78bfa', '#3ddc97'] %}
+      <svg viewBox="0 -10 1000 290" role="img"
+           aria-label="Portfolio index against benchmarks, rebased to 100 at inception">
+        <line x1="0" y1="290" x2="1000" y2="290" stroke="#22304d" stroke-width="1"/>
+        {% for s in p.chart.series %}
+          <polyline points="{{ s.points }}" fill="none"
+                    stroke="{{ colours[loop.index0 % 4] }}"
+                    stroke-width="{{ 2.5 if loop.index0 == 0 else 1.6 }}"
+                    stroke-linejoin="round" stroke-linecap="round"
+                    {{ 'stroke-dasharray="4 3"' if loop.index0 > 0 }}/>
+        {% endfor %}
+      </svg>
+      <div class="axis"><span>{{ p.chart.start }}</span>
+        <span>{{ '%.1f'|format(p.chart.lo) }} – {{ '%.1f'|format(p.chart.hi) }}</span>
+        <span>{{ p.chart.end }}</span></div>
+      <div class="legend">
+        {% for s in p.chart.series %}
+          <span><i style="background:{{ colours[loop.index0 % 4] }}"></i>{{ s.name }}
+            <b>{{ '%.1f'|format(s.last) }}</b>
+            <span class="pill mute">{{ s.type }}</span></span>
+        {% endfor %}
+      </div>
+      {% if 'PRI' in p.series_used.values() %}
+        <p class="muted" style="margin-top:10px"><span class="pill warn">price return</span>
+          A benchmark shown as PRI excludes dividends, so it understates the index by
+          roughly its dividend yield. Load the TRI CSV for a fair comparison:
+          <code>python -m app.analytics.benchmark --tri &lt;file&gt; --name "NIFTY 500"</code></p>
+      {% endif %}
+      {% for note in p.benchmark_notes %}<p class="muted">{{ note }}</p>{% endfor %}
+    {% else %}
+      <p class="empty">At least two snapshots are needed to draw a curve.</p>
+    {% endif %}
+  </div>
+</section>
+
+<!-- DRAWDOWN ===================================================================== -->
+<section class="grid g2">
+  <div class="card">
+    <h2>Underwater</h2>
+    {% if p.underwater.points %}
+      <svg viewBox="0 0 1000 100" role="img"
+           aria-label="Drawdown from the running peak, worst {{ '%.2f'|format(p.underwater.worst) }} percent">
+        <polyline points="{{ p.underwater.points }}" fill="none" stroke="#ff6b6b"
+                  stroke-width="2" stroke-linejoin="round"/>
+        <line x1="0" y1="0" x2="1000" y2="0" stroke="#22304d" stroke-width="1"/>
+      </svg>
+      <div class="axis"><span>0%</span><span>worst {{ '%.2f'|format(p.underwater.worst) }}%</span></div>
+    {% else %}
+      <p class="empty">Not enough history to plot.</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h2>Deepest fall</h2>
+    <table>
+      <tbody>
+        <tr><td>Depth</td><td class="neg">{{ '%.2f'|format(p.drawdown.depth_pct) }}%</td></tr>
+        <tr><td>Peak</td><td>{{ p.drawdown.peak or '—' }}</td></tr>
+        <tr><td>Trough</td><td>{{ p.drawdown.trough or '—' }}</td></tr>
+        <tr><td>Recovered</td>
+            <td class="{{ 'pos' if p.drawdown.recovered else 'neg' }}">
+              {{ p.drawdown.recovery if p.drawdown.recovered else 'still under water' }}</td></tr>
+        <tr><td>Duration</td><td>{{ p.drawdown.duration_days }} days</td></tr>
+        <tr><td>Current</td>
+            <td class="{{ 'neg' if p.drawdown.current_pct < -0.005 else 'na' }}">
+              {{ '%.2f'|format(p.drawdown.current_pct) }}%</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- RELATIVE ===================================================================== -->
+{% if p.relative %}
+<section>
+  <h2>Against {{ p.relative.name }}
+    <span class="pill mute">{{ p.relative.series_type }}</span></h2>
+  <div class="card">
+    {% if not p.relative_flag.meaningful %}
+      <p class="muted" style="margin-bottom:10px"><span class="pill warn">thin</span>
+        {{ p.relative_flag.n }} of {{ p.relative_flag.need }} sessions. Beta and tracking
+        error need a meaningful sample before they describe anything.</p>
+    {% endif %}
+    <table>
+      <thead><tr><th>Measure</th><th>Value</th><th>Reading</th></tr></thead>
+      <tbody>
+        <tr><td>Beta</td><td>{{ '%.3f'|format(p.relative.beta) }}</td>
+            <td class="muted">Above 1 moves more than the index</td></tr>
+        <tr><td>Alpha (annualised)</td>
+            <td class="{{ 'pos' if p.relative.alpha > 0 else 'neg' }}">{{ '%+.2f'|format(p.relative.alpha * 100) }}%</td>
+            <td class="muted">Return beyond what beta explains</td></tr>
+        <tr><td>Tracking error</td><td>{{ '%.2f'|format(p.relative.tracking_error * 100) }}%</td>
+            <td class="muted">How far the paths diverge</td></tr>
+        <tr><td>Information ratio</td>
+            <td>{{ '%.3f'|format(p.relative.information_ratio) if p.relative.information_ratio == p.relative.information_ratio else '—' }}</td>
+            <td class="muted">Excess return per unit of divergence</td></tr>
+        <tr><td>Up capture</td>
+            <td>{{ '%.2f'|format(p.relative.up_capture) if p.relative.up_capture == p.relative.up_capture else '—' }}</td>
+            <td class="muted">Share of the index's up months captured</td></tr>
+        <tr><td>Down capture</td>
+            <td>{{ '%.2f'|format(p.relative.down_capture) if p.relative.down_capture == p.relative.down_capture else '—' }}</td>
+            <td class="muted">Below 1 is good: you fell less</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<!-- MONTHLY ====================================================================== -->
+<section>
+  <h2>Monthly returns</h2>
+  <div class="card">
+    {% if p.monthly and p.monthly_flag.meaningful %}
+      <table class="heat">
+        <thead><tr><th>Year</th>
+          {% for m in ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] %}
+            <th style="text-align:right">{{ m }}</th>{% endfor %}
+        </tr></thead>
+        <tbody>
+        {% for y in p.monthly.years %}
+          <tr><td>{{ y }}</td>
+            {% for v in p.monthly.rows[loop.index0] %}
+              {% if v is none %}<td class="na">·</td>
+              {% else %}
+                <td style="background:{{ 'rgba(61,220,151,%.2f)'|format([v/10, 1]|min if v > 0 else 0)
+                                          if v > 0 else 'rgba(255,107,107,%.2f)'|format([-v/10, 1]|min) }}">
+                  {{ '%+.1f'|format(v) }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty">A month-by-month grid needs at least
+        {{ p.monthly_flag.need }} completed months; there {{ 'is' if p.monthly_flag.n == 1 else 'are' }}
+        {{ p.monthly_flag.n }}. It fills in as the record grows.</p>
+    {% endif %}
+  </div>
+</section>
+
+<!-- TRADES ======================================================================= -->
+<section>
+  <h2>Closed trades</h2>
+  <div class="card">
+    {% if p.trades %}
+      <div class="grid gm" style="margin-bottom:var(--s3)">
+        {% for label, val, unit in [
+            ('Closed', p.trades.closed, ''), ('Win rate', p.trades.win_rate, '%'),
+            ('Avg win', p.trades.avg_win, '₹'), ('Avg loss', p.trades.avg_loss, '₹'),
+            ('Payoff', p.trades.payoff, 'x'), ('Profit factor', p.trades.profit_factor, 'x'),
+            ('Expectancy', p.trades.expectancy, '₹'),
+            ('Avg hold', p.trades.avg_hold_days, 'd')] %}
+          <div class="metric"><dt>{{ label }}</dt>
+            <dd class="{{ 'pos' if val > 0 else ('neg' if val < 0 else '') }}">
+              {{ '{:,.0f}'.format(val) if unit == '₹' else '%.2f'|format(val) }}{{ unit if unit != '₹' }}</dd>
+          </div>
+        {% endfor %}
+      </div>
+      <table>
+        <thead><tr><th>Stock</th><th>Trades</th><th>P&amp;L ₹</th><th>Share</th></tr></thead>
+        <tbody>
+        {% for r in p.trades.by_symbol %}
+          <tr><td>{{ r.symbol }}</td><td>{{ r.trades }}</td>
+              <td class="{{ 'pos' if r.pnl >= 0 else 'neg' }}">{{ '{:,.0f}'.format(r.pnl) }}</td>
+              <td class="muted">{{ '%.1f'|format(r.share_pct) }}%</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty">No closed trades recorded. Realised P&amp;L, win rate and holding
+        periods come from the tax-lot history — import a Console tradebook on the
+        <a href="/tradebook">tradebook page</a> and this section fills in.</p>
+    {% endif %}
+  </div>
+</section>
+
+<!-- CURRENT ====================================================================== -->
+<section>
+  <h2>Where it stands</h2>
+  <div class="card">
+    <table>
+      <tbody>
+        <tr><td>Index value</td><td>{{ '%.4f'|format(p.index_value) }}</td>
+            <td>NAV</td><td>₹{{ '{:,.0f}'.format(p.nav) }}</td></tr>
+        <tr><td>Positions</td><td>{{ p.positions }}</td>
+            <td>Cash</td><td>₹{{ '{:,.0f}'.format(p.cash) }}
+              ({{ '%.1f'|format(p.cash_pct) }}%)</td></tr>
+        <tr><td>Sessions recorded</td><td>{{ p.observations }}</td>
+            <td>Cashflows recorded</td>
+            <td class="{{ 'na' if not p.has_cashflows }}">{{ 'yes' if p.has_cashflows else 'none' }}</td></tr>
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">The index is a time-weighted chain, so
+      deposits and withdrawals never register as performance. Without recorded cashflows
+      XIRR cannot be computed — record them with
+      <code>python -m app.analytics.snapshot --cashflow -100000</code>.</p>
+  </div>
+</section>
+
+{% endif %}
+</body>
+</html>

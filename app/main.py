@@ -15,6 +15,9 @@ from fastapi.templating import Jinja2Templates
 import pandas as pd
 
 from . import config as C
+from .core.gateway import OrderGateway
+from .core.guards import UntouchableInstrumentError
+from .core.risk import RiskManager
 from .scoring import load_scan, score, audit
 from .rebalance import build_plan
 from .kite_client import Kite
@@ -29,6 +32,8 @@ templates = Jinja2Templates(directory="app/templates")
 
 PLANS: dict[str, dict] = {}          # plan_id -> plan (in-memory, session-scoped)
 _kite: Kite | None = None
+_gateway: OrderGateway | None = None
+_risk: RiskManager | None = None
 
 
 def kite() -> Kite:
@@ -36,6 +41,16 @@ def kite() -> Kite:
     if _kite is None:
         _kite = Kite()
     return _kite
+
+
+def gateway() -> OrderGateway:
+    """The sole order path. Holds the risk manager so the daily loss cap, the kill switch
+    and the order counter persist across requests rather than resetting per plan."""
+    global _gateway, _risk
+    if _gateway is None:
+        _risk = RiskManager()
+        _gateway = OrderGateway(kite().kc, _risk)
+    return _gateway
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -107,24 +122,45 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
         raise HTTPException(410, "Plan older than 30 minutes — prices stale, re-run Analyze.")
 
     k = kite()
+    gw = gateway()
     results = []
-    # sells first (frees cash), then buys, then GTT stops
+    # Sells first (frees cash), then buys, then GTT stops. Unchanged sequence — only the
+    # route changed: every order now goes through core/gateway.py, so guards -> risk ->
+    # idempotency -> rate limits -> journal all apply. Previously this called
+    # kite_client directly and skipped everything after the guards.
     ordered = sorted([o for o in plan["orders"] if o["delta"] != 0],
                      key=lambda o: (o["delta"] > 0, -abs(o["delta"] * o["ref_price"])))
+    gross = float(plan.get("book_value") or 0.0)
     for o in ordered:
         side = "SELL" if o["delta"] < 0 else "BUY"
-        # Pledged shares sell directly on Zerodha (instant-sale feature); collateral
-        # margin reduces automatically — no unpledge gate needed.
-        results.append(k.place_cnc_order(o["symbol"], abs(o["delta"]), side, o["ref_price"]))
-        time.sleep(0.35)  # rate-limit courtesy
+        try:
+            # Pledged shares sell directly on Zerodha (instant-sale feature); collateral
+            # margin reduces automatically — no unpledge gate needed.
+            res = await gw.place(
+                symbol=o["symbol"], qty=abs(o["delta"]), side=side, product="CNC",
+                order_type="LIMIT", price=o["ref_price"], exchange="NSE",
+                # Deterministic per plan+symbol, so re-posting a plan cannot double-send.
+                client_id=f"{plan_id}:{o['symbol']}", gross_exposure=gross)
+        except UntouchableInstrumentError as exc:
+            # Caught per order: one protected instrument must not abort a batch that has
+            # already placed real orders, leaving the book half-rebalanced.
+            res = {"symbol": o["symbol"], "status": "BLOCKED", "error": str(exc)}
+        res["action"] = o["action"]
+        results.append(res)
+        # No time.sleep here: it blocked the event loop, and the gateway's token buckets
+        # already pace to Kite's caps and under SEBI's 10-OPS threshold.
 
     stops = []
     if place_stops == "true":
         for o in plan["orders"]:
             if o["qty_final"] > 0 and o.get("stop"):
-                stops.append(k.place_gtt_stop(o["symbol"], o["qty_final"], o["stop"],
-                                              o["ref_price"]))
-                time.sleep(0.35)
+                await gw.limits.api_slot()          # same limiter, no blocking sleep
+                try:
+                    stops.append(k.place_gtt_stop(o["symbol"], o["qty_final"], o["stop"],
+                                                  o["ref_price"]))
+                except UntouchableInstrumentError as exc:
+                    stops.append({"symbol": o["symbol"], "status": "BLOCKED",
+                                  "error": str(exc)})
 
     log_path = f"data/outputs/execution_{plan_id}.json"
     with open(log_path, "w") as f:

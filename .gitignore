@@ -1,0 +1,26 @@
+# --- SECRETS: never commit -------------------------------------------------------
+# .env holds the live Kite API key and secret; .kite_token.json holds an access token
+# that grants full account read plus order placement until it expires.
+.env
+data/.kite_token.json
+
+# --- environment -------------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# --- generated data ------------------------------------------------------------------
+# The SQLite book is reproducible from Kite + scans, and its WAL files are machine state.
+data/portfolio.db
+data/portfolio.db-wal
+data/portfolio.db-shm
+data/.instruments_*.json
+data/outputs/
+data/uploads/*.csv
+!data/uploads/.gitkeep
+
+# --- os / editor ---------------------------------------------------------------------
+.DS_Store
+*.swp

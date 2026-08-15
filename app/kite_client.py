@@ -55,6 +55,15 @@ class Kite:
                             average_price=h["average_price"], last_price=h["last_price"]))
         return out
 
+    def trades(self) -> list[dict]:
+        """Today's executed trades. THE BOOK IS SAME-DAY ONLY.
+
+        /trades takes no date parameter and Zerodha flushes it nightly, so this is the
+        only chance to record a fill through the API — miss the session and it is gone.
+        Historical fills exist solely in a Console export.
+        """
+        return list(self.kc.trades() or [])
+
     def available_cash(self) -> float:
         m = self.kc.margins()
         return float(m["equity"]["available"]["live_balance"])

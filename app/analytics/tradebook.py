@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import csv
 import datetime as dt
+import hashlib
 import logging
 from dataclasses import dataclass, field
 from typing import Iterable, Mapping, Sequence
@@ -243,14 +244,100 @@ def build_lots(fills: Sequence[Fill]) -> Rebuild:
 
 
 # =====================================================================================
+# fills — the durable source of truth
+# =====================================================================================
+def fill_key(f: Fill) -> str:
+    """The broker's trade id where there is one, else a deterministic stand-in.
+
+    Determinism is the whole point: it is what makes re-importing the same export a
+    no-op instead of a silent duplication of every lot.
+    """
+    if f.trade_id:
+        return str(f.trade_id)
+    raw = f"{f.symbol}|{f.when.isoformat()}|{f.side}|{f.quantity}|{f.price:.4f}"
+    return "syn:" + hashlib.sha1(raw.encode()).hexdigest()[:20]
+
+
+def store_fills(conn, fills: Sequence[Fill], *, source: str) -> dict:
+    """Insert fills, ignoring ones already recorded. Returns what changed."""
+    now = dt.datetime.now().isoformat(timespec="seconds")
+    rows = [(fill_key(f), f.symbol, f.ts, f.side, f.quantity, f.price,
+             f.exchange, f.charges, source, now) for f in fills]
+    before = conn.execute("SELECT COUNT(*) c FROM fills").fetchone()["c"]
+    with db.transaction(conn):
+        conn.executemany(
+            "INSERT OR IGNORE INTO fills(trade_id, symbol, when_ts, side, quantity,"
+            " price, exchange, charges, source, captured_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            rows)
+    after = conn.execute("SELECT COUNT(*) c FROM fills").fetchone()["c"]
+    return {"seen": len(rows), "new": after - before,
+            "symbols": sorted({f.symbol for f in fills})}
+
+
+def load_fills(conn, symbols: Sequence[str] | None = None) -> list[Fill]:
+    """Every stored fill for these symbols, whatever its source."""
+    sql = "SELECT * FROM fills"
+    args: tuple = ()
+    if symbols is not None:
+        if not symbols:
+            return []
+        sql += f" WHERE symbol IN ({','.join('?' * len(symbols))})"
+        args = tuple(symbols)
+    return [Fill(symbol=r["symbol"],
+                 when=dt.datetime.fromtimestamp(r["when_ts"]),
+                 side=r["side"], quantity=int(r["quantity"]), price=float(r["price"]),
+                 exchange=r["exchange"] or "NSE", trade_id=r["trade_id"],
+                 charges=float(r["charges"] or 0.0))
+            for r in conn.execute(sql + " ORDER BY when_ts", args)]
+
+
+# =====================================================================================
 # persistence
 # =====================================================================================
-def import_tradebook(conn, path: str, *, replace: bool = True) -> dict:
-    """Parse, rebuild and store. Re-importing the same file is a no-op."""
-    fills = parse_tradebook(path)
-    rebuild = build_lots(fills)
-    symbols = sorted({f.symbol for f in fills})
+def rebuild_symbols(conn, symbols: Sequence[str]) -> dict:
+    """Recompute FIFO lots for these symbols from every fill on record.
 
+    Scoped to the named symbols so a partial import never disturbs a symbol it did not
+    mention, but always reading that symbol's COMPLETE fill history — which is what
+    makes a sell captured today consume a lot bought months ago.
+    """
+    symbols = sorted(set(symbols))
+    fills = load_fills(conn, symbols)
+    rebuild = build_lots(fills)
+    _write_lots(conn, rebuild, symbols)
+    return {"symbols": symbols, "fills": len(fills),
+            "open_lots": len(rebuild.open_lots), "closed_trades": len(rebuild.closed),
+            "unmatched_sells": rebuild.unmatched_sells,
+            "realised_pnl": round(sum(c["pnl"] for c in rebuild.closed), 2)}
+
+
+def import_tradebook(conn, path: str, *, replace: bool = True) -> dict:
+    """Parse, store the fills, rebuild lots. Re-importing the same file is a no-op."""
+    fills = parse_tradebook(path)
+    stored = store_fills(conn, fills, source="console_csv")
+    symbols = stored["symbols"]
+    result = rebuild_symbols(conn, symbols) if replace else {}
+    if not replace:                       # legacy path: rebuild from this file alone
+        rebuild = build_lots(fills)
+        _write_lots(conn, rebuild, symbols, replace=False)
+        result = {"open_lots": len(rebuild.open_lots),
+                  "closed_trades": len(rebuild.closed),
+                  "unmatched_sells": rebuild.unmatched_sells,
+                  "realised_pnl": round(sum(c["pnl"] for c in rebuild.closed), 2)}
+
+    return {"file": path, "fills": len(fills), "symbols": len(symbols),
+            "new_fills": stored["new"],
+            "open_lots": result["open_lots"],
+            "closed_trades": result["closed_trades"],
+            "unmatched_sells": result["unmatched_sells"],
+            "realised_pnl": result["realised_pnl"],
+            "first_trade": min(f.when for f in fills).date().isoformat(),
+            "last_trade": max(f.when for f in fills).date().isoformat()}
+
+
+def _write_lots(conn, rebuild: Rebuild, symbols: Sequence[str],
+                *, replace: bool = True) -> None:
+    """Replace the stored lots for these symbols with a fresh rebuild."""
     # Strategy annotations the broker cannot know are preserved across the rebuild.
     kept: dict[tuple, tuple] = {}
     if replace:
@@ -280,13 +367,60 @@ def import_tradebook(conn, path: str, *, replace: bool = True) -> dict:
             "INSERT INTO trades(symbol, entry_ts, exit_ts, qty, entry_price, exit_price,"
             " entry_score, exit_reason, pnl, costs) VALUES(?,?,?,?,?,?,?,?,?,?)", rows)
 
-    realised = sum(c["pnl"] for c in rebuild.closed)
-    return {"file": path, "fills": len(fills), "symbols": len(symbols),
-            "open_lots": len(rebuild.open_lots), "closed_trades": len(rebuild.closed),
-            "unmatched_sells": rebuild.unmatched_sells,
-            "realised_pnl": round(realised, 2),
-            "first_trade": min(f.when for f in fills).date().isoformat(),
-            "last_trade": max(f.when for f in fills).date().isoformat()}
+
+# =====================================================================================
+# live capture
+# =====================================================================================
+def fills_from_kite(rows: Iterable[Mapping]) -> list[Fill]:
+    """Map Kite trade dicts onto Fills. Unknown side or zero quantity is refused.
+
+    Only equity delivery is kept: this book is a CNC cash-equity record, and letting an
+    F&O or intraday leg in would corrupt the FIFO lots and the tax review built on them.
+    """
+    out = []
+    for r in rows:
+        side = str(r.get("transaction_type", "")).strip().upper()
+        if side not in ("BUY", "SELL"):
+            raise TradebookError(f"unrecognised transaction_type {r.get('transaction_type')!r}")
+        if str(r.get("product", "CNC")).upper() != "CNC":
+            continue
+        qty = int(r.get("quantity") or 0)
+        if qty <= 0:
+            continue
+        when = r.get("fill_timestamp") or r.get("exchange_timestamp") \
+            or r.get("order_timestamp")
+        if isinstance(when, str):
+            when = _parse_when("", when)
+        if not isinstance(when, dt.datetime):
+            raise TradebookError(
+                f"trade {r.get('trade_id')} for {r.get('tradingsymbol')} has no usable "
+                "timestamp; it would land in the wrong FIFO position")
+        out.append(Fill(symbol=str(r["tradingsymbol"]), when=when, side=side,
+                        quantity=qty, price=float(r.get("average_price") or 0.0),
+                        exchange=str(r.get("exchange") or "NSE"),
+                        trade_id=str(r.get("trade_id") or "")))
+    return out
+
+
+def capture_live_trades(conn, kite) -> dict:
+    """Record today's fills and rebuild the lots they touch.
+
+    Run once per session after the close. Idempotent — trade ids already stored are
+    ignored, so repeating it changes nothing. This is what makes the Console CSV a
+    one-time seed rather than a recurring chore.
+    """
+    raw = kite.trades()
+    fills = fills_from_kite(raw)
+    if not fills:
+        return {"raw": len(raw), "captured": 0, "new": 0, "symbols": [],
+                "note": "no fills today"}
+    stored = store_fills(conn, fills, source="kite_api")
+    rebuilt = rebuild_symbols(conn, stored["symbols"]) if stored["new"] else {}
+    return {"raw": len(raw), "captured": len(fills), "new": stored["new"],
+            "symbols": stored["symbols"],
+            "open_lots": rebuilt.get("open_lots"),
+            "closed_trades": rebuilt.get("closed_trades"),
+            "realised_pnl": rebuilt.get("realised_pnl")}
 
 
 def reconcile_with_holdings(conn, holdings: Iterable[Mapping]) -> list[dict]:
@@ -390,6 +524,9 @@ def _main() -> None:
     ap.add_argument("--reconcile", action="store_true",
                     help="compare reconstructed lots against live Kite holdings")
     ap.add_argument("--summary", action="store_true", help="what is stored right now")
+    ap.add_argument("--capture", action="store_true",
+                    help="record today's Kite fills; same-day only, so run it before "
+                         "the session's book is flushed overnight")
     a = ap.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -413,7 +550,22 @@ def _main() -> None:
                     print(f"    {u['date']}  {u['symbol']:<14}{u['quantity']:>7} "
                           f"@ {u['price']}")
 
-        if a.summary or a.file:
+        if a.capture:
+            from ..kite_client import Kite
+            k = Kite()
+            if not k.is_authed():
+                raise SystemExit("Kite session expired — log in at / first")
+            res = capture_live_trades(conn, k)
+            if not res["captured"]:
+                print(f"no fills today ({res['raw']} raw rows from Kite)")
+            else:
+                print(f"captured {res['new']} new of {res['captured']} fills: "
+                      f"{', '.join(res['symbols'])}")
+                if res["closed_trades"]:
+                    print(f"  closed {res['closed_trades']} lots, "
+                          f"realised Rs {res['realised_pnl']:,.0f}")
+
+        if a.summary or a.file or a.capture:
             row = conn.execute(
                 "SELECT COUNT(*) n, SUM(exit_ts IS NULL) open FROM trades").fetchone()
             print(f"\ntrades table: {row['n']} rows, {row['open'] or 0} open lots")

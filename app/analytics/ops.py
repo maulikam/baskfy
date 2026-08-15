@@ -171,6 +171,13 @@ OPERATIONS: tuple[Operation, ...] = (
         lambda v: ["-m", "app.analytics.tradebook", "--reconcile"],
         timeout=180, needs_kite=True, writes=False),
     Operation(
+        "tradebook_capture", "Capture today's fills", "Tax lots",
+        "Record today's executed trades and rebuild the lots they touch. Kite's trade "
+        "book is same-day only, so a fill not captured on its own session survives "
+        "nowhere but a Console export. Idempotent: repeating it changes nothing.",
+        lambda v: ["-m", "app.analytics.tradebook", "--capture"],
+        timeout=120, needs_kite=True),
+    Operation(
         "tradebook_summary", "Summarise tax lots", "Tax lots",
         "How many lots are stored and how many are still open. Reads only.",
         lambda v: ["-m", "app.analytics.tradebook", "--summary"], timeout=60, writes=False),

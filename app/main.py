@@ -115,11 +115,22 @@ def home(request: Request):
             collection = _dr.status(conn)
     except Exception:
         pass
+    # Stop coverage, checked against the broker rather than assumed from the code path
+    # that placed them. Needs a live session, so it degrades to None rather than blocking.
+    protection = None
+    if authed:
+        try:
+            from .analytics import protection as _prot
+            protection = _prot.from_kite(kite())
+        except Exception as exc:
+            logging.warning("could not check stop coverage: %s", exc)
+
     # Starlette >=0.29 requires the request-first signature (the old
     # (name, {"request": ...}) form was removed in Starlette 1.x).
     return templates.TemplateResponse(request, "index.html",
                                       {"authed": authed, "dry_run": C.DRY_RUN,
-                                       "collection": collection})
+                                       "collection": collection,
+                                       "protection": protection})
 
 
 @app.get("/login")

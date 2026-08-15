@@ -172,6 +172,14 @@ OPERATIONS: tuple[Operation, ...] = (
         lambda v: ["-m", "app.analytics.tradebook", "--reconcile"],
         timeout=180, needs_kite=True, writes=False),
     Operation(
+        "protection", "Check stop coverage", "Diagnostics",
+        "Compare live holdings against live GTT triggers. Every buy is supposed to get a "
+        "stop, but one can fail to place, expire, be cancelled, or cover fewer shares "
+        "than are now held — and each of those is silent. Reads only; never places or "
+        "cancels a stop.",
+        lambda v: ["-m", "app.analytics.protection"],
+        timeout=90, needs_kite=True, writes=False),
+    Operation(
         "tradebook_capture", "Capture today's fills", "Tax lots",
         "Record today's executed trades and rebuild the lots they touch. Kite's trade "
         "book is same-day only, so a fill not captured on its own session survives "

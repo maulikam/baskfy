@@ -168,6 +168,25 @@ async def analyze(scan: UploadFile):
     plan["audit"] = scan_audit
     plan["created_at"] = time.time()
     PLANS[plan["plan_id"]] = plan
+
+    # Persist the plan and stamp it with the regime decision it was built under, so the
+    # book's actual movement can later be checked against the policy that asked for it.
+    # A failure to record must not block the desk: the in-memory plan is still executable.
+    try:
+        from .analytics import db as _db, plan_store as _ps, regime_store as _rs
+        with _db.connect() as conn:
+            _db.migrate(conn)
+            # The evaluation that was CURRENT when this plan was built, preview or
+            # committed. In observe mode nothing is ever committed, so linking only to
+            # committed decisions would leave every plan unstamped and the /regime
+            # reconciliation panel permanently empty.
+            ev = _rs.latest_evaluation(conn) if C.REGIME_ENABLED else None
+            plan["evaluation_id"] = ev["evaluation_id"] if ev else None
+            _ps.save_plan(conn, plan, evaluation_id=plan["evaluation_id"],
+                          note=f"scan {scan.filename}")
+    except Exception as exc:
+        logging.warning("could not persist plan %s: %s", plan["plan_id"], exc)
+
     return JSONResponse(plan)
 
 
@@ -244,8 +263,22 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
     log_path = f"data/outputs/execution_{plan_id}.json"
     with open(log_path, "w") as f:
         json.dump({"plan": plan, "orders": results, "gtt": stops}, f, indent=2, default=str)
+
+    # Fold the outcome back onto the stored plan. A JSON file records what happened; the
+    # database is what lets /regime ask whether the policy was actually implemented, and
+    # what lets slippage be measured against the price the plan assumed.
+    recon = {}
+    try:
+        from .analytics import db as _db, plan_store as _ps
+        with _db.connect() as conn:
+            _db.migrate(conn)
+            _ps.record_execution(conn, plan_id, results)
+            recon = _ps.reconciliation(conn, plan_id)
+    except Exception as exc:
+        logging.warning("could not record execution for %s: %s", plan_id, exc)
+
     return JSONResponse({"dry_run": C.DRY_RUN, "orders": results, "gtt": stops,
-                         "log": log_path})
+                         "log": log_path, "reconciliation": recon})
 
 
 # --- regime overlay (read-only) --------------------------------------------------------

@@ -634,3 +634,60 @@ def test_charts_are_server_rendered_with_no_external_dependency():
     assert "cdn." not in html and "https://" not in html.split("<style>")[1].split("</style>")[0]
     assert ".track" in html and ".fill" in html          # weight bars
     assert ".dv .pos" in html and ".dv .neg" in html      # diverging P&L bars
+
+
+# =====================================================================================
+# §12 transition timeline — one row per WEEK, and a chart only when it means something
+# =====================================================================================
+def _hist(weeks):
+    return [{"week": w, "raw": "R1", "tier": "R1", "cap": 100.0, "actual": a,
+             "breadth": b, "trigger": "X", "committed": False,
+             "transition_limited": False}
+            for w, a, b in weeks]
+
+
+def test_no_timeline_below_the_minimum_weeks():
+    """Two points make a line that looks like a trend and is not one."""
+    assert RV.timeline_chart(_hist([("2026-08-07", 60.0, 80.0)])) is None
+    assert RV.timeline_chart(_hist([("2026-08-07", 60.0, 80.0),
+                                    ("2026-08-14", 62.0, 78.0)])) is None
+
+
+def test_a_timeline_appears_once_there_is_enough_history():
+    tl = RV.timeline_chart(_hist([("2026-07-31", 55.0, 70.0),
+                                  ("2026-08-07", 60.0, 80.0),
+                                  ("2026-08-14", 62.0, 78.0)]))
+    assert tl is not None and tl["weeks"] == 3
+    for key in ("cap", "actual", "breadth"):
+        assert tl[key].startswith("M"), key
+
+
+def test_all_three_series_share_one_axis():
+    """Cap, exposure and breadth are all percentages; a second scale would mislead."""
+    tl = RV.timeline_chart(_hist([("2026-07-31", 0.0, 100.0),
+                                  ("2026-08-07", 50.0, 50.0),
+                                  ("2026-08-14", 100.0, 0.0)]))
+    ys = {t["v"]: t["px"] for t in tl["ticks"]}
+    assert ys[100] < ys[50] < ys[0]
+
+
+def test_the_cap_is_drawn_as_a_step():
+    """It changes only at a transition; a slope implies it drifted mid-week."""
+    tl = RV.timeline_chart(_hist([("2026-07-31", 60.0, 70.0),
+                                  ("2026-08-07", 60.0, 70.0),
+                                  ("2026-08-14", 60.0, 70.0)]))
+    assert tl["cap"].count("L") > tl["actual"].count("L")
+
+
+def test_the_missing_series_is_named_rather_than_faked():
+    tl = RV.timeline_chart(_hist([("2026-07-31", 60.0, 70.0),
+                                  ("2026-08-07", 60.0, 70.0),
+                                  ("2026-08-14", 60.0, 70.0)]))
+    assert "Momentum 50" in tl["omitted"]
+
+
+def test_history_keeps_one_row_per_week(conn, cfg):
+    """An evaluation is re-previewed on every page load and every daily run; the raw
+    table held five rows for a single week and the timeline read as five weeks."""
+    rows = RV.transition_history(conn, cfg)
+    assert len(rows) == len({r["week"] for r in rows})

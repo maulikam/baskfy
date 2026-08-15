@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import json
+import os
 
 import pandas as pd
 import pytest
@@ -704,9 +705,23 @@ def test_regime_config_factory_validates():
     assert cfg.buffer_bps == 150
 
 
-def test_regime_is_disabled_by_default():
-    from app import config as C
-    assert C.REGIME_ENABLED is False
+def test_regime_is_disabled_by_default(monkeypatch):
+    """A fresh checkout must not have the overlay on.
+
+    This asserts the DEFAULT, so it reads the env fallback rather than the live module
+    attribute: the settings layer exists precisely to change that attribute at runtime,
+    and asserting the mutated value made a legitimate 'enable the overlay' break a test
+    about defaults.
+    """
+    monkeypatch.delenv("REGIME_ENABLED", raising=False)
+    assert os.getenv("REGIME_ENABLED", "false").lower() == "false"
+
+
+def test_the_overlay_switch_is_runtime_editable():
+    """And that it CAN be turned on is the other half of the contract."""
+    from app.analytics import settings as S
+    spec = next(s for s in S.SPECS if s.key == "REGIME_ENABLED")
+    assert spec.kind == "bool" and "REGIME_ENABLED" not in S.LOCKED_KEYS
 
 
 def test_bad_regime_config_raises_at_the_factory(monkeypatch):

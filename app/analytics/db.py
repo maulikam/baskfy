@@ -23,7 +23,7 @@ from typing import Iterator, Sequence
 
 from .. import config as C
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # --- schema ---------------------------------------------------------------------------
 # Column sets are fixed by the analytics spec; extra *indexes* are fine, extra columns are
@@ -288,6 +288,22 @@ _MIGRATIONS: dict[int, Sequence[str]] = {
                duration_s   REAL
            )""",
         """CREATE INDEX IF NOT EXISTS ix_daily_runs_ran ON daily_runs(ran_at DESC)""",
+    ),
+    7: (
+        # Links a stored plan back to the regime decision that motivated it.
+        #
+        # rebalance_versions and rebalance_orders were created in v1 and, until now, never
+        # written by anything — while metrics.slippage() read them and the /regime page
+        # needed a plan id it could not get. A regime tier on screen says nothing about
+        # whether the book actually moved, and without this column there is no way to ask
+        # "which plan implemented that decision, and what did it actually fill".
+        #
+        # Nullable on purpose: a plan built with the overlay off has no evaluation.
+        """ALTER TABLE rebalance_versions ADD COLUMN evaluation_id TEXT""",
+        """CREATE INDEX IF NOT EXISTS ix_rebalance_versions_eval
+               ON rebalance_versions(evaluation_id)""",
+        """CREATE INDEX IF NOT EXISTS ix_rebalance_versions_created
+               ON rebalance_versions(created_ts DESC)""",
     ),
 }
 

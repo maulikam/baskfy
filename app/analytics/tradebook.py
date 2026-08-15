@@ -459,6 +459,39 @@ def coverage(conn, holdings: Iterable[Mapping]) -> dict:
             "missing": sorted(set(held) - recon)}
 
 
+def fills_status(conn) -> dict:
+    """Where the stored fills came from, and whether today's session was captured.
+
+    Provenance is worth showing: lots derived from a CSV that stops in June say nothing
+    about a July sell, and the page should make that visible rather than imply the book
+    is complete.
+    """
+    by_source = {r["source"]: dict(r) for r in conn.execute(
+        "SELECT source, COUNT(*) n, MIN(when_ts) first_ts, MAX(when_ts) last_ts,"
+        "       MAX(captured_at) last_run FROM fills GROUP BY source")}
+    total = sum(s["n"] for s in by_source.values())
+    last_ts = max((s["last_ts"] for s in by_source.values()), default=None)
+    today = dt.date.today()
+    api = by_source.get("kite_api")
+    captured_today = bool(api and api["last_run"]
+                          and api["last_run"][:10] == today.isoformat())
+    return {
+        "total": total,
+        "sources": [
+            {"source": k, "label": {"console_csv": "Console export",
+                                    "kite_api": "Daily capture"}.get(k, k),
+             "count": v["n"],
+             "first": dt.datetime.fromtimestamp(v["first_ts"]).date().isoformat(),
+             "last": dt.datetime.fromtimestamp(v["last_ts"]).date().isoformat(),
+             "last_run": v["last_run"]}
+            for k, v in sorted(by_source.items())],
+        "latest_fill": (dt.datetime.fromtimestamp(last_ts).date().isoformat()
+                        if last_ts else None),
+        "captured_today": captured_today,
+        "capture_ever_run": bool(api),
+    }
+
+
 def status(conn, positions: Sequence[Mapping]) -> dict:
     """Everything the tradebook page shows, from stored rows only.
 
@@ -509,6 +542,7 @@ def status(conn, positions: Sequence[Mapping]) -> dict:
         "coverage": cov,
         "problems": problems,
         "detail": detail,
+        "fills": fills_status(conn),
     }
 
 

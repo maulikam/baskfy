@@ -351,3 +351,49 @@ def test_capture_leaves_other_symbols_alone(conn, tmp_path):
         conn, FakeKite([ktrade("X", "BUY", 1, 5.0, "2026-08-15 10:00:00")]))
     r = conn.execute("SELECT qty FROM trades WHERE symbol='OTHER'").fetchone()
     assert r["qty"] == 7
+
+
+# =====================================================================================
+# fill provenance — what the page shows about where the lots came from
+# =====================================================================================
+def test_fills_status_is_empty_before_anything_is_imported(conn):
+    f = TB.fills_status(conn)
+    assert f["total"] == 0 and f["sources"] == []
+    assert f["capture_ever_run"] is False and f["captured_today"] is False
+
+
+def test_fills_status_separates_the_two_sources(conn, tmp_path):
+    TB.import_tradebook(conn, write(tmp_path, [row("X", "2025-01-01", "buy", 100, 50.0)]))
+    TB.capture_live_trades(
+        conn, FakeKite([ktrade("X", "SELL", 10, 90.0, "2026-08-15 10:00:00")]))
+    f = TB.fills_status(conn)
+    assert f["total"] == 2
+    labels = {s["label"]: s["count"] for s in f["sources"]}
+    assert labels == {"Console export": 1, "Daily capture": 1}
+    assert f["capture_ever_run"] is True and f["captured_today"] is True
+
+
+def test_capture_run_on_an_earlier_day_is_not_reported_as_today(conn):
+    TB.capture_live_trades(
+        conn, FakeKite([ktrade("X", "BUY", 1, 5.0, "2026-08-15 10:00:00")]))
+    conn.execute("UPDATE fills SET captured_at='2020-01-01T18:30:00'")
+    f = TB.fills_status(conn)
+    assert f["capture_ever_run"] is True and f["captured_today"] is False
+
+
+def test_status_carries_fill_provenance(conn, tmp_path):
+    TB.import_tradebook(conn, write(tmp_path, [row("X", "2025-01-01", "buy", 100, 50.0)]))
+    st = TB.status(conn, [{"symbol": "X", "quantity": 100, "average_price": 50.0}])
+    assert st["fills"]["total"] == 1
+
+
+def test_the_empty_state_does_not_report_reconciliation_failures(conn):
+    """With nothing imported every holding trivially 'mismatches'. Showing that as a
+    reconciliation count spends the alarm a real mismatch needs later."""
+    st = TB.status(conn, [{"symbol": "X", "quantity": 100, "average_price": 50.0}])
+    assert st["has_lots"] is False
+    assert st["problems"]            # the data still says so...
+    from fastapi.testclient import TestClient
+    from app import main as M
+    page = TestClient(M.app).get("/tradebook").text
+    assert "Quantity mismatches" not in page   # ...but the page does not cry wolf

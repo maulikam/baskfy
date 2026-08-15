@@ -357,7 +357,8 @@ def tradebook_page(request: Request, imported: str = "", error: str = ""):
         _db.migrate(conn)
         st = _tb.status(conn, positions)
     return templates.TemplateResponse(request, "tradebook.html",
-                                      {"s": st, "imported": imported, "error": error,
+                                      {"s": st, "f": st["fills"],
+                                       "imported": imported, "error": error,
                                        "have_snapshot": bool(positions)})
 
 

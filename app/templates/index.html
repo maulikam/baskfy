@@ -95,6 +95,7 @@
                 padding:2px 8px;border-radius:4px;border:1px solid currentColor;
                 white-space:nowrap;font-weight:700}
   .collect.bad .tag{color:var(--down)} .collect.warn .tag{color:var(--saffron)}
+  .collect.ok{border-color:var(--up);background:#12241f}
   .collect.ok .tag{color:var(--up)}
   #result pre{background:#0a1326;border:1px solid var(--line);border-radius:8px;
        padding:14px;overflow:auto;max-height:340px;font-size:12px;margin-top:10px}
@@ -150,6 +151,31 @@
         <a href="/ops">Open Operations</a> to re-run it.{% endif %}</span>
   </div>
   {% endif %}
+{% endif %}
+
+{# Checked against the broker, not inferred from the code that placed them. A stop can
+   fail to place, expire, be cancelled, or cover fewer shares than are now held — every
+   one of those is silent, and every one leaves money uncovered. #}
+{% if protection and not protection.healthy %}
+  <div class="collect bad">
+    <span class="tag">{{ protection.counts.missing + protection.counts.partial }} unprotected</span>
+    <span>₹{{ '{:,.0f}'.format(protection.unprotected_value) }} of
+      ₹{{ '{:,.0f}'.format(protection.tradeable_value) }} has no working stop
+      ({{ protection.coverage_pct }}% covered, {{ protection.active_gtts }} active GTT{{ '' if protection.active_gtts == 1 else 's' }}).
+      <span class="muted">Largest:
+        {%- for f in protection.findings[:4] %}
+          {{ f.symbol }} ₹{{ '{:,.0f}'.format(f.value) }}{{ ',' if not loop.last }}
+        {%- endfor %}{% if protection.findings|length > 4 %}
+          and {{ protection.findings|length - 4 }} more{% endif %}.
+        Run <code>python -m app.analytics.protection</code> for the full list. Placing
+        stops is a decision with money behind it, so nothing here does it for you.</span></span>
+  </div>
+{% elif protection and protection.checked %}
+  <div class="collect ok">
+    <span class="tag">stops current</span>
+    <span class="muted">All {{ protection.checked }} tradeable positions carry a stop
+      covering their full quantity.</span>
+  </div>
 {% endif %}
 
 <div class="row">

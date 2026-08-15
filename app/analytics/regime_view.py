@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 from .. import config as C
 from ..core.regime import AFFIRMATIVE_RISK_OFF, DISPLAY_REASONS, RegimeTier
@@ -138,7 +138,74 @@ def _confirmation(ma: dict, cfg) -> str:
     return f"{n}/{cfg.confirm_days} {state}"
 
 
-def _index_cards(diagnostics: dict, cfg, status_rows: list[dict]) -> list[dict]:
+SPARK_SESSIONS = 130            # about six months of trading
+SPARK_W, SPARK_H = 168, 34
+
+
+def _sparkline(closes: list[float], ma_len: int) -> dict | None:
+    """Close against the moving average that decides this card, over ~6 months.
+
+    The card already states every MA distance as a number. A sparkline of price alone
+    would only repeat the close, so the reference line is the MA that actually drives the
+    decision for this index — the 200-DMA for the structural indices, whose H200 sets the
+    tier, and the 50-DMA for the sentinel, whose crossing is the new-buy veto. That makes
+    the shape answer a question the numbers do not: is this rolling over or recovering.
+
+    Needs ma_len sessions of history BEFORE the visible window, so the average is real at
+    the first drawn point rather than creeping up from a short window.
+    """
+    if len(closes) < ma_len + 2:
+        return None
+    ma = [sum(closes[i - ma_len + 1:i + 1]) / ma_len if i >= ma_len - 1 else None
+          for i in range(len(closes))]
+    start = max(ma_len - 1, len(closes) - SPARK_SESSIONS)
+    px_v, ma_v = closes[start:], ma[start:]
+    if len(px_v) < 2:
+        return None
+
+    pts = [v for v in px_v + [m for m in ma_v if m is not None]]
+    lo, hi = min(pts), max(pts)
+    span = (hi - lo) or (hi or 1.0) * 0.01
+    n = len(px_v) - 1
+
+    def x(i): return i / n * (SPARK_W - 2) + 1
+    def y(v): return SPARK_H - 2 - (v - lo) / span * (SPARK_H - 4)
+
+    def path(vals):
+        out, pen = [], "M"
+        for i, v in enumerate(vals):
+            if v is None:
+                pen = "M"
+                continue
+            out.append(f"{pen}{x(i):.1f},{y(v):.1f}")
+            pen = "L"
+        return " ".join(out)
+
+    return {"w": SPARK_W, "h": SPARK_H, "ma_len": ma_len,
+            "price": path(px_v), "ma": path(ma_v),
+            "last_x": round(x(n), 1), "last_y": round(y(px_v[-1]), 1),
+            "above": px_v[-1] >= (ma_v[-1] if ma_v[-1] is not None else px_v[-1]),
+            "sessions": len(px_v)}
+
+
+def _spark_series(conn, cfg, order: Sequence[str]) -> dict:
+    """Closes per index, deep enough to compute a real 200-DMA at the window start."""
+    from . import index_cache as IC
+
+    out: dict = {}
+    try:
+        repo = IC.IndexRepository(conn)
+        for name in order:
+            need = SPARK_SESSIONS + 200 + 5
+            candles = repo.load(name)[-need:]
+            out[name] = [c.close for c in candles if c.close]
+    except Exception:
+        return {}
+    return out
+
+
+def _index_cards(diagnostics: dict, cfg, status_rows: list[dict],
+                 spark_series: Mapping[str, list[float]] | None = None) -> list[dict]:
     by_name = {r["index_name"]: r for r in status_rows}
     order = list(cfg.structural_indices.values()) + [cfg.momentum_sentinel]
     cards = []
@@ -156,7 +223,12 @@ def _index_cards(diagnostics: dict, cfg, status_rows: list[dict]) -> list[dict]:
                 "confirmation": _confirmation(sigs.get(str(n)) or {}, cfg)}
                for n in (20, 50, 200)]
         st = by_name.get(name, {})
-        cards.append({"index_name": name, "is_sentinel": name == cfg.momentum_sentinel,
+        is_sentinel = name == cfg.momentum_sentinel
+        # The sentinel is judged on its 50-DMA crossing (the new-buy veto); the structural
+        # indices on their 200-DMA (H200, which sets the tier).
+        spark = _sparkline((spark_series or {}).get(name, []), 50 if is_sentinel else 200)
+        cards.append({"index_name": name, "is_sentinel": is_sentinel,
+                      "spark": spark,
                       "close": d.get("close"), "mas": mas,
                       "bearish_stack": bool(d.get("bearish_stack")),
                       "data_date": d.get("as_of_date"),
@@ -566,7 +638,9 @@ def build(conn) -> dict:
     band = next((b for b in BREADTH_BANDS
                  if breadth_pct is not None and b[0] <= breadth_pct < b[1]), None)
 
-    cards = _index_cards(diagnostics, cfg, status_rows)
+    order = list(cfg.structural_indices.values()) + [cfg.momentum_sentinel]
+    cards = _index_cards(diagnostics, cfg, status_rows,
+                         _spark_series(conn, cfg, order))
     sentinel_card = next((c for c in cards if c["is_sentinel"]), None)
     mas = (sentinel_card or {}).get("mas", [])
     s50 = next((m for m in mas if m["length"] == 50), {})

@@ -419,6 +419,25 @@
         {{ '{:,.1f}'.format(c.close) if c.close is not none else '—' }}</div>
       <p class="muted">close · {{ c.data_date or '—' }}
         {% if c.stale %}<span class="pill warn">stale</span>{% else %}<span class="pill mute">current</span>{% endif %}</p>
+      {% if c.spark %}
+        {# Trajectory only. Every MA distance is stated as a number below, so the price
+           line is drawn against the average that DECIDES this card — the 200-DMA for the
+           structural indices, the 50-DMA for the sentinel — and answers a question the
+           numbers do not: rolling over, or recovering. #}
+        <svg viewBox="0 0 {{ c.spark.w }} {{ c.spark.h }}" width="100%"
+             style="max-width:{{ c.spark.w }}px;height:auto;display:block;margin:8px 0 2px"
+             role="img" aria-hidden="true" focusable="false">
+          <path d="{{ c.spark.ma }}" fill="none" stroke="#5b6b8c" stroke-width="1"
+                stroke-dasharray="3 2"/>
+          <path d="{{ c.spark.price }}" fill="none" stroke-width="1.5"
+                stroke="{{ '#3ddc97' if c.spark.above else '#ff6b6b' }}"
+                stroke-linejoin="round"/>
+          <circle cx="{{ c.spark.last_x }}" cy="{{ c.spark.last_y }}" r="2.2"
+                  fill="{{ '#3ddc97' if c.spark.above else '#ff6b6b' }}"/>
+        </svg>
+        <p class="muted" style="font-size:10.5px">{{ c.spark.sessions }} sessions ·
+          dashed line is the {{ c.spark.ma_len }}-DMA</p>
+      {% endif %}
       <table style="margin-top:8px">
         <tbody>
         {% for m in c.mas %}

@@ -40,6 +40,8 @@
     <string>-m</string>
     <string>scripts.daily</string>
     <string>--quiet</string>
+    <string>--source</string>
+    <string>schedule</string>
   </array>
 
   <!-- 18:30 local, comfortably after the 15:30 IST close and any evening login.

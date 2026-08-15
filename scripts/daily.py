@@ -46,6 +46,7 @@ sys.path.insert(0, ".")
 
 from app import config as C                                       # noqa: E402
 from app.analytics import breadth as B                            # noqa: E402
+from app.analytics import daily_runs as DR                        # noqa: E402
 from app.analytics import db, index_cache as IC                   # noqa: E402
 from app.analytics import regime_store as RS, snapshot as SNAP    # noqa: E402
 from app.core import regime as R                                  # noqa: E402
@@ -99,6 +100,17 @@ class Runner:
               "some steps failed; re-run once the cause is fixed, nothing is duplicated")
 
 
+def _safe_record(conn, *, steps, trigger, session_date, started, outcome=None) -> None:
+    """Recording is bookkeeping: a failure here must never turn a collection that
+    otherwise landed into a crash, nor mask the real exit code."""
+    try:
+        DR.record(conn, steps=[tuple(s) for s in steps], trigger=trigger,
+                  session_date=session_date, outcome=outcome,
+                  duration_s=round((dt.datetime.now() - started).total_seconds(), 2))
+    except Exception as exc:
+        print(f"  (could not record this run: {exc})")
+
+
 def _state(conn) -> dict:
     counts = {t: conn.execute(f"SELECT COUNT(*) c FROM {t}").fetchone()["c"]
               for t in ("snapshots", "breadth_readings", "trades", "index_series",
@@ -118,11 +130,19 @@ def main() -> int:
     ap.add_argument("--only", action="append", choices=STEPS, metavar="STEP",
                     help=f"run only these steps ({', '.join(STEPS)}); repeatable. "
                          "The steps stay independently idempotent either way.")
+    ap.add_argument("--source", choices=("schedule", "cli", "page"), default="cli",
+                    help="who launched this run; recorded so the interface can tell an "
+                         "unattended failure from one you were watching")
     a = ap.parse_args()
 
     today = dt.date.today()
     cfg = C.regime_config()
     run = Runner(verbose=not a.quiet, only=set(a.only) if a.only else None)
+    started = dt.datetime.now()
+
+    # A --only run collects part of a session by design, so it must not be recorded as
+    # the day's collection: doing so would mark the day complete when it is not.
+    record_run = not a.only
 
     with db.connect(a.db) as conn:
         db.migrate(conn)
@@ -153,6 +173,13 @@ def main() -> int:
                   "login flow has no refresh token.")
             print(f"  log in:  {kite.login_url()}")
             print("  then re-run this command.")
+            # Recorded, not just printed: this is THE failure mode of the scheduled job,
+            # and unrecorded it goes nowhere but a log nobody opens.
+            if record_run:
+                _safe_record(conn, steps=[(s, DR.FAIL, "not reached: no Kite session")
+                                          for s in STEPS],
+                             trigger=a.source, session_date=today, outcome=DR.AUTH,
+                             started=started)
             return 2
 
         # --- 1. index history ------------------------------------------------------------
@@ -233,6 +260,9 @@ def main() -> int:
         run.step("regime preview", _regime)
 
         run.report()
+        if record_run:
+            _safe_record(conn, steps=run.rows, trigger=a.source, session_date=today,
+                         started=started)
         st = _state(conn)
         print(f"\nsnapshots {st['snapshots']} ({st['first_snapshot']} -> "
               f"{st['last_snapshot']}) · breadth {st['breadth_readings']} · "

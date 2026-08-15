@@ -105,10 +105,21 @@ def home(request: Request):
         authed = kite().is_authed()
     except Exception:
         pass
+    # Collection health belongs on the desk: a silently broken daily job costs history
+    # that cannot be backfilled, and this is the page actually opened before trading.
+    collection = None
+    try:
+        from .analytics import daily_runs as _dr, db as _db
+        with _db.connect() as conn:
+            _db.migrate(conn)
+            collection = _dr.status(conn)
+    except Exception:
+        pass
     # Starlette >=0.29 requires the request-first signature (the old
     # (name, {"request": ...}) form was removed in Starlette 1.x).
     return templates.TemplateResponse(request, "index.html",
-                                      {"authed": authed, "dry_run": C.DRY_RUN})
+                                      {"authed": authed, "dry_run": C.DRY_RUN,
+                                       "collection": collection})
 
 
 @app.get("/login")
@@ -267,10 +278,12 @@ def regime_data():
 # --- operations ---------------------------------------------------------------------------
 @app.get("/ops", response_class=HTMLResponse)
 def ops_page(request: Request, started: str = "", error: str = ""):
-    from .analytics import db as _db, ops as _ops
+    from .analytics import daily_runs as _dr, db as _db, ops as _ops
     with _db.connect() as conn:
         _db.migrate(conn)
         ctx = _ops.view(conn)
+        ctx["collection"] = _dr.status(conn)
+        ctx["daily_history"] = _dr.history(conn, limit=10)
     ctx.update({"started": started, "error": error})
     return templates.TemplateResponse(request, "ops.html", ctx)
 

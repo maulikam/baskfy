@@ -82,6 +82,20 @@
        padding:10px 0 0;border-top:2px solid var(--saffron);font-weight:600}
   #ticketCount{margin-bottom:2px}
   .muted{color:var(--dim);font-size:12px;line-height:1.55}
+  /* No global link colour existed, so any link outside .nav fell back to the browser's
+     default blue — illegible on this background. .nav a keeps its own colour by
+     specificity. */
+  a{color:var(--saffron)}
+  .collect{border:1px solid var(--line);border-radius:9px;padding:11px 15px;
+           margin-bottom:16px;background:#16203a;display:flex;gap:12px;
+           align-items:baseline;flex-wrap:wrap;font-size:12.5px}
+  .collect.bad{border-color:var(--down);background:#251722}
+  .collect.warn{border-color:var(--saffron);background:#221b12}
+  .collect .tag{font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+                padding:2px 8px;border-radius:4px;border:1px solid currentColor;
+                white-space:nowrap;font-weight:700}
+  .collect.bad .tag{color:var(--down)} .collect.warn .tag{color:var(--saffron)}
+  .collect.ok .tag{color:var(--up)}
   #result pre{background:#0a1326;border:1px solid var(--line);border-radius:8px;
        padding:14px;overflow:auto;max-height:340px;font-size:12px;margin-top:10px}
   @media (prefers-reduced-motion:no-preference){
@@ -107,6 +121,36 @@
     &nbsp;·&nbsp; Mode: <b class="{{ 'warn' if not dry_run else '' }}">{{ 'DRY RUN' if dry_run else 'LIVE ORDERS' }}</b>
   </div>
 </header>
+
+{# Only shown when something is wrong. A healthy collection needs no banner: a status
+   line that is always present stops being read, and this one has to be believed on the
+   day it turns red. #}
+{% if collection and not collection.healthy %}
+  {% if not collection.ever_ran %}
+  <div class="collect warn">
+    <span class="tag">collection idle</span>
+    <span>The daily job has never run. Nothing is being recorded yet, and a missed
+      session cannot be backfilled: margins have no history and Kite's trade book is
+      same-day only. <a href="/ops">Run it now</a>.</span>
+  </div>
+  {% else %}
+  <div class="collect {{ 'bad' if collection.consecutive_failures > 1 else 'warn' }}">
+    <span class="tag">
+      {%- if collection.consecutive_failures > 1 -%}
+        {{ collection.consecutive_failures }} runs failed
+      {%- else -%}last run failed{%- endif -%}
+    </span>
+    <span>{{ collection.message }}
+      {%- if collection.stale_days %} Nothing has been collected for
+        {{ collection.stale_days }} day{{ '' if collection.stale_days == 1 else 's' }},
+        and those sessions cannot be recovered.
+      {%- elif not collection.stale_days is none %} Today is still covered.{% endif %}
+      {% if collection.outcome == 'auth' %}<a href="/login">Log in to Kite</a>, then
+        <a href="/ops">re-run the collection</a>.{% else %}
+        <a href="/ops">Open Operations</a> to re-run it.{% endif %}</span>
+  </div>
+  {% endif %}
+{% endif %}
 
 <div class="row">
   <div class="card">

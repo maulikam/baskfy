@@ -236,6 +236,121 @@ def ranked_bars(variants: Mapping[str, Mapping], metric: str, *,
             "pad_l": pad_l, "zero": round(zero, 1), "bars": bars, "metric": metric}
 
 
+import math
+
+# Direct-labelled at the right edge: the three that define the decision. The rest stay in
+# their family colour, so seven lines read as three bands rather than as spaghetti.
+CURVE_CALLOUTS = ("A", "B_raw", "F")
+
+
+def _log_ticks(lo: float, hi: float) -> list[float]:
+    """1-2-5 decade ticks spanning [lo, hi]."""
+    out, dec = [], 10 ** math.floor(math.log10(max(lo, 1e-9)))
+    while dec <= hi * 10:
+        for m in (1, 2, 5):
+            v = dec * m
+            if lo <= v <= hi:
+                out.append(v)
+        dec *= 10
+    return out or [lo, hi]
+
+
+def curves(data: Mapping, *, width: int = 720, eq_h: int = 300, dd_h: int = 190,
+           pad_l: int = 58, pad_r: int = 74, pad_t: int = 14, pad_b: int = 26) -> dict | None:
+    """Equity (log) and drawdown (linear) over the whole window.
+
+    Equity is logarithmic because a linear axis over twenty-one years of compounding
+    devotes most of its height to the last few years and makes the early drawdowns — the
+    ones that decide whether a design is survivable — invisible.
+    """
+    c = data.get("curves") or {}
+    dates, series = c.get("dates") or [], c.get("series") or {}
+    if len(dates) < 2 or not series:
+        return None
+
+    keys = [k for k in series if is_candidate(k)]
+    if not keys:
+        return None
+
+    eq_vals = [v for k in keys for v in series[k]["equity"] if v]
+    dd_vals = [v for k in keys for v in series[k]["drawdown"] if v is not None]
+    if not eq_vals or not dd_vals:
+        return None
+    lo, hi = max(min(eq_vals), 1e-6), max(eq_vals)
+    worst = min(dd_vals)
+
+    pw = width - pad_l - pad_r
+    eph, dph = eq_h - pad_t - pad_b, dd_h - pad_t - pad_b
+    n = len(dates) - 1
+    llo, lhi = math.log10(lo), math.log10(hi)
+
+    def px(i): return pad_l + i / n * pw
+    def eqy(v): return pad_t + (1 - (math.log10(v) - llo) / (lhi - llo)) * eph
+    def ddy(v): return pad_t + (-v / -worst) * dph if worst else pad_t
+
+    def path(vals, fn):
+        out, pen = [], "M"
+        for i, v in enumerate(vals):
+            if v is None or (fn is eqy and v <= 0):
+                pen = "M"
+                continue
+            out.append(f"{pen}{px(i):.1f},{fn(v):.1f}")
+            pen = "L"
+        return " ".join(out)
+
+    lines = []
+    for k in sorted(keys, key=lambda k: k not in CURVE_CALLOUTS):
+        fam = FAMILY_OF[k]
+        eq, dd = series[k]["equity"], series[k]["drawdown"]
+        last = next((v for v in reversed(eq) if v), None)
+        lines.append({
+            "key": k, "family": fam, "color": FAMILIES[fam]["color"],
+            "equity": path(eq, eqy), "drawdown": path(dd, ddy),
+            "callout": k in CURVE_CALLOUTS,
+            "final": round(last, 0) if last else None,
+            "label_y": round(eqy(last), 1) if last else None,
+        })
+    _spread([l for l in lines if l["callout"]], pad_t, pad_t + eph)
+
+    year_ix = [i for i, d in enumerate(dates)
+               if d.endswith("-01-01") or (i and dates[i - 1][:4] != d[:4])]
+    step = max(1, len(year_ix) // 8)
+
+    return {
+        "width": width, "eq_h": eq_h, "dd_h": dd_h,
+        "pad_l": pad_l, "pad_r": pad_r, "pad_t": pad_t,
+        "eq_plot": eph, "dd_plot": dph,
+        "lines": lines,
+        "eq_ticks": [{"v": v, "px": round(eqy(v), 1),
+                      "label": f"{v:,.0f}"} for v in _log_ticks(lo, hi)],
+        "dd_ticks": [{"v": v, "px": round(ddy(v), 1), "label": f"{v:.0f}%"}
+                     for v in _dd_ticks(worst)],
+        "xticks": [{"px": round(px(i), 1), "label": dates[i][:4]}
+                   for i in year_ix[::step]],
+        "start": dates[0], "end": dates[-1], "worst": round(worst, 2),
+    }
+
+
+def _dd_ticks(worst: float) -> list[float]:
+    step = 10 if worst > -45 else 20
+    out, v = [0.0], -step
+    while v > worst - step:
+        out.append(float(v))
+        v -= step
+    return out
+
+
+def _spread(lines: list[dict], top: float, bottom: float, gap: float = 13.0) -> None:
+    """Keep right-edge callouts from printing over each other."""
+    have = [l for l in lines if l["label_y"] is not None]
+    have.sort(key=lambda l: l["label_y"])
+    for i in range(1, len(have)):
+        if have[i]["label_y"] - have[i - 1]["label_y"] < gap:
+            have[i]["label_y"] = have[i - 1]["label_y"] + gap
+    for l in have:
+        l["label_y"] = min(max(l["label_y"], top + 6), bottom)
+
+
 def build(data: Mapping | None) -> dict | None:
     """Everything the backtest page needs to draw itself."""
     if not data or not data.get("variants"):
@@ -244,6 +359,7 @@ def build(data: Mapping | None) -> dict | None:
     abl = [k for k in v if k.startswith("abl_")]
     return {
         "scatter": risk_return_scatter(v),
+        "curves": curves(data),
         "sharpe": ranked_bars(v, "sharpe"),
         "ablation": ranked_bars(v, "CAGR", keys=abl, pad_l=196),
         "families": [{"key": k, **f} for k, f in FAMILIES.items()],

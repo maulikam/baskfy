@@ -457,6 +457,48 @@ def performance(sim: dict, schedule: pd.DataFrame, benchmark: pd.Series,
     }
 
 
+def curve_payload(detail: dict, *, rule: str = "W-FRI") -> dict:
+    """Serialise the equity and drawdown curves for the page.
+
+    Daily resolution over twenty-one years is ~5,300 points per variant, far more than a
+    720px chart can show, so the curves are bucketed weekly — which is also the cadence
+    the strategy actually rebalances at.
+
+    THE TRAP: drawdown must be computed at FULL resolution and then bucketed by MINIMUM.
+    Bucketing the equity curve first, or taking the last value of each week, silently
+    misses a trough that falls mid-week and would draw a drawdown shallower than the one
+    the metrics report — a chart quietly disagreeing with the table beside it.
+
+    Dates are stored once: every variant is simulated over the same session index, so
+    repeating them per variant would multiply the payload for nothing.
+    """
+    curves, index = {}, None
+    for key, d in detail.items():
+        # Ablations answer "which input contributed", which the summary bars already show.
+        # Their curves would quadruple the payload the page parses on every request.
+        if key.startswith("abl_"):
+            continue
+        curve = d["sim"]["curve"]
+        if curve is None or curve.empty:
+            continue
+        drawdown = (curve / curve.cummax() - 1.0) * 100.0
+        eq = curve.resample(rule).last().dropna()
+        dd = drawdown.resample(rule).min().dropna()      # MIN keeps the trough
+        eq, dd = eq.align(dd, join="inner")
+        if index is None:
+            index = eq.index
+        else:
+            eq = eq.reindex(index)
+            dd = dd.reindex(index)
+        curves[key] = {
+            "equity": [None if pd.isna(x) else round(float(x), 1) for x in eq],
+            "drawdown": [None if pd.isna(x) else round(float(x), 2) for x in dd],
+        }
+    if index is None:
+        return {}
+    return {"dates": [d.date().isoformat() for d in index], "series": curves}
+
+
 def run_all(conn, cfg: R.RegimeConfig, *, start: dt.date, end: dt.date,
             costs: CostModel, cash_rate: float, spec: WhipsawSpec,
             proxy_name: str) -> tuple[pd.DataFrame, dict]:
@@ -710,6 +752,7 @@ def main() -> None:
                     "cash_rate": f"{a.cash_rate*100:.2f}%",
                 },
                 "variants": json.loads(table.to_json(orient="index")),
+                "curves": curve_payload(detail),
                 "tier_distribution": {
                     k: {kk: float(vv) for kk, vv in (d["schedule"]["tier"]
                         .value_counts(normalize=True).mul(100).round(2).to_dict()).items()}

@@ -195,3 +195,102 @@ def test_the_page_survives_missing_results(monkeypatch):
     monkeypatch.setattr("os.path.exists", lambda p: False)
     r = TestClient(M.app).get("/regime/backtest")
     assert r.status_code == 200
+
+
+# =====================================================================================
+# equity / drawdown curves
+# =====================================================================================
+CURVES = {
+    "curves": {
+        "dates": ["2020-01-03", "2020-01-10", "2020-01-17", "2020-01-24"],
+        "series": {
+            "A":     {"equity": [100.0, 120.0, 60.0, 90.0],
+                      "drawdown": [0.0, 0.0, -50.0, -25.0]},
+            "B_raw": {"equity": [100.0, 110.0, 95.0, 130.0],
+                      "drawdown": [0.0, 0.0, -13.64, 0.0]},
+            "F":     {"equity": [100.0, 105.0, 98.0, 112.0],
+                      "drawdown": [0.0, 0.0, -6.67, 0.0]},
+            "abl_x": {"equity": [100.0, 100.0, 100.0, 100.0],
+                      "drawdown": [0.0, 0.0, 0.0, 0.0]},
+        },
+    },
+    "variants": SAMPLE["variants"],
+}
+
+
+def test_no_curves_without_series():
+    assert BV.curves({}) is None
+    assert BV.curves({"curves": {"dates": ["2020-01-01"], "series": {}}}) is None
+
+
+def test_ablations_are_excluded_from_the_curves():
+    c = BV.curves(CURVES)
+    assert "abl_x" not in {l["key"] for l in c["lines"]}
+
+
+def test_every_candidate_becomes_a_path():
+    c = BV.curves(CURVES)
+    assert {l["key"] for l in c["lines"]} == {"A", "B_raw", "F"}
+    for l in c["lines"]:
+        assert l["equity"].startswith("M") and l["drawdown"].startswith("M")
+
+
+def test_the_final_value_is_the_last_point():
+    c = BV.curves(CURVES)
+    finals = {l["key"]: l["final"] for l in c["lines"]}
+    assert finals["A"] == 90 and finals["B_raw"] == 130
+
+
+def test_the_equity_axis_is_logarithmic():
+    """Equal ratios must occupy equal vertical distance."""
+    c = BV.curves({"curves": {"dates": ["2020-01-01", "2020-01-08", "2020-01-15"],
+                              "series": {"A": {"equity": [100.0, 1000.0, 10000.0],
+                                               "drawdown": [0.0, 0.0, 0.0]}}}})
+    ys = [float(s.split(",")[1]) for s in
+          c["lines"][0]["equity"].replace("M", " ").replace("L", " ").split()]
+    assert abs((ys[0] - ys[1]) - (ys[1] - ys[2])) < 0.5
+
+
+def test_the_drawdown_axis_spans_the_worst_point():
+    c = BV.curves(CURVES)
+    assert c["worst"] == -50.0
+    assert min(t["v"] for t in c["dd_ticks"]) <= -50.0
+
+
+def test_zero_drawdown_sits_at_the_top():
+    c = BV.curves(CURVES)
+    zero = [t for t in c["dd_ticks"] if t["v"] == 0][0]
+    assert zero["px"] == c["pad_t"]
+
+
+def test_callout_labels_do_not_collide():
+    c = BV.curves(CURVES)
+    ys = sorted(l["label_y"] for l in c["lines"] if l["callout"])
+    assert all(b - a >= 12.9 for a, b in zip(ys, ys[1:]))
+
+
+def test_a_gap_in_a_series_breaks_the_path_instead_of_bridging_it():
+    """A straight line across missing weeks would invent performance."""
+    c = BV.curves({"curves": {
+        "dates": ["2020-01-01", "2020-01-08", "2020-01-15"],
+        "series": {"A": {"equity": [100.0, None, 120.0],
+                         "drawdown": [0.0, None, 0.0]}}}})
+    assert c["lines"][0]["equity"].count("M") == 2
+
+
+def test_curves_reach_the_page():
+    page = TestClient(M.app).get("/regime/backtest").text
+    assert "Growth of ₹100" in page
+    assert "Drawdown from peak" in page
+
+
+def test_the_stored_curves_agree_with_the_reported_drawdown():
+    """The chart must not draw a shallower trough than the table reports — which is what
+    bucketing weekly by CLOSE instead of by MINIMUM would do."""
+    data = json.load(open("data/outputs/regime_backtest.json"))
+    if not data.get("curves"):
+        pytest.skip("no curves stored")
+    for key, s in data["curves"]["series"].items():
+        worst = min(x for x in s["drawdown"] if x is not None)
+        reported = float(data["variants"][key]["max_drawdown_pct"])
+        assert worst <= reported + 0.01, f"{key}: curve {worst} vs reported {reported}"

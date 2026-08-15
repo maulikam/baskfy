@@ -172,6 +172,74 @@
   </div>
 </section>
 
+{% if charts.curves %}
+{% set cv = charts.curves %}
+<section>
+  <h2>Growth of ₹100, and what it cost to hold</h2>
+  <div class="card">
+    <p class="muted" style="margin-bottom:4px">{{ cv.start }} to {{ cv.end }}. The equity
+      axis is <b>logarithmic</b>: on a linear axis two decades of compounding give almost
+      all the height to the last few years and hide the early drawdowns, which are the
+      ones that decide whether a design is survivable. Same three families as above;
+      A, B_raw and F are labelled.</p>
+    <div class="scroll">
+      <svg viewBox="0 0 {{ cv.width }} {{ cv.eq_h }}" width="100%"
+           style="max-width:{{ cv.width }}px;height:auto;display:block"
+           role="img" aria-label="Growth of 100 rupees by variant, logarithmic scale">
+        {% for t in cv.eq_ticks %}
+          <line x1="{{ cv.pad_l }}" y1="{{ t.px }}" x2="{{ cv.width - cv.pad_r }}"
+                y2="{{ t.px }}" stroke="#22304d" stroke-width="1"/>
+          <text x="{{ cv.pad_l - 8 }}" y="{{ t.px + 4 }}" text-anchor="end"
+                fill="#8593ad" font-size="10">{{ t.label }}</text>
+        {% endfor %}
+        {% for t in cv.xticks %}
+          <text x="{{ t.px }}" y="{{ cv.eq_h - 6 }}" text-anchor="middle"
+                fill="#8593ad" font-size="10">{{ t.label }}</text>
+        {% endfor %}
+        {% for l in cv.lines %}
+          <path d="{{ l.equity }}" fill="none" stroke="{{ l.color }}"
+                stroke-width="{{ 2 if l.callout else 1.2 }}"
+                opacity="{{ 1 if l.callout else 0.4 }}"
+                stroke-linejoin="round"/>
+        {% endfor %}
+        {% for l in cv.lines %}{% if l.callout %}
+          <text x="{{ cv.width - cv.pad_r + 7 }}" y="{{ l.label_y }}" fill="{{ l.color }}"
+                font-size="11">{{ l.key }}</text>
+          <text x="{{ cv.width - cv.pad_r + 7 }}" y="{{ l.label_y + 11 }}" fill="#8593ad"
+                font-size="10">₹{{ '{:,.0f}'.format(l.final) }}</text>
+        {% endif %}{% endfor %}
+      </svg>
+      <p class="muted" style="margin:12px 0 2px;letter-spacing:.11em;font-size:10px;
+                text-transform:uppercase">Drawdown from peak</p>
+      <svg viewBox="0 0 {{ cv.width }} {{ cv.dd_h }}" width="100%"
+           style="max-width:{{ cv.width }}px;height:auto;display:block"
+           role="img" aria-label="Drawdown from peak by variant">
+        {% for t in cv.dd_ticks %}
+          <line x1="{{ cv.pad_l }}" y1="{{ t.px }}" x2="{{ cv.width - cv.pad_r }}"
+                y2="{{ t.px }}" stroke="#22304d" stroke-width="1"/>
+          <text x="{{ cv.pad_l - 8 }}" y="{{ t.px + 4 }}" text-anchor="end"
+                fill="#8593ad" font-size="10">{{ t.label }}</text>
+        {% endfor %}
+        {% for t in cv.xticks %}
+          <text x="{{ t.px }}" y="{{ cv.dd_h - 6 }}" text-anchor="middle"
+                fill="#8593ad" font-size="10">{{ t.label }}</text>
+        {% endfor %}
+        {% for l in cv.lines %}
+          <path d="{{ l.drawdown }}" fill="none" stroke="{{ l.color }}"
+                stroke-width="{{ 1.8 if l.callout else 1.1 }}"
+                opacity="{{ 0.95 if l.callout else 0.35 }}"
+                stroke-linejoin="round"/>
+        {% endfor %}
+      </svg>
+    </div>
+    <p class="muted" style="margin-top:8px">Drawdown is computed daily and then bucketed
+      weekly by its <b>worst</b> value, so a trough falling mid-week still shows. Bucketing
+      by the week's closing value instead would draw a shallower curve than the table
+      above reports.</p>
+  </div>
+</section>
+{% endif %}
+
 {% if charts.sharpe %}
 {% set sh = charts.sharpe %}
 <section>

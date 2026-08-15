@@ -691,3 +691,72 @@ def test_history_keeps_one_row_per_week(conn, cfg):
     table held five rows for a single week and the timeline read as five weeks."""
     rows = RV.transition_history(conn, cfg)
     assert len(rows) == len({r["week"] for r in rows})
+
+
+# =====================================================================================
+# §5 sparklines — trajectory, which the MA distances alone cannot show
+# =====================================================================================
+def test_no_sparkline_without_enough_history():
+    """A 200-DMA needs 200 sessions before the first drawn point; anything less would
+    creep up from a short window and misstate where price sits against it."""
+    assert RV._sparkline([100.0] * 50, 200) is None
+    assert RV._sparkline([], 50) is None
+
+
+def test_a_sparkline_draws_price_and_its_reference_average():
+    closes = [100.0 + i for i in range(260)]
+    s = RV._sparkline(closes, 200)
+    assert s is not None
+    assert s["price"].startswith("M") and s["ma"].startswith("M")
+    assert s["ma_len"] == 200
+
+
+def test_the_visible_window_is_capped_at_six_months():
+    s = RV._sparkline([100.0 + i for i in range(900)], 50)
+    assert s["sessions"] == RV.SPARK_SESSIONS
+
+
+def test_a_rising_series_ends_above_its_average():
+    s = RV._sparkline([100.0 + i for i in range(300)], 200)
+    assert s["above"] is True
+
+
+def test_a_falling_series_ends_below_its_average():
+    s = RV._sparkline([500.0 - i for i in range(300)], 200)
+    assert s["above"] is False
+
+
+def test_higher_prices_are_drawn_higher():
+    """SVG y grows downward; a rising series must not render upside down."""
+    s = RV._sparkline([100.0 + i for i in range(300)], 200)
+    ys = [float(p.split(",")[1]) for p in
+          s["price"].replace("M", " ").replace("L", " ").split()]
+    assert ys[0] > ys[-1]
+
+
+def test_a_flat_series_does_not_divide_by_zero():
+    s = RV._sparkline([100.0] * 300, 200)
+    assert s is not None and s["price"].startswith("M")
+
+
+def test_marks_stay_inside_the_canvas():
+    s = RV._sparkline([100.0 + (i % 7) for i in range(300)], 200)
+    xs, ys = [], []
+    for p in s["price"].replace("M", " ").replace("L", " ").split():
+        x, y = p.split(",")
+        xs.append(float(x)); ys.append(float(y))
+    assert min(xs) >= 0 and max(xs) <= s["w"]
+    assert min(ys) >= 0 and max(ys) <= s["h"]
+
+
+def test_the_sentinel_is_charted_against_its_own_decisive_average(conn, cfg):
+    """Structural indices are judged on the 200-DMA (H200 sets the tier); the sentinel on
+    its 50-DMA (the new-buy veto). Charting both against the same line would misrepresent
+    which crossing matters."""
+    series = {n: [100.0 + i for i in range(300)]
+              for n in list(cfg.structural_indices.values()) + [cfg.momentum_sentinel]}
+    diag = {n: {"close": 399.0, "signals": {}, "as_of_date": "2026-08-14"}
+            for n in series}
+    cards = RV._index_cards(diag, cfg, [], series)
+    for c in cards:
+        assert c["spark"]["ma_len"] == (50 if c["is_sentinel"] else 200)

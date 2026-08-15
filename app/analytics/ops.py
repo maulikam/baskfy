@@ -121,7 +121,8 @@ OPERATIONS: tuple[Operation, ...] = (
         "daily", "Run the daily collection", "Daily",
         "Index history, benchmark PRI, EOD snapshot, breadth if a scan is given, and an "
         "observe-mode regime preview. Idempotent: re-running changes nothing.",
-        lambda v: ["-m", "scripts.daily"] + (["--scan", v["scan"]] if v.get("scan") else []),
+        lambda v: ["-m", "scripts.daily", "--source", "page"]
+                  + (["--scan", v["scan"]] if v.get("scan") else []),
         timeout=900, params=(SCAN,), needs_kite=True, long_running=True),
     Operation(
         "daily_check", "Check collection state", "Daily",

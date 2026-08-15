@@ -23,7 +23,7 @@ from typing import Iterator, Sequence
 
 from .. import config as C
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # --- schema ---------------------------------------------------------------------------
 # Column sets are fixed by the analytics spec; extra *indexes* are fine, extra columns are
@@ -267,6 +267,27 @@ _MIGRATIONS: dict[int, Sequence[str]] = {
                captured_at TEXT
            )""",
         """CREATE INDEX IF NOT EXISTS ix_fills_symbol ON fills(symbol, when_ts)""",
+    ),
+    6: (
+        # Outcome of each daily collection, whoever launched it.
+        #
+        # Deliberately NOT ops_jobs: that table records "a process was started from the
+        # page". This records "the collection produced this result", which is a different
+        # fact — a scheduled run has no ops_jobs row at all, and the thing worth alerting
+        # on is a streak of failures, not an exit code. Per-step detail is kept because
+        # "snapshot failed, everything else landed" and "nothing ran" both exit non-zero
+        # and need very different responses.
+        """CREATE TABLE IF NOT EXISTS daily_runs(
+               id           INTEGER PRIMARY KEY AUTOINCREMENT,
+               ran_at       TEXT NOT NULL,
+               session_date TEXT NOT NULL,
+               trigger      TEXT NOT NULL,   -- schedule | cli | page
+               outcome      TEXT NOT NULL,   -- ok | partial | failed | auth
+               failed_steps INTEGER NOT NULL DEFAULT 0,
+               steps_json   TEXT NOT NULL,
+               duration_s   REAL
+           )""",
+        """CREATE INDEX IF NOT EXISTS ix_daily_runs_ran ON daily_runs(ran_at DESC)""",
     ),
 }
 

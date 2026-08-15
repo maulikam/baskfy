@@ -130,6 +130,49 @@
   <div class="banner bad"><span class="tag">refused</span><span>{{ error }}</span></div>
 {% endif %}
 
+{# Collection health, stated whether good or bad: this is the page you come to when you
+   suspect something did not run, so silence here would be ambiguous. #}
+<div class="banner {{ 'ok' if collection.healthy else ('bad' if collection.consecutive_failures > 1 or not collection.ever_ran else 'run') }}">
+  <span class="tag">
+    {%- if not collection.ever_ran %}never run
+    {%- elif collection.healthy %}collection healthy
+    {%- elif collection.consecutive_failures > 1 %}{{ collection.consecutive_failures }} failures
+    {%- else %}last run failed{% endif %}</span>
+  <span>{{ collection.message }}
+    {%- if collection.ran_at %} <span class="muted">Last attempt {{ collection.ran_at }}
+      ({{ collection.trigger }}){% if collection.stale_days %}; nothing collected for
+      {{ collection.stale_days }} day{{ '' if collection.stale_days == 1 else 's' }},
+      which cannot be recovered{% endif %}.</span>{% endif %}</span>
+</div>
+
+{% if daily_history %}
+<section>
+  <h2>Daily collection history</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Ran at</th><th>Session</th><th>Trigger</th><th>Outcome</th>
+        <th>Steps that failed</th></tr></thead>
+      <tbody>
+      {% for r in daily_history %}
+        <tr>
+          <td>{{ r.ran_at }}</td>
+          <td class="muted">{{ r.session_date }}</td>
+          <td class="muted">{{ r.trigger }}</td>
+          <td><span class="st {{ 'ok' if r.outcome == 'ok' else ('running' if r.outcome == 'partial' else 'failed') }}">{{ r.outcome }}</span></td>
+          <td class="muted">
+            {%- set bad = (r.steps_json | fromjson) | selectattr(1, 'equalto', 'FAILED') | map(attribute=0) | list -%}
+            {{ bad | join(', ') if bad else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">Scheduled runs appear here even though they
+      never touch the buttons above. A run started from this page is also recorded in
+      <em>Run history</em> below, which tracks processes rather than collection outcomes.</p>
+  </div>
+</section>
+{% endif %}
+
 <div class="banner">
   <span class="tag">how this works</span>
   <span class="muted">Each button runs one <b>allowlisted</b> command with a fixed argument

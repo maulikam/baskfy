@@ -485,6 +485,12 @@ def curve_payload(detail: dict, *, rule: str = "W-FRI") -> dict:
         eq = curve.resample(rule).last().dropna()
         dd = drawdown.resample(rule).min().dropna()      # MIN keeps the trough
         eq, dd = eq.align(dd, join="inner")
+        # Equity exposure, so cash allocation over the whole window is readable as its
+        # complement. Bucketed by MEAN: the average of the week is what was actually held,
+        # where last() would report a single day's stance as the whole week's.
+        exp = d["sim"].get("exposure")
+        exp = (exp.resample(rule).mean().reindex(eq.index)
+               if exp is not None and not exp.empty else None)
         if index is None:
             index = eq.index
         else:
@@ -493,6 +499,8 @@ def curve_payload(detail: dict, *, rule: str = "W-FRI") -> dict:
         curves[key] = {
             "equity": [None if pd.isna(x) else round(float(x), 1) for x in eq],
             "drawdown": [None if pd.isna(x) else round(float(x), 2) for x in dd],
+            "exposure": ([None if pd.isna(x) else round(float(x), 1) for x in exp]
+                         if exp is not None else None),
         }
     if index is None:
         return {}

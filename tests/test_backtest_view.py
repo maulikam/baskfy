@@ -461,3 +461,64 @@ def test_a_plain_save_run_still_produces_every_section():
 def test_the_heatmap_separates_cells_with_the_surface():
     css = open("app/templates/regime_backtest.html").read()
     assert "border-spacing:2px" in css
+
+
+# --- exposure panel ------------------------------------------------------------------
+EXP = {"curves": {"dates": [f"2020-01-{d:02d}" for d in range(1, 11)],
+                  "series": {"A": {"equity": [100.0] * 10, "drawdown": [0.0] * 10,
+                                   "exposure": [100.0] * 10},
+                             "B_raw": {"equity": [100.0] * 10, "drawdown": [0.0] * 10,
+                                       "exposure": [0.0, 100.0] * 5}}}}
+
+
+def test_exposure_is_optional():
+    """Results saved before exposure was serialised must still render."""
+    c = BV.curves(CURVES)
+    assert c["has_exposure"] is False
+    assert all(l["exposure"] == "" for l in c["lines"])
+
+
+def test_exposure_becomes_a_path_when_present():
+    c = BV.curves(EXP)
+    assert c["has_exposure"] is True
+    assert all(l["exposure"].startswith("M") for l in c["lines"])
+
+
+def test_full_exposure_is_at_the_top_of_its_panel():
+    c = BV.curves(EXP)
+    ticks = {t["v"]: t["px"] for t in c["ex_ticks"]}
+    assert ticks[100] < ticks[50] < ticks[0]
+
+
+def test_the_average_exposure_is_the_unsmoothed_mean():
+    """The headline number must describe the data, not the drawn approximation."""
+    c = BV.curves(EXP)
+    avg = {l["key"]: l["avg_exposure"] for l in c["lines"]}
+    assert avg["A"] == 100.0 and avg["B_raw"] == 50.0
+
+
+def test_smoothing_flattens_a_binary_switcher():
+    """Drawn raw this is a picket fence; the trailing mean is what makes it readable."""
+    raw = [0.0, 100.0] * 20
+    sm = BV.curves({"curves": {"dates": [f"d{i}" for i in range(40)],
+                               "series": {"B_raw": {"equity": [100.0] * 40,
+                                                    "drawdown": [0.0] * 40,
+                                                    "exposure": raw}}}})
+    ys = [float(s.split(",")[1]) for s in
+          sm["lines"][0]["exposure"].replace("M", " ").replace("L", " ").split()]
+    churn = sum(abs(b - a) for a, b in zip(ys, ys[1:]))
+    # Compare against the raw series drawn on the same panel rather than a magic number.
+    panel = sm["ex_h"] - sm["pad_t"] - 26
+    raw_churn = (len(raw) - 1) * panel
+    assert churn < raw_churn / 10, f"{churn:.0f} vs raw {raw_churn:.0f}"
+
+
+def test_the_smoothing_window_is_stated_on_the_page():
+    page = TestClient(M.app).get("/regime/backtest").text
+    assert f"{BV.EXPOSURE_WINDOW}-week trailing" in page
+
+
+def test_the_stale_placeholder_section_is_gone():
+    """It listed curves, heatmaps and timelines as 'still to come' while all three
+    rendered above it on the same page."""
+    assert "Still to come" not in open("app/templates/regime_backtest.html").read()

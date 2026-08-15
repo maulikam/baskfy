@@ -242,6 +242,9 @@ import math
 # their family colour, so seven lines read as three bands rather than as spaghetti.
 CURVE_CALLOUTS = ("A", "B_raw", "F")
 
+# Weeks in the trailing mean used for the exposure panel (~1 year).
+EXPOSURE_WINDOW = 52
+
 
 def _log_ticks(lo: float, hi: float) -> list[float]:
     """1-2-5 decade ticks spanning [lo, hi]."""
@@ -256,7 +259,8 @@ def _log_ticks(lo: float, hi: float) -> list[float]:
 
 
 def curves(data: Mapping, *, width: int = 720, eq_h: int = 300, dd_h: int = 190,
-           pad_l: int = 58, pad_r: int = 74, pad_t: int = 14, pad_b: int = 26) -> dict | None:
+           ex_h: int = 150, pad_l: int = 58, pad_r: int = 74, pad_t: int = 14,
+           pad_b: int = 26) -> dict | None:
     """Equity (log) and drawdown (linear) over the whole window.
 
     Equity is logarithmic because a linear axis over twenty-one years of compounding
@@ -277,16 +281,43 @@ def curves(data: Mapping, *, width: int = 720, eq_h: int = 300, dd_h: int = 190,
     if not eq_vals or not dd_vals:
         return None
     lo, hi = max(min(eq_vals), 1e-6), max(eq_vals)
+    # A perfectly flat curve — a variant that sat in cash all window at a 0% cash rate —
+    # collapses the log range to zero and divides by it. Widen instead of crashing.
+    if hi <= lo:
+        lo, hi = lo / 2.0, hi * 2.0
     worst = min(dd_vals)
 
     pw = width - pad_l - pad_r
     eph, dph = eq_h - pad_t - pad_b, dd_h - pad_t - pad_b
+    xph = ex_h - pad_t - pad_b
     n = len(dates) - 1
     llo, lhi = math.log10(lo), math.log10(hi)
 
     def px(i): return pad_l + i / n * pw
     def eqy(v): return pad_t + (1 - (math.log10(v) - llo) / (lhi - llo)) * eph
     def ddy(v): return pad_t + (-v / -worst) * dph if worst else pad_t
+    def exy(v): return pad_t + (1 - v / 100.0) * xph
+
+    def smooth(vals, window=EXPOSURE_WINDOW):
+        """Trailing mean of the exposure series.
+
+        Drawn raw, a binary variant switching between 0% and 100% across 1,116 weeks in
+        580 pixels is a picket fence: every switch is half a pixel wide and the panel
+        reads as noise. The question this panel answers is how invested each design was
+        over time, and a trailing mean answers it legibly. The whipsaw COUNT is reported
+        separately, so nothing is hidden by smoothing — only moved to where it is
+        readable.
+        """
+        out, acc = [], []
+        for v in vals or []:
+            if v is None:
+                out.append(None)
+                continue
+            acc.append(v)
+            if len(acc) > window:
+                acc.pop(0)
+            out.append(sum(acc) / len(acc))
+        return out
 
     def path(vals, fn):
         out, pen = [], "M"
@@ -302,10 +333,15 @@ def curves(data: Mapping, *, width: int = 720, eq_h: int = 300, dd_h: int = 190,
     for k in sorted(keys, key=lambda k: k not in CURVE_CALLOUTS):
         fam = FAMILY_OF[k]
         eq, dd = series[k]["equity"], series[k]["drawdown"]
+        ex = series[k].get("exposure")
         last = next((v for v in reversed(eq) if v), None)
         lines.append({
             "key": k, "family": fam, "color": FAMILIES[fam]["color"],
             "equity": path(eq, eqy), "drawdown": path(dd, ddy),
+            "exposure": path(smooth(ex), exy) if ex else "",
+            "avg_exposure": (round(sum(x for x in ex if x is not None)
+                                   / max(len([x for x in ex if x is not None]), 1), 1)
+                             if ex else None),
             "callout": k in CURVE_CALLOUTS,
             "final": round(last, 0) if last else None,
             "label_y": round(eqy(last), 1) if last else None,
@@ -317,7 +353,10 @@ def curves(data: Mapping, *, width: int = 720, eq_h: int = 300, dd_h: int = 190,
     step = max(1, len(year_ix) // 8)
 
     return {
-        "width": width, "eq_h": eq_h, "dd_h": dd_h,
+        "width": width, "eq_h": eq_h, "dd_h": dd_h, "ex_h": ex_h,
+        "has_exposure": any(l["exposure"] for l in lines),
+        "exposure_window": EXPOSURE_WINDOW,
+        "ex_ticks": [{"v": v, "px": round(exy(v), 1)} for v in (0, 50, 100)],
         "pad_l": pad_l, "pad_r": pad_r, "pad_t": pad_t,
         "eq_plot": eph, "dd_plot": dph,
         "lines": lines,

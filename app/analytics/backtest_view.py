@@ -351,6 +351,159 @@ def _spread(lines: list[dict], top: float, bottom: float, gap: float = 13.0) -> 
         l["label_y"] = min(max(l["label_y"], top + 6), bottom)
 
 
+# Sequential ramp for magnitude: single hue, monotone lightness, validated with
+# validateOrdinal against the page surface.
+#
+# It sits in the LIGHT half of the hue deliberately. The cells carry their numbers inside
+# them, and a ramp spanning dark-to-light needs the ink to flip partway along or one end
+# becomes unreadable — a darker ramp measured 2.42:1 for dark ink at its low end. Every
+# step here clears 4.5:1 against one ink, so the text never changes colour mid-grid.
+RAMP = ("#8577d0", "#9a8ce4", "#b0a4f2", "#c5bcf8", "#dad3fc")
+RAMP_INK = "#0b1220"
+
+
+def _ramp_color(v: float, lo: float, hi: float) -> str:
+    if hi <= lo:
+        return RAMP[len(RAMP) // 2]
+    i = int((v - lo) / (hi - lo) * (len(RAMP) - 1) + 0.5)
+    return RAMP[max(0, min(len(RAMP) - 1, i))]
+
+
+def robustness(data: Mapping, metric: str = "CAGR") -> dict | None:
+    """The parameter grid as heatmaps, one per R4 exposure setting.
+
+    Reported, not ranked. The question a heatmap answers here is "does the result depend
+    on where these knobs are set", and a flat grid is as informative as a varied one.
+    """
+    rows = data.get("robustness")
+    if not rows:
+        return None
+    vals = [float(r[metric]) for r in rows]
+    lo, hi = min(vals), max(vals)
+    buffers = sorted({r["buffer_bps"] for r in rows})
+    confirms = sorted({r["confirm_days"] for r in rows})
+
+    grids = []
+    for r4 in sorted({r["r4_exposure"] for r in rows}):
+        cells = []
+        for b in buffers:
+            for c in confirms:
+                hit = next((r for r in rows if r["buffer_bps"] == b
+                            and r["confirm_days"] == c and r["r4_exposure"] == r4), None)
+                if not hit:
+                    continue
+                cells.append({
+                    "buffer": b, "confirm": c,
+                    "value": round(float(hit[metric]), 2),
+                    "dd": round(float(hit["max_drawdown_pct"]), 1),
+                    "whip": round(float(hit["whipsaws_per_year"]), 2),
+                    "turnover": round(float(hit["annual_turnover_pct"]), 0),
+                    "color": _ramp_color(float(hit[metric]), lo, hi),
+                })
+        grids.append({"r4": r4, "cells": cells})
+
+    # Two things the grid says that a reader should not have to spot by eye.
+    signatures = [tuple(c["value"] for c in g["cells"]) for g in grids]
+    r4_inert = len(signatures) > 1 and len(set(signatures)) == 1
+
+    return {"grids": grids, "buffers": buffers, "confirms": confirms,
+            "metric": metric, "min": round(lo, 2), "max": round(hi, 2),
+            "spread": round(hi - lo, 2), "ramp": list(RAMP), "ink": RAMP_INK,
+            # Every R4 setting producing an identical grid means the tier was never
+            # reached in this window, so the knob decided nothing.
+            "r4_inert": r4_inert,
+            # A narrow spread means the result is not a tuning artefact — which also
+            # means it cannot be tuned into a different answer.
+            "narrow": (hi - lo) < 2.0}
+
+
+def timelines(data: Mapping, *, width: int = 720, height: int = 118,
+              pad_l: int = 40, pad_r: int = 16, pad_t: int = 12,
+              pad_b: int = 24) -> list[dict] | None:
+    """Exposure through each event window, as a step.
+
+    Exposure IS the tier, expressed as the quantity that actually matters, so it needs no
+    colour key of its own: a step down to 40% is what R3 MEANS. Held as a step rather than
+    interpolated, because the exposure was constant between weekly evaluations and a
+    sloped line would imply a gradual exit that never happened.
+    """
+    wins = data.get("timelines")
+    if not wins:
+        return None
+    out = []
+    for w in wins:
+        entry = {"label": w["label"], "start": w["start"], "end": w["end"],
+                 "width": width, "height": height, "pad_l": pad_l, "pad_t": pad_t,
+                 "unavailable": w.get("unavailable")}
+        rows = w.get("rows") or []
+        if entry["unavailable"] or not rows:
+            entry["unavailable"] = entry["unavailable"] or "no evaluations in this window"
+            out.append(entry)
+            continue
+
+        n = max(len(rows) - 1, 1)
+        pw, ph = width - pad_l - pad_r, height - pad_t - pad_b
+
+        def px(i): return pad_l + i / n * pw
+        def py(v): return pad_t + (1 - v / 100.0) * ph
+
+        d = [f"M{px(0):.1f},{py(rows[0]['exposure']):.1f}"]
+        for i, r in enumerate(rows[1:], start=1):
+            d.append(f"L{px(i):.1f},{py(rows[i - 1]['exposure']):.1f}")
+            d.append(f"L{px(i):.1f},{py(r['exposure']):.1f}")
+        entry["path"] = " ".join(d)
+        entry["area"] = (f"{entry['path']} L{px(len(rows) - 1):.1f},{py(0):.1f} "
+                         f"L{px(0):.1f},{py(0):.1f} Z")
+
+        changes = []
+        for i, r in enumerate(rows):
+            if i and r["tier"] != rows[i - 1]["tier"]:
+                changes.append({"x": round(px(i), 1), "tier": r["tier"],
+                                "date": r["date"], "exposure": r["exposure"]})
+        entry["changes"] = changes
+        entry["ticks"] = [{"v": v, "px": round(py(v), 1)} for v in (0, 50, 100)]
+        entry["first"], entry["last"] = rows[0]["date"], rows[-1]["date"]
+        entry["min_exposure"] = min(r["exposure"] for r in rows)
+        out.append(entry)
+    return out
+
+
+def subperiods(data: Mapping, *, bar_w: int = 190) -> dict | None:
+    """The overlay against no overlay in windows chosen because they hurt.
+
+    Both measures are shown because they point opposite ways: the tiered model cut the
+    drawdown in every window and gave up return in every window. Showing only one would
+    argue a case rather than present the trade.
+    """
+    rows = data.get("subperiods")
+    if not rows:
+        return None
+    usable = [r for r in rows if not r.get("unavailable") and r.get("variants")]
+    if not usable:
+        return None
+    keys = list(usable[0]["variants"])
+    cagr_max = max(abs(float(v["CAGR"])) for r in usable for v in r["variants"].values())
+    dd_max = max(abs(float(v["max_drawdown_pct"]))
+                 for r in usable for v in r["variants"].values())
+
+    out = []
+    for r in usable:
+        entry = {"label": r["label"], "start": r["start"], "bars": []}
+        for k in keys:
+            v = r["variants"][k]
+            fam = FAMILY_OF.get(k, "tiered")
+            entry["bars"].append({
+                "key": k, "color": FAMILIES[fam]["color"],
+                "cagr": round(float(v["CAGR"]), 2),
+                "dd": round(float(v["max_drawdown_pct"]), 2),
+                "cagr_w": round(abs(float(v["CAGR"])) / cagr_max * bar_w, 1),
+                "dd_w": round(abs(float(v["max_drawdown_pct"])) / dd_max * bar_w, 1),
+            })
+        out.append(entry)
+    return {"rows": out, "keys": keys, "bar_w": bar_w,
+            "cagr_max": round(cagr_max, 1), "dd_max": round(dd_max, 1)}
+
+
 def build(data: Mapping | None) -> dict | None:
     """Everything the backtest page needs to draw itself."""
     if not data or not data.get("variants"):
@@ -360,6 +513,9 @@ def build(data: Mapping | None) -> dict | None:
     return {
         "scatter": risk_return_scatter(v),
         "curves": curves(data),
+        "robustness": robustness(data),
+        "timelines": timelines(data),
+        "subperiods": subperiods(data),
         "sharpe": ranked_bars(v, "sharpe"),
         "ablation": ranked_bars(v, "CAGR", keys=abl, pad_l=196),
         "families": [{"key": k, **f} for k, f in FAMILIES.items()],

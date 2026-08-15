@@ -8,14 +8,22 @@
   and check the log — the job exits 0 only when every step landed.
 
   Install:
+      mkdir -p data/outputs
       cp scripts/com.momentum.daily.plist.example \
          ~/Library/LaunchAgents/com.momentum.daily.plist
       # edit the paths below to match this checkout, then:
-      launchctl load ~/Library/LaunchAgents/com.momentum.daily.plist
+      launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.momentum.daily.plist
 
-  Check:   launchctl list | grep momentum
+  Check:   launchctl list | grep momentum      # columns: PID, last exit, label
   Logs:    tail -f data/outputs/daily.log
-  Remove:  launchctl unload ~/Library/LaunchAgents/com.momentum.daily.plist
+  Test:    launchctl kickstart -p gui/$(id -u)/com.momentum.daily
+  Remove:  launchctl bootout gui/$(id -u)/com.momentum.daily
+
+  load/unload still work but are deprecated; bootstrap/bootout report real errors instead
+  of failing silently.
+
+  Exit 2 means the Kite session was not logged in that day. The job cannot fix that for
+  you and does not retry: see the token note above.
 -->
 <plist version="1.0">
 <dict>

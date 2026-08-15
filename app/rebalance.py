@@ -27,12 +27,41 @@ def _load_clusters() -> dict:
     return {}
 
 
-def build_plan(scored: pd.DataFrame, holdings: list[dict], cash: float) -> dict:
-    """holdings: [{symbol, quantity(total incl pledged+t1), pledged_qty, last_price, average_price}]"""
+def build_plan(scored: pd.DataFrame, holdings: list[dict], cash: float,
+               live_prices: dict[str, float] | None = None) -> dict:
+    """holdings: [{symbol, quantity(total incl pledged+t1), pledged_qty, last_price, average_price}]
+
+    live_prices maps symbol -> last traded price and is REQUIRED for any name not already
+    held. A new position was previously sized and limit-priced from the scan CSV's close
+    while held names used live LTP, so every entry was priced one gap stale at best: the
+    quantity is capital*weight/price, and a price that is wrong by a factor is a position
+    size wrong by that factor. A candidate with no live price is dropped from the plan and
+    reported in `unpriced` rather than sized from a stale figure.
+    """
+    live_prices = {k: float(v) for k, v in (live_prices or {}).items() if v and v > 0}
     idx = scored.set_index("symbol")
     hold = {h["symbol"]: h for h in holdings if h["symbol"] not in C.EXCLUDED_SYMBOLS}
     excluded = [h for h in holdings if h["symbol"] in C.EXCLUDED_SYMBOLS]
     clusters = _load_clusters()
+
+    def price_of(s: str) -> float | None:
+        """Live price only. Held names carry an LTP refreshed by the caller."""
+        p = live_prices.get(s)
+        if p:
+            return p
+        h = hold.get(s)
+        return float(h["last_price"]) if h and h.get("last_price") else None
+
+    # Only ELIGIBLE names matter here: a filter-rejected symbol is never bought, so its
+    # lack of a live price is not a problem to report. Held names are covered by the
+    # caller's LTP refresh and fall back to their stored last_price.
+    #
+    # `scored` itself is deliberately NOT filtered: breadth is measured across the whole
+    # scan, and removing rows from it moved breadth from 83.9% to 100% — which feeds the
+    # cash target and the regime overlay. Unpriced names are excluded at SELECTION only.
+    unpriced = sorted({str(r.symbol) for _, r in scored.iterrows()
+                       if not r["reject"] and str(r.symbol) not in hold
+                       and price_of(str(r.symbol)) is None})
 
     book_val = sum(h["quantity"] * h["last_price"] for h in hold.values())
     capital = book_val + cash
@@ -58,7 +87,8 @@ def build_plan(scored: pd.DataFrame, holdings: list[dict], cash: float) -> dict:
             keepers[s] = float(row["SCORE"])
 
     # --- selection ---
-    elig = scored[scored.reject == ""].sort_values("rank")
+    # A name with no live price cannot be sized, so it is not eligible to be selected.
+    elig = scored[(scored.reject == "") & (~scored.symbol.isin(unpriced))].sort_values("rank")
     n_lo, n_hi = C.TARGET_POSITIONS
     n = int(np.clip(len(elig[elig.SCORE >= elig.SCORE.quantile(.85)]) + len(keepers), n_lo, n_hi))
     cutoff_rank = n + C.RETENTION_BUFFER
@@ -110,7 +140,9 @@ def build_plan(scored: pd.DataFrame, holdings: list[dict], cash: float) -> dict:
     # --- orders ---
     orders = []
     for s, weight in sorted(w.items(), key=lambda x: -x[1]):
-        px = hold[s]["last_price"] if s in hold else float(idx.loc[s, "close"])
+        px = price_of(s)
+        if px is None:                      # unreachable: filtered above, guarded anyway
+            continue
         vol = float(idx.loc[s, "volatility_one_year"]) if s in idx.index else 0.36
         tgt_qty = round(capital * weight / 100 / px)
         cur_qty = hold[s]["quantity"] if s in hold else 0
@@ -151,4 +183,5 @@ def build_plan(scored: pd.DataFrame, holdings: list[dict], cash: float) -> dict:
                 buys_value=round(buys), sells_value=round(sells),
                 net_cash_use=round(buys - sells), cluster_warnings=cluster_warn,
                 pledged_sells_margin_note=pledged_sells,
-                excluded=[h["symbol"] for h in excluded], orders=orders)
+                excluded=[h["symbol"] for h in excluded], unpriced=unpriced,
+                orders=orders)

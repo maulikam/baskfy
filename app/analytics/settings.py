@@ -407,3 +407,62 @@ def locked_view() -> list[dict]:
     ):
         rows.append({"key": key, "value": getattr(C, key, None), "why": why})
     return rows
+
+
+def inr_short(v: float) -> str:
+    """Lakh/crore gloss. `15,750,000` is arithmetic; `1.58 cr` is a quantity you can
+    weigh against a portfolio. The full figure is always shown beside it."""
+    a = abs(v)
+    if a >= 1e7:
+        return f"{v / 1e7:,.2f} cr"
+    if a >= 1e5:
+        return f"{v / 1e5:,.2f} L"
+    return f"{v:,.0f}"
+
+
+def risk_preview(nav: float) -> dict:
+    """What the risk limits actually mean, in rupees, at the current NAV.
+
+    WHY THIS EXISTS
+    "Daily loss cap: 5.0%" is not a number anyone can accept or reject. "Trading halts
+    for the day after losing Rs 5,25,000" is. Every limit here is derived from NAV, so
+    the percentage alone tells you nothing until it is multiplied out — and a limit
+    nobody can evaluate is a limit nobody sets deliberately.
+
+    Calls config.risk_config, the SAME function the gateway uses, rather than repeating
+    the arithmetic. A preview that re-derived these would eventually disagree with what
+    is actually enforced, which is worse than showing nothing.
+    """
+    from .. import config as C
+
+    cfg = C.risk_config(nav)
+    derived = not (C.RISK_MAX_POSITION_VALUE or C.RISK_MAX_GROSS_EXPOSURE)
+    legal_max = nav * C.MAX_SINGLE_WEIGHT / 100.0 if nav > 0 else 0.0
+    return {
+        "nav": nav, "nav_short": inr_short(nav),
+        "have_nav": nav > 0,
+        "derived": derived,
+        "rows": [
+            {"key": "RISK_MAX_DAILY_LOSS_PCT",
+             "value": f"₹{cfg.max_daily_loss:,.0f}",
+             "short": inr_short(cfg.max_daily_loss),
+             "means": "Trading halts for the rest of the day once losses reach this."},
+            {"key": "RISK_POSITION_HEADROOM",
+             "value": f"₹{cfg.max_position_value:,.0f}",
+             "short": inr_short(cfg.max_position_value),
+             "means": (f"Largest single position the gateway will allow. The strategy's "
+                       f"own cap is {C.MAX_SINGLE_WEIGHT}% of NAV = "
+                       f"₹{legal_max:,.0f}.")},
+            {"key": "RISK_GROSS_MULTIPLE",
+             "value": f"₹{cfg.max_gross_exposure:,.0f}",
+             "short": inr_short(cfg.max_gross_exposure),
+             "means": "Total exposure ceiling across all positions."},
+            {"key": "RISK_MAX_ORDERS_PER_DAY",
+             "value": f"{cfg.max_orders_per_day:,}", "short": "",
+             "means": (f"A full rebalance of {C.TARGET_POSITIONS[1]} positions is at most "
+                       f"{C.TARGET_POSITIONS[1] * 2} orders plus stops.")},
+        ],
+        # Surfaced rather than only logged: an incoherent limit blocks something the
+        # strategy is configured to do, and the warning belongs where it is edited.
+        "problems": C.risk_coherence(cfg, nav) if nav > 0 else [],
+    }

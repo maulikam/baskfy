@@ -274,3 +274,64 @@ def test_json_endpoint_reports_values_and_sources(client, conn):
     assert d["settings"]["REGIME_BUFFER_BPS"]["value"] == "205"
     assert d["settings"]["REGIME_BUFFER_BPS"]["source"] == "database"
     assert any(r["key"] == "DRY_RUN" for r in d["locked"])
+
+
+# =====================================================================================
+# risk preview — a percentage is not a decision
+# =====================================================================================
+def test_inr_short_uses_lakh_and_crore():
+    assert S.inr_short(10_531_889) == "1.05 cr"
+    assert S.inr_short(526_594) == "5.27 L"
+    assert S.inr_short(4_200) == "4,200"
+
+
+def test_inr_short_handles_negatives_by_magnitude():
+    assert S.inr_short(-12_000_000).endswith("cr")
+
+
+def test_the_preview_multiplies_the_percentage_out():
+    p = S.risk_preview(10_000_000.0)
+    row = next(r for r in p["rows"] if r["key"] == "RISK_MAX_DAILY_LOSS_PCT")
+    assert row["value"] == f"₹{10_000_000 * C.RISK_MAX_DAILY_LOSS_PCT / 100:,.0f}"
+
+
+def test_the_preview_matches_what_the_gateway_will_enforce():
+    """A preview that re-derived these would eventually disagree with the real limits."""
+    nav = 10_531_889.0
+    cfg = C.risk_config(nav)
+    p = S.risk_preview(nav)
+    shown = {r["key"]: r["value"] for r in p["rows"]}
+    assert shown["RISK_MAX_DAILY_LOSS_PCT"] == f"₹{cfg.max_daily_loss:,.0f}"
+    assert shown["RISK_POSITION_HEADROOM"] == f"₹{cfg.max_position_value:,.0f}"
+    assert shown["RISK_GROSS_MULTIPLE"] == f"₹{cfg.max_gross_exposure:,.0f}"
+
+
+def test_without_a_snapshot_the_preview_says_so_rather_than_inventing_a_nav():
+    p = S.risk_preview(0.0)
+    assert p["have_nav"] is False and p["problems"] == []
+
+
+def test_an_incoherent_limit_is_surfaced_not_only_logged(monkeypatch):
+    """A cap below the largest legal position blocks something the strategy permits."""
+    monkeypatch.setattr(C, "RISK_MAX_POSITION_VALUE", 100.0)
+    p = S.risk_preview(10_000_000.0)
+    assert p["problems"] and "below the largest position" in p["problems"][0]
+
+
+def test_the_page_explains_itself_when_there_is_no_snapshot(client):
+    """Every risk limit is derived from NAV, so with no snapshot the page must say the
+    gateway is on fallback defaults rather than print a number that means nothing."""
+    page = client.get("/settings").text
+    assert "No stored snapshot yet" in page
+    assert "nothing to do with your book" in page
+
+
+def test_the_page_shows_the_rupee_figures_once_a_snapshot_exists(client, conn):
+    import json as _json
+    conn.execute("INSERT INTO snapshots(date, nav, invested, cash, holdings_json,"
+                 " index_value) VALUES('2026-08-14', 10531889.0, 9000000.0, 1531889.0,"
+                 " ?, 100.0)", (_json.dumps([]),))
+    conn.commit()
+    page = client.get("/settings").text
+    assert "the gateway enforces" in page
+    assert "1.05 cr" in page

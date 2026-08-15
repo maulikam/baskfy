@@ -416,7 +416,8 @@ def settings_page(request: Request, saved: str = "", error: str = ""):
         _db.migrate(conn)
         ctx = {"eff": _st.effective(conn), "groups": _st.GROUPS,
                "locked": _st.locked_view(), "history": _st.history(conn, 25),
-               "saved": saved, "error": error, "dry_run": C.DRY_RUN}
+               "saved": saved, "error": error, "dry_run": C.DRY_RUN,
+               "risk": _st.risk_preview(_latest_nav())}
     return templates.TemplateResponse(request, "settings.html", ctx)
 
 

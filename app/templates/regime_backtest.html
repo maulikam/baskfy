@@ -238,11 +238,42 @@
                 stroke-linejoin="round"/>
         {% endfor %}
       </svg>
+      {% if cv.has_exposure %}
+      <p class="muted" style="margin:12px 0 2px;letter-spacing:.11em;font-size:10px;
+                text-transform:uppercase">Equity exposure, {{ cv.exposure_window }}-week trailing mean · the rest was cash</p>
+      <svg viewBox="0 0 {{ cv.width }} {{ cv.ex_h }}" width="100%"
+           style="max-width:{{ cv.width }}px;height:auto;display:block"
+           role="img" aria-label="Equity exposure by variant; the remainder was held in cash">
+        {% for t in cv.ex_ticks %}
+          <line x1="{{ cv.pad_l }}" y1="{{ t.px }}" x2="{{ cv.width - cv.pad_r }}"
+                y2="{{ t.px }}" stroke="#22304d" stroke-width="1"/>
+          <text x="{{ cv.pad_l - 8 }}" y="{{ t.px + 4 }}" text-anchor="end"
+                fill="#8593ad" font-size="10">{{ t.v }}%</text>
+        {% endfor %}
+        {% for t in cv.xticks %}
+          <text x="{{ t.px }}" y="{{ cv.ex_h - 6 }}" text-anchor="middle"
+                fill="#8593ad" font-size="10">{{ t.label }}</text>
+        {% endfor %}
+        {% for l in cv.lines %}{% if l.exposure %}
+          <path d="{{ l.exposure }}" fill="none" stroke="{{ l.color }}"
+                stroke-width="{{ 1.8 if l.callout else 1.1 }}"
+                opacity="{{ 0.95 if l.callout else 0.3 }}" stroke-linejoin="round"/>
+        {% endif %}{% endfor %}
+        {% for l in cv.lines %}{% if l.callout and l.avg_exposure is not none %}
+          <text x="{{ cv.width - cv.pad_r + 7 }}"
+                y="{{ cv.pad_t + 12 + loop.index0 * 13 }}" fill="{{ l.color }}"
+                font-size="10">{{ l.key }} {{ l.avg_exposure }}%</text>
+        {% endif %}{% endfor %}
+      </svg>
+      {% endif %}
     </div>
     <p class="muted" style="margin-top:8px">Drawdown is computed daily and then bucketed
       weekly by its <b>worst</b> value, so a trough falling mid-week still shows. Bucketing
       by the week's closing value instead would draw a shallower curve than the table
-      above reports.</p>
+      above reports. Exposure is bucketed by its <b>mean</b> and then shown as a
+      {{ cv.exposure_window }}-week trailing average: drawn raw, a binary variant flipping
+      between 0% and 100% over more than a thousand weeks is a picket fence half a pixel
+      wide. The whipsaw count is reported separately, so nothing is hidden by smoothing.</p>
   </div>
 </section>
 {% endif %}
@@ -537,18 +568,6 @@
       approximated. A stand-in would be a different strategy wearing the same name.</p>
   </div>
   {% endif %}
-</section>
-
-<section>
-  <h2>Still to come</h2>
-  <div class="card">
-    <p class="empty">Equity and drawdown curves, cash allocation over time,
-      parameter-sensitivity heatmaps and the 2018 / 2020 / 2021-22 event timelines need
-      the per-week series, which the script computes but does not serialise. Run them in
-      the terminal meanwhile:</p>
-    <p class="muted" style="margin-top:10px">
-      <code>python -m scripts.backtest_regime --run --robustness --timelines --start 2005-04-01</code></p>
-  </div>
 </section>
 
 {% endif %}

@@ -150,15 +150,21 @@ async def analyze(scan: UploadFile):
                 and not h["symbol"].upper().startswith("SGB")]
     cash = k.available_cash()
 
-    # refresh ref prices with live LTP where possible
+    # Live prices for EVERY name the plan could touch, not just the ones already held.
+    # A candidate priced from the scan CSV is sized and limit-priced one session stale at
+    # best, and quantity is capital*weight/price — a wrong price is a wrong position size.
+    # Kite takes up to 500 instruments per call; a scan plus a book is far inside that.
+    candidates = [str(s) for s in scored.loc[scored["reject"] == "", "symbol"]]
+    wanted = sorted({*candidates, *(h["symbol"] for h in holdings)})
+    live: dict[str, float] = {}
     try:
-        live = k.ltp([h["symbol"] for h in holdings])
-        for h in holdings:
-            h["last_price"] = live.get(h["symbol"], h["last_price"])
-    except Exception:
-        pass
+        live = k.ltp(wanted)
+    except Exception as exc:
+        logging.warning("LTP fetch failed for the plan universe: %s", exc)
+    for h in holdings:
+        h["last_price"] = live.get(h["symbol"], h["last_price"])
 
-    plan = build_plan(scored, holdings, cash)
+    plan = build_plan(scored, holdings, cash, live_prices=live)
     plan["audit"] = scan_audit
     plan["created_at"] = time.time()
     PLANS[plan["plan_id"]] = plan

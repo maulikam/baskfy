@@ -109,8 +109,10 @@
   <h2>Import a Console tradebook</h2>
   <div class="card">
     <p class="muted" style="margin-bottom:10px">Kite Connect exposes only today's trades,
-      so acquisition dates have to come from an export. Without them every tax review
-      returns <code>TAX_DATA_UNKNOWN</code> and no sale is ever assumed tax-safe.</p>
+      so acquisition dates for anything bought earlier have to come from an export.
+      Without them every tax review returns <code>TAX_DATA_UNKNOWN</code> and no sale is
+      ever assumed tax-safe. <b>This is a one-time seed</b>: from then on the daily run
+      records each session's fills itself.</p>
     <ol>
       <li>Open <b>console.zerodha.com → Reports → Tradebook</b></li>
       <li>Pick a range that reaches back <b>before your oldest open position</b>, then
@@ -121,6 +123,55 @@
       <input type="file" name="file" accept=".csv" required aria-label="Tradebook CSV">
       <button class="btn-saffron" type="submit">Import tradebook</button>
     </form>
+  </div>
+</section>
+
+<section>
+  <h2>Where the lots come from</h2>
+  <div class="card">
+    <p class="muted" style="margin-bottom:12px">Lots are derived from stored fills, so
+      what the fills cover is what the tax review can answer for. An export that stops in
+      June says nothing about a July sale.</p>
+    {% if f.total %}
+      <table>
+        <thead><tr><th>Source</th><th>Fills</th><th>Covers</th>
+          <th>Last recorded</th></tr></thead>
+        <tbody>
+        {% for src in f.sources %}
+          <tr>
+            <td>{{ src.label }}</td>
+            <td>{{ src.count }}</td>
+            <td class="muted">{{ src.first }} → {{ src.last }}</td>
+            <td class="muted">{{ src.last_run or '—' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No fills stored yet. Import an export above to seed the history.</p>
+    {% endif %}
+
+    {% if f.captured_today %}
+      <div class="banner ok" style="margin:14px 0 0">
+        <span class="tag">captured</span>
+        <span>Today's session has been recorded.</span>
+      </div>
+    {% elif f.capture_ever_run %}
+      <div class="banner hold" style="margin:14px 0 0">
+        <span class="tag">not yet today</span>
+        <span class="muted">Today's fills are not recorded yet. Kite's trade book is
+          same-day only, so a fill missed on its own session survives nowhere but a fresh
+          Console export. The daily run captures it, or run it now from
+          <a href="/ops">Operations</a>.</span>
+      </div>
+    {% else %}
+      <div class="banner hold" style="margin:14px 0 0">
+        <span class="tag">capture idle</span>
+        <span class="muted">Automatic capture has never run. Until the daily job is
+          scheduled, every session you trade needs either a run from
+          <a href="/ops">Operations</a> that day or another Console export later.</span>
+      </div>
+    {% endif %}
   </div>
 </section>
 
@@ -148,10 +199,18 @@
   </div>
   <div class="card">
     <h2>Reconciliation</h2>
-    <div class="stat {{ 'ok' if not s.problems else 'bad' }}">{{ s.problems|length }}</div>
-    <p class="muted">{% if s.problems %}quantity mismatches against the real book. A
-      mismatch means the lots are wrong for tax purposes.{% else %}Every holding matches
-      its reconstructed lots.{% endif %}</p>
+    {% if not s.has_lots %}
+      {# Every holding "mismatches" when nothing is imported. Counting that as a
+         reconciliation failure would repeat what coverage already says, and would spend
+         the alarm that a real mismatch needs to carry once lots exist. #}
+      <div class="stat na">n/a</div>
+      <p class="muted">Nothing to reconcile against until lots are imported.</p>
+    {% else %}
+      <div class="stat {{ 'ok' if not s.problems else 'bad' }}">{{ s.problems|length }}</div>
+      <p class="muted">{% if s.problems %}quantity mismatches against the real book. A
+        mismatch means the lots are wrong for tax purposes.{% else %}Every holding matches
+        its reconstructed lots.{% endif %}</p>
+    {% endif %}
   </div>
 </section>
 
@@ -205,7 +264,10 @@
 </section>
 {% endif %}
 
-{% if s.problems %}
+{# Gated on has_lots for the same reason as the card above: with nothing imported this
+   table is 17 rows of "no history", which is coverage restated, not a reconciliation
+   problem. #}
+{% if s.problems and s.has_lots %}
 <section>
   <h2>Quantity mismatches</h2>
   <div class="card">

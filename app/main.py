@@ -263,8 +263,10 @@ def regime_backtest(request: Request):
     if os.path.exists(path):
         with open(path) as f:
             data = json.load(f)
+    from .analytics import backtest_view as _bv
     return templates.TemplateResponse(request, "regime_backtest.html",
-                                      {"b": data, "path": path})
+                                      {"b": data, "path": path,
+                                       "charts": _bv.build(data)})
 
 
 @app.get("/regime/data")

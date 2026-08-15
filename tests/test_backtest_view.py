@@ -294,3 +294,170 @@ def test_the_stored_curves_agree_with_the_reported_drawdown():
         worst = min(x for x in s["drawdown"] if x is not None)
         reported = float(data["variants"][key]["max_drawdown_pct"])
         assert worst <= reported + 0.01, f"{key}: curve {worst} vs reported {reported}"
+
+
+# =====================================================================================
+# robustness heatmap, timelines, subperiods
+# =====================================================================================
+def grid_row(b, c, r4, cagr, dd=-50.0, turn=200.0, whip=1.0):
+    return {"buffer_bps": b, "confirm_days": c, "r4_exposure": r4, "CAGR": cagr,
+            "max_drawdown_pct": dd, "annual_turnover_pct": turn,
+            "whipsaws_per_year": whip}
+
+
+def make_grid(offset=0.0):
+    """CAGR depends only on (buffer, confirm) plus `offset` when R4 is non-zero, so
+    offset=0 makes the two R4 grids genuinely identical."""
+    return [grid_row(b, c, r4, 15.0 + bi * 0.3 + ci * 0.1 + (offset if r4 else 0.0))
+            for bi, b in enumerate((100, 150, 200))
+            for ci, c in enumerate((2, 3, 5))
+            for r4 in (0.0, 10.0)]
+
+
+def test_no_robustness_without_the_flag():
+    assert BV.robustness({}) is None
+    assert BV.robustness({"robustness": []}) is None
+
+
+def test_every_combination_becomes_a_cell():
+    r = BV.robustness({"robustness": make_grid()})
+    assert len(r["grids"]) == 2
+    assert all(len(g["cells"]) == 9 for g in r["grids"])
+
+
+def test_identical_grids_are_reported_as_an_inert_parameter():
+    """If every R4 setting scores the same, the tier was never reached and the knob
+    decided nothing. That is a finding, not something to leave for the eye."""
+    assert BV.robustness({"robustness": make_grid(offset=0.0)})["r4_inert"] is True
+
+
+def test_a_parameter_that_does_change_things_is_not_called_inert():
+    assert BV.robustness({"robustness": make_grid(offset=3.0)})["r4_inert"] is False
+
+
+def test_a_narrow_spread_is_flagged():
+    r = BV.robustness({"robustness": make_grid()})
+    assert r["narrow"] is True and r["spread"] < 2.0
+
+
+def test_a_wide_spread_is_not_flagged():
+    rows = make_grid()
+    rows[0]["CAGR"] = 40.0
+    assert BV.robustness({"robustness": rows})["narrow"] is False
+
+
+def test_heat_colours_come_from_the_sequential_ramp():
+    r = BV.robustness({"robustness": make_grid()})
+    for g in r["grids"]:
+        for c in g["cells"]:
+            assert c["color"] in BV.RAMP
+
+
+def test_the_ramp_is_readable_with_one_ink():
+    """A ramp needing the text colour to flip partway makes one end unreadable."""
+    assert BV.robustness({"robustness": make_grid()})["ink"] == BV.RAMP_INK
+    assert len(set(BV.RAMP)) == len(BV.RAMP)
+
+
+# --- timelines -----------------------------------------------------------------------
+TL = {"timelines": [
+    {"label": "Feb-Jun 2020", "start": "2020-02-01", "end": "2020-06-30", "rows": [
+        {"date": "2020-02-07", "raw_tier": "R1", "tier": "R1", "exposure": 100.0,
+         "breadth": None},
+        {"date": "2020-02-14", "raw_tier": "R3", "tier": "R2", "exposure": 70.0,
+         "breadth": None},
+        {"date": "2020-02-21", "raw_tier": "R3", "tier": "R3", "exposure": 40.0,
+         "breadth": None}]},
+    {"label": "Missing window", "start": "1990-01-01", "end": "1990-12-31", "rows": [],
+     "unavailable": "index history does not reach this window"},
+]}
+
+
+def test_no_timelines_without_the_flag():
+    assert BV.timelines({}) is None
+
+
+def test_a_window_with_no_data_says_so_instead_of_drawing_nothing():
+    t = BV.timelines(TL)[1]
+    assert t["unavailable"] and "path" not in t
+
+
+def test_exposure_is_drawn_as_a_step_not_a_slope():
+    """A sloped line would imply a gradual exit that never happened."""
+    t = BV.timelines(TL)[0]
+    pts = [p for p in t["path"].replace("M", " ").replace("L", " ").split()]
+    xs = [float(p.split(",")[0]) for p in pts]
+    ys = [float(p.split(",")[1]) for p in pts]
+    # every segment is either purely horizontal or purely vertical
+    for i in range(1, len(pts)):
+        assert xs[i] == xs[i - 1] or ys[i] == ys[i - 1]
+
+
+def test_full_exposure_is_at_the_top_and_zero_at_the_bottom():
+    t = BV.timelines(TL)[0]
+    ticks = {tk["v"]: tk["px"] for tk in t["ticks"]}
+    assert ticks[100] < ticks[50] < ticks[0]
+
+
+def test_tier_changes_are_marked():
+    t = BV.timelines(TL)[0]
+    assert [c["tier"] for c in t["changes"]] == ["R2", "R3"]
+
+
+def test_the_lowest_exposure_is_reported():
+    assert BV.timelines(TL)[0]["min_exposure"] == 40.0
+
+
+# --- subperiods ----------------------------------------------------------------------
+SP = {"subperiods": [
+    {"label": "2007-2009 GFC", "start": "2007-01-01",
+     "variants": {"A": {"CAGR": 16.5, "max_drawdown_pct": -70.45},
+                  "F": {"CAGR": 13.97, "max_drawdown_pct": -49.97}}},
+    {"label": "too short", "start": "2026-01-01", "unavailable": "only 12 sessions"},
+]}
+
+
+def test_no_subperiods_without_data():
+    assert BV.subperiods({}) is None
+    assert BV.subperiods({"subperiods": [{"label": "x", "unavailable": "no"}]}) is None
+
+
+def test_unusable_subperiods_are_dropped():
+    s = BV.subperiods(SP)
+    assert [r["label"] for r in s["rows"]] == ["2007-2009 GFC"]
+
+
+def test_both_measures_are_scaled_against_their_own_maximum():
+    """CAGR and drawdown share no scale; scaling them together would make the smaller
+    measure invisible."""
+    s = BV.subperiods(SP)
+    bars = {b["key"]: b for b in s["rows"][0]["bars"]}
+    assert bars["A"]["cagr_w"] == s["bar_w"]          # A has the largest CAGR
+    assert bars["A"]["dd_w"] == s["bar_w"]            # and the deepest drawdown
+    assert bars["F"]["cagr_w"] < s["bar_w"]
+
+
+def test_subperiod_bars_keep_the_family_colour():
+    s = BV.subperiods(SP)
+    for b in s["rows"][0]["bars"]:
+        assert b["color"] == BV.FAMILIES[BV.FAMILY_OF[b["key"]]]["color"]
+
+
+def test_the_new_sections_reach_the_page():
+    page = TestClient(M.app).get("/regime/backtest").text
+    for heading in ("The trade, window by window", "Event timelines",
+                    "Parameter sensitivity"):
+        assert heading in page
+
+
+def test_a_plain_save_run_still_produces_every_section():
+    """A run without --robustness/--timelines must not blank sections a fuller run made:
+    the page would silently lose charts the reader was looking at."""
+    src = open("scripts/backtest_regime.py").read()
+    block = src.split("if a.save:")[1].split("payload = {")[0]
+    assert "if grid is None:" in block and "if timelines is None:" in block
+
+
+def test_the_heatmap_separates_cells_with_the_surface():
+    css = open("app/templates/regime_backtest.html").read()
+    assert "border-spacing:2px" in css

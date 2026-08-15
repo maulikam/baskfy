@@ -499,6 +499,91 @@ def curve_payload(detail: dict, *, rule: str = "W-FRI") -> dict:
     return {"dates": [d.date().isoformat() for d in index], "series": curves}
 
 
+ROBUSTNESS_BUFFERS = (100, 150, 200)
+ROBUSTNESS_CONFIRMS = (2, 3, 5)
+ROBUSTNESS_R4 = (0.0, 10.0)
+
+EVENT_WINDOWS = (("2018 smallcap bear", "2018-01-01", "2019-03-31"),
+                 ("Feb-Jun 2020", "2020-02-01", "2020-06-30"),
+                 ("2021-22 top/correction", "2021-10-01", "2022-07-31"))
+
+SUBPERIODS = (("2007-2009 GFC", "2007-01-01"), ("2009 onward", "2009-01-01"),
+              ("2015 onward", "2015-01-01"), ("2020 onward", "2020-01-01"))
+
+
+def robustness_grid(conn, bt_cfg, variant, *, start, end, proxy, costs,
+                    cash_rate, spec) -> list[dict]:
+    """Every parameter combination, computed once and both printed and serialised.
+
+    Reported, not ranked: a wider buffer is not automatically better because it lowers
+    the whipsaw count. The grid exists so the sensitivity is visible, not so a winner can
+    be read off it.
+    """
+    out = []
+    for bps in ROBUSTNESS_BUFFERS:
+        for cd in ROBUSTNESS_CONFIRMS:
+            for r4 in ROBUSTNESS_R4:
+                g = replace(bt_cfg, buffer_bps=bps, confirm_days=cd,
+                            tier_exposure_pct={"R1": 100.0, "R2": 70.0,
+                                               "R3": 40.0, "R4": r4})
+                sch = replay(conn, g, variant, start=start, end=end)
+                sim = simulate(sch, proxy, costs=costs, cash_rate=cash_rate)
+                p = performance(sim, sch, proxy["close"], spec)
+                out.append({"buffer_bps": bps, "confirm_days": cd, "r4_exposure": r4,
+                            "CAGR": p["CAGR"], "max_drawdown_pct": p["max_drawdown_pct"],
+                            "annual_turnover_pct": p["annual_turnover_pct"],
+                            "whipsaws_per_year": p["whipsaws_per_year"]})
+    return out
+
+
+def event_timelines(sched) -> list[dict]:
+    """Tier and exposure through the windows where an overlay either earns its keep or
+    does not. Rows are per weekly evaluation, not per session."""
+    out = []
+    for label, w0, w1 in EVENT_WINDOWS:
+        sl = sched.loc[str(w0):str(w1)]
+        entry = {"label": label, "start": w0, "end": w1, "rows": []}
+        if sl.empty:
+            entry["unavailable"] = ("index history does not reach this window; "
+                                    "re-run with --fetch and an earlier --start")
+            out.append(entry)
+            continue
+        for d, r in sl.iterrows():
+            entry["rows"].append({
+                "date": d.date().isoformat(),
+                "raw_tier": str(r["raw_tier"]), "tier": str(r["tier"]),
+                "exposure": float(r["exposure"]),
+                "breadth": None if pd.isna(r["breadth"]) else float(r["breadth"]),
+            })
+        out.append(entry)
+    return out
+
+
+def subperiod_table(conn, bt_cfg, variant, *, start, end, proxy, costs,
+                    cash_rate, spec) -> list[dict]:
+    """The overlay against no overlay, in windows chosen because they hurt."""
+    base = next(x for x in VARIANTS if x.key == "A")
+    out = []
+    for label, s0 in SUBPERIODS:
+        s0d = max(dt.date.fromisoformat(s0), start)
+        if s0d >= end:
+            continue
+        sub = proxy.loc[str(s0d):str(end)]
+        if len(sub) < 260:
+            out.append({"label": label, "start": s0d.isoformat(),
+                        "unavailable": f"only {len(sub)} sessions cached"})
+            continue
+        row = {"label": label, "start": s0d.isoformat(), "variants": {}}
+        for v in (base, variant):
+            sch = replay(conn, bt_cfg, v, start=s0d, end=end)
+            sim = simulate(sch, sub, costs=costs, cash_rate=cash_rate)
+            p = performance(sim, sch, sub["close"], spec)
+            row["variants"][v.key] = {"CAGR": p["CAGR"],
+                                      "max_drawdown_pct": p["max_drawdown_pct"]}
+        out.append(row)
+    return out
+
+
 def run_all(conn, cfg: R.RegimeConfig, *, start: dt.date, end: dt.date,
             costs: CostModel, cash_rate: float, spec: WhipsawSpec,
             proxy_name: str) -> tuple[pd.DataFrame, dict]:
@@ -665,78 +750,71 @@ def main() -> None:
             print(f"  reversal window {w:>2} evals: {res['count']} whipsaws "
                   f"({res['per_year']}/yr)")
 
+        grid, timelines, subperiods = None, None, None
+
         if a.robustness:
+            grid = robustness_grid(conn, bt_cfg, vf, start=start, end=end, proxy=proxy,
+                                   costs=costs, cash_rate=a.cash_rate, spec=spec)
             print()
             print("=" * 92)
             print("ROBUSTNESS GRID (variant F)")
             print("=" * 92)
             print(f"{'buffer':>8}{'confirm':>9}{'R4 eq':>8}{'CAGR':>9}{'maxDD':>9}"
                   f"{'turnover':>11}{'whip/yr':>9}")
-            for bps in (100, 150, 200):
-                for cd in (2, 3, 5):
-                    for r4 in (0.0, 10.0):
-                        g = replace(bt_cfg, buffer_bps=bps, confirm_days=cd,
-                                    tier_exposure_pct={"R1": 100.0, "R2": 70.0,
-                                                       "R3": 40.0, "R4": r4})
-                        sch = replay(conn, g, vf, start=start, end=end)
-                        sim = simulate(sch, proxy, costs=costs, cash_rate=a.cash_rate)
-                        p = performance(sim, sch, proxy["close"], spec)
-                        print(f"{bps/100:>7.1f}%{cd:>9}{r4:>7.0f}%{p['CAGR']:>9.2f}"
-                              f"{p['max_drawdown_pct']:>9.2f}"
-                              f"{p['annual_turnover_pct']:>11.1f}"
-                              f"{p['whipsaws_per_year']:>9.2f}")
+            for g in grid:
+                print(f"{g['buffer_bps']/100:>7.1f}%{g['confirm_days']:>9}"
+                      f"{g['r4_exposure']:>7.0f}%{g['CAGR']:>9.2f}"
+                      f"{g['max_drawdown_pct']:>9.2f}{g['annual_turnover_pct']:>11.1f}"
+                      f"{g['whipsaws_per_year']:>9.2f}")
             print("\n  Reported, not ranked: a wider buffer is not automatically better "
                   "because it lowers whipsaw count.")
 
         if a.timelines:
-            windows = [("2018 smallcap bear", "2018-01-01", "2019-03-31"),
-                       ("Feb-Jun 2020", "2020-02-01", "2020-06-30"),
-                       ("2021-22 top/correction", "2021-10-01", "2022-07-31")]
+            timelines = event_timelines(sched)
             print()
             print("=" * 92)
             print("EVENT TIMELINES (variant F)")
             print("=" * 92)
-            for label, w0, w1 in windows:
-                sl = sched.loc[str(w0):str(w1)]
-                print(f"\n-- {label} ({w0} .. {w1}) --")
-                if sl.empty:
-                    print("   NO DATA in the cached window — index history does not "
-                          "extend here. Re-run with --fetch --start earlier.")
+            for w in timelines:
+                print(f"\n-- {w['label']} ({w['start']} .. {w['end']}) --")
+                if w.get("unavailable"):
+                    print(f"   NO DATA: {w['unavailable']}")
                     continue
-                print(f"{'session':<12}{'raw':>5}{'tier':>6}{'exp%':>7}{'H20':>6}{'H50':>6}"
-                      f"{'H200':>7}{'M50/50':>9}{'M50/200':>9}{'breadth':>9}")
-                for d, r in sl.iterrows():
-                    print(f"{d.date().isoformat():<12}{r['raw_tier']:>5}{r['tier']:>6}"
-                          f"{r['exposure']:>7.0f}{(r['H20'] or 0):>6.2f}"
-                          f"{(r['H50'] or 0):>6.2f}{(r['H200'] or 0):>7.2f}"
-                          f"{r['sentinel_50']:>9}{r['sentinel_200']:>9}"
-                          f"{'' if pd.isna(r['breadth']) else format(r['breadth'], '.1f'):>9}")
+                print(f"{'session':<12}{'raw':>5}{'tier':>6}{'exp%':>7}{'breadth':>9}")
+                for r in w["rows"]:
+                    b = "" if r["breadth"] is None else format(r["breadth"], ".1f")
+                    print(f"{r['date']:<12}{r['raw_tier']:>5}{r['tier']:>6}"
+                          f"{r['exposure']:>7.0f}{b:>9}")
 
-        # subperiods
+        subperiods = subperiod_table(conn, bt_cfg, vf, start=start, end=end, proxy=proxy,
+                                     costs=costs, cash_rate=a.cash_rate, spec=spec)
         print()
         print("=" * 92)
         print("SUBPERIODS (variant F vs A)")
         print("=" * 92)
-        for label, s0 in (("2007-2009 GFC", "2007-01-01"), ("2009 onward", "2009-01-01"),
-                          ("2015 onward", "2015-01-01"), ("2020 onward", "2020-01-01")):
-            s0d = max(dt.date.fromisoformat(s0), start)
-            if s0d >= end:
+        for row in subperiods:
+            if row.get("unavailable"):
+                print(f"  {row['label']:<18} INSUFFICIENT DATA ({row['unavailable']})")
                 continue
-            sub = proxy.loc[str(s0d):str(end)]
-            if len(sub) < 260:
-                print(f"  {label:<18} INSUFFICIENT DATA ({len(sub)} sessions cached)")
-                continue
-            out = []
-            for v in (next(x for x in VARIANTS if x.key == "A"), vf):
-                sch = replay(conn, bt_cfg, v, start=s0d, end=end)
-                sim = simulate(sch, sub, costs=costs, cash_rate=a.cash_rate)
-                p = performance(sim, sch, sub["close"], spec)
-                out.append(f"{v.key}: CAGR {p['CAGR']:>6.2f}% maxDD {p['max_drawdown_pct']:>7.2f}%")
-            print(f"  {label:<18} " + "   |   ".join(out))
+            out = [f"{k}: CAGR {v['CAGR']:>6.2f}% maxDD {v['max_drawdown_pct']:>7.2f}%"
+                   for k, v in row["variants"].items()]
+            print(f"  {row['label']:<18} " + "   |   ".join(out))
 
         if a.save:
             import os
             os.makedirs(os.path.dirname(a.save) or ".", exist_ok=True)
+            # A run without --robustness/--timelines must not blank sections a fuller run
+            # produced: the page would silently lose charts. Compute them instead, so the
+            # saved artifact always describes one internally consistent run rather than
+            # mixing fresh metrics with a stale grid from a different config.
+            if grid is None:
+                print("\n(--save: computing the robustness grid so the saved artifact "
+                      "is complete)")
+                grid = robustness_grid(conn, bt_cfg, vf, start=start, end=end,
+                                       proxy=proxy, costs=costs, cash_rate=a.cash_rate,
+                                       spec=spec)
+            if timelines is None:
+                timelines = event_timelines(sched)
             covers = breadth_covers_window(conn, start, end)
             payload = {
                 "generated_for": {"start": start.isoformat(), "end": end.isoformat()},
@@ -753,6 +831,11 @@ def main() -> None:
                 },
                 "variants": json.loads(table.to_json(orient="index")),
                 "curves": curve_payload(detail),
+                # Present only when the run asked for them; the page says so rather than
+                # rendering an empty chart that looks like a result.
+                "robustness": grid,
+                "timelines": timelines,
+                "subperiods": subperiods,
                 "tier_distribution": {
                     k: {kk: float(vv) for kk, vv in (d["schedule"]["tier"]
                         .value_counts(normalize=True).mul(100).round(2).to_dict()).items()}

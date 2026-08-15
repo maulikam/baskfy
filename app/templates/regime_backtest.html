@@ -63,6 +63,13 @@
   .lg{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--dim)}
   .lg i{width:11px;height:11px;border-radius:3px;display:block;flex:none}
   .lg i.ring{border:1.5px solid var(--dim);border-radius:50%;background:none}
+  /* Cells are separated by the surface itself rather than by a rule: adjacent fills need
+     a 2px gap so two similar steps of the ramp cannot read as one block. */
+  table.heat{border-collapse:separate;border-spacing:2px}
+  table.heat td{text-align:center;border:0;border-radius:3px;padding:7px 8px}
+  table.heat td:first-child{text-align:right;background:none;color:var(--dim);
+                            font-weight:400}
+  table.heat th{text-align:center} table.heat th:first-child{text-align:right}
   :focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
   @media(max-width:780px){
     body{padding:20px 16px 70px}
@@ -236,6 +243,145 @@
       weekly by its <b>worst</b> value, so a trough falling mid-week still shows. Bucketing
       by the week's closing value instead would draw a shallower curve than the table
       above reports.</p>
+  </div>
+</section>
+{% endif %}
+
+{% if charts.subperiods %}
+{% set sp = charts.subperiods %}
+<section>
+  <h2>The trade, window by window</h2>
+  <div class="card scroll">
+    <p class="muted" style="margin-bottom:10px">The tiered model against no overlay in
+      periods chosen because they hurt. Both measures are here because they point opposite
+      ways, and showing one alone would argue a case instead of presenting the trade.</p>
+    <table>
+      <thead><tr><th>Period</th><th>Variant</th><th>CAGR</th><th></th>
+        <th>Max drawdown</th><th></th></tr></thead>
+      <tbody>
+      {% for row in sp.rows %}
+        {% for b in row.bars %}
+        <tr>
+          <td>{% if loop.first %}{{ row.label }}{% endif %}</td>
+          <td><code>{{ b.key }}</code></td>
+          <td>{{ '%.2f'|format(b.cagr) }}%</td>
+          <td style="width:{{ sp.bar_w + 20 }}px">
+            <span style="display:block;height:9px;border-radius:2px;
+                         width:{{ b.cagr_w }}px;background:{{ b.color }}"></span></td>
+          <td class="bad">{{ '%.2f'|format(b.dd) }}%</td>
+          <td style="width:{{ sp.bar_w + 20 }}px">
+            <span style="display:block;height:9px;border-radius:2px;
+                         width:{{ b.dd_w }}px;background:{{ b.color }};opacity:.55"></span></td>
+        </tr>
+        {% endfor %}
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">The tiered model cut the drawdown in every
+      window and gave up return in every window. Whether that is worth paying for is a
+      judgement about what you can sit through, not something the table decides.</p>
+  </div>
+</section>
+{% endif %}
+
+{% if charts.timelines %}
+<section>
+  <h2>Event timelines</h2>
+  <div class="grid">
+    {% for t in charts.timelines %}
+    <div class="card">
+      <h3 style="font-family:var(--disp);font-size:13px;margin-bottom:2px">{{ t.label }}</h3>
+      <p class="muted" style="margin-bottom:8px">{{ t.start }} to {{ t.end }}</p>
+      {% if t.unavailable %}
+        <p class="empty">{{ t.unavailable }}</p>
+      {% else %}
+        <svg viewBox="0 0 {{ t.width }} {{ t.height }}" width="100%"
+             style="max-width:{{ t.width }}px;height:auto;display:block"
+             role="img" aria-label="Equity exposure through {{ t.label }}">
+          {% for tk in t.ticks %}
+            <line x1="{{ t.pad_l }}" y1="{{ tk.px }}" x2="{{ t.width - 16 }}" y2="{{ tk.px }}"
+                  stroke="#22304d" stroke-width="1"/>
+            <text x="{{ t.pad_l - 7 }}" y="{{ tk.px + 4 }}" text-anchor="end"
+                  fill="#8593ad" font-size="9.5">{{ tk.v }}%</text>
+          {% endfor %}
+          <path d="{{ t.area }}" fill="#7b6ad0" opacity=".18"/>
+          <path d="{{ t.path }}" fill="none" stroke="#7b6ad0" stroke-width="1.8"
+                stroke-linejoin="round"/>
+          {% for c in t.changes %}
+            <line x1="{{ c.x }}" y1="{{ t.pad_t }}" x2="{{ c.x }}"
+                  y2="{{ t.height - 24 }}" stroke="#8593ad" stroke-width="1"
+                  stroke-dasharray="2 3" opacity=".7"/>
+          {% endfor %}
+          <text x="{{ t.pad_l }}" y="{{ t.height - 8 }}" fill="#8593ad"
+                font-size="9.5">{{ t.first }}</text>
+          <text x="{{ t.width - 16 }}" y="{{ t.height - 8 }}" text-anchor="end"
+                fill="#8593ad" font-size="9.5">{{ t.last }}</text>
+        </svg>
+        <p class="muted" style="margin-top:6px">Held to
+          <b>{{ '%.0f'|format(t.min_exposure) }}%</b> at its lowest,
+          {{ t.changes|length }} tier change{{ '' if t.changes|length == 1 else 's' }}.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <p class="muted" style="margin-top:8px">Exposure is drawn as a step, not a slope: it was
+    constant between weekly evaluations, and an interpolated line would imply a gradual
+    exit that never happened. Dashed rules mark tier changes.</p>
+</section>
+{% endif %}
+
+{% if charts.robustness %}
+{% set rb = charts.robustness %}
+<section>
+  <h2>Parameter sensitivity</h2>
+  <div class="card">
+    <p class="muted" style="margin-bottom:10px">CAGR of the tiered model across every
+      combination of buffer, confirmation days and R4 exposure. Reported, not ranked: a
+      wider buffer is not automatically better because it lowers the whipsaw count.</p>
+    <div class="legend">
+      <span class="lg">{{ rb.min }}%</span>
+      {% for c in rb.ramp %}<span class="lg"><i style="background:{{ c }}"></i></span>{% endfor %}
+      <span class="lg">{{ rb.max }}%</span>
+    </div>
+    <div class="grid">
+      {% for g in rb.grids %}
+      <div>
+        <p class="muted" style="margin-bottom:6px">R4 exposure
+          <b>{{ '%.0f'|format(g.r4) }}%</b></p>
+        <div class="scroll">
+        <table class="heat">
+          <thead><tr><th>buffer \ confirm</th>
+            {% for c in rb.confirms %}<th>{{ c }}d</th>{% endfor %}</tr></thead>
+          <tbody>
+          {% for b in rb.buffers %}
+            <tr>
+              <td>{{ '%.1f'|format(b / 100) }}%</td>
+              {% for c in rb.confirms %}
+                {% set cell = (g.cells | selectattr('buffer','equalto',b)
+                                        | selectattr('confirm','equalto',c) | list | first) %}
+                {% if cell %}
+                <td style="background:{{ cell.color }};color:{{ rb.ink }};font-weight:700">
+                  {{ '%.2f'|format(cell.value) }}%
+                  <span style="display:block;font-weight:400;font-size:10px">
+                    dd {{ cell.dd }}% · {{ cell.whip }}/yr</span>
+                </td>
+                {% else %}<td class="na">—</td>{% endif %}
+              {% endfor %}
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="muted" style="margin-top:12px">
+      {% if rb.narrow %}The whole grid spans <b>{{ rb.spread }} percentage points</b> of
+        CAGR. The tiered result is therefore not an artefact of where these knobs sit —
+        and by the same token cannot be tuned into a different answer.{% endif %}
+      {% if rb.r4_inert %} Every R4 setting produces an identical grid, which means R4 was
+        never reached in this window: that parameter decided nothing here.{% endif %}
+    </p>
   </div>
 </section>
 {% endif %}

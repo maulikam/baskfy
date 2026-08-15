@@ -1,0 +1,253 @@
+"""Chart geometry for the regime backtest page.
+
+Pure: takes the stored results dict, returns pixel-space geometry. No I/O, no rendering,
+so the arithmetic that decides where a mark lands is testable on its own.
+
+WHY CHARTS AT ALL
+The comparison table has fourteen columns and seven candidates. It contains the answer to
+"which variant should I actually run" but does not show it. The scatter does: return on
+one axis, the drawdown you had to sit through on the other, so a variant that wins on both
+is visibly up and to the left rather than a row you have to read across.
+
+Palette validated against the page surface (#111a2e) with the dataviz validator: lightness
+band, chroma floor, CVD separation, normal-vision floor and contrast all pass. Colour
+encodes the DESIGN FAMILY, which is a property of the variant, never its rank — a filter
+that changed which variants were shown must not repaint the survivors.
+"""
+from __future__ import annotations
+
+from typing import Mapping, Sequence
+
+# Design families. The decision is not "which of 14 rows" but "does an overlay earn its
+# complexity", so the families are the axis that actually matters.
+FAMILIES = {
+    "none":   {"label": "No overlay",  "color": "#2f9fb8"},
+    "binary": {"label": "Binary rule", "color": "#c97d1e"},
+    "tiered": {"label": "Tiered",      "color": "#7b6ad0"},
+}
+
+FAMILY_OF = {
+    "A": "none",
+    "B_raw": "binary", "B_buf": "binary", "C_raw": "binary", "C_buf": "binary",
+    "E": "tiered", "F": "tiered",
+}
+
+# Ablations answer a different question (which input contributes) and are not candidates
+# to run, so they are charted separately rather than crowding the decision.
+def is_candidate(key: str) -> bool:
+    return key in FAMILY_OF
+
+
+def _nice_step(span: float, target: int = 5) -> float:
+    """A round tick step near span/target: 1, 2, 2.5 or 5 times a power of ten."""
+    if span <= 0:
+        return 1.0
+    raw = span / max(target, 1)
+    mag = 10 ** (len(str(int(abs(raw)))) - 1) if abs(raw) >= 1 else 0.1
+    while mag * 10 <= raw:
+        mag *= 10
+    for m in (1, 2, 2.5, 5, 10):
+        if mag * m >= raw:
+            return mag * m
+    return mag * 10
+
+
+def axis(lo: float, hi: float, target: int = 5) -> dict:
+    """Padded, round-numbered axis covering [lo, hi]."""
+    if hi <= lo:
+        hi = lo + 1
+    step = _nice_step(hi - lo, target)
+    start = step * (int(lo / step) - (1 if lo % step else 0)) if lo else 0.0
+    end = step * (int(hi / step) + (1 if hi % step else 0))
+    ticks, t = [], start
+    while t <= end + step * 1e-9:
+        ticks.append(round(t, 6))
+        t += step
+    return {"min": start, "max": end, "step": step, "ticks": ticks}
+
+
+# A label is TWO lines — the variant key and its numbers — so the box it occupies is
+# about 26px tall, not one line-height. Treating it as one line is what let C_raw, C_buf
+# and F print on top of each other.
+LABEL_W = 104.0
+LABEL_ABOVE = 11.0
+LABEL_BELOW = 17.0
+NUDGE = 27.0
+
+
+def _box(m: dict) -> tuple[float, float, float, float]:
+    x0 = m["lx"] if m["anchor"] == "start" else m["lx"] - LABEL_W
+    return x0, m["ly"] - LABEL_ABOVE, x0 + LABEL_W, m["ly"] + LABEL_BELOW
+
+
+MARK_R = 9.0            # dot radius plus its surface ring
+
+
+def _mark_box(m: dict) -> tuple[float, float, float, float]:
+    return m["x"] - MARK_R, m["y"] - MARK_R, m["x"] + MARK_R, m["y"] + MARK_R
+
+
+def _overlap(a: tuple, b: tuple) -> bool:
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def _hits(a: dict, b: dict) -> bool:
+    return _overlap(_box(a), _box(b))
+
+
+def _hits_any_mark(m: dict, marks: list[dict]) -> bool:
+    """A label must clear every DOT too, not just other labels.
+
+    Missing this put variant F's mark on top of C_raw's numbers, which read as a corrupted
+    figure rather than as two overlapping elements.
+    """
+    box = _box(m)
+    return any(_overlap(box, _mark_box(o)) for o in marks if o is not m)
+
+
+def _place_labels(marks: list[dict], *, top: float, bottom: float,
+                  left: float = 4.0, right: float = 716.0) -> None:
+    """Give every mark a readable label position, nudging collisions apart.
+
+    Variants can land almost exactly on top of each other — C_raw and C_buf differ by
+    0.2% CAGR at identical drawdown — and overlapping text makes both unreadable. The
+    anchor side is chosen FIRST, because a label flipped to the left of its mark occupies
+    a completely different box, and resolving overlaps before knowing that measures the
+    wrong rectangle. Nudged labels get a leader line so the association stays clear.
+    """
+    def side(m, anchor):
+        m["anchor"] = anchor
+        m["lx"] = m["x"] + 11 if anchor == "start" else m["x"] - 11
+
+    placed: list[dict] = []
+    for m in marks:
+        home = m["y"] + 4
+        # Preferred side first, but BOTH are tried at every height before moving further
+        # away. Extending only rightwards drove labels far down through a dense cluster
+        # when the space immediately left of the mark was empty.
+        sides = ("start", "end") if m["x"] < 560 else ("end", "start")
+        best = None
+        for attempt in range(14):
+            delta = ((attempt + 1) // 2) * NUDGE * (1 if attempt % 2 == 0 else -1)
+            m["ly"] = home + delta
+            if m["ly"] - LABEL_ABOVE < top or m["ly"] + LABEL_BELOW > bottom:
+                continue
+            for anchor in sides:
+                side(m, anchor)
+                x0, _, x1, _ = _box(m)
+                if x0 < left or x1 > right:
+                    continue
+                if not any(_hits(m, p) for p in placed) and not _hits_any_mark(m, marks):
+                    best = (m["ly"], anchor)
+                    break
+            if best:
+                break
+        if best:
+            m["ly"], _ = best
+            side(m, best[1])
+        m["leader"] = abs(m["ly"] - home) > 1
+        placed.append(m)
+
+
+def risk_return_scatter(variants: Mapping[str, Mapping], *,
+                        width: int = 720, height: int = 380,
+                        pad_l: int = 62, pad_b: int = 46,
+                        pad_t: int = 18, pad_r: int = 22) -> dict | None:
+    """CAGR against the drawdown you had to sit through. Up and left is better."""
+    pts = [(k, v) for k, v in variants.items()
+           if is_candidate(k) and v.get("status") == "ok"]
+    if not pts:
+        return None
+
+    xs = [abs(float(v["max_drawdown_pct"])) for _, v in pts]
+    ys = [float(v["CAGR"]) for _, v in pts]
+    ax = axis(0, max(xs))
+    ay = axis(min(0, min(ys)), max(ys))
+    pw, ph = width - pad_l - pad_r, height - pad_t - pad_b
+
+    def sx(x): return pad_l + (x - ax["min"]) / (ax["max"] - ax["min"]) * pw
+    def sy(y): return pad_t + (1 - (y - ay["min"]) / (ay["max"] - ay["min"])) * ph
+
+    best = max(pts, key=lambda kv: float(kv[1]["CAGR"]) / max(abs(float(kv[1]["max_drawdown_pct"])), 1e-9))
+
+    marks = []
+    for k, v in pts:
+        fam = FAMILY_OF[k]
+        marks.append({
+            "key": k, "label": v.get("label", k),
+            "family": fam, "color": FAMILIES[fam]["color"],
+            "cagr": round(float(v["CAGR"]), 2),
+            "dd": round(abs(float(v["max_drawdown_pct"])), 2),
+            "x": round(sx(abs(float(v["max_drawdown_pct"]))), 1),
+            "y": round(sy(float(v["CAGR"])), 1),
+            "best": k == best[0],
+            # Tiered variants ran with breadth disabled, so their marks carry a caveat
+            # rather than being presented as a like-for-like measurement.
+            "proxy": bool(v.get("note")) or fam == "tiered",
+        })
+    marks.sort(key=lambda m: m["x"])
+    _place_labels(marks, top=pad_t, bottom=pad_t + ph,
+                  left=4.0, right=width - 4.0)
+
+    return {
+        "width": width, "height": height,
+        "pad_l": pad_l, "pad_t": pad_t, "pad_b": pad_b, "pad_r": pad_r,
+        "plot_w": pw, "plot_h": ph,
+        "x": ax, "y": ay,
+        "xticks": [{"v": t, "px": round(sx(t), 1)} for t in ax["ticks"]],
+        "yticks": [{"v": t, "px": round(sy(t), 1)} for t in ay["ticks"]],
+        "zero_y": round(sy(0), 1) if ay["min"] < 0 < ay["max"] else None,
+        "marks": marks,
+        "families": [{"key": k, **v} for k, v in FAMILIES.items()],
+    }
+
+
+def ranked_bars(variants: Mapping[str, Mapping], metric: str, *,
+                keys: Sequence[str] | None = None, width: int = 720,
+                row_h: int = 26, pad_l: int = 148, pad_r: int = 62) -> dict | None:
+    """One measure, sorted. The ranking IS the reading."""
+    rows = [(k, v) for k, v in variants.items()
+            if v.get("status") == "ok" and metric in v
+            and (k in keys if keys is not None else is_candidate(k))]
+    if not rows:
+        return None
+    rows.sort(key=lambda kv: float(kv[1][metric]), reverse=True)
+
+    vals = [float(v[metric]) for _, v in rows]
+    hi = max(max(vals), 0.0) or 1.0
+    lo = min(min(vals), 0.0)
+    span = hi - lo or 1.0
+    bw = width - pad_l - pad_r
+    zero = pad_l + (0 - lo) / span * bw
+
+    bars = []
+    for i, (k, v) in enumerate(rows):
+        val = float(v[metric])
+        x = pad_l + (min(val, 0) - lo) / span * bw
+        w = abs(val) / span * bw
+        fam = FAMILY_OF.get(k, "tiered")
+        bars.append({
+            "key": k, "label": v.get("label", k), "value": round(val, 3),
+            "y": i * row_h, "x": round(x, 1), "w": round(max(w, 1.5), 1),
+            "color": FAMILIES[fam]["color"] if k in FAMILY_OF else "#5b6b8c",
+            "family": fam,
+        })
+    return {"width": width, "height": len(bars) * row_h + 8, "row_h": row_h,
+            "pad_l": pad_l, "zero": round(zero, 1), "bars": bars, "metric": metric}
+
+
+def build(data: Mapping | None) -> dict | None:
+    """Everything the backtest page needs to draw itself."""
+    if not data or not data.get("variants"):
+        return None
+    v = data["variants"]
+    abl = [k for k in v if k.startswith("abl_")]
+    return {
+        "scatter": risk_return_scatter(v),
+        "sharpe": ranked_bars(v, "sharpe"),
+        "ablation": ranked_bars(v, "CAGR", keys=abl, pad_l=196),
+        "families": [{"key": k, **f} for k, f in FAMILIES.items()],
+        # Restated next to the charts, not only in a limitations block: a reader deciding
+        # from these marks has to know the tiered ones were measured without breadth.
+        "breadth_caveat": str(data.get("limitations", {}).get("breadth", "")),
+    }

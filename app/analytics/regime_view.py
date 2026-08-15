@@ -369,12 +369,30 @@ def portfolio_block(conn) -> dict:
 
 
 def transition_history(conn, cfg, limit: int = 12) -> list[dict]:
+    """One row per WEEK, not per evaluation.
+
+    An evaluation is re-previewed every time the page or the daily job runs, so the raw
+    table held five rows for a single week and the timeline read as five weeks of
+    history. A committed decision wins its week; otherwise the newest preview does.
+    """
     rows = conn.execute(
         "SELECT e.*, x.actual_equity_pct FROM regime_evaluations e "
         "LEFT JOIN (SELECT evaluation_id, actual_equity_pct, MAX(observed_at) mo "
         "           FROM regime_exposure GROUP BY evaluation_id) x "
         "  ON x.evaluation_id = e.evaluation_id "
-        "ORDER BY e.scheduled_week_end DESC, e.id DESC LIMIT ?", (limit,)).fetchall()
+        "ORDER BY e.scheduled_week_end DESC, (e.run_id = ?) DESC, e.id DESC",
+        (RS.CANONICAL,)).fetchall()
+    seen: set = set()
+    deduped = []
+    for r in rows:
+        if r["scheduled_week_end"] in seen:
+            continue
+        seen.add(r["scheduled_week_end"])
+        deduped.append(r)
+        if len(deduped) >= limit:
+            break
+    rows = deduped
+
     out = []
     for r in rows:
         codes = json.loads(r["reason_codes_json"] or "[]")
@@ -385,13 +403,126 @@ def transition_history(conn, cfg, limit: int = 12) -> list[dict]:
                     "cap": cfg.cap_for(RegimeTier(r["policy_tier"])),
                     "actual": r["actual_equity_pct"], "trigger": trigger,
                     "committed": r["run_id"] == RS.CANONICAL,
+                    "breadth": r["breadth_pct"],
                     "transition_limited": bool(r["transition_limited"])})
+    out.reverse()          # oldest first, so a timeline reads left to right
     return out
 
 
 # =====================================================================================
 # build
 # =====================================================================================
+TIMELINE_MIN_WEEKS = 3
+
+
+def timeline_chart(history: list[dict], *, width: int = 700, height: int = 170,
+                   pad_l: int = 40, pad_r: int = 46, pad_t: int = 12,
+                   pad_b: int = 26) -> dict | None:
+    """Cap, actual exposure and breadth on one 0-100% axis, week by week.
+
+    All three are percentages, so they share an axis honestly — no second scale. The cap
+    is drawn as a STEP because it changes only at a tier transition and holds between
+    evaluations; a sloped line would imply the limit drifted during the week.
+
+    Returns None below TIMELINE_MIN_WEEKS: two points make a line that looks like a trend
+    and is not one. The table beneath carries the same numbers meanwhile.
+    """
+    rows = [h for h in history if h.get("week")]
+    if len({h["week"] for h in rows}) < TIMELINE_MIN_WEEKS:
+        return None
+
+    n = max(len(rows) - 1, 1)
+    pw, ph = width - pad_l - pad_r, height - pad_t - pad_b
+
+    def px(i): return pad_l + i / n * pw
+    def py(v): return pad_t + (1 - max(0.0, min(100.0, float(v))) / 100.0) * ph
+
+    def line(key, step=False):
+        pts, pen = [], "M"
+        for i, h in enumerate(rows):
+            v = h.get(key)
+            if v is None:
+                pen = "M"
+                continue
+            if step and pts and pen == "L":
+                pts.append(f"L{px(i):.1f},{py(rows[i-1][key]):.1f}")
+            pts.append(f"{pen}{px(i):.1f},{py(v):.1f}")
+            pen = "L"
+        return " ".join(pts)
+
+    return {
+        "width": width, "height": height, "pad_l": pad_l, "pad_t": pad_t,
+        "weeks": len(rows),
+        "cap": line("cap", step=True),
+        "actual": line("actual"),
+        "breadth": line("breadth"),
+        "ticks": [{"v": v, "px": round(py(v), 1)} for v in (0, 50, 100)],
+        "xticks": [{"px": round(px(i), 1), "label": h["week"][5:]}
+                   for i, h in enumerate(rows)
+                   if len(rows) <= 8 or i % max(1, len(rows) // 6) == 0],
+        "first": rows[0]["week"], "last": rows[-1]["week"],
+        # Stated rather than silently omitted: the sentinel's distance from its 50-DMA is
+        # not stored per evaluation, so it cannot be drawn here without inventing it.
+        "omitted": "Momentum 50 distance is not stored per evaluation",
+    }
+
+
+def _store_status(conn) -> dict:
+    """Cache and database health, plus when data was last successfully collected.
+
+    The per-index freshness above says whether the SIGNAL inputs are current. This says
+    whether the machine that fetches them is working at all — a page can show perfectly
+    fresh indices while the collection job has been failing for a week on an expired
+    token, and the two facts have different fixes.
+    """
+    out: dict = {"schema_version": None, "journal_mode": None, "db_bytes": None,
+                 "last_collection": None, "last_collection_outcome": None,
+                 "consecutive_failures": 0, "last_index_write": None}
+    try:
+        out["schema_version"] = conn.execute("PRAGMA user_version").fetchone()[0]
+        out["journal_mode"] = conn.execute("PRAGMA journal_mode").fetchone()[0]
+        page = conn.execute("PRAGMA page_size").fetchone()[0]
+        count = conn.execute("PRAGMA page_count").fetchone()[0]
+        out["db_bytes"] = int(page) * int(count)
+        row = conn.execute("SELECT MAX(updated_at) m FROM index_series").fetchone()
+        out["last_index_write"] = row["m"] if row else None
+    except Exception:
+        pass
+    try:
+        from . import daily_runs as DR
+        st = DR.status(conn)
+        out["last_collection"] = st.get("ran_at")
+        out["last_collection_outcome"] = st.get("outcome")
+        out["consecutive_failures"] = st.get("consecutive_failures", 0)
+        out["collection_healthy"] = st.get("healthy", False)
+    except Exception:
+        out["collection_healthy"] = None
+    return out
+
+
+def _plan_link(conn, evaluation_id: str | None) -> dict | None:
+    """The stored rebalance plan for this decision, with its reconciliation.
+
+    Falls back to the most recent plan when none carries this evaluation id, labelled so
+    the page cannot imply a plan was built under a decision it predates.
+    """
+    from . import plan_store as PS
+
+    try:
+        row = PS.latest(conn, evaluation_id=evaluation_id) if evaluation_id else None
+        linked = row is not None
+        if row is None:
+            row = PS.latest(conn)
+        if row is None:
+            return None
+        recon = PS.reconciliation(conn, row["version_id"]) or {}
+        return {**recon, "plan_id": row["version_id"], "linked": linked,
+                "created_at": row["created_ts"], "note": row["note"],
+                "evaluation_id": row["evaluation_id"]}
+    except Exception:
+        return None
+
+
 def build(conn) -> dict:
     cfg = C.regime_config()
     ev, committed = latest_evaluation(conn)
@@ -567,8 +698,13 @@ def build(conn) -> dict:
         "planned_buy_value": sum(o["delta"] * o["ref_price"]
                                  for o in proposed if o.get("delta", 0) > 0) or None,
 
+        # 11 · the plan that actually implemented this decision, and what it filled.
+        # A tier on screen is a policy; only these say whether the book moved.
+        "rebalance_plan": _plan_link(conn, ev.get("evaluation_id")),
+
         # 13 · data quality
         "index_status": status_rows, "data_stale": any_stale,
+        "store_status": _store_status(conn),
         "forced_actions_permitted": (not any_stale
                                      and "BOOTSTRAP_OBSERVE_ONLY" not in codes),
 
@@ -611,6 +747,8 @@ def build(conn) -> dict:
     v["data_health"] = ("Stale" if any_stale
                         else "Incomplete" if not breadth_usable else "Current")
     v["history"] = transition_history(conn, cfg)
+    v["timeline"] = timeline_chart(v["history"])
+    v["timeline_min_weeks"] = TIMELINE_MIN_WEEKS
     v["banners"] = _banners(ev, v)
     v["safe_state"] = _safe_state(v)
     return v

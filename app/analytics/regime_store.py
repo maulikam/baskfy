@@ -144,6 +144,21 @@ def latest_committed(conn) -> sqlite3.Row | None:
         "ORDER BY scheduled_week_end DESC, id DESC LIMIT 1", (CANONICAL,)).fetchone()
 
 
+def latest_evaluation(conn) -> sqlite3.Row | None:
+    """The most recent evaluation of ANY kind, committed or preview.
+
+    Distinct from latest_committed on purpose. That one answers "what policy is in force",
+    which only a committed decision can set. This answers "which regime view was on screen
+    when this happened", which is what a stored plan needs to be interpretable later —
+    otherwise, in observe mode, every plan is stamped with nothing at all.
+
+    A preview never AUTHORISES anything; `committed` on the row says which kind it was.
+    """
+    return conn.execute(
+        "SELECT * FROM regime_evaluations "
+        "ORDER BY scheduled_week_end DESC, id DESC LIMIT 1").fetchone()
+
+
 def previous_regime(conn, *, recovery_confirmations: int | None = None
                     ) -> PreviousRegime | None:
     """The engine's `previous` input, rebuilt from the last COMMITTED decision only.

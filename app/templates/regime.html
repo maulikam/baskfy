@@ -725,20 +725,44 @@
       <tbody>
         <tr><td>Evaluation ID</td><td><code>{{ v.evaluation_id }}</code></td>
             <td>Execution status</td><td>{{ v.execution_status|upper }}</td></tr>
+        <tr><td>Rebalance plan</td>
+            <td>{% if v.rebalance_plan %}<code>{{ v.rebalance_plan.plan_id }}</code>
+                  {%- if not v.rebalance_plan.linked %}
+                    <span class="pill mute">not linked</span>{% endif %}
+                {% else %}<span class="na">none stored</span>{% endif %}</td>
+            <td>Orders in plan</td>
+            <td>{{ v.rebalance_plan.orders if v.rebalance_plan else '—' }}</td></tr>
         <tr><td>Planned sell value</td>
             <td>{{ '₹{:,.0f}'.format(v.planned_sell_value) if v.planned_sell_value else '—' }}</td>
-            <td>Submitted / filled</td><td class="na">not executed</td></tr>
+            <td>Submitted</td>
+            <td>{{ '₹{:,.0f}'.format(v.rebalance_plan.submitted_value)
+                   if v.rebalance_plan and v.rebalance_plan.submitted_value else '—' }}</td></tr>
         <tr><td>Planned buy value</td>
             <td>{{ '₹{:,.0f}'.format(v.planned_buy_value) if v.planned_buy_value else '—' }}</td>
-            <td>Failed / rejected</td><td class="na">—</td></tr>
+            <td>Filled</td>
+            <td class="{{ 'ok' if v.rebalance_plan and v.rebalance_plan.filled_value else 'na' }}">
+              {{ '₹{:,.0f}'.format(v.rebalance_plan.filled_value)
+                 if v.rebalance_plan and v.rebalance_plan.filled_value else '—' }}</td></tr>
+        <tr><td>Order states</td>
+            <td class="muted">{% if v.rebalance_plan and v.rebalance_plan.counts %}
+                {%- for k, n in v.rebalance_plan.counts.items() %}{{ k|lower }} {{ n }}{{ ', ' if not loop.last }}{% endfor %}
+              {%- else %}—{% endif %}</td>
+            <td>Failed / rejected</td>
+            <td class="{{ 'bad' if v.rebalance_plan and v.rebalance_plan.failed_value else 'na' }}">
+              {{ '₹{:,.0f}'.format(v.rebalance_plan.failed_value)
+                 if v.rebalance_plan and v.rebalance_plan.failed_value else '—' }}</td></tr>
         <tr><td>Remaining gap</td>
             <td class="{{ 'bad' if v.exposure_gap_pct and v.exposure_gap_pct > 0 else 'ok' }}">{{ '%+.1f'|format(v.exposure_gap_pct) if v.exposure_gap_pct is not none else '—' }}%</td>
             <td>Last reconciliation</td><td>{{ v.exposure_observed_at or '—' }}</td></tr>
       </tbody>
     </table>
     <p class="muted" style="margin-top:10px">A tier on this screen never guarantees the
-      book reached its cap. Submitted, filled and rejected values populate only once a plan
-      has been executed; they stay blank rather than showing zeros.</p>
+      book reached its cap. Filled is what actually moved: under DRY_RUN every order
+      reaches <code>dry_run</code> and nothing fills, which is why submitted can carry a
+      value while filled stays blank.
+      {%- if v.rebalance_plan and not v.rebalance_plan.linked %}
+        The plan shown is the most recent one stored, not one built under this evaluation.
+      {%- endif %}</p>
   </div>
 </section>
 
@@ -746,6 +770,47 @@
 <section>
   <h2>Transition history</h2>
   <div class="card">
+    {% if v.timeline %}
+      {% set tl = v.timeline %}
+      <p class="muted" style="margin-bottom:6px">{{ tl.first }} to {{ tl.last }}. Cap,
+        actual exposure and breadth are all percentages, so they share one axis. The cap
+        is a step: it changes only at a transition and holds between evaluations.</p>
+      <div class="legend" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px">
+        <span class="muted"><b style="color:#f2a33c">▬</b> permitted cap</span>
+        <span class="muted"><b style="color:#3ddc97">▬</b> actual equity</span>
+        <span class="muted"><b style="color:#7b6ad0">▬</b> breadth</span>
+      </div>
+      <div class="scroll">
+        <svg viewBox="0 0 {{ tl.width }} {{ tl.height }}" width="100%"
+             style="max-width:{{ tl.width }}px;height:auto;display:block"
+             role="img" aria-label="Permitted cap, actual equity exposure and breadth by week">
+          {% for t in tl.ticks %}
+            <line x1="{{ tl.pad_l }}" y1="{{ t.px }}" x2="{{ tl.width - 46 }}" y2="{{ t.px }}"
+                  stroke="#22304d" stroke-width="1"/>
+            <text x="{{ tl.pad_l - 7 }}" y="{{ t.px + 4 }}" text-anchor="end"
+                  fill="#8593ad" font-size="10">{{ t.v }}%</text>
+          {% endfor %}
+          {% for t in tl.xticks %}
+            <text x="{{ t.px }}" y="{{ tl.height - 7 }}" text-anchor="middle"
+                  fill="#8593ad" font-size="9.5">{{ t.label }}</text>
+          {% endfor %}
+          <path d="{{ tl.cap }}" fill="none" stroke="#f2a33c" stroke-width="1.8"
+                stroke-linejoin="round"/>
+          <path d="{{ tl.breadth }}" fill="none" stroke="#7b6ad0" stroke-width="1.4"
+                opacity=".85" stroke-linejoin="round"/>
+          <path d="{{ tl.actual }}" fill="none" stroke="#3ddc97" stroke-width="1.8"
+                stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <p class="muted" style="margin-top:6px">{{ tl.omitted }}, so it is not drawn rather
+        than approximated.</p>
+    {% elif v.history %}
+      <p class="muted" style="margin-bottom:10px">A timeline needs at least
+        {{ v.timeline_min_weeks }} distinct weeks; there
+        {{ 'is' if v.history|length == 1 else 'are' }} {{ v.history|length }}. Two points
+        make a line that looks like a trend and is not one, so the table carries the
+        numbers until then.</p>
+    {% endif %}
     {% if v.history|length > 1 %}
       <table>
         <thead><tr><th>Week</th><th>Raw candidate</th><th>Policy tier</th><th>Cap</th>
@@ -799,6 +864,24 @@
               <td class="{{ 'bad' if v.tax_data_incomplete else 'ok' }}">{{ 'incomplete' if v.tax_data_incomplete else 'complete for proposed sales' }}</td></tr>
           <tr><td>Forced actions permitted</td>
               <td class="{{ 'ok' if v.forced_actions_permitted else 'warnc' }}">{{ 'yes' if v.forced_actions_permitted else 'no' }}</td></tr>
+          {% if v.store_status %}
+          {# Index freshness above says whether the SIGNAL inputs are current. These say
+             whether the machine that fetches them is working: a page can show perfectly
+             fresh indices while collection has failed for a week on an expired token. #}
+          <tr><td>Last collection</td>
+              <td class="{{ 'ok' if v.store_status.collection_healthy else 'bad' }}">
+                {{ v.store_status.last_collection or 'never' }}
+                {%- if v.store_status.last_collection_outcome %}
+                  · {{ v.store_status.last_collection_outcome }}{% endif %}
+                {%- if v.store_status.consecutive_failures %}
+                  · {{ v.store_status.consecutive_failures }} consecutive failures{% endif %}</td></tr>
+          <tr><td>Last index write</td>
+              <td>{{ v.store_status.last_index_write or 'never' }}</td></tr>
+          <tr><td>Database</td>
+              <td>schema v{{ v.store_status.schema_version }} ·
+                {{ v.store_status.journal_mode }} ·
+                {{ '%.1f'|format((v.store_status.db_bytes or 0) / 1048576) }} MB</td></tr>
+          {% endif %}
         </tbody>
       </table>
     </div>

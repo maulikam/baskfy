@@ -23,7 +23,7 @@ from typing import Iterator, Sequence
 
 from .. import config as C
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # --- schema ---------------------------------------------------------------------------
 # Column sets are fixed by the analytics spec; extra *indexes* are fine, extra columns are
@@ -241,6 +241,32 @@ _MIGRATIONS: dict[int, Sequence[str]] = {
                note        TEXT
            )""",
         """CREATE INDEX IF NOT EXISTS ix_ops_jobs_started ON ops_jobs(started_at DESC)""",
+    ),
+    5: (
+        # Raw broker fills — the durable source of truth that `trades` is DERIVED from.
+        #
+        # Why this table has to exist: Kite Connect's /trades endpoint is same-day only
+        # (it takes no date parameter and the book is flushed nightly), so history can
+        # only ever be seeded once from a Console export. But FIFO cannot be computed
+        # incrementally — a sell captured today has to consume a lot bought months ago.
+        # Keeping every fill means both sources write here and lots are always rebuilt
+        # from the complete picture, in one code path.
+        #
+        # trade_id is the broker's own identifier where there is one; a CSV row without
+        # it gets a deterministic synthetic key, so re-importing a file is still a no-op.
+        """CREATE TABLE IF NOT EXISTS fills(
+               trade_id    TEXT PRIMARY KEY,
+               symbol      TEXT NOT NULL,
+               when_ts     REAL NOT NULL,
+               side        TEXT NOT NULL,      -- BUY | SELL
+               quantity    INTEGER NOT NULL,
+               price       REAL NOT NULL,
+               exchange    TEXT,
+               charges     REAL NOT NULL DEFAULT 0,
+               source      TEXT NOT NULL,      -- console_csv | kite_api
+               captured_at TEXT
+           )""",
+        """CREATE INDEX IF NOT EXISTS ix_fills_symbol ON fills(symbol, when_ts)""",
     ),
 }
 

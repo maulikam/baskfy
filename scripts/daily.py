@@ -11,8 +11,13 @@ WHAT IT DOES, IN ORDER
     1. index history      structural indices + the momentum sentinel
     2. benchmark PRI      NIFTY 500 and the momentum index
     3. EOD snapshot       NAV, holdings, cash -> the TWR index chain
-    4. breadth            only when a scan CSV is supplied; never invented
-    5. regime preview     an observe-mode evaluation, stored as a preview
+    4. trade capture      today's fills -> FIFO tax lots
+    5. breadth            only when a scan CSV is supplied; never invented
+    6. regime preview     an observe-mode evaluation, stored as a preview
+
+Trade capture has the same one-shot property as the snapshot, for the same reason:
+Kite's /trades endpoint is same-day only, so a fill not recorded on its own session
+survives nowhere but a Console export.
 
 Every step is independently idempotent, so re-running changes nothing. A step that fails
 does not stop the others: partial collection beats none, and the summary says exactly what
@@ -48,7 +53,8 @@ from app.core import regime as R                                  # noqa: E402
 OK, SKIP, FAIL = "ok", "skipped", "FAILED"
 
 
-STEPS = ("index history", "benchmark PRI", "EOD snapshot", "breadth", "regime preview")
+STEPS = ("index history", "benchmark PRI", "EOD snapshot", "trade capture", "breadth",
+         "regime preview")
 
 
 class Runner:
@@ -172,6 +178,16 @@ def main() -> int:
             return (f"{snap['date']} nav Rs {snap['nav']:,.0f} "
                     f"index {snap['index_value']:.4f} [{snap['outcome']}]")
         run.step("EOD snapshot", _snapshot)
+
+        # --- 3b. trade capture ---------------------------------------------------------
+        def _trades():
+            from app.analytics import tradebook as TB
+            r = TB.capture_live_trades(conn, kite)
+            if not r["captured"]:
+                return "no fills today"
+            return (f"{r['new']} new of {r['captured']} fills, "
+                    f"{', '.join(r['symbols'])}")
+        run.step("trade capture", _trades)
 
         # --- 4. breadth --------------------------------------------------------------------
         def _breadth():

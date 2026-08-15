@@ -5,6 +5,7 @@ these tests are about what it REFUSES.
 """
 from __future__ import annotations
 
+import html
 import json
 import time
 
@@ -223,7 +224,9 @@ def test_last_run_gives_the_latest_outcome_per_operation(conn):
 # the page
 # =====================================================================================
 def test_ops_page_renders_every_operation(client):
-    text = client.get("/ops").text
+    # unescape first: a label with an apostrophe is escaped in the markup, and comparing
+    # the raw string would fail on presentation rather than on a missing operation.
+    text = html.unescape(client.get("/ops").text)
     for op in O.OPERATIONS:
         assert op.label in text, f"{op.name} is not on the page"
 

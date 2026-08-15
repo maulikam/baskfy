@@ -258,3 +258,96 @@ def test_coverage_reports_what_tax_can_reason_about(conn, tmp_path):
     assert cov["with_lots"] == 1 and cov["holdings"] == 3
     assert cov["coverage_pct"] == pytest.approx(33.3)
     assert cov["missing"] == ["B", "C"]
+
+
+# =====================================================================================
+# live capture — Kite's /trades is same-day only, so the CSV seeds history exactly once
+# =====================================================================================
+class FakeKite:
+    def __init__(self, rows): self._rows = rows
+    def trades(self): return list(self._rows)
+
+
+def ktrade(symbol, side, qty, price, when, tid="K1", product="CNC"):
+    return {"trade_id": tid, "tradingsymbol": symbol, "transaction_type": side,
+            "quantity": qty, "average_price": price, "product": product,
+            "exchange": "NSE", "fill_timestamp": when}
+
+
+def test_a_captured_sell_consumes_a_lot_bought_months_earlier(conn, tmp_path):
+    """The whole point of persisting fills: FIFO cannot be computed incrementally."""
+    TB.import_tradebook(conn, write(tmp_path, [row("X", "2025-01-01", "buy", 100, 50.0)]))
+    r = TB.capture_live_trades(
+        conn, FakeKite([ktrade("X", "SELL", 40, 90.0, "2026-08-15 10:00:00")]))
+
+    assert r["new"] == 1 and r["closed_trades"] == 1
+    closed = conn.execute("SELECT * FROM trades WHERE exit_ts IS NOT NULL").fetchone()
+    assert closed["qty"] == 40
+    assert closed["entry_price"] == 50.0        # the January lot, not today's price
+    assert closed["pnl"] == pytest.approx((90.0 - 50.0) * 40)
+    still_open = conn.execute(
+        "SELECT qty FROM trades WHERE exit_ts IS NULL").fetchone()["qty"]
+    assert still_open == 60
+
+
+def test_capturing_the_same_session_twice_changes_nothing(conn, tmp_path):
+    TB.import_tradebook(conn, write(tmp_path, [row("X", "2025-01-01", "buy", 100, 50.0)]))
+    k = FakeKite([ktrade("X", "SELL", 40, 90.0, "2026-08-15 10:00:00")])
+    TB.capture_live_trades(conn, k)
+    before = [tuple(r) for r in conn.execute("SELECT * FROM trades ORDER BY id")]
+    second = TB.capture_live_trades(conn, k)
+    after = [tuple(r) for r in conn.execute("SELECT * FROM trades ORDER BY id")]
+    assert second["new"] == 0 and before == after
+
+
+def test_a_quiet_session_captures_nothing(conn):
+    r = TB.capture_live_trades(conn, FakeKite([]))
+    assert r["captured"] == 0 and r["symbols"] == []
+
+
+def test_non_cnc_legs_are_excluded(conn):
+    """An MIS or F&O leg would corrupt the delivery FIFO book and the tax review."""
+    TB.capture_live_trades(conn, FakeKite([
+        ktrade("X", "BUY", 10, 5.0, "2026-08-15 10:00:00", tid="A", product="MIS"),
+        ktrade("Y", "BUY", 10, 5.0, "2026-08-15 10:00:00", tid="B", product="CNC")]))
+    syms = [r["symbol"] for r in conn.execute("SELECT symbol FROM fills")]
+    assert syms == ["Y"]
+
+
+def test_a_trade_without_a_usable_timestamp_is_refused(conn):
+    with pytest.raises(TB.TradebookError, match="timestamp"):
+        TB.fills_from_kite([{"trade_id": "Z", "tradingsymbol": "X",
+                             "transaction_type": "BUY", "quantity": 1,
+                             "average_price": 5.0, "product": "CNC"}])
+
+
+def test_an_unrecognised_side_is_refused_not_guessed(conn):
+    with pytest.raises(TB.TradebookError, match="transaction_type"):
+        TB.fills_from_kite([ktrade("X", "TRANSFER", 1, 5.0, "2026-08-15 10:00:00")])
+
+
+def test_capture_and_csv_coexist_without_duplicating(conn, tmp_path):
+    """The same fill arriving from both sources must be stored once. Kite's trade_id is
+    the same value the Console export carries, which is what makes that possible."""
+    TB.capture_live_trades(
+        conn, FakeKite([ktrade("X", "BUY", 100, 50.0, "2026-08-15 09:30:00", tid="T1")]))
+    TB.import_tradebook(conn, write(tmp_path, [row("X", "2026-08-15", "buy", 100, 50.0)]))
+    assert conn.execute("SELECT COUNT(*) c FROM fills").fetchone()["c"] == 1
+    assert conn.execute("SELECT COUNT(*) c FROM trades").fetchone()["c"] == 1
+
+
+def test_a_csv_row_without_a_trade_id_still_dedupes(conn, tmp_path):
+    hdr = "symbol,trade_date,trade_type,quantity,price"
+    f = tmp_path / "no_id.csv"
+    f.write_text(hdr + "\nX,2025-01-01,buy,100,50.0\n")
+    TB.import_tradebook(conn, str(f))
+    TB.import_tradebook(conn, str(f))
+    assert conn.execute("SELECT COUNT(*) c FROM fills").fetchone()["c"] == 1
+
+
+def test_capture_leaves_other_symbols_alone(conn, tmp_path):
+    TB.import_tradebook(conn, write(tmp_path, [row("OTHER", "2025-01-01", "buy", 7, 3.0)]))
+    TB.capture_live_trades(
+        conn, FakeKite([ktrade("X", "BUY", 1, 5.0, "2026-08-15 10:00:00")]))
+    r = conn.execute("SELECT qty FROM trades WHERE symbol='OTHER'").fetchone()
+    assert r["qty"] == 7

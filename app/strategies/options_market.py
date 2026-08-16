@@ -62,21 +62,17 @@ class LiveSnapshot:
             "option_quotes": len(m.quotes),
         }
         if include_chain:
+            # The FULL microstructure record: five depth levels, resting quantity at the
+            # touch, a receive stamp and last-trade staleness. Top-of-book alone cannot
+            # answer the two questions a fill model asks — how long is the queue ahead of
+            # me, and is this quote stale — and neither can be reconstructed later from a
+            # log that never held them.
             out["chain"] = [
-                {
-                    "token": q.instrument.token,
-                    "symbol": q.instrument.symbol,
-                    "expiry": q.instrument.expiry.isoformat(),
-                    "strike": q.instrument.strike,
-                    "kind": q.instrument.kind,
-                    "lot_size": q.instrument.lot_size,
-                    "tick_size": q.instrument.tick_size,
-                    "bid": q.bid,
-                    "ask": q.ask,
-                    "last": q.last,
-                    "volume": q.volume,
-                    "oi": q.oi,
-                }
+                {"token": q.instrument.token,
+                 "expiry": q.instrument.expiry.isoformat(),
+                 "lot_size": q.instrument.lot_size,
+                 "tick_size": q.instrument.tick_size,
+                 **q.microstructure()}
                 for q in m.quotes
             ]
         return out
@@ -222,6 +218,9 @@ def build_live_snapshot(kite, cfg: SellingConfig | BuyingConfig, *,
     tick size.  Every one is resolved from the current NFO instrument dump.
     """
     now = _aware(as_of)
+    # One stamp for the whole batch: the quotes arrive in a single response,
+    # so per-quote wall-clock times would imply a precision that is not there.
+    received = dt.datetime.now(IST)
     kc = kite.kc
     rows = list(kc.instruments("NFO") or [])
 
@@ -247,7 +246,7 @@ def build_live_snapshot(kite, cfg: SellingConfig | BuyingConfig, *,
     for ins in instruments:
         row = option_rows.get(f"NFO:{ins.symbol}")
         if row:
-            quotes.append(OptionQuote.from_kite(ins, row))
+            quotes.append(OptionQuote.from_kite(ins, row, received_at=received))
     if not quotes:
         raise LiveSnapshotUnavailable("Kite returned no quotes for the selected chain")
 

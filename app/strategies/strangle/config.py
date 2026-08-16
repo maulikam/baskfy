@@ -7,7 +7,8 @@ from typing import Any, Sequence
 
 import yaml
 
-from .clock import expiry_is_expected_weekday, resolve_expiry
+from .calendar_nse import Calendar
+from .clock import resolve_expiry
 
 DEFAULT_PATH = "config/strangle.yaml"
 
@@ -22,7 +23,8 @@ def load(path: str | Path = DEFAULT_PATH) -> dict:
 
 
 def assert_market_facts(cfg: dict, instruments: Sequence[dict],
-                        today: dt.date | None = None) -> dict:
+                        today: dt.date | None = None,
+                        calendar: Calendar | None = None) -> dict:
     """Check lot size, strike step and expiry weekday against the live instrument dump.
 
     Lot sizes change — NIFTY went 75 -> 65 in Jan 2026 — and expiry days move, Thursday to
@@ -51,11 +53,19 @@ def assert_market_facts(cfg: dict, instruments: Sequence[dict],
     today = today or dt.date.today()
     expiries = sorted({i["expiry"] for i in opts if i.get("expiry")})
     expiry = resolve_expiry(today, expiries)
-    if not expiry_is_expected_weekday(expiry, ins["expiry_weekday"]):
+    # The calendar, not the weekday alone. A Tuesday holiday legitimately shifts an expiry
+    # back to Monday — the live dump carries one, 2029-12-24 for Christmas — and refusing
+    # to start that week would be the assertion misfiring, not catching anything.
+    cal = calendar or Calendar.build(expiries=expiries,
+                                     extra=cfg["session"].get("extra_holidays") or ())
+    valid, why = cal.expiry_is_valid(expiry)
+    if not valid:
         raise StartupRefused(
             f"nearest expiry {expiry} is a {expiry.strftime('%A')}, config expects "
-            f"{ins['expiry_weekday']}. The expiry cycle has moved again.")
+            f"{ins['expiry_weekday']}: {why}")
 
     return {"lot_size": int(ins["lot_size"]), "strike_step": step, "expiry": expiry,
-            "expiry_weekday": expiry.strftime("%A"), "contracts": len(opts),
-            "next_expiries": [e.isoformat() for e in expiries[:5]]}
+            "expiry_weekday": expiry.strftime("%A"), "expiry_note": why,
+            "contracts": len(opts),
+            "next_expiries": [e.isoformat() for e in expiries[:5]],
+            "calendar": cal.coverage(today)}

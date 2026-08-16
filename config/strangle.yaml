@@ -92,6 +92,11 @@ session:
   # spreads does not. Two of the four weekly sessions sit in the dte>=3 bucket, so expect
   # this to skip days; the report says how often and why.
   min_stop_to_entry_cost_ratio: 2.0
+  # NSE holidays that the derived calendar cannot see. It reads past holidays exactly from
+  # index history and infers future ones from expiries that shifted off a Tuesday — but a
+  # holiday that moves no expiry leaves no trace in any Kite endpoint. Add those from the
+  # NSE circular; scripts/strangle.py --check prints how far the derived calendar reaches.
+  extra_holidays: []
 
 timing:
   premarket_setup: "09:00"

@@ -26,6 +26,7 @@ import sys
 
 from app.kite_client import Kite
 from app.strategies.strangle import book as B
+from app.strategies.strangle import calendar_nse as CALN
 from app.strategies.strangle import calibrate as CAL
 from app.strategies.strangle import clock as C
 from app.strategies.strangle import config as SC
@@ -70,8 +71,13 @@ def main() -> int:
 
     ins = cfg["instrument"]
     instruments = kite.kc.instruments(ins["exchange"])
+    # Derived, not hardcoded: past holidays come from index history, future ones from
+    # expiries that shifted off a Tuesday. See calendar_nse.py for what it cannot see.
+    cal = CALN.build_from_kite(kite.kc, name=ins["name"],
+                               extra=cfg["session"].get("extra_holidays") or (),
+                               today=today)
     try:
-        facts = SC.assert_market_facts(cfg, instruments, today)
+        facts = SC.assert_market_facts(cfg, instruments, today, calendar=cal)
     except SC.StartupRefused as exc:
         jr.write("startup_refused", error=str(exc))
         return _out({"status": "STARTUP_REFUSED", "error": str(exc)})
@@ -83,9 +89,10 @@ def main() -> int:
                      "note": "a restart must not resume trading on a day that already "
                              "hit its stop"})
 
-    if not C.is_trading_day(today):
+    if not cal.is_trading_day(today):
         return _out({"status": "NOT_A_TRADING_DAY", "session": today.isoformat(),
                      "weekday": today.strftime("%A"),
+                     "holiday": today in cal.holidays,
                      "note": "the session parameters would still compute, which is exactly "
                              "why this is checked rather than assumed"})
 
@@ -94,7 +101,7 @@ def main() -> int:
                                              if i.get("name") == ins["name"]
                                              and i.get("expiry")}))
     try:
-        params = C.session_params(today, expiry, cfg)
+        params = C.session_params(today, expiry, cfg, holidays=cal.holidays)
     except C.ExpiryResolutionError as exc:
         return _out({"status": "EXPIRY_ERROR", "error": str(exc)})
 

@@ -480,10 +480,21 @@ def test_the_entry_timing_gate_reads_the_straddle_open():
 # =====================================================================================
 # the package cannot trade
 # =====================================================================================
-def test_no_module_in_the_package_can_place_an_order():
+def test_no_paper_module_can_reach_the_broker_at_all():
+    """Everything except the V4 live adapter is entirely broker-free.
+
+    This assertion was once "no module in the package", and V4 relaxed it by adding
+    fills_live.py — deliberately, and localised here rather than deleted. The live adapter
+    submits only through core/gateway.py and its one direct call is a cancellation, which
+    test_strangle_v4.py pins by walking the AST for call sites.
+    """
+    import ast
     import pathlib
-    banned = ("place_order", "place_gtt", "modify_order", "cancel_order", "place_basket")
-    for f in pathlib.Path("app/strategies/strangle").glob("*.py"):
-        src = f.read_text()
-        for token in banned:
-            assert token not in src, f"{f.name} references {token}"
+    banned = {"place_order", "place_gtt", "place_gtt_stop", "modify_order",
+              "cancel_order", "place_basket"}
+    for f in sorted(pathlib.Path("app/strategies/strangle").glob("*.py")):
+        if f.name == "fills_live.py":
+            continue
+        called = {n.func.attr for n in ast.walk(ast.parse(f.read_text()))
+                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+        assert not (called & banned), f"{f.name} calls {sorted(called & banned)}"

@@ -199,11 +199,15 @@
   }
   :focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
 
-  /* Dense tables cannot shrink below their content, so below this width they scroll
-     inside their own card rather than dragging the whole page sideways. */
+  /* Dense tables cannot shrink below their content, so they scroll inside their own card
+     rather than dragging the whole page sideways. Unconditional, not below a breakpoint:
+     this was gated at 780px on the assumption that anything wider fits, and it does not —
+     the exposure table still overflowed the page at 900px. A table either fits or it
+     scrolls, and which is true depends on its content, not on the viewport. */
+  .card table{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+
   @media(max-width:780px){
     body{padding:20px 16px 70px}
-    .card table{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
     .kv{flex-wrap:wrap;gap:0}
     .kv b{white-space:normal;text-align:left;max-width:100%}
     .strip{grid-template-columns:repeat(auto-fit,minmax(118px,1fr))}
@@ -211,6 +215,16 @@
     .banner{gap:var(--s2)}
     .legend{font-size:11px;gap:var(--s2)}
   }
+
+  /* The badge is the header's third flex item. Once the nav grew, badge+nav no longer fit
+     beside the title, so the badge wrapped to its own row — and under
+     justify-content:space-between a lone item on the second row sits flush LEFT, directly
+     under the title, reading as a stray line rather than as status. The nav absorbs the
+     shrink instead: it already wraps internally, so it gets taller while the title and the
+     badge stay on the first row where they belong. */
+  header>h1{flex:0 0 auto}
+  header>.nav{flex:1 1 auto;min-width:0}
+  header>.badge{flex:0 0 auto;margin-left:auto;text-align:right}
 </style>
 </head>
 <body>

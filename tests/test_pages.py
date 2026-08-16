@@ -208,3 +208,32 @@ def test_new_pages_use_no_external_dependency():
         html = open(f"app/templates/{f}").read()
         assert "<script" not in html
         assert "cdn." not in html
+
+
+def test_every_page_header_keeps_the_status_badge_out_of_the_left_gutter():
+    """The header is a wrapping flex row of title, nav and badge. Once the nav grew the
+    badge no longer fit beside the title and wrapped — and under justify-content:
+    space-between a lone item on the next row sits flush LEFT, under the title, reading as
+    a stray line rather than as status. These three rules keep the nav absorbing the
+    shrink and the badge anchored right.
+    """
+    import pathlib
+    for f in sorted(pathlib.Path("app/templates").glob("*.html")):
+        src = f.read_text()
+        if "<header>" not in src or 'class="badge"' not in src:
+            continue
+        assert "header>.badge{flex:0 0 auto;margin-left:auto" in src, f.name
+        assert "header>.nav{flex:1 1 auto;min-width:0}" in src, f.name
+
+
+def test_regime_tables_scroll_at_every_width_not_just_on_a_phone():
+    """The rule was gated behind max-width:780px on the assumption that anything wider
+    fits. The exposure table still overflowed the page at 900px: whether a dense table
+    fits depends on its content, not on the viewport."""
+    rule = ".card table{display:block;max-width:100%;overflow-x:auto"
+    hits = [ln for ln in open("app/templates/regime.html") if rule in ln]
+    assert hits, "the regime table scroll rule is gone"
+    # Top-level rules in this stylesheet are indented two spaces; anything nested inside a
+    # @media block is indented four. That is the whole assertion: not behind a breakpoint.
+    assert all(ln.startswith("  ") and not ln.startswith("   ") for ln in hits), \
+        "the table scroll rule is gated behind a breakpoint again"

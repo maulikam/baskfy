@@ -122,6 +122,16 @@
   pre.cmd{background:#0a1326;border:1px solid var(--line);border-radius:7px;
           padding:9px 12px;overflow-x:auto;font-size:11.5px;color:var(--paper);margin-top:3px;
           max-width:100%}
+
+  /* The badge is the header's third flex item. Once the nav grew, badge+nav no longer fit
+     beside the title, so the badge wrapped to its own row — and under
+     justify-content:space-between a lone item on the second row sits flush LEFT, directly
+     under the title, reading as a stray line rather than as status. The nav absorbs the
+     shrink instead: it already wraps internally, so it gets taller while the title and the
+     badge stay on the first row where they belong. */
+  header>h1{flex:0 0 auto}
+  header>.nav{flex:1 1 auto;min-width:0}
+  header>.badge{flex:0 0 auto;margin-left:auto;text-align:right}
 </style>
 </head>
 <body>

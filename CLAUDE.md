@@ -8,8 +8,9 @@ GTT stop-losses placed for every position.
 ## Architecture (event-driven, latency-aware)
 - `app/core/` — guards (SGB hard-block), rate limiter (Kite caps), risk manager +
   kill switch, async OrderGateway (sole order path), websocket TickBus.
-- `app/strategies/` — plugin engines: momentum_weekly (LIVE), intraday_skeleton and
-  options_skeleton (READY, gated OFF). New strategies subclass strategies/base.py.
+- `app/strategies/` — plugin engines: momentum_weekly (LIVE), intraday_skeleton, and
+  defined-risk option planners in options.py (PAPER-ONLY, gated OFF). New strategies
+  subclass strategies/base.py.
 - Perf: uvloop + orjson; hot path is in-memory; sync kiteconnect calls run in threads.
   Kite's own floor is ~100-300ms order round-trip, 10 req/s, ~1 tick/sec/instrument —
   design within it (host in AWS Mumbai for the lowest RTT). Zerodha's backend being Go

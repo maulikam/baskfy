@@ -123,6 +123,7 @@
     &nbsp;·&nbsp; Mode: <b class="{{ 'warn' if not dry_run else '' }}">{{ 'DRY RUN' if dry_run else 'LIVE ORDERS' }}</b>
   </div>
 </header>
+<main>
 
 {# Only shown when something is wrong. A healthy collection needs no banner: a status
    line that is always present stops being read, and this one has to be believed on the
@@ -204,7 +205,7 @@
 
 <div class="card" id="planCard" style="display:none">
   <h2>Order plan — review every line</h2>
-  <table id="plan"><thead><tr>
+  <table aria-label="Order plan review every line" id="plan"><thead><tr>
     <th>Symbol</th><th>Rank</th><th>Score</th><th>Action</th><th>Now</th><th>Δ Order</th>
     <th>Final</th><th>Ref ₹</th><th>Value ₹</th><th>Wt%</th><th>GTT stop</th><th>Pledged</th>
   </tr></thead><tbody></tbody></table>
@@ -293,5 +294,6 @@ async function execute(){
   document.getElementById('resultBody').textContent=JSON.stringify(j,null,2);
 }
 </script>
+</main>
 </body>
 </html>

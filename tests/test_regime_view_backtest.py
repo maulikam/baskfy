@@ -760,3 +760,91 @@ def test_the_sentinel_is_charted_against_its_own_decisive_average(conn, cfg):
     cards = RV._index_cards(diag, cfg, [], series)
     for c in cards:
         assert c["spark"]["ma_len"] == (50 if c["is_sentinel"] else 200)
+
+
+# =====================================================================================
+# the two P1 audit findings
+# =====================================================================================
+def _portfolio(rows):
+    return {"tradeable": rows, "count": len(rows)}
+
+
+def _pos(sym, weight, value=None):
+    return {"symbol": sym, "weight_pct": weight, "value": value if value is not None
+            else weight * 1000, "excluded": False}
+
+
+def test_holdings_come_from_the_portfolio_not_from_proposed_orders():
+    """With no plan the card read 'Holdings —' while seventeen positions were held."""
+    got = RV._holding_counts(_portfolio([_pos("A", 7.0), _pos("B", 4.0)]), 100.0, [])
+    assert got["holdings_now"] == 2
+    assert got["holdings_source"] == "portfolio"
+
+
+def test_an_empty_portfolio_falls_back_to_the_plan_and_says_so():
+    got = RV._holding_counts({}, 100.0, [{"qty_now": 5}, {"qty_now": 0}])
+    assert got["holdings_now"] == 1 and got["holdings_source"] == "plan"
+
+
+def test_nothing_held_and_nothing_planned_reports_none_not_zero():
+    assert RV._holding_counts({}, 100.0, [])["holdings_now"] is None
+
+
+def test_sizes_are_judged_against_the_sleeve_not_nav():
+    """In R3 the sleeve is 40% of NAV, so a 4% NAV position is 10% of the sleeve — a full
+    weight. Comparing NAV weight to a sleeve threshold would call it half-size."""
+    rows = _portfolio([_pos("A", 4.0)])
+    assert RV._holding_counts(rows, 100.0, [])["full_sized"] == 0     # 4% of NAV
+    assert RV._holding_counts(rows, 40.0, [])["full_sized"] == 1      # 10% of sleeve
+
+
+def test_below_minimum_is_not_conflated_with_a_deliberate_half_entry():
+    from app import config as C
+    rows = _portfolio([_pos("FULL", C.MIN_POSITION_WEIGHT + 1),
+                       _pos("HALF", C.HALF_SIZE_WEIGHT + 0.5),
+                       _pos("THIN", C.HALF_SIZE_WEIGHT - 1)])
+    got = RV._holding_counts(rows, 100.0, [])
+    assert got["full_sized"] == 1
+    assert [h["symbol"] for h in got["half_sized"]] == ["HALF"]
+    assert [h["symbol"] for h in got["below_half"]] == ["THIN"]
+
+
+def test_the_largest_position_is_by_value_and_carries_its_sleeve_weight():
+    rows = _portfolio([_pos("SMALL", 8.0, value=100), _pos("BIG", 4.0, value=900)])
+    got = RV._holding_counts(rows, 50.0, [])
+    assert got["largest_position"]["symbol"] == "BIG"
+    assert got["largest_position"]["weight_sleeve"] == 8.0     # 4% of NAV / 0.5 sleeve
+
+
+def test_an_excluded_holding_is_not_counted():
+    rows = {"tradeable": [_pos("A", 7.0), {**_pos("SGB", 50.0), "excluded": True}]}
+    assert RV._holding_counts(rows, 100.0, [])["holdings_now"] == 1
+
+
+# --- the headline reason ---------------------------------------------------------------
+def test_a_risk_off_reason_that_fired_is_the_headline():
+    pairs = [{"code": "R2_DEFAULT", "risk_off": False, "text": "default"},
+             {"code": "R3_H200_WEAK", "risk_off": True, "text": "long-term health weak"}]
+    assert RV.headline_reason(pairs, ["something else"]) == "long-term health weak"
+
+
+def test_with_nothing_risk_off_the_tier_setting_code_is_the_headline():
+    """The narrative's first line is an observation. On the live book it read 'NIFTY 50 is
+    confirmed below its 200-DMA' beneath a RISK-ON tier, inviting the wrong conclusion."""
+    pairs = [{"code": "BOOK_WEIGHTS_CONFIG_DEFAULT", "risk_off": False, "text": "defaults"},
+             {"code": "R1_ALL_CONDITIONS_MET", "risk_off": False, "text": "all risk-on"}]
+    assert RV.headline_reason(pairs, ["NIFTY 50 is below its 200-DMA."]) == "all risk-on"
+
+
+def test_the_narrative_is_only_the_last_resort():
+    assert RV.headline_reason([], ["observation"]) == "observation"
+    assert RV.headline_reason([], []) == "—"
+
+
+def test_the_decision_summary_precedes_the_explainers_in_the_markup():
+    """Comprehension first: the mode explainer and tier ladder were pushing 'why this
+    regime' past 1,400px."""
+    html = open("app/templates/regime.html").read()
+    assert html.index("Decision summary") < html.index("What the four tiers mean")
+    assert html.index("Decision summary") < html.index("How the overlay is running")
+    assert html.index("Why this regime") < html.index("What the four tiers mean")

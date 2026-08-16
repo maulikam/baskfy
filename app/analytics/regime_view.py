@@ -539,6 +539,78 @@ def timeline_chart(history: list[dict], *, width: int = 700, height: int = 170,
     }
 
 
+# Codes that SET a tier, most decisive first. A risk-off code that actually fired always
+# outranks these; this is the order to fall back through when none did.
+TIER_SETTING_CODES = ("R4_", "R3_", "R2_", "R1_ALL_CONDITIONS_MET", "R2_DEFAULT")
+
+
+def headline_reason(reason_pairs: Sequence[dict], narrative: Sequence[str]) -> str:
+    """The one sentence that explains the tier.
+
+    The narrative's first line is an observation, not a cause. On the live book it read
+    "NIFTY 50 is confirmed below its 200-DMA" beneath a RISK-ON tier, which invites
+    exactly the wrong conclusion. The decisive reason is the risk-off code that fired, or
+    failing that the code that set the tier.
+    """
+    fired = [p for p in reason_pairs if p.get("risk_off")]
+    if fired:
+        return fired[0]["text"]
+    for prefix in TIER_SETTING_CODES:
+        for p in reason_pairs:
+            if str(p.get("code", "")).startswith(prefix):
+                return p["text"]
+    return narrative[0] if narrative else "—"
+
+
+def _holding_counts(portfolio: dict, tier_cap: float | None,
+                    proposed: Sequence[dict]) -> dict:
+    """How many positions are held, and how many are carrying a full weight.
+
+    Sizes are judged against the ACTIVE SLEEVE, not against NAV. MIN_POSITION_WEIGHT is a
+    percentage of the sleeve, so in R3 — where the sleeve is 40% of NAV — a 6% sleeve
+    position is 2.4% of NAV. Comparing a NAV weight against a sleeve threshold would
+    report most of the book as half-size the moment the overlay reduced exposure.
+    """
+    rows = [p for p in (portfolio or {}).get("tradeable", []) if not p.get("excluded")]
+    if not rows:
+        # No stored portfolio: fall back to what a plan says is held, which is better
+        # than nothing but is a statement of intent rather than of fact.
+        n = len([o for o in proposed if o.get("qty_now", 0) > 0])
+        return {"holdings_now": n or None, "full_sized": None, "half_sized": [],
+                "largest_position": None, "holdings_source": "plan" if n else None}
+
+    # Three bands, not two. "Half-size" in this system means a DELIBERATE half-weight
+    # entry for a short-history listing; a position that has merely drifted under the
+    # minimum is a different thing, and labelling both the same would imply an intent
+    # that was never there.
+    sleeve = (tier_cap or 100.0) / 100.0
+    full, half, thin = 0, [], []
+    for p in rows:
+        w = float(p.get("weight_pct") or 0.0)
+        sleeve_w = w / sleeve if sleeve else w
+        entry = {"symbol": p["symbol"], "weight_pct": round(w, 2),
+                 "sleeve_pct": round(sleeve_w, 2)}
+        if sleeve_w + 1e-9 >= C.MIN_POSITION_WEIGHT:
+            full += 1
+        elif sleeve_w + 1e-9 >= C.HALF_SIZE_WEIGHT:
+            half.append(entry)
+        else:
+            thin.append(entry)
+    top = max(rows, key=lambda p: float(p.get("value") or 0.0))
+    top_w = float(top.get("weight_pct") or 0.0)
+    return {
+        "holdings_now": len(rows),
+        "full_sized": full,
+        "half_sized": half,
+        "below_half": thin,
+        "largest_position": {"symbol": top["symbol"],
+                             "weight_pct": round(top_w, 2),
+                             "weight_sleeve": round(top_w / sleeve if sleeve else top_w, 2),
+                             "value": round(float(top.get("value") or 0.0))},
+        "holdings_source": "portfolio",
+    }
+
+
 def _store_status(conn) -> dict:
     """Cache and database health, plus when data was last successfully collected.
 
@@ -693,9 +765,7 @@ def build(conn) -> dict:
                 "excess": reduction,
                 "cash": round(100.0 - actual, 4) if actual is not None else None,
                 "cap_marker": tier_cap},
-        "holdings_now": len([o for o in proposed if o.get("qty_now", 0) > 0]) or None,
         "positions_target": plan.get("positions"),
-        "half_sized": plan.get("half_sized", []),
         "target_position_range": list(C.TARGET_POSITIONS),
         "cluster_weights": plan.get("cluster_weights", {}),
         "cluster_cap": C.CLUSTER_CAP,
@@ -812,6 +882,12 @@ def build(conn) -> dict:
     }
 
     v["portfolio"] = portfolio_block(conn)
+    # Holdings come from the STORED PORTFOLIO, not from proposed orders. Deriving them
+    # from a plan meant the card read "Holdings —" whenever no plan existed, which is most
+    # of the time in observe mode: seventeen real positions displayed as nothing. A plan
+    # describes what should CHANGE; the portfolio is what is actually held.
+    v.update(_holding_counts(v["portfolio"], tier_cap, proposed))
+    v["headline_reason"] = headline_reason(v["reason_pairs"], v["narrative"])
     v["tier_ladder"] = [dict(t, current=(t["tier"] == tier),
                              cap=cfg.cap_for(RegimeTier(t["tier"])))
                         for t in TIER_LADDER]

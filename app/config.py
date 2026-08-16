@@ -1,4 +1,5 @@
 """Every strategy knob lives here. Change behaviour here, not in scoring/rebalance code."""
+import datetime as dt
 import os
 from dotenv import load_dotenv
 
@@ -45,6 +46,70 @@ FULLY_INVESTED = os.getenv("FULLY_INVESTED", "false").lower() == "true"  # overr
 # failed closed either way, but a missing constant is not a gate — this is.
 INTRADAY_ENABLED = os.getenv("INTRADAY_ENABLED", "false").lower() == "true"
 OPTIONS_ENABLED = os.getenv("OPTIONS_ENABLED", "false").lower() == "true"
+
+# ---- Options research engines (PAPER-ONLY; the product gates above remain OFF) --------
+# Return figures are evaluation benchmarks, never an instruction to trade until hit.
+OPTION_UNDERLYING = os.getenv("OPTION_UNDERLYING", "NIFTY")
+OPTION_SELL_MONTHLY_BENCHMARK_PCT = float(
+    os.getenv("OPTION_SELL_MONTHLY_BENCHMARK_PCT", "5.0"))
+OPTION_SELL_ENTRY_START = os.getenv("OPTION_SELL_ENTRY_START", "09:45")
+OPTION_SELL_ENTRY_END = os.getenv("OPTION_SELL_ENTRY_END", "13:30")
+OPTION_SELL_RISK_PER_TRADE_PCT = float(os.getenv("OPTION_SELL_RISK_PER_TRADE_PCT", "0.75"))
+OPTION_SELL_SHORT_DELTA = float(os.getenv("OPTION_SELL_SHORT_DELTA", "0.16"))
+OPTION_SELL_WING_DELTA = float(os.getenv("OPTION_SELL_WING_DELTA", "0.05"))
+OPTION_SELL_TARGET_CAPTURE_PCT = float(os.getenv("OPTION_SELL_TARGET_CAPTURE_PCT", "35"))
+OPTION_SELL_STOP_CREDIT_MULTIPLE = float(
+    os.getenv("OPTION_SELL_STOP_CREDIT_MULTIPLE", "1.5"))
+
+OPTION_BUY_TRADE_BENCHMARK_PCT = float(
+    os.getenv("OPTION_BUY_TRADE_BENCHMARK_PCT", "15.0"))
+OPTION_BUY_ENTRY_START = os.getenv("OPTION_BUY_ENTRY_START", "09:35")
+OPTION_BUY_ENTRY_END = os.getenv("OPTION_BUY_ENTRY_END", "14:30")
+OPTION_BUY_RISK_PER_TRADE_PCT = float(os.getenv("OPTION_BUY_RISK_PER_TRADE_PCT", "0.50"))
+OPTION_BUY_DELTA = float(os.getenv("OPTION_BUY_DELTA", "0.60"))
+OPTION_BUY_PREMIUM_STOP_PCT = float(os.getenv("OPTION_BUY_PREMIUM_STOP_PCT", "25"))
+OPTION_BUY_TRAIL_ACTIVATION_PCT = float(
+    os.getenv("OPTION_BUY_TRAIL_ACTIVATION_PCT", "15"))
+OPTION_BUY_TRAIL_DRAWDOWN_PCT = float(os.getenv("OPTION_BUY_TRAIL_DRAWDOWN_PCT", "8"))
+OPTION_INTRADAY_SQUARE_OFF = os.getenv("OPTION_INTRADAY_SQUARE_OFF", "15:12")
+
+
+def option_selling_config():
+    from .strategies.options import SellingConfig
+
+    cfg = SellingConfig(
+        underlying=OPTION_UNDERLYING,
+        entry_start=dt.time.fromisoformat(OPTION_SELL_ENTRY_START),
+        entry_end=dt.time.fromisoformat(OPTION_SELL_ENTRY_END),
+        square_off=dt.time.fromisoformat(OPTION_INTRADAY_SQUARE_OFF),
+        short_delta=OPTION_SELL_SHORT_DELTA,
+        wing_delta=OPTION_SELL_WING_DELTA,
+        risk_per_trade_pct=OPTION_SELL_RISK_PER_TRADE_PCT,
+        target_credit_capture_pct=OPTION_SELL_TARGET_CAPTURE_PCT,
+        stop_credit_multiple=OPTION_SELL_STOP_CREDIT_MULTIPLE,
+        monthly_return_benchmark_pct=OPTION_SELL_MONTHLY_BENCHMARK_PCT,
+    )
+    cfg.validate()
+    return cfg
+
+
+def option_buying_config():
+    from .strategies.options import BuyingConfig
+
+    cfg = BuyingConfig(
+        underlying=OPTION_UNDERLYING,
+        entry_start=dt.time.fromisoformat(OPTION_BUY_ENTRY_START),
+        entry_end=dt.time.fromisoformat(OPTION_BUY_ENTRY_END),
+        square_off=dt.time.fromisoformat(OPTION_INTRADAY_SQUARE_OFF),
+        target_delta=OPTION_BUY_DELTA,
+        risk_per_trade_pct=OPTION_BUY_RISK_PER_TRADE_PCT,
+        premium_stop_pct=OPTION_BUY_PREMIUM_STOP_PCT,
+        trail_activation_pct=OPTION_BUY_TRAIL_ACTIVATION_PCT,
+        trail_drawdown_pct=OPTION_BUY_TRAIL_DRAWDOWN_PCT,
+        target_return_benchmark_pct=OPTION_BUY_TRADE_BENCHMARK_PCT,
+    )
+    cfg.validate()
+    return cfg
 
 # ---- Runners: held names that fail filters or go parabolic ----
 RUNNER_MAX_VALUE = 300_000                 # ₹ cap for a filter-rejected held name

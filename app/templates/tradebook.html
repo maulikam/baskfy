@@ -79,6 +79,14 @@
   ol{padding-left:20px;color:var(--dim);font-size:12.5px;line-height:1.8}
   ol b{color:var(--paper)}
   @media(max-width:780px){body{padding:20px 16px 70px} .card table{display:block;overflow-x:auto}}
+
+  /* Touch targets. Nav links were ~32px high, under the comfortable 44px, but only on a
+     coarse pointer does that matter — a mouse is precise, a thumb is not. */
+  @media (pointer:coarse){
+    .nav a{min-height:44px;display:flex;align-items:center}
+    button,.btn{min-height:44px}
+    summary{min-height:44px;display:flex;align-items:center}
+  }
   :focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
 </style>
 </head>
@@ -97,6 +105,7 @@
     <a class="api" href="/status">status</a>
   </nav>
 </header>
+<main>
 
 {% if imported %}
   <div class="banner ok"><span class="tag">imported</span><span>{{ imported }}</span></div>
@@ -166,7 +175,7 @@
       inferring it from a price gap: it decides when the holding period starts.</p>
 
     {% if actions %}
-      <table style="margin-top:14px">
+      <table aria-label="Corporate actions" style="margin-top:14px">
         <thead><tr><th>Stock</th><th>Ex-date</th><th>Effect</th><th></th></tr></thead>
         <tbody>
         {% for a in actions %}
@@ -200,7 +209,7 @@
       what the fills cover is what the tax review can answer for. An export that stops in
       June says nothing about a July sale.</p>
     {% if f.total %}
-      <table>
+      <table aria-label="Where the lots come from">
         <thead><tr><th>Source</th><th>Fills</th><th>Covers</th>
           <th>Last recorded</th></tr></thead>
         <tbody>
@@ -302,7 +311,7 @@
 <section>
   <h2>Holdings against their lots</h2>
   <div class="card">
-    <table>
+    <table aria-label="Holdings against their lots">
       <thead><tr><th>Stock</th><th>Holding qty</th><th>Lot qty</th><th>Lots</th>
         <th>First acquired</th><th>Lot avg ₹</th><th>Broker avg ₹</th><th>Status</th></tr></thead>
       <tbody>
@@ -338,7 +347,7 @@
 <section>
   <h2>Quantity mismatches</h2>
   <div class="card">
-    <table>
+    <table aria-label="Quantity mismatches">
       <thead><tr><th>Stock</th><th>Holding</th><th>Lots</th><th>Difference</th>
         <th>Likely cause</th></tr></thead>
       <tbody>
@@ -357,5 +366,6 @@
   </div>
 </section>
 {% endif %}
+</main>
 </body>
 </html>

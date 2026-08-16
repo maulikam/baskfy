@@ -373,3 +373,32 @@ def plan_reentry(book, snap: Snapshot, cfg: dict, *, exit_code: str,
                        target_points=new_target,
                        stop_points=new_target * float(ex["reentry_stop_ratio"]),
                        min_strike_shift=int(ex["reentry_min_extra_strikes"]) * step)
+
+
+def entry_cost_gate(stop_points: float, cost_points: float, cfg: dict) -> tuple[bool, str]:
+    """Refuse a session whose stop is not meaningfully larger than the cost of entering it.
+
+    THIS IS THE FIX FOR THE dte>=3 PROBLEM, and it is a gate rather than a change to the
+    stop for a specific reason. Three other repairs were available and each breaks
+    something the brief holds fixed:
+
+      - deriving the stop from the entry cost would break the 2:1 target-to-stop ratio,
+        which is [STRUCTURAL] and stated to BE the edge;
+      - measuring the stop from the post-entry mark would "correct" the liquidation mark,
+        which the accounting section explicitly forbids because the cost is real;
+      - simply raising the dte>=3 target invents a number no data supports.
+
+    What is left is the honest reading: if a 2.5-point stop cannot survive the friction of
+    getting in and out, that session has no room for the trade to be right, and the answer
+    is not to take it. The ratio is measured per session against live depth, so a day with
+    tight spreads is traded and the same day with blown-out spreads is not.
+    """
+    need = float(cfg["session"].get("min_stop_to_entry_cost_ratio", 2.0))
+    if cost_points <= 0:
+        return True, "no measurable entry cost"
+    ratio = stop_points / cost_points
+    if ratio < need:
+        return False, (f"a {stop_points:.2f}-point stop is only {ratio:.2f}x the "
+                       f"{cost_points:.2f}-point cost of entering (need {need:.1f}x); "
+                       "the friction would consume the risk budget before the market moved")
+    return True, f"stop is {ratio:.2f}x the entry cost"

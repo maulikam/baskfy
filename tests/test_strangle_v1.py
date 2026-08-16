@@ -498,3 +498,94 @@ def test_no_paper_module_can_reach_the_broker_at_all():
         called = {n.func.attr for n in ast.walk(ast.parse(f.read_text()))
                   if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
         assert not (called & banned), f"{f.name} calls {sorted(called & banned)}"
+
+
+# =====================================================================================
+# the dte>=3 entry-cost gate
+# =====================================================================================
+def depth_rows(spread: float, prices: dict, qty: int = 500_000):
+    rows = []
+    for sym, (strike, kind, px) in prices.items():
+        bid, ask = round(px - spread / 2, 2), round(px + spread / 2, 2)
+        rows.append({"symbol": sym, "strike": float(strike), "kind": kind,
+                     "bid": bid, "ask": ask, "oi": 9_000_000.0,
+                     "depth": {"buy": [{"price": bid, "quantity": qty}],
+                               "sell": [{"price": ask, "quantity": qty}]}})
+    return rows
+
+
+CONDOR = {"C24800": (24_800, "CE", 27.0), "P24000": (24_000, "PE", 27.0),
+          "C25300": (25_300, "CE", 8.0), "P23500": (23_500, "PE", 8.0)}
+PROBE = [{"symbol": "C24800", "side": "SELL"}, {"symbol": "P24000", "side": "SELL"},
+         {"symbol": "C25300", "side": "BUY"}, {"symbol": "P23500", "side": "BUY"}]
+
+
+def test_entry_cost_counts_the_crossing_and_the_statutory_stack():
+    """A short is sold at the bid and marked at the ask the same instant. That is not an
+    accounting artefact — it is what flattening immediately would cost."""
+    c = B.estimate_entry_cost(PROBE, depth_rows(0.20, CONDOR), CFG, units=1300,
+                              lot_size=LOT)
+    # 0.20 of spread on each of four legs, plus the one-tick queue penalty on each: a
+    # resting order is behind everything already at that price, so the touch is not ours.
+    assert c["crossing_points"] == pytest.approx(4 * (0.20 + 0.05), abs=0.01)
+    assert c["statutory_points"] > 0
+    assert c["total_points"] == pytest.approx(c["crossing_points"] + c["statutory_points"])
+
+
+def test_a_wide_book_costs_more_to_enter_than_a_tight_one():
+    tight = B.estimate_entry_cost(PROBE, depth_rows(0.10, CONDOR), CFG, units=1300,
+                                  lot_size=LOT)
+    wide = B.estimate_entry_cost(PROBE, depth_rows(1.00, CONDOR), CFG, units=1300,
+                                 lot_size=LOT)
+    assert wide["total_points"] > tight["total_points"] * 3
+
+
+def test_entry_cost_walks_the_ladder_for_the_real_size():
+    """Twenty lots is 1,300 units and the touch rarely holds that much."""
+    thin = depth_rows(0.10, CONDOR, qty=200)
+    with pytest.raises(F.DepthUnavailable, match="visible depth"):
+        B.estimate_entry_cost(PROBE, thin, CFG, units=1300, lot_size=LOT)
+
+
+def test_a_tight_market_lets_the_wednesday_session_trade():
+    """The gate is not a ban on dte>=3. On a tight book a 2.5-point stop is many times the
+    friction and the session is perfectly tradeable."""
+    c = B.estimate_entry_cost(PROBE, depth_rows(0.10, CONDOR), CFG, units=1300,
+                              lot_size=LOT)
+    ok, why = R.entry_cost_gate(2.5, c["total_points"], CFG)
+    assert ok, why
+
+
+def test_a_wide_market_vetoes_the_wednesday_session():
+    """At 1.5 points of friction a 2.5-point stop is 1.67x it — under the 2.0 floor — and
+    Lever B would be armed at entry."""
+    ok, why = R.entry_cost_gate(2.5, 1.5, CFG)
+    assert not ok and "friction would consume" in why
+
+
+def test_the_same_friction_is_acceptable_against_the_monday_stop():
+    """The problem was never the cost, it was the cost against a HALF-SIZE stop. The same
+    1.5 points is only 30% of a Monday 5-point stop."""
+    assert R.entry_cost_gate(5.0, 1.5, CFG)[0]
+    assert not R.entry_cost_gate(2.5, 1.5, CFG)[0]
+
+
+def test_the_gate_leaves_the_structural_ratio_untouched():
+    """The fix had to avoid three repairs that each break something held fixed: deriving
+    the stop from the cost breaks the 2:1 ratio, netting the cost out of the mark is
+    forbidden by the accounting section, and raising the dte>=3 target invents a number."""
+    assert CFG["session"]["stop_to_target_ratio"] == 0.50
+    for day, exp in ((D(2026, 8, 19), D(2026, 8, 25)), (D(2026, 8, 24), D(2026, 8, 25))):
+        p = C.session_params(day, exp, CFG)
+        assert p.stop_points == pytest.approx(p.target_points * 0.5)
+    assert CFG["accounting"]["mark_basis"] == "liquidation"
+    assert CFG["session"]["by_days_to_expiry"]["3+"]["target_points"] == 5
+
+
+def test_the_runner_vetoes_before_it_sizes_or_fills():
+    """Checked before the margin query and before any fill: a session that cannot clear
+    this gate should not consume a broker call, let alone a position."""
+    src = open("scripts/strangle.py").read()
+    assert src.index("entry_cost_gate") < src.index("Z.query_margin")
+    assert src.index("entry_cost_gate") < src.index("F.simulate_basket")
+    assert "ENTRY_COST_VETO" in src

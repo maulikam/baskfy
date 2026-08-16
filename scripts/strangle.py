@@ -183,6 +183,32 @@ def main() -> int:
                      "levels": {"resistance": lv.resistance, "support": lv.support},
                      "priced_range": pr.as_dict()})
 
+    # --- entry-cost gate --------------------------------------------------------------
+    # Before sizing and before any fill: if the stop cannot survive the friction of getting
+    # in and out, the session has no room for the trade to be right.
+    probe_legs = [{"symbol": pair.call.symbol, "side": "SELL"},
+                  {"symbol": pair.put.symbol, "side": "SELL"}]
+    if pair.call_wing and pair.put_wing:
+        probe_legs += [{"symbol": pair.call_wing.symbol, "side": "BUY"},
+                       {"symbol": pair.put_wing.symbol, "side": "BUY"}]
+    probe_units = Z.session_lots(cfg, params.size_mult) * int(ins["lot_size"])
+    try:
+        entry_cost = B.estimate_entry_cost(probe_legs, snap.as_rows(), cfg,
+                                           units=probe_units,
+                                           lot_size=int(ins["lot_size"]))
+    except F.DepthUnavailable as exc:
+        session.to(ST.State.NO_ENTRY, str(exc))
+        jr.write("depth_unavailable", error=str(exc), **base)
+        return _out({**base, "status": "NO_DEPTH", "reason": str(exc)})
+
+    ok, why = R.entry_cost_gate(params.stop_points, entry_cost["total_points"], cfg)
+    if not ok:
+        session.to(ST.State.NO_ENTRY, why)
+        jr.write("entry_cost_veto", entry_cost=entry_cost, reason=why, **base)
+        return _out({**base, "status": "ENTRY_COST_VETO", "reason": why,
+                     "entry_cost": entry_cost,
+                     "pair": pair.as_dict()})
+
     # --- sizing, from queried margin --------------------------------------------------
     lots = Z.session_lots(cfg, params.size_mult)
     legs = [(pair.call, "SELL"), (pair.put, "SELL")]
@@ -231,6 +257,7 @@ def main() -> int:
                         else by_symbol[c.symbol]["bid"]) for c, side in legs}
     entry_pnl_pts = bk.pnl_points(marks)
     headroom = R.entry_cost_headroom(entry_pnl_pts, params.stop_points)
+    headroom["estimated"] = entry_cost
 
     session.to(ST.State.MANAGING, "entered")
     entered = {"pair": pair.as_dict(), "sizing": sized.as_dict(),

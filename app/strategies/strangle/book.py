@@ -189,3 +189,45 @@ def cost_of(fills: Sequence[Mapping], lot_size: int,
     cf = [Fill(side=f["side"], price=float(f["price"]), quantity=int(f["quantity"]))
           for f in fills]
     return option_costs(cf, rates=rates, lot_size=lot_size).statutory_total
+
+
+def estimate_entry_cost(legs: Sequence[Mapping], chain: Sequence[Mapping], cfg: dict, *,
+                        units: int, lot_size: int) -> dict:
+    """What entering this position costs before the market has moved at all, in points.
+
+    Two components, both real:
+      - the crossing loss, because a short is SOLD at the bid and immediately MARKED at the
+        ask. Walked against actual depth rather than taken from the touch, so 20 lots is
+        costed at the levels 20 lots would really consume.
+      - the statutory stack: brokerage, STT on the sells, exchange and SEBI fees, stamp
+        duty and GST.
+
+    Computed BEFORE committing, from the same quotes the entry would use. In paper it
+    equals what the fill engine then produces; in live it is an estimate, because the book
+    can move between the estimate and the fill. That is stated rather than hidden.
+    """
+    from . import fills_paper as F
+
+    by_symbol = {r["symbol"]: r for r in chain}
+    fills, cross = [], 0.0
+    for leg in legs:
+        row = by_symbol.get(leg["symbol"])
+        if not row:
+            raise F.DepthUnavailable(f"{leg['symbol']}: not quoted")
+        side = leg["side"]
+        f = F.simulate_fill(leg["symbol"], side, row["depth"], units, cfg)
+        if not f.complete or f.avg_price is None:
+            raise F.DepthUnavailable(
+                f"{leg['symbol']}: only {f.filled}/{units} available at visible depth")
+        # Liquidation mark the instant after the fill: shorts at the ask, longs at the bid.
+        mark = float(row["ask"] if side == "SELL" else row["bid"])
+        cross += (f.avg_price - mark) * units if side == "SELL" else (mark - f.avg_price) * units
+        fills.append({"side": side, "price": f.avg_price, "quantity": units})
+
+    statutory = cost_of(fills, lot_size)
+    crossing_points = -cross / units if units else 0.0     # positive = a cost
+    statutory_points = statutory / units if units else 0.0
+    return {"crossing_points": round(crossing_points, 4),
+            "statutory_points": round(statutory_points, 4),
+            "total_points": round(crossing_points + statutory_points, 4),
+            "total_rupees": round(-cross + statutory, 2)}

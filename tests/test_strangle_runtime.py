@@ -12,6 +12,7 @@ import json
 import pytest
 
 from app.strategies.strangle import calibrate as CAL
+from app.strategies.strangle import clock as C
 from app.strategies.strangle import journal as JN
 from app.strategies.strangle import market as MK
 from app.strategies.strangle import state as ST
@@ -277,3 +278,95 @@ def test_the_runner_places_no_orders():
 def test_the_runner_refuses_a_non_trading_day():
     src = open("scripts/strangle.py").read()
     assert "NOT_A_TRADING_DAY" in src and "is_trading_day" in src
+
+
+# =====================================================================================
+# the NSE calendar — weekly Tuesdays, monthly last-Tuesdays, and the holiday shift
+# =====================================================================================
+def index_rows(days):
+    return [{"date": dt.datetime(d.year, d.month, d.day, 15, 30), "close": 24_400.0}
+            for d in days]
+
+
+def weekdays(start, end):
+    out, d = [], start
+    while d <= end:
+        if d.weekday() < 5:
+            out.append(d)
+        d += dt.timedelta(days=1)
+    return out
+
+
+def test_monthly_expiries_are_the_last_tuesday_of_their_month():
+    """Verified against the live dump: 13 of 13 monthlies matched."""
+    from app.strategies.strangle import calendar_nse as CAL
+    assert CAL.last_weekday_of_month(2026, 8) == D(2026, 8, 25)
+    assert CAL.last_weekday_of_month(2026, 9) == D(2026, 9, 29)
+    assert CAL.last_weekday_of_month(2031, 6) == D(2031, 6, 24)
+
+
+def test_a_missing_weekday_candle_is_a_holiday():
+    """The exchange's own record of what happened, not a list somebody typed."""
+    from app.strategies.strangle import calendar_nse as CAL
+    days = weekdays(D(2026, 9, 28), D(2026, 10, 9))
+    days.remove(D(2026, 10, 2))                      # Gandhi Jayanti, a Friday
+    cal = CAL.Calendar.build(index_rows=index_rows(days))
+    assert D(2026, 10, 2) in cal.holidays
+    assert not cal.is_trading_day(D(2026, 10, 2))
+    assert cal.is_trading_day(D(2026, 10, 1))
+
+
+def test_a_shifted_expiry_reveals_a_future_holiday():
+    """The only forward-looking holiday signal Kite carries. 2029-12-24 is a Monday in the
+    live dump because 25 December is Christmas."""
+    from app.strategies.strangle import calendar_nse as CAL
+    cal = CAL.Calendar.build(expiries=[D(2029, 12, 24), D(2029, 12, 31)])
+    assert D(2029, 12, 25) in cal.holidays
+
+
+def test_a_legitimately_shifted_expiry_is_accepted():
+    """Without the calendar this refused startup, which is the assertion misfiring rather
+    than catching anything."""
+    from app.strategies.strangle import calendar_nse as CAL
+    cal = CAL.Calendar.build(expiries=[D(2029, 12, 24)])
+    ok, why = cal.expiry_is_valid(D(2029, 12, 24))
+    assert ok and "holiday" in why
+
+
+def test_an_unjustified_shift_is_still_refused():
+    from app.strategies.strangle import calendar_nse as CAL
+    cal = CAL.Calendar.build()
+    ok, why = cal.expiry_is_valid(D(2026, 8, 17))       # a Monday, Tuesday trades fine
+    assert not ok and "trading day" in why
+
+
+def test_dte_skips_holidays():
+    """Counting a holiday as a session puts the day in the wrong target and size bucket."""
+    from app.strategies.strangle import calendar_nse as CAL
+    cal = CAL.Calendar.build(extra=[D(2026, 10, 2)])
+    assert cal.trading_days_between(D(2026, 9, 30), D(2026, 10, 6)) == 3
+    assert C.trading_days_between(D(2026, 9, 30), D(2026, 10, 6)) == 4   # blind
+
+
+def test_the_previous_trading_day_walks_back_over_a_holiday():
+    from app.strategies.strangle import calendar_nse as CAL
+    cal = CAL.Calendar.build(extra=[D(2026, 10, 2)])
+    assert cal.previous_trading_day(D(2026, 10, 5)) == D(2026, 10, 1)
+
+
+def test_the_calendar_reports_how_far_it_actually_reaches():
+    """A holiday that shifts no expiry leaves no trace in any Kite endpoint. The gap is
+    reported rather than assumed away."""
+    from app.strategies.strangle import calendar_nse as CAL
+    cal = CAL.Calendar.build(index_rows=index_rows(weekdays(D(2026, 8, 3), D(2026, 8, 14))),
+                             expiries=[D(2029, 12, 24)])
+    cov = cal.coverage(D(2026, 8, 17))
+    assert cov["exact_through"] == D(2026, 8, 14)
+    assert cov["inferred_forward"] == [D(2029, 12, 25)]
+    assert "leaves no trace" in cov["note"]
+
+
+def test_the_runner_uses_the_calendar_not_the_weekday():
+    src = open("scripts/strangle.py").read()
+    assert "cal.is_trading_day(today)" in src
+    assert "holidays=cal.holidays" in src

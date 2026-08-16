@@ -53,6 +53,14 @@ from app.core import regime as R                                  # noqa: E402
 
 OK, SKIP, FAIL = "ok", "skipped", "FAILED"
 
+MARKET_CLOSE = dt.time(15, 30)          # IST
+
+
+def _before_close(now: dt.datetime) -> bool:
+    """True on a weekday before the close. Weekends and holidays hold a settled book, so
+    a snapshot taken then is the previous session's close and is safe."""
+    return now.weekday() < 5 and now.time() < MARKET_CLOSE
+
 
 STEPS = ("index history", "benchmark PRI", "EOD snapshot", "trade capture", "breadth",
          "regime preview")
@@ -127,6 +135,10 @@ def main() -> int:
     ap.add_argument("--db", default=None)
     ap.add_argument("--check", action="store_true", help="report state, change nothing")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--force-snapshot", action="store_true",
+                    help="take the EOD snapshot before the close. It will record an "
+                         "intraday NAV as the day's final value; only useful for a "
+                         "deliberate backfill.")
     ap.add_argument("--only", action="append", choices=STEPS, metavar="STEP",
                     help=f"run only these steps ({', '.join(STEPS)}); repeatable. "
                          "The steps stay independently idempotent either way.")
@@ -200,11 +212,26 @@ def main() -> int:
         run.step("benchmark PRI", _benchmarks)
 
         # --- 3. EOD snapshot --------------------------------------------------------------
+        # REFUSED BEFORE THE CLOSE, because the damage is silent and permanent. A snapshot
+        # is insert-if-absent: a row written at 09:30 holds an intraday NAV, and the 18:30
+        # run then finds the day already present and leaves it exactly as it was. The
+        # track record keeps a number that was never the close and nothing ever says so.
+        #
+        # This is not hypothetical — a verification kickstart at 01:44 wrote exactly such a
+        # row for 2026-08-17 and it had to be deleted by hand. The plist comment warned
+        # about it; a comment is not a guard.
         def _snapshot():
             snap = asyncio.run(SNAP.run(kite=kite, db_path=a.db))
             return (f"{snap['date']} nav Rs {snap['nav']:,.0f} "
                     f"index {snap['index_value']:.4f} [{snap['outcome']}]")
-        run.step("EOD snapshot", _snapshot)
+
+        _now = dt.datetime.now()
+        too_early = _before_close(_now) and not a.force_snapshot
+        run.step("EOD snapshot", _snapshot,
+                 skip_reason=(f"it is {_now:%H:%M}, before the 15:30 close — a snapshot now "
+                              "would store an intraday NAV as the day's final value and the "
+                              "evening run would not correct it. Pass --force-snapshot to "
+                              "override." if too_early else None))
 
         # --- 3b. trade capture ---------------------------------------------------------
         def _trades():

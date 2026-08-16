@@ -902,3 +902,87 @@ def test_turnover_is_labelled_as_regime_only():
     html = open("app/templates/regime_backtest.html").read()
     assert "regime turnover only" in html
     assert "selection turnover" in html.lower()
+
+
+# =====================================================================================
+# P2 — enriched action rows and per-lot tax review
+# =====================================================================================
+def _order(sym="AAA", delta=-100, px=100.0, **kw):
+    return {"symbol": sym, "action": "EXIT", "qty_now": 100, "delta": delta,
+            "qty_final": 0, "ref_price": px, "weight_nav": 0.0, "weight_sleeve": 0.0,
+            "value": abs(delta) * px, **kw}
+
+
+def _stock(conn, sym, qty, price, when="2026-01-05T10:00:00"):
+    from app.analytics import tradebook as TB
+    import datetime as _dt
+    TB.store_fills(conn, [TB.Fill(symbol=sym, when=_dt.datetime.fromisoformat(when),
+                                  side="BUY", quantity=qty, price=price,
+                                  trade_id=f"{sym}{when}")], source="console_csv")
+    TB.rebuild_symbols(conn, [sym])
+
+
+def test_an_order_carries_the_weight_it_moves_from_and_to(conn, cfg):
+    port = {"tradeable": [{"symbol": "AAA", "weight_pct": 6.4, "pnl_pct": 12.5,
+                           "pnl_value": 5000.0, "value": 1e5, "excluded": False}]}
+    got = RV.enrich_orders(conn, [_order(weight_nav=2.0)], port, cfg)[0]
+    assert got["weight_now"] == 6.4 and got["weight_target"] == 2.0
+    assert got["pnl_pct"] == 12.5 and got["pnl_value"] == 5000.0
+
+
+def test_an_order_for_a_position_not_in_the_portfolio_keeps_its_row(conn, cfg):
+    """A buy has no current weight. Dropping the row would hide a proposed purchase."""
+    got = RV.enrich_orders(conn, [_order(delta=+50)], {"tradeable": []}, cfg)
+    assert len(got) == 1 and got[0]["weight_now"] is None
+
+
+def test_a_sale_reports_the_soonest_lot_to_reach_long_term(conn, cfg):
+    _stock(conn, "AAA", 100, 90.0)
+    got = RV.enrich_orders(conn, [_order()], {"tradeable": []}, cfg)[0]
+    assert got["days_to_ltcg"] is not None and got["days_to_ltcg"] > 0
+    assert got["tax_flagged"] is not None
+
+
+def test_a_purchase_is_not_tax_reviewed(conn, cfg):
+    got = RV.enrich_orders(conn, [_order(delta=+50)], {"tradeable": []}, cfg)[0]
+    assert got["days_to_ltcg"] is None and got["tax_flagged"] is None
+
+
+def test_a_failed_tax_review_does_not_look_tax_clear(conn, cfg, monkeypatch):
+    """The most dangerous default: a silent failure that invites an unassessed sale."""
+    from app.analytics import tax_lots as TL
+    monkeypatch.setattr(TL, "review_sales",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    got = RV.enrich_orders(conn, [_order()], {"tradeable": []}, cfg)[0]
+    assert got["tax_flagged"] is None          # unknown, never False
+
+
+# --- per-lot detail --------------------------------------------------------------------
+def test_every_proposed_sale_gets_its_lots_not_only_flagged_ones(conn, cfg):
+    _stock(conn, "AAA", 100, 90.0)
+    d = RV.tax_detail(conn, [_order()])
+    assert len(d) == 1 and d[0]["lots"], "detail should appear even when nothing is flagged"
+
+
+def test_lot_detail_carries_the_acquisition_price(conn, cfg):
+    """Without it a reviewer sees that a lot is short-term but not what selling realises."""
+    _stock(conn, "AAA", 100, 90.0)
+    lot = RV.tax_detail(conn, [_order()])[0]["lots"][0]
+    assert lot["acquired_at"] == 90.0 and lot["acquired_on"] == "2026-01-05"
+
+
+def test_uncovered_quantity_is_reported(conn, cfg):
+    """Shares with no basis at all are the honest headline of an incomplete tradebook."""
+    _stock(conn, "AAA", 40, 90.0)
+    d = RV.tax_detail(conn, [_order(delta=-100)])[0]
+    assert d["covered_qty"] == 40 and d["uncovered_qty"] == 60
+
+
+def test_short_and_long_term_quantities_are_split(conn, cfg):
+    _stock(conn, "AAA", 100, 90.0, when="2020-01-05T10:00:00")     # long ago
+    d = RV.tax_detail(conn, [_order()])[0]
+    assert d["long_term_qty"] == 100 and d["short_term_qty"] == 0
+
+
+def test_a_purchase_produces_no_tax_detail(conn, cfg):
+    assert RV.tax_detail(conn, [_order(delta=+10)]) == []

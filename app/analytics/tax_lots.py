@@ -221,7 +221,14 @@ def manual_review_items(reviews: Mapping[str, TaxReview]) -> list[dict]:
         item["detail"] = [
             {"quantity": c.quantity,
              "acquired_on": c.lot.acquired_on.isoformat() if c.lot.acquired_on else None,
+             # The acquisition PRICE was computed and then dropped. Without it a reviewer
+             # can see that a lot is short-term but not what selling it would realise,
+             # which is the number the decision actually turns on.
+             "acquired_at": c.lot.price,
+             "corporate_action_adjusted": c.lot.corporate_action_adjusted,
+             "days_held": c.days_held,
              "days_to_ltcg": c.days_to_ltcg, "gain": c.gain,
+             "long_term": c.long_term,
              "codes": list(c.codes)}
             for c in r.consumptions]
         out.append(item)

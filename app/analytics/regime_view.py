@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 from typing import Any, Mapping, Sequence
 
 from .. import config as C
@@ -572,6 +573,111 @@ def headline_reason(reason_pairs: Sequence[dict], narrative: Sequence[str]) -> s
     return narrative[0] if narrative else "—"
 
 
+def enrich_orders(conn, orders: Sequence[dict], portfolio: dict, cfg,
+                  plan_id: str | None = None) -> list[dict]:
+    """Join each proposed order to what is known about the position it touches.
+
+    The allocation solver knows quantities and weights. It does not know what the position
+    has done, what it would cost in tax, whether the market can absorb the trade, or what
+    the order actually did once submitted — and those are the four things a human needs
+    before approving a sale. Each source is optional: a missing one leaves its fields None
+    rather than removing the row, because an order you cannot fully assess still has to be
+    visible.
+    """
+    from . import plan_store as PS
+    from . import tax_lots as TL
+
+    held = {p["symbol"]: p for p in (portfolio or {}).get("tradeable", [])}
+
+    # Tax is only computed for sales, and only against lots that exist.
+    sells = {o["symbol"]: (abs(int(o.get("delta") or 0)), float(o.get("ref_price") or 0.0))
+             for o in orders if (o.get("delta") or 0) < 0}
+    reviews: dict = {}
+    if sells:
+        # Deliberately NOT wrapped in a bare except. A tax review that fails silently
+        # leaves every sale looking tax-clear, which is the most dangerous possible
+        # default: the page would invite a sale it had never actually assessed.
+        try:
+            reviews = TL.review_sales(conn, sells, as_of=dt.date.today(),
+                                      review_days=C.REGIME_LTCG_REVIEW_DAYS)
+        except Exception as exc:
+            logging.warning("tax review failed for %s: %s", sorted(sells), exc)
+            reviews = {"__failed__": exc}
+
+    state: dict = {}
+    if plan_id:
+        try:
+            state = {r["symbol"]: r for r in PS.orders_frame(conn, plan_id).to_dict("records")}
+        except Exception:
+            state = {}
+
+    out = []
+    for o in orders:
+        sym = o["symbol"]
+        p, rv, st = held.get(sym, {}), reviews.get(sym), state.get(sym, {})
+        soonest = None
+        if rv is not None:
+            days = [c.days_to_ltcg for c in rv.consumptions
+                    if c.days_to_ltcg is not None and c.days_to_ltcg > 0]
+            soonest = min(days) if days else None
+        value = abs(float(o.get("delta") or 0)) * float(o.get("ref_price") or 0.0)
+        day_value = float(p.get("median_day_value") or 0.0)
+        out.append({
+            **o,
+            "weight_now": p.get("weight_pct"),
+            "weight_target": o.get("weight_nav"),
+            "pnl_pct": p.get("pnl_pct"),
+            "pnl_value": p.get("pnl_value"),
+            "days_to_ltcg": soonest,
+            "tax_flagged": bool(rv.manual_review) if rv is not None else None,
+            "tax_codes": list(rv.codes) if rv is not None else [],
+            "tax_gain": rv.estimated_gain if rv is not None else None,
+            # A trade larger than the cap fraction of median traded value moves the price
+            # against itself; the planner already caps for this, so a warning here means
+            # the cap is binding rather than that the order is wrong.
+            "liquidity_warning": bool(day_value and value > day_value * C.MAX_POS_VS_DAY_VALUE),
+            "order_status": st.get("status"),
+            "filled_qty": st.get("filled_qty"),
+        })
+    return out
+
+
+def tax_detail(conn, orders: Sequence[dict]) -> list[dict]:
+    """FIFO lots each proposed sale would consume, with what each realises."""
+    from . import tax_lots as TL
+
+    out = []
+    for o in orders:
+        qty = -int(o.get("delta") or 0)
+        if qty <= 0:
+            continue
+        try:
+            rv = TL.review_sale(o["symbol"], qty, float(o.get("ref_price") or 0.0),
+                                TL.open_lots(conn, o["symbol"]), as_of=dt.date.today(),
+                                review_days=C.REGIME_LTCG_REVIEW_DAYS)
+        except Exception as exc:
+            logging.warning("lot detail failed for %s: %s", o["symbol"], exc)
+            continue
+        lots = [{"quantity": c.quantity,
+                 "acquired_on": c.lot.acquired_on.isoformat() if c.lot.acquired_on else None,
+                 "acquired_at": c.lot.price, "days_held": c.days_held,
+                 "days_to_ltcg": c.days_to_ltcg, "gain": c.gain,
+                 "long_term": c.long_term, "codes": list(c.codes)}
+                for c in rv.consumptions]
+        out.append({
+            "symbol": o["symbol"], "requested_qty": rv.requested_qty,
+            "covered_qty": rv.covered_qty,
+            # Uncovered quantity is the honest headline: those shares have no basis at all.
+            "uncovered_qty": max(0, rv.requested_qty - rv.covered_qty),
+            "estimated_gain": rv.estimated_gain, "flagged": rv.flagged,
+            "data_unknown": rv.data_unknown, "codes": list(rv.codes),
+            "manual_review": rv.manual_review, "lots": lots,
+            "short_term_qty": sum(l["quantity"] for l in lots if l["long_term"] is False),
+            "long_term_qty": sum(l["quantity"] for l in lots if l["long_term"] is True),
+        })
+    return out
+
+
 def _holding_counts(portfolio: dict, tier_cap: float | None,
                     proposed: Sequence[dict]) -> dict:
     """How many positions are held, and how many are carrying a full weight.
@@ -901,6 +1007,18 @@ def build(conn) -> dict:
     # describes what should CHANGE; the portfolio is what is actually held.
     v.update(_holding_counts(v["portfolio"], tier_cap, proposed))
     v["headline_reason"] = headline_reason(v["reason_pairs"], v["narrative"])
+    # Enriched here rather than inside the literal because it needs the portfolio and the
+    # plan link, both of which are resolved after it.
+    v["proposed_orders"] = enrich_orders(
+        conn, v["proposed_orders"], v["portfolio"], cfg,
+        (v.get("rebalance_plan") or {}).get("plan_id"))
+    # Every proposed sale gets its lot breakdown, not only the flagged ones. A reviewer
+    # deciding whether to approve a sell needs to see WHICH lots go and what each realises;
+    # showing detail only when something is already wrong makes the panel useless in
+    # exactly the case where the sale is fine but large.
+    v["tax_detail"] = tax_detail(conn, v["proposed_orders"])
+    v["proposed_sells"] = [o for o in v["proposed_orders"] if (o.get("delta") or 0) < 0]
+    v["proposed_buys"] = [o for o in v["proposed_orders"] if (o.get("delta") or 0) > 0]
     # How much of the re-risk requirement currently holds. Breadth recovering for one week
     # does not re-risk the book; the engine wants consecutive confirmations, and showing
     # the counter is the difference between "improving" and "improved enough".

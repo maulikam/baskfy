@@ -3,7 +3,8 @@ Enforces: instrument guards → risk manager → rate limits → idempotency →
 Sync kiteconnect calls run in a thread pool so the event loop never blocks."""
 from __future__ import annotations
 import asyncio, json, os, time, uuid, logging
-from .guards import assert_tradeable
+from .guards import (OvernightOptionError, assert_not_overnight_option,
+                     assert_tradeable)
 from .ratelimit import KiteLimits
 from .risk import RiskManager
 from .. import config as C
@@ -29,6 +30,15 @@ class OrderGateway:
                     client_id: str | None = None, gross_exposure: float = 0.0,
                     series: str | None = None, tick_size: float | None = None) -> dict:
         assert_tradeable(symbol, series)                       # layer 1: untouchables
+        # Same layer: an option under a carry product would still be open tomorrow morning.
+        # Returned as BLOCKED rather than raised so one refused leg cannot abort a batch
+        # that has already placed real orders.
+        try:
+            assert_not_overnight_option(symbol, exchange, product)
+        except OvernightOptionError as exc:
+            self._journal({"event": "overnight_option_block", "symbol": symbol,
+                           "product": product, "side": side, "exchange": exchange})
+            return {"symbol": symbol, "status": "BLOCKED", "error": str(exc)}
         # MIS is an intraday product on every segment. The old NSE/BSE-only check let an
         # NFO MIS order through with INTRADAY_ENABLED=false as soon as OPTIONS_ENABLED was
         # set, so enabling options silently enabled an intraday engine as well.

@@ -341,9 +341,12 @@ const ORDER_STATUS={
   RISK_BLOCKED:{kind:'bad',  title:'refused by risk limits',
                 fix:'Nothing was sent. Raise the limit in Settings or cut position size, '
                    +'then re-run Analyze — the plan cannot be re-confirmed as it stands.'},
-  BLOCKED:     {kind:'bad',  title:'blocked — untouchable instrument',
-                fix:'Nothing was sent, and nothing will be: these are permanently '
-                   +'excluded and no order path can reach them.'},
+  // BLOCKED covers every hard guard, not just the untouchable list: the product gates and
+  // the overnight-option rule return it too. The heading must not name one of them.
+  BLOCKED:     {kind:'bad',  title:'refused by a guard',
+                fix:'Nothing was sent, and a retry will not change that — a guard refuses '
+                   +'by policy, not by circumstance. The reason beside each symbol says '
+                   +'which one.'},
   ERROR:       {kind:'bad',  title:'rejected',
                 fix:'The call failed, so the exchange status is UNKNOWN — an order may '
                    +'still have been accepted. Check the Kite order book before you '

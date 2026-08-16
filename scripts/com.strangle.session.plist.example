@@ -33,8 +33,14 @@
          ~/Library/LaunchAgents/com.strangle.session.plist
       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.strangle.session.plist
 
-  Logs:    tail -f data/outputs/strangle_session.log
+  Logs:    tail -f ~/Library/Logs/strangle-session.log
   Remove:  launchctl bootout gui/$(id -u)/com.strangle.session
+  LOGS GO TO ~/Library/Logs, NOT INTO THE REPO. macOS protects ~/Documents with TCC, and a
+  launchd agent has no grant for a file it did not create there: it cannot open the log, so
+  it never spawns the process and exits 78 (EX_CONFIG) with no output at all. This was not
+  theory — the first install of this job did exactly that, while the older daily job kept
+  working because its log file carries a com.apple.macl grant from an approval given long
+  ago. ~/Library/Logs is where macOS expects agent logs and is not TCC-restricted.
 -->
 <plist version="1.0">
 <dict>
@@ -72,8 +78,8 @@
   <false/>
 
   <key>StandardOutPath</key>
-  <string>/Users/maulikdave/Documents/portfolio/kite-momentum-rebalancer/data/outputs/strangle_session.log</string>
+  <string>/Users/maulikdave/Library/Logs/strangle-session.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/maulikdave/Documents/portfolio/kite-momentum-rebalancer/data/outputs/strangle_session.log</string>
+  <string>/Users/maulikdave/Library/Logs/strangle-session.log</string>
 </dict>
 </plist>

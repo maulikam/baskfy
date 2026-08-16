@@ -144,3 +144,75 @@ def test_the_summary_line_states_the_money_at_risk():
 def test_the_summary_line_is_positive_when_everything_is_covered():
     rev = P.review([hold("AAA", 100, 100.0)], [gtt("AAA", 90.0, 100)])
     assert "carry a stop" in P.summary_line(rev)
+
+
+# =====================================================================================
+# the stop plan — proposing is not arming
+# =====================================================================================
+def test_a_plan_proposes_one_stop_per_uncovered_position():
+    plan = P.build_stop_plan([hold("AAA", 100, 100.0), hold("BBB", 50, 200.0)], [])
+    assert plan["count"] == 2
+    assert {r["symbol"] for r in plan["rows"]} == {"AAA", "BBB"}
+
+
+def test_a_covered_position_is_not_proposed_for():
+    plan = P.build_stop_plan([hold("AAA", 100, 100.0)], [gtt("AAA", 90.0, 100)])
+    assert plan["count"] == 0
+
+
+def test_a_partial_position_is_proposed_for_the_uncovered_shares_only():
+    """Arming must not double up on quantity already protected."""
+    plan = P.build_stop_plan([hold("AAA", 200, 100.0)], [gtt("AAA", 90.0, 100)])
+    assert [r["qty"] for r in plan["rows"]] == [100]
+
+
+def test_a_stop_outside_the_band_is_left_alone():
+    """Replacing it means cancelling a live trigger — a different, riskier action."""
+    plan = P.build_stop_plan([hold("AAA", 100, 100.0)], [gtt("AAA", 10.0, 100)])
+    assert plan["count"] == 0
+
+
+def test_an_untouchable_position_is_never_proposed_for():
+    plan = P.build_stop_plan([hold("SGBDE31III-GB", 392, 15306.0)], [])
+    assert plan["count"] == 0
+
+
+def test_the_trigger_sits_inside_the_configured_band():
+    plan = P.build_stop_plan([hold("AAA", 100, 1000.0)], [])
+    drop = plan["rows"][0]["drop_pct"] / 100
+    assert C.STOP_MIN - 1e-9 <= drop <= C.STOP_MAX + 1e-9
+
+
+def test_a_higher_volatility_gives_a_wider_stop():
+    tight = P.build_stop_plan([hold("AAA", 100, 1000.0)], [],
+                              vol_by_symbol={"AAA": 0.10})["rows"][0]
+    wide = P.build_stop_plan([hold("AAA", 100, 1000.0)], [],
+                             vol_by_symbol={"AAA": 0.90})["rows"][0]
+    assert wide["drop_pct"] > tight["drop_pct"]
+    assert tight["vol_source"] == "scan"
+
+
+def test_a_missing_volatility_is_labelled_not_hidden():
+    plan = P.build_stop_plan([hold("AAA", 100, 100.0)], [])
+    assert plan["rows"][0]["vol_source"] == "default"
+    assert plan["using_default_vol"] == ["AAA"]
+
+
+def test_at_risk_is_the_distance_from_price_to_trigger():
+    r = P.build_stop_plan([hold("AAA", 100, 1000.0)], [])["rows"][0]
+    assert r["at_risk"] == pytest.approx((1000.0 - r["trigger"]) * 100, abs=1)
+
+
+def test_rows_are_ordered_by_value_at_stake():
+    plan = P.build_stop_plan([hold("SMALL", 1, 100.0), hold("BIG", 500, 100.0)], [])
+    assert [r["symbol"] for r in plan["rows"]] == ["BIG", "SMALL"]
+
+
+def test_every_plan_gets_its_own_id():
+    a = P.build_stop_plan([hold("AAA")], [])["plan_id"]
+    b = P.build_stop_plan([hold("AAA")], [])["plan_id"]
+    assert a != b
+
+
+def test_a_zero_price_position_is_skipped_rather_than_priced_at_zero():
+    assert P.build_stop_plan([hold("AAA", 100, 0.0)], [])["count"] == 0

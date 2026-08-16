@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Momentum Desk — Arm Stops</title>
+<style>
+  :root{
+    --ink:#0b1220; --panel:#111a2e; --panel-2:#0d1626; --line:#22304d; --paper:#e8edf7;
+    --dim:#8593ad; --saffron:#f2a33c; --up:#3ddc97; --down:#ff6b6b; --orange:#ff9f43;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+    --disp:"Archivo",system-ui,sans-serif;
+    --s2:8px; --s3:14px; --s4:22px;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:13.5px;
+       line-height:1.5;min-height:100vh;padding:26px 3.5vw 90px}
+  header{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;
+         gap:var(--s3);border-bottom:2px solid var(--saffron);padding-bottom:12px;
+         margin-bottom:var(--s4)}
+  h1{font-family:var(--disp);font-weight:900;font-size:clamp(21px,3vw,31px);letter-spacing:-.02em}
+  h1 em{color:var(--saffron);font-style:normal}
+  a{color:var(--saffron)}
+  .nav{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+  .nav a{font-family:var(--disp);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+         color:var(--dim);text-decoration:none;padding:6px 13px;border-radius:7px;
+         border:1px solid transparent;transition:color .15s,border-color .15s,background .15s}
+  .nav a:hover{color:var(--paper);border-color:var(--line);background:#152040}
+  .nav a[aria-current="page"]{color:var(--saffron);border-color:var(--saffron)}
+  .nav .api{font-size:11px;opacity:.65}
+  .badge{font-size:12px;color:var(--dim)}
+  .badge b{color:var(--saffron)} .badge b.warn{color:var(--down)}
+  section{margin-bottom:var(--s4)}
+  h2{font-family:var(--disp);font-size:12px;text-transform:uppercase;letter-spacing:.15em;
+     color:var(--dim);margin-bottom:var(--s2)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+        padding:16px 18px;min-width:0;max-width:100%}
+  .banner{border:1px solid var(--line);border-radius:9px;padding:12px 16px;
+          margin-bottom:var(--s3);background:#16203a;display:flex;gap:var(--s3);
+          align-items:baseline;flex-wrap:wrap}
+  .banner.ok{border-color:var(--up);background:#12241f}
+  .banner.bad{border-color:var(--down);background:#251722}
+  .banner.warn{border-color:var(--saffron);background:#221b12}
+  .banner .tag{font-family:var(--disp);font-size:10px;letter-spacing:.14em;
+               text-transform:uppercase;padding:2px 8px;border-radius:4px;
+               border:1px solid currentColor;white-space:nowrap;font-weight:700}
+  .banner.ok .tag{color:var(--up)} .banner.bad .tag{color:var(--down)}
+  .banner.warn .tag{color:var(--saffron)}
+  .grid{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+  .stat{font-family:var(--disp);font-weight:900;font-size:26px;margin:4px 0 2px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th{font-family:var(--disp);font-size:10px;text-transform:uppercase;letter-spacing:.11em;
+     color:var(--dim);text-align:right;padding:7px 9px;border-bottom:1px solid var(--line);
+     white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:6px 9px;text-align:right;border-bottom:1px solid #182240;font-size:12.5px;
+     white-space:nowrap}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover td{background:#152040}
+  .scroll{overflow-x:auto}
+  .ok{color:var(--up)} .bad{color:var(--down)} .na{color:var(--dim)}
+  .muted{color:var(--dim);font-size:11.5px;line-height:1.6}
+  code{font-size:11.5px;color:var(--saffron)}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:10.5px;
+        font-family:var(--disp);letter-spacing:.08em;border:1px solid currentColor}
+  .pill.mute{color:var(--dim)}
+  button{font-family:var(--disp);font-weight:700;border:0;border-radius:8px;padding:12px 24px;
+         cursor:pointer;font-size:13.5px;transition:filter .15s}
+  button:hover{filter:brightness(1.1)}
+  .btn-danger{background:var(--down);color:#2a0b0b}
+  .btn-saffron{background:var(--saffron);color:#161006}
+  .actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:var(--s3)}
+  :focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
+  @media(max-width:780px){body{padding:20px 16px 70px} .card table{display:block;overflow-x:auto}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Arm <em>Stops</em></h1>
+  <nav class="nav" aria-label="Sections">
+    <a href="/">Desk</a>
+    <a href="/performance">Performance</a>
+    <a href="/regime">Regime</a>
+    <a href="/regime/backtest">Backtest</a>
+    <a href="/tradebook">Tradebook</a>
+    <a href="/stops" aria-current="page">Stops</a>
+    <a href="/ops">Operations</a>
+    <a href="/settings">Settings</a>
+    <a class="api" href="/status">status</a>
+  </nav>
+  <div class="badge">Orders: <b class="{{ 'warn' if not dry_run else '' }}">{{ 'DRY RUN' if dry_run else 'LIVE' }}</b></div>
+</header>
+
+{% if armed %}
+  <div class="banner ok"><span class="tag">done</span><span>{{ armed }}</span>
+    <span class="muted">Reloaded below from the broker, so this reflects what is actually
+      live rather than what was requested.</span></div>
+{% endif %}
+{% if error %}
+  <div class="banner bad"><span class="tag">failed</span><span>{{ error }}</span></div>
+{% endif %}
+
+{% if problem %}
+  <section class="card">
+    <h2>Cannot review stops</h2>
+    <p class="muted" style="margin-top:8px">{{ problem }}</p>
+    <p class="actions"><a class="pill" href="/login">Log in to Kite</a></p>
+  </section>
+{% elif plan and plan.count == 0 %}
+  <div class="banner ok"><span class="tag">nothing to arm</span>
+    <span>Every tradeable position already carries a stop covering its full quantity.</span></div>
+{% elif plan %}
+
+<div class="banner {{ 'warn' if dry_run else 'bad' }}">
+  <span class="tag">{{ 'dry run' if dry_run else 'live orders' }}</span>
+  <span>{% if dry_run %}DRY_RUN is on, so confirming below simulates every trigger and
+      places nothing. Turn it off in <code>.env</code> to arm for real.
+    {% else %}Confirming below places <b>{{ plan.count }} real GTT triggers</b> on your
+      account.{% endif %}</span>
+</div>
+
+<section class="grid">
+  <div class="card">
+    <h2>Positions to cover</h2>
+    <div class="stat">{{ plan.count }}</div>
+    <p class="muted">of {{ review.checked }} tradeable positions.
+      {{ review.active_gtts }} trigger{{ '' if review.active_gtts == 1 else 's' }} active now.</p>
+  </div>
+  <div class="card">
+    <h2>Value protected</h2>
+    <div class="stat">₹{{ '{:,.0f}'.format(plan.value) }}</div>
+    <p class="muted">Currently uncovered by any working stop.</p>
+  </div>
+  <div class="card">
+    <h2>Loss if every stop fires</h2>
+    <div class="stat bad">₹{{ '{:,.0f}'.format(plan.at_risk) }}</div>
+    <p class="muted">The distance from today's price to each trigger. This is what the
+      protection costs in the worst case, not what it saves.</p>
+  </div>
+  <div class="card">
+    <h2>Stop band</h2>
+    <div class="stat">{{ '%.0f'|format(band[0]) }}–{{ '%.0f'|format(band[1]) }}%</div>
+    <p class="muted">Vol-scaled and clamped to this range by <code>stop_from_vol()</code>.</p>
+  </div>
+</section>
+
+{% if plan.at_risk > daily_loss_cap %}
+  <div class="banner warn">
+    <span class="tag">exceeds the daily cap</span>
+    <span class="muted">If every stop triggered on the same day the loss would be
+      ₹{{ '{:,.0f}'.format(plan.at_risk) }}, above the ₹{{ '{:,.0f}'.format(daily_loss_cap) }}
+      daily loss cap. Stops rarely all fire at once, but a single bad session can take
+      many of them, and the kill switch would halt trading part-way through.</span>
+  </div>
+{% endif %}
+
+{% if plan.using_default_vol %}
+  <div class="banner">
+    <span class="tag">sizing note</span>
+    <span class="muted">{{ plan.using_default_vol|length }} of {{ plan.count }} stops are
+      sized from the default volatility, which lands mid-band, because no scan volatility
+      is available for them. Upload a weekly scan on the <a href="/">desk</a> first if you
+      want each stop scaled to its own name.</span>
+  </div>
+{% endif %}
+
+<section>
+  <h2>Proposed stops</h2>
+  <div class="card scroll">
+    <table>
+      <thead><tr>
+        <th>Stock</th><th>Qty</th><th>Last price</th><th>Trigger</th><th>Below</th>
+        <th>Value covered</th><th>At risk</th><th>Sizing</th><th>Why</th>
+      </tr></thead>
+      <tbody>
+      {% for r in plan.rows %}
+        <tr>
+          <td><b>{{ r.symbol }}</b></td>
+          <td>{{ '{:,}'.format(r.qty) }}</td>
+          <td>{{ '{:,.1f}'.format(r.last_price) }}</td>
+          <td class="ok">{{ '{:,.1f}'.format(r.trigger) }}</td>
+          <td>−{{ '%.1f'|format(r.drop_pct) }}%</td>
+          <td>₹{{ '{:,.0f}'.format(r.value) }}</td>
+          <td class="bad">₹{{ '{:,.0f}'.format(r.at_risk) }}</td>
+          <td class="muted">{{ r.vol_source }}</td>
+          <td class="muted">{{ 'no stop' if r.reason == 'missing' else 'uncovered shares' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">A partially covered position is proposed for
+      its <b>uncovered shares only</b>, so arming cannot double up on quantity that is
+      already protected. Positions whose existing stop merely sits outside the band are
+      left alone: replacing one means cancelling a live trigger, which is a different and
+      riskier action than arming where there is none.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Confirm</h2>
+  <div class="card">
+    <p class="muted">Each trigger is a GTT sell at the price shown, valid until it fires or
+      Zerodha expires it. Protected instruments are refused at the guard even if one
+      reached this list. This plan expires in 30 minutes because every trigger is priced
+      off a live quote.</p>
+    <form method="post" action="/stops/arm" class="actions">
+      <input type="hidden" name="plan_id" value="{{ plan.plan_id }}">
+      <input type="hidden" name="confirm" value="true">
+      <button class="{{ 'btn-saffron' if dry_run else 'btn-danger' }}" type="submit">
+        {{ 'Simulate' if dry_run else 'Arm' }} {{ plan.count }} stops</button>
+      <span class="muted">Plan <code>{{ plan.plan_id }}</code> · single use</span>
+    </form>
+  </div>
+</section>
+{% endif %}
+</body>
+</html>

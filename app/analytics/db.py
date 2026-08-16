@@ -23,7 +23,7 @@ from typing import Iterator, Sequence
 
 from .. import config as C
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 # --- schema ---------------------------------------------------------------------------
 # Column sets are fixed by the analytics spec; extra *indexes* are fine, extra columns are
@@ -344,7 +344,7 @@ _MIGRATIONS: dict[int, Sequence[str]] = {
         """CREATE TABLE IF NOT EXISTS option_variants(
                variant_id   TEXT PRIMARY KEY,
                name         TEXT NOT NULL,
-               arm          TEXT NOT NULL,      -- intraday | overnight
+               arm          TEXT NOT NULL,      -- intraday (overnight dropped, v11)
                spec_json    TEXT NOT NULL,
                spec_hash    TEXT NOT NULL,
                registered_at TEXT NOT NULL,
@@ -394,6 +394,63 @@ _MIGRATIONS: dict[int, Sequence[str]] = {
         # label carries the headline; this column lets the axes be crossed.
         """ALTER TABLE option_arms ADD COLUMN expiry_eve INTEGER""",
         """ALTER TABLE option_arms ADD COLUMN elm_charged REAL""",
+    ),
+    11: (
+        # The overnight arm was dropped on 16 Aug 2026: the system no longer holds any
+        # option past the close (core/guards.py), so night_type, expiry_eve and
+        # elm_charged describe a position that can never exist. gap_pct is renamed
+        # spot_move_pct because with a single-session hold it measures an intraday move,
+        # not an overnight gap, and a column whose name asserts the wrong thing is worse
+        # than one that is merely unused.
+        #
+        # A rebuild rather than DROP COLUMN: no arm had been recorded yet, so nothing is
+        # lost, and the table is left with no vestigial columns for a future reader to
+        # wonder about. The overnight variants go too — they were preregistered but never
+        # ran, so they consumed no look at the data and must not inflate the trial count
+        # that governs the deflated Sharpe.
+        """CREATE TABLE option_arms_v11(
+               arm_id        TEXT PRIMARY KEY,
+               variant_id    TEXT NOT NULL REFERENCES option_variants(variant_id),
+               strategy      TEXT NOT NULL,
+               arm           TEXT NOT NULL,
+               session_date  TEXT NOT NULL,
+               expiry        TEXT NOT NULL,
+               dte_at_entry  REAL,
+               lots          INTEGER NOT NULL,
+               lot_size      INTEGER NOT NULL,
+               entry_at      TEXT NOT NULL,
+               entry_spot    REAL,
+               entry_fills_json TEXT NOT NULL,
+               entry_credit  REAL,
+               max_loss      REAL,
+               margin        REAL,
+               margin_source TEXT,
+               exit_at       TEXT,
+               exit_spot     REAL,
+               exit_fills_json TEXT,
+               exit_reason   TEXT,
+               breach_seen   INTEGER,
+               breach_at     TEXT,
+               mark_stop_seen INTEGER,
+               mark_stop_at  TEXT,
+               spot_move_pct REAL,
+               settled_json  TEXT,
+               note          TEXT
+           )""",
+        """INSERT INTO option_arms_v11
+               SELECT arm_id, variant_id, strategy, arm, session_date, expiry,
+                      dte_at_entry, lots, lot_size, entry_at, entry_spot,
+                      entry_fills_json, entry_credit, max_loss, margin, margin_source,
+                      exit_at, exit_spot, exit_fills_json, exit_reason, breach_seen,
+                      breach_at, mark_stop_seen, mark_stop_at, gap_pct, settled_json, note
+               FROM option_arms WHERE arm <> 'overnight'""",
+        """DROP TABLE option_arms""",
+        """ALTER TABLE option_arms_v11 RENAME TO option_arms""",
+        """CREATE INDEX IF NOT EXISTS ix_option_arms_variant
+               ON option_arms(variant_id, session_date)""",
+        """CREATE INDEX IF NOT EXISTS ix_option_arms_open
+               ON option_arms(exit_at) WHERE exit_at IS NULL""",
+        """DELETE FROM option_variants WHERE arm = 'overnight'""",
     ),
 }
 

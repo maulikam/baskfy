@@ -1,11 +1,20 @@
-"""Paper-only A/B experiment: intraday versus overnight defined-risk option selling.
+"""Paper-only measurement of intraday defined-risk option selling.
 
-THE QUESTION
-Bhat (2024, J. Futures Markets) reports that on NIFTY the variance risk premium is earned
-OVERNIGHT and given back intraday; Muravyev & Ni (2020, JFE) find the same sign pattern on
-SPX. If that holds after 2026 costs and at retail fills, an intraday short-premium strategy
-is on the wrong side of the clock. If it does not, the one published NIFTY-specific reason
-to sell premium at all has been falsified. Either answer is worth having.
+WHAT HAPPENED TO THE OVERNIGHT ARM
+This began as an A/B of intraday against overnight. The overnight arm was dropped on
+16 Aug 2026 by a risk decision, not by a result: the system now refuses to hold any option
+past the close, enforced in core/guards.py. An arm that can never be executed is not worth
+the collection effort, so only the intraday arm remains.
+
+That leaves a real question deliberately unanswered, and it should stay visible rather than
+be quietly dropped from the file. Bhat (2024, J. Futures Markets) reports that on NIFTY the
+variance risk premium is earned OVERNIGHT and given back intraday; Muravyev & Ni (2020,
+JFE) find the same sign pattern on SPX. If that holds after 2026 costs and at retail fills,
+an intraday short-premium strategy is on the wrong side of the clock — and this module can
+now measure whether the intraday side pays, but not what is being forgone by refusing the
+other. A negative intraday result is therefore consistent with the published finding and is
+NOT evidence that the overnight trade would have worked, because gap risk is exactly what
+the policy declined to take.
 
 WHAT THIS MODULE IS AND IS NOT
 It is bookkeeping and arithmetic. It pairs an ENTRY observation with a later EXIT
@@ -44,15 +53,10 @@ from typing import Any, Iterable, Mapping, Sequence
 from ..analytics import db
 from .options_costs import CostRates, Fill, option_costs
 
-INTRADAY, OVERNIGHT = "intraday", "overnight"
-ARMS = (INTRADAY, OVERNIGHT)
-
-# Night classification. Kept separate because their gap distributions are not the same
-# animal and averaging them hides the tail that decides an overnight strategy.
-NIGHT_NORMAL, NIGHT_WEEKEND, NIGHT_HOLIDAY, NIGHT_EVENT, NIGHT_EXPIRY_EVE = (
-    "normal", "weekend", "holiday", "event", "expiry_eve")
-NIGHT_TYPES = (NIGHT_NORMAL, NIGHT_WEEKEND, NIGHT_HOLIDAY, NIGHT_EVENT,
-               NIGHT_EXPIRY_EVE)
+INTRADAY = "intraday"
+# One arm. The tuple stays so `arm` remains a validated field rather than free text, and so
+# a second arm (a different exit time, say) can be added without reshaping the table.
+ARMS = (INTRADAY,)
 
 
 class ExperimentError(ValueError):
@@ -148,47 +152,6 @@ def reverse(fills: Sequence[Fill], quotes: Mapping[str, tuple[float, float]]) ->
 
 
 # =====================================================================================
-# night classification
-# =====================================================================================
-def is_expiry_eve(exit_: dt.datetime, expiry: dt.date | None) -> bool:
-    """Did the hold run into expiry morning?
-
-    That is precisely when the +2% expiry-day ELM lands on every short leg, hedged or not.
-    With Tuesday now the only NIFTY weekly expiry, an overnight arm opened on a Monday
-    evening is always this case — so on a five-day week it is one night in five, and its
-    margin is roughly double every other night's.
-    """
-    return expiry is not None and exit_.date() == expiry
-
-
-def classify_night(entry: dt.datetime, exit_: dt.datetime, *,
-                   event: bool = False, holidays: Iterable[dt.date] = (),
-                   expiry: dt.date | None = None) -> str:
-    """What kind of night was actually held.
-
-    Precedence: event, then expiry eve, then holiday, then weekend, then normal. An
-    explicit `event` flag beats everything because the caller knows whether an RBI policy
-    or a budget fell in the window and this module cannot. Expiry eve comes next because
-    the ELM is a large, deterministic, one-directional cost that dominates that night's
-    return on margin.
-
-    The label is a headline, not the whole truth: a night can be both a weekend and an
-    expiry eve, so `is_expiry_eve` is recorded separately and the two axes can be crossed.
-    """
-    if event:
-        return NIGHT_EVENT
-    if is_expiry_eve(exit_, expiry):
-        return NIGHT_EXPIRY_EVE
-    days = {entry.date() + dt.timedelta(days=i)
-            for i in range(1, max((exit_.date() - entry.date()).days, 0) + 1)}
-    if days & set(holidays):
-        return NIGHT_HOLIDAY
-    if any(d.weekday() >= 5 for d in days):
-        return NIGHT_WEEKEND
-    return NIGHT_NORMAL
-
-
-# =====================================================================================
 # settlement
 # =====================================================================================
 @dataclass(frozen=True)
@@ -245,8 +208,7 @@ def open_arm(conn, *, variant_id: str, strategy: str, arm: str, expiry: dt.date,
              lots: int, lot_size: int, entry_fills: Sequence[Fill],
              entry_at: dt.datetime, entry_spot: float, dte_at_entry: float | None = None,
              max_loss: float | None = None, margin: float | None = None,
-             margin_source: str = "", elm_charged: float | None = None,
-             note: str = "") -> str:
+             margin_source: str = "", note: str = "") -> str:
     """Record an opened paper position. Returns the arm id."""
     row = conn.execute("SELECT 1 FROM option_variants WHERE variant_id=?",
                        (variant_id,)).fetchone()
@@ -262,14 +224,13 @@ def open_arm(conn, *, variant_id: str, strategy: str, arm: str, expiry: dt.date,
         conn.execute(
             "INSERT INTO option_arms(arm_id, variant_id, strategy, arm, session_date,"
             " expiry, dte_at_entry, lots, lot_size, entry_at, entry_spot,"
-            " entry_fills_json, entry_credit, max_loss, margin, margin_source,"
-            " elm_charged, note)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " entry_fills_json, entry_credit, max_loss, margin, margin_source, note)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (arm_id, variant_id, strategy, arm, entry_at.date().isoformat(),
              expiry.isoformat(), dte_at_entry, lots, lot_size,
              entry_at.isoformat(timespec="seconds"), entry_spot,
              json.dumps([_fill_json(f) for f in entry_fills]), credit, max_loss,
-             margin, margin_source, elm_charged, note))
+             margin, margin_source, note))
     return arm_id
 
 
@@ -295,8 +256,8 @@ def observe(conn, arm_id: str, *, breach: bool = False, mark_stop: bool = False,
 
 
 def close_arm(conn, arm_id: str, *, exit_fills: Sequence[Fill], exit_at: dt.datetime,
-              exit_spot: float, exit_reason: str, event_night: bool = False,
-              holidays: Iterable[dt.date] = (), rates: CostRates | None = None) -> dict:
+              exit_spot: float, exit_reason: str,
+              rates: CostRates | None = None) -> dict:
     """Close an arm, settle it, and store the result."""
     row = conn.execute("SELECT * FROM option_arms WHERE arm_id=?", (arm_id,)).fetchone()
     if row is None:
@@ -305,27 +266,21 @@ def close_arm(conn, arm_id: str, *, exit_fills: Sequence[Fill], exit_at: dt.date
         raise ExperimentError(f"arm {arm_id!r} is already closed")
 
     entry_fills = [_fill_from_json(x) for x in json.loads(row["entry_fills_json"])]
-    entry_at = dt.datetime.fromisoformat(row["entry_at"])
-    expiry = dt.date.fromisoformat(row["expiry"]) if row["expiry"] else None
-    eve = is_expiry_eve(exit_at, expiry)
-    night = (classify_night(entry_at, exit_at, event=event_night, holidays=holidays,
-                            expiry=expiry)
-             if row["arm"] == OVERNIGHT else None)
-    gap = ((exit_spot / row["entry_spot"] - 1.0) * 100.0
-           if row["entry_spot"] else None)
+    # The underlying's move across the hold. Named for what it is now that the hold is
+    # always a single session: an intraday move, not an overnight gap.
+    move = ((exit_spot / row["entry_spot"] - 1.0) * 100.0
+            if row["entry_spot"] else None)
 
     s = settle(entry_fills, exit_fills, margin=row["margin"], max_loss=row["max_loss"],
                rates=rates, lot_size=row["lot_size"])
     with db.transaction(conn):
         conn.execute(
             "UPDATE option_arms SET exit_at=?, exit_spot=?, exit_fills_json=?,"
-            " exit_reason=?, night_type=?, gap_pct=?, expiry_eve=?, settled_json=?"
-            " WHERE arm_id=?",
+            " exit_reason=?, spot_move_pct=?, settled_json=? WHERE arm_id=?",
             (exit_at.isoformat(timespec="seconds"), exit_spot,
-             json.dumps([_fill_json(f) for f in exit_fills]), exit_reason, night, gap,
-             1 if eve else 0, json.dumps(s.as_dict()), arm_id))
-    return {"arm_id": arm_id, "night_type": night, "gap_pct": gap,
-            "expiry_eve": eve, **s.as_dict()}
+             json.dumps([_fill_json(f) for f in exit_fills]), exit_reason, move,
+             json.dumps(s.as_dict()), arm_id))
+    return {"arm_id": arm_id, "spot_move_pct": move, **s.as_dict()}
 
 
 def _fill_json(f: Fill) -> dict:
@@ -336,24 +291,6 @@ def _fill_json(f: Fill) -> dict:
 def _fill_from_json(d: Mapping[str, Any]) -> Fill:
     return Fill(side=d["side"], price=float(d["price"]), quantity=int(d["quantity"]),
                 bid=d.get("bid"), ask=d.get("ask"), label=d.get("label", ""))
-
-
-def legs_of(conn, arm_id: str) -> list[dict]:
-    """The exact contracts an arm holds, so another arm can reuse them.
-
-    Strike identity is what makes the comparison clean. If the intraday arm sells
-    24500/24300 at 09:45 and the overnight arm re-picks 0.16 delta against a moved spot at
-    15:15, the two arms differ in BOTH structure and clock — and the experiment exists to
-    isolate the clock. Reusing the morning's contracts removes the confound entirely, at
-    the cost of the evening strikes no longer sitting at 0.16 delta, which is the correct
-    trade: a known deviation from a target delta is a measurable covariate, whereas two
-    positions that differ in an uncontrolled way are not comparable at all.
-    """
-    row = conn.execute("SELECT entry_fills_json FROM option_arms WHERE arm_id=?",
-                       (arm_id,)).fetchone()
-    if row is None:
-        raise ExperimentError(f"unknown arm {arm_id!r}")
-    return json.loads(row["entry_fills_json"])
 
 
 def latest_arm(conn, *, arm: str, session_date: dt.date | None = None) -> dict | None:
@@ -455,13 +392,16 @@ def summarise(arms: Sequence[Mapping]) -> dict:
     }
 
 
-def compare(conn, *, holidays: Iterable[dt.date] = ()) -> dict:
-    """Intraday against overnight, and overnight split by night type.
+def report(conn) -> dict:
+    """What the intraday arm has done so far, overall and per variant.
 
-    Deliberately returns no verdict. The comparison that matters — is the difference
-    larger than its own standard error — needs a sample this experiment does not yet have,
-    and a function that printed "overnight wins" on twelve observations would be worse
-    than useless.
+    Deliberately returns no verdict. There is no longer a second arm to difference against,
+    so the only question this can answer is whether intraday short premium pays its own
+    costs — and that is a test against zero, which needs a sample this does not yet have.
+    A function that printed "it works" on twelve observations would be worse than useless.
+
+    `mean_vs_zero` is the honest form of that test: the mean net P&L against the standard
+    error of the mean. It is reported without a conclusion attached.
     """
     closed = closed_arms(conn)
     by_arm = {a: [r for r in closed if r["arm"] == a] for a in ARMS}
@@ -470,31 +410,19 @@ def compare(conn, *, holidays: Iterable[dt.date] = ()) -> dict:
         "closed_arms": len(closed),
         "open_arms": len(open_arms(conn)),
         "by_arm": {a: summarise(rows) for a, rows in by_arm.items()},
-        "by_night": {
-            nt: summarise([r for r in by_arm[OVERNIGHT] if r["night_type"] == nt])
-            for nt in NIGHT_TYPES},
-        # The expiry-eve flag crossed against the label, because a night can be both a
-        # weekend and an expiry eve and the single label can only say one of them.
-        "expiry_eve": {
-            "held_into_expiry": summarise(
-                [r for r in by_arm[OVERNIGHT] if r.get("expiry_eve")]),
-            "other_nights": summarise(
-                [r for r in by_arm[OVERNIGHT] if not r.get("expiry_eve")])},
         "by_variant": {v["variant_id"]: summarise(
             [r for r in closed if r["variant_id"] == v["variant_id"]])
             for v in variants(conn)},
     }
-    a, b = out["by_arm"][INTRADAY], out["by_arm"][OVERNIGHT]
-    if a.get("n") and b.get("n"):
-        diff = (b.get("net_pnl_mean") or 0) - (a.get("net_pnl_mean") or 0)
-        # Pooled standard error of the difference in means. Reported so the difference can
-        # be read against its own noise instead of being eyeballed.
-        sa, sb = a.get("net_pnl_sd") or 0.0, b.get("net_pnl_sd") or 0.0
-        se = ((sa * sa / max(a["n"], 1)) + (sb * sb / max(b["n"], 1))) ** 0.5
-        out["difference"] = {
-            "overnight_minus_intraday_mean": round(diff, 2),
+    a = out["by_arm"][INTRADAY]
+    if a.get("n"):
+        mean = a.get("net_pnl_mean") or 0.0
+        sd = a.get("net_pnl_sd") or 0.0
+        se = sd / (a["n"] ** 0.5) if sd and a["n"] else None
+        out["mean_vs_zero"] = {
+            "net_pnl_mean": round(mean, 2),
             "standard_error": round(se, 2) if se else None,
-            "t": round(diff / se, 2) if se else None,
-            "conclusive": bool(se and abs(diff / se) >= 2.0),
+            "t": round(mean / se, 2) if se else None,
+            "conclusive": bool(se and abs(mean / se) >= 2.0),
         }
     return out

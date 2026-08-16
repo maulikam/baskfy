@@ -158,6 +158,70 @@ def review(holdings: Iterable[Mapping], gtts: Iterable[Mapping]) -> dict:
     }
 
 
+# A stop needs a volatility to be sized. Where the scan does not supply one, this is the
+# fallback — the same figure app/rebalance.py uses, which lands mid-band at about 11%.
+DEFAULT_VOL = 0.36
+
+
+def build_stop_plan(holdings: Iterable[Mapping], gtts: Iterable[Mapping], *,
+                    vol_by_symbol: Mapping[str, float] | None = None,
+                    plan_id: str | None = None) -> dict:
+    """Propose a stop for every position that lacks working cover.
+
+    Only MISSING and PARTIAL positions are proposed for. A stop that merely sits outside
+    the band is left alone: replacing it means cancelling a live trigger, which is a
+    different and riskier action than arming one where there is none.
+
+    For a partially covered position the proposal is for the UNCOVERED shares only, so
+    arming it cannot double up on quantity already protected.
+
+    Pure. Takes prices and volatilities as data and returns a plan; it does not read the
+    broker and it cannot place anything.
+    """
+    import uuid
+
+    from ..scoring import stop_from_vol
+
+    vols = dict(vol_by_symbol or {})
+    rev = review(holdings, gtts)
+    held = {h["symbol"]: h for h in holdings}
+
+    rows = []
+    for f in rev["findings"]:
+        if f["kind"] not in (MISSING, PARTIAL):
+            continue
+        h = held.get(f["symbol"])
+        if not h:
+            continue
+        px = float(h.get("last_price") or 0.0)
+        qty = int(f["qty"]) - int(f.get("covered") or 0)
+        if qty <= 0 or px <= 0:
+            continue
+        vol = vols.get(f["symbol"])
+        trigger = stop_from_vol(px, vol if vol else DEFAULT_VOL)
+        rows.append({
+            "symbol": f["symbol"], "qty": qty, "last_price": round(px, 2),
+            "trigger": trigger,
+            "drop_pct": round((1 - trigger / px) * 100, 2),
+            "value": round(qty * px),
+            "at_risk": round(qty * (px - trigger)),
+            "vol": round(vol, 4) if vol else None,
+            "vol_source": "scan" if vol else "default",
+            "reason": f["kind"],
+        })
+
+    rows.sort(key=lambda r: -r["value"])
+    return {
+        "plan_id": plan_id or uuid.uuid4().hex[:12],
+        "rows": rows,
+        "count": len(rows),
+        "value": sum(r["value"] for r in rows),
+        "at_risk": sum(r["at_risk"] for r in rows),
+        "using_default_vol": [r["symbol"] for r in rows if r["vol_source"] == "default"],
+        "review": rev,
+    }
+
+
 def from_kite(kite) -> dict:
     """Live review. Two API reads, no writes."""
     return review(kite.holdings(), kite.kc.get_gtts() or [])

@@ -292,6 +292,81 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
                          "log": log_path, "reconciliation": recon})
 
 
+# --- arming stops ----------------------------------------------------------------------
+# Same shape as /analyze -> /execute, and for the same reason: proposing and doing are
+# separate acts. A status check found the gap; nothing arms a stop without being told to.
+STOP_PLANS: dict[str, dict] = {}
+
+
+@app.get("/stops", response_class=HTMLResponse)
+def stops_page(request: Request, armed: str = "", error: str = ""):
+    """Review the stops that would be armed. Builds a plan; places nothing."""
+    from .analytics import protection as _prot
+
+    plan, review, problem = None, None, ""
+    try:
+        k = kite()
+        if not k.is_authed():
+            problem = "Kite session expired — log in first. Stops are sized from live prices."
+        else:
+            plan = _prot.build_stop_plan(k.holdings(), k.kc.get_gtts() or [])
+            plan["created_at"] = time.time()
+            STOP_PLANS[plan["plan_id"]] = plan
+            review = plan["review"]
+    except Exception as exc:
+        problem = f"Could not read holdings or triggers: {exc}"
+
+    return templates.TemplateResponse(
+        request, "stops.html",
+        {"plan": plan, "review": review, "problem": problem, "dry_run": C.DRY_RUN,
+         "armed": armed, "error": error,
+         "band": (C.STOP_MIN * 100, C.STOP_MAX * 100),
+         "daily_loss_cap": C.risk_config(_latest_nav()).max_daily_loss})
+
+
+@app.post("/stops/arm")
+async def stops_arm(plan_id: str = Form(...), confirm: str = Form(...)):
+    """Arm the reviewed stops. Same gates as /execute: explicit confirm, a plan issued by
+    the review page, and a freshness limit because a trigger is priced off a live quote."""
+    if confirm != "true":
+        raise HTTPException(400, "Arming stops requires explicit confirmation.")
+    plan = STOP_PLANS.get(plan_id)
+    if not plan:
+        raise HTTPException(404, "Unknown or expired plan — reload the review page.")
+    if time.time() - plan["created_at"] > 1800:
+        raise HTTPException(410, "Plan older than 30 minutes — prices stale, reload it.")
+
+    k = kite()
+    gw = gateway()
+    placed = []
+    for r in plan["rows"]:
+        # The gateway has no GTT method, so this uses kite_client.place_gtt_stop, which
+        # carries its own untouchable-instrument guard. The gateway's limiter still paces
+        # the calls so a batch of stops cannot outrun Kite's caps.
+        await gw.limits.api_slot()
+        try:
+            res = k.place_gtt_stop(r["symbol"], r["qty"], r["trigger"], r["last_price"])
+        except UntouchableInstrumentError as exc:
+            res = {"symbol": r["symbol"], "status": "BLOCKED", "error": str(exc)}
+        except Exception as exc:
+            # One rejection must not abandon the rest of the book unprotected.
+            res = {"symbol": r["symbol"], "status": "FAILED", "error": str(exc)}
+        placed.append({**res, "qty": r["qty"], "trigger": r["trigger"]})
+
+    STOP_PLANS.pop(plan_id, None)          # single use: re-arming needs a fresh review
+    ok = sum(1 for p in placed if str(p.get("status", "")).upper() in
+             ("TRIGGER_CREATED", "OK", "PLACED", "DRY_RUN_GTT"))
+    log_path = f"data/outputs/stops_{plan_id}.json"
+    with open(log_path, "w") as f:
+        json.dump({"plan": plan["rows"], "results": placed}, f, indent=2, default=str)
+    msg = f"{ok} of {len(placed)} stops {'simulated' if C.DRY_RUN else 'armed'}"
+    failed = [p for p in placed if p not in placed[:0] and str(p.get("status", "")).upper()
+              not in ("TRIGGER_CREATED", "OK", "PLACED", "DRY_RUN_GTT")]
+    if failed:
+        msg += f" · {len(failed)} failed: " + ", ".join(p["symbol"] for p in failed[:6])
+    return RedirectResponse(f"/stops?armed={msg}", status_code=303)
+
+
 # --- regime overlay (read-only) --------------------------------------------------------
 # Both routes read PRECOMPUTED rows from SQLite. No Kite calls, no signal recomputation,
 # no writes: a status page must never be able to change the state it reports.

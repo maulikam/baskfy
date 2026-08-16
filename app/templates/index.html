@@ -113,6 +113,7 @@
     <a href="/regime">Regime</a>
     <a href="/regime/backtest">Backtest</a>
     <a href="/tradebook">Tradebook</a>
+    <a href="/stops">Stops</a>
     <a href="/ops">Operations</a>
     <a href="/settings">Settings</a>
     <a class="api" href="/status">status</a>
@@ -167,8 +168,9 @@
           {{ f.symbol }} ₹{{ '{:,.0f}'.format(f.value) }}{{ ',' if not loop.last }}
         {%- endfor %}{% if protection.findings|length > 4 %}
           and {{ protection.findings|length - 4 }} more{% endif %}.
-        Run <code>python -m app.analytics.protection</code> for the full list. Placing
-        stops is a decision with money behind it, so nothing here does it for you.</span></span>
+        <a href="/stops">Review and arm stops</a>, or run
+        <code>python -m app.analytics.protection</code> for the full list. Nothing is
+        placed without an explicit confirmation.</span></span>
   </div>
 {% elif protection and protection.checked %}
   <div class="collect ok">

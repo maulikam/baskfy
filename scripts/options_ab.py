@@ -166,19 +166,36 @@ def cmd_open(args) -> int:
         expiry, lots, lot_size = plan.expiry, plan.lots, plan.lot_size
         max_loss = plan.max_loss
 
-    margin, margin_source = None, ""
-    if not args.no_margin and plan is not None:
+    # The product is the arm: an intraday position is MIS, an overnight one NRML. The same
+    # four contracts carry different margin under each, and return-on-margin is one of the
+    # things the arms are being compared on — so the estimate is made under the product
+    # the arm would actually use, from the legs themselves rather than from a plan object
+    # that does not exist when strikes are inherited.
+    product = "NRML" if args.arm == X.OVERNIGHT else "MIS"
+    margin, margin_source, elm = None, "", None
+    if not args.no_margin:
         try:
-            from app.strategies.options_market import basket_margin_estimate
-            est = basket_margin_estimate(kite.kc, plan)
+            from app.strategies.options_market import (basket_margin_for_legs,
+                                                       expiry_day_elm)
+            est = basket_margin_for_legs(
+                kite.kc,
+                [{"tradingsymbol": f.label, "transaction_type": f.side,
+                  "quantity": f.quantity, "price": f.price} for f in fills],
+                product=product)
             margin = float(est.get("total") or est.get("initial") or 0.0) or None
-            margin_source = "kite_basket"
+            margin_source = f"kite_basket:{product}"
+
+            # An overnight arm opened the evening before expiry is 1 DTE at entry and 0 DTE
+            # at exit, so it is still open on the morning the expiry-day ELM applies —
+            # hedged or not. The basket endpoint does not include it.
+            if args.arm == X.OVERNIGHT and expiry == now.date() + dt.timedelta(days=1):
+                shorts = sum(1 for f in fills if f.side == "SELL")
+                elm = expiry_day_elm(live.market.spot, lot_size, shorts, lots)
+                if margin is not None:
+                    margin += elm
+                    margin_source += "+expiry_elm"
         except Exception as exc:
             margin_source = f"unavailable: {exc}"
-    elif inherited:
-        # No plan object to hand the basket endpoint. Carrying the source arm's figure
-        # would be wrong — MIS and NRML differ — so it is left unknown and labelled.
-        margin_source = "not_estimated_for_inherited_legs"
 
     variant_id = X.Variant(args.name, args.arm,
                            {"short_delta": cfg.short_delta,
@@ -200,6 +217,7 @@ def cmd_open(args) -> int:
         "lots": lots, "entry_credit_rs": round(sum(
             f.turnover if f.side == "SELL" else -f.turnover for f in fills), 2),
         "max_loss_rs": max_loss, "margin_rs": margin, "margin_source": margin_source,
+        "product": product, "expiry_day_elm_rs": elm,
         "inherited_from": source_arm_id if inherited else None,
         "legs": [{"symbol": f.label, "side": f.side, "fill": f.price,
                   "bid": f.bid, "ask": f.ask} for f in fills],

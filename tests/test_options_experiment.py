@@ -396,3 +396,72 @@ def test_one_tick_is_a_far_larger_share_of_a_wing_than_of_an_atm_leg():
 
 def test_a_quote_with_no_trade_time_reports_unknown_staleness_not_zero():
     assert _quote(30.0, 30.4, traded="").microstructure()["staleness_s"] is None
+
+
+# =====================================================================================
+# margin: the product IS the arm
+# =====================================================================================
+def test_the_basket_estimate_uses_the_product_it_is_given():
+    """The same four contracts carry different margin as an intraday MIS basket and an
+    overnight NRML one. Using one arm's product for both answers a different question."""
+    from app.strategies.options_market import basket_margin_for_legs
+
+    class RecordingKC:
+        def __init__(self): self.seen = []
+        def basket_order_margins(self, params, **kw):
+            self.seen.append(params)
+            return {"total": 48000.0}
+
+    kc = RecordingKC()
+    legs = [{"tradingsymbol": "NIFTY26AUG24500CE", "transaction_type": "SELL",
+             "quantity": LOT, "price": 30.0}]
+    basket_margin_for_legs(kc, legs, product="NRML")
+    basket_margin_for_legs(kc, legs, product="MIS")
+    assert [p[0]["product"] for p in kc.seen] == ["NRML", "MIS"]
+
+
+def test_the_basket_call_is_a_calculation_not_an_order():
+    """basket_order_margins computes and places nothing; nothing else may be called."""
+    from app.strategies.options_market import basket_margin_for_legs
+
+    class StrictKC:
+        def basket_order_margins(self, params, **kw): return {"total": 1.0}
+        def __getattr__(self, name):
+            raise AssertionError(f"unexpected broker call: {name}")
+
+    basket_margin_for_legs(StrictKC(), [{"tradingsymbol": "X",
+                                         "transaction_type": "SELL",
+                                         "quantity": LOT, "price": 1.0}], product="NRML")
+
+
+# --- expiry-day ELM --------------------------------------------------------------------
+def test_expiry_day_elm_reproduces_the_published_figure():
+    """2% of contract value per short leg: 0.02 x 24,400 x 65 x 2 = Rs 63,440 per lot."""
+    from app.strategies.options_market import expiry_day_elm
+    assert expiry_day_elm(24400.0, 65, short_legs=2, lots=1) == pytest.approx(63_440)
+
+
+def test_elm_scales_with_lots_and_with_short_legs():
+    from app.strategies.options_market import expiry_day_elm
+    base = expiry_day_elm(24400.0, 65, 2, 1)
+    assert expiry_day_elm(24400.0, 65, 2, 5) == pytest.approx(base * 5)
+    assert expiry_day_elm(24400.0, 65, 1, 1) == pytest.approx(base / 2)
+
+
+def test_a_position_with_no_short_leg_attracts_no_elm():
+    from app.strategies.options_market import expiry_day_elm
+    assert expiry_day_elm(24400.0, 65, short_legs=0) == 0.0
+
+
+def test_the_elm_can_exceed_the_base_condor_margin():
+    """Rs 63,440 a lot against a hedged condor's roughly Rs 40-60k. An overnight arm held
+    into expiry morning is the case where this lands, and the basket endpoint omits it."""
+    from app.strategies.options_market import expiry_day_elm
+    assert expiry_day_elm(24400.0, 65, 2, 1) > 60_000
+
+
+def test_the_runner_charges_elm_only_to_the_overnight_arm_into_expiry():
+    src = open("scripts/options_ab.py").read()
+    block = src.split("product = ")[1].split("except Exception")[0]
+    assert 'X.OVERNIGHT' in block and "timedelta(days=1)" in block
+    assert 'expiry_elm' in block

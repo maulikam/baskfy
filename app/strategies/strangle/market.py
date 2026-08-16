@@ -83,6 +83,11 @@ def snapshot(kc, *, instruments: Sequence[Mapping[str, Any]], index_key: str,
             "last": float(q.get("last_price") or 0.0),
             "oi": float(q.get("oi") or 0.0),
             "volume": float(q.get("volume") or 0.0),
+            # The exchange's own day VWAP. The strategy's threat filter needs the average
+            # price of every short since the open, and one accumulated from our own polls
+            # would only start when the bot did — which says nothing about where the
+            # average short actually sits.
+            "average_price": float(q.get("average_price") or 0.0),
             # Kept whole: every simulated fill is walked against this and stored with it,
             # so any price in the journal can be re-derived without trusting the engine.
             "depth": {"buy": [{"price": float(l.get("price") or 0),
@@ -116,3 +121,30 @@ def atm_straddle(snap: ChainSnapshot, step: int) -> tuple[float | None, float]:
     if "CE" in mids and "PE" in mids:
         return mids["CE"] + mids["PE"], k
     return None, k
+
+
+# =====================================================================================
+# providers — what the session loop consumes
+# =====================================================================================
+def live_provider(kc, *, instruments, index_key: str, expiry, name: str = "NIFTY",
+                  poll_seconds: float = 5.0, until=None, sleep=None, now=None):
+    """Yield chain snapshots until `until` (a time) passes or the caller stops consuming.
+
+    A generator rather than a callback so the loop owns the schedule, and so a test can
+    hand the same loop a list instead.
+    """
+    import time as _time
+    sleep = sleep or _time.sleep
+    now = now or (lambda: dt.datetime.now())
+    while True:
+        snap = snapshot(kc, instruments=instruments, index_key=index_key, expiry=expiry,
+                        name=name, now=now())
+        yield snap
+        if until is not None and now().time() >= until:
+            return
+        sleep(poll_seconds)
+
+
+def scripted_provider(frames):
+    """Replay pre-built snapshots. Used by the tests and by V3's synthetic sequence."""
+    yield from frames

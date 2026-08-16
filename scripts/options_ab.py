@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import sys
 
 from app import config as C
 from app.analytics import db
@@ -297,9 +298,11 @@ def cmd_report(args) -> int:
     print(json.dumps(rep, indent=2, default=str))
     n = rep.get("closed_arms", 0)
     if n < 100:
+        # stderr, so stdout stays valid JSON and the command can be piped into jq.
         print(f"\n{n} closed arms. A high-win-rate condor needs roughly 550-710 to "
               "separate a real edge from noise at 80% power after a cost drag; the "
-              "difference between arms needs its own sample on top of that.")
+              "difference between arms needs its own sample on top of that.",
+              file=sys.stderr)
     return 0
 
 

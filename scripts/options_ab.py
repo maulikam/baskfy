@@ -15,8 +15,8 @@ THE PROTOCOL
     python -m scripts.options_ab watch                  # any time, records touches
     python -m scripts.options_ab close --reason square_off   # 15:12
 
-    # overnight arm
-    python -m scripts.options_ab open  --arm overnight  # ~15:15
+    # overnight arm — SAME contracts as the morning, so only the clock differs
+    python -m scripts.options_ab open --arm overnight --inherit-strikes-from intraday
     python -m scripts.options_ab close --reason scheduled    # 09:20 next session
 
     python -m scripts.options_ab report
@@ -100,14 +100,39 @@ def cmd_open(args) -> int:
     except LiveSnapshotUnavailable as exc:
         print(json.dumps({"status": "DATA_UNAVAILABLE", "error": str(exc)}, indent=2))
         return 2
-    try:
-        plan = IronCondorPlanner(cfg).plan(live.market)
-    except OptionPlanRejected as exc:
-        print(json.dumps({"status": "NO_TRADE", "code": exc.code,
-                          "reason": exc.reason}, indent=2))
-        return 1
+    # Strike inheritance. When set, the SAME contracts as an earlier arm are reused, so
+    # the two arms differ only in the clock — which is the one variable this experiment
+    # exists to isolate.
+    inherited = None
+    if args.inherit_strikes_from:
+        with db.connect() as conn:
+            db.migrate(conn)
+            src = args.inherit_strikes_from
+            if src in ("intraday", "overnight"):
+                row = X.latest_arm(conn, arm=src, session_date=dt.date.today())
+                if row is None:
+                    print(json.dumps({"status": "NO_SOURCE_ARM", "arm": src,
+                                      "note": "no arm of that kind opened today"},
+                                     indent=2))
+                    return 1
+                src = row["arm_id"]
+            inherited = X.legs_of(conn, src)
+            source = conn.execute("SELECT * FROM option_arms WHERE arm_id=?",
+                                  (src,)).fetchone()
+            source_arm = dict(source)
+            source_arm_id = src
 
-    symbols = {leg.instrument.symbol for leg in plan.entry_legs}
+    if inherited:
+        plan = None
+        symbols = {x["label"] for x in inherited}
+    else:
+        try:
+            plan = IronCondorPlanner(cfg).plan(live.market)
+        except OptionPlanRejected as exc:
+            print(json.dumps({"status": "NO_TRADE", "code": exc.code,
+                              "reason": exc.reason}, indent=2))
+            return 1
+        symbols = {leg.instrument.symbol for leg in plan.entry_legs}
     quotes = _leg_quotes(live.market.quotes, symbols)
     missing = sorted(symbols - set(quotes))
     if missing:
@@ -117,20 +142,43 @@ def cmd_open(args) -> int:
         return 2
 
     fills = []
-    for leg in plan.entry_legs:
-        bid, ask = quotes[leg.instrument.symbol]
-        fills.append(X.executable_fill(leg.side, bid, ask, leg.quantity,
-                                       label=leg.instrument.symbol))
+    if inherited:
+        # Same contracts, same sides, same quantity — priced at THIS moment's quotes.
+        for leg in inherited:
+            bid, ask = quotes[leg["label"]]
+            fills.append(X.executable_fill(leg["side"], bid, ask, int(leg["quantity"]),
+                                           label=leg["label"]))
+    else:
+        for leg in plan.entry_legs:
+            bid, ask = quotes[leg.instrument.symbol]
+            fills.append(X.executable_fill(leg.side, bid, ask, leg.quantity,
+                                           label=leg.instrument.symbol))
 
-    margin, source = None, ""
-    if not args.no_margin:
+    # Contract terms come from the plan, or from the arm being inherited from. Margin is
+    # re-estimated either way: an intraday MIS basket and an overnight NRML basket are not
+    # the same number even on identical contracts, and return on margin is one of the
+    # things the two arms are being compared on.
+    if inherited:
+        expiry = dt.date.fromisoformat(source_arm["expiry"])
+        lots, lot_size = int(source_arm["lots"]), int(source_arm["lot_size"])
+        max_loss = source_arm["max_loss"]
+    else:
+        expiry, lots, lot_size = plan.expiry, plan.lots, plan.lot_size
+        max_loss = plan.max_loss
+
+    margin, margin_source = None, ""
+    if not args.no_margin and plan is not None:
         try:
             from app.strategies.options_market import basket_margin_estimate
             est = basket_margin_estimate(kite.kc, plan)
             margin = float(est.get("total") or est.get("initial") or 0.0) or None
-            source = "kite_basket"
+            margin_source = "kite_basket"
         except Exception as exc:
-            source = f"unavailable: {exc}"
+            margin_source = f"unavailable: {exc}"
+    elif inherited:
+        # No plan object to hand the basket endpoint. Carrying the source arm's figure
+        # would be wrong — MIS and NRML differ — so it is left unknown and labelled.
+        margin_source = "not_estimated_for_inherited_legs"
 
     variant_id = X.Variant(args.name, args.arm,
                            {"short_delta": cfg.short_delta,
@@ -140,17 +188,19 @@ def cmd_open(args) -> int:
         db.migrate(conn)
         arm_id = X.open_arm(
             conn, variant_id=variant_id, strategy="seller", arm=args.arm,
-            expiry=plan.expiry, lots=plan.lots, lot_size=plan.lot_size,
+            expiry=expiry, lots=lots, lot_size=lot_size,
             entry_fills=fills, entry_at=now, entry_spot=live.market.spot,
-            dte_at_entry=(plan.expiry - now.date()).days,
-            max_loss=plan.max_loss, margin=margin, margin_source=source,
-            note=args.note or "")
+            dte_at_entry=(expiry - now.date()).days,
+            max_loss=max_loss, margin=margin, margin_source=margin_source,
+            note=(args.note or "") + (f" inherited_from={source_arm_id}"
+                                      if inherited else ""))
     print(json.dumps({
         "status": "OPENED", "arm_id": arm_id, "arm": args.arm, "variant": variant_id,
-        "expiry": plan.expiry.isoformat(), "dte": (plan.expiry - now.date()).days,
-        "lots": plan.lots, "entry_credit_rs": round(sum(
+        "expiry": expiry.isoformat(), "dte": (expiry - now.date()).days,
+        "lots": lots, "entry_credit_rs": round(sum(
             f.turnover if f.side == "SELL" else -f.turnover for f in fills), 2),
-        "max_loss_rs": plan.max_loss, "margin_rs": margin, "margin_source": source,
+        "max_loss_rs": max_loss, "margin_rs": margin, "margin_source": margin_source,
+        "inherited_from": source_arm_id if inherited else None,
         "legs": [{"symbol": f.label, "side": f.side, "fill": f.price,
                   "bid": f.bid, "ask": f.ask} for f in fills],
         "paper_only": True, "orders_submitted": 0}, indent=2, default=str))
@@ -245,6 +295,9 @@ def main() -> int:
     o.add_argument("--name", default="wing05")
     o.add_argument("--wing-delta", type=float, default=None)
     o.add_argument("--no-margin", action="store_true")
+    o.add_argument("--inherit-strikes-from", metavar="ARM_ID|intraday|overnight",
+                   help="reuse an earlier arm's exact contracts so the two arms differ "
+                        "only in the clock — the confound this experiment must avoid")
     o.add_argument("--note", default="")
 
     sub.add_parser("watch", help="record short-strike breaches without closing")

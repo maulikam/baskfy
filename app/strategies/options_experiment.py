@@ -310,6 +310,35 @@ def _fill_from_json(d: Mapping[str, Any]) -> Fill:
                 bid=d.get("bid"), ask=d.get("ask"), label=d.get("label", ""))
 
 
+def legs_of(conn, arm_id: str) -> list[dict]:
+    """The exact contracts an arm holds, so another arm can reuse them.
+
+    Strike identity is what makes the comparison clean. If the intraday arm sells
+    24500/24300 at 09:45 and the overnight arm re-picks 0.16 delta against a moved spot at
+    15:15, the two arms differ in BOTH structure and clock — and the experiment exists to
+    isolate the clock. Reusing the morning's contracts removes the confound entirely, at
+    the cost of the evening strikes no longer sitting at 0.16 delta, which is the correct
+    trade: a known deviation from a target delta is a measurable covariate, whereas two
+    positions that differ in an uncontrolled way are not comparable at all.
+    """
+    row = conn.execute("SELECT entry_fills_json FROM option_arms WHERE arm_id=?",
+                       (arm_id,)).fetchone()
+    if row is None:
+        raise ExperimentError(f"unknown arm {arm_id!r}")
+    return json.loads(row["entry_fills_json"])
+
+
+def latest_arm(conn, *, arm: str, session_date: dt.date | None = None) -> dict | None:
+    """The most recent arm of a kind, optionally restricted to one session."""
+    sql = "SELECT * FROM option_arms WHERE arm=?"
+    args: list = [arm]
+    if session_date is not None:
+        sql += " AND session_date=?"
+        args.append(session_date.isoformat())
+    row = conn.execute(sql + " ORDER BY entry_at DESC LIMIT 1", tuple(args)).fetchone()
+    return dict(row) if row else None
+
+
 def open_arms(conn) -> list[dict]:
     return [dict(r) for r in conn.execute(
         "SELECT * FROM option_arms WHERE exit_at IS NULL ORDER BY entry_at")]

@@ -82,6 +82,33 @@ class OptionInstrument:
         )
 
 
+
+def _depth_from_kite(depth: Mapping[str, Any]) -> dict:
+    """All five levels, price and quantity only.
+
+    Kite also returns an `orders` count per level; it is dropped because it is not
+    consistently populated and a field that is sometimes real and sometimes zero is worse
+    than no field at all.
+    """
+    out: dict[str, list] = {}
+    for side in ("buy", "sell"):
+        out[side] = [{"price": float(l.get("price") or 0.0),
+                      "quantity": int(l.get("quantity") or 0)}
+                     for l in (depth.get(side) or [])[:5]]
+    return out
+
+
+def _maybe_dt(value: Any) -> dt.datetime | None:
+    if isinstance(value, dt.datetime):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return dt.datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
 @dataclass(frozen=True)
 class OptionQuote:
     instrument: OptionInstrument
@@ -92,6 +119,13 @@ class OptionQuote:
     oi: int
     iv: float | None = None       # decimal, for example 0.14
     delta: float | None = None    # optional vendor/live calculation
+    # Full five-level book, a monotonic receive stamp and the last trade time. Kept
+    # because top-of-book alone cannot answer the two questions a fill model asks: how
+    # long is the queue in front of me, and is this quote stale?
+    depth: Mapping[str, Any] = field(default_factory=dict)
+    received_at: dt.datetime | None = None
+    last_traded_at: dt.datetime | None = None
+    ohlc: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def mid(self) -> float:
@@ -102,14 +136,85 @@ class OptionQuote:
         return ((self.ask - self.bid) / self.mid * 100.0) if self.mid > 0 else math.inf
 
     @classmethod
-    def from_kite(cls, instrument: OptionInstrument, row: Mapping[str, Any]) -> "OptionQuote":
+    def from_kite(cls, instrument: OptionInstrument, row: Mapping[str, Any],
+                  received_at: dt.datetime | None = None) -> "OptionQuote":
         depth = row.get("depth") or {}
         buys, sells = depth.get("buy") or [], depth.get("sell") or []
         bid = float((buys[0] if buys else {}).get("price") or 0.0)
         ask = float((sells[0] if sells else {}).get("price") or 0.0)
         return cls(instrument=instrument, bid=bid, ask=ask,
                    last=float(row.get("last_price") or 0.0),
-                   volume=int(row.get("volume") or 0), oi=int(row.get("oi") or 0))
+                   volume=int(row.get("volume") or 0), oi=int(row.get("oi") or 0),
+                   depth=_depth_from_kite(depth),
+                   received_at=received_at or dt.datetime.now().astimezone(),
+                   last_traded_at=_maybe_dt(row.get("last_trade_time")),
+                   ohlc=dict(row.get("ohlc") or {}))
+
+    @property
+    def top_depth_lots(self) -> tuple[int, int]:
+        """Quantity resting at the best bid and best ask.
+
+        Queue position is unmeasurable without this. NSE is price-time priority, so an
+        order small relative to its level is last in a queue whose length is exactly this
+        number — and a backtest that fills every touch symmetrically is assuming a queue
+        position it never had.
+        """
+        b = self.depth.get("buy") or []
+        s = self.depth.get("sell") or []
+        return (int((b[0] if b else {}).get("quantity") or 0),
+                int((s[0] if s else {}).get("quantity") or 0))
+
+    @property
+    def staleness_seconds(self) -> float | None:
+        """Seconds between the last trade and this observation.
+
+        A far wing can quote for minutes without trading. Simulating a fill on a stale
+        bar is the difference between a backtest and a wish, so the number is carried
+        rather than inferred later from bar timestamps that no longer exist.
+        """
+        if self.last_traded_at is None or self.received_at is None:
+            return None
+        a, b = self.last_traded_at, self.received_at
+        if a.tzinfo is None and b.tzinfo is not None:
+            a = a.replace(tzinfo=b.tzinfo)
+        elif b.tzinfo is None and a.tzinfo is not None:
+            b = b.replace(tzinfo=a.tzinfo)
+        return max(0.0, (b - a).total_seconds())
+
+    @property
+    def effective_spread_pct(self) -> float | None:
+        """2 x |last - mid| / mid, in percent.
+
+        The quoted spread is what is advertised; the effective spread is what trades
+        actually paid, and it is the one that belongs in a cost model.
+        """
+        m = self.mid
+        if m <= 0 or self.last <= 0:
+            return None
+        return 2.0 * abs(self.last - m) / m * 100.0
+
+    def microstructure(self) -> dict:
+        """Everything a fill model needs, in one flat record."""
+        bq, sq = self.top_depth_lots
+        return {
+            "symbol": self.instrument.symbol, "strike": self.instrument.strike,
+            "kind": self.instrument.kind,
+            "bid": self.bid, "ask": self.ask, "mid": round(self.mid, 4),
+            "last": self.last,
+            "spread": round(self.ask - self.bid, 4),
+            "spread_pct": (None if not math.isfinite(self.spread_pct)
+                           else round(self.spread_pct, 4)),
+            "effective_spread_pct": (None if self.effective_spread_pct is None
+                                     else round(self.effective_spread_pct, 4)),
+            "ticks_wide": (round((self.ask - self.bid) / self.instrument.tick_size)
+                           if self.instrument.tick_size else None),
+            "bid_qty": bq, "ask_qty": sq,
+            "volume": self.volume, "oi": self.oi,
+            "delta": self.delta, "iv": self.iv,
+            "staleness_s": self.staleness_seconds,
+            "received_at": None if self.received_at is None else self.received_at.isoformat(),
+            "depth": self.depth,
+        }
 
 
 @dataclass(frozen=True)

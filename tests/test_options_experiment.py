@@ -287,3 +287,112 @@ def test_an_arm_with_an_incomplete_cost_is_excluded_from_the_summary(conn):
 def test_the_sharpe_standard_error_shrinks_with_sample_size():
     assert X.sharpe_se(0.2, 100) > X.sharpe_se(0.2, 400)
     assert X.sharpe_se(0.2, 1) is None
+
+
+# =====================================================================================
+# strike identity — the confound the experiment must avoid
+# =====================================================================================
+def test_an_arms_exact_contracts_can_be_recovered(conn, variant):
+    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.INTRADAY,
+                     expiry=D(2026, 8, 25), lots=1, lot_size=LOT,
+                     entry_fills=entry_fills(),
+                     entry_at=dt.datetime(2026, 8, 17, 9, 45), entry_spot=24400.0)
+    legs = X.legs_of(conn, aid)
+    assert [l["label"] for l in legs] == ["short_ce", "short_pe", "wing_ce", "wing_pe"]
+    assert [l["side"] for l in legs] == ["SELL", "SELL", "BUY", "BUY"]
+
+
+def test_inherited_legs_reproduce_side_and_quantity_at_new_prices(conn, variant):
+    """The overnight arm must hold the SAME contracts, priced at the evening quotes. If
+    it re-picked 0.16 delta against a moved spot the arms would differ in structure AND
+    clock, and the clock is the only thing being tested."""
+    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.INTRADAY,
+                     expiry=D(2026, 8, 25), lots=1, lot_size=LOT,
+                     entry_fills=entry_fills(short=30.0, wing=8.0),
+                     entry_at=dt.datetime(2026, 8, 17, 9, 45), entry_spot=24400.0)
+    evening = {"short_ce": (26.0, 26.1), "short_pe": (26.0, 26.1),
+               "wing_ce": (6.0, 6.1), "wing_pe": (6.0, 6.1)}
+    rebuilt = [X.executable_fill(l["side"], *evening[l["label"]], int(l["quantity"]),
+                                 label=l["label"])
+               for l in X.legs_of(conn, aid)]
+    assert [f.label for f in rebuilt] == ["short_ce", "short_pe", "wing_ce", "wing_pe"]
+    assert [f.side for f in rebuilt] == ["SELL", "SELL", "BUY", "BUY"]
+    assert all(f.quantity == LOT for f in rebuilt)
+    assert rebuilt[0].price == 26.0          # a SELL still hits the bid
+
+
+def test_latest_arm_finds_the_session_source(conn, variant):
+    v2 = X.register(conn, X.Variant("base", X.INTRADAY, {"w": 1}))
+    X.open_arm(conn, variant_id=v2, strategy="seller", arm=X.INTRADAY,
+               expiry=D(2026, 8, 25), lots=1, lot_size=LOT, entry_fills=entry_fills(),
+               entry_at=dt.datetime(2026, 8, 17, 9, 45), entry_spot=24400.0)
+    got = X.latest_arm(conn, arm=X.INTRADAY, session_date=D(2026, 8, 17))
+    assert got is not None and got["arm"] == X.INTRADAY
+    assert X.latest_arm(conn, arm=X.INTRADAY, session_date=D(2026, 8, 18)) is None
+
+
+def test_inheriting_from_an_unknown_arm_is_refused(conn):
+    with pytest.raises(X.ExperimentError, match="unknown arm"):
+        X.legs_of(conn, "nope")
+
+
+# =====================================================================================
+# microstructure capture
+# =====================================================================================
+def _quote(bid, ask, last=None, bidq=650, askq=325, traded="2026-08-16T15:29:40"):
+    from app.strategies.options import OptionInstrument, OptionQuote
+    inst = OptionInstrument(token=1, symbol="NIFTY26AUG24500CE", underlying="NIFTY",
+                            expiry=D(2026, 8, 25), strike=24500, kind="CE", lot_size=LOT)
+    row = {"last_price": last if last is not None else (bid + ask) / 2,
+           "volume": 12000, "oi": 40000, "last_trade_time": traded,
+           "depth": {"buy": [{"price": bid, "quantity": bidq},
+                             {"price": bid - 0.05, "quantity": 1300}],
+                     "sell": [{"price": ask, "quantity": askq},
+                              {"price": ask + 0.05, "quantity": 975}]}}
+    return OptionQuote.from_kite(inst, row,
+                                 received_at=dt.datetime(2026, 8, 16, 15, 30, 10))
+
+
+def test_all_depth_levels_are_kept_not_just_the_touch():
+    m = _quote(30.0, 30.4).microstructure()
+    assert len(m["depth"]["buy"]) == 2 and len(m["depth"]["sell"]) == 2
+
+
+def test_resting_quantity_at_the_touch_is_captured():
+    """Queue position is unmeasurable without it, and NSE is price-time priority."""
+    m = _quote(30.0, 30.4, bidq=650, askq=325).microstructure()
+    assert m["bid_qty"] == 650 and m["ask_qty"] == 325
+
+
+def test_staleness_is_measured_from_the_last_trade():
+    """A far wing can quote for minutes without trading; filling on a stale bar is the
+    difference between a backtest and a wish."""
+    assert _quote(30.0, 30.4).microstructure()["staleness_s"] == 30.0
+
+
+def test_the_spread_is_reported_in_ticks_as_well_as_percent():
+    m = _quote(30.0, 30.4).microstructure()
+    assert m["ticks_wide"] == 8
+    assert m["spread_pct"] == pytest.approx(0.4 / 30.2 * 100, abs=0.01)
+
+
+def test_the_effective_spread_measures_what_trades_actually_paid():
+    """The quoted spread is what is advertised; the effective spread is what trades
+    actually paid. They coincide only when trades happen at the touch — which is itself
+    the finding, because on a wide book most prints are inside."""
+    at_touch = _quote(30.0, 30.4, last=30.4).microstructure()
+    at_mid = _quote(30.0, 30.4, last=30.2).microstructure()
+    inside = _quote(30.0, 30.4, last=30.3).microstructure()
+    assert at_touch["effective_spread_pct"] == pytest.approx(at_touch["spread_pct"])
+    assert at_mid["effective_spread_pct"] == pytest.approx(0.0)
+    assert 0 < inside["effective_spread_pct"] < at_touch["effective_spread_pct"]
+
+
+def test_one_tick_is_a_far_larger_share_of_a_wing_than_of_an_atm_leg():
+    atm = _quote(30.0, 30.05).microstructure()
+    wing = _quote(0.50, 0.55).microstructure()
+    assert wing["spread_pct"] > 15 * atm["spread_pct"]
+
+
+def test_a_quote_with_no_trade_time_reports_unknown_staleness_not_zero():
+    assert _quote(30.0, 30.4, traded="").microstructure()["staleness_s"] is None

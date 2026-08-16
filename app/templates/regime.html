@@ -473,6 +473,7 @@
         <tbody>
         {% for m in c.mas %}
           <tr><td>{{ m.length }}-DMA</td>
+              <td class="muted">{{ '{:,.0f}'.format(m.ma) if m.ma else '—' }}</td>
               <td>{{ '%+.2f'|format(m.distance_pct) if m.distance_pct is not none else '—' }}%</td>
               <td class="st-{{ m.state }}">{{ m.state }}</td>
               <td class="muted">{{ m.confirmation }}</td></tr>
@@ -544,6 +545,14 @@
         <b class="{{ 'ok' if v.breadth_usable else 'bad' }}">{{ '%.1f'|format(v.breadth_coverage_pct) if v.breadth_coverage_pct is not none else '—' }}% · need {{ '%.0f'|format(v.min_breadth_coverage_pct) }}%</b></div>
       <div class="kv"><span>Audit date</span><b>{{ v.breadth_as_of or '—' }}</b></div>
       <div class="kv"><span>Universe</span><b>{{ v.breadth_universe or '—' }}</b></div>
+      <div class="kv"><span>Recovery confirmations</span>
+        <b class="{{ 'ok' if v.recovery_confirmations and v.recovery_required
+                     and v.recovery_confirmations >= v.recovery_required else 'na' }}">
+          {{ v.recovery_confirmations if v.recovery_confirmations is not none else '—' }}
+          of {{ v.recovery_required or '—' }}</b></div>
+      <div class="kv"><span>Re-risk needs</span>
+        <b class="muted">breadth ≥ {{ '%.0f'|format(v.config.recovery_breadth_min) }}%
+          and H20 ≥ {{ '%.2f'|format(v.config.recovery_h20_min) }}</b></div>
       <div class="kv"><span>Universe hash</span><b><code>{{ v.breadth_universe_hash or '—' }}</code></b></div>
       {% if not v.breadth_usable %}
         <p class="muted" style="margin-top:10px"><span class="pill warn">unusable</span>
@@ -912,6 +921,12 @@
               <td class="{{ 'bad' if v.book_weights_are_defaults else 'ok' }}">{{ 'defaults in use' if v.book_weights_are_defaults else 'sufficient' }}</td></tr>
           <tr><td>Tax-lot completeness</td>
               <td class="{{ 'bad' if v.tax_data_incomplete else 'ok' }}">{{ 'incomplete' if v.tax_data_incomplete else 'complete for proposed sales' }}</td></tr>
+          <tr><td>Possible gaps in index data</td>
+              <td class="{{ 'warnc' if v.index_status|sum(attribute='gap_count') else 'ok' }}">
+                {% set g = v.index_status|sum(attribute='gap_count') %}
+                {{ g }} run{{ '' if g == 1 else 's' }} over 5 days
+                {%- if g %}<span class="muted"> · holidays are not known here, so these are
+                  possible rather than confirmed</span>{% endif %}</td></tr>
           <tr><td>Forced actions permitted</td>
               <td class="{{ 'ok' if v.forced_actions_permitted else 'warnc' }}">{{ 'yes' if v.forced_actions_permitted else 'no' }}</td></tr>
           {% if v.store_status %}

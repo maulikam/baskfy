@@ -414,14 +414,17 @@ def test_agent_logs_live_outside_the_tcc_protected_repo():
     daily job kept working only because its log file carries a com.apple.macl grant from an
     approval given long ago, which is a grant that vanishes if the file is ever deleted.
     """
+    import pathlib
     import plistlib
-    for name in ("collect", "session"):
-        with open(f"scripts/com.strangle.{name}.plist.example", "rb") as fh:
+    templates = sorted(pathlib.Path("scripts").glob("com.*.plist.example"))
+    assert len(templates) >= 3, "expected the daily job and both strangle jobs"
+    for f in templates:
+        with open(f, "rb") as fh:
             pl = plistlib.load(fh)
         for key in ("StandardOutPath", "StandardErrorPath"):
             path = pl[key]
-            assert "/Library/Logs/" in path, f"{name}.{key} -> {path}"
-            assert "/Documents/" not in path, f"{name}.{key} is inside a TCC-protected tree"
+            assert "/Library/Logs/" in path, f"{f.name}.{key} -> {path}"
+            assert "/Documents/" not in path, f"{f.name}.{key} is in a TCC-protected tree"
 
 
 def test_both_plists_are_valid_and_point_at_this_checkout():

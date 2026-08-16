@@ -387,7 +387,17 @@ def test_status_carries_fill_provenance(conn, tmp_path):
     assert st["fills"]["total"] == 1
 
 
-def test_the_empty_state_does_not_report_reconciliation_failures(conn):
+def test_the_empty_state_does_not_report_reconciliation_failures(conn, tmp_path,
+                                                                 monkeypatch):
+    # The app reads C.DB_PATH, not this fixture's connection. Without redirecting it the
+    # TestClient below renders the REAL database — which passed only while that database
+    # happened to be empty, and broke the moment a tradebook was imported.
+    from app import config as _C
+    monkeypatch.setattr(_C, "DB_PATH", str(tmp_path / "p.db"))
+    return _empty_state_body(conn)
+
+
+def _empty_state_body(conn):
     """With nothing imported every holding trivially 'mismatches'. Showing that as a
     reconciliation count spends the alarm a real mismatch needs later."""
     st = TB.status(conn, [{"symbol": "X", "quantity": 100, "average_price": 50.0}])

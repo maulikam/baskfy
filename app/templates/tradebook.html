@@ -128,6 +128,72 @@
 </section>
 
 <section>
+  <h2>Corporate actions</h2>
+  <div class="card">
+    <p class="muted" style="margin-bottom:10px">A tradebook records transactions. A bonus
+      or a split changes what you hold with <b>no transaction at all</b>, so lots rebuilt
+      from fills alone come out short and reconciliation reports a mismatch it cannot
+      price. Record it here and the lots are re-derived.</p>
+    <p class="muted" style="margin-bottom:12px">The two are not interchangeable.
+      A <b>bonus</b> share has <b>nil cost</b> and its holding period starts at allotment,
+      so selling one is short-term tax on the full proceeds for a year. A <b>split</b>
+      acquires nothing: cost per share divides and the original holding period is
+      <b>inherited</b>, so a share bought two years ago stays long-term.</p>
+
+    <form method="post" action="/tradebook/corporate-action" class="actions"
+          style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <label class="muted">Stock<br>
+        <input type="text" name="symbol" required placeholder="ANANDRATHI"
+               style="text-transform:uppercase"></label>
+      <label class="muted">Type<br>
+        <select name="kind">
+          <option value="bonus">Bonus</option>
+          <option value="split">Split</option>
+        </select></label>
+      <label class="muted">Ex-date<br>
+        <input type="text" name="ex_date" required placeholder="YYYY-MM-DD"></label>
+      <label class="muted">Ratio new<br>
+        <input type="text" name="ratio_new" required value="1" style="max-width:70px"></label>
+      <label class="muted">Ratio old<br>
+        <input type="text" name="ratio_old" required value="1" style="max-width:70px"></label>
+      <label class="muted" style="flex:1;min-width:160px">Note<br>
+        <input type="text" name="note" placeholder="optional"></label>
+      <button class="btn-saffron" type="submit">Record and rebuild</button>
+    </form>
+    <p class="muted" style="margin-top:8px">Ratio is <b>new:old</b>. A 1:1 bonus is
+      <code>1</code> and <code>1</code>. A share splitting into two is
+      <code>2</code> and <code>1</code>. Confirm the ex-date from Console rather than
+      inferring it from a price gap: it decides when the holding period starts.</p>
+
+    {% if actions %}
+      <table style="margin-top:14px">
+        <thead><tr><th>Stock</th><th>Ex-date</th><th>Effect</th><th></th></tr></thead>
+        <tbody>
+        {% for a in actions %}
+          <tr>
+            <td><b>{{ a.symbol }}</b></td>
+            <td>{{ a.ex_date }}</td>
+            <td style="text-align:left;white-space:normal" class="muted">{{ a.describe }}
+              {%- if a.note %} · {{ a.note }}{% endif %}</td>
+            <td>
+              <form method="post" action="/tradebook/corporate-action/delete">
+                <input type="hidden" name="action_id" value="{{ a.id }}">
+                <input type="hidden" name="symbol" value="{{ a.symbol }}">
+                <button class="btn-ghost" type="submit"
+                        style="padding:4px 10px;font-size:11px">Remove</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <p class="muted" style="margin-top:8px">Removing one rebuilds that symbol's lots
+        too: nothing adjusted is stored, so both directions self-heal.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section>
   <h2>Where the lots come from</h2>
   <div class="card">
     <p class="muted" style="margin-bottom:12px">Lots are derived from stored fills, so

@@ -23,7 +23,7 @@ from typing import Iterator, Sequence
 
 from .. import config as C
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 # --- schema ---------------------------------------------------------------------------
 # Column sets are fixed by the analytics spec; extra *indexes* are fine, extra columns are
@@ -304,6 +304,32 @@ _MIGRATIONS: dict[int, Sequence[str]] = {
                ON rebalance_versions(evaluation_id)""",
         """CREATE INDEX IF NOT EXISTS ix_rebalance_versions_created
                ON rebalance_versions(created_ts DESC)""",
+    ),
+    8: (
+        # Corporate actions that move quantity WITHOUT a trade, so FIFO lots can be
+        # rebuilt correctly instead of merely reporting a mismatch.
+        #
+        # Bonus and split are stored separately because Indian tax treats them very
+        # differently. A bonus share has NIL cost of acquisition and its holding period
+        # starts at allotment, so selling one is short-term tax on the full proceeds. A
+        # split just subdivides an existing lot: cost per share falls, and the holding
+        # period is INHERITED from the original purchase. Modelling both as "extra
+        # shares" would silently misprice one of them.
+        #
+        # ratio is stored as new:old, so a 1:1 bonus is (1,1) and a 1:2 split is (2,1).
+        """CREATE TABLE IF NOT EXISTS corporate_actions(
+               id         INTEGER PRIMARY KEY AUTOINCREMENT,
+               symbol     TEXT NOT NULL,
+               kind       TEXT NOT NULL,      -- bonus | split
+               ex_date    TEXT NOT NULL,
+               ratio_new  REAL NOT NULL,
+               ratio_old  REAL NOT NULL,
+               note       TEXT,
+               created_at TEXT NOT NULL,
+               UNIQUE(symbol, kind, ex_date)
+           )""",
+        """CREATE INDEX IF NOT EXISTS ix_corporate_actions_symbol
+               ON corporate_actions(symbol, ex_date)""",
     ),
 }
 

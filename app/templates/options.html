@@ -119,6 +119,28 @@
      inside .scroll that leaves the THEAD sized to its own content and pushing the page a
      few px wider than the viewport. One scroller per table: the wrapper. */
   @media(max-width:780px){ .card.scroll table{display:table;overflow-x:visible} }
+  /* --- run controls ------------------------------------------------------------------ */
+  .ctl{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+  .ctl form{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+       padding:14px 16px;display:flex;flex-direction:column;gap:9px;min-width:0}
+  .ctl form.primary{border-color:var(--saffron)}
+  .ctl h4{font-family:var(--disp);font-size:14px}
+  .ctl .sum{color:var(--dim);font-size:11.5px;line-height:1.55;flex:1 1 auto}
+  .ctl .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+  .ctl button{padding:10px 18px;font-size:13px}
+  .ctl button[disabled]{opacity:.4;cursor:not-allowed}
+  .ctl select{background:#0a1326;color:var(--paper);border:1px solid var(--line);
+       border-radius:7px;padding:8px 10px;font-family:var(--mono);font-size:12.5px}
+  .ctl .last{font-size:11px;color:var(--dim)}
+  /* The parameter, its control and its help each on their own line: inline they wrap
+     mid-sentence around the select and read as one broken string. */
+  .ctl label{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--dim)}
+  .ctl label select{align-self:flex-start}
+  .ctl .last b.ok{color:var(--up)} .ctl .last b.bad{color:var(--down)}
+  .steps-path{display:grid;gap:7px;margin-top:10px}
+  .steps-path div{display:flex;gap:10px;align-items:baseline}
+  .steps-path .k{font-family:var(--disp);font-size:11px;letter-spacing:.1em;
+       text-transform:uppercase;color:var(--dim);min-width:112px}
   pre.cmd{background:#0a1326;border:1px solid var(--line);border-radius:7px;
           padding:9px 12px;overflow-x:auto;font-size:11.5px;color:var(--paper);margin-top:3px;
           max-width:100%}
@@ -153,6 +175,12 @@
 </header>
 <main>
 
+{% if started %}<div class="banner ok"><span class="tag">started</span>
+  <span>{{ started }} is running. Output appears below when it finishes, and on
+  <a href="/ops">Operations</a> while it runs.</span></div>{% endif %}
+{% if error %}<div class="banner bad"><span class="tag">refused</span>
+  <span>{{ error }}</span></div>{% endif %}
+
 {# The claim this page has to earn. Counted from the order journal — the gateway's record
    of everything it has ever done — rather than asserted. #}
 {% if p.orders.placed %}
@@ -169,6 +197,121 @@
     journal, which records every placement, dry run and refusal it has made — not asserted
     from intent. Nothing on this page can reach the broker.</span>
 </div>
+{% endif %}
+
+{% set s = p.strangle %}
+{% if s and s.available %}
+<section>
+  <h2>Intraday strangle &mdash; run controls</h2>
+
+  {% if p.jobs.running %}
+  <div class="banner warn">
+    <span class="tag">busy</span>
+    <span><b>{{ p.jobs.running.name }}</b> has been running since
+      {{ p.jobs.running.started_at[11:16] }}. Operations share one database and one broker
+      session, so the controls below are disabled until it finishes &mdash; including the
+      equity daily job. <a href="/ops/job/{{ p.jobs.running.id }}">Watch it</a>.</span>
+  </div>
+  {% endif %}
+
+  <div class="banner {{ 'ok' if s.bands_ready.ready else 'warn' }}">
+    <span class="tag">next step</span>
+    <span><b>{{ s.next_action.label }}</b> &mdash; {{ s.next_action.why }}</span>
+  </div>
+
+  <div class="ctl">
+    {% for c in p.jobs.controls %}
+    <form method="post" action="/options/run"
+          class="{{ 'primary' if c.name == s.next_action.op }}">
+      <input type="hidden" name="op" value="{{ c.name }}">
+      <h4>{{ c.label }}</h4>
+      <div class="sum">{{ c.summary }}</div>
+      {% for prm in c.params %}
+        <label>{{ prm.label }}
+          <select name="{{ prm.key }}">
+            {% for ch in prm.choices %}
+            <option value="{{ ch }}" {{ 'selected' if ch == prm.default }}>{{ ch }} polls</option>
+            {% endfor %}
+          </select>
+          <span class="muted">{{ prm.help }}</span>
+        </label>
+      {% endfor %}
+      <div class="row">
+        <button type="submit"
+                class="{{ 'btn-saffron' if c.name == s.next_action.op else 'btn-ghost' }}"
+                {{ 'disabled' if p.jobs.running }}>Run</button>
+        {% if c.last %}
+        <span class="last">last
+          <b class="{{ 'ok' if c.last.status == 'ok' else 'bad' }}">{{ c.last.status }}</b>
+          {{ c.last.started_at[5:16] }}
+          {% if c.last.id %}&middot; <a href="/ops/job/{{ c.last.id }}">output</a>{% endif %}
+        </span>
+        {% else %}<span class="last">never run</span>{% endif %}
+      </div>
+    </form>
+    {% endfor %}
+  </div>
+  <p class="muted" style="margin-top:11px">Every control is on the same fixed allowlist as
+    <a href="/ops">Operations</a>: the browser sends an operation name, never a command.
+    A paper session is bounded by its poll count on purpose &mdash; operations hold one
+    shared lock, so an unbounded run would block the equity daily job behind it. A full
+    unattended session belongs in the scheduler.</p>
+</section>
+
+<section>
+  <h2>Strangle status</h2>
+  <div class="posture">
+    <div class="fact {{ 'good' if s.mode == 'paper' else 'warn' }}">
+      <div class="k">Mode</div><div class="v">{{ s.mode|upper }}</div>
+      <div class="muted">{{ s.lots }} lots &middot; {{ s.structure|lower }} &middot;
+        {{ s.wing_width }}-point wings &middot; Rs {{ '{:,}'.format(s.margin_per_lot) }}/lot
+        at {{ s.max_utilisation_pct }}% max utilisation.</div>
+    </div>
+    <div class="fact {{ 'good' if s.bands_ready.ready else 'warn' }}">
+      <div class="k">Reference bands</div>
+      <div class="v">{{ s.forward_sessions }} rec</div>
+      <div class="muted">{{ s.bands_ready.note }}</div>
+    </div>
+    <div class="fact warn">
+      <div class="k">Paper record</div>
+      <div class="v">{{ s.paper_sessions }} / {{ s.paper_needed }}</div>
+      <div class="muted">Completed sessions that reached a flat book. An unclosed session
+        is not experience and is not counted.</div>
+    </div>
+  </div>
+
+  {% if s.bands %}
+  <div class="card scroll" style="margin-top:var(--s3)">
+    <table aria-label="Reference bands">
+      <thead><tr><th>dte</th><th>n</th><th>low</th><th>high</th><th>would veto</th>
+        <th>sample</th></tr></thead>
+      <tbody>
+      {% for b, r in s.bands.items() %}
+        <tr><td>{{ b }}</td><td>{{ r.n }}</td><td>{{ '%.1f'|format(r.low) }}</td>
+          <td>{{ '%.1f'|format(r.high) }}</td><td>{{ r.vetoes_pct }}%</td>
+          <td class="{{ 'ok' if r.sufficient else 'bad' }}">
+            {{ 'ok' if r.sufficient else 'THIN' }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <h3 style="margin-top:var(--s4)">What stands between here and live trading</h3>
+  <div class="card">
+    <div class="steps-path">
+      {% for l in s.locks.locks %}
+      <div><span class="k {{ 'ok' if l.open else 'bad' }}">{{ 'open' if l.open else 'shut' }}</span>
+        <span><b>{{ l.lock }}</b> &mdash; <span class="muted">{{ l.detail }}</span></span></div>
+      {% endfor %}
+    </div>
+    <p class="muted" style="margin-top:11px">All {{ s.locks.closed_locks|length }} closed.
+      The last two are enforced inside <code>core/gateway.py</code>, so a caller that
+      skipped every check on this page would still be refused at the layer that talks to
+      Kite. The entry-cost gate additionally skips any session whose stop is under
+      {{ s.min_stop_to_cost }}x the measured cost of entering it.</p>
+  </div>
+</section>
 {% endif %}
 
 <section>

@@ -114,6 +114,13 @@ def _scan_choices() -> tuple[str, ...]:
 
 SCAN = Param("scan", "Scan CSV", "upload", help="A weekly momentum scan in data/uploads")
 
+# How many 5-second polls a paper session runs for. Bounded on purpose: operations share
+# one lock, so an unbounded session would hold it until 15:10 and block the equity daily
+# job behind it. A full unattended session belongs in the scheduler, not in a web request.
+TICKS = Param("ticks", "Poll for", "text_choice", default="60",
+              choices=("12", "60", "360"),
+              help="12 polls is about a minute, 60 about five, 360 about thirty")
+
 
 OPERATIONS: tuple[Operation, ...] = (
     # --- daily ---------------------------------------------------------------------
@@ -224,6 +231,41 @@ OPERATIONS: tuple[Operation, ...] = (
         "Run the scoring engine over a scan and print the top ranks. Changes nothing.",
         lambda v: ["-m", "app.scoring", v.get("scan") or str(UPLOADS / "sample_scan.csv")],
         timeout=120, writes=False, params=(SCAN,)),
+    # --- options: the intraday strangle. PAPER ONLY. ---------------------------------
+    # Live execution sits behind seven locks (app/strategies/strangle/live.py) and every
+    # one of them is shut, so none of these can reach a real order however they are run.
+    Operation(
+        "strangle_check", "Check the strangle", "Options",
+        "Market facts, the trading calendar, today's session parameters and every veto "
+        "standing between now and an entry. Places nothing and writes nothing.",
+        lambda v: ["-m", "scripts.strangle", "--check"],
+        timeout=180, needs_kite=True, writes=False),
+    Operation(
+        "strangle_collect", "Record today's straddle", "Options",
+        "One ATM straddle observation for the reference bands, then stops. This is the "
+        "daily job while the bands are being built: the IV gates cannot be calibrated "
+        "from history because Kite drops expired contracts.",
+        lambda v: ["-m", "scripts.strangle", "--collect"],
+        timeout=180, needs_kite=True),
+    Operation(
+        "strangle_calibrate", "Calibrate bands (report)", "Options",
+        "Rebuild the ATM straddle bands from the forward record and report the veto rate "
+        "each would produce on its own history. Writes nothing.",
+        lambda v: ["-m", "scripts.strangle_calibrate"],
+        timeout=900, needs_kite=True, writes=False, long_running=True),
+    Operation(
+        "strangle_calibrate_write", "Calibrate bands and save", "Options",
+        "The same, but writes the bands into config/strangle.yaml. Refuses to write while "
+        "any tradeable bucket is missing or thin.",
+        lambda v: ["-m", "scripts.strangle_calibrate", "--write"],
+        timeout=900, needs_kite=True, long_running=True),
+    Operation(
+        "strangle_session", "Run a paper session", "Options",
+        "Enter on live quotes, then manage the book: exits first, then at most one "
+        "adjustment per poll. Fills are simulated against real depth; no order is placed.",
+        lambda v: ["-m", "scripts.strangle", "--max-ticks", str(v.get("ticks") or "60")],
+        timeout=3600, params=(TICKS,), needs_kite=True, long_running=True),
+
     Operation(
         "tests", "Run the test suite", "Diagnostics",
         "The full suite. Slow, but the fastest way to know the system is intact after a "

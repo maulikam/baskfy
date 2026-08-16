@@ -176,3 +176,55 @@ def test_dry_run_says_simulated_rather_than_armed(client, monkeypatch):
     r = client.post("/stops/arm", data={"plan_id": pid, "confirm": "true"},
                     follow_redirects=False)
     assert "simulated" in r.headers["location"]
+
+
+# =====================================================================================
+# both bugs the first live arming run exposed
+# =====================================================================================
+def test_the_success_status_matches_what_kite_client_actually_returns():
+    """The first live run placed 16 triggers and reported '0 armed, 17 failed' because
+    GTT_PLACED was not in a hand-written success set. A false failure invites a re-arm,
+    which is how a position ends up with two stops."""
+    from app.kite_client import Kite
+    src = open("app/kite_client.py").read()
+    returned = {s for s in ("GTT_PLACED", "DRY_RUN_GTT") if f'"status": "{s}"' in src}
+    assert returned, "kite_client no longer returns a recognisable GTT status"
+    assert returned <= M.STOP_OK, f"{returned - M.STOP_OK} would be reported as failures"
+
+
+def test_a_real_failure_is_still_reported_with_its_reason(client, kite, monkeypatch):
+    def reject(symbol, qty, trigger, last_price):
+        return {"symbol": symbol, "status": "GTT_ERROR",
+                "error": "Trigger price should be a multiple of tick size 1.00."}
+    kite.place_gtt_stop = reject
+    pid = make_plan(client)
+    r = client.post("/stops/arm", data={"plan_id": pid, "confirm": "true"},
+                    follow_redirects=False)
+    from urllib.parse import unquote_plus
+    msg = unquote_plus(r.headers["location"])
+    assert "0 of 1" in msg
+    assert "1 failed" in msg and "tick size" in msg      # the reason travels with it
+
+
+@pytest.mark.parametrize("price,tick,expected", [
+    (10528.9, 1.0, 10529.0),      # OFSS: one decimal is not a valid price here
+    (1291.13, 0.1, 1291.1),
+    (198.567, 0.01, 198.57),
+    (447.6, 0.05, 447.60),
+])
+def test_prices_snap_to_the_instruments_tick(price, tick, expected):
+    from app.kite_client import Kite
+    assert Kite.to_tick(price, tick) == pytest.approx(expected)
+
+
+def test_a_snapped_price_is_always_a_whole_number_of_ticks():
+    from app.kite_client import Kite
+    for tick in (0.01, 0.05, 0.1, 1.0):
+        for price in (10528.9, 1291.13, 198.567, 47.111):
+            snapped = Kite.to_tick(price, tick)
+            assert abs(round(snapped / tick) * tick - snapped) < 1e-6
+
+
+def test_an_unknown_tick_does_not_crash_the_arming():
+    from app.kite_client import Kite
+    assert Kite.to_tick(100.123, 0) == 100.12

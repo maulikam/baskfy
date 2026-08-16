@@ -96,21 +96,52 @@ class Kite:
         except Exception as exc:
             return {"symbol": symbol, "status": "ERROR", "error": str(exc)}
 
+    def tick_size(self, symbol: str, exchange: str = "NSE") -> float:
+        """Tick size for an instrument, cached for the process.
+
+        NSE ticks are not uniform: most names are 0.05 or 0.10, but a high-priced scrip
+        like OFSS is 1.00. A price that is not a multiple of its tick is rejected outright
+        — "Trigger price should be a multiple of tick size 1.00" is what cost OFSS its
+        stop on the first live arming run.
+        """
+        cache = getattr(self, "_ticks", None)
+        if cache is None or exchange not in cache:
+            cache = cache or {}
+            cache[exchange] = {i["tradingsymbol"]: float(i.get("tick_size") or 0.05)
+                               for i in self.kc.instruments(exchange)}
+            self._ticks = cache
+        return cache[exchange].get(symbol, 0.05)
+
+    @staticmethod
+    def to_tick(price: float, tick: float) -> float:
+        """Snap to the nearest valid tick. Sub-tick precision is not a price."""
+        if tick <= 0:
+            return round(price, 2)
+        steps = round(price / tick)
+        return round(steps * tick, 2)
+
     def place_gtt_stop(self, symbol: str, qty: int, trigger: float, last_price: float,
                        exchange: str = "NSE") -> dict:
         assert_tradeable(symbol)   # SGB/G-sec hard block
         if C.DRY_RUN:
-            return {"symbol": symbol, "status": "DRY_RUN_GTT", "trigger": trigger}
+            return {"symbol": symbol, "status": "DRY_RUN_GTT", "trigger": trigger,
+                    "qty": int(qty)}
         try:
+            tick = self.tick_size(symbol, exchange)
+            trig = self.to_tick(trigger, tick)
+            # The GTT's own limit sits just under the trigger so it fills on the way
+            # down; it needs snapping to the same tick or the whole trigger is rejected.
+            limit = self.to_tick(trig * 0.995, tick)
             gid = self.kc.place_gtt(
                 trigger_type=self.kc.GTT_TYPE_SINGLE, tradingsymbol=symbol,
-                exchange=exchange, trigger_values=[round(trigger, 1)],
+                exchange=exchange, trigger_values=[trig],
                 last_price=last_price,
                 orders=[dict(exchange=exchange, tradingsymbol=symbol,
                              transaction_type=self.kc.TRANSACTION_TYPE_SELL,
                              quantity=int(qty), order_type=self.kc.ORDER_TYPE_LIMIT,
                              product=self.kc.PRODUCT_CNC,
-                             price=round(trigger * 0.995, 1))])
-            return {"symbol": symbol, "status": "GTT_PLACED", "gtt_id": gid["trigger_id"]}
+                             price=limit)])
+            return {"symbol": symbol, "status": "GTT_PLACED", "gtt_id": gid["trigger_id"],
+                    "trigger": trig, "limit": limit}
         except Exception as exc:
             return {"symbol": symbol, "status": "GTT_ERROR", "error": str(exc)}

@@ -108,8 +108,15 @@ def _feed_minute(state: LoopState, snapshot, levels) -> str | None:
                                 support=levels.support, at=stamp)
 
 
-def flatten(book, snapshot, cfg, *, lot_size: int, now: dt.datetime) -> dict:
-    """Close every open leg as ONE basket. Never leg out sequentially (rule R5)."""
+def flatten(book, snapshot, cfg, *, lot_size: int, now: dt.datetime,
+            executor=None) -> dict:
+    """Close every open leg together.
+
+    Rule R5 asks for one basket order. Kite Connect has no such order — see fills_live.py —
+    so the closest achievable thing is used: every leg goes out concurrently rather than
+    sequentially. `executor` is the paper fill engine by default and the live one under V4,
+    which is why nothing else in this loop changes when the transport does.
+    """
     by_symbol = {r["symbol"]: r for r in snapshot.rows}
     orders, legs = [], list(book.open_legs)
     for leg in legs:
@@ -118,7 +125,7 @@ def flatten(book, snapshot, cfg, *, lot_size: int, now: dt.datetime) -> dict:
             raise F.DepthUnavailable(f"{leg.symbol}: not in the chain; cannot flatten")
         orders.append({"symbol": leg.symbol, "side": "BUY" if leg.is_short else "SELL",
                        "quantity": leg.quantity, "depth": row["depth"]})
-    fills = F.simulate_basket(orders, cfg)
+    fills = (executor or F.simulate_basket)(orders, cfg)
     priced = [{"side": o["side"], "price": f.avg_price, "quantity": o["quantity"]}
               for o, f in zip(orders, fills)]
     cost = cost_of(priced, lot_size)
@@ -132,6 +139,7 @@ def flatten(book, snapshot, cfg, *, lot_size: int, now: dt.datetime) -> dict:
 def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
                 lot_size: int, step: int,
                 original_legs: list | None = None,
+                executor=None, kill_switch=None,
                 on_event: Callable[[str, dict], None] | None = None) -> dict:
     """Drive one session to a flat book. Returns the session record.
 
@@ -163,6 +171,24 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
                                   "have": len(marks), "need": len(book.open_legs)})
             continue
 
+        # The kill switch outranks every strategy rule. A book past twice its stop, a dead
+        # feed or a missed heartbeat all mean the position is not what the book thinks it
+        # is, and none of those are improved by continuing to trade.
+        if kill_switch is not None:
+            kill_switch.beat(snapshot.as_of)
+            tripped = kill_switch.check(now=snapshot.as_of,
+                                        stale_seconds=snapshot.stale_seconds,
+                                        book=book, marks=marks)
+            if tripped:
+                emit("kill_switch", {"at": snapshot.as_of, "reason": tripped})
+                result = flatten(book, snapshot, cfg, lot_size=lot_size,
+                                 now=snapshot.as_of, executor=executor)
+                emit("emergency_flatten", {"at": snapshot.as_of, "reason": tripped,
+                                           **result})
+                exit_decision = R.Decision(R.Action.EXIT, code="KILL", reason=tripped,
+                                           detail={"ends_day": True, "halt": True})
+                break
+
         pnl = book.pnl(marks)
         if state.best_pnl is None or pnl > state.best_pnl:
             state.best_pnl, state.last_improve_at = pnl, snapshot.as_of
@@ -183,7 +209,8 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
         if decision is not None:
             emit("exit_signal", {"at": snapshot.as_of, **decision.as_dict(),
                                  "pnl": round(pnl, 2)})
-            result = flatten(book, snapshot, cfg, lot_size=lot_size, now=snapshot.as_of)
+            result = flatten(book, snapshot, cfg, lot_size=lot_size, now=snapshot.as_of,
+                             executor=executor)
             emit("flattened", {"at": snapshot.as_of, "code": decision.code, **result})
             exit_decision = decision
 
@@ -200,7 +227,8 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
                     try:
                         opened = reenter(book, snapshot, cfg, levels=levels, oi=oi,
                                          plan=plan, prior_strikes=prior,
-                                         lot_size=lot_size, step=step)
+                                         lot_size=lot_size, step=step,
+                                         executor=executor)
                     except (SelectionRefused, F.DepthUnavailable) as exc:
                         emit("reentry_refused", {"at": snapshot.as_of, "reason": str(exc)})
                         break
@@ -224,8 +252,8 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
                 for plan in A.plan_widen(book, chain=snapshot.as_rows(), marks=marks,
                                          cfg=cfg, step=step):
                     try:
-                        A.apply_roll(book, plan, _roll_fills(plan, snapshot, cfg), cfg,
-                                     lot_size=lot_size, now=snapshot.as_of)
+                        A.apply_roll(book, plan, _roll_fills(plan, snapshot, cfg, executor),
+                                     cfg, lot_size=lot_size, now=snapshot.as_of)
                         emit("widened", {"at": snapshot.as_of, **plan.as_dict()})
                     except (A.RollRefused, F.DepthUnavailable) as exc:
                         emit("widen_refused", {"at": snapshot.as_of, "reason": str(exc)})
@@ -255,7 +283,8 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
             try:
                 plan = A.plan_loser_roll(book, loser=loser, chain=snapshot.as_rows(),
                                          marks=marks, cfg=cfg)
-                applied = A.apply_roll(book, plan, _roll_fills(plan, snapshot, cfg), cfg,
+                applied = A.apply_roll(book, plan,
+                                       _roll_fills(plan, snapshot, cfg, executor), cfg,
                                        lot_size=lot_size, now=snapshot.as_of)
             except (A.RollRefused, F.DepthUnavailable) as exc:
                 emit("risk_off_refused", {"at": snapshot.as_of, "reason": str(exc)})
@@ -275,7 +304,7 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
                 spot=snapshot.spot, asp=_asp(snapshot, step) or 0.0, levels=levels, oi=oi,
                 cfg=cfg, step=step,
                 trending=state.breaks.is_trending(confirmed or "", snapshot.spot))
-            fills = _roll_fills(plan, snapshot, cfg)
+            fills = _roll_fills(plan, snapshot, cfg, executor)
             applied = A.apply_roll(book, plan, fills, cfg, lot_size=lot_size,
                                    now=snapshot.as_of)
         except (A.RollRefused, F.DepthUnavailable) as exc:
@@ -324,7 +353,7 @@ class SelectionRefused(RuntimeError):
 
 
 def reenter(book, snapshot, cfg, *, levels, oi, plan, prior_strikes, lot_size: int,
-            step: int) -> dict:
+            step: int, executor=None) -> dict:
     """Open the replacement position, at least two strikes further out than the last one.
 
     Everything is recomputed against the current chain: levels, the priced range and the
@@ -361,9 +390,9 @@ def reenter(book, snapshot, cfg, *, levels, oi, plan, prior_strikes, lot_size: i
         legs += [(pair.call_wing, "BUY"), (pair.put_wing, "BUY")]
     by_symbol = {r["symbol"]: r for r in rows}
     qty = book.units_at_entry
-    fills = F.simulate_basket([{"symbol": c.symbol, "side": side, "quantity": qty,
-                                "depth": by_symbol[c.symbol]["depth"]}
-                               for c, side in legs], cfg)
+    fills = (executor or F.simulate_basket)(
+        [{"symbol": c.symbol, "side": side, "quantity": qty,
+          "depth": by_symbol[c.symbol]["depth"]} for c, side in legs], cfg)
 
     credit = 0.0
     for (c, side), f in zip(legs, fills):
@@ -394,7 +423,7 @@ def _asp(snapshot, step: int) -> float | None:
         return None
 
 
-def _roll_fills(plan: A.RollPlan, snapshot, cfg: dict) -> dict[str, Any]:
+def _roll_fills(plan: A.RollPlan, snapshot, cfg: dict, executor=None) -> dict[str, Any]:
     """Simulate all four legs of the roll against live depth, as one basket."""
     by_symbol = {r["symbol"]: r for r in snapshot.rows}
     orders = [{"symbol": plan.close_short.symbol, "side": "BUY",
@@ -411,5 +440,5 @@ def _roll_fills(plan: A.RollPlan, snapshot, cfg: dict) -> dict[str, Any]:
         if not row:
             raise F.DepthUnavailable(f"{o['symbol']}: not quoted; abandoning the roll")
         o["depth"] = row["depth"]
-    fills = F.simulate_basket(orders, cfg)
+    fills = (executor or F.simulate_basket)(orders, cfg)
     return {o["symbol"]: f for o, f in zip(orders, fills)}

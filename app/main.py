@@ -296,6 +296,9 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
 # Same shape as /analyze -> /execute, and for the same reason: proposing and doing are
 # separate acts. A status check found the gap; nothing arms a stop without being told to.
 STOP_PLANS: dict[str, dict] = {}
+# The statuses kite_client.place_gtt_stop returns on success, named here so the two
+# cannot drift apart silently. Anything else is a failure and is shown with its reason.
+STOP_OK = frozenset({"GTT_PLACED", "DRY_RUN_GTT"})
 
 
 @app.get("/stops", response_class=HTMLResponse)
@@ -354,16 +357,21 @@ async def stops_arm(plan_id: str = Form(...), confirm: str = Form(...)):
         placed.append({**res, "qty": r["qty"], "trigger": r["trigger"]})
 
     STOP_PLANS.pop(plan_id, None)          # single use: re-arming needs a fresh review
-    ok = sum(1 for p in placed if str(p.get("status", "")).upper() in
-             ("TRIGGER_CREATED", "OK", "PLACED", "DRY_RUN_GTT"))
     log_path = f"data/outputs/stops_{plan_id}.json"
     with open(log_path, "w") as f:
         json.dump({"plan": plan["rows"], "results": placed}, f, indent=2, default=str)
-    msg = f"{ok} of {len(placed)} stops {'simulated' if C.DRY_RUN else 'armed'}"
-    failed = [p for p in placed if p not in placed[:0] and str(p.get("status", "")).upper()
-              not in ("TRIGGER_CREATED", "OK", "PLACED", "DRY_RUN_GTT")]
+
+    # Success is whatever kite_client actually returns, matched from ITS constants rather
+    # than a guessed list. The first live run placed 16 triggers and reported "0 armed,
+    # 17 failed" because GTT_PLACED was not in a hand-written set — and a false failure
+    # invites a re-arm, which is how a position ends up with two stops.
+    ok = [p for p in placed if str(p.get("status", "")) in STOP_OK]
+    failed = [p for p in placed if p not in ok]
+    msg = f"{len(ok)} of {len(placed)} stops {'simulated' if C.DRY_RUN else 'armed'}"
     if failed:
-        msg += f" · {len(failed)} failed: " + ", ".join(p["symbol"] for p in failed[:6])
+        msg += (f" · {len(failed)} failed: "
+                + ", ".join(f"{p['symbol']} ({p.get('error', 'unknown')[:60]})"
+                            for p in failed[:3]))
     return RedirectResponse(f"/stops?armed={msg}", status_code=303)
 
 

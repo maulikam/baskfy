@@ -80,14 +80,18 @@ session:
     "1":  {target_points: 10, size_mult: 1.00}   # Mon
     "0":  {target_points: 10, size_mult: 0.60}   # Tue, unreachable while disabled
   reject_negative_dte: true
-  # OPEN PROBLEM, not yet resolved — see rules.py::entry_cost_headroom.
-  # At dte>=3 the stop is 5 * 0.5 = 2.5 pts, but liquidation marks open the book at
-  # -1.0 to -1.5 pts (four bid-ask spreads). So 40-60% of the risk budget is spent
-  # before the market moves; Lever B arms at -0.60 * 2.5 = -1.5 pts, i.e. AT ENTRY; and
-  # the rebalance gate at -2.125 leaves under a point of headroom. Two of the four
-  # weekly sessions sit in this bucket. V1 logs the entry mark against the stop every
-  # session so the size of this is measured rather than argued about.
-  min_stop_to_entry_cost_ratio: 2.0   # warn when stop_pts < 2x observed entry cost
+  # THE dte>=3 ENTRY-COST GATE. [TUNE]
+  # At dte>=3 the stop is 5 * 0.5 = 2.5 pts while entering costs the four crossing spreads
+  # plus the statutory stack. If that comes to 1.5 pts, 60% of the risk budget is gone
+  # before the market moves and Lever B is armed AT ENTRY. Rather than change the stop —
+  # which would break the [STRUCTURAL] 2:1 ratio — or net the cost out of the mark — which
+  # the accounting section forbids — the session is simply not taken.
+  #
+  # The cost is MEASURED per session against live depth at the candidate strikes, walked
+  # for the real size, so a day with tight spreads trades and the same day with blown-out
+  # spreads does not. Two of the four weekly sessions sit in the dte>=3 bucket, so expect
+  # this to skip days; the report says how often and why.
+  min_stop_to_entry_cost_ratio: 2.0
 
 timing:
   premarket_setup: "09:00"

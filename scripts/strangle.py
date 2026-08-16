@@ -35,6 +35,7 @@ from app.strategies.strangle import levels as L
 from app.strategies.strangle import market as MK
 from app.strategies.strangle import rules as R
 from app.strategies.strangle import selection as SEL
+from app.strategies.strangle import session as SESS
 from app.strategies.strangle import sizing as Z
 from app.strategies.strangle import state as ST
 
@@ -53,6 +54,10 @@ def main() -> int:
     ap.add_argument("--collect", action="store_true",
                     help="record today's ATM straddle for band calibration, then stop")
     ap.add_argument("--forward", default=FORWARD_PATH)
+    ap.add_argument("--entry-only", action="store_true",
+                    help="enter and stop, without running the management loop (V1 behaviour)")
+    ap.add_argument("--max-ticks", type=int, default=0,
+                    help="stop the loop after N polls; 0 means run to the force-exit time")
     args = ap.parse_args()
 
     cfg = SC.load(args.config)
@@ -228,20 +233,49 @@ def main() -> int:
     headroom = R.entry_cost_headroom(entry_pnl_pts, params.stop_points)
 
     session.to(ST.State.MANAGING, "entered")
-    jr.write("entered", pair=pair.as_dict(), sizing=sized.as_dict(),
-             fills=[f.as_dict() for f in fills], entry_credit=round(credit),
-             entry_headroom=headroom, **base)
+    entered = {"pair": pair.as_dict(), "sizing": sized.as_dict(),
+               "entry_credit": round(credit),
+               "entry_mark_points": round(entry_pnl_pts, 3),
+               "entry_cost_headroom": headroom,
+               "levels": {"resistance": lv.resistance, "support": lv.support},
+               "priced_range": pr.as_dict()}
+    jr.write("entered", fills=[f.as_dict() for f in fills], **entered, **base)
 
-    return _out({**base, "status": "OK", "state": session.state.value,
-                 "pair": pair.as_dict(), "sizing": sized.as_dict(),
-                 "entry_credit": round(credit),
-                 "entry_mark_points": round(entry_pnl_pts, 3),
-                 "entry_cost_headroom": headroom,
-                 "levels": {"resistance": lv.resistance, "support": lv.support},
-                 "priced_range": pr.as_dict(),
-                 "fills": [f.as_dict() | {"depth_snapshot": "recorded"} for f in fills],
-                 "note": "V1 has no adjustment logic; management and exits run in the "
-                         "session loop, which is V2."})
+    if args.entry_only:
+        return _out({**base, **entered, "status": "OK", "state": session.state.value,
+                     "note": "entered and stopped; the management loop was not run"})
+
+    # --- the management loop --------------------------------------------------------
+    # Exits are evaluated before adjustments on every poll. The provider is a generator so
+    # the same loop can be driven from a scripted sequence in the tests.
+    originals = list(bk.legs)
+    force = dt.time(*(int(x) for x in cfg["timing"]["force_exit"].split(":")))
+    frames = MK.live_provider(kite.kc, instruments=instruments,
+                              index_key=ins["index_key"], expiry=expiry,
+                              name=ins["name"],
+                              poll_seconds=float(cfg["management"]["poll_seconds"]),
+                              until=force)
+    if args.max_ticks:
+        frames = _capped(frames, args.max_ticks)
+
+    result = SESS.run_session(book=bk, provider=frames, cfg=cfg, levels=lv, oi=oi,
+                              journal=jr, lot_size=int(ins["lot_size"]),
+                              step=int(ins["strike_step"]), original_legs=originals)
+
+    if result["flat"]:
+        session.to(ST.State.EXITING, result.get("exit_reason") or "flat")
+        if result.get("ends_day"):
+            session.to(ST.State.LOCKED_OUT, result.get("exit_code") or "flat")
+
+    return _out({**base, **entered, "status": result["status"],
+                 "state": session.state.value, "session": result})
+
+
+def _capped(frames, n: int):
+    for i, f in enumerate(frames):
+        if i >= n:
+            return
+        yield f
 
 
 if __name__ == "__main__":

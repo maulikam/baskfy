@@ -145,3 +145,73 @@ def test_the_suite_cannot_write_to_the_production_journal():
     happen cannot serve as evidence."""
     import app.core.gateway as gateway
     assert "data/outputs/orders_journal.jsonl" not in gateway.JOURNAL
+
+
+# =====================================================================================
+# the strangle run controls
+# =====================================================================================
+def test_the_page_offers_every_strangle_control(client):
+    from app.analytics import options_view as OV
+    body = client.get("/options").text
+    for name in OV.STRANGLE_OPS:
+        assert f'value="{name}"' in body, name
+
+
+def test_the_controls_post_an_operation_name_never_a_command(client):
+    """The same fixed allowlist as /ops. A page that can run an arbitrary string is remote
+    code execution on the machine holding the broker credentials."""
+    import re
+    from app.analytics import options_view as OV
+    body = client.get("/options").text
+    assert 'action="/options/run"' in body
+    # Every op the page can submit is on the allowlist, and there is no free-form field to
+    # type a command into. ("shell" as a substring is not a security check — it matched a
+    # CSS comment about the inherited page shell.)
+    posted = set(re.findall(r'name="op" value="([^"]+)"', body))
+    assert posted and posted <= set(OV.STRANGLE_OPS)
+    assert not re.search(r'<(input|textarea)[^>]*name="(cmd|command|argv)"', body)
+
+
+def test_the_run_route_refuses_an_operation_outside_the_options_group(client):
+    """Restricted further than /ops: this route cannot start the equity jobs even if the
+    form is edited in the browser."""
+    from urllib.parse import unquote_plus
+    r = client.post("/options/run", data={"op": "daily"}, follow_redirects=False)
+    assert r.status_code == 303
+    assert "is not an options operation" in unquote_plus(r.headers["location"])
+
+
+def test_the_run_route_refuses_an_unknown_operation(client):
+    r = client.post("/options/run", data={"op": "rm -rf /"}, follow_redirects=False)
+    assert r.status_code == 303 and "error=" in r.headers["location"]
+
+
+def test_every_strangle_operation_is_paper_only():
+    """None of them can reach a live order: the scripts contain no order call and the
+    seven locks are shut regardless."""
+    from app.analytics import ops, options_view as OV
+    for name in OV.STRANGLE_OPS:
+        argv = ops.BY_NAME[name].argv({})
+        assert argv[1] == "-m" and argv[2].startswith("scripts.strangle")
+
+
+def test_the_paper_session_is_bounded_so_it_cannot_hold_the_shared_lock_all_day():
+    """Operations share one lock. An unbounded session would run to 15:10 and block the
+    equity daily job behind it."""
+    from app.analytics import ops
+    assert "--max-ticks" in ops.BY_NAME["strangle_session"].cli()
+
+
+def test_the_page_names_the_single_next_action(client):
+    """'Why can I not trade' is one question and deserves one answer at a time, not seven
+    switches to reason about."""
+    body = " ".join(client.get("/options").text.split())
+    assert "next step" in body.lower()
+    assert "Record today&#39;s straddle" in body or "Record today's straddle" in body
+
+
+def test_the_strangle_view_needs_no_kite_session():
+    from app.analytics import options_view as OV
+    s = OV.strangle()
+    assert s["available"] and s["mode"] == "paper"
+    assert s["paper_needed"] == 60

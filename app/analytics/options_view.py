@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import Any, Mapping
 
 from .. import config as C
 from ..core.guards import CARRY_PRODUCTS, is_option
@@ -70,6 +70,74 @@ def _token_coverage(arms: list[dict]) -> dict:
             "pct": round(with_tokens / len(arms) * 100, 1) if arms else None}
 
 
+def strangle(cfg_path: str = "config/strangle.yaml") -> dict[str, Any]:
+    """State of the intraday strangle, computed WITHOUT a Kite session.
+
+    The page must answer "what is this doing and may it trade" when logged out, because
+    that is exactly when someone asks. Everything here comes from config, the forward
+    record and the journal — no broker call, so the page never blocks on a token.
+    """
+    from ..strategies.strangle import calibrate as _cal
+    from ..strategies.strangle import config as _sc
+    from ..strategies.strangle import journal as _sj
+    from ..strategies.strangle import live as _live
+
+    try:
+        cfg = _sc.load(cfg_path)
+    except Exception as exc:                                  # noqa: BLE001
+        return {"available": False, "error": str(exc)}
+
+    forward = _cal.load_forward("data/outputs/strangle_straddle_record.jsonl")
+    bands = _cal.build_bands(forward) if forward else {}
+    ready = _cal.readiness(bands) if bands else {
+        "ready": False, "missing_buckets": ["3+", "2", "1"], "thin_buckets": [],
+        "note": "no observations yet — run 'Record today's straddle' each session"}
+    jr = _sj.Journal(cfg["operational"]["journal_path"])
+    pf = _live.preflight(cfg, jr)
+    sessions = _live.completed_paper_sessions(jr)
+
+    return {
+        "available": True,
+        "mode": cfg["meta"]["mode"],
+        "lots": cfg["sizing"]["lots"],
+        "wing_width": cfg["structure"]["wing_width_points"],
+        "structure": cfg["structure"]["type"],
+        "margin_per_lot": cfg["margin"]["margin_per_lot_estimate"],
+        "max_utilisation_pct": round(float(cfg["margin"]["max_utilisation_pct"]) * 100),
+        "min_stop_to_cost": cfg["session"]["min_stop_to_entry_cost_ratio"],
+        "extra_holidays": cfg["session"].get("extra_holidays") or [],
+        "forward_sessions": len(forward),
+        "bands": {b: {"low": r["low"], "high": r["high"], "n": r["n"],
+                      "sufficient": r["sufficient"],
+                      "vetoes_pct": r["would_have_vetoed_pct"]}
+                  for b, r in bands.items()},
+        "bands_ready": ready,
+        "paper_sessions": len(sessions),
+        "paper_needed": int(cfg["live"]["min_paper_sessions_before_live"]),
+        "expectancy": _live.observed_expectancy(sessions),
+        "locks": pf.as_dict(),
+        # The blocking sequence, in the order it has to happen. Shown as a path rather
+        # than a list of switches, because "why can I not trade" is one question with one
+        # answer at a time.
+        "next_action": _next_action(len(forward), ready, len(sessions),
+                                    int(cfg["live"]["min_paper_sessions_before_live"])),
+    }
+
+
+def _next_action(forward: int, ready: Mapping, paper: int, needed: int) -> dict:
+    if not ready.get("ready"):
+        return {"op": "strangle_collect", "label": "Record today's straddle",
+                "why": f"the IV gates need reference bands and {forward} observations "
+                       "have been recorded; every tradeable bucket needs a sample before "
+                       "any session can be entered"}
+    if paper < needed:
+        return {"op": "strangle_session", "label": "Run a paper session",
+                "why": f"{paper} of {needed} completed paper sessions"}
+    return {"op": "strangle_check", "label": "Check the strangle",
+            "why": "bands are calibrated and the paper record is complete; the remaining "
+                   "locks are deliberate switches, not progress"}
+
+
 def page(conn, *, journal: str | None = None) -> dict[str, Any]:
     """Everything the options page renders. Read-only."""
     rep = X.report(conn)
@@ -103,6 +171,8 @@ def page(conn, *, journal: str | None = None) -> dict[str, Any]:
         "summary": rep["by_arm"].get(X.INTRADAY) or {},
         "mean_vs_zero": rep.get("mean_vs_zero"),
         "tokens": _token_coverage(all_arms),
+        "strangle": strangle(),
+        "jobs": _jobs(conn),
         "sample": {
             "have": n, "need_low": low, "need_high": high,
             "pct": round(min(n / low, 1.0) * 100, 1) if low else 0.0,
@@ -133,3 +203,41 @@ def _arm_row(a: dict) -> dict:
         "replayable": bool(contracts),
         "tokens": [c.get("token") for c in contracts],
     }
+
+
+# =====================================================================================
+# the run controls
+# =====================================================================================
+STRANGLE_OPS = ("strangle_check", "strangle_collect", "strangle_calibrate",
+                "strangle_calibrate_write", "strangle_session")
+
+
+def _jobs(conn) -> dict:
+    """What is running and what each strangle control did last time.
+
+    Operations share one lock and one broker session, so a control is disabled while
+    anything is in flight — including the equity daily job. Showing WHICH job holds the
+    lock matters: a disabled button with no explanation reads as broken.
+    """
+    from . import ops as _ops
+    try:
+        running = _ops.running_job(conn)
+        last = _ops.last_run(conn)
+    except Exception:                                        # noqa: BLE001
+        return {"running": None, "last": {}, "controls": []}
+    controls = []
+    for name in STRANGLE_OPS:
+        op = _ops.BY_NAME.get(name)
+        if op is None:
+            continue
+        controls.append({
+            "name": name, "label": op.label, "summary": op.summary,
+            "cli": op.cli(), "writes": op.writes, "long_running": op.long_running,
+            "params": [{"key": p.key, "label": p.label, "kind": p.kind,
+                        "default": p.default, "choices": list(p.choices), "help": p.help}
+                       for p in op.params],
+            "last": last.get(name),
+        })
+    return {"running": running, "last": {k: v for k, v in last.items()
+                                         if k in STRANGLE_OPS},
+            "controls": controls}

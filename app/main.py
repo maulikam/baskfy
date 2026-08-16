@@ -302,7 +302,7 @@ STOP_OK = frozenset({"GTT_PLACED", "DRY_RUN_GTT"})
 
 
 @app.get("/options", response_class=HTMLResponse)
-def options_page(request: Request):
+def options_page(request: Request, started: str = "", error: str = ""):
     """The options lab: paper-only, read-only, no session required.
 
     Deliberately needs no Kite login. Its whole job is to say what the program is and is
@@ -313,7 +313,32 @@ def options_page(request: Request):
     with _db.connect() as conn:
         _db.migrate(conn)
         p = _ov.page(conn)
-    return templates.TemplateResponse(request, "options.html", {"p": p})
+    return templates.TemplateResponse(request, "options.html",
+                                      {"p": p, "started": started, "error": error})
+
+
+@app.post("/options/run")
+async def options_run(request: Request):
+    """Start one allowlisted options operation and come back to this page.
+
+    The same fixed allowlist as /ops — the browser sends an operation NAME, never a
+    command — and restricted further to the options group, so this route cannot start the
+    equity jobs even if the form is edited.
+    """
+    from .analytics import db as _db, ops as _ops, options_view as _ov
+    form = await request.form()
+    name = str(form.get("op") or "")
+    if name not in _ov.STRANGLE_OPS:
+        return RedirectResponse(f"/options?error={name or 'no operation'} is not an "
+                                "options operation", status_code=303)
+    values = {k: v for k, v in form.items() if k != "op"}
+    try:
+        with _db.connect() as conn:
+            _db.migrate(conn)
+            res = _ops.start(conn, name, values)
+        return RedirectResponse(f"/options?started={res['name']}", status_code=303)
+    except _ops.OpsError as exc:
+        return RedirectResponse(f"/options?error={exc}", status_code=303)
 
 
 @app.get("/options/data")

@@ -1,4 +1,4 @@
-"""The intraday-versus-overnight A/B experiment.
+"""The intraday option-selling measurement (formerly an intraday/overnight A/B).
 
 Paper-only bookkeeping. These tests are mostly about what the module REFUSES to do,
 because each refusal corresponds to a documented way a paper result fails to survive
@@ -28,7 +28,7 @@ def conn(tmp_path):
 
 @pytest.fixture()
 def variant(conn):
-    v = X.Variant(name="base", arm=X.OVERNIGHT,
+    v = X.Variant(name="base", arm=X.INTRADAY,
                   spec={"short_delta": 0.16, "wing_delta": 0.05})
     return X.register(conn, v)
 
@@ -132,22 +132,22 @@ def test_an_unquoted_leg_makes_the_net_unavailable_rather_than_optimistic():
 def test_an_unregistered_variant_cannot_open_an_arm(conn):
     """The trial count governs the deflated Sharpe, so it must be fixed before data."""
     with pytest.raises(X.ExperimentError, match="not registered"):
-        X.open_arm(conn, variant_id="made:up:now", strategy="seller", arm=X.OVERNIGHT,
+        X.open_arm(conn, variant_id="made:up:now", strategy="seller", arm=X.INTRADAY,
                    expiry=D(2026, 8, 25), lots=1, lot_size=LOT,
                    entry_fills=entry_fills(), entry_at=dt.datetime(2026, 8, 17, 15, 15),
                    entry_spot=24400.0)
 
 
 def test_registering_the_same_spec_twice_is_idempotent(conn):
-    v = X.Variant(name="base", arm=X.OVERNIGHT, spec={"wing_delta": 0.05})
+    v = X.Variant(name="base", arm=X.INTRADAY, spec={"wing_delta": 0.05})
     X.register(conn, v)
     X.register(conn, v)
     assert X.trials_registered(conn) == 1
 
 
 def test_changing_any_parameter_creates_a_distinct_trial(conn):
-    X.register(conn, X.Variant("base", X.OVERNIGHT, {"wing_delta": 0.05}))
-    X.register(conn, X.Variant("base", X.OVERNIGHT, {"wing_delta": 0.08}))
+    X.register(conn, X.Variant("base", X.INTRADAY, {"wing_delta": 0.05}))
+    X.register(conn, X.Variant("base", X.INTRADAY, {"wing_delta": 0.08}))
     assert X.trials_registered(conn) == 2
 
 
@@ -160,7 +160,7 @@ def test_an_unknown_arm_is_refused():
 # lifecycle
 # =====================================================================================
 def test_an_opened_arm_is_visible_as_open_until_closed(conn, variant):
-    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.OVERNIGHT,
+    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.INTRADAY,
                      expiry=D(2026, 8, 25), lots=1, lot_size=LOT,
                      entry_fills=entry_fills(),
                      entry_at=dt.datetime(2026, 8, 17, 15, 15), entry_spot=24400.0)
@@ -173,7 +173,7 @@ def test_an_opened_arm_is_visible_as_open_until_closed(conn, variant):
 
 
 def test_an_arm_cannot_be_closed_twice(conn, variant):
-    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.OVERNIGHT,
+    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.INTRADAY,
                      expiry=D(2026, 8, 25), lots=1, lot_size=LOT,
                      entry_fills=entry_fills(),
                      entry_at=dt.datetime(2026, 8, 17, 15, 15), entry_spot=24400.0)
@@ -211,64 +211,54 @@ def test_only_the_first_occurrence_of_each_condition_is_kept(conn, variant):
 
 
 # =====================================================================================
-# night classification
+# reporting
 # =====================================================================================
-def test_a_monday_to_tuesday_hold_is_a_normal_night():
-    assert X.classify_night(dt.datetime(2026, 8, 17, 15, 15),
-                            dt.datetime(2026, 8, 18, 9, 20)) == X.NIGHT_NORMAL
-
-
-def test_a_friday_to_monday_hold_is_a_weekend():
-    assert X.classify_night(dt.datetime(2026, 8, 21, 15, 15),
-                            dt.datetime(2026, 8, 24, 9, 20)) == X.NIGHT_WEEKEND
-
-
-def test_a_declared_holiday_outranks_a_plain_night():
-    assert X.classify_night(dt.datetime(2026, 8, 17, 15, 15),
-                            dt.datetime(2026, 8, 19, 9, 20),
-                            holidays=[D(2026, 8, 18)]) == X.NIGHT_HOLIDAY
-
-
-def test_an_event_flag_outranks_everything():
-    """The caller knows an RBI policy fell in the window; this module cannot infer it."""
-    assert X.classify_night(dt.datetime(2026, 8, 21, 15, 15),
-                            dt.datetime(2026, 8, 24, 9, 20),
-                            event=True) == X.NIGHT_EVENT
-
-
-def test_an_intraday_arm_gets_no_night_label(conn, variant):
+def test_the_report_reaches_no_verdict_on_a_tiny_sample(conn, variant):
+    """With one arm there is nothing to difference against, so the only question left is
+    whether the mean beats zero — and two observations cannot answer it."""
     v2 = X.register(conn, X.Variant("base", X.INTRADAY, {"wing_delta": 0.05}))
-    aid = X.open_arm(conn, variant_id=v2, strategy="seller", arm=X.INTRADAY,
+    for vid, day in ((variant, 17), (v2, 18)):
+        aid = X.open_arm(conn, variant_id=vid, strategy="seller", arm=X.INTRADAY,
+                         expiry=D(2026, 8, 25), lots=1, lot_size=LOT,
+                         entry_fills=entry_fills(),
+                         entry_at=dt.datetime(2026, 8, day, 9, 45), entry_spot=24400.0)
+        X.close_arm(conn, aid, exit_fills=X.reverse(entry_fills(), exit_quotes()),
+                    exit_at=dt.datetime(2026, 8, day, 15, 12), exit_spot=24450.0,
+                    exit_reason="square_off")
+    rep = X.report(conn)
+    assert rep["closed_arms"] == 2
+    assert rep["trials_registered"] == 2
+    assert rep["mean_vs_zero"]["conclusive"] is False
+    assert "difference" not in rep, "there is no second arm to difference against"
+
+
+def test_the_overnight_arm_is_gone(conn):
+    """It cannot be registered, so it cannot be collected. The system refuses to hold an
+    option past the close, and an arm that can never run must not look available."""
+    assert X.ARMS == (X.INTRADAY,)
+    assert not hasattr(X, "OVERNIGHT")
+    with pytest.raises(X.ExperimentError):
+        X.Variant("base", "overnight", {"wing_delta": 0.05})
+
+
+def test_the_hold_records_an_intraday_move_not_an_overnight_gap(conn, variant):
+    """gap_pct was renamed: a single-session hold has no gap, and a column whose name
+    asserts the wrong thing is worse than one that is merely unused."""
+    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.INTRADAY,
                      expiry=D(2026, 8, 25), lots=1, lot_size=LOT,
                      entry_fills=entry_fills(),
                      entry_at=dt.datetime(2026, 8, 17, 9, 45), entry_spot=24400.0)
     out = X.close_arm(conn, aid, exit_fills=X.reverse(entry_fills(), exit_quotes()),
-                      exit_at=dt.datetime(2026, 8, 17, 15, 12), exit_spot=24420.0,
+                      exit_at=dt.datetime(2026, 8, 17, 15, 12), exit_spot=24522.0,
                       exit_reason="square_off")
-    assert out["night_type"] is None
-
-
-# =====================================================================================
-# reporting
-# =====================================================================================
-def test_the_comparison_reports_no_verdict_on_a_tiny_sample(conn, variant):
-    v2 = X.register(conn, X.Variant("base", X.INTRADAY, {"wing_delta": 0.05}))
-    for arm, vid, day in ((X.OVERNIGHT, variant, 17), (X.INTRADAY, v2, 18)):
-        aid = X.open_arm(conn, variant_id=vid, strategy="seller", arm=arm,
-                         expiry=D(2026, 8, 25), lots=1, lot_size=LOT,
-                         entry_fills=entry_fills(),
-                         entry_at=dt.datetime(2026, 8, day, 15, 15), entry_spot=24400.0)
-        X.close_arm(conn, aid, exit_fills=X.reverse(entry_fills(), exit_quotes()),
-                    exit_at=dt.datetime(2026, 8, day + 1, 9, 20), exit_spot=24450.0,
-                    exit_reason="scheduled")
-    rep = X.compare(conn)
-    assert rep["closed_arms"] == 2
-    assert rep["trials_registered"] == 2
-    assert rep["difference"]["conclusive"] is False      # n=1 per arm
+    assert out["spot_move_pct"] == pytest.approx(0.5)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(option_arms)")}
+    assert "spot_move_pct" in cols
+    assert not cols & {"night_type", "expiry_eve", "elm_charged", "gap_pct"}
 
 
 def test_a_cost_ratio_above_one_means_frictions_ate_everything(conn, variant):
-    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.OVERNIGHT,
+    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.INTRADAY,
                      expiry=D(2026, 8, 25), lots=1, lot_size=LOT,
                      entry_fills=entry_fills(),
                      entry_at=dt.datetime(2026, 8, 17, 15, 15), entry_spot=24400.0)
@@ -287,53 +277,6 @@ def test_an_arm_with_an_incomplete_cost_is_excluded_from_the_summary(conn):
 def test_the_sharpe_standard_error_shrinks_with_sample_size():
     assert X.sharpe_se(0.2, 100) > X.sharpe_se(0.2, 400)
     assert X.sharpe_se(0.2, 1) is None
-
-
-# =====================================================================================
-# strike identity — the confound the experiment must avoid
-# =====================================================================================
-def test_an_arms_exact_contracts_can_be_recovered(conn, variant):
-    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.INTRADAY,
-                     expiry=D(2026, 8, 25), lots=1, lot_size=LOT,
-                     entry_fills=entry_fills(),
-                     entry_at=dt.datetime(2026, 8, 17, 9, 45), entry_spot=24400.0)
-    legs = X.legs_of(conn, aid)
-    assert [l["label"] for l in legs] == ["short_ce", "short_pe", "wing_ce", "wing_pe"]
-    assert [l["side"] for l in legs] == ["SELL", "SELL", "BUY", "BUY"]
-
-
-def test_inherited_legs_reproduce_side_and_quantity_at_new_prices(conn, variant):
-    """The overnight arm must hold the SAME contracts, priced at the evening quotes. If
-    it re-picked 0.16 delta against a moved spot the arms would differ in structure AND
-    clock, and the clock is the only thing being tested."""
-    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.INTRADAY,
-                     expiry=D(2026, 8, 25), lots=1, lot_size=LOT,
-                     entry_fills=entry_fills(short=30.0, wing=8.0),
-                     entry_at=dt.datetime(2026, 8, 17, 9, 45), entry_spot=24400.0)
-    evening = {"short_ce": (26.0, 26.1), "short_pe": (26.0, 26.1),
-               "wing_ce": (6.0, 6.1), "wing_pe": (6.0, 6.1)}
-    rebuilt = [X.executable_fill(l["side"], *evening[l["label"]], int(l["quantity"]),
-                                 label=l["label"])
-               for l in X.legs_of(conn, aid)]
-    assert [f.label for f in rebuilt] == ["short_ce", "short_pe", "wing_ce", "wing_pe"]
-    assert [f.side for f in rebuilt] == ["SELL", "SELL", "BUY", "BUY"]
-    assert all(f.quantity == LOT for f in rebuilt)
-    assert rebuilt[0].price == 26.0          # a SELL still hits the bid
-
-
-def test_latest_arm_finds_the_session_source(conn, variant):
-    v2 = X.register(conn, X.Variant("base", X.INTRADAY, {"w": 1}))
-    X.open_arm(conn, variant_id=v2, strategy="seller", arm=X.INTRADAY,
-               expiry=D(2026, 8, 25), lots=1, lot_size=LOT, entry_fills=entry_fills(),
-               entry_at=dt.datetime(2026, 8, 17, 9, 45), entry_spot=24400.0)
-    got = X.latest_arm(conn, arm=X.INTRADAY, session_date=D(2026, 8, 17))
-    assert got is not None and got["arm"] == X.INTRADAY
-    assert X.latest_arm(conn, arm=X.INTRADAY, session_date=D(2026, 8, 18)) is None
-
-
-def test_inheriting_from_an_unknown_arm_is_refused(conn):
-    with pytest.raises(X.ExperimentError, match="unknown arm"):
-        X.legs_of(conn, "nope")
 
 
 # =====================================================================================
@@ -431,7 +374,7 @@ def test_the_basket_call_is_a_calculation_not_an_order():
 
     basket_margin_for_legs(StrictKC(), [{"tradingsymbol": "X",
                                          "transaction_type": "SELL",
-                                         "quantity": LOT, "price": 1.0}], product="NRML")
+                                         "quantity": LOT, "price": 1.0}], product="MIS")
 
 
 # --- expiry-day ELM --------------------------------------------------------------------
@@ -458,85 +401,3 @@ def test_the_elm_can_exceed_the_base_condor_margin():
     into expiry morning is the case where this lands, and the basket endpoint omits it."""
     from app.strategies.options_market import expiry_day_elm
     assert expiry_day_elm(24400.0, 65, 2, 1) > 60_000
-
-
-def test_the_runner_charges_elm_only_to_the_overnight_arm_into_expiry():
-    src = open("scripts/options_ab.py").read()
-    block = src.split("product = ")[1].split("except Exception")[0]
-    assert 'X.OVERNIGHT' in block and "timedelta(days=1)" in block
-    assert 'expiry_elm' in block
-
-
-# =====================================================================================
-# expiry eve — the night the ELM lands
-# =====================================================================================
-def test_a_monday_night_before_a_tuesday_expiry_is_expiry_eve():
-    """Tuesday is now the only NIFTY weekly expiry, so on a five-day week this is one
-    night in five — and its margin is roughly double every other night's."""
-    assert X.classify_night(dt.datetime(2026, 8, 17, 15, 15),
-                            dt.datetime(2026, 8, 18, 9, 20),
-                            expiry=D(2026, 8, 18)) == X.NIGHT_EXPIRY_EVE
-
-
-def test_a_night_that_does_not_reach_expiry_is_not_expiry_eve():
-    assert X.classify_night(dt.datetime(2026, 8, 17, 15, 15),
-                            dt.datetime(2026, 8, 18, 9, 20),
-                            expiry=D(2026, 8, 25)) == X.NIGHT_NORMAL
-
-
-def test_expiry_eve_outranks_weekend_because_the_elm_dominates():
-    """A Friday-to-Monday hold into a Monday expiry is both. The label reports the cost
-    that dominates; the separate flag keeps the other fact recoverable."""
-    got = X.classify_night(dt.datetime(2026, 8, 21, 15, 15),
-                           dt.datetime(2026, 8, 24, 9, 20), expiry=D(2026, 8, 24))
-    assert got == X.NIGHT_EXPIRY_EVE
-    assert X.is_expiry_eve(dt.datetime(2026, 8, 24, 9, 20), D(2026, 8, 24)) is True
-
-
-def test_an_event_still_outranks_expiry_eve():
-    """The caller knows a policy decision fell in the window; the module cannot infer it,
-    and a gap distribution the model has never seen beats a cost it can compute."""
-    assert X.classify_night(dt.datetime(2026, 8, 17, 15, 15),
-                            dt.datetime(2026, 8, 18, 9, 20),
-                            expiry=D(2026, 8, 18), event=True) == X.NIGHT_EVENT
-
-
-def test_without_an_expiry_the_classification_is_unchanged():
-    assert X.classify_night(dt.datetime(2026, 8, 17, 15, 15),
-                            dt.datetime(2026, 8, 18, 9, 20)) == X.NIGHT_NORMAL
-
-
-def test_the_flag_is_stored_alongside_the_label(conn, variant):
-    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.OVERNIGHT,
-                     expiry=D(2026, 8, 18), lots=1, lot_size=LOT,
-                     entry_fills=entry_fills(),
-                     entry_at=dt.datetime(2026, 8, 17, 15, 15), entry_spot=24400.0,
-                     elm_charged=63_440.0)
-    out = X.close_arm(conn, aid, exit_fills=X.reverse(entry_fills(), exit_quotes()),
-                      exit_at=dt.datetime(2026, 8, 18, 9, 20), exit_spot=24450.0,
-                      exit_reason="scheduled")
-    assert out["night_type"] == X.NIGHT_EXPIRY_EVE and out["expiry_eve"] is True
-    row = conn.execute("SELECT expiry_eve, elm_charged FROM option_arms WHERE arm_id=?",
-                       (aid,)).fetchone()
-    assert row["expiry_eve"] == 1
-    assert row["elm_charged"] == pytest.approx(63_440.0)
-
-
-def test_the_report_separates_nights_held_into_expiry(conn, variant):
-    """Otherwise the ELM is buried in an average and the arm looks uniformly worse."""
-    for day, exp in ((17, D(2026, 8, 18)), (19, D(2026, 8, 25))):
-        aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.OVERNIGHT,
-                         expiry=exp, lots=1, lot_size=LOT, entry_fills=entry_fills(),
-                         entry_at=dt.datetime(2026, 8, day, 15, 15), entry_spot=24400.0)
-        X.close_arm(conn, aid, exit_fills=X.reverse(entry_fills(), exit_quotes()),
-                    exit_at=dt.datetime(2026, 8, day + 1, 9, 20), exit_spot=24450.0,
-                    exit_reason="scheduled")
-    rep = X.compare(conn)
-    assert rep["expiry_eve"]["held_into_expiry"]["n"] == 1
-    assert rep["expiry_eve"]["other_nights"]["n"] == 1
-    assert rep["by_night"][X.NIGHT_EXPIRY_EVE]["n"] == 1
-
-
-def test_every_night_type_appears_in_the_report(conn):
-    rep = X.compare(conn)
-    assert set(rep["by_night"]) == set(X.NIGHT_TYPES)

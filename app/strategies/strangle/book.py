@@ -73,6 +73,11 @@ class Book:
     stop_points: float = 0.0
     target_points: float = 0.0
     high_water_mark: float = 0.0
+    # Book P&L at the moment the CURRENT position was opened. Zero for the first entry.
+    # After a re-entry the day's realised profit is already banked, and judging the new
+    # position's stop against the day total would let a good morning fund a much larger
+    # afternoon loss than the stop was ever meant to permit.
+    baseline: float = 0.0
 
     # --- construction -----------------------------------------------------------------
     def add(self, leg: Leg, cost: float = 0.0) -> None:
@@ -131,6 +136,14 @@ class Book:
                     "with a missing leg")
             total += leg.unrealised(marks[leg.symbol])
         return total - self.accrued_costs
+
+    def session_pnl(self, marks: Mapping[str, float]) -> float:
+        """P&L of the position currently open, measured from its own baseline.
+
+        Identical to pnl() before any re-entry, which is why every existing rule can use
+        it unchanged.
+        """
+        return self.pnl(marks) - self.baseline
 
     def pnl_points(self, marks: Mapping[str, float]) -> float:
         """Book P&L expressed in index points, which is how every threshold is written."""

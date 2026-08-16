@@ -133,7 +133,9 @@ def evaluate_exits(book, snap: Snapshot, cfg: dict, *, state: Mapping[str, Any]
     if book.is_flat:
         return None
     ex = cfg["exits"]
-    pnl = book.pnl(snap.marks)
+    # session_pnl, not pnl: after a re-entry the stop applies to the new position, not to
+    # the day's total. They are the same number until a re-entry happens.
+    pnl = book.session_pnl(snap.marks)
     units = book.units_at_entry
 
     # E1 — hard stop. Ends the day. No re-entry, ever.
@@ -282,3 +284,92 @@ def evaluate_adjustment(book, snap: Snapshot, cfg: dict, *, state: Mapping[str, 
                     reason=f"loser/winner premium {chk.ratio:.2f}, break {confirmed_break}",
                     detail={"winner": chk.winner.symbol, "loser": chk.loser.symbol,
                             "ratio": chk.ratio, "break": confirmed_break})
+
+
+def evaluate_risk_off(book, snap: Snapshot, cfg: dict, *, state: Mapping[str, Any]
+                      ) -> Decision:
+    """Lever B. Considered only when Lever A has declined.
+
+    Every refusal carries its reason so the fire count and the reasons behind a zero can
+    both be read out of the journal — section 4.6 asks for exactly that, because if this
+    lever never fires the two thresholds need re-deriving rather than widening until
+    something happens.
+    """
+    from .adjust import check_risk_off
+
+    if book.is_flat:
+        return Decision(Action.HOLD, reason="no position")
+    chk = check_risk_off(book, marks=snap.marks, vwaps=snap.vwaps, now=snap.now,
+                         state=state, cfg=cfg)
+    if not chk.armed:
+        return Decision(Action.HOLD, code="risk_off_idle", reason=chk.reason,
+                        detail={"pnl": chk.pnl})
+    return Decision(Action.ROLL_LOSER, code="lever_b", reason=chk.reason,
+                    detail={"loser": chk.loser.symbol, "pnl": chk.pnl})
+
+
+# =====================================================================================
+# V3 — target overrun and the single re-entry
+# =====================================================================================
+def target_overrun(book, snap: Snapshot, cfg: dict) -> float | None:
+    """A raised target when the book is past the old one and neither leg is threatened.
+
+    Returns the new target in rupees, or None to leave it alone. The absolute STOP never
+    moves: this extends how far a winner may run, not how much a loser may lose.
+    """
+    pnl = book.session_pnl(snap.marks)
+    if pnl < book.target_cash:
+        return None
+    if snap.vwaps:
+        shorts = [l for l in book.open_legs if l.is_short]
+        for leg in shorts:
+            v = snap.vwaps.get(leg.symbol)
+            if v is not None and snap.marks.get(leg.symbol, 0) > v:
+                return None          # a leg is squeezing; do not extend the ride
+    return book.target_cash * float(cfg["exits"]["target_overrun_multiplier"])
+
+
+@dataclass(frozen=True)
+class ReentryPlan:
+    allowed: bool
+    reason: str
+    target_points: float | None = None
+    stop_points: float | None = None
+    min_strike_shift: int = 0
+
+
+def plan_reentry(book, snap: Snapshot, cfg: dict, *, exit_code: str,
+                 reentries_used: int, banked_points: float, step: int) -> ReentryPlan:
+    """Whether the one permitted re-entry may be taken, and on what terms.
+
+    The target is what is LEFT of the original, so a day cannot quietly double its
+    objective by aborting and starting again. The stop is then derived from that target at
+    the structural ratio — fixing it at an absolute 2 points, as an earlier draft did,
+    would risk 2 to make 1 once 9 points were already booked, which is negative expectancy
+    at any win rate under 67%.
+    """
+    ex = cfg["exits"]
+    if not ex.get("allow_single_reentry", False):
+        return ReentryPlan(False, "re-entry is disabled")
+    if reentries_used >= 1:
+        return ReentryPlan(False, "the one permitted re-entry has been used")
+    if exit_code not in ("E4a", "E4b", "E4c"):
+        return ReentryPlan(False, f"{exit_code} does not permit a re-entry")
+    cutoff = _hhmm(cfg["timing"]["no_new_entry_after"])
+    if snap.now.time() >= cutoff:
+        return ReentryPlan(False, f"past {cfg['timing']['no_new_entry_after']}")
+    if banked_points <= 0:
+        return ReentryPlan(False, f"the session is not green ({banked_points:.2f} pts)")
+
+    new_target = book.target_points - banked_points
+    # Guarded because target_overrun can push the book past 1.5x the original target, which
+    # would make this negative and the behaviour undefined.
+    if new_target < float(ex["reentry_min_target_points"]):
+        return ReentryPlan(False,
+                           f"only {new_target:.2f} pts left of the original target, under "
+                           f"the {float(ex['reentry_min_target_points']):.1f} floor; "
+                           "nothing worth the risk")
+    return ReentryPlan(True, f"{new_target:.2f} pts left of the original target",
+                       target_points=new_target,
+                       stop_points=new_target * float(ex["reentry_stop_ratio"]),
+                       min_strike_shift=int(ex["reentry_min_extra_strikes"]) * step)

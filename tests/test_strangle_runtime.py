@@ -370,3 +370,72 @@ def test_the_runner_uses_the_calendar_not_the_weekday():
     src = open("scripts/strangle.py").read()
     assert "cal.is_trading_day(today)" in src
     assert "holidays=cal.holidays" in src
+
+
+# =====================================================================================
+# scheduling
+# =====================================================================================
+def test_a_second_session_process_is_refused(tmp_path):
+    """The /options button and the launchd job cannot see each other's in-process locks.
+    Two sessions on one day would both enter and both journal, producing a paper record
+    describing a position nobody held — and that record is what gates live trading."""
+    import scripts.strangle as SR
+    lock = str(tmp_path / "s.lock")
+    assert SR._acquire_session_lock(lock)
+    assert not SR._acquire_session_lock(lock)
+    SR._release_session_lock(lock)
+    assert SR._acquire_session_lock(lock)
+    SR._release_session_lock(lock)
+
+
+def test_a_stale_lock_from_a_dead_process_is_reclaimed(tmp_path):
+    """A crash at 09:31 must not cost the whole day."""
+    import scripts.strangle as SR
+    lock = tmp_path / "s.lock"
+    lock.write_text("999999 2026-08-17T09:31:00\n")      # a pid that does not exist
+    assert SR._acquire_session_lock(str(lock))
+    SR._release_session_lock(str(lock))
+
+
+def test_a_corrupt_lock_file_does_not_block_the_day(tmp_path):
+    import scripts.strangle as SR
+    lock = tmp_path / "s.lock"
+    lock.write_text("not a pid\n")
+    assert SR._acquire_session_lock(str(lock))
+    SR._release_session_lock(str(lock))
+
+
+def test_both_plists_are_valid_and_point_at_this_checkout():
+    import os
+    import plistlib
+    here = os.getcwd()
+    for name, args in (("collect", ["-m", "scripts.strangle", "--collect"]),
+                       ("session", ["-m", "scripts.strangle"])):
+        path = f"scripts/com.strangle.{name}.plist.example"
+        with open(path, "rb") as fh:
+            pl = plistlib.load(fh)
+        assert pl["Label"] == f"com.strangle.{name}"
+        assert pl["ProgramArguments"][1:] == args, name
+        assert pl["WorkingDirectory"] == here, name
+        assert pl["RunAtLoad"] is False, "a scheduled job must not fire on load"
+
+
+def test_the_scheduled_jobs_run_inside_market_hours():
+    """09:20 and 09:30 IST. There is no NFO pre-open session, so option quotes do not
+    exist before 09:15 and an earlier run would find an empty chain."""
+    import plistlib
+    for name, want in (("collect", (9, 20)), ("session", (9, 30))):
+        with open(f"scripts/com.strangle.{name}.plist.example", "rb") as fh:
+            pl = plistlib.load(fh)
+        slots = pl["StartCalendarInterval"]
+        assert len(slots) == 5, "weekdays only"
+        assert {(s["Hour"], s["Minute"]) for s in slots} == {want}
+        assert {s["Weekday"] for s in slots} == {1, 2, 3, 4, 5}
+
+
+def test_the_session_job_is_never_restarted_automatically():
+    """A session that died mid-book must be looked at, not relaunched into a position it
+    has forgotten about."""
+    import plistlib
+    with open("scripts/com.strangle.session.plist.example", "rb") as fh:
+        assert plistlib.load(fh)["KeepAlive"] is False

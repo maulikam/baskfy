@@ -405,6 +405,25 @@ def test_a_corrupt_lock_file_does_not_block_the_day(tmp_path):
     SR._release_session_lock(str(lock))
 
 
+def test_agent_logs_live_outside_the_tcc_protected_repo():
+    """macOS protects ~/Documents. A launchd agent has no grant for a log file it did not
+    create there, so it cannot open it, never spawns the process, and exits 78 with no
+    output at all — a failure that looks like nothing happening.
+
+    Measured, not theorised: the first install of this job did exactly that. The older
+    daily job kept working only because its log file carries a com.apple.macl grant from an
+    approval given long ago, which is a grant that vanishes if the file is ever deleted.
+    """
+    import plistlib
+    for name in ("collect", "session"):
+        with open(f"scripts/com.strangle.{name}.plist.example", "rb") as fh:
+            pl = plistlib.load(fh)
+        for key in ("StandardOutPath", "StandardErrorPath"):
+            path = pl[key]
+            assert "/Library/Logs/" in path, f"{name}.{key} -> {path}"
+            assert "/Documents/" not in path, f"{name}.{key} is inside a TCC-protected tree"
+
+
 def test_both_plists_are_valid_and_point_at_this_checkout():
     import os
     import plistlib

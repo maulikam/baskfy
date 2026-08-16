@@ -6,7 +6,7 @@ import os
 import logging
 from kiteconnect import KiteConnect
 from . import config as C
-from .core.guards import assert_tradeable
+from .core.guards import assert_not_overnight_option, assert_tradeable
 
 log = logging.getLogger("kite")
 
@@ -123,6 +123,11 @@ class Kite:
     def place_gtt_stop(self, symbol: str, qty: int, trigger: float, last_price: float,
                        exchange: str = "NSE") -> dict:
         assert_tradeable(symbol)   # SGB/G-sec hard block
+        # A GTT rests at the exchange for up to a year, so an option GTT is an overnight
+        # option position by construction — it can only fire on a session this system
+        # never intended to be holding one. Checked against the order's OWN product, which
+        # is CNC below, rather than against the caller's intent.
+        assert_not_overnight_option(symbol, exchange, "CNC")
         if C.DRY_RUN:
             return {"symbol": symbol, "status": "DRY_RUN_GTT", "trigger": trigger,
                     "qty": int(qty)}

@@ -189,3 +189,44 @@ def test_recording_failure_cannot_crash_a_good_collection():
     src = open("scripts/daily.py").read()
     body = src.split("def _safe_record")[1].split("def _state")[0]
     assert "except Exception" in body
+
+
+# =====================================================================================
+# the EOD snapshot may not be taken before the close
+# =====================================================================================
+def test_a_pre_close_run_skips_the_snapshot():
+    """A snapshot is insert-if-absent, so a row written at 09:30 holds an intraday NAV and
+    the 18:30 run finds the day already present and leaves it. The track record keeps a
+    number that was never the close and nothing ever says so.
+
+    Not hypothetical: a verification kickstart at 01:44 wrote exactly such a row for
+    2026-08-17 and it had to be deleted by hand. The plist warned about it in a comment,
+    and a comment is not a guard.
+    """
+    import datetime as dt
+    from scripts.daily import _before_close
+    assert _before_close(dt.datetime(2026, 8, 17, 1, 44))     # Monday, pre-dawn
+    assert _before_close(dt.datetime(2026, 8, 17, 9, 30))     # Monday, mid-session
+    assert _before_close(dt.datetime(2026, 8, 17, 15, 29))    # one minute early
+
+
+def test_after_the_close_the_snapshot_runs():
+    import datetime as dt
+    from scripts.daily import _before_close
+    assert not _before_close(dt.datetime(2026, 8, 17, 15, 30))
+    assert not _before_close(dt.datetime(2026, 8, 17, 18, 30))    # the scheduled slot
+
+
+def test_a_weekend_run_is_not_treated_as_early():
+    """Saturday holds a settled book: the values are Friday's close, so recording them is
+    correct rather than premature."""
+    import datetime as dt
+    from scripts.daily import _before_close
+    assert not _before_close(dt.datetime(2026, 8, 15, 9, 0))     # Saturday
+    assert not _before_close(dt.datetime(2026, 8, 16, 9, 0))     # Sunday
+
+
+def test_the_override_exists_and_says_it_will_be_wrong():
+    src = open("scripts/daily.py").read()
+    assert "--force-snapshot" in src
+    assert "intraday NAV as the day's final value" in src

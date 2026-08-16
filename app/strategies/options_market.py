@@ -274,19 +274,60 @@ def build_live_snapshot(kite, cfg: SellingConfig | BuyingConfig, *,
                         option_expiry=expiry, minute_bars=int(signal["minute_bars"]))
 
 
-def basket_margin_estimate(kc, plan: OptionPlan) -> Mapping[str, Any]:
-    """Ask Kite for the read-only basket margin; this cannot place an order."""
+# Zerodha applies an additional 2% of contract value on EVERY short index option leg on
+# expiry day, intraday, and it applies even when the position is fully hedged. It is not
+# in the SPAN+exposure figure the basket endpoint returns, so a margin estimate that omits
+# it will be short on exactly the session it matters.
+EXPIRY_DAY_ELM_PCT = 0.02
+
+
+def basket_margin_for_legs(kc, legs: Sequence[Mapping[str, Any]], *,
+                           product: str) -> Mapping[str, Any]:
+    """Read-only basket margin for arbitrary legs under an explicit product.
+
+    Product is a parameter rather than being taken from a plan because the same four
+    contracts carry DIFFERENT margin as an intraday MIS basket and as an overnight NRML
+    one — and when two arms are being compared on return-on-margin, using one arm's
+    product for both would silently answer a different question.
+
+    This endpoint calculates. It cannot place an order.
+    """
     params = [
         {
-            "exchange": leg.instrument.exchange,
-            "tradingsymbol": leg.instrument.symbol,
-            "transaction_type": leg.side,
+            "exchange": leg.get("exchange", "NFO"),
+            "tradingsymbol": leg["tradingsymbol"],
+            "transaction_type": leg["transaction_type"],
             "variety": "regular",
-            "product": plan.product,
+            "product": product,
             "order_type": "LIMIT",
-            "quantity": leg.quantity,
-            "price": leg.limit_price,
+            "quantity": int(leg["quantity"]),
+            "price": leg.get("price"),
         }
-        for leg in plan.entry_legs
+        for leg in legs
     ]
     return kc.basket_order_margins(params, consider_positions=True, mode="compact")
+
+
+def expiry_day_elm(spot: float, lot_size: int, short_legs: int, lots: int = 1,
+                   pct: float = EXPIRY_DAY_ELM_PCT) -> float:
+    """The extra margin a short index option leg attracts on expiry day.
+
+    Charged on contract value, per short leg, hedged or not. An overnight arm opened the
+    evening before a Tuesday expiry is held straight into this: the position is 1 DTE at
+    entry and 0 DTE at exit, so the ELM lands on the morning the position is still open.
+    That is a real and easily-missed cost of the overnight arm specifically.
+    """
+    return max(0.0, spot) * lot_size * max(0, short_legs) * max(1, lots) * pct
+
+
+def basket_margin_estimate(kc, plan: OptionPlan) -> Mapping[str, Any]:
+    """Read-only basket margin for a planned position, under the plan's own product."""
+    return basket_margin_for_legs(
+        kc,
+        [{"exchange": leg.instrument.exchange,
+          "tradingsymbol": leg.instrument.symbol,
+          "transaction_type": leg.side,
+          "quantity": leg.quantity,
+          "price": leg.limit_price}
+         for leg in plan.entry_legs],
+        product=plan.product)

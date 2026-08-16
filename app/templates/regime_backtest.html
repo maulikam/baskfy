@@ -482,6 +482,43 @@
 {% endif %}
 
 <section>
+  <h2>Rolling returns and turnover</h2>
+  <div class="card scroll">
+    <p class="muted" style="margin-bottom:10px">A single CAGR hides the experience of
+      holding a design. The worst rolling year is what you would actually have had to sit
+      through; the median 3 and 5-year windows say what a typical holding period returned.
+      Turnover is what the design costs to run.</p>
+    <table aria-label="Rolling returns and turnover by variant">
+      <thead><tr>
+        <th>Variant</th><th>Worst 1Y</th><th>Median 3Y</th><th>Median 5Y</th>
+        <th>Turnover /yr</th><th>Transitions /yr</th><th>Whipsaws /yr</th>
+        <th>Cost drag /yr</th>
+      </tr></thead>
+      <tbody>
+      {% for key, r in b.variants.items() if r.status == 'ok' and not key.startswith('abl_') %}
+        <tr>
+          <td><code>{{ key }}</code></td>
+          <td class="{{ 'bad' if r.roll_1Y_worst_pct is not none and r.roll_1Y_worst_pct < 0 else '' }}">
+            {{ '%+.1f'|format(r.roll_1Y_worst_pct) ~ '%' if r.roll_1Y_worst_pct is not none else '—' }}</td>
+          <td>{{ '%+.1f'|format(r.roll_3Y_med_pct) ~ '%' if r.roll_3Y_med_pct is not none else '—' }}</td>
+          <td>{{ '%+.1f'|format(r.roll_5Y_med_pct) ~ '%' if r.roll_5Y_med_pct is not none else '—' }}</td>
+          <td>{{ '%.0f'|format(r.annual_turnover_pct) }}%</td>
+          <td>{{ '%.1f'|format(r.transitions_per_year) }}</td>
+          <td>{{ '%.2f'|format(r.whipsaws_per_year) }}</td>
+          <td>{{ '%.3f'|format(r.total_cost_drag_pct_yr) }}%</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">Turnover here is <b>regime turnover only</b>:
+      the exposure changes the overlay caused, measured in NAV fractions at trade time. The
+      selection turnover from weekly momentum ranking is NOT included, because this proxy
+      trades an index rather than the stock book, so the two cannot be separated from these
+      results. A live book would carry both.</p>
+  </div>
+</section>
+
+<section>
   <h2>Strategy comparison</h2>
   <div class="card scroll">
     <table aria-label="Strategy comparison">

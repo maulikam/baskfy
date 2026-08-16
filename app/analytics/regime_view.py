@@ -118,10 +118,20 @@ def index_status(conn, names: list[str], as_of: dt.date | None) -> list[dict]:
             "WHERE index_name=? AND is_final=1", (name,)).fetchone()
         last = dt.date.fromisoformat(r["d"]) if r and r["d"] else None
         age = (as_of - last).days if (last and as_of) else None
+        # Gaps, not "missing sessions": the NSE holiday calendar is not known here, so a
+        # four-day hole is an ordinary long weekend. Anything longer is reported as a
+        # POSSIBLE gap rather than asserted as missing data.
+        days = [dt.date.fromisoformat(x["date"]) for x in conn.execute(
+            "SELECT date FROM index_series WHERE index_name=? AND is_final=1 "
+            "ORDER BY date", (name,))]
+        gaps = [{"from": a.isoformat(), "to": b.isoformat(), "days": (b - a).days}
+                for a, b in zip(days, days[1:]) if (b - a).days > 5]
         out.append({"index_name": name,
                     "last_final_session": last.isoformat() if last else None,
                     "sessions": r["n"] if r else 0, "age_days": age,
                     "stale": bool(age is not None and age > C.REGIME_INDEX_STALE_DAYS),
+                    "gaps": gaps[-3:], "gap_count": len(gaps),
+                    "first_session": days[0].isoformat() if days else None,
                     "has_data": bool(last)})
     return out
 
@@ -867,6 +877,9 @@ def build(conn) -> dict:
                                   "R4 stack": f"≥ {cfg.r4_bearish_stack_min:.2f}"},
             "exposure_map": dict(cfg.tier_exposure_pct),
             "default_weights": dict(cfg.default_book_weights),
+            "recovery_breadth_min": cfg.recovery_breadth_min,
+            "recovery_h20_min": cfg.recovery_h20_min,
+            "recovery_confirm_evaluations": cfg.recovery_confirm_evaluations,
             "ltcg_review_days": C.REGIME_LTCG_REVIEW_DAYS,
             "weekly_evaluation_weekday": cfg.weekly_evaluation_weekday,
             "r4_residual": f"max {C.REGIME_R4_MAX_RESIDUAL_NAMES} names, ordered by "
@@ -888,6 +901,15 @@ def build(conn) -> dict:
     # describes what should CHANGE; the portfolio is what is actually held.
     v.update(_holding_counts(v["portfolio"], tier_cap, proposed))
     v["headline_reason"] = headline_reason(v["reason_pairs"], v["narrative"])
+    # How much of the re-risk requirement currently holds. Breadth recovering for one week
+    # does not re-risk the book; the engine wants consecutive confirmations, and showing
+    # the counter is the difference between "improving" and "improved enough".
+    try:
+        v["recovery_confirmations"] = RS.count_recovery_confirmations(conn)
+        v["recovery_required"] = cfg.recovery_confirm_evaluations
+    except Exception:
+        v["recovery_confirmations"] = None
+        v["recovery_required"] = None
     v["tier_ladder"] = [dict(t, current=(t["tier"] == tier),
                              cap=cfg.cap_for(RegimeTier(t["tier"])))
                         for t in TIER_LADDER]

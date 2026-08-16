@@ -848,3 +848,57 @@ def test_the_decision_summary_precedes_the_explainers_in_the_markup():
     assert html.index("Decision summary") < html.index("What the four tiers mean")
     assert html.index("Decision summary") < html.index("How the overlay is running")
     assert html.index("Why this regime") < html.index("What the four tiers mean")
+
+
+# =====================================================================================
+# P2 diagnostics
+# =====================================================================================
+def test_index_status_reports_possible_gaps_not_missing_sessions(conn, cfg):
+    """The NSE holiday calendar is not known here, so a four-day hole is an ordinary long
+    weekend. Anything longer is POSSIBLE, not asserted."""
+    import datetime as dt
+    for d in ("2026-06-01", "2026-06-02", "2026-06-30"):     # a 28-day hole
+        conn.execute("INSERT INTO index_series(index_name, date, close, is_final,"
+                     " updated_at) VALUES('NIFTY 50', ?, 100.0, 1, 'x')", (d,))
+    conn.commit()
+    st = RV.index_status(conn, ["NIFTY 50"], dt.date(2026, 6, 30))[0]
+    assert st["gap_count"] == 1
+    assert st["gaps"][0]["days"] == 28
+    assert st["first_session"] == "2026-06-01"
+
+
+def test_an_ordinary_long_weekend_is_not_reported_as_a_gap(conn, cfg):
+    import datetime as dt
+    for d in ("2026-06-05", "2026-06-09"):                   # 4 days, a holiday weekend
+        conn.execute("INSERT INTO index_series(index_name, date, close, is_final,"
+                     " updated_at) VALUES('NIFTY 50', ?, 100.0, 1, 'x')", (d,))
+    conn.commit()
+    assert RV.index_status(conn, ["NIFTY 50"], dt.date(2026, 6, 9))[0]["gap_count"] == 0
+
+
+def test_index_cards_carry_the_absolute_moving_average_not_only_the_distance():
+    html = open("app/templates/regime.html").read()
+    assert "{{ '{:,.0f}'.format(m.ma) if m.ma else '—' }}" in html
+
+
+def test_the_breadth_card_shows_the_recovery_counter():
+    """Breadth recovering for one week does not re-risk the book; the engine wants
+    consecutive confirmations, and the counter is the difference between 'improving' and
+    'improved enough'."""
+    html = open("app/templates/regime.html").read()
+    assert "Recovery confirmations" in html and "Re-risk needs" in html
+
+
+def test_the_backtest_renders_rolling_returns_and_turnover():
+    html = open("app/templates/regime_backtest.html").read()
+    for field in ("roll_1Y_worst_pct", "roll_3Y_med_pct", "roll_5Y_med_pct",
+                  "transitions_per_year", "whipsaws_per_year"):
+        assert field in html, field
+
+
+def test_turnover_is_labelled_as_regime_only():
+    """Selection turnover cannot be separated from an index proxy, so claiming a total
+    would overstate what the backtest measured."""
+    html = open("app/templates/regime_backtest.html").read()
+    assert "regime turnover only" in html
+    assert "selection turnover" in html.lower()

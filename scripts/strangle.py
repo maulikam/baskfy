@@ -22,6 +22,8 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
+import pathlib
 import sys
 
 from app.kite_client import Kite
@@ -33,6 +35,7 @@ from app.strategies.strangle import config as SC
 from app.strategies.strangle import fills_paper as F
 from app.strategies.strangle import journal as JN
 from app.strategies.strangle import levels as L
+from app.strategies.strangle import live as LIVE
 from app.strategies.strangle import market as MK
 from app.strategies.strangle import rules as R
 from app.strategies.strangle import selection as SEL
@@ -41,6 +44,42 @@ from app.strategies.strangle import sizing as Z
 from app.strategies.strangle import state as ST
 
 FORWARD_PATH = "data/outputs/strangle_straddle_record.jsonl"
+SESSION_LOCK = "data/outputs/strangle_session.lock"
+
+
+def _acquire_session_lock(path: str = SESSION_LOCK) -> bool:
+    """One session process at a time, across the whole machine.
+
+    The ops lock lives inside the web process, so it cannot see a session started by
+    launchd — and once this is scheduled, the button on /options and the scheduled job can
+    collide. Two sessions on one day would both enter, both journal, and produce a paper
+    record describing a position nobody held.
+
+    A stale lock from a killed process is reclaimed rather than blocking forever: a crash
+    at 09:31 must not cost the whole day.
+    """
+    import errno
+    old = pathlib.Path(path)
+    if old.exists():
+        try:
+            pid = int(old.read_text().split()[0])
+            os.kill(pid, 0)
+            return False                       # a live process holds it
+        except (ValueError, IndexError, ProcessLookupError, PermissionError):
+            pass
+        except OSError as exc:
+            if exc.errno != errno.ESRCH:
+                return False
+    old.parent.mkdir(parents=True, exist_ok=True)
+    old.write_text(f"{os.getpid()} {dt.datetime.now().isoformat(timespec='seconds')}\n")
+    return True
+
+
+def _release_session_lock(path: str = SESSION_LOCK) -> None:
+    try:
+        pathlib.Path(path).unlink()
+    except OSError:
+        pass
 
 
 def _out(payload: dict) -> int:
@@ -280,6 +319,11 @@ def main() -> int:
                      "note": "entered and stopped; the management loop was not run"})
 
     # --- the management loop --------------------------------------------------------
+    if not _acquire_session_lock():
+        return _out({**base, **entered, "status": "ALREADY_RUNNING",
+                     "note": "another strangle session process is live; refusing to run a "
+                             "second. The scheduled job and the /options button cannot see "
+                             "each other's in-process locks, only this file."})
     # Exits are evaluated before adjustments on every poll. The provider is a generator so
     # the same loop can be driven from a scripted sequence in the tests.
     originals = list(bk.legs)
@@ -292,9 +336,13 @@ def main() -> int:
     if args.max_ticks:
         frames = _capped(frames, args.max_ticks)
 
-    result = SESS.run_session(book=bk, provider=frames, cfg=cfg, levels=lv, oi=oi,
-                              journal=jr, lot_size=int(ins["lot_size"]),
-                              step=int(ins["strike_step"]), original_legs=originals)
+    try:
+        result = SESS.run_session(book=bk, provider=frames, cfg=cfg, levels=lv, oi=oi,
+                                  journal=jr, lot_size=int(ins["lot_size"]),
+                                  step=int(ins["strike_step"]), original_legs=originals,
+                                  kill_switch=LIVE.KillSwitch.from_config(cfg))
+    finally:
+        _release_session_lock()
 
     if result["flat"]:
         session.to(ST.State.EXITING, result.get("exit_reason") or "flat")

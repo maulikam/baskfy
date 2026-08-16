@@ -401,3 +401,66 @@ def test_the_elm_can_exceed_the_base_condor_margin():
     into expiry morning is the case where this lands, and the basket endpoint omits it."""
     from app.strategies.options_market import expiry_day_elm
     assert expiry_day_elm(24400.0, 65, 2, 1) > 60_000
+
+
+# =====================================================================================
+# instrument tokens — the only thing that keeps an expired contract's history reachable
+# =====================================================================================
+def a_leg(symbol="NIFTY2681824350CE", token=11546626, side="SELL", strike=24350.0):
+    from app.strategies.options import OptionInstrument, OptionLeg
+    ins = OptionInstrument(token=token, symbol=symbol, underlying="NIFTY",
+                           expiry=D(2026, 8, 18), strike=strike, kind="CE",
+                           lot_size=LOT)
+    return OptionLeg(role="short_call", side=side, instrument=ins, quantity=LOT,
+                     limit_price=None, sequence=1)
+
+
+def test_a_leg_yields_everything_needed_to_refetch_it():
+    """Kite's instruments dump lists only LIVE contracts, and historical_data takes a
+    token rather than a symbol. A token not written down before expiry cannot be recovered
+    from any API afterwards, and the arm's price history dies with the contract."""
+    c = X.contract_from_leg(a_leg())
+    assert c["token"] == 11546626
+    assert c["symbol"] == "NIFTY2681824350CE"
+    assert (c["strike"], c["kind"], c["side"], c["quantity"]) == (24350.0, "CE", "SELL", LOT)
+    assert c["expiry"] == "2026-08-18"
+
+
+def test_the_position_is_reconstructable_from_the_contracts_alone(conn, variant):
+    """Side and quantity are stored with the token, so the arm can be rebuilt without the
+    instruments dump — which will no longer list these contracts."""
+    legs = [a_leg(), a_leg("NIFTY2681824050PE", 11546627, "SELL", 24050.0)]
+    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.INTRADAY,
+                     expiry=D(2026, 8, 18), lots=1, lot_size=LOT,
+                     entry_fills=entry_fills(),
+                     entry_at=dt.datetime(2026, 8, 17, 9, 45), entry_spot=24400.0,
+                     contracts=[X.contract_from_leg(x) for x in legs],
+                     underlying_token=256265)
+    got = X.contracts_of(conn, aid)
+    assert [c["token"] for c in got] == [11546626, 11546627]
+    assert {c["side"] for c in got} == {"SELL"}
+    row = conn.execute("SELECT underlying_token FROM option_arms WHERE arm_id=?",
+                       (aid,)).fetchone()
+    assert row["underlying_token"] == 256265
+
+
+def test_an_arm_stored_without_contracts_reports_none_rather_than_pretending(conn, variant):
+    """An empty list means the history is gone, not that the arm had no legs."""
+    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.INTRADAY,
+                     expiry=D(2026, 8, 18), lots=1, lot_size=LOT,
+                     entry_fills=entry_fills(),
+                     entry_at=dt.datetime(2026, 8, 17, 9, 45), entry_spot=24400.0)
+    assert X.contracts_of(conn, aid) == []
+
+
+def test_contracts_of_an_unknown_arm_is_refused(conn):
+    with pytest.raises(X.ExperimentError):
+        X.contracts_of(conn, "nope")
+
+
+def test_the_runner_records_tokens_when_it_opens_an_arm():
+    """Drift guard: the collection is worthless for replay if the CLI stops passing them,
+    and nothing else in the system would notice."""
+    src = open("scripts/options_ab.py").read()
+    assert "contracts=[X.contract_from_leg(leg) for leg in plan.entry_legs]" in src
+    assert "underlying_token=live.underlying_token" in src

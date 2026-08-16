@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Momentum Desk — Options</title>
+<style>
+  :root{
+    --ink:#0b1220; --panel:#111a2e; --panel-2:#0d1626; --line:#22304d; --paper:#e8edf7;
+    --dim:#8593ad; --saffron:#f2a33c; --up:#3ddc97; --down:#ff6b6b; --orange:#ff9f43;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+    --disp:"Archivo",system-ui,sans-serif;
+    --s2:8px; --s3:14px; --s4:22px;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:13.5px;
+       line-height:1.5;min-height:100vh;padding:26px 3.5vw 90px}
+  header{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;
+         gap:var(--s3);border-bottom:2px solid var(--saffron);padding-bottom:12px;
+         margin-bottom:var(--s4)}
+  h1{font-family:var(--disp);font-weight:900;font-size:clamp(21px,3vw,31px);letter-spacing:-.02em}
+  h1 em{color:var(--saffron);font-style:normal}
+  a{color:var(--saffron)}
+  .nav{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+  .nav a{font-family:var(--disp);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+         color:var(--dim);text-decoration:none;padding:6px 13px;border-radius:7px;
+         border:1px solid transparent;transition:color .15s,border-color .15s,background .15s}
+  .nav a:hover{color:var(--paper);border-color:var(--line);background:#152040}
+  .nav a[aria-current="page"]{color:var(--saffron);border-color:var(--saffron)}
+  .nav .api{font-size:11px;opacity:.65}
+  .badge{font-size:12px;color:var(--dim)}
+  .badge b{color:var(--saffron)} .badge b.warn{color:var(--down)}
+  section{margin-bottom:var(--s4)}
+  h2{font-family:var(--disp);font-size:12px;text-transform:uppercase;letter-spacing:.15em;
+     color:var(--dim);margin-bottom:var(--s2)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+        padding:16px 18px;min-width:0;max-width:100%}
+  .banner{border:1px solid var(--line);border-radius:9px;padding:12px 16px;
+          margin-bottom:var(--s3);background:#16203a;display:flex;gap:var(--s3);
+          align-items:baseline;flex-wrap:wrap}
+  .banner.ok{border-color:var(--up);background:#12241f}
+  .banner.bad{border-color:var(--down);background:#251722}
+  .banner.warn{border-color:var(--saffron);background:#221b12}
+  .banner .tag{font-family:var(--disp);font-size:10px;letter-spacing:.14em;
+               text-transform:uppercase;padding:2px 8px;border-radius:4px;
+               border:1px solid currentColor;white-space:nowrap;font-weight:700}
+  .banner.ok .tag{color:var(--up)} .banner.bad .tag{color:var(--down)}
+  .banner.warn .tag{color:var(--saffron)}
+  .grid{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+  .stat{font-family:var(--disp);font-weight:900;font-size:26px;margin:4px 0 2px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th{font-family:var(--disp);font-size:10px;text-transform:uppercase;letter-spacing:.11em;
+     color:var(--dim);text-align:right;padding:7px 9px;border-bottom:1px solid var(--line);
+     white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:6px 9px;text-align:right;border-bottom:1px solid #182240;font-size:12.5px;
+     white-space:nowrap}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover td{background:#152040}
+  .scroll{overflow-x:auto}
+  .ok{color:var(--up)} .bad{color:var(--down)} .na{color:var(--dim)}
+  .muted{color:var(--dim);font-size:11.5px;line-height:1.6}
+  code{font-size:11.5px;color:var(--saffron)}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:10.5px;
+        font-family:var(--disp);letter-spacing:.08em;border:1px solid currentColor}
+  .pill.mute{color:var(--dim)}
+  button{font-family:var(--disp);font-weight:700;border:0;border-radius:8px;padding:12px 24px;
+         cursor:pointer;font-size:13.5px;transition:filter .15s}
+  button:hover{filter:brightness(1.1)}
+  .btn-danger{background:var(--down);color:#2a0b0b}
+  .btn-saffron{background:var(--saffron);color:#161006}
+  .actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:var(--s3)}
+
+  /* Touch targets. Nav links were ~32px high, under the comfortable 44px, but only on a
+     coarse pointer does that matter — a mouse is precise, a thumb is not. */
+  @media (pointer:coarse){
+    .nav a{min-height:44px;display:flex;align-items:center}
+    button,.btn{min-height:44px}
+    summary{min-height:44px;display:flex;align-items:center}
+  }
+  :focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
+  @media(max-width:780px){body{padding:20px 16px 70px} .card table{display:block;overflow-x:auto}}
+</style>
+<style>
+  /* --- options-specific ---------------------------------------------------------------
+     This page's job is to be believed on two points: nothing has been traded, and the
+     sample is nowhere near decisive. Both are stated with the evidence beside them. */
+  .posture{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+           margin-bottom:var(--s3)}
+  .fact{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+        padding:13px 16px}
+  .fact .k{font-family:var(--disp);font-size:10px;letter-spacing:.13em;
+           text-transform:uppercase;color:var(--dim)}
+  .fact .v{font-family:var(--disp);font-weight:900;font-size:19px;margin:5px 0 3px}
+  .fact.good .v{color:var(--up)} .fact.warn .v{color:var(--saffron)}
+  /* Progress toward a decisive sample. A bar rather than a number because the point is
+     how far away it is, and 0 of 550 reads as "not started" far better than "0.0%". */
+  .prog{height:8px;border-radius:4px;background:#0a1326;border:1px solid var(--line);
+        overflow:hidden;margin:9px 0 6px}
+  .prog i{display:block;height:100%;background:var(--saffron)}
+  .empty{border:1px dashed var(--line);border-radius:11px;padding:26px 22px;
+         background:var(--panel-2)}
+  .empty h3{font-family:var(--disp);font-size:17px;margin-bottom:7px}
+  /* padding:0 as well as margin — the global reset zeroes only margin, so a bare <ul>
+     keeps the browser's 40px indent and pushes the whole list off the right edge. */
+  .steps{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:9px}
+  .steps li{display:flex;gap:11px;align-items:baseline}
+  /* min-width:0 — a flex item defaults to min-width:auto and refuses to shrink below its
+     content, so the long command inside <pre> pushed the whole page into horizontal
+     scroll instead of scrolling inside its own box. */
+  .steps li>span:last-child{min-width:0;flex:1 1 auto}
+  .steps .n{font-family:var(--disp);font-weight:900;color:var(--saffron);font-size:12px;
+            min-width:15px}
+  /* The scroll wrapper is the element that scrolls; the table inside must not be able to
+     push the page wider than the viewport on a narrow screen. */
+  .scroll{overflow-x:auto;max-width:100%}
+  main{min-width:0}
+  /* The inherited shell turns tables into display:block scrollers below 780px. Nested
+     inside .scroll that leaves the THEAD sized to its own content and pushing the page a
+     few px wider than the viewport. One scroller per table: the wrapper. */
+  @media(max-width:780px){ .card.scroll table{display:table;overflow-x:visible} }
+  pre.cmd{background:#0a1326;border:1px solid var(--line);border-radius:7px;
+          padding:9px 12px;overflow-x:auto;font-size:11.5px;color:var(--paper);margin-top:3px;
+          max-width:100%}
+</style>
+</head>
+<body>
+<header>
+  <h1>Options <em>Lab</em></h1>
+  <nav class="nav" aria-label="Sections">
+    <a href="/">Desk</a>
+    <a href="/performance">Performance</a>
+    <a href="/regime">Regime</a>
+    <a href="/regime/backtest">Backtest</a>
+    <a href="/tradebook">Tradebook</a>
+    <a href="/stops">Stops</a>
+    <a href="/options" aria-current="page">Options</a>
+    <a href="/ops">Operations</a>
+    <a href="/settings">Settings</a>
+    <a class="api" href="/options/data">json</a>
+  </nav>
+  <div class="badge">Paper only &middot; <b>0 orders</b></div>
+</header>
+<main>
+
+{# The claim this page has to earn. Counted from the order journal — the gateway's record
+   of everything it has ever done — rather than asserted. #}
+{% if p.orders.placed %}
+<div class="banner bad">
+  <span class="tag">{{ p.orders.placed }} option orders</span>
+  <span>The order journal records {{ p.orders.placed }} option order{{ '' if p.orders.placed == 1 else 's' }}.
+    This program is supposed to be paper-only, so either the journal or that assumption is
+    wrong. Read <code>data/outputs/orders_journal.jsonl</code> before doing anything else.</span>
+</div>
+{% else %}
+<div class="banner ok">
+  <span class="tag">paper only</span>
+  <span class="muted">No option order has ever been placed. Counted from the gateway's own
+    journal, which records every placement, dry run and refusal it has made — not asserted
+    from intent. Nothing on this page can reach the broker.</span>
+</div>
+{% endif %}
+
+<section>
+  <h2>Safety posture</h2>
+  <div class="posture">
+    <div class="fact {{ 'warn' if p.gates.options_enabled else 'good' }}">
+      <div class="k">F&amp;O orders</div>
+      <div class="v">{{ 'ENABLED' if p.gates.options_enabled else 'OFF' }}</div>
+      <div class="muted">config.OPTIONS_ENABLED — the gateway refuses every NFO/BFO order
+        while this is off.</div>
+    </div>
+    <div class="fact {{ 'warn' if p.gates.intraday_enabled else 'good' }}">
+      <div class="k">Intraday (MIS)</div>
+      <div class="v">{{ 'ENABLED' if p.gates.intraday_enabled else 'OFF' }}</div>
+      <div class="muted">config.INTRADAY_ENABLED — MIS is an intraday product on every
+        segment, so this gates the engine as well as the product.</div>
+    </div>
+    <div class="fact good">
+      <div class="k">Overnight carry</div>
+      <div class="v">BLOCKED</div>
+      <div class="muted">{{ p.gates.carry_products_blocked|join(' and ') }} are refused on
+        any option, in both directions. Hard-coded in <code>core/guards.py</code>, not a
+        setting — a knob that can be turned is not a guarantee.</div>
+    </div>
+  </div>
+  <p class="muted">The overnight arm was dropped on 16 Aug 2026 as a risk decision, not a
+    result. Bhat (2024) reports the NIFTY variance risk premium is earned overnight and
+    given back intraday; if that holds, a negative result below is <em>consistent</em> with
+    the literature and is not evidence the overnight trade would have worked. Gap risk is
+    exactly what the policy declined to take.</p>
+</section>
+
+<section>
+  <h2>Sample</h2>
+  <div class="card">
+    <div class="prog"><i style="width:{{ p.sample.pct }}%"></i></div>
+    <div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap">
+      <span><b class="{{ 'ok' if p.sample.have >= p.sample.need_low else 'na' }}">{{ p.sample.have }}</b>
+        of {{ p.sample.need_low }}–{{ p.sample.need_high }} observations</span>
+      <span class="muted">{{ p.sample.sessions_remaining }} more sessions at roughly one a day</span>
+    </div>
+    <p class="muted" style="margin-top:10px">A high-win-rate condor needs roughly
+      {{ p.sample.need_low }}–{{ p.sample.need_high }} observations to separate a real edge
+      from noise at 80% power once costs are taken out. Anything read off a smaller sample
+      is a story about variance. The count is shown against that denominator for exactly
+      that reason.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Preregistered variants — {{ p.trials }} trial{{ '' if p.trials == 1 else 's' }}</h2>
+  <div class="card scroll">
+    <table aria-label="Preregistered variants">
+      <thead><tr><th>Variant</th><th>Short Δ</th><th>Wing Δ</th><th>Registered</th>
+        <th>Closed</th><th>Note</th></tr></thead>
+      <tbody>
+      {% for v in p.variants %}
+        <tr>
+          <td>{{ v.name }}</td>
+          <td>{{ v.spec.short_delta }}</td>
+          <td>{{ v.spec.wing_delta }}</td>
+          <td>{{ v.registered_at[:10] }}</td>
+          <td class="{{ 'na' if not v.closed }}">{{ v.closed }}</td>
+          <td style="text-align:left;white-space:normal" class="muted">{{ v.note or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">Expected best Sharpe from N trials on a
+      worthless strategy is about 1.19 at N=5 and 1.58 at N=10 (Bailey, Borwein,
+      López de Prado &amp; Zhu), so the number of variants tried is part of the result.
+      Adding one after collection begins invalidates the deflated Sharpe for everything
+      already collected.</p>
+  </div>
+</section>
+
+{% if p.open_arms %}
+<section>
+  <h2>Open now</h2>
+  <div class="card scroll">
+    <table aria-label="Open arms">
+      <thead><tr><th>Arm</th><th>Session</th><th>Expiry</th><th>In</th><th>Credit ₹</th>
+        <th>Margin ₹</th><th>Legs</th><th>Breach</th></tr></thead>
+      <tbody>
+      {% for a in p.open_arms %}
+        <tr>
+          <td>{{ a.arm_id[:8] }}</td><td>{{ a.session_date }}</td><td>{{ a.expiry }}</td>
+          <td>{{ a.entry_at }}</td>
+          <td>{{ '{:,.0f}'.format(a.entry_credit or 0) }}</td>
+          <td>{{ '{:,.0f}'.format(a.margin) if a.margin else '—' }}</td>
+          <td>{{ a.legs }}</td>
+          <td class="{{ 'bad' if a.breach_seen else 'na' }}">{{ 'yes' if a.breach_seen else 'no' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<section>
+  <h2>Results</h2>
+  {% if p.closed_count %}
+  <div class="card">
+    <div class="grid">
+      <div><div class="k muted">Closed</div><div class="stat">{{ p.closed_count }}</div></div>
+      <div><div class="k muted">Mean net ₹</div>
+        <div class="stat {{ 'ok' if (p.summary.net_pnl_mean or 0) > 0 else 'bad' }}">
+          {{ '{:,.0f}'.format(p.summary.net_pnl_mean or 0) }}</div></div>
+      <div><div class="k muted">Win rate</div>
+        <div class="stat">{{ p.summary.win_rate_pct if p.summary.win_rate_pct is not none else '—' }}%</div></div>
+      <div><div class="k muted">Cost / gross</div>
+        <div class="stat">{{ p.summary.cost_ratio if p.summary.cost_ratio is not none else '—' }}</div></div>
+    </div>
+    {% if p.mean_vs_zero %}
+    <p class="muted" style="margin-top:12px">Mean net P&amp;L is
+      ₹{{ '{:,.0f}'.format(p.mean_vs_zero.net_pnl_mean) }} against a standard error of
+      {% if p.mean_vs_zero.standard_error %}₹{{ '{:,.0f}'.format(p.mean_vs_zero.standard_error) }}
+      (t = {{ p.mean_vs_zero.t }}){% else %}—{% endif %}.
+      {% if p.mean_vs_zero.conclusive %}That clears two standard errors. It is still one
+        strategy on one instrument over one period.{% else %}<b>That does not clear two
+        standard errors, so it says nothing yet</b> — the sign of a mean this noisy is not
+        a finding.{% endif %}</p>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <h3>No observation has been recorded yet</h3>
+    <p class="muted">The variants are preregistered and the schema is ready. Collection is
+      three commands a day, and every one of them is read-only.</p>
+    <ul class="steps">
+      <li><span class="n">1</span><span>Around 09:45, once the opening range has formed
+        <pre class="cmd">python -m scripts.options_ab open</pre></span></li>
+      <li><span class="n">2</span><span>Any time during the session, to record a short-strike touch
+        <pre class="cmd">python -m scripts.options_ab watch</pre></span></li>
+      <li><span class="n">3</span><span>By 15:12, before the broker's own square-off
+        <pre class="cmd">python -m scripts.options_ab close --reason square_off</pre></span></li>
+    </ul>
+    <p class="muted" style="margin-top:14px">A missed session is simply a missing
+      observation — nothing breaks, and the count above stays where it is. What cannot be
+      recovered is a session's chain: quotes are not stored by anyone on your behalf.</p>
+  </div>
+  {% endif %}
+</section>
+
+{% if p.recent %}
+<section>
+  <h2>Recent sessions</h2>
+  <div class="card scroll">
+    <table aria-label="Recent closed arms">
+      <thead><tr><th>Session</th><th>In</th><th>Out</th><th>Reason</th><th>Spot move %</th>
+        <th>Net ₹</th><th>RoM %</th><th>Replayable</th></tr></thead>
+      <tbody>
+      {% for a in p.recent %}
+        <tr>
+          <td>{{ a.session_date }}</td><td>{{ a.entry_at }}</td><td>{{ a.exit_at }}</td>
+          <td>{{ a.exit_reason }}</td>
+          <td>{{ '%+.2f'|format(a.spot_move_pct) if a.spot_move_pct is not none else '—' }}</td>
+          <td class="{{ 'ok' if (a.net_pnl or 0) > 0 else 'bad' }}">
+            {{ '{:,.0f}'.format(a.net_pnl) if a.net_pnl is not none else 'n/a' }}</td>
+          <td>{{ '%+.2f'|format(a.return_on_margin_pct) if a.return_on_margin_pct is not none else '—' }}</td>
+          <td class="{{ 'ok' if a.replayable else 'bad' }}">{{ 'yes' if a.replayable else 'NO' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<section>
+  <h2>Replayability</h2>
+  <div class="card">
+    {% if p.tokens.total %}
+    <p><b class="{{ 'ok' if p.tokens.without == 0 else 'bad' }}">{{ p.tokens.with_tokens }}
+      of {{ p.tokens.total }}</b> recorded arms carry their instrument tokens.</p>
+    {% else %}
+    <p class="muted">No arms recorded yet. Every arm opened from now on stores its tokens.</p>
+    {% endif %}
+    <p class="muted" style="margin-top:9px">Kite lists only <em>live</em> contracts: checked
+      on 16 Aug 2026, zero of the eighteen NIFTY expiries on file were in the past. Once a
+      contract expires its token cannot be looked up again, and <code>historical_data</code>
+      takes a token rather than a symbol — so an option's price history becomes unreachable
+      the moment it expires unless the token was written down first. Each arm stores its
+      own, which is the difference between a dataset and a summary.</p>
+    <p class="muted" style="margin-top:9px">It also settles an open question. Whether a
+      token recorded <em>before</em> expiry still resolves <em>after</em> it could not be
+      tested, because no such token existed. The first arms to pass their expiry will say.</p>
+  </div>
+</section>
+
+</main>
+</body>
+</html>

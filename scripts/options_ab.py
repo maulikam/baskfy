@@ -156,6 +156,11 @@ def cmd_open(args) -> int:
             entry_fills=fills, entry_at=now, entry_spot=live.market.spot,
             dte_at_entry=(expiry - now.date()).days,
             max_loss=max_loss, margin=margin, margin_source=margin_source,
+            # Tokens, recorded while the contracts still exist in the instruments dump.
+            # After expiry they cannot be looked up again, and historical_data needs the
+            # token — so this is the only chance to keep the arm's history reachable.
+            contracts=[X.contract_from_leg(leg) for leg in plan.entry_legs],
+            underlying_token=live.underlying_token,
             note=args.note or "")
     print(json.dumps({
         "status": "OPENED", "arm_id": arm_id, "arm": X.INTRADAY, "variant": variant_id,
@@ -164,8 +169,9 @@ def cmd_open(args) -> int:
             f.turnover if f.side == "SELL" else -f.turnover for f in fills), 2),
         "max_loss_rs": max_loss, "margin_rs": margin, "margin_source": margin_source,
         "product": product,
-        "legs": [{"symbol": f.label, "side": f.side, "fill": f.price,
-                  "bid": f.bid, "ask": f.ask} for f in fills],
+        "legs": [{"symbol": leg.instrument.symbol, "token": leg.instrument.token,
+                   "side": f.side, "fill": f.price, "bid": f.bid, "ask": f.ask}
+                  for leg, f in zip(plan.entry_legs, fills)],
         "paper_only": True, "orders_submitted": 0}, indent=2, default=str))
     return 0
 

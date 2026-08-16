@@ -504,8 +504,10 @@ def tradebook_page(request: Request, imported: str = "", error: str = ""):
     with _db.connect() as conn:
         _db.migrate(conn)
         st = _tb.status(conn, positions)
+        from .analytics import corporate_actions as _ca
+        actions = _ca.listing(conn)
     return templates.TemplateResponse(request, "tradebook.html",
-                                      {"s": st, "f": st["fills"],
+                                      {"s": st, "f": st["fills"], "actions": actions,
                                        "imported": imported, "error": error,
                                        "have_snapshot": bool(positions)})
 
@@ -531,6 +533,40 @@ async def tradebook_upload(file: UploadFile):
         return RedirectResponse(f"/tradebook?imported={msg}", status_code=303)
     except _tb.TradebookError as exc:
         return RedirectResponse(f"/tradebook?error={exc}", status_code=303)
+
+
+@app.post("/tradebook/corporate-action")
+async def record_corporate_action(symbol: str = Form(...), kind: str = Form(...),
+                                  ex_date: str = Form(...), ratio_new: str = Form(...),
+                                  ratio_old: str = Form(...), note: str = Form("")):
+    """Record a bonus or split, then rebuild that symbol's lots.
+
+    Lots are derived, so recording the action and rebuilding is the whole operation —
+    there is no adjusted quantity stored anywhere that would need migrating.
+    """
+    from .analytics import corporate_actions as _ca, db as _db, tradebook as _tb
+    try:
+        action = _ca.parse(symbol, kind, ex_date, ratio_new, ratio_old, note)
+        with _db.connect() as conn:
+            _db.migrate(conn)
+            _ca.record(conn, action)
+            res = _tb.rebuild_symbols(conn, [action.symbol])
+        msg = (f"{action.symbol}: {action.describe()} · rebuilt to "
+               f"{res['open_lots']} open lots")
+        return RedirectResponse(f"/tradebook?imported={msg}", status_code=303)
+    except _ca.CorporateActionError as exc:
+        return RedirectResponse(f"/tradebook?error={exc}", status_code=303)
+
+
+@app.post("/tradebook/corporate-action/delete")
+async def delete_corporate_action(action_id: str = Form(...), symbol: str = Form(...)):
+    from .analytics import corporate_actions as _ca, db as _db, tradebook as _tb
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        _ca.remove(conn, int(action_id))
+        _tb.rebuild_symbols(conn, [symbol])       # derived, so removal self-heals
+    return RedirectResponse(f"/tradebook?imported=removed, {symbol} lots rebuilt",
+                            status_code=303)
 
 
 @app.get("/tradebook/data")

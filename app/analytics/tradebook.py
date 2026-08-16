@@ -201,12 +201,29 @@ def parse_tradebook(path: str) -> list[Fill]:
 # =====================================================================================
 # FIFO reconstruction
 # =====================================================================================
-def build_lots(fills: Sequence[Fill]) -> Rebuild:
-    """Buys open lots; sells consume them oldest-first."""
+def build_lots(fills: Sequence[Fill], actions: Sequence = ()) -> Rebuild:
+    """Buys open lots; sells consume them oldest-first.
+
+    Corporate actions are interleaved by date rather than applied at the end, so a sale
+    BEFORE an ex-date consumes the unadjusted book and one after it consumes the adjusted
+    book. Applying them afterwards would let a pre-bonus sale draw on shares that did not
+    exist yet.
+    """
+    from .corporate_actions import apply_to_book
+
     out = Rebuild()
     books: dict[str, list[Lot]] = {}
 
-    for f in sorted(fills, key=lambda x: (x.when, x.symbol)):
+    # One ordered stream of events. Actions sort at 00:01 on their ex-date, ahead of any
+    # fill that session, because the adjustment precedes trading.
+    events: list[tuple] = [(f.when, f.symbol, 0, f) for f in fills]
+    events += [(a.when, a.symbol, 1, a) for a in (actions or ())]
+
+    for _, _, kind, ev in sorted(events, key=lambda e: (e[0], e[1], e[2])):
+        if kind == 1:                                   # corporate action
+            apply_to_book(books.setdefault(ev.symbol, []), ev)
+            continue
+        f = ev
         book = books.setdefault(f.symbol, [])
         if f.side == "BUY":
             book.append(Lot(f.symbol, f.when, f.quantity, f.price, f.charges))
@@ -301,9 +318,13 @@ def rebuild_symbols(conn, symbols: Sequence[str]) -> dict:
     mention, but always reading that symbol's COMPLETE fill history — which is what
     makes a sell captured today consume a lot bought months ago.
     """
+    from . import corporate_actions as CA
+
     symbols = sorted(set(symbols))
     fills = load_fills(conn, symbols)
-    rebuild = build_lots(fills)
+    # Lots are DERIVED, so recording a corporate action and rebuilding is all it takes
+    # for it to take effect — there is no adjusted quantity stored anywhere to migrate.
+    rebuild = build_lots(fills, CA.load(conn, symbols))
     _write_lots(conn, rebuild, symbols)
     return {"symbols": symbols, "fills": len(fills),
             "open_lots": len(rebuild.open_lots), "closed_trades": len(rebuild.closed),

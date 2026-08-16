@@ -90,10 +90,19 @@ class TestGatewayEnforcesGuard(unittest.TestCase):
                                       price=2275.0, series="GB"))
 
     def test_gateway_accepts_ordinary_equity(self):
-        res = asyncio.run(self.gw.place(symbol="RRKABEL", qty=10, side="BUY",
-                                        price=2275.0, series="EQ"))
-        # DRY_RUN=true in .env → simulated, never routed to the broker.
-        self.assertIn(res["status"], ("DRY_RUN", "PLACED"))
+        # DRY_RUN is pinned rather than inherited from .env. Reading the ambient value
+        # meant this only ever exercised the simulation short-circuit, so it passed while
+        # the desk was in DRY_RUN and failed the moment it went live — false confidence
+        # at exactly the point it mattered.
+        from app import config as C
+        prev = C.DRY_RUN
+        C.DRY_RUN = True
+        try:
+            res = asyncio.run(self.gw.place(symbol="RRKABEL", qty=10, side="BUY",
+                                            price=2275.0, series="EQ"))
+        finally:
+            C.DRY_RUN = prev
+        self.assertEqual(res["status"], "DRY_RUN")
         self.assertEqual(res["symbol"], "RRKABEL")
 
 
@@ -129,8 +138,15 @@ class TestProductGates(unittest.TestCase):
         self.assertIn("OPTIONS_ENABLED", res["error"])
 
     def test_cnc_still_passes(self):
-        res = asyncio.run(self.gw.place(symbol="DIXON", qty=10, side="BUY", price=639.4))
-        self.assertIn(res["status"], ("DRY_RUN", "PLACED"))
+        from app import config as C
+        prev = C.DRY_RUN
+        C.DRY_RUN = True
+        try:
+            res = asyncio.run(self.gw.place(symbol="DIXON", qty=10, side="BUY",
+                                            price=639.4))
+        finally:
+            C.DRY_RUN = prev
+        self.assertEqual(res["status"], "DRY_RUN")
 
 
 class TestScoringExcludesSGB(unittest.TestCase):
@@ -146,6 +162,74 @@ class TestScoringExcludesSGB(unittest.TestCase):
         self.assertIn("excluded_instrument", row.iloc[0]["reject"])
         self.assertTrue(pd.isna(row.iloc[0]["SCORE"]))
 
+class TestLiveModeRouting(unittest.TestCase):
+    """What happens when DRY_RUN is OFF.
+
+    Every other gateway test pinned DRY_RUN on, so the simulation short-circuit was the
+    only path ever exercised. That left the live path — the one that actually reaches the
+    broker — untested, which is the wrong way round: the dangerous path deserves the
+    coverage.
+    """
+
+    def setUp(self):
+        from app.core.gateway import OrderGateway
+        from app.core.risk import RiskConfig, RiskManager
+
+        class RecordingKC:
+            def __init__(self):
+                self.sent = []
+                self.VARIETY_REGULAR = "regular"
+                self.TRANSACTION_TYPE_BUY = "BUY"
+                self.TRANSACTION_TYPE_SELL = "SELL"
+                self.PRODUCT_CNC = "CNC"
+                self.PRODUCT_MIS = "MIS"
+                self.ORDER_TYPE_LIMIT = "LIMIT"
+                self.ORDER_TYPE_MARKET = "MARKET"
+                self.VALIDITY_DAY = "DAY"
+
+            def place_order(self, **kw):
+                self.sent.append(kw)
+                return "ORDER123"
+
+        self.kc = RecordingKC()
+        self.gw = OrderGateway(self.kc,
+                               RiskManager(RiskConfig(max_position_value=1e12)))
+
+    def _live(self, **kw):
+        from app import config as C
+        prev = C.DRY_RUN
+        C.DRY_RUN = False
+        try:
+            return asyncio.run(self.gw.place(**kw))
+        finally:
+            C.DRY_RUN = prev
+
+    def test_a_legitimate_cnc_order_reaches_the_broker_when_live(self):
+        res = self._live(symbol="DIXON", qty=10, side="BUY", price=639.4)
+        self.assertEqual(len(self.kc.sent), 1)
+        self.assertNotEqual(res.get("status"), "BLOCKED")
+
+    def test_an_untouchable_instrument_never_reaches_the_broker_when_live(self):
+        """The guard must not depend on DRY_RUN for its protection."""
+        from app.core.guards import UntouchableInstrumentError
+        try:
+            res = self._live(symbol="SGBDE31III-GB", qty=1, side="SELL", price=15306.0)
+            self.assertEqual(res.get("status"), "BLOCKED")
+        except UntouchableInstrumentError:
+            pass                      # raising before any network call is also correct
+        self.assertEqual(self.kc.sent, [], "a protected instrument was sent to the broker")
+
+    def test_a_gated_product_never_reaches_the_broker_when_live(self):
+        res = self._live(symbol="DIXON", qty=10, side="BUY", product="MIS", price=639.4)
+        self.assertEqual(res["status"], "BLOCKED")
+        self.assertEqual(self.kc.sent, [], "an MIS order was sent while the gate is off")
+
+    def test_the_order_sent_live_is_cnc_and_delivery(self):
+        self._live(symbol="DIXON", qty=10, side="BUY", price=639.4)
+        sent = self.kc.sent[0]
+        self.assertEqual(sent.get("product"), "CNC")
+        self.assertEqual(sent.get("exchange"), "NSE")
+        self.assertEqual(sent.get("quantity"), 10)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

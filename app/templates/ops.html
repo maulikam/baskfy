@@ -95,6 +95,14 @@
   .muted{color:var(--dim);font-size:11.5px;line-height:1.6}
   code{font-size:11.5px;color:var(--saffron);overflow-wrap:anywhere}
   @media(max-width:780px){body{padding:20px 16px 70px} .card table{display:block;overflow-x:auto}}
+
+  /* Touch targets. Nav links were ~32px high, under the comfortable 44px, but only on a
+     coarse pointer does that matter — a mouse is precise, a thumb is not. */
+  @media (pointer:coarse){
+    .nav a{min-height:44px;display:flex;align-items:center}
+    button,.btn{min-height:44px}
+    summary{min-height:44px;display:flex;align-items:center}
+  }
   :focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
 </style>
 </head>
@@ -114,6 +122,7 @@
   </nav>
   <div class="badge">Orders: <b class="{{ 'warn' if not dry_run else '' }}">{{ 'DRY RUN' if dry_run else 'LIVE' }}</b></div>
 </header>
+<main>
 
 {% if running %}
   <div class="banner run">
@@ -150,7 +159,7 @@
 <section>
   <h2>Daily collection history</h2>
   <div class="card">
-    <table>
+    <table aria-label="Daily collection history">
       <thead><tr><th>Ran at</th><th>Session</th><th>Trigger</th><th>Outcome</th>
         <th>Steps that failed</th></tr></thead>
       <tbody>
@@ -236,7 +245,7 @@
   <h2>Run history</h2>
   <div class="card">
     {% if history %}
-      <table>
+      <table aria-label="Run history">
         <thead><tr><th>Started</th><th>Operation</th><th>Command</th><th>Status</th>
           <th>Took</th><th>Output</th></tr></thead>
         <tbody>
@@ -268,5 +277,6 @@
   </div>
 </section>
 {% endif %}
+</main>
 </body>
 </html>

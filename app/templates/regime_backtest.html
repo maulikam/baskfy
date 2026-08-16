@@ -70,6 +70,14 @@
   table.heat td:first-child{text-align:right;background:none;color:var(--dim);
                             font-weight:400}
   table.heat th{text-align:center} table.heat th:first-child{text-align:right}
+
+  /* Touch targets. Nav links were ~32px high, under the comfortable 44px, but only on a
+     coarse pointer does that matter — a mouse is precise, a thumb is not. */
+  @media (pointer:coarse){
+    .nav a{min-height:44px;display:flex;align-items:center}
+    button,.btn{min-height:44px}
+    summary{min-height:44px;display:flex;align-items:center}
+  }
   :focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
   @media(max-width:780px){
     body{padding:20px 16px 70px}
@@ -93,6 +101,7 @@
     <a class="api" href="/status">status</a>
   </nav>
 </header>
+<main>
 
 {% if not b %}
   <section class="card">
@@ -287,7 +296,7 @@
     <p class="muted" style="margin-bottom:10px">The tiered model against no overlay in
       periods chosen because they hurt. Both measures are here because they point opposite
       ways, and showing one alone would argue a case instead of presenting the trade.</p>
-    <table>
+    <table aria-label="The trade, window by window">
       <thead><tr><th>Period</th><th>Variant</th><th>CAGR</th><th></th>
         <th>Max drawdown</th><th></th></tr></thead>
       <tbody>
@@ -381,7 +390,7 @@
         <p class="muted" style="margin-bottom:6px">R4 exposure
           <b>{{ '%.0f'|format(g.r4) }}%</b></p>
         <div class="scroll">
-        <table class="heat">
+        <table aria-label="Parameter sensitivity" class="heat">
           <thead><tr><th>buffer \ confirm</th>
             {% for c in rb.confirms %}<th>{{ c }}d</th>{% endfor %}</tr></thead>
           <tbody>
@@ -475,7 +484,7 @@
 <section>
   <h2>Strategy comparison</h2>
   <div class="card scroll">
-    <table>
+    <table aria-label="Strategy comparison">
       <thead><tr>
         <th>Variant</th><th>Design</th><th>CAGR</th><th>Max DD</th><th>Vol</th>
         <th>Sharpe</th><th>Sortino</th><th>Calmar</th><th>Avg exp</th><th>% cash</th>
@@ -518,7 +527,7 @@
   <div class="card">
     <h2>Tier distribution</h2>
     <div class="scroll">
-      <table>
+      <table aria-label="Tier distribution">
         <thead><tr><th>Variant</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th></tr></thead>
         <tbody>
         {% for key, d in b.tier_distribution.items() %}
@@ -572,5 +581,6 @@
 </section>
 
 {% endif %}
+</main>
 </body>
 </html>

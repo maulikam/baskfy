@@ -27,9 +27,12 @@ class OrderGateway:
                     order_type: str = "LIMIT", price: float | None = None,
                     exchange: str = "NSE", variety: str = "regular",
                     client_id: str | None = None, gross_exposure: float = 0.0,
-                    series: str | None = None) -> dict:
+                    series: str | None = None, tick_size: float | None = None) -> dict:
         assert_tradeable(symbol, series)                       # layer 1: untouchables
-        if product != "CNC" and not C.INTRADAY_ENABLED and exchange in ("NSE", "BSE"):
+        # MIS is an intraday product on every segment. The old NSE/BSE-only check let an
+        # NFO MIS order through with INTRADAY_ENABLED=false as soon as OPTIONS_ENABLED was
+        # set, so enabling options silently enabled an intraday engine as well.
+        if product == "MIS" and not C.INTRADAY_ENABLED:
             return {"symbol": symbol, "status": "BLOCKED",
                     "error": "MIS/intraday disabled (config.INTRADAY_ENABLED)"}
         if exchange in ("NFO", "BFO") and not C.OPTIONS_ENABLED:
@@ -53,7 +56,12 @@ class OrderGateway:
                       quantity=abs(int(qty)), transaction_type=side, product=product,
                       order_type=order_type, validity="DAY")
         if price and order_type == "LIMIT":
-            params["price"] = round(float(price), 1)
+            # Option ticks are currently Rs 0.05; rounding every limit to one decimal can
+            # move a price away from the selected quote. Live contract metadata remains
+            # authoritative because exchange tick sizes can change.
+            px = float(price)
+            params["price"] = (round(round(px / tick_size) * tick_size, 2)
+                               if tick_size and tick_size > 0 else round(px, 1))
         try:
             oid = await asyncio.to_thread(self.kc.place_order, **params)
             self._sent[cid] = oid

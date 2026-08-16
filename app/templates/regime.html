@@ -175,6 +175,28 @@
           color:var(--dim);cursor:pointer}
   summary:hover{color:var(--paper)}
   .empty{color:var(--dim);font-size:12.5px;padding:var(--s2) 0;line-height:1.65}
+
+  /* Decision summary: the five answers, above everything that explains them. */
+  .decide{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);
+          border-radius:11px;overflow:hidden;
+          grid-template-columns:repeat(auto-fit,minmax(232px,1fr))}
+  .d-item{background:var(--panel);padding:13px 16px;display:flex;flex-direction:column;
+          gap:3px;min-width:0}
+  .d-q{font-family:var(--disp);font-size:9.5px;letter-spacing:.14em;
+       text-transform:uppercase;color:var(--dim)}
+  .d-a{font-family:var(--disp);font-size:19px;font-weight:900;line-height:1.15;
+       overflow-wrap:anywhere}
+  .d-item .muted{font-size:11px}
+  .d-item a.muted{color:var(--saffron)}
+  @media(max-width:640px){.d-a{font-size:17px}}
+
+  /* Touch targets. Nav links were ~32px high, under the comfortable 44px, but only on a
+     coarse pointer does that matter — a mouse is precise, a thumb is not. */
+  @media (pointer:coarse){
+    .nav a{min-height:44px;display:flex;align-items:center}
+    button,.btn{min-height:44px}
+    summary{min-height:44px;display:flex;align-items:center}
+  }
   :focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
 
   /* Dense tables cannot shrink below their content, so below this width they scroll
@@ -211,6 +233,7 @@
     &nbsp;·&nbsp; Orders: <b class="{{ 'warn' if not v.dry_run else '' }}">{{ 'DRY RUN' if v.dry_run else 'LIVE' }}</b>
   </div>
 </header>
+<main>
 
 {% if not v.available %}
   <section class="card" style="margin-top:22px">
@@ -247,21 +270,48 @@
 </div>
 {% endif %}
 
-<!-- 2b · WHAT THE HEADER SWITCHES MEAN ============================================ -->
-<section>
-  <h2>How the overlay is running</h2>
-  <div class="switches">
-    {% for sw in v.mode_explainer %}
-      <div class="switch">
-        <span class="l">{{ sw.label }}</span>
-        <span class="v {{ sw.state }}">{{ sw.value }}</span>
-        <span class="m">{{ sw.means }}</span>
-      </div>
-    {% endfor %}
+<!-- 1b · THE FIVE ANSWERS, ABOVE EVERYTHING ======================================= -->
+{# The page exists to answer five questions on sight. Explaining what the switches mean
+   and what the four tiers do is reference material: useful, but it was pushing "why this
+   regime" past 1,400px on desktop and past 3,100px on mobile. Decision first, teaching
+   after. #}
+<section aria-label="Decision summary">
+  <div class="decide">
+    <div class="d-item">
+      <span class="d-q">What regime</span>
+      <b class="d-a badge2 {{ v.tier_key }}">{{ v.policy_tier }} {{ v.tier_name }}</b>
+      <span class="muted">{{ v.tier_meaning }}</span>
+    </div>
+    <div class="d-item">
+      <span class="d-q">Why</span>
+      <b class="d-a">{{ v.headline_reason }}</b>
+      <a class="muted" href="#why">every gate below</a>
+    </div>
+    <div class="d-item">
+      <span class="d-q">Exposure permitted</span>
+      <b class="d-a">{{ '%.0f'|format(v.target_equity_cap_pct) }}%</b>
+      <span class="muted">holding
+        {{ '%.1f'|format(v.actual_equity_pct) if v.actual_equity_pct is not none else '—' }}%
+        across {{ v.holdings_now or '—' }} positions
+        {%- if v.required_reduction_pct %} ·
+          <b class="bad">{{ '%.1f'|format(v.required_reduction_pct) }}% to sell</b>
+        {%- else %} · within cap{% endif %}</span>
+    </div>
+    <div class="d-item">
+      <span class="d-q">Pending changes</span>
+      <b class="d-a {{ 'bad' if v.proposed_orders else '' }}">
+        {{ v.proposed_orders|length if v.proposed_orders else 'None' }}</b>
+      <span class="muted">{{ 'orders proposed' if v.proposed_orders else v.no_plan_reason
+                             or 'no rebalance planned' }}</span>
+    </div>
+    <div class="d-item">
+      <span class="d-q">Data reliable</span>
+      <b class="d-a {{ 'ok' if v.data_health == 'Current' else 'bad' }}">{{ v.data_health }}</b>
+      <span class="muted">signal {{ v.signal_session_date }} · next {{ v.next_evaluation_date }}
+        {%- if v.breadth_coverage_pct is not none %} · breadth
+          {{ '%.0f'|format(v.breadth_coverage_pct) }}% covered{% endif %}</span>
+    </div>
   </div>
-  <p class="muted" style="margin-top:8px">These three are independent. Dry run is the
-    global guarantee: it holds in every mode, so an order cannot be placed even in
-    enforce.</p>
 </section>
 
 <!-- 3 · REGIME + EXPOSURE ========================================================= -->
@@ -328,7 +378,7 @@
       cannot be compared against reality yet.</p>
     {% endif %}
 
-    <table style="margin-top:var(--s3)">
+    <table aria-label="Equity exposure" style="margin-top:var(--s3)">
       <tbody>
         <tr><td>Actual equity</td><td>{{ '%.1f'|format(v.actual_equity_pct) if v.actual_equity_pct is not none else '—' }}%</td>
             <td>Holdings</td><td>{{ v.holdings_now or '—' }}</td></tr>
@@ -336,7 +386,11 @@
             <td>Target range</td><td>{{ v.target_position_range[0] }}–{{ v.target_position_range[1] }}</td></tr>
         <tr><td>Required reduction</td>
             <td class="{{ 'bad' if v.required_reduction_pct else 'na' }}">{{ '%.1f'|format(v.required_reduction_pct) if v.required_reduction_pct is not none else '—' }}%</td>
-            <td>Half-size / provisional</td><td>{{ v.half_sized|length }}</td></tr>
+            <td>At full weight</td>
+            <td>{{ v.full_sized if v.full_sized is not none else '—' }}
+              {%- if v.half_sized or v.below_half %}
+                <span class="muted">· {{ v.half_sized|length }} half
+                  · {{ v.below_half|length }} thinner</span>{% endif %}</td></tr>
         <tr><td>Current cash</td><td>{{ '%.1f'|format(v.current_cash_pct) if v.current_cash_pct is not none else '—' }}%</td>
             <td>Largest position</td>
             <td>{% if v.largest_position and v.largest_position.symbol %}{{ v.largest_position.symbol }} · {{ '%.1f'|format(v.largest_position.weight_sleeve) }}%{% else %}—{% endif %}</td></tr>
@@ -357,37 +411,13 @@
   </div>
 </section>
 
-<!-- 3b · TIER LADDER ============================================================== -->
-<section>
-  <h2>What the four tiers mean</h2>
-  <div class="ladder">
-    {% for t in v.tier_ladder %}
-      <div class="rung {{ 'now ' + t.key if t.current }}">
-        <div>
-          <div class="badge2 {{ t.key }}">{{ t.tier }}</div>
-          <div class="cap">equity &le;{{ '%.0f'|format(t.cap) }}%</div>
-          <div class="cap">buys: {{ t.buys|lower }}</div>
-        </div>
-        <div>
-          <h3 class="{{ t.key }}">{{ t.name }}
-            {%- if t.current %}<span class="youarehere {{ t.key }}">current</span>{% endif %}</h3>
-          <p><b style="color:var(--paper)">Entered when:</b> {{ t.when }}</p>
-          <p style="margin-top:3px"><b style="color:var(--paper)">What it does:</b> {{ t.does }}</p>
-        </div>
-      </div>
-    {% endfor %}
-  </div>
-  <p class="muted" style="margin-top:8px">Risk reduction is immediate: R1 can drop
-    straight to R3 or R4. Re-risking climbs one rung per weekly evaluation, so R4 back to
-    R1 takes three weeks.</p>
-</section>
-
+<a id="why"></a>
 <!-- 4 · WHY ======================================================================= -->
 <section>
   <h2>Why this regime</h2>
   <div class="card">
     <ul class="why">{% for line in v.narrative %}<li>{{ line }}</li>{% endfor %}</ul>
-    <table style="margin-top:var(--s3)">
+    <table aria-label="Why this regime" style="margin-top:var(--s3)">
       <thead><tr><th>Gate</th><th>Current</th><th>Threshold</th><th>Status</th><th>Confirmation</th></tr></thead>
       <tbody>
       {% for g in v.gates %}
@@ -439,7 +469,7 @@
         <p class="muted" style="font-size:10.5px">{{ c.spark.sessions }} sessions ·
           dashed line is the {{ c.spark.ma_len }}-DMA</p>
       {% endif %}
-      <table style="margin-top:8px">
+      <table aria-label="Index health" style="margin-top:8px">
         <tbody>
         {% for m in c.mas %}
           <tr><td>{{ m.length }}-DMA</td>
@@ -460,7 +490,7 @@
 <section class="grid g2">
   <div class="card">
     <h2>Weighted structural health</h2>
-    <table>
+    <table aria-label="Weighted structural health">
       <thead><tr><th>Measure</th><th>Value</th><th>Interpretation</th></tr></thead>
       <tbody>
         {% for k, note in [('20','Weight above its 20-DMA'),('50','Short-term structure'),
@@ -477,7 +507,7 @@
   </div>
   <div class="card">
     <h2>Strategic category weights</h2>
-    <table>
+    <table aria-label="Strategic category weights">
       <thead><tr><th>Category</th><th>Weight</th><th>Source</th></tr></thead>
       <tbody>
       {% for cat, w in v.book_weights.items()|sort %}
@@ -612,7 +642,7 @@
 
   <div class="card">
     <h2>Holdings</h2>
-    <table>
+    <table aria-label="Holdings">
       <thead><tr><th>Stock</th><th>Qty</th><th>Pledged</th><th>Avg cost ₹</th><th>Price ₹</th>
         <th>Value ₹</th><th>Wt% NAV</th><th>Unrealised</th><th>P&amp;L ₹</th><th>Status</th></tr></thead>
       <tbody>
@@ -658,7 +688,7 @@
         {{ v.plan_summary.sleeve_pct }}%, projected
         {{ '%.1f'|format(v.plan_summary.projected_equity_pct) }}% equity{% endif %}.
         Read-only: nothing executes from this page.</p>
-      <table>
+      <table aria-label="Proposed portfolio actions">
         <thead><tr><th>Stock</th><th>Action</th><th>Now</th><th>&Delta; qty</th><th>Final</th>
           <th>Wt% NAV</th><th>Wt% sleeve</th><th>Value ₹</th><th>Rank</th><th>Reason</th>
           <th>Status</th></tr></thead>
@@ -706,7 +736,7 @@
 <section>
   <h2>Tax and manual review</h2>
   <div class="card">
-    <table>
+    <table aria-label="Tax and manual review">
       <thead><tr><th>Position</th><th>Sell qty</th><th>Lots covered</th><th>Est. gain ₹</th>
         <th>Days to LTCG</th><th>Warnings</th></tr></thead>
       <tbody>
@@ -741,7 +771,7 @@
         {% else %}<b class="ok">Cap satisfied.</b>{% endif %}
       {% else %}No exposure has been observed for this evaluation yet.{% endif %}
     </p>
-    <table style="margin-top:var(--s2)">
+    <table aria-label="Execution and reconciliation" style="margin-top:var(--s2)">
       <tbody>
         <tr><td>Evaluation ID</td><td><code>{{ v.evaluation_id }}</code></td>
             <td>Execution status</td><td>{{ v.execution_status|upper }}</td></tr>
@@ -832,7 +862,7 @@
         numbers until then.</p>
     {% endif %}
     {% if v.history|length > 1 %}
-      <table>
+      <table aria-label="Transition history">
         <thead><tr><th>Week</th><th>Raw candidate</th><th>Policy tier</th><th>Cap</th>
           <th>Actual</th><th>Trigger</th><th>Record</th></tr></thead>
         <tbody>
@@ -862,7 +892,7 @@
         {{ v.safe_state }}</p>
     {% endif %}
     <div class="grid g2" style="margin-top:var(--s2)">
-      <table>
+      <table aria-label="Data quality">
         <thead><tr><th>Index</th><th>Last final session</th><th>Sessions</th><th>Age</th><th>State</th></tr></thead>
         <tbody>
         {% for r in v.index_status %}
@@ -873,7 +903,7 @@
         {% endfor %}
         </tbody>
       </table>
-      <table>
+      <table aria-label="Data quality">
         <tbody>
           <tr><td>Breadth freshness</td><td>{{ v.breadth_as_of or 'none' }}</td></tr>
           <tr><td>Breadth coverage</td>
@@ -909,10 +939,53 @@
 </section>
 
 <!-- 14 · CONFIGURATION ============================================================ -->
+<!-- REFERENCE — moved below the decisive content ==================== -->
+<!-- 3b · TIER LADDER ============================================================== -->
+<section>
+  <h2>What the four tiers mean</h2>
+  <div class="ladder">
+    {% for t in v.tier_ladder %}
+      <div class="rung {{ 'now ' + t.key if t.current }}">
+        <div>
+          <div class="badge2 {{ t.key }}">{{ t.tier }}</div>
+          <div class="cap">equity &le;{{ '%.0f'|format(t.cap) }}%</div>
+          <div class="cap">buys: {{ t.buys|lower }}</div>
+        </div>
+        <div>
+          <h3 class="{{ t.key }}">{{ t.name }}
+            {%- if t.current %}<span class="youarehere {{ t.key }}">current</span>{% endif %}</h3>
+          <p><b style="color:var(--paper)">Entered when:</b> {{ t.when }}</p>
+          <p style="margin-top:3px"><b style="color:var(--paper)">What it does:</b> {{ t.does }}</p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  <p class="muted" style="margin-top:8px">Risk reduction is immediate: R1 can drop
+    straight to R3 or R4. Re-risking climbs one rung per weekly evaluation, so R4 back to
+    R1 takes three weeks.</p>
+</section>
+
+<!-- 2b · WHAT THE HEADER SWITCHES MEAN ============================================ -->
+<section>
+  <h2>How the overlay is running</h2>
+  <div class="switches">
+    {% for sw in v.mode_explainer %}
+      <div class="switch">
+        <span class="l">{{ sw.label }}</span>
+        <span class="v {{ sw.state }}">{{ sw.value }}</span>
+        <span class="m">{{ sw.means }}</span>
+      </div>
+    {% endfor %}
+  </div>
+  <p class="muted" style="margin-top:8px">These three are independent. Dry run is the
+    global guarantee: it holds in every mode, so an order cannot be placed even in
+    enforce.</p>
+</section>
+
 <details>
   <summary>Configuration (read-only)</summary>
   <div class="grid g2" style="margin-top:var(--s3)">
-    <table><tbody>
+    <table aria-label="How the overlay is running"><tbody>
       <tr><td>MA lengths</td><td>{{ v.config.ma_lengths|join(' · ') }}</td></tr>
       <tr><td>Buffer</td><td>{{ v.config.buffer_bps }} bps · {{ '%.2f'|format(v.config.buffer_bps / 100) }}%</td></tr>
       <tr><td>Confirmation days</td><td>{{ v.config.confirm_days }}</td></tr>
@@ -922,15 +995,15 @@
       <tr><td>Index stale after</td><td>{{ v.config.index_stale_days }}d</td></tr>
       <tr><td>LTCG review window</td><td>{{ v.config.ltcg_review_days }}d</td></tr>
     </tbody></table>
-    <table><tbody>
+    <table aria-label="How the overlay is running"><tbody>
       {% for k, val in v.config.breadth_thresholds.items() %}<tr><td>Breadth · {{ k }}</td><td>{{ val }}</td></tr>{% endfor %}
       {% for k, val in v.config.health_thresholds.items() %}<tr><td>Health · {{ k }}</td><td>{{ val }}</td></tr>{% endfor %}
     </tbody></table>
-    <table><tbody>
+    <table aria-label="How the overlay is running"><tbody>
       {% for k, val in v.config.exposure_map.items()|sort %}<tr><td>Exposure · {{ k }}</td><td>{{ '%.0f'|format(val) }}%</td></tr>{% endfor %}
       {% for k, val in v.config.default_weights.items()|sort %}<tr><td>Default weight · {{ k }}</td><td>{{ '%.0f'|format(val * 100) }}%</td></tr>{% endfor %}
     </tbody></table>
-    <table><tbody>
+    <table aria-label="How the overlay is running"><tbody>
       <tr><td>R4 residual policy</td><td style="white-space:normal">{{ v.config.r4_residual }}</td></tr>
       <tr><td>Whipsaw definition</td><td style="white-space:normal">{{ v.config.whipsaw }}</td></tr>
       <tr><td>Algorithm version</td><td><code>{{ v.config.algorithm_version }}</code></td></tr>
@@ -943,5 +1016,6 @@
 </details>
 
 {% endif %}
+</main>
 </body>
 </html>

@@ -465,3 +465,78 @@ def test_the_runner_charges_elm_only_to_the_overnight_arm_into_expiry():
     block = src.split("product = ")[1].split("except Exception")[0]
     assert 'X.OVERNIGHT' in block and "timedelta(days=1)" in block
     assert 'expiry_elm' in block
+
+
+# =====================================================================================
+# expiry eve — the night the ELM lands
+# =====================================================================================
+def test_a_monday_night_before_a_tuesday_expiry_is_expiry_eve():
+    """Tuesday is now the only NIFTY weekly expiry, so on a five-day week this is one
+    night in five — and its margin is roughly double every other night's."""
+    assert X.classify_night(dt.datetime(2026, 8, 17, 15, 15),
+                            dt.datetime(2026, 8, 18, 9, 20),
+                            expiry=D(2026, 8, 18)) == X.NIGHT_EXPIRY_EVE
+
+
+def test_a_night_that_does_not_reach_expiry_is_not_expiry_eve():
+    assert X.classify_night(dt.datetime(2026, 8, 17, 15, 15),
+                            dt.datetime(2026, 8, 18, 9, 20),
+                            expiry=D(2026, 8, 25)) == X.NIGHT_NORMAL
+
+
+def test_expiry_eve_outranks_weekend_because_the_elm_dominates():
+    """A Friday-to-Monday hold into a Monday expiry is both. The label reports the cost
+    that dominates; the separate flag keeps the other fact recoverable."""
+    got = X.classify_night(dt.datetime(2026, 8, 21, 15, 15),
+                           dt.datetime(2026, 8, 24, 9, 20), expiry=D(2026, 8, 24))
+    assert got == X.NIGHT_EXPIRY_EVE
+    assert X.is_expiry_eve(dt.datetime(2026, 8, 24, 9, 20), D(2026, 8, 24)) is True
+
+
+def test_an_event_still_outranks_expiry_eve():
+    """The caller knows a policy decision fell in the window; the module cannot infer it,
+    and a gap distribution the model has never seen beats a cost it can compute."""
+    assert X.classify_night(dt.datetime(2026, 8, 17, 15, 15),
+                            dt.datetime(2026, 8, 18, 9, 20),
+                            expiry=D(2026, 8, 18), event=True) == X.NIGHT_EVENT
+
+
+def test_without_an_expiry_the_classification_is_unchanged():
+    assert X.classify_night(dt.datetime(2026, 8, 17, 15, 15),
+                            dt.datetime(2026, 8, 18, 9, 20)) == X.NIGHT_NORMAL
+
+
+def test_the_flag_is_stored_alongside_the_label(conn, variant):
+    aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.OVERNIGHT,
+                     expiry=D(2026, 8, 18), lots=1, lot_size=LOT,
+                     entry_fills=entry_fills(),
+                     entry_at=dt.datetime(2026, 8, 17, 15, 15), entry_spot=24400.0,
+                     elm_charged=63_440.0)
+    out = X.close_arm(conn, aid, exit_fills=X.reverse(entry_fills(), exit_quotes()),
+                      exit_at=dt.datetime(2026, 8, 18, 9, 20), exit_spot=24450.0,
+                      exit_reason="scheduled")
+    assert out["night_type"] == X.NIGHT_EXPIRY_EVE and out["expiry_eve"] is True
+    row = conn.execute("SELECT expiry_eve, elm_charged FROM option_arms WHERE arm_id=?",
+                       (aid,)).fetchone()
+    assert row["expiry_eve"] == 1
+    assert row["elm_charged"] == pytest.approx(63_440.0)
+
+
+def test_the_report_separates_nights_held_into_expiry(conn, variant):
+    """Otherwise the ELM is buried in an average and the arm looks uniformly worse."""
+    for day, exp in ((17, D(2026, 8, 18)), (19, D(2026, 8, 25))):
+        aid = X.open_arm(conn, variant_id=variant, strategy="seller", arm=X.OVERNIGHT,
+                         expiry=exp, lots=1, lot_size=LOT, entry_fills=entry_fills(),
+                         entry_at=dt.datetime(2026, 8, day, 15, 15), entry_spot=24400.0)
+        X.close_arm(conn, aid, exit_fills=X.reverse(entry_fills(), exit_quotes()),
+                    exit_at=dt.datetime(2026, 8, day + 1, 9, 20), exit_spot=24450.0,
+                    exit_reason="scheduled")
+    rep = X.compare(conn)
+    assert rep["expiry_eve"]["held_into_expiry"]["n"] == 1
+    assert rep["expiry_eve"]["other_nights"]["n"] == 1
+    assert rep["by_night"][X.NIGHT_EXPIRY_EVE]["n"] == 1
+
+
+def test_every_night_type_appears_in_the_report(conn):
+    rep = X.compare(conn)
+    assert set(rep["by_night"]) == set(X.NIGHT_TYPES)

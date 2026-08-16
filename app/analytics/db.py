@@ -23,7 +23,7 @@ from typing import Iterator, Sequence
 
 from .. import config as C
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # --- schema ---------------------------------------------------------------------------
 # Column sets are fixed by the analytics spec; extra *indexes* are fine, extra columns are
@@ -386,6 +386,14 @@ _MIGRATIONS: dict[int, Sequence[str]] = {
                ON option_arms(variant_id, session_date)""",
         """CREATE INDEX IF NOT EXISTS ix_option_arms_open
                ON option_arms(exit_at) WHERE exit_at IS NULL""",
+    ),
+    10: (
+        # Whether the hold ran into expiry morning, stored SEPARATELY from night_type.
+        # The two are different axes: a night can be both a weekend and an expiry eve, and
+        # collapsing them into one label would make that combination unrecoverable. The
+        # label carries the headline; this column lets the axes be crossed.
+        """ALTER TABLE option_arms ADD COLUMN expiry_eve INTEGER""",
+        """ALTER TABLE option_arms ADD COLUMN elm_charged REAL""",
     ),
 }
 

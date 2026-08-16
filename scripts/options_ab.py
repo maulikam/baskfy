@@ -209,6 +209,7 @@ def cmd_open(args) -> int:
             entry_fills=fills, entry_at=now, entry_spot=live.market.spot,
             dte_at_entry=(expiry - now.date()).days,
             max_loss=max_loss, margin=margin, margin_source=margin_source,
+            elm_charged=elm,
             note=(args.note or "") + (f" inherited_from={source_arm_id}"
                                       if inherited else ""))
     print(json.dumps({

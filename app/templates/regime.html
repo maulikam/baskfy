@@ -699,8 +699,8 @@
         Read-only: nothing executes from this page.</p>
       <table aria-label="Proposed portfolio actions">
         <thead><tr><th>Stock</th><th>Action</th><th>Now</th><th>&Delta; qty</th><th>Final</th>
-          <th>Wt% NAV</th><th>Wt% sleeve</th><th>Value ₹</th><th>Rank</th><th>Reason</th>
-          <th>Status</th></tr></thead>
+          <th>Wt now</th><th>Wt target</th><th>Value ₹</th><th>Unrealised</th>
+          <th>To LTCG</th><th>Rank</th><th>Reason</th><th>Status</th></tr></thead>
         <tbody>
         {% for o in v.guard_orders + (v.proposed_sells | rejectattr('note','equalto','guard exit') | list) + v.proposed_buys %}
           <tr>
@@ -709,9 +709,16 @@
             <td>{{ o.qty_now }}</td>
             <td class="{{ 'bad' if o.delta < 0 else 'ok' }}">{{ '%+d'|format(o.delta) }}</td>
             <td>{{ o.qty_final }}</td>
-            <td>{{ '%.2f'|format(o.weight_nav) }}</td>
-            <td>{{ '%.2f'|format(o.weight_sleeve) }}</td>
-            <td>{{ '{:,.0f}'.format(o.value) }}</td>
+            <td>{{ '%.2f'|format(o.weight_now) ~ '%' if o.weight_now is not none else '—' }}</td>
+            <td>{{ '%.2f'|format(o.weight_target) ~ '%' if o.weight_target is not none else '—' }}</td>
+            <td>{{ '{:,.0f}'.format(o.value) }}
+              {%- if o.liquidity_warning %} <span class="pill warn">thin</span>{% endif %}</td>
+            <td class="{{ 'ok' if (o.pnl_pct or 0) >= 0 else 'bad' }}">
+              {{ '%+.1f'|format(o.pnl_pct) ~ '%' if o.pnl_pct is not none else '—' }}</td>
+            <td class="{{ 'warnc' if o.days_to_ltcg and o.days_to_ltcg <= 45 else 'muted' }}">
+              {%- if o.days_to_ltcg %}{{ o.days_to_ltcg }}d
+              {%- elif o.delta < 0 and o.tax_flagged is not none %}long term
+              {%- else %}—{% endif %}</td>
             <td>{{ o.rank if o.rank is not none else '—' }}</td>
             <td class="muted">
               {%- if o.note == 'guard exit' %}<span class="pill warn">guard exit</span>
@@ -719,7 +726,13 @@
               {%- else %}regime target{% endif %}
               {%- if o.half_sized %} <span class="pill hold">half</span>{% endif %}
               {%- if o.tax_review %} <span class="pill warn">tax review</span>{% endif %}</td>
-            <td class="muted">{{ 'Manual' if o.tax_review else 'Planned' }}</td>
+            <td class="muted">
+              {%- if o.order_status %}<span class="pill {{ 'ok' if o.order_status == 'FILLED'
+                  else ('warn' if o.order_status in ('FAILED','BLOCKED') else 'hold') }}">
+                {{ o.order_status|lower }}</span>
+                {%- if o.filled_qty %} {{ o.filled_qty }} filled{% endif %}
+              {%- elif o.tax_flagged %}Manual
+              {%- else %}Planned{% endif %}</td>
           </tr>
         {% endfor %}
         </tbody>
@@ -741,31 +754,75 @@
 </section>
 
 <!-- 10 · TAX ====================================================================== -->
-{% if v.manual_review_items %}
 <section>
   <h2>Tax and manual review</h2>
-  <div class="card">
-    <table aria-label="Tax and manual review">
-      <thead><tr><th>Position</th><th>Sell qty</th><th>Lots covered</th><th>Est. gain ₹</th>
-        <th>Days to LTCG</th><th>Warnings</th></tr></thead>
+  <div class="card scroll">
+    <p class="muted" style="margin-bottom:10px">Every proposed sale, with the FIFO lots it
+      would consume. Shown whether or not anything is flagged: deciding to approve a sale
+      needs the lots and what each realises, and detail that appears only when something
+      is already wrong is missing in exactly the case where the sale is fine but large.</p>
+    <table aria-label="Tax review of proposed sales">
+      <thead><tr><th>Position</th><th>Sell qty</th><th>Covered</th><th>Short / long</th>
+        <th>Est. gain ₹</th><th>Soonest LTCG</th><th>Review</th></tr></thead>
       <tbody>
-      {% for m in v.manual_review_items %}
+      {% for m in v.tax_detail %}
+        {% set soonest = m.lots | selectattr('days_to_ltcg') | map(attribute='days_to_ltcg') | list %}
         <tr>
-          <td>{{ m.symbol }}</td><td>{{ m.requested_qty }}</td>
-          <td class="{{ 'bad' if m.covered_qty < m.requested_qty else '' }}">{{ m.covered_qty }}</td>
-          <td>{{ '{:,.0f}'.format(m.estimated_gain) if m.estimated_gain is not none else 'unknown' }}</td>
-          <td>{% for d in m.detail %}{{ d.days_to_ltcg if d.days_to_ltcg is not none else '—' }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
-          <td class="muted">{% for c in m.codes %}<span class="pill warn">{{ c }}</span> {% endfor %}</td>
+          <td><b>{{ m.symbol }}</b></td>
+          <td>{{ m.requested_qty }}</td>
+          <td class="{{ 'bad' if m.uncovered_qty else 'ok' }}">{{ m.covered_qty }}
+            {%- if m.uncovered_qty %} <span class="pill warn">{{ m.uncovered_qty }} with no basis</span>{% endif %}</td>
+          <td>{{ m.short_term_qty }} / {{ m.long_term_qty }}</td>
+          <td class="{{ 'ok' if (m.estimated_gain or 0) >= 0 else 'bad' }}">
+            {{ '{:,.0f}'.format(m.estimated_gain) if m.estimated_gain is not none else 'unknown' }}</td>
+          <td class="{{ 'warnc' if soonest and soonest|min <= 45 else 'muted' }}">
+            {{ soonest|min ~ 'd' if soonest else 'all long term' }}</td>
+          <td class="muted">
+            {%- if m.manual_review %}<span class="pill warn">manual</span>
+            {%- else %}<span class="pill ok">clear</span>{% endif %}
+            {% for c in m.codes %}<span class="pill hold">{{ c }}</span> {% endfor %}</td>
         </tr>
+        <tr>
+          <td colspan="7" style="padding:0 9px 12px">
+            <details>
+              <summary class="muted">{{ m.lots|length }} FIFO lot{{ '' if m.lots|length == 1 else 's' }}
+                consumed by this sale</summary>
+              <table aria-label="FIFO lots for {{ m.symbol }}" style="margin-top:6px">
+                <thead><tr><th>Acquired</th><th>Qty</th><th>Cost ₹</th><th>Held</th>
+                  <th>To LTCG</th><th>Gain ₹</th><th>Treatment</th></tr></thead>
+                <tbody>
+                {% for l in m.lots %}
+                  <tr>
+                    <td>{{ l.acquired_on or 'unknown' }}</td>
+                    <td>{{ l.quantity }}</td>
+                    <td>{{ '{:,.1f}'.format(l.acquired_at) if l.acquired_at is not none else 'unknown' }}</td>
+                    <td class="muted">{{ l.days_held ~ 'd' if l.days_held is not none else '—' }}</td>
+                    <td class="{{ 'warnc' if l.days_to_ltcg and l.days_to_ltcg <= 45 else 'muted' }}">
+                      {{ l.days_to_ltcg ~ 'd' if l.days_to_ltcg else '—' }}</td>
+                    <td class="{{ 'ok' if (l.gain or 0) >= 0 else 'bad' }}">
+                      {{ '{:,.0f}'.format(l.gain) if l.gain is not none else 'unknown' }}</td>
+                    <td class="{{ 'ok' if l.long_term else 'muted' }}">
+                      {{ 'long term' if l.long_term else ('short term' if l.long_term is false else 'unknown') }}</td>
+                  </tr>
+                {% endfor %}
+                </tbody>
+              </table>
+            </details>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="muted">No sales are proposed, so there is nothing to
+          review. Lots are re-read from the tradebook each time a plan is built.</td></tr>
       {% endfor %}
       </tbody>
     </table>
     <p class="muted" style="margin-top:10px">A tax flag is a review warning, not a
       recommendation to hold. It defers a sale only when an alternative exists, and never
-      leaves the exposure cap silently breached.</p>
+      leaves the exposure cap silently breached. A bonus share carries <b>nil cost</b> and
+      its holding period starts at allotment, so it shows as short term for a year after
+      it lands.</p>
   </div>
 </section>
-{% endif %}
 
 <!-- 11 · EXECUTION ================================================================ -->
 <section>

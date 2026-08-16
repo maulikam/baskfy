@@ -35,6 +35,15 @@ class LoopState:
     breaks: A.BreakTracker = field(default_factory=A.BreakTracker)
     minute: dt.datetime | None = None
     minute_close: float | None = None
+    # V3 bookkeeping.
+    widened: bool = False
+    overrun_applied: bool = False
+    reentries_used: int = 0
+    lever_a: int = 0
+    lever_b: int = 0
+    # Section 4.6 asks for the risk-off fire count AND the reasons behind a zero, because
+    # a lever that never fires needs its thresholds re-derived, not widened until it does.
+    risk_off_refusals: dict = field(default_factory=dict)
 
     def as_rules_state(self) -> dict:
         return {"adjustments_today": self.adjustments_today,
@@ -177,6 +186,32 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
             result = flatten(book, snapshot, cfg, lot_size=lot_size, now=snapshot.as_of)
             emit("flattened", {"at": snapshot.as_of, "code": decision.code, **result})
             exit_decision = decision
+
+            # The one permitted re-entry. Only after an abort, only before the cutoff, only
+            # while green — and on what is LEFT of the original target, so a day cannot
+            # quietly double its objective by aborting and starting again.
+            if decision.detail.get("allows_reentry"):
+                banked = (book.pnl({}) - book.baseline) / max(book.units_at_entry, 1)
+                plan = R.plan_reentry(book, snap, cfg, exit_code=decision.code,
+                                      reentries_used=state.reentries_used,
+                                      banked_points=banked, step=step)
+                if plan.allowed:
+                    prior = {l.strike for l in originals if l.is_short}
+                    try:
+                        opened = reenter(book, snapshot, cfg, levels=levels, oi=oi,
+                                         plan=plan, prior_strikes=prior,
+                                         lot_size=lot_size, step=step)
+                    except (SelectionRefused, F.DepthUnavailable) as exc:
+                        emit("reentry_refused", {"at": snapshot.as_of, "reason": str(exc)})
+                        break
+                    state.reentries_used += 1
+                    state.trail_active = state.widened = state.overrun_applied = False
+                    state.best_pnl = None
+                    exit_decision = None
+                    emit("reentered", {"at": snapshot.as_of, "banked_points": round(banked, 3),
+                                       **opened})
+                    continue
+                emit("reentry_declined", {"at": snapshot.as_of, "reason": plan.reason})
             break
 
         # Trail activation is not an exit; it changes how the next tick is judged.
@@ -184,11 +219,52 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
             state.trail_active = True
             emit("trail_armed", {"at": snapshot.as_of, "pnl": round(pnl, 2),
                                  "high_water_mark": round(book.high_water_mark, 2)})
+            if not state.widened:
+                state.widened = True
+                for plan in A.plan_widen(book, chain=snapshot.as_rows(), marks=marks,
+                                         cfg=cfg, step=step):
+                    try:
+                        A.apply_roll(book, plan, _roll_fills(plan, snapshot, cfg), cfg,
+                                     lot_size=lot_size, now=snapshot.as_of)
+                        emit("widened", {"at": snapshot.as_of, **plan.as_dict()})
+                    except (A.RollRefused, F.DepthUnavailable) as exc:
+                        emit("widen_refused", {"at": snapshot.as_of, "reason": str(exc)})
+                marks = marks_from(snapshot, book)
+
+        # Target overrun: extend how far a winner may run. The stop never moves.
+        if not state.overrun_applied:
+            raised = R.target_overrun(book, snap, cfg)
+            if raised:
+                state.overrun_applied = True
+                book.target_points = raised / max(book.units_at_entry, 1)
+                emit("target_raised", {"at": snapshot.as_of,
+                                       "target_points": round(book.target_points, 2)})
 
         # --- then at most one adjustment ----------------------------------------------
         adj = R.evaluate_adjustment(book, snap, cfg, state=state.as_rules_state(),
                                     confirmed_break=confirmed)
         if adj.action is not R.Action.ROLL_WINNER:
+            # Lever B — risk-off. Narrow window by design; every refusal is counted so a
+            # zero fire count can be explained rather than merely observed.
+            off = R.evaluate_risk_off(book, snap, cfg, state=state.as_rules_state())
+            if off.action is not R.Action.ROLL_LOSER:
+                key = off.reason.split(";")[0][:60]
+                state.risk_off_refusals[key] = state.risk_off_refusals.get(key, 0) + 1
+                continue
+            loser = next(l for l in book.open_legs if l.symbol == off.detail["loser"])
+            try:
+                plan = A.plan_loser_roll(book, loser=loser, chain=snapshot.as_rows(),
+                                         marks=marks, cfg=cfg)
+                applied = A.apply_roll(book, plan, _roll_fills(plan, snapshot, cfg), cfg,
+                                       lot_size=lot_size, now=snapshot.as_of)
+            except (A.RollRefused, F.DepthUnavailable) as exc:
+                emit("risk_off_refused", {"at": snapshot.as_of, "reason": str(exc)})
+                continue
+            state.adjustments_today += 1
+            state.lever_b += 1
+            state.last_adjustment_at = snapshot.as_of
+            emit("risk_off", {"at": snapshot.as_of, "n": state.adjustments_today,
+                              **plan.as_dict(), **applied})
             continue
 
         winner = next(l for l in book.open_legs if l.symbol == adj.detail["winner"])
@@ -208,6 +284,7 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
             continue
 
         state.adjustments_today += 1
+        state.lever_a += 1
         state.last_adjustment_at = snapshot.as_of
         emit("rolled", {"at": snapshot.as_of, "n": state.adjustments_today,
                         **plan.as_dict(), **applied})
@@ -215,6 +292,12 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
     record: dict[str, Any] = {
         "ticks": ticks,
         "adjustments": state.adjustments_today,
+        "lever_a": state.lever_a,
+        "lever_b": state.lever_b,
+        "risk_off_refusals": dict(state.risk_off_refusals),
+        "reentries_used": state.reentries_used,
+        "widened": state.widened,
+        "target_raised": state.overrun_applied,
         "exit_code": exit_decision.code if exit_decision else None,
         "exit_reason": exit_decision.reason if exit_decision else None,
         "ends_day": bool(exit_decision and exit_decision.detail.get("ends_day")),
@@ -234,6 +317,73 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
                                                adjustments=state.adjustments_today)
     journal.write("session_closed", **record)
     return record
+
+
+class SelectionRefused(RuntimeError):
+    """No qualifying pair for the re-entry. The day ends rather than relaxing a boundary."""
+
+
+def reenter(book, snapshot, cfg, *, levels, oi, plan, prior_strikes, lot_size: int,
+            step: int) -> dict:
+    """Open the replacement position, at least two strikes further out than the last one.
+
+    Everything is recomputed against the current chain: levels, the priced range and the
+    premium balance. Re-using the morning's frame would put the new legs where the old ones
+    already proved to be wrong.
+    """
+    from . import selection as SEL
+    from .levels import priced_range
+
+    if not book.is_flat:
+        raise SelectionRefused("cannot re-enter while legs are still open")
+    # Captured BEFORE the new legs exist: once they are added the book is no longer flat
+    # and pnl({}) would raise on the missing marks.
+    baseline = book.pnl({})
+
+    asp = _asp(snapshot, step)
+    if not asp:
+        raise SelectionRefused("no ATM straddle price; cannot recompute the priced range")
+    rows = snapshot.as_rows()
+    widest_call = max((s for s in prior_strikes), default=0)
+    tightest_put = min((s for s in prior_strikes), default=0)
+    kept = [r for r in rows
+            if (r["kind"] == "CE" and float(r["strike"]) >= widest_call + plan.min_strike_shift)
+            or (r["kind"] == "PE" and float(r["strike"]) <= tightest_put - plan.min_strike_shift)]
+    try:
+        pair = SEL.select_pair(kept, pr=priced_range(snapshot.spot, asp, cfg),
+                               levels=levels, oi=oi, cfg=cfg, step=step)
+        pair = SEL.attach_wings(pair, rows, cfg)
+    except SEL.NoQualifyingPair as exc:
+        raise SelectionRefused(str(exc)) from exc
+
+    legs = [(pair.call, "SELL"), (pair.put, "SELL")]
+    if pair.call_wing and pair.put_wing:
+        legs += [(pair.call_wing, "BUY"), (pair.put_wing, "BUY")]
+    by_symbol = {r["symbol"]: r for r in rows}
+    qty = book.units_at_entry
+    fills = F.simulate_basket([{"symbol": c.symbol, "side": side, "quantity": qty,
+                                "depth": by_symbol[c.symbol]["depth"]}
+                               for c, side in legs], cfg)
+
+    credit = 0.0
+    for (c, side), f in zip(legs, fills):
+        role = ("short_call" if (side == "SELL" and c.kind == "CE") else
+                "short_put" if side == "SELL" else
+                "wing_call" if c.kind == "CE" else "wing_put")
+        book.add(Leg(symbol=c.symbol, kind=c.kind, strike=c.strike, side=side,
+                     quantity=qty, entry_price=f.avg_price, role=role,
+                     opened_at=snapshot.as_of))
+        credit += f.avg_price * qty * (1 if side == "SELL" else -1)
+    book.accrued_costs += cost_of([{"side": s, "price": f.avg_price, "quantity": qty}
+                                   for (_c, s), f in zip(legs, fills)], lot_size)
+    # The new position is judged from here: its stop must not be funded by the morning.
+    book.baseline = baseline
+    book.entry_credit = credit
+    book.target_points = plan.target_points
+    book.stop_points = plan.stop_points
+    book.high_water_mark = 0.0
+    return {"pair": pair.as_dict(), "target_points": plan.target_points,
+            "stop_points": plan.stop_points, "baseline": round(book.baseline, 2)}
 
 
 def _asp(snapshot, step: int) -> float | None:

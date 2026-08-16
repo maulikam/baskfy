@@ -41,6 +41,12 @@ class LiveSnapshot:
     future_symbol: str
     option_expiry: dt.date
     minute_bars: int
+    # Tokens for the two series a recorded observation would need to be replayed. The
+    # index token is stable and public, but a row that carries its own source needs no
+    # outside knowledge — and the future's token, like every derivative token, stops being
+    # resolvable once the contract expires.
+    underlying_token: int | None = None
+    future_token: int | None = None
 
     def as_dict(self, *, include_chain: bool = True) -> dict[str, Any]:
         m = self.market
@@ -271,7 +277,17 @@ def build_live_snapshot(kite, cfg: SellingConfig | BuyingConfig, *,
     )
     market.validate()
     return LiveSnapshot(market=market, future_symbol=future_symbol,
-                        option_expiry=expiry, minute_bars=int(signal["minute_bars"]))
+                        option_expiry=expiry, minute_bars=int(signal["minute_bars"]),
+                        underlying_token=_token(spot_row),
+                        future_token=_token(future_quote) or _token(future))
+
+
+def _token(row: Mapping[str, Any] | None) -> int | None:
+    """instrument_token from a quote or an instruments row, if it carries one."""
+    try:
+        return int((row or {}).get("instrument_token") or 0) or None
+    except (TypeError, ValueError):
+        return None
 
 
 # Zerodha applies an additional 2% of contract value on EVERY short index option leg on

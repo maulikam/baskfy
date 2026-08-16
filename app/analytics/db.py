@@ -23,7 +23,7 @@ from typing import Iterator, Sequence
 
 from .. import config as C
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 # --- schema ---------------------------------------------------------------------------
 # Column sets are fixed by the analytics spec; extra *indexes* are fine, extra columns are
@@ -451,6 +451,24 @@ _MIGRATIONS: dict[int, Sequence[str]] = {
         """CREATE INDEX IF NOT EXISTS ix_option_arms_open
                ON option_arms(exit_at) WHERE exit_at IS NULL""",
         """DELETE FROM option_variants WHERE arm = 'overnight'""",
+    ),
+    12: (
+        # The contracts an arm held, by instrument_token as well as by symbol.
+        #
+        # Kite's instruments dump lists only LIVE contracts: checked on 16 Aug 2026, zero
+        # of the eighteen NIFTY expiries on file were in the past. Once a contract expires
+        # its token cannot be looked up again, and historical_data takes a token, not a
+        # symbol — so an option's price history becomes unreachable the moment it expires
+        # unless the token was written down first. Recording it costs nothing now and is
+        # the only thing that can make this data re-fetchable later.
+        #
+        # It also makes an open question answerable: whether a token recorded BEFORE expiry
+        # still resolves AFTER it. That could not be tested, because no such token existed.
+        # Two weeks of collection will settle it.
+        """ALTER TABLE option_arms ADD COLUMN contracts_json TEXT""",
+        # The underlying, for the same reason. Its token is stable and well known, but a
+        # row that carries its own spot source needs no outside knowledge to be replayed.
+        """ALTER TABLE option_arms ADD COLUMN underlying_token INTEGER""",
     ),
 }
 

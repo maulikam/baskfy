@@ -301,6 +301,29 @@ STOP_PLANS: dict[str, dict] = {}
 STOP_OK = frozenset({"GTT_PLACED", "DRY_RUN_GTT"})
 
 
+@app.get("/options", response_class=HTMLResponse)
+def options_page(request: Request):
+    """The options lab: paper-only, read-only, no session required.
+
+    Deliberately needs no Kite login. Its whole job is to say what the program is and is
+    not doing, and a page that could only answer that while authenticated would be
+    unavailable at exactly the moment someone wondered.
+    """
+    from .analytics import db as _db, options_view as _ov
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        p = _ov.page(conn)
+    return templates.TemplateResponse(request, "options.html", {"p": p})
+
+
+@app.get("/options/data")
+def options_data():
+    from .analytics import db as _db, options_view as _ov
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        return _ov.page(conn)
+
+
 @app.get("/stops", response_class=HTMLResponse)
 def stops_page(request: Request, armed: str = "", error: str = ""):
     """Review the stops that would be armed. Builds a plan; places nothing."""

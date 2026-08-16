@@ -208,8 +208,15 @@ def open_arm(conn, *, variant_id: str, strategy: str, arm: str, expiry: dt.date,
              lots: int, lot_size: int, entry_fills: Sequence[Fill],
              entry_at: dt.datetime, entry_spot: float, dte_at_entry: float | None = None,
              max_loss: float | None = None, margin: float | None = None,
-             margin_source: str = "", note: str = "") -> str:
-    """Record an opened paper position. Returns the arm id."""
+             margin_source: str = "", contracts: Sequence[Mapping[str, Any]] = (),
+             underlying_token: int | None = None, note: str = "") -> str:
+    """Record an opened paper position. Returns the arm id.
+
+    `contracts` carries each leg's instrument_token alongside its symbol. Kite drops a
+    contract from the instruments dump the moment it expires, and historical_data takes a
+    token rather than a symbol, so a token not written down here is unrecoverable
+    afterwards and the arm's price history dies with the contract.
+    """
     row = conn.execute("SELECT 1 FROM option_variants WHERE variant_id=?",
                        (variant_id,)).fetchone()
     if row is None:
@@ -224,13 +231,16 @@ def open_arm(conn, *, variant_id: str, strategy: str, arm: str, expiry: dt.date,
         conn.execute(
             "INSERT INTO option_arms(arm_id, variant_id, strategy, arm, session_date,"
             " expiry, dte_at_entry, lots, lot_size, entry_at, entry_spot,"
-            " entry_fills_json, entry_credit, max_loss, margin, margin_source, note)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " entry_fills_json, entry_credit, max_loss, margin, margin_source,"
+            " contracts_json, underlying_token, note)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (arm_id, variant_id, strategy, arm, entry_at.date().isoformat(),
              expiry.isoformat(), dte_at_entry, lots, lot_size,
              entry_at.isoformat(timespec="seconds"), entry_spot,
              json.dumps([_fill_json(f) for f in entry_fills]), credit, max_loss,
-             margin, margin_source, note))
+             margin, margin_source,
+             json.dumps([dict(c) for c in contracts]) if contracts else None,
+             underlying_token, note))
     return arm_id
 
 
@@ -291,6 +301,31 @@ def _fill_json(f: Fill) -> dict:
 def _fill_from_json(d: Mapping[str, Any]) -> Fill:
     return Fill(side=d["side"], price=float(d["price"]), quantity=int(d["quantity"]),
                 bid=d.get("bid"), ask=d.get("ask"), label=d.get("label", ""))
+
+
+def contracts_of(conn, arm_id: str) -> list[dict]:
+    """The contracts an arm held, with the tokens needed to re-fetch their history.
+
+    Returns [] for an arm recorded before tokens were kept, which is honest: an empty list
+    means the history is gone, not that the arm had no legs.
+    """
+    row = conn.execute("SELECT contracts_json FROM option_arms WHERE arm_id=?",
+                       (arm_id,)).fetchone()
+    if row is None:
+        raise ExperimentError(f"unknown arm {arm_id!r}")
+    return json.loads(row["contracts_json"]) if row["contracts_json"] else []
+
+
+def contract_from_leg(leg: Any) -> dict:
+    """One leg's full identity, from a planner's OptionLeg.
+
+    Everything needed to re-fetch the contract and to reconstruct the position without the
+    instruments dump, which will no longer list it.
+    """
+    i = leg.instrument
+    return {"symbol": i.symbol, "token": int(i.token), "strike": float(i.strike),
+            "kind": i.kind, "expiry": i.expiry.isoformat(), "lot_size": int(i.lot_size),
+            "exchange": i.exchange, "side": leg.side, "quantity": int(leg.quantity)}
 
 
 def latest_arm(conn, *, arm: str, session_date: dt.date | None = None) -> dict | None:

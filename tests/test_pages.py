@@ -169,8 +169,9 @@ def client(monkeypatch, conn):
     return TestClient(M.app)
 
 
-@pytest.mark.parametrize("path", ["/performance", "/tradebook",
-                                  "/performance/data", "/tradebook/data"])
+@pytest.mark.parametrize("path", ["/performance", "/tradebook", "/options",
+                                  "/performance/data", "/tradebook/data",
+                                  "/options/data"])
 def test_pages_render(client, path):
     assert client.get(path).status_code == 200
 

@@ -53,6 +53,10 @@ class Snapshot:
     event_today: str = ""
     consecutive_loss_days: int = 0
     at_min_lots: bool = False
+    # --- V2 ---------------------------------------------------------------------------
+    vwaps: Mapping[str, float] = field(default_factory=dict)
+    resistance: float | None = None
+    support: float | None = None
 
 
 # =====================================================================================
@@ -169,6 +173,20 @@ def evaluate_exits(book, snap: Snapshot, cfg: dict, *, state: Mapping[str, Any]
                                    f"{book.entry_credit:,.0f} credit — the trade is done",
                             detail={"ends_day": True})
 
+    # E4a — both legs above their own session VWAP: volatility is expanding on both sides
+    # and there is short-covering pressure on each. Checked before proximity because it
+    # describes the whole book, not one strike.
+    if snap.vwaps:
+        shorts = [l for l in book.open_legs if l.is_short]
+        above = [l.symbol for l in shorts
+                 if snap.vwaps.get(l.symbol) is not None
+                 and snap.marks.get(l.symbol, 0) > snap.vwaps[l.symbol]]
+        if len(shorts) == 2 and len(above) == 2:
+            return Decision(Action.EXIT, code="E4a",
+                            reason="both shorts are above their session VWAP — the "
+                                   "average short is losing on each side",
+                            detail={"allows_reentry": True, "legs": above})
+
     # E4b — proximity. After rolls a strike can drift too close to spot to be worth holding.
     if snap.asp:
         nearest = min((abs(l.strike - snap.spot) for l in book.open_legs
@@ -219,3 +237,48 @@ def entry_cost_headroom(entry_pnl_points: float, stop_points: float) -> dict:
             "fraction_of_stop_consumed": round(used, 3),
             "risk_off_already_armed": used >= 0.60,
             "healthy": used < 0.50}
+
+
+# =====================================================================================
+# V2 — the winner roll
+# =====================================================================================
+def evaluate_adjustment(book, snap: Snapshot, cfg: dict, *, state: Mapping[str, Any],
+                        confirmed_break: str | None = None) -> Decision:
+    """Whether to roll, and which leg. Pure: the caller supplies break state and VWAPs.
+
+    Runs only AFTER evaluate_exits has returned None. An exit and an adjustment are never
+    both valid, and checking them in the other order would let a book that should be closed
+    spend money on a roll first.
+    """
+    from .adjust import check_rebalance, threatened_legs
+
+    if book.is_flat:
+        return Decision(Action.HOLD, reason="no position")
+
+    chk = check_rebalance(book, marks=snap.marks, now=snap.now, state=state, cfg=cfg)
+    if not chk.allowed:
+        return Decision(Action.HOLD, reason=chk.reason, code="throttled",
+                        detail={"ratio": chk.ratio})
+
+    # A level TOUCH is not a break. Without this the loop adjusts on noise.
+    if cfg["management"]["break_confirmation_closes"] and confirmed_break is None:
+        return Decision(Action.HOLD, code="unconfirmed",
+                        reason="no confirmed break; a touch that closes back inside the "
+                               "range is not a signal",
+                        detail={"ratio": chk.ratio})
+
+    # Lever A moves the WINNER toward spot, which adds risk on the winner's side. If that
+    # leg is itself above its session VWAP it is already under pressure, and rolling it
+    # closer would be adding to the losing side of a book that is squeezing on both.
+    if snap.vwaps:
+        threatened = threatened_legs([chk.winner], snap.marks, snap.vwaps)
+        if chk.winner.symbol in threatened:
+            return Decision(Action.HOLD, code="vwap_veto",
+                            reason=f"{chk.winner.symbol} is above its own VWAP; rolling it "
+                                   "toward spot would add to the threatened side",
+                            detail={"ratio": chk.ratio})
+
+    return Decision(Action.ROLL_WINNER, code="lever_a",
+                    reason=f"loser/winner premium {chk.ratio:.2f}, break {confirmed_break}",
+                    detail={"winner": chk.winner.symbol, "loser": chk.loser.symbol,
+                            "ratio": chk.ratio, "break": confirmed_break})

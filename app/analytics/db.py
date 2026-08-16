@@ -23,7 +23,7 @@ from typing import Iterator, Sequence
 
 from .. import config as C
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 # --- schema ---------------------------------------------------------------------------
 # Column sets are fixed by the analytics spec; extra *indexes* are fine, extra columns are
@@ -330,6 +330,62 @@ _MIGRATIONS: dict[int, Sequence[str]] = {
            )""",
         """CREATE INDEX IF NOT EXISTS ix_corporate_actions_symbol
                ON corporate_actions(symbol, ex_date)""",
+    ),
+    9: (
+        # Paper-only A/B research arms for the options work. Nothing here can place an
+        # order; the table exists so an ENTRY observation and a later EXIT observation can
+        # be paired across process runs, which a JSONL append log cannot do.
+        #
+        # Variants are PREREGISTERED with a hash and a registration timestamp. Expected
+        # maximum Sharpe from N trials on a worthless strategy is ~1.6 at N=10
+        # (Bailey/Borwein/Lopez de Prado/Zhu), so the count of variants tried is itself a
+        # result and has to be recorded before the data arrives rather than reconstructed
+        # from memory afterwards.
+        """CREATE TABLE IF NOT EXISTS option_variants(
+               variant_id   TEXT PRIMARY KEY,
+               name         TEXT NOT NULL,
+               arm          TEXT NOT NULL,      -- intraday | overnight
+               spec_json    TEXT NOT NULL,
+               spec_hash    TEXT NOT NULL,
+               registered_at TEXT NOT NULL,
+               note         TEXT
+           )""",
+        # One row per opened paper position. exit_* stay NULL until it is closed, so an
+        # arm abandoned mid-experiment is visible as an open row rather than vanishing.
+        """CREATE TABLE IF NOT EXISTS option_arms(
+               arm_id        TEXT PRIMARY KEY,
+               variant_id    TEXT NOT NULL REFERENCES option_variants(variant_id),
+               strategy      TEXT NOT NULL,
+               arm           TEXT NOT NULL,
+               session_date  TEXT NOT NULL,
+               expiry        TEXT NOT NULL,
+               dte_at_entry  REAL,
+               lots          INTEGER NOT NULL,
+               lot_size      INTEGER NOT NULL,
+               entry_at      TEXT NOT NULL,
+               entry_spot    REAL,
+               entry_fills_json TEXT NOT NULL,
+               entry_credit  REAL,
+               max_loss      REAL,
+               margin        REAL,
+               margin_source TEXT,
+               exit_at       TEXT,
+               exit_spot     REAL,
+               exit_fills_json TEXT,
+               exit_reason   TEXT,
+               breach_seen   INTEGER,
+               breach_at     TEXT,
+               mark_stop_seen INTEGER,
+               mark_stop_at  TEXT,
+               night_type    TEXT,
+               gap_pct       REAL,
+               settled_json  TEXT,
+               note          TEXT
+           )""",
+        """CREATE INDEX IF NOT EXISTS ix_option_arms_variant
+               ON option_arms(variant_id, session_date)""",
+        """CREATE INDEX IF NOT EXISTS ix_option_arms_open
+               ON option_arms(exit_at) WHERE exit_at IS NULL""",
     ),
 }
 

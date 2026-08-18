@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import pathlib
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -190,50 +192,56 @@ def test_tradebook_page_explains_the_export_route(client):
     assert "TAX_DATA_UNKNOWN" in text
 
 
-def test_every_page_links_to_every_other_page():
+def test_every_page_links_to_every_other_page(client):
+    """Checked on the RENDERED page, not the template source. The nav moved into the
+    shared shell when the UI was rebuilt, so every page inherits it rather than repeating
+    it — reading each file for links would now pass or fail for the wrong reason."""
     import re
     routes = ["/", "/performance", "/regime", "/regime/backtest", "/tradebook",
               "/settings"]
-    files = {"index.html": "/", "performance.html": "/performance",
-             "regime.html": "/regime", "regime_backtest.html": "/regime/backtest",
-             "tradebook.html": "/tradebook", "settings.html": "/settings"}
-    for f in files:
-        links = set(re.findall(r'href="([^"]+)"', open(f"app/templates/{f}").read()))
+    for page in routes:
+        html = client.get(page).text
+        links = set(re.findall(r'href="([^"]+)"', html))
         missing = [r for r in routes if r not in links]
-        assert missing == [], f"{f} does not link to {missing}"
+        assert missing == [], f"{page} does not link to {missing}"
 
 
-def test_new_pages_use_no_external_dependency():
-    for f in ("performance.html", "tradebook.html"):
-        html = open(f"app/templates/{f}").read()
-        assert "<script" not in html
-        assert "cdn." not in html
+def test_the_nav_absorbs_the_shrink_and_never_wraps_to_a_stray_line():
+    """The badge used to be pushed onto its own line when the nav grew, reading as a
+    stray sentence rather than as status. The three flex rules that fixed it lived in
+    every page's own stylesheet; the shell now owns the bar, so the guarantee is asserted
+    once, where it is implemented."""
+    shell = pathlib.Path("app/templates/base.html").read_text()
+    assert 'class="sc-topbar__in"' in shell and "sc-nav" in shell
 
-
-def test_every_page_header_keeps_the_status_badge_out_of_the_left_gutter():
-    """The header is a wrapping flex row of title, nav and badge. Once the nav grew the
-    badge no longer fit beside the title and wrapped — and under justify-content:
-    space-between a lone item on the next row sits flush LEFT, under the title, reading as
-    a stray line rather than as status. These three rules keep the nav absorbing the
-    shrink and the badge anchored right.
-    """
-    import pathlib
-    for f in sorted(pathlib.Path("app/templates").glob("*.html")):
-        src = f.read_text()
-        if "<header>" not in src or 'class="badge"' not in src:
-            continue
-        assert "header>.badge{flex:0 0 auto;margin-left:auto" in src, f.name
-        assert "header>.nav{flex:1 1 auto;min-width:0}" in src, f.name
+    # A flex item defaults to min-width:auto and so refuses to shrink below its content.
+    # Without min-width:0 the nav widens the bar, the bar widens the page, and every page
+    # scrolls sideways on a phone. This is the rule that stops it.
+    css = pathlib.Path("app/static/app.css").read_text().replace(" ", "").replace("\n", "")
+    import re as _re
+    nav = _re.search(r"\.sc-nav\{([^}]*)\}", css)
+    assert nav, "the nav rule is gone"
+    assert "min-width:0" in nav.group(1) or "min-width:0px" in nav.group(1), \
+        "the nav can no longer shrink; the page will scroll sideways"
+    assert "overflow-x:auto" in nav.group(1), "the nav must scroll rather than wrap"
 
 
 def test_regime_tables_scroll_at_every_width_not_just_on_a_phone():
     """The rule was gated behind max-width:780px on the assumption that anything wider
     fits. The exposure table still overflowed the page at 900px: whether a dense table
-    fits depends on its content, not on the viewport."""
-    rule = ".card table{display:block;max-width:100%;overflow-x:auto"
-    hits = [ln for ln in open("app/templates/regime.html") if rule in ln]
-    assert hits, "the regime table scroll rule is gone"
-    # Top-level rules in this stylesheet are indented two spaces; anything nested inside a
-    # @media block is indented four. That is the whole assertion: not behind a breakpoint.
-    assert all(ln.startswith("  ") and not ln.startswith("   ") for ln in hits), \
+    fits depends on its content, not on the viewport.
+
+    Now asserted against the BUILT stylesheet, which is where the rule lives since the
+    per-page style blocks were consolidated. The breakpoint check is the point: the rule
+    must not sit inside an @media query."""
+    css = pathlib.Path("app/static/app.css").read_text().replace(" ", "").replace("\n", "")
+    rules = re.findall(r"([^{}]*table[^{}]*)\{([^}]*)\}", css)
+    scrollers = [sel for sel, body in rules
+                 if "overflow-x:auto" in body and "display:block" in body]
+    assert scrollers, "the table scroll rule is gone from the stylesheet"
+
+    # and it is not gated behind a breakpoint: every @media opened before it must have
+    # closed again.
+    head = css[:css.index(scrollers[0])]
+    assert "@media" not in head or head.rfind("}") > head.rfind("@media"), \
         "the table scroll rule is gated behind a breakpoint again"

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>{% block title %}Momentum Desk{% endblock %}</title>
+<link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+
+<header class="sc-topbar">
+  <div class="sc-topbar__in">
+    <a class="sc-brand" href="/">
+      <span class="sc-brand__mark">M</span>
+      <span>Momentum&nbsp;Desk</span>
+    </a>
+    <nav class="sc-nav" aria-label="Sections">
+      {% set here = request.url.path %}
+      {% for href, label in [
+           ('/', 'Desk'), ('/performance', 'Performance'), ('/regime', 'Regime'),
+           ('/regime/backtest', 'Backtest'), ('/tradebook', 'Tradebook'),
+           ('/stops', 'Stops'), ('/reconcile', 'Reconcile'), ('/options', 'Options'),
+           ('/ops', 'Operations'), ('/settings', 'Settings')] %}
+        <a href="{{ href }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <div class="ml-3 flex shrink-0 items-center gap-2">
+      {% block topbar_extra %}{% endblock %}
+      <a class="sc-btn sc-btn--ghost sc-btn--sm" href="/status">Status</a>
+    </div>
+  </div>
+</header>
+
+<main class="sc-shell pt-6">
+  {% block page_head %}
+    {% if self.heading() | trim %}
+      <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <h1 class="text-[22px] font-bold tracking-tight text-ink">{% block heading %}{% endblock %}</h1>
+        <div class="flex items-center gap-2">{% block heading_aside %}{% endblock %}</div>
+      </div>
+    {% endif %}
+  {% endblock %}
+  {% block content %}{% endblock %}
+</main>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

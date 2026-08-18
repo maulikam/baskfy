@@ -130,12 +130,16 @@ def test_the_raw_json_is_still_reachable():
 
 
 def test_the_json_dump_is_no_longer_the_primary_view():
+    """Anchored on the card itself rather than on what follows it: the page script moved
+    into its own template block when the UI moved to a shared shell, and the old regex
+    was really asserting the position of that script tag."""
     src = template()
-    body = re.search(r'<div class="card" id="result".*?</div>\s*\n\s*<script>', src, re.S)
-    assert body, "the result card is gone or was restructured"
-    rendered = body.group(0).index('id="repVerdict"')
-    raw = body.group(0).index('id="resultRaw"')
-    assert rendered < raw, "the raw dump comes before the verdict"
+    start = src.index('<div class="card" id="result"')
+    body = src[start:start + 4000]
+    assert 'id="repVerdict"' in body and 'id="resultRaw"' in body, \
+        "the result card is gone or was restructured"
+    assert body.index('id="repVerdict"') < body.index('id="resultRaw"'), \
+        "the raw dump comes before the verdict"
 
 
 def test_a_rejected_plan_is_not_dressed_as_an_execution():

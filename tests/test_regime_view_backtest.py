@@ -4,6 +4,8 @@ from __future__ import annotations
 import datetime as dt
 
 import pandas as pd
+import re
+
 import pytest
 
 from app.analytics import db, regime_store as RS, regime_view as RV
@@ -16,6 +18,16 @@ D = dt.date
 @pytest.fixture()
 def cfg():
     return R.RegimeConfig()
+
+
+@pytest.fixture()
+def client():
+    """The nav and the stylesheet moved into the shared shell when the UI was rebuilt, so
+    these guarantees are asserted on the rendered page rather than on template source."""
+    from fastapi.testclient import TestClient
+
+    from app import main as _M
+    return TestClient(_M.app)
 
 
 @pytest.fixture()
@@ -417,22 +429,25 @@ def test_missing_capital_does_not_produce_a_nonsense_percentage(conn, cfg):
 # =====================================================================================
 # navigation — every page must be reachable from the UI
 # =====================================================================================
-def test_every_html_page_is_reachable_from_every_other():
+def test_every_html_page_is_reachable_from_every_other(client):
     """A page with no inbound link is unreachable unless you type the URL."""
     import re
-    pages = {"app/templates/index.html": "/", "app/templates/regime.html": "/regime"}
-    for path in pages:
-        html = open(path).read()
-        links = set(re.findall(r'href="([^"]+)"', html))
-        for target in pages.values():
-            assert target in links, f"{path} has no link to {target}"
+    routes = ["/", "/regime", "/performance", "/tradebook", "/stops", "/reconcile",
+              "/options", "/ops", "/settings", "/regime/backtest"]
+    for page in routes:
+        links = set(re.findall(r'href="([^"]+)"', client.get(page).text))
+        missing = [t for t in routes if t not in links]
+        assert not missing, f"{page} has no link to {missing}"
 
 
-def test_nav_marks_the_current_page():
-    for path, current in (("app/templates/index.html", '<a href="/" aria-current="page">'),
-                          ("app/templates/regime.html",
-                           '<a href="/regime" aria-current="page">')):
-        assert current in open(path).read(), f"{path} does not mark its own nav item"
+def test_nav_marks_the_current_page(client):
+    """Marked from the request path in the shell, so it cannot fall out of step with the
+    route the way a hand-written aria-current on each page could."""
+    import re
+    for page in ("/", "/regime", "/performance", "/options"):
+        html = client.get(page).text
+        marked = re.findall(r'<a href="([^"]+)"\s+aria-current="page"', html)
+        assert marked == [page], f"{page} marked {marked}"
 
 
 # =====================================================================================
@@ -533,9 +548,10 @@ def test_config_panel_is_read_only_and_complete(conn, cfg):
     assert "<form" not in html and "<input" not in html, "the status page must be read-only"
 
 
-def test_backtest_page_is_separate_from_the_status_page():
-    """Detailed backtesting stays off the live status page."""
-    status = open("app/templates/regime.html").read()
+def test_backtest_page_is_separate_from_the_status_page(client):
+    """Detailed backtesting stays off the live status page. Checked on the rendered page:
+    the link now comes from the shared nav rather than from regime.html itself."""
+    status = client.get("/regime").text
     assert "/regime/backtest" in status          # linked
     assert "Strategy comparison" not in status   # but not embedded
     bt = open("app/templates/regime_backtest.html").read()
@@ -627,13 +643,24 @@ def test_no_plan_reason_is_shown_instead_of_an_empty_table(conn, cfg):
     assert "inside the cap" in v["no_plan_reason"]
 
 
-def test_charts_are_server_rendered_with_no_external_dependency():
-    """No CDN, no build step, no script: the page must work offline."""
-    html = open("app/templates/regime.html").read()
+def test_charts_are_server_rendered_with_no_external_dependency(client):
+    """No CDN, no script: the page must work offline. The stylesheet and the webfont are
+    both vendored under /static for the same reason — the desk has to render while an
+    order is being confirmed."""
+    html = client.get("/regime").text
     assert "<script" not in html
-    assert "cdn." not in html and "https://" not in html.split("<style>")[1].split("</style>")[0]
-    assert ".track" in html and ".fill" in html          # weight bars
-    assert ".dv .pos" in html and ".dv .neg" in html      # diverging P&L bars
+    assert "cdn." not in html
+    import re as _re
+    external = [u for u in _re.findall(r'(?:href|src)="(https?://[^"]+)"', html)]
+    assert not external, f"the page reaches outside for {external}"
+    assert 'href="/static/app.css' in html
+    # A url in the licence banner is a comment, not a fetch. What must not exist is
+    # anything the browser would actually go and get.
+    css = re.sub(r"/\*.*?\*/", "", open("app/static/app.css").read(), flags=re.S)
+    remote = re.findall(r"(?:@import\s+|url\(\s*)['\"]?(https?://[^)'\"\s]+)", css)
+    assert not remote, f"the stylesheet fetches {remote}"
+    # the webfont is vendored too
+    assert "/static/fonts/" in css
 
 
 # =====================================================================================

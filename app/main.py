@@ -11,6 +11,7 @@ try:                       # ultra-fast serialization when available
     from fastapi.responses import ORJSONResponse as JSONResponse
 except Exception:
     from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import pandas as pd
 
@@ -30,6 +31,25 @@ except Exception:
     pass
 app = FastAPI(title="Kite Momentum Rebalancer", default_response_class=JSONResponse)
 templates = Jinja2Templates(directory="app/templates")
+
+# The stylesheet is BUILT and VENDORED (app/static/app.css, from src.css via the Tailwind
+# CLI) rather than pulled from a CDN. The desk has to render while an order is being
+# confirmed, and an unstyled page at that moment is a real failure, not a cosmetic one.
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# Cache-bust on content, so a rebuilt stylesheet is picked up without a hard reload and an
+# unchanged one still caches.
+def _asset_version() -> str:
+    import hashlib
+    import pathlib as _pl
+    try:
+        return hashlib.md5(_pl.Path("app/static/app.css").read_bytes()).hexdigest()[:8]
+    except OSError:
+        return "dev"
+
+
+ASSET_V = _asset_version()
+templates.env.globals["asset_v"] = ASSET_V
 # Argv is stored as JSON so the exact command can be shown back without re-quoting it.
 templates.env.filters["fromjson"] = json.loads
 

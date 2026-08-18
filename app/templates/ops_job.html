@@ -1,52 +1,9 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-{% if j.status == 'running' %}<meta http-equiv="refresh" content="4">{% endif %}
-<title>Momentum Desk — Job {{ j.id }}</title>
-<style>
-  :root{--ink:#0b1220;--panel:#111a2e;--panel-2:#0d1626;--line:#22304d;--paper:#e8edf7;
-        --dim:#8593ad;--saffron:#f2a33c;--up:#3ddc97;--down:#ff6b6b;
-        --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;--disp:"Archivo",system-ui,sans-serif}
-  *{box-sizing:border-box;margin:0}
-  body{background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:13.5px;
-       line-height:1.5;min-height:100vh;padding:26px 3.5vw 90px}
-  header{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:14px;
-         border-bottom:2px solid var(--saffron);padding-bottom:12px;margin-bottom:22px}
-  h1{font-family:var(--disp);font-weight:900;font-size:clamp(20px,3vw,29px);letter-spacing:-.02em}
-  h1 em{color:var(--saffron);font-style:normal}
-  a{color:var(--saffron)}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px 18px}
-  .kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;
-      border-bottom:1px dotted var(--line);font-size:13px}
-  .kv:last-child{border-bottom:0} .kv span{color:var(--dim)} .kv b{font-weight:600}
-  .st{font-family:var(--disp);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
-      border:1px solid currentColor;border-radius:4px;padding:1px 7px}
-  .st.ok{color:var(--up)} .st.failed,.st.timeout{color:var(--down)} .st.running{color:var(--saffron)}
-  pre{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:14px;
-      overflow:auto;font-size:11.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;
-      margin-top:14px}
-  code{color:var(--saffron);font-size:11.5px;overflow-wrap:anywhere}
-  .muted{color:var(--dim);font-size:11.5px;line-height:1.6}
-  :focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Job {{ j.id }}{% endblock %}
 
-  /* The badge is the header's third flex item. Once the nav grew, badge+nav no longer fit
-     beside the title, so the badge wrapped to its own row — and under
-     justify-content:space-between a lone item on the second row sits flush LEFT, directly
-     under the title, reading as a stray line rather than as status. The nav absorbs the
-     shrink instead: it already wraps internally, so it gets taller while the title and the
-     badge stay on the first row where they belong. */
-  header>h1{flex:0 0 auto}
-  header>.nav{flex:1 1 auto;min-width:0}
-  header>.badge{flex:0 0 auto;margin-left:auto;text-align:right}
-</style>
-</head>
-<body>
-<header>
-  <h1>Job <em>{{ j.id }}</em> · {{ j.name }}</h1>
-  <div><a href="/ops">← operations</a></div>
-</header>
+{% block heading %}Job {{ j.id }} · {{ j.name }}{% endblock %}
+
+{% block content %}
 <div class="card">
   <div class="kv"><span>Status</span><b><span class="st {{ j.status }}">{{ j.status }}</span></b></div>
   <div class="kv"><span>Command</span><b><code>python {{ (j.argv_json | fromjson) | join(' ') }}</code></b></div>
@@ -57,5 +14,4 @@
   {% if j.output %}<pre>{{ j.output }}</pre>
   {% else %}<p class="muted" style="margin-top:14px">No output captured yet.</p>{% endif %}
 </div>
-</body>
-</html>
+{% endblock %}

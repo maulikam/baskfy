@@ -265,11 +265,24 @@ def main() -> int:
     now_t = dt.datetime.now().time()
     win = C.entry_window_state(cfg, now_t)
     if win["veto"]:
+        # PREMARKET IS NOT AN OUTCOME. autorun reads the journal to decide whether the day
+        # has already been dealt with, and it counts entry_window_closed as "the session
+        # had its say". Writing that at 08:00 — from the /options button, or a cron a few
+        # minutes early — made autorun skip the real session at 09:30 and lose the day
+        # silently. A run before the open has decided nothing, so it says nothing.
+        premarket = win["state"] == "premarket"
         session.to(ST.State.NO_ENTRY, win["veto"])
-        jr.write("entry_window_closed", reason=win["veto"], **base)
-        return _out({**base, "status": "ENTRY_WINDOW_CLOSED", "entry_window": win,
-                     "note": f"{win['veto']}; only {tm['force_exit']} remains and a decay "
-                             "trade cannot reach its target in it, only its stop"})
+        jr.write("entry_window_not_open" if premarket else "entry_window_closed",
+                 reason=win["veto"], **base)
+        return _out({
+            **base,
+            "status": "ENTRY_WINDOW_NOT_OPEN" if premarket else "ENTRY_WINDOW_CLOSED",
+            "entry_window": win,
+            "note": (f"{win['veto']}. Nothing is lost: the session has not been recorded "
+                     f"as run, so the {tm['entry_early']} start still happens."
+                     if premarket else
+                     f"{win['veto']}; only {tm['force_exit']} remains and a decay trade "
+                     "cannot reach its target in it, only its stop")})
     late = win["state"] == "late"
     late_mult = float(win["size_mult"])
     if late:

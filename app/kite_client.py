@@ -163,6 +163,25 @@ class Kite:
         steps = round(price / tick)
         return round(steps * tick, 2)
 
+    def delete_gtt(self, gtt_id: int, symbol: str = "") -> dict:
+        """Cancel one GTT trigger.
+
+        Cancelling only ever REDUCES exposure — it removes a resting sell order — so it
+        carries the untouchable guard for consistency but cannot itself create a position.
+        It exists because an over-covered stop cannot be fixed by adding another: a trigger
+        for more shares than are held sells what you do not own when it fires.
+        """
+        if symbol:
+            assert_tradeable(symbol)
+        if C.DRY_RUN:
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": "DRY_RUN_GTT_DELETE"}
+        try:
+            self.kc.delete_gtt(trigger_id=int(gtt_id))
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": "GTT_DELETED"}
+        except Exception as exc:
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": "GTT_DELETE_ERROR",
+                    "error": str(exc)}
+
     def place_gtt_stop(self, symbol: str, qty: int, trigger: float, last_price: float,
                        exchange: str = "NSE") -> dict:
         assert_tradeable(symbol)   # SGB/G-sec hard block

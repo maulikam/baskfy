@@ -259,17 +259,22 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
         # No time.sleep here: it blocked the event loop, and the gateway's token buckets
         # already pace to Kite's caps and under SEBI's 10-OPS threshold.
 
-    stops = []
-    if place_stops == "true":
-        for o in plan["orders"]:
-            if o["qty_final"] > 0 and o.get("stop"):
-                await gw.limits.api_slot()          # same limiter, no blocking sleep
-                try:
-                    stops.append(k.place_gtt_stop(o["symbol"], o["qty_final"], o["stop"],
-                                                  o["ref_price"]))
-                except UntouchableInstrumentError as exc:
-                    stops.append({"symbol": o["symbol"], "status": "BLOCKED",
-                                  "error": str(exc)})
+    # STOPS ARE NOT ARMED HERE ANY MORE, and that is the fix for a real loss of protection.
+    #
+    # This used to place a GTT for each order's qty_final immediately after submitting the
+    # batch — before any fill was known. So every trigger was sized to the PLANNED position
+    # rather than the actual one. On 18 Aug 2026 that left the book carrying 10,383 shares
+    # of GTT against 9,478 held: SONACOMS covered 2.5x what was owned, RADICO 3.1x, and a
+    # 438-share stop sat on PARAS before a single share of it had filled. An over-covered
+    # trigger sells shares you do not own when it fires, which is short delivery.
+    #
+    # Fills are not knowable at this instant — these are LIMIT orders and some will rest.
+    # So arming moves to /stops, which sizes every trigger from the broker's own holdings
+    # and can also cancel the wrong ones. Rule 4 still holds: every buy gets a stop the
+    # same session. It just happens after the fills, which is the only time it can be right.
+    stops: list[dict] = []
+    stops_note = ("stops are armed from /stops once fills are known; sizing them here "
+                  "would use planned quantities, not filled ones")
 
     log_path = f"data/outputs/execution_{plan_id}.json"
     with open(log_path, "w") as f:
@@ -289,6 +294,7 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
         logging.warning("could not record execution for %s: %s", plan_id, exc)
 
     return JSONResponse({"dry_run": C.DRY_RUN, "orders": results, "gtt": stops,
+                         "stops_note": stops_note, "stops_pending": True,
                          "log": log_path, "reconciliation": recon})
 
 
@@ -389,6 +395,20 @@ async def stops_arm(plan_id: str = Form(...), confirm: str = Form(...)):
 
     k = kite()
     gw = gateway()
+
+    # Cancels FIRST. An over-covered symbol has every trigger removed before the correct
+    # one is armed, so the two can never both be live — and cancelling is the half that
+    # reduces risk, so it is the half that must not be skipped if something fails later.
+    cancelled = []
+    for c in plan.get("cancels", []):
+        await gw.limits.api_slot()
+        try:
+            res = k.delete_gtt(c["gtt_id"], c["symbol"])
+        except Exception as exc:                                  # noqa: BLE001
+            res = {"symbol": c["symbol"], "gtt_id": c["gtt_id"],
+                   "status": "GTT_DELETE_ERROR", "error": str(exc)}
+        cancelled.append({**res, "reason": c["reason"]})
+
     placed = []
     for r in plan["rows"]:
         # The gateway has no GTT method, so this uses kite_client.place_gtt_stop, which
@@ -407,7 +427,8 @@ async def stops_arm(plan_id: str = Form(...), confirm: str = Form(...)):
     STOP_PLANS.pop(plan_id, None)          # single use: re-arming needs a fresh review
     log_path = f"data/outputs/stops_{plan_id}.json"
     with open(log_path, "w") as f:
-        json.dump({"plan": plan["rows"], "results": placed}, f, indent=2, default=str)
+        json.dump({"plan": plan["rows"], "cancels": plan.get("cancels", []),
+                   "cancelled": cancelled, "results": placed}, f, indent=2, default=str)
 
     # Success is whatever kite_client actually returns, matched from ITS constants rather
     # than a guessed list. The first live run placed 16 triggers and reported "0 armed,
@@ -416,6 +437,10 @@ async def stops_arm(plan_id: str = Form(...), confirm: str = Form(...)):
     ok = [p for p in placed if str(p.get("status", "")) in STOP_OK]
     failed = [p for p in placed if p not in ok]
     msg = f"{len(ok)} of {len(placed)} stops {'simulated' if C.DRY_RUN else 'armed'}"
+    if cancelled:
+        gone = [c for c in cancelled
+                if str(c.get("status")) in ("GTT_DELETED", "DRY_RUN_GTT_DELETE")]
+        msg = f"{len(gone)} of {len(cancelled)} wrong triggers cancelled · " + msg
     if failed:
         msg += (f" · {len(failed)} failed: "
                 + ", ".join(f"{p['symbol']} ({p.get('error', 'unknown')[:60]})"

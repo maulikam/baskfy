@@ -317,15 +317,44 @@ def test_the_queried_margin_binds_before_the_tail_at_real_rates():
     """With margin queried at ~Rs 92.5k/lot rather than the brief's Rs 32,500, utilisation
     is the binding constraint, not the catastrophic cap. That reverses the brief's
     section 3.2 and is why the estimate is never trusted."""
-    d = Z.evaluate(CFG, lots=20, margin_required=20 * 92_497)
+    d = Z.evaluate(CFG, lots=9, margin_required=9 * 92_497)
     assert d.binding_constraint == "margin"
     assert d.max_lots_by_margin < d.max_lots_by_tail
-    assert d.utilisation_pct == pytest.approx(0.389, abs=0.01)
+    assert d.utilisation_pct == pytest.approx(0.175, abs=0.01)
 
 
 def test_over_utilisation_is_refused_with_the_real_per_lot_number():
-    with pytest.raises(Z.SizingRefused, match="over the 40% cap"):
+    with pytest.raises(Z.SizingRefused, match="over this instrument's 18% allocation"):
         Z.evaluate(CFG, lots=30, margin_required=30 * 92_497)
+
+
+# =====================================================================================
+# the account is one account — three instruments, one pool of margin
+# =====================================================================================
+def test_an_instrument_may_not_spend_another_instrument_s_margin():
+    """Each config is sized to its own allocation of the SAME Rs 50L. Summed naively the
+    three are entitled to 118% of it, and nothing in a single sizing call can see that:
+    they are separate processes and basket_order_margins runs with
+    consider_positions=False. Without the shared ledger the first two enter and the third
+    discovers the problem, leaving the account holding a pair nobody chose."""
+    ok = Z.evaluate(CFG, lots=9, margin_required=9 * 92_497, committed_elsewhere=1_000_000)
+    assert ok.utilisation_pct == pytest.approx(0.386, abs=0.01)
+    with pytest.raises(Z.SizingRefused, match="ACCOUNT ceiling"):
+        Z.evaluate(CFG, lots=9, margin_required=9 * 92_497,
+                   committed_elsewhere=1_300_000)
+
+
+def test_the_account_ceiling_is_reported_as_the_binding_constraint():
+    """So the operator is told WHICH cap stopped them. 'over the cap' is not actionable
+    when there are two different caps and only one of them is about this instrument."""
+    d = Z.evaluate(CFG, lots=5, margin_required=5 * 92_497, committed_elsewhere=1_400_000)
+    assert d.binding_constraint == "account"
+
+
+def test_an_instrument_alone_is_unaffected_by_the_ledger():
+    plain = Z.evaluate(CFG, lots=9, margin_required=9 * 92_497)
+    zeroed = Z.evaluate(CFG, lots=9, margin_required=9 * 92_497, committed_elsewhere=0.0)
+    assert plain.as_dict() == zeroed.as_dict()
 
 
 def test_the_tail_cap_still_binds_at_wider_wings():
@@ -351,9 +380,9 @@ def test_reading_initial_instead_of_final_would_be_caught():
 
 
 def test_session_size_scales_down_but_never_up():
-    assert Z.session_lots(CFG, 0.50) == 10
-    assert Z.session_lots(CFG, 1.00) == 20
-    assert Z.session_lots(CFG, 1.00, win_streak=5) == 20     # ceiling holds
+    assert Z.session_lots(CFG, 0.50) == 5                    # min_lots floors it
+    assert Z.session_lots(CFG, 1.00) == 9
+    assert Z.session_lots(CFG, 1.00, win_streak=5) == 9      # ceiling holds
 
 
 # =====================================================================================

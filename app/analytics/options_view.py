@@ -70,8 +70,20 @@ def _token_coverage(arms: list[dict]) -> dict:
             "pct": round(with_tokens / len(arms) * 100, 1) if arms else None}
 
 
-def strangle(cfg_path: str = "config/strangle.yaml") -> dict[str, Any]:
-    """State of the intraday strangle, computed WITHOUT a Kite session.
+def strangles() -> list[dict[str, Any]]:
+    """One block per configured underlying, in registry order.
+
+    Each keeps its own bands, paper record and locks. Pooling them would build a reference
+    band from three different distributions — not a wider band, a meaningless one.
+    """
+    from ..strategies.strangle import instruments as _ins
+    return [{**strangle(u.config, u), "slug": u.slug, "label": u.label,
+             "series": u.series, "exchange": u.exchange}
+            for u in _ins.configured()]
+
+
+def strangle(cfg_path: str = "config/strangle.yaml", und=None) -> dict[str, Any]:
+    """State of one intraday strangle, computed WITHOUT a Kite session.
 
     The page must answer "what is this doing and may it trade" when logged out, because
     that is exactly when someone asks. Everything here comes from config, the forward
@@ -79,15 +91,19 @@ def strangle(cfg_path: str = "config/strangle.yaml") -> dict[str, Any]:
     """
     from ..strategies.strangle import calibrate as _cal
     from ..strategies.strangle import config as _sc
+    from ..strategies.strangle import instruments as _ins
     from ..strategies.strangle import journal as _sj
     from ..strategies.strangle import live as _live
 
+    und = und or _ins.get(_ins.DEFAULT)
     try:
         cfg = _sc.load(cfg_path)
     except Exception as exc:                                  # noqa: BLE001
         return {"available": False, "error": str(exc)}
+    cfg["operational"]["journal_path"] = und.journal()
+    cfg["operational"]["lockout_path"] = und.lockout()
 
-    forward = _cal.load_forward("data/outputs/strangle_straddle_record.jsonl")
+    forward = _cal.load_forward(und.forward())
     bands = _cal.build_bands(forward) if forward else {}
     ready = _cal.readiness(bands) if bands else {
         "ready": False, "missing_buckets": ["3+", "2", "1"], "thin_buckets": [],
@@ -96,14 +112,27 @@ def strangle(cfg_path: str = "config/strangle.yaml") -> dict[str, Any]:
     pf = _live.preflight(cfg, jr)
     sessions = _live.completed_paper_sessions(jr)
 
+    tm = cfg["timing"]
     return {
         "available": True,
         "mode": cfg["meta"]["mode"],
+        "underlying": cfg["instrument"]["underlying"],
+        "lot_size": cfg["instrument"]["lot_size"],
+        "expiry_weekday": cfg["instrument"]["expiry_weekday"].title(),
+        "expiry_series": cfg["instrument"].get("expiry_series", "weekly"),
+        "max_dte": cfg["session"].get("max_dte"),
+        "allow_expiry_day": bool(cfg["session"].get("allow_expiry_day", False)),
+        "entry_window_end": tm["entry_window_end"],
+        "allow_late_entry": bool(tm.get("allow_late_entry", False)),
+        "late_entry_size_mult": tm.get("late_entry_size_mult"),
+        "no_new_entry_after": tm["no_new_entry_after"],
+        "allocation_pct": round(float(cfg["margin"]["max_utilisation_pct"]) * 100),
         "lots": cfg["sizing"]["lots"],
         "wing_width": cfg["structure"]["wing_width_points"],
         "structure": cfg["structure"]["type"],
         "margin_per_lot": cfg["margin"]["margin_per_lot_estimate"],
-        "max_utilisation_pct": round(float(cfg["margin"]["max_utilisation_pct"]) * 100),
+        "max_utilisation_pct": round(float(cfg["margin"].get(
+            "portfolio_max_utilisation_pct", cfg["margin"]["max_utilisation_pct"])) * 100),
         "min_stop_to_cost": cfg["session"]["min_stop_to_entry_cost_ratio"],
         "extra_holidays": cfg["session"].get("extra_holidays") or [],
         "forward_sessions": len(forward),
@@ -172,6 +201,8 @@ def page(conn, *, journal: str | None = None) -> dict[str, Any]:
         "mean_vs_zero": rep.get("mean_vs_zero"),
         "tokens": _token_coverage(all_arms),
         "strangle": strangle(),
+        "strangles": strangles(),
+        "commitments": _commitments(),
         "jobs": _jobs(conn),
         "sample": {
             "have": n, "need_low": low, "need_high": high,
@@ -203,6 +234,34 @@ def _arm_row(a: dict) -> dict:
         "replayable": bool(contracts),
         "tokens": [c.get("token") for c in contracts],
     }
+
+
+def _commitments() -> dict:
+    """Margin held right now by live sessions, and what is left for the next one.
+
+    The account is one account. Three instruments each sized to their own allocation is
+    only safe while something adds them up, and this is where an operator can see it.
+    """
+    from ..strategies.strangle import allocation as _alloc
+    from ..strategies.strangle import config as _sc
+    from ..strategies.strangle import instruments as _ins
+    live = _alloc.live()
+    total = float(sum(float(r.get("margin") or 0.0) for r in live.values()))
+    usable = ceiling = None
+    try:
+        cfg = _sc.load(_ins.get(_ins.DEFAULT).config)
+        from ..strategies.strangle import sizing as _z
+        usable = _z.capital_from_config(cfg).usable
+        ceiling = usable * float(cfg["margin"].get("portfolio_max_utilisation_pct", 0.40))
+    except Exception:                                          # noqa: BLE001
+        pass
+    return {"live": {k: {"margin": round(float(v.get("margin") or 0)),
+                         "at": v.get("at")} for k, v in live.items()},
+            "committed": round(total),
+            "usable": None if usable is None else round(usable),
+            "ceiling": None if ceiling is None else round(ceiling),
+            "free": None if ceiling is None else round(max(ceiling - total, 0)),
+            "pct": None if not ceiling else round(total / ceiling * 100, 1)}
 
 
 # =====================================================================================

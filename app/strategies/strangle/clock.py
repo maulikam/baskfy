@@ -111,16 +111,43 @@ def session_params(session: dt.date, expiry: dt.date, cfg: dict,
     if dte == 0 and not sess.get("allow_expiry_day", False):
         tradeable, reason = False, "expiry day disabled (allow_expiry_day=false)"
 
+    # THE FAR-DATED GATE. The bucket table tops out at "3+", which was written for a weekly
+    # cycle where the furthest session is four days from expiry. A monthly series — every
+    # BANKNIFTY contract since the weeklies were withdrawn — spends most of its life at
+    # dte 5..25, and every one of those days lands in "3+" and is handed a 5-point target
+    # calibrated for an option about to expire.
+    #
+    # That is not conservative, it is a category error: intraday decay on a 22-day option is
+    # a fraction of a 3-day one, so the same target asks a much slower trade to travel the
+    # same distance, while the stop stays at half of it. Rather than invent bucket rows
+    # nobody has calibrated, sessions beyond max_dte are simply not taken — which reduces a
+    # monthly instrument to the final week, where its behaviour matches the table it is
+    # being priced with.
+    max_dte = sess.get("max_dte")
+    if tradeable and max_dte is not None and dte > int(max_dte):
+        tradeable = False
+        reason = (f"dte={dte} exceeds max_dte={int(max_dte)}: the session table is "
+                  "calibrated to the final week and has no row for a far-dated contract")
+
     return SessionParams(dte=dte, bucket=bucket, target_points=target,
                          size_mult=float(row["size_mult"]), stop_points=stop,
                          tradeable=tradeable, reason=reason)
 
 
-def tradeable_sessions_per_week(cfg: dict) -> int:
-    """Wed/Thu/Fri/Mon with a Tuesday expiry and expiry-day trading off.
+def tradeable_sessions_per_cycle(cfg: dict) -> int:
+    """How many sessions one expiry cycle actually offers.
 
-    Exposed as a function because every expectancy model needs it and the intuitive
-    answer (5, or 20/month) overstates returns by roughly 2.5x: only the dte=1 session
-    runs the full target at full size.
+    Exposed as a function because every expectancy model needs it and the intuitive answer
+    overstates returns badly: only the dte=1 session runs the full target at full size, and
+    on a monthly series max_dte discards most of the month outright. A monthly instrument
+    is therefore NOT five times a weekly one — it is roughly a quarter of it.
     """
-    return 4 if not cfg["session"].get("allow_expiry_day", False) else 5
+    sess = cfg["session"]
+    span = int(sess["max_dte"]) if sess.get("max_dte") is not None else 3
+    n = min(span, 4)                       # dte 1..span, capped at a working week
+    return n + (1 if sess.get("allow_expiry_day", False) else 0)
+
+
+# Kept under the old name: callers outside this module still ask the weekly question.
+def tradeable_sessions_per_week(cfg: dict) -> int:
+    return tradeable_sessions_per_cycle(cfg)

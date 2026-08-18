@@ -231,7 +231,8 @@
         <label>{{ prm.label }}
           <select name="{{ prm.key }}">
             {% for ch in prm.choices %}
-            <option value="{{ ch }}" {{ 'selected' if ch == prm.default }}>{{ ch }} polls</option>
+            <option value="{{ ch }}" {{ 'selected' if ch == prm.default }}>
+              {{ ch|upper if prm.key == 'instrument' else ch ~ ' polls' }}</option>
             {% endfor %}
           </select>
           <span class="muted">{{ prm.help }}</span>
@@ -261,57 +262,143 @@
 
 <section>
   <h2>Strangle status</h2>
-  <div class="posture">
-    <div class="fact {{ 'good' if s.mode == 'paper' else 'warn' }}">
-      <div class="k">Mode</div><div class="v">{{ s.mode|upper }}</div>
-      <div class="muted">{{ s.lots }} lots &middot; {{ s.structure|lower }} &middot;
-        {{ s.wing_width }}-point wings &middot; Rs {{ '{:,}'.format(s.margin_per_lot) }}/lot
-        at {{ s.max_utilisation_pct }}% max utilisation.</div>
-    </div>
-    <div class="fact {{ 'good' if s.bands_ready.ready else 'warn' }}">
-      <div class="k">Reference bands</div>
-      <div class="v">{{ s.forward_sessions }} rec</div>
-      <div class="muted">{{ s.bands_ready.note }}</div>
-    </div>
-    <div class="fact warn">
-      <div class="k">Paper record</div>
-      <div class="v">{{ s.paper_sessions }} / {{ s.paper_needed }}</div>
-      <div class="muted">Completed sessions that reached a flat book. An unclosed session
-        is not experience and is not counted.</div>
-    </div>
+
+  {% set acc = p.commitments %}
+  <div class="banner {{ 'warn' if acc.pct and acc.pct > 90 else 'ok' }}">
+    <span class="tag">one account</span>
+    <span>Three underlyings draw on the same Rs
+      {{ '{:,}'.format(acc.usable) if acc.usable else '&mdash;' }} of usable margin. Each
+      config is allowed its own slice, and the ceiling across all of them is Rs
+      {{ '{:,}'.format(acc.ceiling) if acc.ceiling else '&mdash;' }}.
+      {% if acc.live %}
+        <b>Rs {{ '{:,}'.format(acc.committed) }}</b> is committed right now by
+        {{ acc.live.keys()|join(', ')|upper }} &mdash; Rs
+        {{ '{:,}'.format(acc.free) }} left for anything starting after them.
+      {% else %}
+        Nothing is committed; the full ceiling is available.
+      {% endif %}
+      A session that would breach it is refused at sizing rather than discovered halfway
+      through a basket.</span>
   </div>
 
-  {% if s.bands %}
   <div class="card scroll" style="margin-top:var(--s3)">
-    <table aria-label="Reference bands">
-      <thead><tr><th>dte</th><th>n</th><th>low</th><th>high</th><th>would veto</th>
-        <th>sample</th></tr></thead>
+    <table aria-label="Instruments">
+      <thead><tr>
+        <th>Underlying</th><th>Expiry</th><th>Lot</th><th>Lots</th><th>Wings</th>
+        <th>Allocation</th><th>Bands</th><th>Paper</th><th>Next</th>
+      </tr></thead>
       <tbody>
-      {% for b, r in s.bands.items() %}
-        <tr><td>{{ b }}</td><td>{{ r.n }}</td><td>{{ '%.1f'|format(r.low) }}</td>
-          <td>{{ '%.1f'|format(r.high) }}</td><td>{{ r.vetoes_pct }}%</td>
-          <td class="{{ 'ok' if r.sufficient else 'bad' }}">
-            {{ 'ok' if r.sufficient else 'THIN' }}</td></tr>
+      {% for u in p.strangles %}
+        {% if u.available %}
+        <tr>
+          <td><b>{{ u.label }}</b><br><span class="muted">{{ u.exchange }}</span></td>
+          <td>{{ u.expiry_weekday }}<br><span class="muted">{{ u.expiry_series }}</span></td>
+          <td>{{ u.lot_size }}</td>
+          <td>{{ u.lots }}</td>
+          <td>{{ u.wing_width }}</td>
+          <td>{{ u.allocation_pct }}%<br>
+            <span class="muted">Rs {{ '{:,}'.format(u.margin_per_lot) }}/lot</span></td>
+          <td class="{{ 'ok' if u.bands_ready.ready else 'bad' }}">
+            {{ u.forward_sessions }} rec</td>
+          <td>{{ u.paper_sessions }} / {{ u.paper_needed }}</td>
+          <td class="muted">{{ u.next_action.label }}</td>
+        </tr>
+        {% else %}
+        <tr><td><b>{{ u.label }}</b></td>
+          <td colspan="8" class="bad">config unreadable &mdash; {{ u.error }}</td></tr>
+        {% endif %}
       {% endfor %}
       </tbody>
     </table>
   </div>
-  {% endif %}
 
-  <h3 style="margin-top:var(--s4)">What stands between here and live trading</h3>
-  <div class="card">
-    <div class="steps-path">
-      {% for l in s.locks.locks %}
-      <div><span class="k {{ 'ok' if l.open else 'bad' }}">{{ 'open' if l.open else 'shut' }}</span>
-        <span><b>{{ l.lock }}</b> &mdash; <span class="muted">{{ l.detail }}</span></span></div>
-      {% endfor %}
+  <p class="muted" style="margin-top:11px">Each underlying keeps its own bands, journal,
+    lockout and paper record. Pooling them would not widen a reference band, it would
+    build one from three different distributions and make it meaningless. BANKNIFTY has
+    <b>no weekly expiry</b> &mdash; the live dump lists only last-Tuesday-of-month
+    contracts &mdash; so it trades roughly four sessions a month rather than four a week,
+    and 60 paper sessions there will take about fifteen months.</p>
+
+  {% for u in p.strangles %}{% if u.available %}
+  <details style="margin-top:var(--s3)">
+    <summary><b>{{ u.label }}</b> &mdash; {{ u.next_action.why }}</summary>
+
+    <div class="posture" style="margin-top:var(--s3)">
+      <div class="fact {{ 'good' if u.mode == 'paper' else 'warn' }}">
+        <div class="k">Mode</div><div class="v">{{ u.mode|upper }}</div>
+        <div class="muted">{{ u.lots }} lots &middot; {{ u.structure|lower }} &middot;
+          {{ u.wing_width }}-point wings &middot;
+          Rs {{ '{:,}'.format(u.margin_per_lot) }}/lot, {{ u.allocation_pct }}% of the
+          account against a {{ u.max_utilisation_pct }}% ceiling shared with the others.</div>
+      </div>
+      <div class="fact {{ 'good' if u.bands_ready.ready else 'warn' }}">
+        <div class="k">Reference bands</div>
+        <div class="v">{{ u.forward_sessions }} rec</div>
+        <div class="muted">{{ u.bands_ready.note }}</div>
+      </div>
+      <div class="fact warn">
+        <div class="k">Paper record</div>
+        <div class="v">{{ u.paper_sessions }} / {{ u.paper_needed }}</div>
+        <div class="muted">Completed sessions that reached a flat book. An unclosed
+          session is not experience and is not counted.</div>
+      </div>
+      <div class="fact {{ 'warn' if u.allow_expiry_day else 'good' }}">
+        <div class="k">Expiry day</div>
+        <div class="v">{{ 'TRADED' if u.allow_expiry_day else 'SKIPPED' }}</div>
+        <div class="muted">dte=0 carries the most gamma of any session: the same index
+          move that costs one point on Monday can cost many multiples of it at the bell,
+          and the stop is the same size. Sessions beyond dte {{ u.max_dte }} are skipped
+          too &mdash; the table has no row calibrated for them.</div>
+      </div>
+      <div class="fact {{ 'warn' if u.allow_late_entry else 'good' }}">
+        <div class="k">Entry window</div>
+        <div class="v">{{ u.entry_window_end }}{{ '+' if u.allow_late_entry }}</div>
+        <div class="muted">
+          {% if u.allow_late_entry %}
+            A first entry after {{ u.entry_window_end }} is still taken, up to
+            {{ u.no_new_entry_after }}, at {{ (u.late_entry_size_mult * 100)|int }}% size.
+            The target and stop do not move &mdash; that ratio is the strategy &mdash; so
+            size carries the fact that less of the session is left.
+          {% else %}
+            A first entry is only opened inside the opening window.
+          {% endif %}
+        </div>
+      </div>
     </div>
-    <p class="muted" style="margin-top:11px">All {{ s.locks.closed_locks|length }} closed.
-      The last two are enforced inside <code>core/gateway.py</code>, so a caller that
-      skipped every check on this page would still be refused at the layer that talks to
-      Kite. The entry-cost gate additionally skips any session whose stop is under
-      {{ s.min_stop_to_cost }}x the measured cost of entering it.</p>
-  </div>
+
+    {% if u.bands %}
+    <div class="card scroll" style="margin-top:var(--s3)">
+      <table aria-label="Reference bands for {{ u.label }}">
+        <thead><tr><th>dte</th><th>n</th><th>low</th><th>high</th><th>would veto</th>
+          <th>sample</th></tr></thead>
+        <tbody>
+        {% for b, r in u.bands.items() %}
+          <tr><td>{{ b }}</td><td>{{ r.n }}</td><td>{{ '%.1f'|format(r.low) }}</td>
+            <td>{{ '%.1f'|format(r.high) }}</td><td>{{ r.vetoes_pct }}%</td>
+            <td class="{{ 'ok' if r.sufficient else 'bad' }}">
+              {{ 'ok' if r.sufficient else 'THIN' }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <div class="card" style="margin-top:var(--s3)">
+      <div class="steps-path">
+        {% for l in u.locks.locks %}
+        <div><span class="k {{ 'ok' if l.open else 'bad' }}">{{ 'open' if l.open else 'shut' }}</span>
+          <span><b>{{ l.lock }}</b> &mdash; <span class="muted">{{ l.detail }}</span></span></div>
+        {% endfor %}
+      </div>
+      <p class="muted" style="margin-top:11px">All
+        {{ u.locks.closed_locks|length }} closed. The last two are enforced inside
+        <code>core/gateway.py</code>, so a caller that skipped every check on this page
+        would still be refused at the layer that talks to Kite. The entry-cost gate
+        additionally skips any session whose stop is under {{ u.min_stop_to_cost }}x the
+        measured cost of entering it.</p>
+    </div>
+  </details>
+  {% endif %}{% endfor %}
 </section>
 {% endif %}
 

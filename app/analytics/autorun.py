@@ -23,6 +23,30 @@ MARKET_CLOSE = dt.time(15, 30)
 SESSION_LOCK = "data/outputs/strangle_session.lock"
 
 
+def _hhmm(text: str, fallback: dt.time) -> dt.time:
+    try:
+        h, m = (int(x) for x in str(text).split(":")[:2])
+        return dt.time(h, m)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _entry_deadline(cfg: dict, window_end: dt.time) -> tuple[dt.time, bool]:
+    """The last moment a FIRST entry may be opened, and whether that is the late path.
+
+    Two different times, and using the wrong one is what made the session unreachable
+    after 09:45. entry_window_end is when the preferred window shuts; with
+    allow_late_entry the runner will still open a position up to no_new_entry_after, at
+    reduced size. Starting the process is only pointless past the one it will actually
+    refuse at.
+    """
+    tm = (cfg or {}).get("timing") or {}
+    end = _hhmm(tm.get("entry_window_end"), window_end)
+    if not tm.get("allow_late_entry", False):
+        return end, False
+    return _hhmm(tm.get("no_new_entry_after"), end), True
+
+
 def _observed_today(forward_path: str, today: dt.date) -> bool:
     from ..strategies.strangle import calibrate as CAL
     return any(o.session == today for o in CAL.load_forward(forward_path))
@@ -84,10 +108,10 @@ def _session_ran_today(journal_path: str, today: dt.date) -> bool:
 
 
 def needed(conn, *, now: dt.datetime, is_trading_day: bool,
-           forward_path: str = "data/outputs/strangle_straddle_record.jsonl",
+           forward_path: str | None = None,
            entry_window_end: dt.time = dt.time(9, 45),
-           session_journal: str = "data/outputs/strangle_journal.jsonl",
-           lock_path: str = SESSION_LOCK) -> list[dict[str, Any]]:
+           session_journal: str | None = None,
+           lock_path: str | None = None) -> list[dict[str, Any]]:
     """The outstanding collection for today, in the order it should run.
 
     Each entry says WHY, because a job that runs itself without explanation is one nobody
@@ -114,33 +138,74 @@ def needed(conn, *, now: dt.datetime, is_trading_day: bool,
             "note": ("the EOD snapshot will be skipped before 15:30 and is left to the "
                      "18:30 job" if now.time() < MARKET_CLOSE else "")})
 
-    if now.time() >= OPTIONS_OPEN and not _observed_today(forward_path, today):
+    for spec in _underlyings(forward_path, session_journal, lock_path):
+        out.extend(_options_items(spec, now=now, today=today,
+                                  entry_window_end=entry_window_end))
+    return out
+
+
+def _underlyings(forward_path, session_journal, lock_path) -> list[dict]:
+    """One entry per instrument to collect for.
+
+    LEGACY PATHS WIN. When a caller names explicit paths it is asking about one specific
+    record, and silently fanning that out to three underlyings would answer a different
+    question than the one asked.
+    """
+    if forward_path or session_journal or lock_path:
+        return [{"slug": None, "label": "", "config": None,
+                 "forward": forward_path or "data/outputs/strangle_straddle_record.jsonl",
+                 "journal": session_journal or "data/outputs/strangle_journal.jsonl",
+                 "lock": lock_path or SESSION_LOCK}]
+    from ..strategies.strangle import instruments as INS
+    return [{"slug": u.slug, "label": u.label, "config": u.config,
+             "forward": u.forward(), "journal": u.journal(), "lock": u.lock()}
+            for u in INS.configured()]
+
+
+def _options_items(spec: dict, *, now: dt.datetime, today: dt.date,
+                   entry_window_end: dt.time) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    slug, label = spec["slug"], spec["label"]
+    tag = f" ({label})" if label else ""
+    args = {"instrument": slug} if slug else {}
+
+    if now.time() >= OPTIONS_OPEN and not _observed_today(spec["forward"], today):
         out.append({
-            "op": "strangle_collect", "label": "Record today's straddle",
-            "why": "no ATM straddle observation for today; the IV reference bands can only "
-                   "be built forward because Kite drops expired contracts",
+            "op": "strangle_collect", "label": f"Record today's straddle{tag}",
+            "args": args, "instrument": slug,
+            "why": f"no ATM straddle observation for today{tag}; the IV reference bands "
+                   "can only be built forward because Kite drops expired contracts",
             "note": ("recorded near the open is best — the bands are built on opening "
                      "prints" if now.time() < dt.time(10, 0) else
                      "later than the open, so this observation sits further down the "
                      "decay curve than the gate that will consume it")})
 
-    # --- the paper session -----------------------------------------------------------
-    # Only inside the opening window. A first entry taken at midday runs on parameters
-    # written for a full day of decay, against a range the session has already set — the
-    # runner refuses it, and starting a process only to be refused is noise.
-    if OPTIONS_OPEN <= now.time() <= entry_window_end:
-        if _session_live(lock_path):
-            pass                                    # already running; nothing to start
-        elif _session_ran_today(session_journal, today):
-            pass                                    # already had its say today
-        else:
-            out.append({
-                "op": "strangle_session", "label": "Paper session",
-                "detached": True,
-                "why": "no session has run today and the entry window is still open",
-                "note": "runs until 15:10 in its own process, so it cannot hold the "
-                        "operations lock; it will veto by itself if the day does not "
-                        "qualify"})
+    # --- the paper session -------------------------------------------------------------
+    cfg = None
+    if spec["config"]:
+        try:
+            from ..strategies.strangle import config as _sc
+            cfg = _sc.load(spec["config"])
+        except Exception:                                          # noqa: BLE001
+            cfg = None
+    deadline, late = _entry_deadline(cfg, entry_window_end)
+
+    if not (OPTIONS_OPEN <= now.time() <= deadline):
+        return out
+    if _session_live(spec["lock"]) or _session_ran_today(spec["journal"], today):
+        return out                      # already running, or already had its say today
+
+    after_window = late and now.time() > entry_window_end
+    out.append({
+        "op": "strangle_session", "label": f"Paper session{tag}",
+        "detached": True, "args": args, "instrument": slug,
+        "why": ("no session has run today and a late first entry is still permitted "
+                f"until {deadline.strftime('%H:%M')}" if after_window else
+                "no session has run today and the entry window is still open"),
+        "note": ("past the preferred window, so the runner will size it down rather than "
+                 "pretend it has a full day of decay ahead of it" if after_window else
+                 "runs until 15:10 in its own process, so it cannot hold the operations "
+                 "lock; it will veto by itself if the day does not qualify")})
     return out
 
 

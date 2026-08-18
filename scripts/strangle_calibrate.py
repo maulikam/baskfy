@@ -22,11 +22,14 @@ import sys
 from app.kite_client import Kite
 from app.strategies.strangle import calibrate as CAL
 from app.strategies.strangle import config as SC
+from app.strategies.strangle import instruments as INS
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="calibrate ATM straddle reference bands")
-    ap.add_argument("--config", default=SC.DEFAULT_PATH)
+    ap.add_argument("--instrument", default=INS.DEFAULT, choices=INS.all_slugs())
+    ap.add_argument("--config", default=None,
+                    help="override the instrument's config file")
     ap.add_argument("--lookback", type=int, default=90,
                     help="calendar days to reconstruct (bounded by contract listing dates)")
     ap.add_argument("--low", type=float, default=0.25, help="lower percentile")
@@ -36,7 +39,9 @@ def main() -> int:
     ap.add_argument("--json", action="store_true", help="machine-readable output only")
     args = ap.parse_args()
 
-    cfg = SC.load(args.config)
+    und = INS.get(args.instrument)
+    config_path = args.config or und.config
+    cfg = SC.load(config_path)
     say = (lambda m: None) if args.json else (lambda m: print(m, file=sys.stderr))
 
     kite = Kite()
@@ -46,7 +51,10 @@ def main() -> int:
         return 2
 
     ins = cfg["instrument"]
-    instruments = kite.kc.instruments(ins["exchange"]) + kite.kc.instruments("NSE")
+    # und.cash_exchange, not "NSE": the index itself is looked up here, and SENSEX quotes
+    # on BSE. Hardcoding NSE would find no index row and reconstruct nothing, silently.
+    instruments = (kite.kc.instruments(ins["exchange"])
+                   + kite.kc.instruments(und.cash_exchange))
     say(f"reconstructing up to {args.lookback} days of ATM straddle opens...")
 
     obs = CAL.collect(kite.kc, instruments=instruments, index_key=ins["index_key"],
@@ -67,6 +75,7 @@ def main() -> int:
 
     report = {
         "status": "OK",
+        "instrument": und.slug,
         "observations": len(obs),
         "history_reached": {"from": span[0].isoformat(), "to": span[1].isoformat(),
                             "calendar_days": (span[1] - span[0]).days,
@@ -93,9 +102,9 @@ def main() -> int:
             say("refusing to write: " + ready["note"])
             say("re-run with a wider --lookback, or keep collecting forward.")
             return 1
-        _write_bands(args.config, {b: {"low": r["low"], "high": r["high"], "n": r["n"]}
+        _write_bands(config_path, {b: {"low": r["low"], "high": r["high"], "n": r["n"]}
                                    for b, r in bands.items()})
-        say(f"wrote {len(bands)} bands into {args.config}")
+        say(f"wrote {len(bands)} bands into {config_path}")
     return 0
 
 

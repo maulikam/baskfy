@@ -20,6 +20,7 @@ the day. This is the same reasoning as the session lock, for the same reason.
 """
 from __future__ import annotations
 
+import atexit
 import contextlib
 import datetime as dt
 import fcntl
@@ -118,8 +119,23 @@ def committed_elsewhere(slug: str, path: str = PATH, *,
                      for s, r in live(path, today=today).items() if s != slug))
 
 
+_REGISTERED: set[tuple[str, str]] = set()
+
+
 def commit(slug: str, margin: float, path: str = PATH, *,
-           today: dt.date | None = None, pid: int | None = None) -> dict:
+           today: dt.date | None = None, pid: int | None = None,
+           release_on_exit: bool = True) -> dict:
+    """Claim margin for this instrument, and arrange to give it back.
+
+    The release is registered HERE, against the same path the claim was written to. It
+    used to be registered by the caller as `atexit.register(release, slug)` with no path
+    at all — correct only because the runner happens to use the default, and silently
+    releasing the wrong file for any caller that does not. That is the same shape as the
+    forgotten-argument defects this module exists to make impossible.
+
+    Registered once per (slug, path): a session commits once, but a caller in a loop must
+    not stack thousands of identical handlers.
+    """
     today = today or dt.date.today()
     rec = {"pid": int(pid or os.getpid()), "margin": float(margin),
            "session_date": today.isoformat(),
@@ -128,6 +144,10 @@ def commit(slug: str, margin: float, path: str = PATH, *,
         data = _read(path)
         data[slug] = rec
         _write(path, data)
+    key = (slug, str(path))
+    if release_on_exit and key not in _REGISTERED:
+        _REGISTERED.add(key)
+        atexit.register(release, slug, path)
     return rec
 
 

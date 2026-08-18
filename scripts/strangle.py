@@ -20,7 +20,6 @@ so the bands build up while nothing is at risk. Run it daily until the report sa
 from __future__ import annotations
 
 import argparse
-import atexit
 import datetime as dt
 import json
 import os
@@ -357,13 +356,12 @@ def main() -> int:
         return _out({**base, "status": "SIZING_REFUSED", "reason": str(exc),
                      "committed_elsewhere": round(committed),
                      "live_elsewhere": sorted(ALLOC.live()) or None})
+    # commit() registers its own release, against the same path it wrote to, so no exit
+    # path can outlive the claim — not the NO_DEPTH return below, not an exception, and not
+    # one added here later. The explicit releases further down still matter: they free the
+    # capital for another instrument the moment the position is actually gone, rather than
+    # at interpreter exit. A hard kill is covered by the pid check in allocation.live().
     ALLOC.commit(und.slug, margin)
-    # Registered at the moment the claim is made, so no exit path can outlive it — not the
-    # NO_DEPTH return below, not an exception, and not one added here later. The explicit
-    # releases further down still matter: they free the capital for another instrument at
-    # the moment the position is actually gone, rather than at interpreter exit. A hard
-    # kill is covered separately by the pid liveness check in allocation.live().
-    atexit.register(ALLOC.release, und.slug)
 
     # --- simulated entry ----------------------------------------------------------------
     by_symbol = {r["symbol"]: r for r in snap.rows}

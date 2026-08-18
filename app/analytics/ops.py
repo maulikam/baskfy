@@ -231,6 +231,20 @@ OPERATIONS: tuple[Operation, ...] = (
         "Run the scoring engine over a scan and print the top ranks. Changes nothing.",
         lambda v: ["-m", "app.scoring", v.get("scan") or str(UPLOADS / "sample_scan.csv")],
         timeout=120, writes=False, params=(SCAN,)),
+    Operation(
+        "autorun", "Collect what today still needs", "Daily",
+        "Runs whatever is outstanding for today and nothing else: the daily collection if "
+        "no complete run has landed, and the ATM straddle observation if none is recorded. "
+        "Fires automatically after a Kite login, because that is the moment the token that "
+        "blocks both jobs becomes available.",
+        lambda v: ["-m", "scripts.autorun"],
+        timeout=1800, needs_kite=True, long_running=True),
+    Operation(
+        "autorun_check", "What does today still need?", "Daily",
+        "Reports the outstanding collection and why, without running anything.",
+        lambda v: ["-m", "scripts.autorun", "--check"],
+        timeout=180, needs_kite=True, writes=False),
+
     # --- options: the intraday strangle. PAPER ONLY. ---------------------------------
     # Live execution sits behind seven locks (app/strategies/strangle/live.py) and every
     # one of them is shut, so none of these can reach a real order however they are run.

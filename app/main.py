@@ -99,7 +99,7 @@ def gateway() -> OrderGateway:
 
 
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request):
+def home(request: Request, logged_in: str = "", autorun: str = "", note: str = ""):
     authed = False
     try:
         authed = kite().is_authed()
@@ -127,9 +127,24 @@ def home(request: Request):
 
     # Starlette >=0.29 requires the request-first signature (the old
     # (name, {"request": ...}) form was removed in Starlette 1.x).
+    # What the post-login collection is doing, or did. Read from the ops journal rather
+    # than remembered, so a page reload after the job finishes still shows the outcome.
+    auto = None
+    try:
+        from .analytics import db as _db, ops as _ops
+        with _db.connect() as conn:
+            running = _ops.running_job(conn)
+            last = (_ops.last_run(conn) or {}).get("autorun")
+            if (logged_in or autorun) or (running and running["name"] == "autorun") or last:
+                auto = {"just_logged_in": bool(logged_in), "note": note,
+                        "running": running if running and running["name"] == "autorun" else None,
+                        "last": last}
+    except Exception:                                              # noqa: BLE001
+        pass
+
     return templates.TemplateResponse(request, "index.html",
                                       {"authed": authed, "dry_run": C.DRY_RUN,
-                                       "collection": collection,
+                                       "collection": collection, "auto": auto,
                                        "protection": protection})
 
 
@@ -140,10 +155,33 @@ def login():
 
 @app.get("/callback")
 def callback(request_token: str = ""):
+    """Exchange the token, then collect whatever the day still owes.
+
+    Logging in is the moment the blocker clears. Both daily jobs need a token that expires
+    overnight with no refresh, and on 17-18 Aug 2026 both exited 2 for want of one — two
+    sessions of straddle observations and an EOD snapshot lost, none of it recoverable.
+    Waiting for the next scheduled fire would have lost another day.
+
+    The run is started, not awaited: a login must not hang on a fifteen-minute collection,
+    and the ops page already shows a running job.
+    """
     if not request_token:
         raise HTTPException(400, "Missing request_token")
     kite().exchange_token(request_token)
-    return RedirectResponse("/")
+
+    started, why = "", ""
+    try:
+        from .analytics import db as _db, ops as _ops
+        with _db.connect() as conn:
+            _db.migrate(conn)
+            res = _ops.start(conn, "autorun")
+            started, why = res["name"], "post-login collection"
+    except Exception as exc:                                       # noqa: BLE001
+        # A failed autostart must never cost the login itself, which is the one thing the
+        # user came here to do.
+        logging.warning("post-login autorun did not start: %s", exc)
+        why = str(exc)[:120]
+    return RedirectResponse(f"/?logged_in=1&autorun={started}&note={why}")
 
 
 @app.post("/analyze")

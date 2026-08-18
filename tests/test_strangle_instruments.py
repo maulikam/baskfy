@@ -816,3 +816,55 @@ def test_the_market_open_time_is_defined_once():
     assigned = [n for n in ast.walk(tree) if isinstance(n, ast.Assign)
                 and any(getattr(t, "id", "") == "OPTIONS_OPEN" for t in n.targets)]
     assert not assigned, "autorun redeclared the market open time"
+
+
+def test_a_premarket_run_does_not_consume_the_day(tmp_path):
+    """autorun reads the journal to decide whether the day has been dealt with, and counts
+    entry_window_closed as "the session had its say". A run before the open — the /options
+    button at 08:00, or a cron a few minutes early — wrote exactly that, so autorun skipped
+    the real session at 09:30 and the day was lost with no record of why.
+
+    A run that declined to start has evaluated nothing and must not stand in for the
+    session it was too early to be."""
+    import json
+    j = tmp_path / "j.jsonl"
+    j.write_text(json.dumps({"ts": "2026-08-19T08:00:00",
+                             "event": "entry_window_not_open",
+                             "reason": "before 09:15"}) + "\n")
+    assert AR._session_ran_today(str(j), dt.date(2026, 8, 19)) is False
+
+    spec = {"slug": "nifty", "label": "NIFTY", "config": None,
+            "forward": str(tmp_path / "f.jsonl"), "journal": str(j),
+            "lock": str(tmp_path / "s.lock")}
+    items = AR._options_items(spec, now=dt.datetime(2026, 8, 19, 9, 30),
+                              today=dt.date(2026, 8, 19),
+                              entry_window_end=dt.time(9, 45))
+    assert "strangle_session" in [i["op"] for i in items], \
+        "the pre-open refusal still consumed the day"
+
+
+def test_a_genuine_refusal_after_the_cutoff_does_consume_the_day(tmp_path):
+    """The other direction. Past no_new_entry_after the runner HAS decided, and starting
+    another process at 13:00 to be refused again is noise."""
+    import json
+    j = tmp_path / "j.jsonl"
+    j.write_text(json.dumps({"ts": "2026-08-19T13:00:00",
+                             "event": "entry_window_closed",
+                             "reason": "past 12:30"}) + "\n")
+    assert AR._session_ran_today(str(j), dt.date(2026, 8, 19)) is True
+
+
+def test_every_decided_event_is_a_real_outcome():
+    """The list is what stops the day being re-run. Anything on it must mean the strategy
+    evaluated the day, not that the runner declined to start."""
+    assert "entry_window_not_open" not in AR.DECIDED
+    assert set(AR.DECIDED) == {"session_closed", "entry_window_closed", "skipped",
+                               "no_entry", "entry_cost_veto"}
+
+
+def test_the_runner_reports_premarket_as_not_open_rather_than_closed():
+    """At 06:00 the old note read 'only 15:10 remains and a decay trade cannot reach its
+    target' — the whole day remained. A status that contradicts itself is worse than none."""
+    src = pathlib.Path("scripts/strangle.py").read_text()
+    assert "ENTRY_WINDOW_NOT_OPEN" in src
+    assert "entry_window_not_open" in src

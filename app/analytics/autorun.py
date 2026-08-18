@@ -80,11 +80,17 @@ def _session_live(lock_path: str) -> bool:
         return False
 
 
+# Events that mean the day HAS been decided. A run that declined to start is not on this
+# list: entry_window_not_open is deliberately absent, because a pre-open run has evaluated
+# nothing and must not stand in for the session it was too early to be.
+DECIDED = ("session_closed", "entry_window_closed", "skipped", "no_entry",
+           "entry_cost_veto")
+
+
 def _session_ran_today(journal_path: str, today: dt.date) -> bool:
     from ..strategies.strangle import journal as _j
     return any(str(r.get("ts", "")).startswith(today.isoformat())
-               and r.get("event") in ("session_closed", "entry_window_closed", "skipped",
-                                      "no_entry", "entry_cost_veto")
+               and r.get("event") in DECIDED
                for r in _j.Journal(journal_path).read())
 
 

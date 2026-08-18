@@ -20,6 +20,7 @@ from typing import Any, Sequence
 # there is no NFO quote at all — there is no pre-open session for options.
 OPTIONS_OPEN = dt.time(9, 15)
 MARKET_CLOSE = dt.time(15, 30)
+SESSION_LOCK = "data/outputs/strangle_session.lock"
 
 
 def _observed_today(forward_path: str, today: dt.date) -> bool:
@@ -56,9 +57,37 @@ def _daily_ok_today(conn, today: dt.date, after_close: bool = False) -> bool:
     return False
 
 
+def _session_live(lock_path: str) -> bool:
+    """Is a strangle session process already running?
+
+    The PID lock is the only signal that crosses processes: the scheduled job, the button
+    on /options and this all start the same runner and cannot see each other's memory.
+    """
+    import os
+    import pathlib as _p
+    f = _p.Path(lock_path)
+    if not f.exists():
+        return False
+    try:
+        os.kill(int(f.read_text().split()[0]), 0)
+        return True
+    except (ValueError, IndexError, ProcessLookupError, PermissionError, OSError):
+        return False
+
+
+def _session_ran_today(journal_path: str, today: dt.date) -> bool:
+    from ..strategies.strangle import journal as _j
+    return any(str(r.get("ts", "")).startswith(today.isoformat())
+               and r.get("event") in ("session_closed", "entry_window_closed", "skipped",
+                                      "no_entry", "entry_cost_veto")
+               for r in _j.Journal(journal_path).read())
+
+
 def needed(conn, *, now: dt.datetime, is_trading_day: bool,
-           forward_path: str = "data/outputs/strangle_straddle_record.jsonl"
-           ) -> list[dict[str, Any]]:
+           forward_path: str = "data/outputs/strangle_straddle_record.jsonl",
+           entry_window_end: dt.time = dt.time(9, 45),
+           session_journal: str = "data/outputs/strangle_journal.jsonl",
+           lock_path: str = SESSION_LOCK) -> list[dict[str, Any]]:
     """The outstanding collection for today, in the order it should run.
 
     Each entry says WHY, because a job that runs itself without explanation is one nobody
@@ -94,6 +123,24 @@ def needed(conn, *, now: dt.datetime, is_trading_day: bool,
                      "prints" if now.time() < dt.time(10, 0) else
                      "later than the open, so this observation sits further down the "
                      "decay curve than the gate that will consume it")})
+
+    # --- the paper session -----------------------------------------------------------
+    # Only inside the opening window. A first entry taken at midday runs on parameters
+    # written for a full day of decay, against a range the session has already set — the
+    # runner refuses it, and starting a process only to be refused is noise.
+    if OPTIONS_OPEN <= now.time() <= entry_window_end:
+        if _session_live(lock_path):
+            pass                                    # already running; nothing to start
+        elif _session_ran_today(session_journal, today):
+            pass                                    # already had its say today
+        else:
+            out.append({
+                "op": "strangle_session", "label": "Paper session",
+                "detached": True,
+                "why": "no session has run today and the entry window is still open",
+                "note": "runs until 15:10 in its own process, so it cannot hold the "
+                        "operations lock; it will veto by itself if the day does not "
+                        "qualify"})
     return out
 
 

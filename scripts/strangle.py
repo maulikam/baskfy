@@ -207,6 +207,20 @@ def main() -> int:
         jr.write("skipped", vetoes=vetoes, **base)
         return _out({**base, "status": "SKIPPED", "vetoes": vetoes})
 
+    # --- entry window ---------------------------------------------------------------------
+    # NEVER ENFORCED UNTIL NOW, which did not matter while the session only ever started at
+    # 09:30 from the scheduler. It matters the moment the start time is a human login: the
+    # runner would have opened a fresh position at 14:00 on rules written for the open, with
+    # two thirds of the session's decay already gone and the day's range already set.
+    window_end = dt.time(*(int(x) for x in cfg["timing"]["entry_window_end"].split(":")))
+    if dt.datetime.now().time() > window_end:
+        session.to(ST.State.NO_ENTRY, f"past {cfg['timing']['entry_window_end']}")
+        jr.write("entry_window_closed", **base)
+        return _out({**base, "status": "ENTRY_WINDOW_CLOSED",
+                     "note": f"it is past {cfg['timing']['entry_window_end']}; a first "
+                             "entry is only taken in the opening window, and the session "
+                             "parameters assume a full day of decay ahead of it"})
+
     # --- selection ----------------------------------------------------------------------
     session.to(ST.State.WAITING_ENTRY, "gates clear")
     hist = kite.kc.historical_data(

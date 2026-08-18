@@ -154,7 +154,14 @@ def test_the_decision_module_runs_nothing():
             imported |= {a.name.split(".")[0] for a in n.names}
         elif isinstance(n, ast.ImportFrom) and n.module:
             imported.add(n.module.split(".")[0])
-    assert not (imported & {"subprocess", "os", "sys"}), sorted(imported)
+    # subprocess is the real prohibition: this module must not RUN anything.
+    # os is permitted for exactly one thing — os.kill(pid, 0), which asks whether a
+    # process exists and starts nothing. That probe is the only signal that crosses
+    # process boundaries, and the alternative is starting a second session because this
+    # module could not see the first.
+    assert "subprocess" not in imported, sorted(imported)
+    src = open("app/analytics/autorun.py").read()
+    assert src.count("os.") == 1 and "os.kill" in src
 
 
 def test_login_starts_the_collection():
@@ -174,3 +181,92 @@ def test_the_runner_places_no_orders():
     src = open("scripts/autorun.py").read()
     for token in ("place_order", "place_gtt", "modify_order", "cancel_order"):
         assert token not in src
+
+
+# =====================================================================================
+# the paper session — started on login, whenever that happens
+# =====================================================================================
+def sess_kwargs(tmp_path, **over):
+    d = {"forward_path": str(tmp_path / "fwd.jsonl"),
+         "session_journal": str(tmp_path / "sj.jsonl"),
+         "lock_path": str(tmp_path / "s.lock")}
+    d.update(over)
+    return d
+
+
+def test_a_session_is_started_inside_the_opening_window(conn, tmp_path):
+    """The login time is not fixed, so the session starts whenever the login happens —
+    provided the window is still open."""
+    items = AR.needed(conn, now=at(9, 30), is_trading_day=True, **sess_kwargs(tmp_path))
+    assert "strangle_session" in ops(items)
+    s = next(i for i in items if i["op"] == "strangle_session")
+    assert s["detached"] is True
+
+
+def test_a_session_is_not_started_after_the_entry_window(conn, tmp_path):
+    """A first entry at midday runs on parameters written for a full day of decay, against
+    a range the session has already set. The runner refuses it; starting a process only to
+    be refused is noise."""
+    assert "strangle_session" not in ops(
+        AR.needed(conn, now=at(11), is_trading_day=True, **sess_kwargs(tmp_path)))
+
+
+def test_a_session_is_not_started_before_the_options_open(conn, tmp_path):
+    assert "strangle_session" not in ops(
+        AR.needed(conn, now=at(9, 0), is_trading_day=True, **sess_kwargs(tmp_path)))
+
+
+def test_a_live_session_is_not_started_twice(conn, tmp_path):
+    """Two sessions on one day would both enter and both journal, producing a paper record
+    describing a position nobody held — and that record is what gates live trading."""
+    import os
+    lock = tmp_path / "s.lock"
+    lock.write_text(f"{os.getpid()} now\n")
+    assert "strangle_session" not in ops(
+        AR.needed(conn, now=at(9, 30), is_trading_day=True,
+                  **sess_kwargs(tmp_path, lock_path=str(lock))))
+
+
+def test_a_stale_lock_does_not_block_a_session(conn, tmp_path):
+    """A crash at 09:31 must not cost the day."""
+    lock = tmp_path / "s.lock"
+    lock.write_text("999999 dead\n")
+    assert "strangle_session" in ops(
+        AR.needed(conn, now=at(9, 30), is_trading_day=True,
+                  **sess_kwargs(tmp_path, lock_path=str(lock))))
+
+
+def test_a_session_that_already_had_its_say_is_not_restarted(conn, tmp_path):
+    """Including one that vetoed. A day the strategy declined is a day it decided about,
+    not a gap to fill."""
+    from app.strategies.strangle import journal as J
+    sj = tmp_path / "sj.jsonl"
+    j = J.Journal(str(sj))
+    j.write("skipped", vetoes=["gap 2%"])
+    rows = sj.read_text().replace(j.read().__iter__().__next__()["ts"][:10],
+                                  TODAY.isoformat())
+    sj.write_text(rows)
+    assert "strangle_session" not in ops(
+        AR.needed(conn, now=at(9, 30), is_trading_day=True,
+                  **sess_kwargs(tmp_path, session_journal=str(sj))))
+
+
+def test_a_session_is_never_started_on_a_non_trading_day(conn, tmp_path):
+    assert AR.needed(conn, now=at(9, 30), is_trading_day=False,
+                     **sess_kwargs(tmp_path)) == []
+
+
+def test_the_session_is_detached_so_it_cannot_hold_the_operations_lock():
+    """It runs until 15:10. Waiting for it would block the equity daily job for five
+    hours."""
+    src = open("scripts/autorun.py").read()
+    assert "start_new_session=True" in src
+    assert 'item.get("detached")' in src
+
+
+def test_the_runner_refuses_a_first_entry_after_the_window():
+    """Never enforced until the start time became a human login."""
+    src = open("scripts/strangle.py").read()
+    assert "ENTRY_WINDOW_CLOSED" in src
+    assert src.index("ENTRY_WINDOW_CLOSED") < src.index("SEL.select_pair"), \
+        "the window must be checked before any strike is chosen"

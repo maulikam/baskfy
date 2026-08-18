@@ -43,17 +43,60 @@ class Kite:
 
     # ---------- reads ----------
     def holdings(self) -> list[dict]:
-        """Total qty = quantity + t1 + collateral (pledged). Missing collateral once
-        caused a 103-share undercount — never simplify this."""
-        out = []
+        """What you actually own right now, including shares bought TODAY.
+
+        Total qty = quantity + t1 + collateral (pledged). Missing collateral once caused a
+        103-share undercount — never simplify this.
+
+        AND TODAY'S CNC BUYS, WHICH ARE NOT IN holdings() AT ALL. Kite moves a same-day
+        purchase into holdings only at T+1; until then it exists solely as a net position.
+        Reading holdings alone therefore reports 0 for a stock bought an hour ago, and the
+        rebalancer treats it as a fresh buy — on 18 Aug 2026 a re-run plan proposed buying
+        CUPID, HSCL and SANSERA a second time, about Rs 16 lakh, having already filled all
+        three that morning.
+
+        Same-day SELLS need no such handling and must not get it: Kite reduces the holdings
+        quantity immediately, so SAILIFE showed 435 after selling 112 from 547 while its
+        position showed -112. Adding that negative would subtract the sale twice. Only
+        POSITIVE day positions are folded in.
+
+        The asymmetry is Kite's, not ours, and it is why this cannot be a single call.
+        """
+        out: dict[str, dict] = {}
         for h in self.kc.holdings():
             total = h["quantity"] + h.get("t1_quantity", 0) + h.get("collateral_quantity", 0)
             if total <= 0:
                 continue
-            out.append(dict(symbol=h["tradingsymbol"], exchange=h["exchange"],
-                            quantity=total, pledged_qty=h.get("collateral_quantity", 0),
-                            average_price=h["average_price"], last_price=h["last_price"]))
-        return out
+            out[h["tradingsymbol"]] = dict(
+                symbol=h["tradingsymbol"], exchange=h["exchange"], quantity=total,
+                pledged_qty=h.get("collateral_quantity", 0),
+                average_price=h["average_price"], last_price=h["last_price"])
+
+        try:
+            positions = self.kc.positions().get("net", []) or []
+        except Exception as exc:                                   # noqa: BLE001
+            # Refuse rather than under-report. A holdings figure that silently omits
+            # today's buys is the input to a plan that would buy them again.
+            raise RuntimeError(
+                f"could not read positions, so today's purchases cannot be counted: {exc}"
+            ) from exc
+
+        for p in positions:
+            if str(p.get("product") or "") != "CNC":
+                continue
+            qty = int(p.get("quantity") or 0)
+            if qty <= 0:                    # sells are already reflected in holdings
+                continue
+            sym = p["tradingsymbol"]
+            row = out.get(sym)
+            if row:
+                row["quantity"] += qty
+            else:
+                out[sym] = dict(symbol=sym, exchange=p.get("exchange", "NSE"),
+                                quantity=qty, pledged_qty=0,
+                                average_price=p.get("average_price") or 0.0,
+                                last_price=p.get("last_price") or 0.0)
+        return list(out.values())
 
     def trades(self) -> list[dict]:
         """Today's executed trades. THE BOOK IS SAME-DAY ONLY.

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 
 class ExpiryResolutionError(RuntimeError):
@@ -132,6 +132,51 @@ def session_params(session: dt.date, expiry: dt.date, cfg: dict,
     return SessionParams(dte=dte, bucket=bucket, target_points=target,
                          size_mult=float(row["size_mult"]), stop_points=stop,
                          tradeable=tradeable, reason=reason)
+
+
+DEFAULT_WINDOW_END = dt.time(9, 45)
+
+
+def entry_window_state(cfg: Mapping | None, now_t: dt.time, *,
+                       default_end: dt.time = DEFAULT_WINDOW_END) -> dict:
+    """Whether a FIRST entry may still be opened, and at what size.
+
+    THE ONE DEFINITION. Three callers need this answer and each had its own copy: the
+    runner deciding whether to enter, --check deciding what to report, and autorun deciding
+    whether starting a process is worth it. Copies drift, and the two failure directions
+    are both silent — autorun starts a session that immediately refuses, or declines to
+    start one that would have traded and the day is simply lost.
+
+    A late entry does not move the target or the stop. stop_to_target_ratio is [STRUCTURAL]
+    and a late start does not change what the trade is worth; it changes how much session
+    is left to be right in. Size is the honest lever.
+    """
+    tm = ((cfg or {}).get("timing") or {})
+    end = _hhmm(tm.get("entry_window_end"), default_end)
+    cutoff = _hhmm(tm.get("no_new_entry_after"), end)
+    late_ok = bool(tm.get("allow_late_entry", False))
+    mult = float(tm.get("late_entry_size_mult", 1.0)) if late_ok else 1.0
+
+    if now_t <= end:
+        return {"state": "open", "veto": None, "size_mult": 1.0,
+                "closes": end.strftime("%H:%M"), "deadline": end}
+    if not late_ok:
+        return {"state": "closed", "size_mult": 0.0, "deadline": end,
+                "veto": f"past {end.strftime('%H:%M')} and late entry is disabled"}
+    if now_t > cutoff:
+        return {"state": "closed", "size_mult": 0.0, "deadline": cutoff,
+                "veto": f"past {cutoff.strftime('%H:%M')}, the last time a new position "
+                        "may be opened"}
+    return {"state": "late", "veto": None, "size_mult": mult,
+            "closes": cutoff.strftime("%H:%M"), "deadline": cutoff}
+
+
+def _hhmm(text, fallback: dt.time) -> dt.time:
+    try:
+        h, m = (int(x) for x in str(text).split(":")[:2])
+        return dt.time(h, m)
+    except (TypeError, ValueError):
+        return fallback
 
 
 def tradeable_sessions_per_cycle(cfg: dict) -> int:

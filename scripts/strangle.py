@@ -88,32 +88,6 @@ def _release_session_lock(path: str = SESSION_LOCK) -> None:
         pass
 
 
-def _entry_window_state(cfg: dict, now_t: dt.time) -> dict:
-    """Whether a FIRST entry may still be opened, and at what size.
-
-    Extracted so --check and the runner cannot drift: a check that reported a tradeable day
-    while the runner refused it on the clock would be worse than no check at all.
-    """
-    tm = cfg["timing"]
-    end = dt.time(*(int(x) for x in tm["entry_window_end"].split(":")))
-    cutoff = dt.time(*(int(x) for x in tm["no_new_entry_after"].split(":")))
-    late_ok = bool(tm.get("allow_late_entry", False))
-    mult = float(tm.get("late_entry_size_mult", 1.0)) if late_ok else 1.0
-
-    if now_t <= end:
-        return {"state": "open", "veto": None, "size_mult": 1.0,
-                "closes": tm["entry_window_end"]}
-    if not late_ok:
-        return {"state": "closed", "size_mult": 0.0,
-                "veto": f"past {tm['entry_window_end']} and late entry is disabled"}
-    if now_t > cutoff:
-        return {"state": "closed", "size_mult": 0.0,
-                "veto": f"past {tm['no_new_entry_after']}, the last time a new position "
-                        "may be opened"}
-    return {"state": "late", "veto": None, "size_mult": mult,
-            "closes": tm["no_new_entry_after"]}
-
-
 def _out(payload: dict) -> int:
     print(json.dumps(payload, indent=2, default=str))
     return 0 if payload.get("status") in ("OK", "COLLECTED", "SKIPPED") else 1
@@ -224,18 +198,23 @@ def main() -> int:
                               call=ce, put=pe)
         CAL.record_forward(forward_path, obs)
         record = CAL.load_forward(forward_path)
-        bands = CAL.build_bands(record) if record else {}
+        max_dte = cfg["session"].get("max_dte")
+        bands = CAL.build_bands(record, max_dte=max_dte) if record else {}
         jr.write("collected", **obs.as_dict())
         return _out({**base, "status": "COLLECTED", "recorded": obs.as_dict(),
                      "forward_sessions": len(record),
-                     "readiness": CAL.readiness(bands) if bands else
-                     {"ready": False, "note": "no observations yet"}})
+                     "readiness": CAL.readiness(
+                         bands, excluded=CAL.excluded_beyond(record, max_dte))
+                     if bands else {"ready": False, "note": "no observations yet"}})
 
     # --- gates --------------------------------------------------------------------------
     band = {**(cfg.get("reference_band") or {})}
     forward = CAL.load_forward(forward_path)
     if forward and not band:
-        band = CAL.build_bands(forward)
+        # max_dte matters MOST here: this is the band that gates entry. Without it a
+        # monthly series builds its "3+" band from contracts up to six months out and the
+        # IV gate stops discriminating.
+        band = CAL.build_bands(forward, max_dte=cfg["session"].get("max_dte"))
     # There is exactly one authenticated broker session in this system today. Operational
     # rule R1 wants a second, funded to buy back the whole position if the primary dies.
     # Reported as false rather than quietly waived: the gate is what makes the gap visible.
@@ -251,11 +230,19 @@ def main() -> int:
         # The entry window is evaluated below, after this return, so --check would have
         # reported "would_trade" on a day the runner refuses on the clock alone. It claims
         # to list every veto standing between now and an entry; the window is one.
-        win = _entry_window_state(cfg, dt.datetime.now().time())
+        win = C.entry_window_state(cfg, dt.datetime.now().time())
         return _out({**base, "status": "OK", "market_facts": facts,
                      "vetoes": vetoes + ([win["veto"]] if win["veto"] else []),
                      "would_trade": not vetoes and not win["veto"],
                      "entry_window": win,
+                     # A closed window carries size_mult 0.0, which is the right answer
+                     # for "may I enter" and a nonsense one for "how big would this be" —
+                     # multiplying by it reported that the multipliers asked for 0 lots.
+                     # --check answers the second question, so it reports the size the day
+                     # would take if it were entered now.
+                     "lot_sizing": Z.session_lots_detail(
+                         cfg, params.size_mult * (float(win["size_mult"])
+                                                  if win["veto"] is None else 1.0)),
                      "forward_sessions": len(forward),
                      "band_source": "config" if cfg.get("reference_band") else
                                     ("forward_record" if forward else "none")})
@@ -273,7 +260,7 @@ def main() -> int:
     # two thirds of the session's decay already gone and the day's range already set.
     tm = cfg["timing"]
     now_t = dt.datetime.now().time()
-    win = _entry_window_state(cfg, now_t)
+    win = C.entry_window_state(cfg, now_t)
     if win["veto"]:
         session.to(ST.State.NO_ENTRY, win["veto"])
         jr.write("entry_window_closed", reason=win["veto"], **base)
@@ -343,7 +330,8 @@ def main() -> int:
                      "pair": pair.as_dict()})
 
     # --- sizing, from queried margin --------------------------------------------------
-    lots = Z.session_lots(cfg, size_mult)
+    lot_detail = Z.session_lots_detail(cfg, size_mult)
+    lots = lot_detail["lots"]
     legs = [(pair.call, "SELL"), (pair.put, "SELL")]
     if pair.call_wing and pair.put_wing:
         legs += [(pair.call_wing, "BUY"), (pair.put_wing, "BUY")]
@@ -409,6 +397,7 @@ def main() -> int:
 
     session.to(ST.State.MANAGING, "entered")
     entered = {"pair": pair.as_dict(), "sizing": sized.as_dict(),
+               "lot_sizing": lot_detail,
                "late_entry": ({"entered_at": now_t.strftime("%H:%M"),
                                "window_end": tm["entry_window_end"],
                                "size_mult": late_mult} if late else None),

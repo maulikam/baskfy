@@ -23,30 +23,6 @@ MARKET_CLOSE = dt.time(15, 30)
 SESSION_LOCK = "data/outputs/strangle_session.lock"
 
 
-def _hhmm(text: str, fallback: dt.time) -> dt.time:
-    try:
-        h, m = (int(x) for x in str(text).split(":")[:2])
-        return dt.time(h, m)
-    except (TypeError, ValueError):
-        return fallback
-
-
-def _entry_deadline(cfg: dict, window_end: dt.time) -> tuple[dt.time, bool]:
-    """The last moment a FIRST entry may be opened, and whether that is the late path.
-
-    Two different times, and using the wrong one is what made the session unreachable
-    after 09:45. entry_window_end is when the preferred window shuts; with
-    allow_late_entry the runner will still open a position up to no_new_entry_after, at
-    reduced size. Starting the process is only pointless past the one it will actually
-    refuse at.
-    """
-    tm = (cfg or {}).get("timing") or {}
-    end = _hhmm(tm.get("entry_window_end"), window_end)
-    if not tm.get("allow_late_entry", False):
-        return end, False
-    return _hhmm(tm.get("no_new_entry_after"), end), True
-
-
 def _observed_today(forward_path: str, today: dt.date) -> bool:
     from ..strategies.strangle import calibrate as CAL
     return any(o.session == today for o in CAL.load_forward(forward_path))
@@ -188,14 +164,18 @@ def _options_items(spec: dict, *, now: dt.datetime, today: dt.date,
             cfg = _sc.load(spec["config"])
         except Exception:                                          # noqa: BLE001
             cfg = None
-    deadline, late = _entry_deadline(cfg, entry_window_end)
+    # THE SAME helper the runner enters on. Deciding here that a session is worth starting
+    # while the runner refuses it — or the reverse — is a silent lost session either way.
+    from ..strategies.strangle import clock as _clock
+    win = _clock.entry_window_state(cfg, now.time(), default_end=entry_window_end)
 
-    if not (OPTIONS_OPEN <= now.time() <= deadline):
+    if now.time() < OPTIONS_OPEN or win["veto"]:
         return out
     if _session_live(spec["lock"]) or _session_ran_today(spec["journal"], today):
         return out                      # already running, or already had its say today
 
-    after_window = late and now.time() > entry_window_end
+    after_window = win["state"] == "late"
+    deadline = win["deadline"]
     out.append({
         "op": "strangle_session", "label": f"Paper session{tag}",
         "detached": True, "args": args, "instrument": slug,

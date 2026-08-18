@@ -197,7 +197,8 @@ def collect(kc, *, instruments: Sequence[Mapping[str, Any]], index_key: str,
 # =====================================================================================
 def build_bands(obs: Iterable[Observation], *, low_pct: float = 0.25,
                 high_pct: float = 0.75, min_samples: int = 8,
-                iv_low_mult: float = 0.85, iv_high_mult: float = 1.30) -> dict:
+                iv_low_mult: float = 0.85, iv_high_mult: float = 1.30,
+                max_dte: int | None = None) -> dict:
     """Percentile bands per dte bucket, with the veto rate they imply.
 
     The veto rate is the point of the report. A band is not "calibrated" because it was
@@ -205,9 +206,31 @@ def build_bands(obs: Iterable[Observation], *, low_pct: float = 0.25,
     have refused to trade. A band that vetoes 40% of sessions is a different strategy from
     the one described in the brief, and you should find that out here rather than by
     watching the bot skip nine days in a row.
+
+    max_dte DISCARDS OBSERVATIONS THE STRATEGY WOULD NEVER HAVE TRADED, and it is not
+    optional on a monthly series. bucket_for() puts every dte >= 3 in one "3+" bucket,
+    which is exactly right for a weekly cycle whose furthest session is four days out. On
+    BANKNIFTY, which has no weeklies, it pools a contract 30 days from expiry with one 5
+    days out — measured 18 Aug 2026, those straddles were 1,836 and 780, a factor of 2.36.
+    Since ~18 of 21 monthly sessions sit beyond the tradeable window, the far-dated
+    observations DOMINATE the band that gates the final week.
+
+    The direction of that failure is the bad one. The band lands about twofold too high, so
+    its lower gate — low * iv_low_multiplier — sits ABOVE any genuine final-week straddle,
+    and every real session is refused as "IV below band". On a representative record the
+    band came out 1,240-1,840 against real straddles of 700-810: BANKNIFTY would never
+    have traded a single session, and the reason logged would have looked like a market
+    condition rather than a calibration bug.
+
+    The raw forward record still keeps them: it cannot be recollected, and a band is a
+    view over the data rather than the data itself.
     """
     grouped: dict[str, list[Observation]] = defaultdict(list)
+    dropped = 0
     for o in obs:
+        if max_dte is not None and o.dte > int(max_dte):
+            dropped += 1
+            continue
         grouped[o.bucket].append(o)
 
     bands: dict[str, dict] = {}
@@ -234,11 +257,25 @@ def build_bands(obs: Iterable[Observation], *, low_pct: float = 0.25,
             "would_have_vetoed_pct": round(vetoed / len(vals) * 100, 1),
             "sessions": sorted({r.session.isoformat() for r in rows})[:3],
             "expiries_covered": len({r.expiry for r in rows}),
+            "dte_range": [min(r.dte for r in rows), max(r.dte for r in rows)],
         }
     return bands
 
 
-def readiness(bands: Mapping[str, Mapping], *, tradeable_buckets=("3+", "2", "1")) -> dict:
+def excluded_beyond(obs: Iterable[Observation], max_dte: int | None) -> int:
+    """How many observations build_bands would discard as untradeable.
+
+    Returned separately rather than mixed into the bands mapping: that mapping is handed
+    straight to the rules engine as reference_band and iterated by the page, so a magic key
+    inside it would become a phantom bucket in both.
+    """
+    if max_dte is None:
+        return 0
+    return sum(1 for o in obs if o.dte > int(max_dte))
+
+
+def readiness(bands: Mapping[str, Mapping], *, tradeable_buckets=("3+", "2", "1"),
+              excluded: int = 0) -> dict:
     """Whether these bands are fit to gate a paper run.
 
     Returns a verdict rather than raising, because a partly-calibrated table is still worth
@@ -247,12 +284,16 @@ def readiness(bands: Mapping[str, Mapping], *, tradeable_buckets=("3+", "2", "1"
     missing = [b for b in tradeable_buckets if b not in bands]
     thin = [b for b in tradeable_buckets
             if b in bands and not bands[b].get("sufficient")]
+    tail = (f" {excluded} observation(s) sat beyond max_dte and were excluded: they price "
+            "a contract this strategy would never have traded." if excluded else "")
     return {"ready": not missing and not thin,
             "missing_buckets": missing, "thin_buckets": thin,
-            "note": ("every tradeable bucket has a sufficient sample"
-                     if not missing and not thin else
-                     "bands are incomplete — Kite cannot supply expired contracts, so this "
-                     "is as far back as reconstruction reaches. Keep collecting forward.")}
+            "excluded_beyond_max_dte": excluded,
+            "note": (("every tradeable bucket has a sufficient sample"
+                      if not missing and not thin else
+                      "bands are incomplete — Kite cannot supply expired contracts, so "
+                      "this is as far back as reconstruction reaches. Keep collecting "
+                      "forward.") + tail)}
 
 
 # =====================================================================================

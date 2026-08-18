@@ -20,13 +20,39 @@ the day. This is the same reasoning as the session lock, for the same reason.
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
+import fcntl
 import json
 import os
 import pathlib
 from typing import Any
 
 PATH = "data/outputs/strangle_commitments.json"
+
+
+@contextlib.contextmanager
+def _exclusive(path: str):
+    """Hold the ledger for a read-modify-write.
+
+    commit() reads the file, adds one entry and writes it back. Two sessions starting in
+    the same second each read the same state and the second write erases the first — so
+    the account would be over-committed by exactly the amount the ledger exists to stop.
+    autorun starts the instruments back to back, which is the case most likely to hit it.
+
+    Reads elsewhere need no lock: _write replaces the file atomically, so a reader sees
+    either the old contents or the new, never a torn file.
+    """
+    lock = pathlib.Path(str(path) + ".lock")
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    fh = open(lock, "w")
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        yield
+    finally:
+        with contextlib.suppress(OSError):
+            fcntl.flock(fh, fcntl.LOCK_UN)
+        fh.close()
 
 
 def _read(path: str) -> dict[str, Any]:
@@ -39,11 +65,23 @@ def _read(path: str) -> dict[str, Any]:
 
 
 def _write(path: str, data: dict) -> None:
+    """Atomic replace, through a temp file unique to this process.
+
+    A shared ".tmp" name is not merely racy, it RAISES: three sessions committing at once
+    each wrote the same temp path and one replaced it out from under another, so the loser
+    died with FileNotFoundError mid-commit. Reproduced with three processes before the lock
+    was added. The lock now serialises commits, and the unique name means a reader or a
+    filesystem without working flock still cannot produce that failure.
+    """
     p = pathlib.Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, indent=2, default=str))
-    tmp.replace(p)
+    tmp = p.with_suffix(f".{os.getpid()}.tmp")
+    try:
+        tmp.write_text(json.dumps(data, indent=2, default=str))
+        tmp.replace(p)
+    finally:
+        if tmp.exists():
+            tmp.unlink(missing_ok=True)
 
 
 def _alive(pid: Any) -> bool:
@@ -83,15 +121,18 @@ def committed_elsewhere(slug: str, path: str = PATH, *,
 def commit(slug: str, margin: float, path: str = PATH, *,
            today: dt.date | None = None, pid: int | None = None) -> dict:
     today = today or dt.date.today()
-    data = _read(path)
-    data[slug] = {"pid": int(pid or os.getpid()), "margin": float(margin),
-                  "session_date": today.isoformat(),
-                  "at": dt.datetime.now().isoformat(timespec="seconds")}
-    _write(path, data)
-    return data[slug]
+    rec = {"pid": int(pid or os.getpid()), "margin": float(margin),
+           "session_date": today.isoformat(),
+           "at": dt.datetime.now().isoformat(timespec="seconds")}
+    with _exclusive(path):
+        data = _read(path)
+        data[slug] = rec
+        _write(path, data)
+    return rec
 
 
 def release(slug: str, path: str = PATH) -> None:
-    data = _read(path)
-    if data.pop(slug, None) is not None:
-        _write(path, data)
+    with _exclusive(path):
+        data = _read(path)
+        if data.pop(slug, None) is not None:
+            _write(path, data)

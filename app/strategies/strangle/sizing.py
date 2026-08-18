@@ -87,6 +87,37 @@ def session_lots(cfg: dict, size_mult: float, *, loss_streak: int = 0,
     return max(int(s["min_lots"]), min(int(lots), int(ceiling)))
 
 
+def session_lots_detail(cfg: dict, size_mult: float, *, loss_streak: int = 0,
+                        win_streak: int = 0) -> dict:
+    """session_lots, plus whether min_lots overrode what the multipliers asked for.
+
+    The floor silently wins more often than it looks. On the "3+" bucket every instrument
+    is already at min_lots, so the late-entry haircut changes nothing there at all — and a
+    config that says size_mult 0.50 and late_entry_size_mult 0.75 reads as though 37.5% of
+    base size were being taken when the position is actually the floor.
+
+    Reported rather than fixed: min_lots means "below this the fixed costs are not worth
+    paying", which is a real constraint, and quietly trading under it would be its own
+    defect. What was wrong was that nobody could see which of the two won.
+    """
+    s = cfg["sizing"]
+    raw = float(s["lots"])
+    if s.get("scale_by_session_multiplier", True):
+        raw *= float(size_mult)
+    if loss_streak > 0:
+        raw *= float(s["loss_streak_multiplier"]) ** loss_streak
+    if win_streak >= 3:
+        raw *= float(s["win_streak_multiplier"])
+    ceiling = float(s["lots"]) * float(s.get("max_lots_multiplier", 1.0))
+    requested = min(int(raw), int(ceiling))
+    lots = session_lots(cfg, size_mult, loss_streak=loss_streak, win_streak=win_streak)
+    return {"lots": lots, "requested": requested, "min_lots": int(s["min_lots"]),
+            "floored": lots > requested,
+            "note": (f"the multipliers asked for {requested} lots; min_lots={s['min_lots']} "
+                     "raised it, so any further size reduction has no effect"
+                     if lots > requested else "")}
+
+
 def max_lots_by_tail(cfg: dict, wing_width: float | None = None) -> int:
     """wing_width * units <= max_catastrophic_loss_pct * capital.total.
 

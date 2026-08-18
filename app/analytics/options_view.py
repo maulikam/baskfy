@@ -104,8 +104,10 @@ def strangle(cfg_path: str = "config/strangle.yaml", und=None) -> dict[str, Any]
     cfg["operational"]["lockout_path"] = und.lockout()
 
     forward = _cal.load_forward(und.forward())
-    bands = _cal.build_bands(forward) if forward else {}
-    ready = _cal.readiness(bands) if bands else {
+    _max_dte = cfg["session"].get("max_dte")
+    bands = _cal.build_bands(forward, max_dte=_max_dte) if forward else {}
+    _excluded = _cal.excluded_beyond(forward, _max_dte)
+    ready = _cal.readiness(bands, excluded=_excluded) if bands else {
         "ready": False, "missing_buckets": ["3+", "2", "1"], "thin_buckets": [],
         "note": "no observations yet — run 'Record today's straddle' each session"}
     jr = _sj.Journal(cfg["operational"]["journal_path"])
@@ -136,6 +138,10 @@ def strangle(cfg_path: str = "config/strangle.yaml", und=None) -> dict[str, Any]
         "min_stop_to_cost": cfg["session"]["min_stop_to_entry_cost_ratio"],
         "extra_holidays": cfg["session"].get("extra_holidays") or [],
         "forward_sessions": len(forward),
+        # Recorded vs usable. On a monthly series most sessions are beyond max_dte, so a
+        # bare count of observations overstates progress toward a calibrated band.
+        "usable_sessions": len(forward) - _excluded,
+        "excluded_sessions": _excluded,
         "bands": {b: {"low": r["low"], "high": r["high"], "n": r["n"],
                       "sufficient": r["sufficient"],
                       "vetoes_pct": r["would_have_vetoed_pct"]}

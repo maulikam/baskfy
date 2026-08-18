@@ -762,3 +762,57 @@ def test_a_naked_structure_is_charged_for_two_legs_not_four():
     # abs tolerance: the field is rounded to three places, so 0.137/2 reads as 0.068
     assert naked["brokerage_points"] == pytest.approx(hedged["brokerage_points"] / 2,
                                                       abs=0.001)
+
+
+# =====================================================================================
+# the window has a floor as well as a ceiling
+# =====================================================================================
+def test_the_entry_window_is_shut_before_the_market_opens():
+    """entry_window_state only ever checked `now <= end`, so every hour before the open
+    reported "open" — 01:38 and 06:00 alike — and that is the one field answering "may I
+    enter". Caught by running --check in the middle of the night."""
+    for t in (dt.time(1, 38), dt.time(6, 0), dt.time(9, 14)):
+        st = C.entry_window_state(_win_cfg(), t)
+        assert st["state"] == "premarket", f"{t} reported {st['state']}"
+        assert st["veto"] and st["size_mult"] == 0.0
+
+
+def test_the_floor_is_the_configured_first_tick_not_a_constant():
+    cfg = _win_cfg()
+    cfg["timing"]["entry_early"] = "09:20"
+    assert C.entry_window_state(cfg, dt.time(9, 17))["state"] == "premarket"
+    assert C.entry_window_state(cfg, dt.time(9, 21))["state"] == "open"
+
+
+def test_the_window_opens_exactly_at_the_first_tick():
+    cfg = _win_cfg()
+    assert C.entry_window_state(cfg, dt.time(9, 15))["state"] == "open"
+    assert C.entry_window_state(cfg, dt.time(9, 14, 59))["state"] == "premarket"
+
+
+def test_every_live_config_declares_its_first_tradeable_tick():
+    for slug, cfg in CONFIGS.items():
+        assert cfg["timing"].get("entry_early"), slug
+
+
+def test_autorun_will_not_start_a_premarket_session(tmp_path):
+    """It refused already, from its OWN copy of the constant — which is how the floor came
+    to be enforced in one module and absent from the other."""
+    spec = _spec(tmp_path, allow_late_entry=True, entry_early="09:15")
+    items = AR._options_items(spec, now=dt.datetime(2026, 8, 19, 6, 0),
+                              today=dt.date(2026, 8, 19),
+                              entry_window_end=dt.time(9, 45))
+    assert "strangle_session" not in [i["op"] for i in items]
+
+
+def test_the_market_open_time_is_defined_once():
+    """autorun held its own OPTIONS_OPEN while clock had no floor at all, so the same fact
+    was enforced in one place and missing from the other."""
+    import app.analytics.autorun as AR_mod
+    from app.strategies.strangle import clock as CK
+    assert AR_mod.OPTIONS_OPEN is CK.OPTIONS_OPEN
+    src = pathlib.Path("app/analytics/autorun.py").read_text()
+    tree = ast.parse(src)
+    assigned = [n for n in ast.walk(tree) if isinstance(n, ast.Assign)
+                and any(getattr(t, "id", "") == "OPTIONS_OPEN" for t in n.targets)]
+    assert not assigned, "autorun redeclared the market open time"

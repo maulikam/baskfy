@@ -40,8 +40,25 @@ def build_plan(scored: pd.DataFrame, holdings: list[dict], cash: float,
     """
     live_prices = {k: float(v) for k, v in (live_prices or {}).items() if v and v > 0}
     idx = scored.set_index("symbol")
-    hold = {h["symbol"]: h for h in holdings if h["symbol"] not in C.EXCLUDED_SYMBOLS}
-    excluded = [h for h in holdings if h["symbol"] in C.EXCLUDED_SYMBOLS]
+    # THE GUARD, not an exact-match set. C.EXCLUDED_SYMBOLS holds "SGBDE31III" while the
+    # actual holding is "SGBDE31III-GB", so the set missed it and the planner proposed
+    # EXIT -392 — selling a Rs 60 lakh position it must never touch. The route happened to
+    # filter SGB* itself, so /analyze was safe; every other caller of build_plan was not,
+    # and a plan is not made safe by the layer that happens to execute it.
+    #
+    # guards.assert_tradeable is prefix- and series-aware and is the same check the gateway
+    # applies, so a plan can no longer propose something the order path would refuse.
+    from .core.guards import UntouchableInstrumentError, assert_tradeable
+
+    def _tradeable(sym: str) -> bool:
+        try:
+            assert_tradeable(sym)
+            return True
+        except UntouchableInstrumentError:
+            return False
+
+    hold = {h["symbol"]: h for h in holdings if _tradeable(h["symbol"])}
+    excluded = [h for h in holdings if not _tradeable(h["symbol"])]
     clusters = _load_clusters()
 
     def price_of(s: str) -> float | None:

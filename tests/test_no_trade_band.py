@@ -135,3 +135,40 @@ def test_the_floors_are_configured_not_hardcoded():
     assert C.MIN_TRADE_VALUE > 0 and C.MIN_TRADE_PCT > 0
     src = open("app/rebalance.py").read()
     assert "C.MIN_TRADE_VALUE" in src and "C.MIN_TRADE_PCT" in src
+
+
+# =====================================================================================
+# untouchable instruments are excluded by the PLANNER, not by whoever calls it
+# =====================================================================================
+def test_the_planner_never_proposes_selling_an_untouchable():
+    """It did. Called directly, build_plan proposed EXIT SGBDE31III-GB -392 — a Rs 60 lakh
+    position it must never touch — because C.EXCLUDED_SYMBOLS holds "SGBDE31III" and the
+    real holding is "SGBDE31III-GB". Only the /analyze route's own SGB* filter kept that
+    plan off the screen, and a plan is not made safe by the layer that executes it."""
+    sgb = holding("SGBDE31III-GB", 392, 15_430.0)
+    p = plan_for([sgb], cash=CASH, prices={"SGBDE31III-GB": 15_430.0})
+    assert not [o for o in p["orders"] if o["symbol"] == "SGBDE31III-GB"]
+    assert "SGBDE31III-GB" in p["excluded"]
+
+
+def test_an_untouchable_does_not_inflate_the_capital_it_is_sized_against():
+    """Counting a Rs 60 lakh untouchable as investable capital would size every position
+    against money the strategy cannot deploy."""
+    px = 15_430.0
+    without = plan_for([], cash=CASH)
+    with_sgb = plan_for([holding("SGBDE31III-GB", 392, px)], cash=CASH,
+                        prices={"SGBDE31III-GB": px})
+    assert with_sgb["capital"] == pytest.approx(without["capital"], rel=0.01)
+
+
+def test_the_planner_uses_the_same_guard_as_the_order_path():
+    """One definition of untouchable. A plan must not be able to propose something the
+    gateway would refuse."""
+    src = open("app/rebalance.py").read()
+    assert "assert_tradeable" in src
+
+
+def test_the_route_no_longer_filters_separately():
+    """Two copies of a safety rule drift. The route's SGB* test is gone."""
+    src = open("app/main.py").read()
+    assert 'startswith("SGB")' not in src

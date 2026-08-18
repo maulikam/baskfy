@@ -16,6 +16,7 @@ import pandas as pd
 
 from . import config as C
 from .core.gateway import OrderGateway
+from .core.gateway import FAILED_STATUSES as _FAILED_STATUSES
 from .core.guards import UntouchableInstrumentError
 from .core.risk import RiskManager
 from .scoring import load_scan, score, audit
@@ -328,7 +329,11 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
         res["action"] = o["action"]
         results.append(res)
 
-        err = str(res.get("error") or "")[:80] if res.get("status") in ("ERROR", "BLOCKED") else ""
+        # From the gateway's own vocabulary, not a hand-written pair. RISK_BLOCKED was
+        # missing, so a tripped loss cap or an exposure limit would refuse every order
+        # individually and the breaker would never see it.
+        err = (str(res.get("error") or "")[:80]
+               if res.get("status") in _FAILED_STATUSES else "")
         recent_errors = (recent_errors + [err])[-breaker_trip:] if err else []
         if len(recent_errors) == breaker_trip and len(set(recent_errors)) == 1:
             aborted_for = recent_errors[0]

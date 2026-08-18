@@ -5,6 +5,8 @@ metrics.slippage() read them and /regime needed a plan id it could not get.
 """
 from __future__ import annotations
 
+import datetime as dt
+
 import pytest
 
 from app.analytics import db
@@ -213,3 +215,74 @@ def test_selling_below_the_reference_also_counts_as_cost(conn):
     PS.record_execution(conn, "p1", [{"symbol": "BBB", "status": "PLACED", "order_id": "X2"}])
     PS.reconcile_fills(conn, "p1", [broker("BBB", filled=5, avg=198.0, oid="X2")])
     assert M.slippage(PS.orders_frame(conn, "p1"))["mean_bps"] > 0
+
+
+# =====================================================================================
+# orders a previous session left working
+# =====================================================================================
+def _submitted_yesterday(conn, filled=0):
+    """A plan from an earlier session with one order still working at the close."""
+    PS.save_plan(conn, plan())
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "PLACED",
+                                      "order_id": "X1"}])
+    conn.execute("UPDATE rebalance_versions SET created_ts=? WHERE version_id='p1'",
+                 (str(dt.datetime(2026, 8, 18, 14, 30).timestamp()),))
+    PS.reconcile_fills(conn, "p1", [broker("AAA", status="OPEN", filled=filled, oid="X1")])
+
+
+def _status(conn, sym="AAA"):
+    return conn.execute("SELECT status FROM rebalance_orders WHERE symbol=?",
+                        (sym,)).fetchone()["status"]
+
+
+def test_an_order_left_working_by_an_earlier_session_is_settled(conn):
+    """reconcile_fills can only record a lapse while the broker still reports the order,
+    and /orders is SAME-DAY ONLY. A limit that never met its price is reconcilable for a
+    few hours and then permanently unreachable, so it stayed SUBMITTED forever — reading
+    as "reached the exchange, outcome unknown" when the outcome is known and final.
+
+    PARAS sat exactly like that in the live database: 0 of 438 on an 18 Aug plan, absent
+    from holdings and positions the next morning.
+    """
+    _submitted_yesterday(conn)
+    assert _status(conn) == PS.SUBMITTED
+    out = PS.lapse_stale_orders(conn, today=dt.date(2026, 8, 19))
+    assert out["n"] == 1 and out["lapsed"][0]["now"] == PS.LAPSED
+    assert _status(conn) == PS.LAPSED
+
+
+def test_a_partial_fill_left_working_is_recorded_as_partial_not_lapsed(conn):
+    """What traded before the close is real and must survive the sweep."""
+    _submitted_yesterday(conn, filled=4)
+    PS.lapse_stale_orders(conn, today=dt.date(2026, 8, 19))
+    assert _status(conn) == PS.PARTIAL
+
+
+def test_todays_working_order_is_left_alone(conn):
+    """It can still trade, and reconcile_fills is the right path for it. Lapsing it would
+    be the mirror of the bug this table exists to prevent."""
+    PS.save_plan(conn, plan())
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "PLACED",
+                                      "order_id": "X1"}])
+    conn.execute("UPDATE rebalance_versions SET created_ts=? WHERE version_id='p1'",
+                 (str(dt.datetime(2026, 8, 19, 10, 0).timestamp()),))
+    PS.reconcile_fills(conn, "p1", [broker("AAA", status="OPEN", filled=0, oid="X1")])
+    assert PS.lapse_stale_orders(conn, today=dt.date(2026, 8, 19))["n"] == 0
+    assert _status(conn) == PS.SUBMITTED
+
+
+def test_a_settled_status_is_never_reopened_by_the_sweep(conn):
+    PS.save_plan(conn, plan())
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "PLACED",
+                                      "order_id": "X1"}])
+    conn.execute("UPDATE rebalance_versions SET created_ts=? WHERE version_id='p1'",
+                 (str(dt.datetime(2026, 8, 18, 14, 30).timestamp()),))
+    PS.reconcile_fills(conn, "p1", [broker("AAA", filled=10, oid="X1")])
+    PS.lapse_stale_orders(conn, today=dt.date(2026, 8, 19))
+    assert _status(conn) == PS.FILLED
+
+
+def test_the_sweep_is_idempotent(conn):
+    _submitted_yesterday(conn)
+    assert PS.lapse_stale_orders(conn, today=dt.date(2026, 8, 19))["n"] == 1
+    assert PS.lapse_stale_orders(conn, today=dt.date(2026, 8, 19))["n"] == 0

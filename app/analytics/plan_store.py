@@ -181,6 +181,58 @@ def history(conn, limit: int = 20) -> list[dict]:
 # =====================================================================================
 # reconciling submitted orders against what the broker actually did
 # =====================================================================================
+def lapse_stale_orders(conn, *, today=None) -> dict:
+    """Settle SUBMITTED orders left behind by a previous session.
+
+    reconcile_fills can only record a lapse while the broker still reports the order, and
+    /orders is SAME-DAY ONLY. So an order still working at the close — a limit that never
+    met its price — is reconcilable for a few hours and then permanently unreachable. It
+    stays SUBMITTED forever, and SUBMITTED reads as "reached the exchange, outcome not yet
+    known" when the outcome is in fact known and final.
+
+    That is exactly the case sitting in this database: PARAS, 0 of 438 filled on a plan
+    from 18 Aug, absent from both holdings and positions the next morning.
+
+    THE INFERENCE IS SOUND, not a guess. A Zerodha regular order is a DAY order: whatever
+    has not traded by the close is cancelled by the exchange and cannot trade in a later
+    session. So a SUBMITTED row whose plan belongs to an earlier session did not fill, and
+    what it filled before lapsing is already recorded.
+
+    Only rows from a STRICTLY EARLIER session are touched. Today's still-working orders
+    are left alone, because those can still trade and reconcile_fills is the right path
+    for them.
+    """
+    import datetime as _dt
+
+    today = today or _dt.date.today()
+    now = _dt.datetime.now().isoformat(timespec="seconds")
+    changed = []
+
+    with db.transaction(conn):
+        rows = [dict(r) for r in conn.execute(
+            "SELECT o.id, o.symbol, o.filled_qty, o.planned_qty, o.version_id,"
+            "       v.created_ts "
+            "FROM rebalance_orders o "
+            "JOIN rebalance_versions v ON v.version_id = o.version_id "
+            "WHERE o.status = ?", (SUBMITTED,))]
+        for r in rows:
+            try:
+                created = _dt.datetime.fromtimestamp(float(r["created_ts"])).date()
+            except (TypeError, ValueError):
+                continue                 # undatable plan: leave it rather than guess
+            if created >= today:
+                continue
+            filled = int(r["filled_qty"] or 0)
+            status = PARTIAL if filled else LAPSED
+            conn.execute("UPDATE rebalance_orders SET status=?, reconciled_at=?"
+                         " WHERE id=?", (status, now, r["id"]))
+            changed.append({"symbol": r["symbol"], "plan": r["version_id"],
+                            "session": created.isoformat(), "was": SUBMITTED,
+                            "now": status, "filled": filled,
+                            "planned": int(r["planned_qty"] or 0)})
+    return {"lapsed": changed, "n": len(changed)}
+
+
 def reconcile_fills(conn, plan_id: str, broker_orders: Iterable[Mapping], *,
                     now: str | None = None) -> dict:
     """Settle SUBMITTED rows from the broker's own order book.

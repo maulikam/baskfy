@@ -62,7 +62,8 @@ def _before_close(now: dt.datetime) -> bool:
     return now.weekday() < 5 and now.time() < MARKET_CLOSE
 
 
-STEPS = ("index history", "benchmark PRI", "EOD snapshot", "trade capture", "breadth",
+STEPS = ("index history", "benchmark PRI", "EOD snapshot", "trade capture",
+         "stale orders", "breadth",
          "regime preview")
 
 
@@ -242,6 +243,16 @@ def main() -> int:
             return (f"{r['new']} new of {r['captured']} fills, "
                     f"{', '.join(r['symbols'])}")
         run.step("trade capture", _trades)
+
+        # --- 3b. orders left working by a previous session -----------------------------
+        def _stale_orders():
+            from app.analytics import plan_store as _ps
+            out = _ps.lapse_stale_orders(conn)
+            if not out["n"]:
+                return "nothing left working from an earlier session"
+            return ", ".join(f"{r['symbol']} {r['was']}->{r['now']} "
+                             f"({r['filled']}/{r['planned']})" for r in out["lapsed"])
+        run.step("stale orders", _stale_orders)
 
         # --- 4. breadth --------------------------------------------------------------------
         def _breadth():

@@ -140,7 +140,7 @@ def main() -> int:
     cal = CALN.build_from_kite(kite.kc, name=ins["name"], index_token=und.index_token,
                                exchange=und.exchange, weekday=weekday,
                                extra=cfg["session"].get("extra_holidays") or (),
-                               today=today)
+                               today=today, instruments=instruments)
     try:
         facts = SC.assert_market_facts(cfg, instruments, today, calendar=cal)
     except SC.StartupRefused as exc:

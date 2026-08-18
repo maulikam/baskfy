@@ -207,7 +207,12 @@ def page(conn, *, journal: str | None = None) -> dict[str, Any]:
         "summary": rep["by_arm"].get(X.INTRADAY) or {},
         "mean_vs_zero": rep.get("mean_vs_zero"),
         "tokens": _token_coverage(all_arms),
-        "strangle": strangle(),
+        # Kept for /options/data consumers that predate the multi-instrument page. Taken
+        # from the blocks already computed rather than recomputed: strangle() reads a
+        # config, a journal and a forward record, and doing it twice per page load is
+        # work for nothing.
+        "strangle": next((b for b in _blocks if b.get("slug") == "nifty"),
+                         _blocks[0] if _blocks else {"available": False}),
         "strangles": _blocks,
         "next": _next_overall(_blocks),
         "commitments": _commitments(),

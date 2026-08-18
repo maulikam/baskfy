@@ -24,6 +24,7 @@ from app.analytics import autorun as AR, db
 from app.kite_client import Kite
 from app.strategies.strangle import calendar_nse as CALN
 from app.strategies.strangle import config as SC
+from app.strategies.strangle import instruments as INS
 
 ARGV = {
     "daily": ["-m", "scripts.daily", "--quiet", "--source", "page"],
@@ -59,10 +60,17 @@ def main() -> int:
                          indent=2))
         return 2
 
-    # The calendar is derived, so a holiday needs no list of its own.
+    # The calendar is derived, so a holiday needs no list of its own. Only the question
+    # "is today a trading day" is asked here, and NSE and BSE keep the same holidays, so
+    # the default underlying answers it for all three — but it is named explicitly rather
+    # than left to a default, because a default that means NIFTY is how the other callers
+    # ended up silently deriving the wrong calendar.
     try:
-        cal = CALN.build_from_kite(kite.kc, extra=(SC.load()["session"].get(
-            "extra_holidays") or ()), today=now.date())
+        _u = INS.get(INS.DEFAULT)
+        cal = CALN.build_from_kite(
+            kite.kc, name=_u.label, index_token=_u.index_token, exchange=_u.exchange,
+            extra=(SC.load(_u.config)["session"].get("extra_holidays") or ()),
+            today=now.date())
         trading = cal.is_trading_day(now.date())
     except Exception as exc:                                       # noqa: BLE001
         print(json.dumps({"status": "CALENDAR_UNAVAILABLE", "error": str(exc)[:200]},

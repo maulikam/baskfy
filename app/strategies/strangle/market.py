@@ -48,7 +48,7 @@ def chain_instruments(instruments: Sequence[Mapping[str, Any]], *, name: str,
 
 
 def snapshot(kc, *, instruments: Sequence[Mapping[str, Any]], index_key: str,
-             expiry: dt.date, name: str = "NIFTY", span_pct: float = 8.0,
+             expiry: dt.date, name: str, span_pct: float = 8.0,
              now: dt.datetime | None = None) -> ChainSnapshot:
     """One quote round trip for spot plus the whole near chain."""
     now = now or dt.datetime.now()
@@ -126,7 +126,7 @@ def atm_straddle(snap: ChainSnapshot, step: int) -> tuple[float | None, float]:
 # =====================================================================================
 # providers — what the session loop consumes
 # =====================================================================================
-def live_provider(kc, *, instruments, index_key: str, expiry, name: str = "NIFTY",
+def live_provider(kc, *, instruments, index_key: str, expiry, name: str,
                   poll_seconds: float = 5.0, until=None, sleep=None, now=None):
     """Yield chain snapshots until `until` (a time) passes or the caller stops consuming.
 

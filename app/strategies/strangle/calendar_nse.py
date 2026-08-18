@@ -173,20 +173,29 @@ class Calendar:
                          "come from session.extra_holidays.")}
 
 
-def build_from_kite(kc, *, name: str = "NIFTY", index_token: int = 256265,
-                    exchange: str = "NFO", weekday: int = TUESDAY,
-                    lookback_days: int = 400, extra: Iterable = (),
-                    today: dt.date | None = None) -> Calendar:
+def build_from_kite(kc, *, name: str, index_token: int, exchange: str,
+                    weekday: int = TUESDAY, lookback_days: int = 400,
+                    extra: Iterable = (), today: dt.date | None = None,
+                    instruments: Sequence[Mapping] | None = None) -> Calendar:
     """One index history call plus the instrument dump already in hand.
 
     NSE and BSE keep the same trading holidays, so either index's history derives a
     calendar valid for both. The history call is still made against the underlying's own
     index because a settlement holiday on one exchange alone would show up there first.
+
+    NO DEFAULTS for name, index_token or exchange. They used to read NIFTY, NIFTY's token
+    and NFO, so a caller that forgot one silently derived NIFTY's calendar and expiry
+    weekday for whatever it was actually asking about.
+
+    `instruments` accepts a dump the caller already holds. Every runner invocation fetched
+    NFO twice — once here, once in main — which at three underlyings was six fetches of up
+    to 35,000 rows before a session could start.
     """
     today = today or dt.date.today()
     rows = kc.historical_data(index_token, today - dt.timedelta(days=lookback_days),
                               today, "day")
-    expiries = sorted({i["expiry"] for i in kc.instruments(exchange)
+    dump = instruments if instruments is not None else kc.instruments(exchange)
+    expiries = sorted({i["expiry"] for i in dump
                        if i.get("name") == name and i.get("expiry")})
     return Calendar.build(index_rows=rows, expiries=expiries, extra=extra,
                           weekday=weekday)

@@ -198,11 +198,21 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
                 (snapshot.as_of - state.last_improve_at).total_seconds() / 60.0)
 
         confirmed = _feed_minute(state, snapshot, levels)
-        vwaps = vwaps_from(snapshot, book)
-        snap = R.Snapshot(now=snapshot.as_of, spot=snapshot.spot,
-                          asp=_asp(snapshot, step), marks=marks, vwaps=vwaps,
-                          resistance=levels.resistance, support=levels.support,
-                          feed_age_seconds=snapshot.stale_seconds)
+
+        # R.Snapshot is FROZEN and carries a copy of the marks. Any rule consulted after
+        # the book changes must be given a rebuilt one, or it values a position that no
+        # longer exists — and book.pnl deliberately raises rather than treat a missing leg
+        # as zero, so the session dies with a KeyError. Built through one closure so the
+        # marks and the snapshot cannot drift apart again.
+        def _observe():
+            m = marks_from(snapshot, book)
+            return m, R.Snapshot(now=snapshot.as_of, spot=snapshot.spot,
+                                 asp=_asp(snapshot, step), marks=m,
+                                 vwaps=vwaps_from(snapshot, book),
+                                 resistance=levels.resistance, support=levels.support,
+                                 feed_age_seconds=snapshot.stale_seconds)
+
+        marks, snap = _observe()
 
         # --- exits first, always -------------------------------------------------------
         decision = R.evaluate_exits(book, snap, cfg, state=state.as_rules_state())
@@ -257,7 +267,11 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
                         emit("widened", {"at": snapshot.as_of, **plan.as_dict()})
                     except (A.RollRefused, F.DepthUnavailable) as exc:
                         emit("widen_refused", {"at": snapshot.as_of, "reason": str(exc)})
-                marks = marks_from(snapshot, book)
+                # The widen replaced legs. Everything below this point — target_overrun,
+                # evaluate_adjustment, evaluate_risk_off — reads snap, so it is rebuilt
+                # here rather than only `marks`. Reproduced by driving a real BANKNIFTY
+                # chain through trail activation: KeyError on the freshly rolled leg.
+                marks, snap = _observe()
 
         # Target overrun: extend how far a winner may run. The stop never moves.
         if not state.overrun_applied:

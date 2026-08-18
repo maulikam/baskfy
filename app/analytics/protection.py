@@ -167,7 +167,14 @@ def review(holdings: Iterable[Mapping], gtts: Iterable[Mapping]) -> dict:
         "coverage_pct": (round(max(0.0, (tradeable_value - unprotected_value)
                                    / tradeable_value * 100), 1)
                          if tradeable_value else None),
-        "healthy": not any(f["kind"] in (MISSING, PARTIAL) for f in findings),
+        # EXCESS and ORPHAN count as unhealthy, not just under-cover. On 18 Aug 2026 the
+        # desk banner read "stops current — all 16 positions carry a stop covering their
+        # full quantity" while 34 triggers were live across 16 symbols, every one of them
+        # duplicated. Both of those findings can fire a sell for shares that are not there,
+        # so a green light while either is outstanding is the most misleading state this
+        # page can show.
+        "healthy": not any(f["kind"] in (MISSING, PARTIAL, EXCESS, ORPHAN)
+                           for f in findings),
     }
 
 

@@ -228,3 +228,28 @@ def test_a_snapped_price_is_always_a_whole_number_of_ticks():
 def test_an_unknown_tick_does_not_crash_the_arming():
     from app.kite_client import Kite
     assert Kite.to_tick(100.123, 0) == 100.12
+
+
+# =====================================================================================
+# cancels must be visible on the page that confirms them
+# =====================================================================================
+def test_the_page_shows_the_triggers_it_will_cancel():
+    """The plan carries cancels and /stops/arm executes them. For a few hours it did both
+    while the page showed neither, so a confirmation would have cancelled two live triggers
+    the operator never saw. A confirmation page must show everything it confirms."""
+    src = open("app/templates/stops.html").read()
+    assert "plan.cancels" in src
+    assert "Triggers to cancel" in src
+    assert "short delivery" in src
+
+
+def test_the_page_no_longer_claims_over_coverage_is_left_alone():
+    """That prose was true until EXCESS was added and became false the moment it wasn't.
+    A page describing behaviour the code no longer has is worse than no prose."""
+    src = " ".join(open("app/templates/stops.html").read().split())
+    assert "Over-coverage is different, and is cancelled below" in src
+
+
+def test_the_confirm_step_states_the_cancel_count():
+    src = open("app/templates/stops.html").read()
+    assert "will be cancelled first" in src

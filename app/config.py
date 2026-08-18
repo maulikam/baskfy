@@ -41,6 +41,13 @@ TARGET_POSITIONS = (12, 15)                # soft range, resolved by score dispe
 # band must never keep you in something the strategy wants out of.
 MIN_TRADE_VALUE = 10_000.0                 # Rs; below this the fee dominates the benefit
 MIN_TRADE_PCT = 2.0                        # % of the existing position
+# A trade whose own costs exceed this share of its value is not worth making. It bites on
+# SELLS, where the DP charge is a flat Rs 15.93 per scrip: that is 0.9% of a Rs 2,000 sale
+# and 0.03% of a Rs 50,000 one. Buys have no fixed component and sit near 0.115% at any
+# size, so this rule is effectively a floor on small sells — which is exactly where the
+# waste was. It cannot reduce STT, which is 0.1% each side and 95% of a real session's
+# bill; only trading less does that.
+MAX_TRADE_COST_PCT = 0.20                  # % of the trade's own value
 MAX_POS_VS_DAY_VALUE = 0.01                # position ≤ 1% of median daily traded value
 HALF_SIZE_WEIGHT = 3.0                     # for short-history listings
 SHORT_HISTORY_MONTHS = 18

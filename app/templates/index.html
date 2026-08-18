@@ -173,6 +173,41 @@
 </header>
 <main>
 
+{# Post-login collection. Shown because a job that runs itself without saying so is one
+   nobody trusts — and because the thing it collects cannot be recovered if it silently
+   fails. #}
+{% if auto %}
+  {% if auto.running %}
+  <div class="collect warn">
+    <span class="tag">collecting</span>
+    <span>{% if auto.just_logged_in %}Logged in. {% endif %}Today's outstanding collection
+      is running — started {{ auto.running.started_at[11:16] }}.
+      <a href="/ops/job/{{ auto.running.id }}">Watch it</a>, or reload this page when it
+      finishes.</span>
+  </div>
+  {% elif auto.last and auto.last.status == 'ok' %}
+  <div class="collect ok">
+    <span class="tag">collected</span>
+    <span class="muted">Today's collection ran at {{ auto.last.started_at[11:16] }} and
+      landed. {% if auto.last.id %}<a href="/ops/job/{{ auto.last.id }}">See what it
+      did</a>.{% endif %}</span>
+  </div>
+  {% elif auto.last %}
+  <div class="collect bad">
+    <span class="tag">collection failed</span>
+    <span>The post-login run at {{ auto.last.started_at[11:16] }} ended
+      <b>{{ auto.last.status }}</b>. Today's data cannot be backfilled, so this is worth
+      opening now.
+      {% if auto.last.id %}<a href="/ops/job/{{ auto.last.id }}">Read the output</a>.{% endif %}</span>
+  </div>
+  {% elif auto.just_logged_in %}
+  <div class="collect ok">
+    <span class="tag">logged in</span>
+    <span class="muted">{{ auto.note or 'Nothing outstanding — today is already collected.' }}</span>
+  </div>
+  {% endif %}
+{% endif %}
+
 {# Only shown when something is wrong. A healthy collection needs no banner: a status
    line that is always present stops being read, and this one has to be believed on the
    day it turns red. #}

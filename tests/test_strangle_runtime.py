@@ -39,7 +39,12 @@ class FakeKC:
 
 
 def instruments_for(expiries, strikes, lot=65):
-    out, token = [], 1000
+    # The INDICES row is not decoration. collect() used to fall back to a hardcoded 256265
+    # when it could not find one, so these fixtures passed WITHOUT ever supplying an index
+    # — which is precisely the silent wrong-index path the fallback allowed in production.
+    out = [{"name": "NIFTY 50", "segment": "INDICES", "tradingsymbol": "NIFTY 50",
+            "instrument_token": 256265, "exchange": "NSE"}]
+    token = 1000
     for e in expiries:
         for k in strikes:
             for kind in ("CE", "PE"):
@@ -67,7 +72,7 @@ def test_only_a_contracts_final_week_is_trustworthy():
         opens[i["instrument_token"]] = {
             d: (400.0 if (expiry - d).days > 7 else 150.0) for d in days}
     kc = FakeKC(spot, opens)
-    obs = CAL.collect(kc, instruments=ins, index_key="NSE:NIFTY 50", lookback_days=60,
+    obs = CAL.collect(kc, instruments=ins, index_key="NSE:NIFTY 50", name="NIFTY", lookback_days=60,
                       step=50, today=D(2026, 8, 14), sleep=lambda _s: None)
     assert {o.session for o in obs} == {D(2026, 8, 12), D(2026, 8, 13), D(2026, 8, 14)}
     assert all(o.straddle == 300.0 for o in obs), "a pre-final-week session leaked in"
@@ -81,9 +86,9 @@ def test_a_wider_lookback_does_not_buy_more_history():
     ins = instruments_for([expiry], [24_400])
     opens = {i["instrument_token"]: {d: 150.0 for d in days} for i in ins}
     kc = FakeKC({d: 24_400.0 for d in days}, opens)
-    short = CAL.collect(kc, instruments=ins, index_key="NSE:NIFTY 50", lookback_days=30,
+    short = CAL.collect(kc, instruments=ins, index_key="NSE:NIFTY 50", name="NIFTY", lookback_days=30,
                         step=50, today=D(2026, 8, 14), sleep=lambda _s: None)
-    long_ = CAL.collect(kc, instruments=ins, index_key="NSE:NIFTY 50", lookback_days=365,
+    long_ = CAL.collect(kc, instruments=ins, index_key="NSE:NIFTY 50", name="NIFTY", lookback_days=365,
                         step=50, today=D(2026, 8, 14), sleep=lambda _s: None)
     assert len(short) == len(long_) == 1
 
@@ -172,7 +177,7 @@ def test_a_naive_last_trade_time_does_not_raise_or_shift_staleness_by_the_offset
     now = dt.datetime(2026, 8, 17, 9, 30, 0)
     kc = QuoteKC(dt.datetime(2026, 8, 17, 9, 29, 30))
     ins = instruments_for([D(2026, 8, 18)], [24_400])
-    snap = MK.snapshot(kc, instruments=ins, index_key="NSE:NIFTY 50",
+    snap = MK.snapshot(kc, instruments=ins, index_key="NSE:NIFTY 50", name="NIFTY",
                        expiry=D(2026, 8, 18), now=now)
     assert snap.stale_seconds == pytest.approx(30.0)
 
@@ -180,7 +185,7 @@ def test_a_naive_last_trade_time_does_not_raise_or_shift_staleness_by_the_offset
 def test_the_atm_straddle_comes_from_mids_and_the_range_from_the_full_sum():
     kc = QuoteKC(dt.datetime(2026, 8, 17, 9, 29, 30))
     ins = instruments_for([D(2026, 8, 18)], [24_400])
-    snap = MK.snapshot(kc, instruments=ins, index_key="NSE:NIFTY 50",
+    snap = MK.snapshot(kc, instruments=ins, index_key="NSE:NIFTY 50", name="NIFTY",
                        expiry=D(2026, 8, 18))
     asp, k = MK.atm_straddle(snap, 50)
     assert k == 24_400 and asp == pytest.approx(200.0)     # two legs at mid 100

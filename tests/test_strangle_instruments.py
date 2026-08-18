@@ -593,3 +593,84 @@ def test_readiness_states_how_many_observations_it_discarded():
                        "1": {"sufficient": True}}, excluded=14)
     assert r["excluded_beyond_max_dte"] == 14
     assert "beyond max_dte" in r["note"]
+
+
+# =====================================================================================
+# no defaults that mean NIFTY
+# =====================================================================================
+def test_reconstruction_refuses_to_guess_an_index_token():
+    """collect() fell back to 256265 — NIFTY 50 — whenever it could not find the index in
+    the rows it was given. A SENSEX run whose BSE dump had been forgotten would compute ATM
+    strikes near 24,000 for a chain that lives near 77,000: every lookup misses, the run
+    reports NO_DATA, and nothing anywhere says the wrong index was used. The runtime
+    fixtures had themselves been relying on it."""
+    from app.strategies.strangle import calibrate as CAL
+    opts = [{"name": "SENSEX", "segment": "BFO-OPT", "expiry": dt.date(2026, 8, 20),
+             "strike": 77000.0, "instrument_type": "CE", "lot_size": 20,
+             "instrument_token": 1, "tradingsymbol": "X", "exchange": "BFO"}]
+    with pytest.raises(RuntimeError, match="refusing to guess a token"):
+        CAL.collect(object(), instruments=opts, index_key="BSE:SENSEX", name="SENSEX",
+                    lookback_days=30, step=100, today=dt.date(2026, 8, 18))
+
+
+@pytest.mark.parametrize("fn,kwargs", [
+    ("build_from_kite", {"index_token": 1, "exchange": "NFO"}),      # no name
+    ("build_from_kite", {"name": "NIFTY", "exchange": "NFO"}),       # no index_token
+    ("build_from_kite", {"name": "NIFTY", "index_token": 1}),        # no exchange
+])
+def test_the_calendar_will_not_assume_an_underlying(fn, kwargs):
+    """These defaulted to NIFTY, NIFTY's token and NFO, so one forgotten argument derived
+    NIFTY's holidays and expiry weekday for whatever was actually being asked about."""
+    with pytest.raises(TypeError):
+        getattr(CALN, fn)(object(), **kwargs)
+
+
+def test_the_chain_snapshot_will_not_assume_an_underlying():
+    from app.strategies.strangle import market as MK
+    with pytest.raises(TypeError):
+        MK.snapshot(object(), instruments=[], index_key="BSE:SENSEX",
+                    expiry=dt.date(2026, 8, 20))
+
+
+def test_the_calendar_reuses_a_dump_the_caller_already_holds():
+    """Every runner invocation fetched its exchange dump twice — once for the chain, once
+    inside the calendar. At three underlyings that was six fetches of up to 35,000 rows
+    before a session could start."""
+    class KC:
+        fetches = 0
+        def historical_data(self, *a, **k):
+            return [{"date": dt.datetime(2026, 8, 17), "close": 1.0}]
+        def instruments(self, exchange):
+            KC.fetches += 1
+            return []
+    kc = KC()
+    dump = [{"name": "SENSEX", "expiry": dt.date(2026, 8, 20)}]
+    CALN.build_from_kite(kc, name="SENSEX", index_token=265, exchange="BFO",
+                         weekday=CALN.THURSDAY, instruments=dump,
+                         today=dt.date(2026, 8, 18))
+    assert KC.fetches == 0, "the calendar re-fetched a dump it was handed"
+
+    CALN.build_from_kite(kc, name="SENSEX", index_token=265, exchange="BFO",
+                         weekday=CALN.THURSDAY, today=dt.date(2026, 8, 18))
+    assert KC.fetches == 1, "the calendar must still fetch when given nothing"
+
+
+def test_the_page_computes_each_instrument_block_once():
+    """page() returned both `strangle` (NIFTY) and `strangles`, computing the NIFTY block
+    twice — each one reads a config, a journal and a forward record."""
+    from app.analytics import db, options_view as V
+    calls = {"n": 0}
+    real = V.strangle
+
+    def counting(*a, **k):
+        calls["n"] += 1
+        return real(*a, **k)
+
+    V.strangle = counting
+    try:
+        with db.connect() as conn:
+            pg = V.page(conn)
+    finally:
+        V.strangle = real
+    assert calls["n"] == len(INS.configured())
+    assert pg["strangle"]["slug"] == "nifty"

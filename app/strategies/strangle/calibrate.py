@@ -95,7 +95,7 @@ def _atm(spot: float, step: int) -> float:
 
 
 def collect(kc, *, instruments: Sequence[Mapping[str, Any]], index_key: str,
-            lookback_days: int, step: int, name: str = "NIFTY",
+            lookback_days: int, step: int, name: str,
             today: dt.date | None = None, series_days: int = 7,
             sleep: Callable[[float], None] = time.sleep,
             log: Callable[[str], None] = lambda _m: None) -> list[Observation]:
@@ -110,7 +110,18 @@ def collect(kc, *, instruments: Sequence[Mapping[str, Any]], index_key: str,
 
     idx = [i for i in instruments if i.get("tradingsymbol") == index_key.split(":")[-1]
            and i.get("segment") == "INDICES"]
-    spot_token = int(idx[0]["instrument_token"]) if idx else 256265   # NIFTY 50
+    if not idx:
+        # NEVER fall back to a token. This defaulted to 256265, NIFTY 50, so a SENSEX run
+        # whose BSE dump had not been passed would have reconstructed its bands against
+        # NIFTY's spot history — computing ATM strikes near 24,000 for a chain that lives
+        # near 77,000. Every strike lookup misses, the run reports NO_DATA, and nothing
+        # says the wrong index was used.
+        raise RuntimeError(
+            f"no index instrument for {index_key!r} in the {len(instruments)} rows given. "
+            "The cash-exchange dump for this underlying is missing; refusing to guess a "
+            "token, because the wrong one reconstructs a plausible-looking band for the "
+            "wrong index.")
+    spot_token = int(idx[0]["instrument_token"])
     spot_rows = kc.historical_data(spot_token, start, today, "day")
     spot_by_day = {r["date"].date(): float(r["close"]) for r in spot_rows}
     if not spot_by_day:

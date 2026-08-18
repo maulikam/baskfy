@@ -13,6 +13,17 @@ log = logging.getLogger("gateway")
 JOURNAL = "data/outputs/orders_journal.jsonl"
 
 
+# Statuses that mean the order did NOT reach the exchange, and say why. The circuit
+# breaker in /execute counts consecutive identical failures against this set, so a status
+# missing from it is a systemic refusal the breaker cannot see: RISK_BLOCKED was absent,
+# and a tripped loss cap would have refused all twenty-one orders one at a time — the exact
+# shape of the 18 Aug "No IPs configured" batch the breaker was built after.
+#
+# DUPLICATE and DRY_RUN are deliberately NOT here: neither is a failure, and neither
+# carries an error to compare.
+FAILED_STATUSES: frozenset[str] = frozenset({"ERROR", "BLOCKED", "RISK_BLOCKED"})
+
+
 class OrderGateway:
     def __init__(self, kc, risk: RiskManager):
         self.kc, self.risk, self.limits = kc, risk, KiteLimits()

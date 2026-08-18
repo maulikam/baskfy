@@ -7,6 +7,7 @@ path that spends real money.
 from __future__ import annotations
 
 import json
+import pathlib
 import time
 
 import pytest
@@ -384,3 +385,59 @@ def test_a_success_between_failures_resets_the_counter(client, monkeypatch):
     pid = seed(orders=[order(f"S{i}", 10, qty_final=10, stop=90.0) for i in range(5)])
     body = post(c, pid).json()
     assert len([o for o in body["orders"] if o["status"] == "ABORTED"]) == 0
+
+
+# =====================================================================================
+# the circuit breaker's failure set, against the gateway's actual vocabulary
+# =====================================================================================
+def _returned_status_error_pairs() -> set[tuple[str, bool]]:
+    """Every (status, carries_an_error) the gateway returns, read from its own source.
+
+    A hand-written set is how the report once counted 16 live GTT triggers as 0 armed.
+    The breaker had the same shape and the same defect.
+    """
+    import ast
+    tree = ast.parse(pathlib.Path("app/core/gateway.py").read_text())
+    out = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Dict):
+            continue
+        keys = {k.value for k in node.keys
+                if isinstance(k, ast.Constant) and isinstance(k.value, str)}
+        if "status" not in keys:
+            continue
+        status = next((v.value for k, v in zip(node.keys, node.values)
+                       if isinstance(k, ast.Constant) and k.value == "status"
+                       and isinstance(v, ast.Constant)), None)
+        if status:
+            out.add((status, "error" in keys))
+    return out
+
+
+def test_every_gateway_refusal_that_gives_a_reason_is_counted_by_the_breaker():
+    """RISK_BLOCKED was missing. A tripped daily-loss cap or an exposure limit refuses
+    every order with the SAME reason, which is precisely the systemic case the breaker
+    exists for — and it would have sent all twenty-one anyway, one rate-limit slot and one
+    journal line at a time."""
+    from app.core.gateway import FAILED_STATUSES
+    with_reason = {s for s, has_err in _returned_status_error_pairs() if has_err}
+    assert with_reason, "gateway no longer returns a recognisable refusal"
+    missing = with_reason - set(FAILED_STATUSES)
+    assert not missing, f"{missing} would slip past the circuit breaker"
+
+
+def test_a_success_is_never_counted_as_a_failure():
+    """The dangerous direction: counting PLACED would abort a batch mid-rebalance."""
+    from app.core.gateway import FAILED_STATUSES
+    assert "PLACED" not in FAILED_STATUSES
+    assert "DRY_RUN" not in FAILED_STATUSES
+    # DUPLICATE is idempotency working, not a failure, and carries no reason to compare.
+    assert "DUPLICATE" not in FAILED_STATUSES
+
+
+def test_the_route_uses_the_gateway_set_rather_than_its_own():
+    import app.main as M
+    from app.core.gateway import FAILED_STATUSES
+    assert M._FAILED_STATUSES is FAILED_STATUSES
+    src = pathlib.Path("app/main.py").read_text()
+    assert '("ERROR", "BLOCKED")' not in src, "the hand-written pair is back"

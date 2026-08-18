@@ -84,7 +84,17 @@ class Kite:
         for p in positions:
             if str(p.get("product") or "") != "CNC":
                 continue
-            qty = int(p.get("quantity") or 0)
+            # THE DAY'S EXPOSURE, NOT THE POSITION. `quantity` includes any overnight
+            # carry, and a carried position is one Kite has already settled into
+            # holdings() — so folding the whole quantity counts those shares twice, the
+            # same Rs 16 lakh error as before with the sign reversed.
+            #
+            # Checked against the live book at 01:50 on 19 Aug 2026, before Kite had
+            # rolled its day: all 20 CNC rows still reported overnight_quantity 0 with
+            # yesterday's fills as day buys, so quantity and day-net agreed exactly. That
+            # is the timing being kind, not the rule being right — the two diverge the
+            # moment the roll happens, which is somewhere inside the next session.
+            qty = int(p.get("quantity") or 0) - int(p.get("overnight_quantity") or 0)
             if qty <= 0:                    # sells are already reflected in holdings
                 continue
             sym = p["tradingsymbol"]

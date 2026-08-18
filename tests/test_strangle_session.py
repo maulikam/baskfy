@@ -300,3 +300,50 @@ def test_every_rule_after_a_widen_sees_the_legs_the_widen_created(tmp_path):
     marks = S.marks_from(snap, bk)
     missing = {l.symbol for l in bk.open_legs} - set(marks)
     assert not missing, f"{missing} would raise inside book.pnl"
+
+
+def test_the_target_is_raised_for_a_winner_and_the_stop_never_moves(tmp_path):
+    """target_overrun had NO test at all, and it is the call that crashed on a stale
+    snapshot: the sequence is trail_armed -> widened -> target_raised, all in one tick.
+    What it must do is extend how far a winner may run WITHOUT touching the stop —
+    stop_to_target_ratio is [STRUCTURAL], and a rule that quietly widened the loss side
+    would change the strategy while looking like a winner's rule."""
+    rich = {"C24800": 6.0, "P24000": 6.0, "C25300": 0.5, "P23500": 0.5}
+    bk, rec, events = run([widen_frame(0, 24_400, rich), widen_frame(1, 24_400, rich)],
+                          tmp_path=tmp_path)
+    raised = [p for k, p in events if k == "target_raised"]
+    assert raised, f"target_overrun never fired; events were {sorted({k for k, _ in events})}"
+    mult = float(CFG["exits"]["target_overrun_multiplier"])
+    assert raised[0]["target_points"] == pytest.approx(10.0 * mult)
+    assert bk.stop_points == 5.0, "the stop moved with the target"
+    assert rec["target_raised"] is True
+
+
+def test_it_is_raised_at_most_once(tmp_path):
+    rich = {"C24800": 6.0, "P24000": 6.0, "C25300": 0.5, "P23500": 0.5}
+    _bk, _rec, events = run([widen_frame(i, 24_400, rich) for i in range(4)],
+                            tmp_path=tmp_path)
+    assert len([k for k, _ in events if k == "target_raised"]) == 1
+
+
+# =====================================================================================
+# the paper record the live gate counts
+# =====================================================================================
+def test_a_flat_session_counts_toward_the_live_gate_and_an_unclosed_one_does_not(tmp_path):
+    """min_paper_sessions_before_live is 60, counted from the journal. If a completed
+    session did not produce a countable record the gate could never advance, and if an
+    UNCLOSED one did, sixty abandoned sessions would read as sixty days of experience."""
+    from app.strategies.strangle import live as LIVE
+
+    jr = JN.Journal(str(tmp_path / "gate.jsonl"))
+    S.run_session(book=hedged_book(),
+                  provider=iter([frame(0, 24_400), frame(1, 24_100, {"P24000": 45.0})]),
+                  cfg=CFG, levels=LEVELS, oi=OI, journal=jr, lot_size=LOT, step=50)
+    assert len(LIVE.completed_paper_sessions(jr)) == 1
+
+    S.run_session(book=hedged_book(), provider=iter([frame(0, 24_400)]), cfg=CFG,
+                  levels=LEVELS, oi=OI, journal=jr, lot_size=LOT, step=50)
+    assert len(LIVE.completed_paper_sessions(jr)) == 1, "an UNCLOSED session was counted"
+
+    exp = LIVE.observed_expectancy(LIVE.completed_paper_sessions(jr))
+    assert exp["n"] == 1 and exp["mean"] is not None

@@ -165,7 +165,21 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
         if book.is_flat:
             break
 
-        marks = marks_from(snapshot, book)
+        # R.Snapshot is FROZEN and carries a copy of the marks. Any rule consulted after
+        # the book changes must be given a rebuilt one, or it values a position that no
+        # longer exists — and book.pnl deliberately raises rather than treat a missing leg
+        # as zero, so the session dies with a KeyError. ONE closure builds both, and it is
+        # the only place either is born: two separate definitions of `marks` in this loop
+        # is precisely how they drifted apart.
+        def _observe():
+            m = marks_from(snapshot, book)
+            return m, R.Snapshot(now=snapshot.as_of, spot=snapshot.spot,
+                                 asp=_asp(snapshot, step), marks=m,
+                                 vwaps=vwaps_from(snapshot, book),
+                                 resistance=levels.resistance, support=levels.support,
+                                 feed_age_seconds=snapshot.stale_seconds)
+
+        marks, snap = _observe()
         if len(marks) < len(book.open_legs):
             emit("mark_missing", {"at": snapshot.as_of,
                                   "have": len(marks), "need": len(book.open_legs)})
@@ -198,21 +212,6 @@ def run_session(*, book, provider: Iterable, cfg: dict, levels, oi, journal,
                 (snapshot.as_of - state.last_improve_at).total_seconds() / 60.0)
 
         confirmed = _feed_minute(state, snapshot, levels)
-
-        # R.Snapshot is FROZEN and carries a copy of the marks. Any rule consulted after
-        # the book changes must be given a rebuilt one, or it values a position that no
-        # longer exists — and book.pnl deliberately raises rather than treat a missing leg
-        # as zero, so the session dies with a KeyError. Built through one closure so the
-        # marks and the snapshot cannot drift apart again.
-        def _observe():
-            m = marks_from(snapshot, book)
-            return m, R.Snapshot(now=snapshot.as_of, spot=snapshot.spot,
-                                 asp=_asp(snapshot, step), marks=m,
-                                 vwaps=vwaps_from(snapshot, book),
-                                 resistance=levels.resistance, support=levels.support,
-                                 feed_age_seconds=snapshot.stale_seconds)
-
-        marks, snap = _observe()
 
         # --- exits first, always -------------------------------------------------------
         decision = R.evaluate_exits(book, snap, cfg, state=state.as_rules_state())

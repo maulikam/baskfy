@@ -68,11 +68,67 @@ def test_orders_start_pending(conn):
 # =====================================================================================
 # execution results
 # =====================================================================================
-def test_a_filled_order_records_its_quantity(conn):
+def broker(symbol, status="COMPLETE", filled=10, avg=None, oid=None):
+    return {"tradingsymbol": symbol, "status": status, "filled_quantity": filled,
+            "average_price": avg, "order_id": oid}
+
+
+def test_a_placed_order_records_submitted_not_filled(conn):
+    """CHANGED 18 Aug 2026. Marking a PLACED order FILLED for its whole planned quantity
+    put a lie in the database: PARAS was recorded as 438 filled while the broker still
+    showed the order OPEN with zero traded. Reaching the exchange is knowable at
+    submission; trading is not."""
     PS.save_plan(conn, plan())
-    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "OK"}])
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "PLACED",
+                                      "order_id": "X1"}])
     r = conn.execute("SELECT * FROM rebalance_orders WHERE symbol='AAA'").fetchone()
-    assert r["status"] == "FILLED" and r["filled_qty"] == 10
+    assert r["status"] == "SUBMITTED" and r["filled_qty"] == 0
+    assert r["order_id"] == "X1"
+
+
+def test_reconciliation_settles_it_from_the_order_book(conn):
+    PS.save_plan(conn, plan())
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "PLACED", "order_id": "X1"}])
+    PS.reconcile_fills(conn, "p1", [broker("AAA", filled=10, avg=101.0, oid="X1")])
+    r = conn.execute("SELECT * FROM rebalance_orders WHERE symbol='AAA'").fetchone()
+    assert r["status"] == "FILLED" and r["filled_qty"] == 10 and r["reconciled_at"]
+
+
+def test_a_part_filled_order_is_not_called_filled(conn):
+    """A limit order that traded 4 of 10 is not a filled order, and rounding it up is the
+    same class of error this reconciliation exists to undo."""
+    PS.save_plan(conn, plan())
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "PLACED", "order_id": "X1"}])
+    PS.reconcile_fills(conn, "p1", [broker("AAA", filled=4, oid="X1")])
+    r = conn.execute("SELECT * FROM rebalance_orders WHERE symbol='AAA'").fetchone()
+    assert r["status"] == "PARTIAL" and r["filled_qty"] == 4
+
+
+def test_an_order_still_working_is_corrected_back_to_submitted(conn):
+    """The exact live case: a row already carrying a wrong FILLED keeps it forever if
+    reconciliation skips open orders. The truth for an open order is what has traded."""
+    PS.save_plan(conn, plan())
+    conn.execute("UPDATE rebalance_orders SET status='FILLED', filled_qty=10,"
+                 " order_id='X1' WHERE symbol='AAA'")
+    PS.reconcile_fills(conn, "p1", [broker("AAA", status="OPEN", filled=0, oid="X1")])
+    r = conn.execute("SELECT * FROM rebalance_orders WHERE symbol='AAA'").fetchone()
+    assert r["status"] == "SUBMITTED" and r["filled_qty"] == 0
+
+
+def test_a_cancelled_order_that_never_traded_is_a_lapse_not_a_failure(conn):
+    """A limit order cancelled at the close was legal and simply never met its price."""
+    PS.save_plan(conn, plan())
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "PLACED", "order_id": "X1"}])
+    PS.reconcile_fills(conn, "p1", [broker("AAA", status="CANCELLED", filled=0, oid="X1")])
+    r = conn.execute("SELECT * FROM rebalance_orders WHERE symbol='AAA'").fetchone()
+    assert r["status"] == "LAPSED"
+
+
+def test_reconciliation_reports_what_it_could_not_match(conn):
+    PS.save_plan(conn, plan())
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "PLACED", "order_id": "X1"}])
+    out = PS.reconcile_fills(conn, "p1", [])
+    assert out["unresolved"] == ["AAA"]
 
 
 def test_a_dry_run_order_fills_nothing(conn):
@@ -108,15 +164,23 @@ def test_a_result_for_an_unplanned_symbol_is_reported_not_invented(conn):
 # reconciliation — the number /regime needs
 # =====================================================================================
 def test_planned_and_filled_are_separate_facts(conn):
+    """Three facts now, not two: planned, submitted, and — only after the order book has
+    been read — filled."""
     PS.save_plan(conn, plan())
-    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "OK"},
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "PLACED", "order_id": "X1"},
                                      {"symbol": "BBB", "status": "REJECTED"}])
+    mid = PS.reconciliation(conn, "p1")
+    assert mid["planned_buy_value"] == 1000       # 10 x 100
+    assert mid["planned_sell_value"] == 1000      # 5 x 200
+    assert mid["filled_value"] == 0, "nothing is filled until the broker says so"
+    assert mid["awaiting_reconciliation"] == ["AAA"] and not mid["fills_confirmed"]
+
+    PS.reconcile_fills(conn, "p1", [broker("AAA", filled=10, oid="X1")])
     r = PS.reconciliation(conn, "p1")
-    assert r["planned_buy_value"] == 1000      # 10 x 100
-    assert r["planned_sell_value"] == 1000     # 5 x 200
-    assert r["filled_value"] == 1000           # only AAA
+    assert r["filled_value"] == 1000           # only AAA, and only once confirmed
     assert r["failed_value"] == 1000           # only BBB
     assert r["failed_symbols"] == ["BBB"]
+    assert r["fills_confirmed"]
 
 
 def test_a_dry_run_plan_submits_value_but_fills_nothing(conn):
@@ -136,7 +200,8 @@ def test_reconciliation_of_an_unknown_plan_is_empty(conn):
 # =====================================================================================
 def test_slippage_can_finally_be_measured(conn):
     PS.save_plan(conn, plan())
-    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "OK", "avg_price": 101.0}])
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "PLACED", "order_id": "X1"}])
+    PS.reconcile_fills(conn, "p1", [broker("AAA", filled=10, avg=101.0, oid="X1")])
     out = M.slippage(PS.orders_frame(conn, "p1"))
     assert out["orders"] == 1
     # bought 1% above the reference: positive means worse than planned
@@ -145,5 +210,6 @@ def test_slippage_can_finally_be_measured(conn):
 
 def test_selling_below_the_reference_also_counts_as_cost(conn):
     PS.save_plan(conn, plan())
-    PS.record_execution(conn, "p1", [{"symbol": "BBB", "status": "OK", "avg_price": 198.0}])
+    PS.record_execution(conn, "p1", [{"symbol": "BBB", "status": "PLACED", "order_id": "X2"}])
+    PS.reconcile_fills(conn, "p1", [broker("BBB", filled=5, avg=198.0, oid="X2")])
     assert M.slippage(PS.orders_frame(conn, "p1"))["mean_bps"] > 0

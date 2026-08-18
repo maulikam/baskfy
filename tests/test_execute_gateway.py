@@ -325,3 +325,62 @@ def test_daily_loss_cap_is_no_longer_inert(client, monkeypatch, tmp_path):
     assert body["orders"][0]["status"] == "RISK_BLOCKED"
     assert "KILL SWITCH" in body["orders"][0]["error"]
     assert fake.kc.orders == [], "the kill switch must stop the batch reaching the broker"
+
+
+# =====================================================================================
+# the circuit breaker
+# =====================================================================================
+def test_a_systemic_refusal_stops_the_batch(client, monkeypatch):
+    """On 18 Aug 2026 all twenty-one orders were fired into the same rejection — "No IPs
+    configured for this app" — because nothing noticed the first three had failed
+    identically. Each one still consumed a rate-limit slot and a journal line."""
+    c, fake = client
+    monkeypatch.setattr(C, "DRY_RUN", False)
+
+    def always_refuse(**kw):
+        raise Exception("No IPs configured for this app. Add allowed IPs on the console.")
+    fake.kc.place_order = always_refuse
+
+    pid = seed(orders=[order(f"S{i}", 10, qty_final=10, stop=90.0) for i in range(10)])
+    body = post(c, pid).json()
+    attempted = [o for o in body["orders"] if o["status"] != "ABORTED"]
+    aborted = [o for o in body["orders"] if o["status"] == "ABORTED"]
+    assert len(attempted) == 3, f"tried {len(attempted)} before stopping"
+    assert len(aborted) == 7
+    assert "No IPs configured" in body["aborted_for"]
+
+
+def test_different_failures_do_not_trip_the_breaker(client, monkeypatch):
+    """Distinct rejections are per-order facts, not a systemic fault. Stopping on them
+    would abandon a book because two unrelated symbols were illiquid."""
+    c, fake = client
+    monkeypatch.setattr(C, "DRY_RUN", False)
+    seen = {"n": 0}
+
+    def varied(**kw):
+        seen["n"] += 1
+        raise Exception(f"reason number {seen['n']}")
+    fake.kc.place_order = varied
+
+    pid = seed(orders=[order(f"S{i}", 10, qty_final=10, stop=90.0) for i in range(6)])
+    body = post(c, pid).json()
+    assert not [o for o in body["orders"] if o["status"] == "ABORTED"]
+    assert body["aborted_for"] == ""
+
+
+def test_a_success_between_failures_resets_the_counter(client, monkeypatch):
+    """Two failures, a fill, then two more is not a systemic refusal."""
+    c, fake = client
+    monkeypatch.setattr(C, "DRY_RUN", False)
+    calls = {"n": 0}
+
+    def flaky(**kw):
+        calls["n"] += 1
+        if calls["n"] == 3:
+            return "OK123"
+        raise Exception("same message every time")
+    fake.kc.place_order = flaky
+
+    pid = seed(orders=[order(f"S{i}", 10, qty_final=10, stop=90.0) for i in range(5)])
+    body = post(c, pid).json()
+    assert len([o for o in body["orders"] if o["status"] == "ABORTED"]) == 0

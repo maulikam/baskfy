@@ -24,11 +24,23 @@ from typing import Iterable, Mapping, Sequence
 
 from . import db
 
-# Terminal-ish states an order can reach. PENDING means written but not yet submitted.
-PENDING, FILLED, FAILED, BLOCKED, DUPLICATE, SIMULATED = (
-    "PENDING", "FILLED", "FAILED", "BLOCKED", "DUPLICATE", "DRY_RUN")
+# States an order can reach.
+#
+# SUBMITTED IS NOT FILLED, and conflating them put a lie in the database. record_execution
+# used to mark a PLACED order FILLED for its whole planned quantity, so on 18 Aug 2026 the
+# DB recorded 438 PARAS shares as filled while the broker still showed the order OPEN with
+# zero traded. /regime reads exactly this to decide whether a policy was implemented, and
+# slippage is measured against it, so the error propagates into every downstream judgement.
+#
+# An order reaching the exchange is knowable at submission. Whether it TRADED is not:
+# these are LIMIT orders and some rest all day. So submission records SUBMITTED, and
+# reconcile_fills() later reads the broker's own order book to settle it.
+PENDING, SUBMITTED, FILLED, PARTIAL, FAILED, BLOCKED, DUPLICATE, SIMULATED, LAPSED = (
+    "PENDING", "SUBMITTED", "FILLED", "PARTIAL", "FAILED", "BLOCKED", "DUPLICATE",
+    "DRY_RUN", "LAPSED")
 
-_OK = {"OK", "PLACED", "COMPLETE", "FILLED"}
+_OK = {"OK", "PLACED"}                  # reached the exchange; nothing yet about trading
+_TERMINAL_BROKER = {"COMPLETE", "REJECTED", "CANCELLED"}
 
 
 def save_plan(conn, plan: Mapping, *, evaluation_id: str | None = None,
@@ -79,7 +91,7 @@ def record_execution(conn, plan_id: str, results: Iterable[Mapping]) -> dict:
             seen.add(sym)
             raw = str(res.get("status") or "").upper()
             if raw in _OK:
-                status, filled = FILLED, rows[sym]["planned_qty"]
+                status, filled = SUBMITTED, 0
             elif raw.startswith("DRY"):
                 status, filled = SIMULATED, 0
             elif raw == "DUPLICATE":
@@ -89,10 +101,10 @@ def record_execution(conn, plan_id: str, results: Iterable[Mapping]) -> dict:
             else:
                 status, filled = FAILED, 0
             conn.execute(
-                "UPDATE rebalance_orders SET status=?, filled_qty=?, avg_fill_price=?"
-                " WHERE version_id=? AND symbol=?",
+                "UPDATE rebalance_orders SET status=?, filled_qty=?, avg_fill_price=?,"
+                " order_id=? WHERE version_id=? AND symbol=?",
                 (status, filled, res.get("avg_price") or res.get("price"),
-                 plan_id, sym))
+                 res.get("order_id"), plan_id, sym))
     return {"updated": len(seen), "unknown": unknown,
             "not_submitted": sorted(set(rows) - seen)}
 
@@ -114,8 +126,11 @@ def reconciliation(conn, plan_id: str) -> dict:
     sells = [r for r in rows if r["side"] == "SELL"]
     buys = [r for r in rows if r["side"] == "BUY"]
     submitted = [r for r in rows if r["status"] != PENDING]
-    filled = [r for r in rows if r["status"] == FILLED]
+    # FILLED means the broker's order book says so. SUBMITTED alone never counts, which is
+    # the whole point of separating them.
+    filled = [r for r in rows if r["status"] in (FILLED, PARTIAL)]
     failed = [r for r in rows if r["status"] in (FAILED, BLOCKED)]
+    working = [r for r in rows if r["status"] == SUBMITTED]
     return {
         "plan_id": plan_id,
         "orders": len(rows),
@@ -128,6 +143,8 @@ def reconciliation(conn, plan_id: str) -> dict:
                    for s in sorted({r["status"] for r in rows})},
         "not_submitted": [r["symbol"] for r in rows if r["status"] == PENDING],
         "failed_symbols": [r["symbol"] for r in failed],
+        "awaiting_reconciliation": [r["symbol"] for r in working],
+        "fills_confirmed": not working,
     }
 
 
@@ -159,3 +176,80 @@ def history(conn, limit: int = 20) -> list[dict]:
         "SELECT v.*, (SELECT COUNT(*) FROM rebalance_orders o"
         "             WHERE o.version_id = v.version_id) AS order_count"
         " FROM rebalance_versions v ORDER BY v.created_ts DESC LIMIT ?", (limit,))]
+
+
+# =====================================================================================
+# reconciling submitted orders against what the broker actually did
+# =====================================================================================
+def reconcile_fills(conn, plan_id: str, broker_orders: Iterable[Mapping], *,
+                    now: str | None = None) -> dict:
+    """Settle SUBMITTED rows from the broker's own order book.
+
+    This is the half that was missing. Submission records that an order reached the
+    exchange; only the order book knows whether it TRADED. Matching is by order_id where
+    one was stored and by symbol otherwise, because rows written before order_id existed
+    have nothing else to join on.
+
+    A COMPLETE order with a partial quantity is recorded PARTIAL rather than FILLED — a
+    limit order that traded 200 of 438 is not a filled order, and rounding it up is the
+    same class of error this function exists to undo.
+    """
+    import datetime as _dt
+
+    now = now or _dt.datetime.now().isoformat(timespec="seconds")
+    by_id, by_sym = {}, {}
+    for o in broker_orders:
+        oid = str(o.get("order_id") or "")
+        if oid:
+            by_id[oid] = o
+        by_sym.setdefault(str(o.get("tradingsymbol") or ""), []).append(o)
+
+    rows = [dict(r) for r in conn.execute(
+        "SELECT * FROM rebalance_orders WHERE version_id=?", (plan_id,))]
+    changed, unresolved = [], []
+
+    with db.transaction(conn):
+        for r in rows:
+            if r["status"] not in (SUBMITTED, FILLED, PARTIAL):
+                continue
+            o = by_id.get(str(r.get("order_id") or ""))
+            if o is None:
+                candidates = by_sym.get(r["symbol"], [])
+                o = candidates[0] if len(candidates) == 1 else None
+            if o is None:
+                unresolved.append(r["symbol"])
+                continue
+
+            state = str(o.get("status") or "").upper()
+            filled = int(o.get("filled_quantity") or 0)
+            planned = int(r["planned_qty"] or 0)
+            if state == "COMPLETE":
+                status = FILLED if filled >= planned else PARTIAL
+            elif state in ("REJECTED", "CANCELLED"):
+                # Cancelled at the close with nothing traded is a lapse, not a failure:
+                # the order was legal and simply never met its price.
+                status = FAILED if filled == 0 and state == "REJECTED" else (
+                    PARTIAL if filled else LAPSED)
+            else:
+                # STILL WORKING. Not skipped: a row already carrying a wrong FILLED from
+                # the old code would keep it forever if this returned early. The truth for
+                # an open order is what has traded SO FAR, which is usually nothing.
+                status, filled = SUBMITTED, filled
+
+            conn.execute(
+                "UPDATE rebalance_orders SET status=?, filled_qty=?, avg_fill_price=?,"
+                " reconciled_at=? WHERE id=?",
+                (status, filled, o.get("average_price") or None, now, r["id"]))
+            if status != r["status"] or filled != int(r["filled_qty"] or 0):
+                changed.append({"symbol": r["symbol"], "was": r["status"],
+                                "now": status, "filled": filled, "planned": planned})
+
+    return {"plan_id": plan_id, "changed": changed, "unresolved": unresolved,
+            "reconciled_at": now}
+
+
+def open_plans(conn, limit: int = 5) -> list[str]:
+    """Plans with orders still recorded as submitted — the ones needing reconciliation."""
+    return [r["version_id"] for r in conn.execute(
+        "SELECT DISTINCT version_id FROM rebalance_orders WHERE status=?"
+        " ORDER BY id DESC LIMIT ?", (SUBMITTED, limit))]

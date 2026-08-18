@@ -232,7 +232,38 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
         except Exception as exc:
             logging.warning("could not evaluate the daily loss cap: %s", exc)
 
+    # --- preflight ---------------------------------------------------------------------
+    # A basket margin query before anything is sent. It is a POST to an order-adjacent
+    # endpoint, so it exercises the same permissions the orders will need, and it returns
+    # the margin the whole plan requires — which is the check that would have caught
+    # SAILIFE failing for Rs 802.67 after twelve other orders had already gone out.
+    preflight = {"checked": False}
+    try:
+        basket = [{"exchange": "NSE", "tradingsymbol": o["symbol"],
+                   "transaction_type": "SELL" if o["delta"] < 0 else "BUY",
+                   "variety": "regular", "product": "CNC", "order_type": "MARKET",
+                   "quantity": abs(int(o["delta"]))}
+                  for o in plan["orders"] if o["delta"] != 0]
+        if basket:
+            resp = await asyncio.to_thread(k.kc.basket_order_margins, basket)
+            need = float(((resp or {}).get("final") or {}).get("total") or 0.0)
+            have = float(k.available_cash() or 0.0)
+            preflight = {"checked": True, "required": round(need), "available": round(have),
+                         "shortfall": round(max(0.0, need - have))}
+    except Exception as exc:                                       # noqa: BLE001
+        # Reported, not fatal: a margin endpoint that is down must not block a rebalance
+        # the operator has already confirmed. The circuit breaker below is the hard stop.
+        preflight = {"checked": False, "error": str(exc)[:200]}
+
     results = []
+    # --- circuit breaker -----------------------------------------------------------------
+    # On 18 Aug 2026 all twenty-one orders were fired into the same rejection — "No IPs
+    # configured for this app" — because nothing noticed that the first three had failed
+    # identically. A systemic refusal does not become less systemic on the fourth attempt,
+    # and each one still consumes a rate-limit slot and a journal line.
+    breaker_trip = 3
+    recent_errors: list[str] = []
+    aborted_for = ""
     # Sells first (frees cash), then buys, then GTT stops. Unchanged sequence — only the
     # route changed: every order now goes through core/gateway.py, so guards -> risk ->
     # idempotency -> rate limits -> journal all apply. Previously this called
@@ -256,6 +287,17 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
             res = {"symbol": o["symbol"], "status": "BLOCKED", "error": str(exc)}
         res["action"] = o["action"]
         results.append(res)
+
+        err = str(res.get("error") or "")[:80] if res.get("status") in ("ERROR", "BLOCKED") else ""
+        recent_errors = (recent_errors + [err])[-breaker_trip:] if err else []
+        if len(recent_errors) == breaker_trip and len(set(recent_errors)) == 1:
+            aborted_for = recent_errors[0]
+            for rest in ordered[ordered.index(o) + 1:]:
+                results.append({"symbol": rest["symbol"], "status": "ABORTED",
+                                "action": rest["action"],
+                                "error": f"batch stopped after {breaker_trip} identical "
+                                         f"failures: {aborted_for}"})
+            break
         # No time.sleep here: it blocked the event loop, and the gateway's token buckets
         # already pace to Kite's caps and under SEBI's 10-OPS threshold.
 
@@ -295,6 +337,7 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
 
     return JSONResponse({"dry_run": C.DRY_RUN, "orders": results, "gtt": stops,
                          "stops_note": stops_note, "stops_pending": True,
+                         "preflight": preflight, "aborted_for": aborted_for,
                          "log": log_path, "reconciliation": recon})
 
 
@@ -353,6 +396,54 @@ def options_data():
     with _db.connect() as conn:
         _db.migrate(conn)
         return _ov.page(conn)
+
+
+@app.get("/reconcile", response_class=HTMLResponse)
+def reconcile_page(request: Request, plan_id: str = ""):
+    """Plan against broker. The broker is the authority; this reports disagreement.
+
+    Also RECONCILES fills as a side effect of loading, because a comparison that shows
+    stale local state and does nothing about it is a worse version of the problem.
+    """
+    from .analytics import db as _db, plan_store as _ps, reconcile_view as _rv
+
+    view = {"available": False, "reason": "not authenticated"}
+    try:
+        k = kite()
+        if k.is_authed():
+            orders = k.kc.orders() or []
+            gtts = k.kc.get_gtts() or []
+            holdings = k.holdings()
+            with _db.connect() as conn:
+                _db.migrate(conn)
+                pid = plan_id or (_ps.latest(conn) or {}).get("version_id")
+                settled = _ps.reconcile_fills(conn, pid, orders) if pid else {}
+                plan = PLANS.get(pid)
+                view = _rv.build(conn, plan_id=pid, plan=plan, broker_orders=orders,
+                                 gtts=gtts, holdings=holdings)
+                view["available"] = True
+                view["settled"] = settled
+    except Exception as exc:                                       # noqa: BLE001
+        logging.warning("reconcile failed: %s", exc)
+        view = {"available": False, "reason": str(exc)[:200]}
+    return templates.TemplateResponse(request, "reconcile.html", {"v": view})
+
+
+@app.get("/reconcile/data")
+def reconcile_data(plan_id: str = ""):
+    from .analytics import db as _db, plan_store as _ps, reconcile_view as _rv
+    k = kite()
+    if not k.is_authed():
+        return {"available": False, "reason": "not authenticated"}
+    orders, gtts, holdings = k.kc.orders() or [], k.kc.get_gtts() or [], k.holdings()
+    with _db.connect() as conn:
+        _db.migrate(conn)
+        pid = plan_id or (_ps.latest(conn) or {}).get("version_id")
+        if pid:
+            _ps.reconcile_fills(conn, pid, orders)
+        return {**_rv.build(conn, plan_id=pid, plan=PLANS.get(pid),
+                            broker_orders=orders, gtts=gtts, holdings=holdings),
+                "available": True}
 
 
 @app.get("/stops", response_class=HTMLResponse)

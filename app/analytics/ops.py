@@ -121,6 +121,19 @@ TICKS = Param("ticks", "Poll for", "text_choice", default="60",
               choices=("12", "60", "360"),
               help="12 polls is about a minute, 60 about five, 360 about thirty")
 
+# Which underlying an options control acts on. Each keeps its own config, journal,
+# lockout, straddle record and session lock, so these never interfere with each other.
+from ..strategies.strangle import instruments as _INS       # noqa: E402
+
+INSTRUMENT = Param("instrument", "Underlying", "text_choice", default=_INS.DEFAULT,
+                   choices=tuple(_INS.all_slugs()),
+                   help="NIFTY and SENSEX expire weekly (Tue / Thu); BANKNIFTY is "
+                        "monthly and only trades its final week")
+
+
+def _slug(v: Mapping[str, Any]) -> str:
+    return str(v.get("instrument") or _INS.DEFAULT)
+
 
 OPERATIONS: tuple[Operation, ...] = (
     # --- daily ---------------------------------------------------------------------
@@ -252,33 +265,35 @@ OPERATIONS: tuple[Operation, ...] = (
         "strangle_check", "Check the strangle", "Options",
         "Market facts, the trading calendar, today's session parameters and every veto "
         "standing between now and an entry. Places nothing and writes nothing.",
-        lambda v: ["-m", "scripts.strangle", "--check"],
-        timeout=180, needs_kite=True, writes=False),
+        lambda v: ["-m", "scripts.strangle", "--instrument", _slug(v), "--check"],
+        timeout=180, params=(INSTRUMENT,), needs_kite=True, writes=False),
     Operation(
         "strangle_collect", "Record today's straddle", "Options",
         "One ATM straddle observation for the reference bands, then stops. This is the "
         "daily job while the bands are being built: the IV gates cannot be calibrated "
         "from history because Kite drops expired contracts.",
-        lambda v: ["-m", "scripts.strangle", "--collect"],
-        timeout=180, needs_kite=True),
+        lambda v: ["-m", "scripts.strangle", "--instrument", _slug(v), "--collect"],
+        timeout=180, params=(INSTRUMENT,), needs_kite=True),
     Operation(
         "strangle_calibrate", "Calibrate bands (report)", "Options",
         "Rebuild the ATM straddle bands from the forward record and report the veto rate "
         "each would produce on its own history. Writes nothing.",
-        lambda v: ["-m", "scripts.strangle_calibrate"],
-        timeout=900, needs_kite=True, writes=False, long_running=True),
+        lambda v: ["-m", "scripts.strangle_calibrate", "--instrument", _slug(v)],
+        timeout=900, params=(INSTRUMENT,), needs_kite=True, writes=False,
+        long_running=True),
     Operation(
         "strangle_calibrate_write", "Calibrate bands and save", "Options",
-        "The same, but writes the bands into config/strangle.yaml. Refuses to write while "
-        "any tradeable bucket is missing or thin.",
-        lambda v: ["-m", "scripts.strangle_calibrate", "--write"],
-        timeout=900, needs_kite=True, long_running=True),
+        "The same, but writes the bands into the selected instrument's config. Refuses "
+        "to write while any tradeable bucket is missing or thin.",
+        lambda v: ["-m", "scripts.strangle_calibrate", "--instrument", _slug(v), "--write"],
+        timeout=900, params=(INSTRUMENT,), needs_kite=True, long_running=True),
     Operation(
         "strangle_session", "Run a paper session", "Options",
         "Enter on live quotes, then manage the book: exits first, then at most one "
         "adjustment per poll. Fills are simulated against real depth; no order is placed.",
-        lambda v: ["-m", "scripts.strangle", "--max-ticks", str(v.get("ticks") or "60")],
-        timeout=3600, params=(TICKS,), needs_kite=True, long_running=True),
+        lambda v: ["-m", "scripts.strangle", "--instrument", _slug(v),
+                   "--max-ticks", str(v.get("ticks") or "60")],
+        timeout=3600, params=(INSTRUMENT, TICKS), needs_kite=True, long_running=True),
 
     Operation(
         "tests", "Run the test suite", "Diagnostics",

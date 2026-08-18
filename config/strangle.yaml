@@ -45,22 +45,35 @@ margin:
   # brief's whole estimate. Consequence: this strategy is MARGIN-bound, not risk-bound,
   # which reverses the brief's section 3.2. max_catastrophic_loss_pct is not the binding
   # constraint here; utilisation is.
-  max_utilisation_pct: 0.40       # [TUNE] raised from 0.35: at real margin, 20 lots is
-                                  # 39% util. Leaves ~Rs 29L free against a Rs 18.5L
-                                  # position — ample for the roll overlap and a SPAN spike.
+  #
+  # SPLIT INTO TWO CAPS when BANKNIFTY and SENSEX were added, 18 Aug 2026. One number
+  # cannot do both jobs. At 20 lots NIFTY alone was 39% of the account, so a second
+  # instrument starting the same morning would have found nothing left — and, worse,
+  # would only have discovered that after the first two had already entered, leaving the
+  # account holding whichever pair happened to start first.
+  #   max_utilisation_pct           this instrument's ALLOCATION  (0.18 + 0.12 + 0.10)
+  #   portfolio_max_utilisation_pct the ACCOUNT ceiling, unchanged at the old 0.40
+  # Enforcement is in sizing.evaluate against a shared ledger of live commitments
+  # (strategies/strangle/allocation.py), because the three run as separate processes and
+  # basket_order_margins is called with consider_positions=False.
+  max_utilisation_pct: 0.18
+  portfolio_max_utilisation_pct: 0.40
   margin_per_lot_estimate: 92500  # [CALIBRATE] sanity bound only; queried before entry
   query_before_every_entry: true
   abort_if_query_fails: true      # never fall back to the estimate
 
 sizing:
-  lots: 20                                  # [TUNE]
+  # 20 -> 9 when the account became a three-instrument account: 0.18 * 47.5L usable /
+  # 92,497 = 9.2. To run NIFTY alone at the original size again, set max_utilisation_pct
+  # back to 0.40 and lots back to 20 — nothing else here depends on the number.
+  lots: 9                                   # [TUNE]
   max_catastrophic_loss_pct: 0.15           # [STRUCTURAL] wing_width * units <= pct * total
   catastrophic_loss_denominator: capital_total
   max_lots_at_current_wing: 23              # derived at startup; do not hand-edit
   scale_by_session_multiplier: true
   never_increase_qty_after_entry: true      # [STRUCTURAL] no averaging, ever
   loss_streak_multiplier: 0.75
-  min_lots: 10
+  min_lots: 5
   win_streak_multiplier: 1.15
   max_lots_multiplier: 1.00                 # [STRUCTURAL] never scale above configured lots
 
@@ -74,6 +87,10 @@ structure:
 session:
   stop_to_target_ratio: 0.50      # [STRUCTURAL] this ratio IS the edge. Do not fit it.
   allow_expiry_day: false
+  # A weekly series never reaches dte 5, so this is a no-op for NIFTY. It is stated
+  # anyway because BANKNIFTY's monthly series does, and a reader comparing the three
+  # files should see the gate exists everywhere rather than wonder why one has it.
+  max_dte: 4
   by_days_to_expiry:              # [CALIBRATE] derived from a Thursday-expiry era
     "3+": {target_points: 5,  size_mult: 0.50}   # Wed + Thu
     "2":  {target_points: 7,  size_mult: 0.75}   # Fri
@@ -103,6 +120,15 @@ timing:
   entry_early: "09:15"            # "first tick with a complete, non-stale chain"
   entry_normal: "09:30"
   entry_window_end: "09:45"
+  # LATE ENTRY. entry_window_end was configured from V1 and never enforced, which did not
+  # matter while the session only ever started at 09:30 from the scheduler — and started
+  # mattering the moment the trigger became a human login at an unpredictable hour.
+  # With allow_late_entry the session still takes a first position after the window, up to
+  # no_new_entry_after, at a reduced size: the target and stop are calibrated for a full
+  # day of decay and a late entry gets less of it, so it takes less risk. Past
+  # no_new_entry_after there is under three hours to force_exit and no entry is taken.
+  allow_late_entry: true
+  late_entry_size_mult: 0.75
   no_new_entry_after: "12:30"
   force_exit: "15:10"
 

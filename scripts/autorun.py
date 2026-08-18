@@ -32,6 +32,20 @@ ARGV = {
 }
 
 
+def _argv(item: dict) -> list[str]:
+    """The command for one outstanding item, with its instrument if it has one.
+
+    Still an allowlist: the op name selects a hardcoded template and the only thing
+    interpolated is a slug the registry already validated.
+    """
+    from app.strategies.strangle import instruments as INS
+    argv = [sys.executable, *ARGV[item["op"]]]
+    slug = (item.get("args") or {}).get("instrument")
+    if slug:
+        argv += ["--instrument", INS.get(slug).slug]
+    return argv
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="run today's outstanding collection")
     ap.add_argument("--check", action="store_true", help="report only")
@@ -69,7 +83,7 @@ def main() -> int:
 
     ran = []
     for item in items:
-        argv = [sys.executable, *ARGV[item["op"]]]
+        argv = _argv(item)
 
         # A session runs until 15:10. Waiting for it would hold the operations lock for
         # five hours and block the equity daily job behind it, so it is DETACHED and left
@@ -79,7 +93,8 @@ def main() -> int:
                 proc = subprocess.Popen(argv, start_new_session=True,
                                         stdout=subprocess.DEVNULL,
                                         stderr=subprocess.DEVNULL)
-                ran.append({"op": item["op"], "label": item["label"], "pid": proc.pid,
+                ran.append({"op": item["op"], "label": item["label"],
+                            "instrument": item.get("instrument"), "pid": proc.pid,
                             "ok": True, "detached": True,
                             "tail": f"started as pid {proc.pid}; it manages itself and "
                                     "logs to the strangle journal"})
@@ -91,7 +106,8 @@ def main() -> int:
         try:
             p = subprocess.run(argv, capture_output=True, text=True, shell=False,
                                timeout=a.timeout)
-            ran.append({"op": item["op"], "label": item["label"], "code": p.returncode,
+            ran.append({"op": item["op"], "label": item["label"],
+                        "instrument": item.get("instrument"), "code": p.returncode,
                         "ok": p.returncode == 0,
                         "tail": (p.stdout or p.stderr or "").strip()[-400:]})
         except subprocess.TimeoutExpired:

@@ -49,7 +49,7 @@ class SizingDecision:
     units: int
     margin_required: float
     margin_per_lot: float
-    utilisation_pct: float
+    utilisation_pct: float          # of the ACCOUNT, including other live instruments
     catastrophic_loss: float
     catastrophic_pct: float
     max_lots_by_margin: int
@@ -103,23 +103,43 @@ def max_lots_by_tail(cfg: dict, wing_width: float | None = None) -> int:
 
 
 def evaluate(cfg: dict, *, lots: int, margin_required: float,
-             wing_width: float | None = None) -> SizingDecision:
-    """Check a proposed size against both caps. Raises rather than trimming silently."""
+             wing_width: float | None = None,
+             committed_elsewhere: float = 0.0) -> SizingDecision:
+    """Check a proposed size against both caps. Raises rather than trimming silently.
+
+    committed_elsewhere is margin already held by another instrument's live session. The
+    utilisation cap is a cap on the ACCOUNT, not on one strategy instance: three underlyings
+    each taking 40% of the same Rs 50L would be 118% subscribed, and each one measuring only
+    itself would report a comfortable 39%.
+    """
     cap = capital_from_config(cfg)
     lot = int(cfg["instrument"]["lot_size"])
     units = lots * lot
     width = float(wing_width or cfg["structure"]["wing_width_points"])
     hedged = cfg["structure"]["type"].upper() == "HEDGED"
 
+    # TWO caps, because there are two different things to protect against.
+    #   max_utilisation_pct  — this instrument's ALLOCATION, its slice of the account.
+    #   portfolio_max_..._pct — the ACCOUNT ceiling, shared by every instrument.
+    # One number cannot do both jobs: an allocation used as an account cap lets three
+    # instruments reach 118%, and an account cap used as an allocation lets whichever
+    # session starts first take everything and starve the rest.
     max_util = float(cfg["margin"]["max_utilisation_pct"])
-    util = margin_required / cap.usable if cap.usable else 1.0
+    port_max = float(cfg["margin"].get("portfolio_max_utilisation_pct", max_util))
+    deployed = margin_required + float(committed_elsewhere)
+    own_util = margin_required / cap.usable if cap.usable else 1.0
+    util = deployed / cap.usable if cap.usable else 1.0
     per_lot = margin_required / lots if lots else 0.0
-    by_margin = int(cap.usable * max_util / per_lot) if per_lot else 0
+    headroom = max(min(cap.usable * max_util,
+                       cap.usable * port_max - float(committed_elsewhere)), 0.0)
+    by_margin = int(headroom / per_lot) if per_lot else 0
     by_tail = max_lots_by_tail(cfg, width)
 
     tail = width * units if hedged else float("inf")
     tail_pct = tail / float(cfg["capital"]["total"]) if hedged else float("inf")
-    binding = "margin" if by_margin <= by_tail else "tail"
+    binding = ("account" if committed_elsewhere and
+               cap.usable * port_max - committed_elsewhere < cap.usable * max_util
+               else "margin") if by_margin <= by_tail else "tail"
 
     decision = SizingDecision(
         lots=lots, units=units, margin_required=margin_required, margin_per_lot=per_lot,
@@ -127,11 +147,17 @@ def evaluate(cfg: dict, *, lots: int, margin_required: float,
         max_lots_by_margin=by_margin, max_lots_by_tail=by_tail,
         binding_constraint=binding)
 
-    if util > max_util:
+    if own_util > max_util:
         raise SizingRefused(
-            f"margin {margin_required:,.0f} is {util:.1%} of usable {cap.usable:,.0f}, "
-            f"over the {max_util:.0%} cap. Max {by_margin} lots at the queried "
-            f"Rs {per_lot:,.0f}/lot — not the estimate.")
+            f"margin {margin_required:,.0f} is {own_util:.1%} of usable {cap.usable:,.0f}, "
+            f"over this instrument's {max_util:.0%} allocation. Max {by_margin} lots at "
+            f"the queried Rs {per_lot:,.0f}/lot — not the estimate.")
+    if util > port_max:
+        raise SizingRefused(
+            f"margin {margin_required:,.0f} plus {committed_elsewhere:,.0f} already "
+            f"committed by another instrument's live session is {util:.1%} of usable "
+            f"{cap.usable:,.0f}, over the {port_max:.0%} ACCOUNT ceiling. Max "
+            f"{by_margin} lots at the queried Rs {per_lot:,.0f}/lot.")
     if hedged and tail_pct > float(cfg["sizing"]["max_catastrophic_loss_pct"]):
         raise SizingRefused(
             f"a gap through the wings loses {tail:,.0f} = {tail_pct:.1%} of capital, over "

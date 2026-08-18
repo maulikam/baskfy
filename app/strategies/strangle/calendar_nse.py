@@ -7,11 +7,16 @@ account already provides, and neither is a list somebody typed:
   trade. This is authoritative — it is the exchange's own record of what happened — and it
   is exact for every day it covers.
 
-  FORWARDS, from the expiry table. Weeklies expire every Tuesday and monthlies on the last
-  Tuesday of the month; when that Tuesday is a holiday the expiry shifts to the preceding
-  working day. So a listed expiry that is NOT a Tuesday tells you the Tuesday after it was
-  a holiday. Checked against the live dump on 17 Aug 2026: 2029-12-24 is a Monday, because
-  25 December is Christmas.
+  FORWARDS, from the expiry table. Contracts expire on the underlying's expiry weekday —
+  Tuesday for NSE index options, Thursday for BSE — and monthlies on the last such weekday
+  of the month; when that day is a holiday the expiry shifts to the preceding working day.
+  So a listed expiry that is NOT on the expected weekday tells you the day after it was a
+  holiday. Checked against the live dump on 17 Aug 2026: NIFTY's 2029-12-24 is a Monday,
+  because 25 December is Christmas.
+
+  THE WEEKDAY IS A PARAMETER, NOT A CONSTANT. Deriving SENSEX's calendar with Tuesday as
+  the expected weekday would read every one of its ordinary Thursday expiries as evidence
+  of a holiday, and invent a fortnightly market closure that does not exist.
 
 WHAT THIS CANNOT DO, stated rather than papered over: forward coverage is limited to
 holidays that happen to have shifted a listed expiry. A Thursday holiday three weeks out
@@ -32,6 +37,18 @@ from dataclasses import dataclass, field
 from typing import Iterable, Mapping, Sequence
 
 TUESDAY = 1
+THURSDAY = 3
+
+WEEKDAYS = {"MONDAY": 0, "TUESDAY": 1, "WEDNESDAY": 2, "THURSDAY": 3, "FRIDAY": 4,
+            "SATURDAY": 5, "SUNDAY": 6}
+
+
+def weekday_num(name: str) -> int:
+    """Config carries the expiry weekday as a name; the calendar works in numbers."""
+    try:
+        return WEEKDAYS[str(name).strip().upper()]
+    except KeyError:
+        raise ValueError(f"unknown weekday {name!r}; expected one of {sorted(WEEKDAYS)}")
 
 
 def last_weekday_of_month(year: int, month: int, weekday: int = TUESDAY) -> dt.date:
@@ -89,12 +106,14 @@ class Calendar:
     derived_from: dt.date | None = None
     derived_to: dt.date | None = None
     inferred: frozenset[dt.date] = frozenset()
+    weekday: int = TUESDAY
 
     @classmethod
     def build(cls, *, index_rows: Sequence[Mapping] = (),
-              expiries: Iterable[dt.date] = (), extra: Iterable[dt.date] = ()) -> "Calendar":
+              expiries: Iterable[dt.date] = (), extra: Iterable[dt.date] = (),
+              weekday: int = TUESDAY) -> "Calendar":
         back = holidays_from_index(index_rows)
-        fwd = holidays_from_expiries(expiries)
+        fwd = holidays_from_expiries(expiries, weekday)
         extra = {d if isinstance(d, dt.date) else dt.date.fromisoformat(str(d))
                  for d in extra}
         days = sorted({(r["date"].date() if isinstance(r["date"], dt.datetime)
@@ -102,7 +121,7 @@ class Calendar:
         return cls(holidays=frozenset(back | fwd | extra),
                    derived_from=days[0] if days else None,
                    derived_to=days[-1] if days else None,
-                   inferred=frozenset(fwd))
+                   inferred=frozenset(fwd), weekday=weekday)
 
     def is_trading_day(self, day: dt.date) -> bool:
         return day.weekday() < 5 and day not in self.holidays
@@ -123,8 +142,10 @@ class Calendar:
             probe -= dt.timedelta(days=1)
         return probe
 
-    def expiry_is_valid(self, expiry: dt.date, weekday: int = TUESDAY) -> tuple[bool, str]:
-        """A Tuesday, or the trading day before a Tuesday that the calendar knows is shut."""
+    def expiry_is_valid(self, expiry: dt.date,
+                        weekday: int | None = None) -> tuple[bool, str]:
+        """The expected weekday, or the trading day before one the calendar knows is shut."""
+        weekday = self.weekday if weekday is None else weekday
         if expiry.weekday() == weekday:
             return True, "on the expected weekday"
         probe = expiry + dt.timedelta(days=1)
@@ -153,12 +174,19 @@ class Calendar:
 
 
 def build_from_kite(kc, *, name: str = "NIFTY", index_token: int = 256265,
+                    exchange: str = "NFO", weekday: int = TUESDAY,
                     lookback_days: int = 400, extra: Iterable = (),
                     today: dt.date | None = None) -> Calendar:
-    """One index history call plus the instrument dump already in hand."""
+    """One index history call plus the instrument dump already in hand.
+
+    NSE and BSE keep the same trading holidays, so either index's history derives a
+    calendar valid for both. The history call is still made against the underlying's own
+    index because a settlement holiday on one exchange alone would show up there first.
+    """
     today = today or dt.date.today()
     rows = kc.historical_data(index_token, today - dt.timedelta(days=lookback_days),
                               today, "day")
-    expiries = sorted({i["expiry"] for i in kc.instruments("NFO")
+    expiries = sorted({i["expiry"] for i in kc.instruments(exchange)
                        if i.get("name") == name and i.get("expiry")})
-    return Calendar.build(index_rows=rows, expiries=expiries, extra=extra)
+    return Calendar.build(index_rows=rows, expiries=expiries, extra=extra,
+                          weekday=weekday)

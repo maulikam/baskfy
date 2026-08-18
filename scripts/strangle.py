@@ -27,12 +27,14 @@ import pathlib
 import sys
 
 from app.kite_client import Kite
+from app.strategies.strangle import allocation as ALLOC
 from app.strategies.strangle import book as B
 from app.strategies.strangle import calendar_nse as CALN
 from app.strategies.strangle import calibrate as CAL
 from app.strategies.strangle import clock as C
 from app.strategies.strangle import config as SC
 from app.strategies.strangle import fills_paper as F
+from app.strategies.strangle import instruments as INS
 from app.strategies.strangle import journal as JN
 from app.strategies.strangle import levels as L
 from app.strategies.strangle import live as LIVE
@@ -43,6 +45,9 @@ from app.strategies.strangle import session as SESS
 from app.strategies.strangle import sizing as Z
 from app.strategies.strangle import state as ST
 
+# Kept for one release so an existing schedule or bookmark still resolves. Every real
+# path now comes from the instrument registry, because three underlyings sharing one
+# journal, one lockout and one straddle record corrupt all three at once.
 FORWARD_PATH = "data/outputs/strangle_straddle_record.jsonl"
 SESSION_LOCK = "data/outputs/strangle_session.lock"
 
@@ -88,19 +93,31 @@ def _out(payload: dict) -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="NIFTY intraday strangle — paper only")
-    ap.add_argument("--config", default=SC.DEFAULT_PATH)
+    ap = argparse.ArgumentParser(description="Intraday strangle — paper only")
+    ap.add_argument("--instrument", default=INS.DEFAULT, choices=INS.all_slugs(),
+                    help="which underlying to run; picks its config and its own state")
+    ap.add_argument("--config", default=None,
+                    help="override the instrument's config file")
     ap.add_argument("--check", action="store_true", help="report readiness, trade nothing")
     ap.add_argument("--collect", action="store_true",
                     help="record today's ATM straddle for band calibration, then stop")
-    ap.add_argument("--forward", default=FORWARD_PATH)
+    ap.add_argument("--forward", default=None,
+                    help="override the instrument's straddle record")
     ap.add_argument("--entry-only", action="store_true",
                     help="enter and stop, without running the management loop (V1 behaviour)")
     ap.add_argument("--max-ticks", type=int, default=0,
                     help="stop the loop after N polls; 0 means run to the force-exit time")
     args = ap.parse_args()
 
-    cfg = SC.load(args.config)
+    und = INS.get(args.instrument)
+    cfg = SC.load(args.config or und.config)
+    # State is per-instrument and is derived, not read from config: a copied YAML with a
+    # forgotten journal_path would silently pool two underlyings into one record, and the
+    # damage — bands built from a mixture of two distributions — is invisible until the
+    # numbers are trusted.
+    cfg["operational"]["journal_path"] = und.journal()
+    cfg["operational"]["lockout_path"] = und.lockout()
+    forward_path = args.forward or und.forward()
     today = dt.date.today()
     jr = JN.Journal(cfg["operational"]["journal_path"])
 
@@ -109,10 +126,18 @@ def main() -> int:
         return _out({"status": "AUTH_REQUIRED", "login_url": kite.login_url()})
 
     ins = cfg["instrument"]
+    if ins["index_key"] != und.index_key or ins["exchange"] != und.exchange:
+        return _out({"status": "CONFIG_MISMATCH", "instrument": und.slug,
+                     "error": f"{args.config or und.config} describes "
+                              f"{ins['exchange']}/{ins['index_key']}, but the registry "
+                              f"entry for {und.slug} is {und.exchange}/{und.index_key}"})
     instruments = kite.kc.instruments(ins["exchange"])
     # Derived, not hardcoded: past holidays come from index history, future ones from
-    # expiries that shifted off a Tuesday. See calendar_nse.py for what it cannot see.
-    cal = CALN.build_from_kite(kite.kc, name=ins["name"],
+    # expiries that shifted off the expected weekday. THE WEEKDAY IS PER-INSTRUMENT —
+    # deriving SENSEX's Thursday series against Tuesday invents a holiday every week.
+    weekday = CALN.weekday_num(ins["expiry_weekday"])
+    cal = CALN.build_from_kite(kite.kc, name=ins["name"], index_token=und.index_token,
+                               exchange=und.exchange, weekday=weekday,
                                extra=cfg["session"].get("extra_holidays") or (),
                                today=today)
     try:
@@ -148,7 +173,8 @@ def main() -> int:
     snap = MK.snapshot(kite.kc, instruments=instruments, index_key=ins["index_key"],
                        expiry=expiry, name=ins["name"])
     asp, atm_k = MK.atm_straddle(snap, int(ins["strike_step"]))
-    base = {"session": today.isoformat(), "expiry": expiry.isoformat(),
+    base = {"instrument": und.slug, "label": und.label,
+            "session": today.isoformat(), "expiry": expiry.isoformat(),
             "dte": params.dte, "bucket": params.bucket,
             "target_points": params.target_points, "stop_points": params.stop_points,
             "size_mult": params.size_mult, "spot": snap.spot, "atm_strike": atm_k,
@@ -169,8 +195,8 @@ def main() -> int:
         obs = CAL.Observation(session=today, expiry=expiry, dte=params.dte,
                               bucket=params.bucket, spot=snap.spot, strike=atm_k,
                               call=ce, put=pe)
-        CAL.record_forward(args.forward, obs)
-        record = CAL.load_forward(args.forward)
+        CAL.record_forward(forward_path, obs)
+        record = CAL.load_forward(forward_path)
         bands = CAL.build_bands(record) if record else {}
         jr.write("collected", **obs.as_dict())
         return _out({**base, "status": "COLLECTED", "recorded": obs.as_dict(),
@@ -180,7 +206,7 @@ def main() -> int:
 
     # --- gates --------------------------------------------------------------------------
     band = {**(cfg.get("reference_band") or {})}
-    forward = CAL.load_forward(args.forward)
+    forward = CAL.load_forward(forward_path)
     if forward and not band:
         band = CAL.build_bands(forward)
     # There is exactly one authenticated broker session in this system today. Operational
@@ -212,19 +238,48 @@ def main() -> int:
     # 09:30 from the scheduler. It matters the moment the start time is a human login: the
     # runner would have opened a fresh position at 14:00 on rules written for the open, with
     # two thirds of the session's decay already gone and the day's range already set.
-    window_end = dt.time(*(int(x) for x in cfg["timing"]["entry_window_end"].split(":")))
-    if dt.datetime.now().time() > window_end:
-        session.to(ST.State.NO_ENTRY, f"past {cfg['timing']['entry_window_end']}")
-        jr.write("entry_window_closed", **base)
-        return _out({**base, "status": "ENTRY_WINDOW_CLOSED",
-                     "note": f"it is past {cfg['timing']['entry_window_end']}; a first "
-                             "entry is only taken in the opening window, and the session "
-                             "parameters assume a full day of decay ahead of it"})
+    tm = cfg["timing"]
+    now_t = dt.datetime.now().time()
+    window_end = dt.time(*(int(x) for x in tm["entry_window_end"].split(":")))
+    cutoff = dt.time(*(int(x) for x in tm["no_new_entry_after"].split(":")))
+    late, late_mult = False, 1.0
+
+    if now_t > window_end:
+        if not tm.get("allow_late_entry", False):
+            session.to(ST.State.NO_ENTRY, f"past {tm['entry_window_end']}")
+            jr.write("entry_window_closed", **base)
+            return _out({**base, "status": "ENTRY_WINDOW_CLOSED",
+                         "note": f"it is past {tm['entry_window_end']}; a first entry is "
+                                 "only taken in the opening window, and the session "
+                                 "parameters assume a full day of decay ahead of it"})
+        if now_t > cutoff:
+            # no_new_entry_after is the config's own boundary for opening anything new. It
+            # is used here rather than a number invented for this path, because past it
+            # there is under three hours to force_exit — not enough for a decay trade to
+            # reach a target, but ample for it to reach a stop.
+            session.to(ST.State.NO_ENTRY, f"past {tm['no_new_entry_after']}")
+            jr.write("entry_window_closed", cutoff=tm["no_new_entry_after"], **base)
+            return _out({**base, "status": "ENTRY_WINDOW_CLOSED",
+                         "note": f"it is past {tm['no_new_entry_after']}, the last time a "
+                                 "new position may be opened; only "
+                                 f"{tm['force_exit']} remains and a decay trade cannot "
+                                 "reach its target in it, only its stop"})
+        late = True
+        late_mult = float(tm.get("late_entry_size_mult", 1.0))
+        # The target and stop are NOT touched. stop_to_target_ratio is [STRUCTURAL], and a
+        # late entry does not change what the trade is worth — it changes how much session
+        # is left to be right in. Size is the honest lever: less time, less on it.
+        jr.write("late_entry", entered_at=now_t.strftime("%H:%M"),
+                 window_end=tm["entry_window_end"], size_mult=late_mult, **base)
 
     # --- selection ----------------------------------------------------------------------
     session.to(ST.State.WAITING_ENTRY, "gates clear")
+    # und.index_token, NOT 256265. Hardcoding NIFTY's token here was correct while NIFTY
+    # was the only underlying and would have computed BANKNIFTY's and SENSEX's support and
+    # resistance off the wrong index entirely — silently, since the call still succeeds.
     hist = kite.kc.historical_data(
-        256265, today - dt.timedelta(days=int(cfg["levels"]["swing_lookback_days"]) * 2),
+        und.index_token,
+        today - dt.timedelta(days=int(cfg["levels"]["swing_lookback_days"]) * 2),
         today, "60minute")
     bars = [L.Bar(ts=r["date"], open=float(r["open"]), high=float(r["high"]),
                   low=float(r["low"]), close=float(r["close"])) for r in hist]
@@ -251,7 +306,8 @@ def main() -> int:
     if pair.call_wing and pair.put_wing:
         probe_legs += [{"symbol": pair.call_wing.symbol, "side": "BUY"},
                        {"symbol": pair.put_wing.symbol, "side": "BUY"}]
-    probe_units = Z.session_lots(cfg, params.size_mult) * int(ins["lot_size"])
+    size_mult = params.size_mult * late_mult
+    probe_units = Z.session_lots(cfg, size_mult) * int(ins["lot_size"])
     try:
         entry_cost = B.estimate_entry_cost(probe_legs, snap.as_rows(), cfg,
                                            units=probe_units,
@@ -270,7 +326,7 @@ def main() -> int:
                      "pair": pair.as_dict()})
 
     # --- sizing, from queried margin --------------------------------------------------
-    lots = Z.session_lots(cfg, params.size_mult)
+    lots = Z.session_lots(cfg, size_mult)
     legs = [(pair.call, "SELL"), (pair.put, "SELL")]
     if pair.call_wing and pair.put_wing:
         legs += [(pair.call_wing, "BUY"), (pair.put_wing, "BUY")]
@@ -278,13 +334,21 @@ def main() -> int:
     basket = [{"exchange": ins["exchange"], "tradingsymbol": c.symbol,
                "transaction_type": side, "variety": "regular", "product": "MIS",
                "order_type": "MARKET", "quantity": qty} for c, side in legs]
+    # What another instrument's live session is already holding. Without this the three
+    # configs each size to their allocation of the same account and nothing notices that
+    # the account has been promised out three times.
+    committed = ALLOC.committed_elsewhere(und.slug)
     try:
         margin = Z.query_margin(kite.kc, basket)
-        sized = Z.evaluate(cfg, lots=lots, margin_required=margin)
+        sized = Z.evaluate(cfg, lots=lots, margin_required=margin,
+                           committed_elsewhere=committed)
     except Z.SizingRefused as exc:
         session.to(ST.State.NO_ENTRY, str(exc))
-        jr.write("sizing_refused", error=str(exc), **base)
-        return _out({**base, "status": "SIZING_REFUSED", "reason": str(exc)})
+        jr.write("sizing_refused", error=str(exc), committed_elsewhere=committed, **base)
+        return _out({**base, "status": "SIZING_REFUSED", "reason": str(exc),
+                     "committed_elsewhere": round(committed),
+                     "live_elsewhere": sorted(ALLOC.live()) or None})
+    ALLOC.commit(und.slug, margin)
 
     # --- simulated entry ----------------------------------------------------------------
     by_symbol = {r["symbol"]: r for r in snap.rows}
@@ -321,6 +385,10 @@ def main() -> int:
 
     session.to(ST.State.MANAGING, "entered")
     entered = {"pair": pair.as_dict(), "sizing": sized.as_dict(),
+               "late_entry": ({"entered_at": now_t.strftime("%H:%M"),
+                               "window_end": tm["entry_window_end"],
+                               "size_mult": late_mult} if late else None),
+               "committed_elsewhere": round(committed),
                "entry_credit": round(credit),
                "entry_mark_points": round(entry_pnl_pts, 3),
                "entry_cost_headroom": headroom,
@@ -329,11 +397,12 @@ def main() -> int:
     jr.write("entered", fills=[f.as_dict() for f in fills], **entered, **base)
 
     if args.entry_only:
+        ALLOC.release(und.slug)
         return _out({**base, **entered, "status": "OK", "state": session.state.value,
                      "note": "entered and stopped; the management loop was not run"})
 
     # --- the management loop --------------------------------------------------------
-    if not _acquire_session_lock():
+    if not _acquire_session_lock(und.lock()):
         return _out({**base, **entered, "status": "ALREADY_RUNNING",
                      "note": "another strangle session process is live; refusing to run a "
                              "second. The scheduled job and the /options button cannot see "
@@ -356,7 +425,8 @@ def main() -> int:
                                   step=int(ins["strike_step"]), original_legs=originals,
                                   kill_switch=LIVE.KillSwitch.from_config(cfg))
     finally:
-        _release_session_lock()
+        _release_session_lock(und.lock())
+        ALLOC.release(und.slug)
 
     if result["flat"]:
         session.to(ST.State.EXITING, result.get("exit_reason") or "flat")

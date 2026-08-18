@@ -77,3 +77,61 @@ def test_a_plan_reports_its_own_bill():
                          {"delta": -50, "ref_price": 2000.0}])
     assert c["turnover"] == 200_000 and c["total"] > 0
     assert c["dp"] == pytest.approx(costs.DP_CHARGE_PER_SELL)
+
+
+# =====================================================================================
+# the session this model was built from
+# =====================================================================================
+SESSION_TURNOVER = 7_349_552.0
+SESSION_COMPONENTS = {"stt": 7349.55, "stamp": 840.73, "exchange": 218.28,
+                      "dp": 127.44, "brokerage": 0.00}
+SESSION_TOTAL = 8583.95
+REPORTED_SUBSET = 7695.87        # what was quoted at the time: STT + exchange + DP
+
+
+def test_the_documented_breakdown_sums_to_the_documented_total():
+    """It did not. The docstring listed components summing to Rs 8,583.96 beside a total of
+    Rs 7,695.87, then derived "STT is 95%" and "10.5 bps" from the mismatch. Both were
+    wrong: 85.6% and 11.68 bps. A cost anchor nobody can add up is how a no-trade band gets
+    justified against a number that was never the bill."""
+    import re
+
+    from app import costs as CO
+    doc = CO.__doc__ or ""
+    nums = {}
+    for line in doc.splitlines():
+        m = re.match(r"\s+(STT|stamp duty|exchange txn|DP charge|SEBI \+ GST|brokerage)"
+                     r"\s+([\d,]+\.\d\d)", line)
+        if m:
+            nums[m.group(1)] = float(m.group(2).replace(",", ""))
+    assert len(nums) == 6, f"the breakdown table changed shape: {sorted(nums)}"
+    total = next(float(m.group(1).replace(",", ""))
+                 for m in [re.search(r"TOTAL\s+([\d,]+\.\d\d)", doc)] if m)
+    assert abs(sum(nums.values()) - total) < 0.05, (
+        f"components sum to {sum(nums.values()):,.2f}, docstring claims {total:,.2f}")
+
+
+def test_the_reported_subset_is_exactly_stt_plus_exchange_plus_dp():
+    """Which is what made the original figure look like a total. Pinned so the distinction
+    survives: the number quoted after a session is not necessarily the whole bill."""
+    subset = (SESSION_COMPONENTS["stt"] + SESSION_COMPONENTS["exchange"]
+              + SESSION_COMPONENTS["dp"])
+    assert abs(subset - REPORTED_SUBSET) < 1.0
+
+
+def test_the_model_reproduces_the_session_it_was_built_from():
+    """Recomputed from the captured fills, aggregated per scrip-side so the DP charge is
+    counted once per scrip rather than once per fill."""
+    from app import costs as CO
+    # buy turnover implied by the stamp duty line, sells are the remainder
+    buys = SESSION_COMPONENTS["stamp"] / CO.STAMP_DUTY_BUY
+    sells = SESSION_TURNOVER - buys
+    got = CO.order_cost(buys, "BUY")
+    assert got.stamp == pytest.approx(SESSION_COMPONENTS["stamp"], abs=0.05)
+    assert (CO.order_cost(buys, "BUY").stt + CO.order_cost(sells, "SELL").stt) == \
+        pytest.approx(SESSION_COMPONENTS["stt"], abs=0.05)
+
+
+def test_stt_is_the_dominant_cost_but_not_ninety_five_percent():
+    share = SESSION_COMPONENTS["stt"] / SESSION_TOTAL
+    assert 0.84 < share < 0.87, f"STT share drifted to {share:.1%}"

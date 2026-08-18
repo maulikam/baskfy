@@ -137,9 +137,15 @@ def evaluate(cfg: dict, *, lots: int, margin_required: float,
 
     tail = width * units if hedged else float("inf")
     tail_pct = tail / float(cfg["capital"]["total"]) if hedged else float("inf")
-    binding = ("account" if committed_elsewhere and
-               cap.usable * port_max - committed_elsewhere < cap.usable * max_util
-               else "margin") if by_margin <= by_tail else "tail"
+    # Which cap the operator is actually up against. "over the cap" is not actionable when
+    # there are three of them and only one is about this instrument.
+    if by_margin > by_tail:
+        binding = "tail"
+    elif committed_elsewhere and (cap.usable * port_max - committed_elsewhere
+                                  < cap.usable * max_util):
+        binding = "account"
+    else:
+        binding = "margin"
 
     decision = SizingDecision(
         lots=lots, units=units, margin_required=margin_required, margin_per_lot=per_lot,

@@ -324,3 +324,160 @@ def test_configured_lots_fit_the_instrument_s_own_allocation():
         allowed = usable * cfg["margin"]["max_utilisation_pct"]
         need = cfg["sizing"]["lots"] * cfg["margin"]["margin_per_lot_estimate"]
         assert need <= allowed, f"{slug}: needs {need:,.0f}, allowed {allowed:,.0f}"
+
+
+# =====================================================================================
+# defects found reviewing the multi-instrument change itself
+# =====================================================================================
+def test_market_facts_uses_the_config_s_weekday_when_it_builds_its_own_calendar():
+    """assert_market_facts built a TUESDAY calendar whenever no calendar was passed. For
+    SENSEX that did not fail — which is worse. It PASSED, by inferring that the Tuesday
+    after each Thursday expiry was a holiday, and reported an ordinary expiry as 'shifted
+    back from 2026-08-25, a holiday'. Six real trading days were marked shut, so every dte
+    derived from that calendar was short by however many fell inside the window."""
+    from app.strategies.strangle import config as SC
+    cfg = yaml.safe_load(open(INS.get("sensex").config))
+    ins = [{"name": "SENSEX", "segment": "BFO-OPT", "lot_size": 20, "strike": k * 100.0,
+            "expiry": exp, "instrument_type": t}
+           for exp in (dt.date(2026, 8, 20), dt.date(2026, 8, 27))
+           for k in range(770, 790) for t in ("CE", "PE")]
+
+    facts = SC.assert_market_facts(cfg, ins, today=dt.date(2026, 8, 18))
+    assert facts["expiry"] == dt.date(2026, 8, 20)
+    assert facts["expiry_note"] == "on the expected weekday"
+    assert facts["calendar"]["holidays"] == 0, "phantom holidays were invented"
+    assert dt.date(2026, 8, 25) not in facts["calendar"]["known_future_holidays"]
+
+
+def test_sessions_per_cycle_still_counts_four_when_no_max_dte_is_set():
+    """Introducing max_dte quietly changed the default from 4 to 3, cutting every
+    expectancy estimate by a quarter for any config predating it."""
+    assert C.tradeable_sessions_per_week({"session": {"allow_expiry_day": False}}) == 4
+    assert C.tradeable_sessions_per_week({"session": {"allow_expiry_day": True}}) == 5
+
+
+# --- the entry window rule has exactly one definition ---------------------------------
+def _win_cfg(late=True, mult=0.75):
+    return {"timing": {"entry_window_end": "09:45", "no_new_entry_after": "12:30",
+                       "force_exit": "15:10", "allow_late_entry": late,
+                       "late_entry_size_mult": mult}}
+
+
+def test_the_entry_window_states_are_open_late_then_closed():
+    import scripts.strangle as R
+    assert R._entry_window_state(_win_cfg(), dt.time(9, 30))["state"] == "open"
+    late = R._entry_window_state(_win_cfg(), dt.time(10, 30))
+    assert late["state"] == "late" and late["veto"] is None
+    assert late["size_mult"] == 0.75
+    assert R._entry_window_state(_win_cfg(), dt.time(13, 0))["state"] == "closed"
+
+
+def test_late_entry_disabled_closes_the_window_at_the_configured_time():
+    import scripts.strangle as R
+    shut = R._entry_window_state(_win_cfg(late=False), dt.time(10, 30))
+    assert shut["state"] == "closed" and "late entry is disabled" in shut["veto"]
+
+
+def test_an_open_window_never_reduces_size():
+    import scripts.strangle as R
+    assert R._entry_window_state(_win_cfg(), dt.time(9, 15))["size_mult"] == 1.0
+
+
+def test_check_and_the_runner_cannot_disagree_about_the_window():
+    """--check claims to list every veto standing between now and an entry. It returned
+    before the window was evaluated, so it reported would_trade on a day the runner
+    refuses on the clock alone. Both now read one helper; a second copy of the rule is the
+    defect this guards."""
+    tree = ast.parse(pathlib.Path("scripts/strangle.py").read_text())
+    calls = sum(1 for n in ast.walk(tree)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                and n.func.id == "_entry_window_state")
+    assert calls == 2, "check and runner must each call the one helper, and nothing else"
+
+    # and the rule itself is parsed in exactly one place: two functions each splitting
+    # "09:45" on a colon is how they drift apart.
+    fn = next(n for n in tree.body
+              if isinstance(n, ast.FunctionDef) and n.name == "_entry_window_state")
+    splitters = [n for n in ast.walk(tree)
+                 if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                 and n.func.attr == "split"
+                 and any(isinstance(a, ast.Constant) and a.value == ":" for a in n.args)]
+    inside = [n for n in ast.walk(fn) if n in splitters]
+    assert len(splitters) == len(inside) + 1, (
+        "a time string is being parsed outside the helper AND outside force_exit")
+
+
+def test_a_margin_claim_is_released_however_the_runner_exits():
+    """The claim was made after sizing and released only on the two paths that reach the
+    management loop. NO_DEPTH and ALREADY_RUNNING returned holding it. A dead process's
+    claim is already invisible to allocation.live(), so this never stranded capital — but
+    every new early return would have leaked again, which is why it is registered rather
+    than remembered."""
+    tree = ast.parse(pathlib.Path("scripts/strangle.py").read_text())
+    registered = [n for n in ast.walk(tree)
+                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                  and n.func.attr == "register"
+                  and getattr(n.func.value, "id", "") == "atexit"]
+    assert registered, "nothing guarantees the margin claim is given back"
+
+
+# --- the ops badge --------------------------------------------------------------------
+def test_last_run_selects_the_id_its_link_needs():
+    """The badge links to /ops/job/<id>. id was never selected, so Jinja resolved it to
+    Undefined, the {% if %} guarding the link never fired, and the output link silently did
+    not exist on the options page."""
+    from app.analytics import db, ops
+    with db.connect() as conn:
+        rows = ops.last_run(conn)
+    if rows:
+        assert "id" in next(iter(rows.values()))
+
+
+def test_a_run_is_attributed_to_the_instrument_it_was_given():
+    from app.analytics import ops
+    argv = '["py", "-m", "scripts.strangle", "--instrument", "sensex", "--collect"]'
+    assert ops.argv_instrument(argv) == "sensex"
+    assert ops.argv_instrument('["py", "-m", "scripts.daily"]') is None
+    assert ops.argv_instrument(None) is None
+    assert ops.argv_instrument("{not json") is None
+    assert ops.argv_instrument('["py", "--instrument"]') is None       # no value follows
+
+
+# --- the page speaks for every instrument, not the first one --------------------------
+def test_the_next_action_is_computed_across_every_instrument():
+    """The banner and the highlighted button read p.strangle, which is NIFTY. It would
+    have kept saying 'collect' once NIFTY was calibrated and the other two were not."""
+    from app.analytics import options_view as V
+    blocks = [
+        {"available": True, "label": "NIFTY", "bands_ready": {"ready": True},
+         "next_action": {"op": "strangle_session", "label": "Run a paper session",
+                         "why": "0 of 60"}},
+        {"available": True, "label": "BANKNIFTY", "bands_ready": {"ready": False},
+         "next_action": {"op": "strangle_collect", "label": "Record today's straddle",
+                         "why": "no bands"}},
+        {"available": True, "label": "SENSEX", "bands_ready": {"ready": False},
+         "next_action": {"op": "strangle_collect", "label": "Record today's straddle",
+                         "why": "no bands"}},
+    ]
+    nx = V._next_overall(blocks)
+    assert nx["op"] == "strangle_collect"            # what two of three are blocked on
+    assert nx["instruments"] == ["BANKNIFTY", "SENSEX"]
+    assert nx["ready"] is False
+
+
+def test_the_page_survives_one_unreadable_config():
+    """The whole section was gated on NIFTY being loadable, so a typo in one file hid all
+    three instruments and every control with them."""
+    from app.analytics import options_view as V
+    nx = V._next_overall([
+        {"available": False, "label": "NIFTY", "error": "bad yaml"},
+        {"available": True, "label": "SENSEX", "bands_ready": {"ready": False},
+         "next_action": {"op": "strangle_collect", "label": "Record", "why": "no bands"}},
+    ])
+    assert nx["op"] == "strangle_collect" and nx["instruments"] == ["SENSEX"]
+
+
+def test_no_instrument_configured_is_reported_rather_than_crashing():
+    from app.analytics import options_view as V
+    nx = V._next_overall([])
+    assert nx["op"] is None and nx["instruments"] == []

@@ -20,6 +20,7 @@ so the bands build up while nothing is at risk. Run it daily until the report sa
 from __future__ import annotations
 
 import argparse
+import atexit
 import datetime as dt
 import json
 import os
@@ -85,6 +86,32 @@ def _release_session_lock(path: str = SESSION_LOCK) -> None:
         pathlib.Path(path).unlink()
     except OSError:
         pass
+
+
+def _entry_window_state(cfg: dict, now_t: dt.time) -> dict:
+    """Whether a FIRST entry may still be opened, and at what size.
+
+    Extracted so --check and the runner cannot drift: a check that reported a tradeable day
+    while the runner refused it on the clock would be worse than no check at all.
+    """
+    tm = cfg["timing"]
+    end = dt.time(*(int(x) for x in tm["entry_window_end"].split(":")))
+    cutoff = dt.time(*(int(x) for x in tm["no_new_entry_after"].split(":")))
+    late_ok = bool(tm.get("allow_late_entry", False))
+    mult = float(tm.get("late_entry_size_mult", 1.0)) if late_ok else 1.0
+
+    if now_t <= end:
+        return {"state": "open", "veto": None, "size_mult": 1.0,
+                "closes": tm["entry_window_end"]}
+    if not late_ok:
+        return {"state": "closed", "size_mult": 0.0,
+                "veto": f"past {tm['entry_window_end']} and late entry is disabled"}
+    if now_t > cutoff:
+        return {"state": "closed", "size_mult": 0.0,
+                "veto": f"past {tm['no_new_entry_after']}, the last time a new position "
+                        "may be opened"}
+    return {"state": "late", "veto": None, "size_mult": mult,
+            "closes": tm["no_new_entry_after"]}
 
 
 def _out(payload: dict) -> int:
@@ -221,8 +248,14 @@ def main() -> int:
         vetoes.insert(0, params.reason)
 
     if args.check:
+        # The entry window is evaluated below, after this return, so --check would have
+        # reported "would_trade" on a day the runner refuses on the clock alone. It claims
+        # to list every veto standing between now and an entry; the window is one.
+        win = _entry_window_state(cfg, dt.datetime.now().time())
         return _out({**base, "status": "OK", "market_facts": facts,
-                     "vetoes": vetoes, "would_trade": not vetoes,
+                     "vetoes": vetoes + ([win["veto"]] if win["veto"] else []),
+                     "would_trade": not vetoes and not win["veto"],
+                     "entry_window": win,
                      "forward_sessions": len(forward),
                      "band_source": "config" if cfg.get("reference_band") else
                                     ("forward_record" if forward else "none")})
@@ -240,32 +273,16 @@ def main() -> int:
     # two thirds of the session's decay already gone and the day's range already set.
     tm = cfg["timing"]
     now_t = dt.datetime.now().time()
-    window_end = dt.time(*(int(x) for x in tm["entry_window_end"].split(":")))
-    cutoff = dt.time(*(int(x) for x in tm["no_new_entry_after"].split(":")))
-    late, late_mult = False, 1.0
-
-    if now_t > window_end:
-        if not tm.get("allow_late_entry", False):
-            session.to(ST.State.NO_ENTRY, f"past {tm['entry_window_end']}")
-            jr.write("entry_window_closed", **base)
-            return _out({**base, "status": "ENTRY_WINDOW_CLOSED",
-                         "note": f"it is past {tm['entry_window_end']}; a first entry is "
-                                 "only taken in the opening window, and the session "
-                                 "parameters assume a full day of decay ahead of it"})
-        if now_t > cutoff:
-            # no_new_entry_after is the config's own boundary for opening anything new. It
-            # is used here rather than a number invented for this path, because past it
-            # there is under three hours to force_exit — not enough for a decay trade to
-            # reach a target, but ample for it to reach a stop.
-            session.to(ST.State.NO_ENTRY, f"past {tm['no_new_entry_after']}")
-            jr.write("entry_window_closed", cutoff=tm["no_new_entry_after"], **base)
-            return _out({**base, "status": "ENTRY_WINDOW_CLOSED",
-                         "note": f"it is past {tm['no_new_entry_after']}, the last time a "
-                                 "new position may be opened; only "
-                                 f"{tm['force_exit']} remains and a decay trade cannot "
-                                 "reach its target in it, only its stop"})
-        late = True
-        late_mult = float(tm.get("late_entry_size_mult", 1.0))
+    win = _entry_window_state(cfg, now_t)
+    if win["veto"]:
+        session.to(ST.State.NO_ENTRY, win["veto"])
+        jr.write("entry_window_closed", reason=win["veto"], **base)
+        return _out({**base, "status": "ENTRY_WINDOW_CLOSED", "entry_window": win,
+                     "note": f"{win['veto']}; only {tm['force_exit']} remains and a decay "
+                             "trade cannot reach its target in it, only its stop"})
+    late = win["state"] == "late"
+    late_mult = float(win["size_mult"])
+    if late:
         # The target and stop are NOT touched. stop_to_target_ratio is [STRUCTURAL], and a
         # late entry does not change what the trade is worth — it changes how much session
         # is left to be right in. Size is the honest lever: less time, less on it.
@@ -349,6 +366,12 @@ def main() -> int:
                      "committed_elsewhere": round(committed),
                      "live_elsewhere": sorted(ALLOC.live()) or None})
     ALLOC.commit(und.slug, margin)
+    # Registered at the moment the claim is made, so no exit path can outlive it — not the
+    # NO_DEPTH return below, not an exception, and not one added here later. The explicit
+    # releases further down still matter: they free the capital for another instrument at
+    # the moment the position is actually gone, rather than at interpreter exit. A hard
+    # kill is covered separately by the pid liveness check in allocation.live().
+    atexit.register(ALLOC.release, und.slug)
 
     # --- simulated entry ----------------------------------------------------------------
     by_symbol = {r["symbol"]: r for r in snap.rows}
@@ -359,6 +382,7 @@ def main() -> int:
     except F.DepthUnavailable as exc:
         session.to(ST.State.NO_ENTRY, str(exc))
         jr.write("depth_unavailable", error=str(exc), **base)
+        ALLOC.release(und.slug)
         return _out({**base, "status": "NO_DEPTH", "reason": str(exc)})
 
     bk = B.Book(units_at_entry=qty, stop_points=params.stop_points,
@@ -403,6 +427,7 @@ def main() -> int:
 
     # --- the management loop --------------------------------------------------------
     if not _acquire_session_lock(und.lock()):
+        ALLOC.release(und.slug)
         return _out({**base, **entered, "status": "ALREADY_RUNNING",
                      "note": "another strangle session process is live; refusing to run a "
                              "second. The scheduled job and the /options button cannot see "

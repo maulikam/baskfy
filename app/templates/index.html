@@ -403,34 +403,21 @@ function renderReport(j){
       <a href="/tradebook">Tradebook</a>.</span>`:''}</span>`;
 
   // --- stop coverage -------------------------------------------------------------------
-  // Highest-consequence residue: a new position that got filled and never got a stop.
-  // Expected count comes from the plan, so a stop that was never even attempted is
-  // counted as missing rather than quietly omitted from the denominator.
+  // Nothing is armed here any more. Sizing a trigger from a planned quantity, before the
+  // fills are known, is what left the book with 10,383 shares of GTT against 9,478 held.
+  // The panel's job is now to make the outstanding step impossible to forget.
   const s=document.getElementById('repStops');
-  // An untouchable instrument is not unprotected — it is deliberately never traded, and
-  // place_gtt_stop's own guard would refuse it. Leaving it in this list would demand an
-  // action that cannot be performed. It is still reported below, with the true remedy.
-  // Mirrors analytics/protection.py, which excludes the same names from its denominator.
-  const untouchable=new Set(orders.filter(o=>o.status==='BLOCKED').map(o=>o.symbol));
-  const expected=(PLAN?.orders||[]).filter(o=>o.qty_final>0&&o.stop)
-    .map(o=>o.symbol).filter(sym=>!untouchable.has(sym));
-  const armed=gtt.filter(g=>STOP_OK.has(g.status)).map(g=>g.symbol);
-  const missing=expected.filter(sym=>!armed.includes(sym));
-  if(!expected.length){ s.innerHTML=''; }
-  else if(missing.length){
-    s.innerHTML=`<div class="collect bad" style="margin-top:14px">
-      <span class="tag">${missing.length} unprotected</span>
-      <span>${armed.length} of ${expected.length} stops armed.
-        <b>${missing.map(esc).join(', ')}</b> ${missing.length===1?'has':'have'} no working
-        stop. <a href="/stops">Review and arm stops</a> — nothing is placed without a
-        second confirmation.</span></div>`;
-  } else {
-    s.innerHTML=`<div class="collect ok" style="margin-top:14px">
-      <span class="tag">stops armed</span>
-      <span class="muted">${expected.length===1?'The one position in this plan carries'
-        :'All '+expected.length+' positions in this plan carry'} a
-        stop${j.dry_run?' (simulated)':''}.</span></div>`;
-  }
+  const bought=orders.filter(o=>read(o).kind==='ok'
+                             && (o.action==='BUY'||o.action==='ADD')).length;
+  s.innerHTML=j.stops_pending===false ? '' : `<div class="collect warn" style="margin-top:14px">
+      <span class="tag">stops not armed</span>
+      <span>${bought?`${bought} position${bought===1?'':'s'} opened or added by this run
+        ${bought===1?'is':'are'} `:'The book is '}<b>not yet protected</b>.
+        <a href="/stops">Arm stops</a> once the fills settle — sizing them here would use
+        the quantities this plan intended, not the ones that actually filled, and a trigger
+        for more shares than you hold sells what you do not own.
+        <span class="muted" style="display:block;margin-top:5px">${esc(j.stops_note||'')}</span>
+      </span></div>`;
 
   // --- exceptions ----------------------------------------------------------------------
   // Grouped by cause, not listed per order: the remedy belongs to the cause and repeating

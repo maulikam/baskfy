@@ -216,3 +216,79 @@ def test_every_plan_gets_its_own_id():
 
 def test_a_zero_price_position_is_skipped_rather_than_priced_at_zero():
     assert P.build_stop_plan([hold("AAA", 100, 0.0)], [])["count"] == 0
+
+
+# =====================================================================================
+# EXCESS — the short-delivery risk, added 18 Aug 2026
+# =====================================================================================
+def gtt_for(sym, qty, trigger=90.0, gid=1):
+    return {"id": gid, "status": "active",
+            "condition": {"tradingsymbol": sym, "trigger_values": [trigger]},
+            "orders": [{"tradingsymbol": sym, "quantity": qty,
+                        "transaction_type": "SELL"}]}
+
+
+def test_a_stop_covering_more_than_is_held_is_flagged():
+    """The failure this was added for: stops armed from PLANNED quantities before the
+    orders filled left 10,383 shares of GTT against 9,478 held. Firing sells shares you do
+    not own, which is short delivery and an auction penalty."""
+    from app.analytics import protection as P
+    rev = P.review([{"symbol": "SONACOMS", "quantity": 342, "last_price": 800.0}],
+                   [gtt_for("SONACOMS", 861)])
+    kinds = {f["kind"] for f in rev["findings"]}
+    assert P.EXCESS in kinds
+    ex = next(f for f in rev["findings"] if f["kind"] == P.EXCESS)
+    assert ex["covered"] == 861 and ex["qty"] == 342
+    assert "519 you do not own" in ex["detail"]
+
+
+def test_excess_outranks_everything_but_a_missing_stop():
+    """An uncovered position loses money on a fall; an over-covered one sells shares that
+    do not exist. Only having no stop at all is worse."""
+    from app.analytics import protection as P
+    assert P.SEVERITY[P.MISSING] < P.SEVERITY[P.EXCESS] < P.SEVERITY[P.PARTIAL]
+
+
+def test_an_exact_cover_is_not_flagged():
+    from app.analytics import protection as P
+    rev = P.review([{"symbol": "TITAN", "quantity": 100, "last_price": 3000.0}],
+                   [gtt_for("TITAN", 100, trigger=2700.0)])
+    assert not [f for f in rev["findings"] if f["kind"] == P.EXCESS]
+
+
+def test_an_excess_position_is_cancelled_then_re_armed_for_what_is_held():
+    """Adding another trigger cannot fix over-coverage, so the plan cancels every trigger
+    on the symbol and arms ONE for the quantity actually held."""
+    from app.analytics import protection as P
+    plan = P.build_stop_plan(
+        [{"symbol": "SONACOMS", "quantity": 342, "last_price": 800.0}],
+        [gtt_for("SONACOMS", 861, gid=111), gtt_for("SONACOMS", 400, gid=222)])
+    assert {c["gtt_id"] for c in plan["cancels"]} == {111, 222}
+    row = next(r for r in plan["rows"] if r["symbol"] == "SONACOMS")
+    assert row["qty"] == 342, "re-arm must cover the held quantity, not a remainder"
+
+
+def test_an_orphan_trigger_is_cancelled():
+    from app.analytics import protection as P
+    plan = P.build_stop_plan([], [gtt_for("PARAS", 438, gid=999)])
+    assert [c["gtt_id"] for c in plan["cancels"]] == [999]
+    assert plan["rows"] == []
+
+
+def test_a_partial_cover_still_only_tops_up_the_uncovered_shares():
+    """Unchanged behaviour: arming for the full quantity would double up on shares already
+    protected, which is how an under-cover becomes an over-cover."""
+    from app.analytics import protection as P
+    plan = P.build_stop_plan(
+        [{"symbol": "TITAN", "quantity": 100, "last_price": 3000.0}],
+        [gtt_for("TITAN", 40, trigger=2700.0)])
+    assert next(r for r in plan["rows"] if r["symbol"] == "TITAN")["qty"] == 60
+    assert plan["cancels"] == []
+
+
+def test_protection_still_cannot_place_or_cancel_anything():
+    """It proposes; main.py acts. The module stays read-only so a review can never have a
+    side effect."""
+    src = open("app/analytics/protection.py").read()
+    for token in ("place_gtt", "delete_gtt", "modify_gtt", "place_order"):
+        assert token not in src, token

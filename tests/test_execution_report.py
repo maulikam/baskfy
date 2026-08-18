@@ -98,13 +98,25 @@ def test_the_report_says_submitted_is_not_filled():
     assert "Submitted is not filled" in template()
 
 
-def test_an_untouchable_instrument_is_not_reported_as_unprotected():
-    """analytics/protection.py:56 — an untouchable instrument is deliberately never traded,
-    and place_gtt_stop's guard would refuse it. Listing it under 'arm a stop' would demand
-    an action that cannot be performed."""
+def test_the_report_directs_stops_to_the_page_that_sizes_them_from_holdings():
+    """The report no longer computes coverage at all, because /execute no longer arms
+    anything: at that instant the fills are unknown and any quantity it used would be the
+    plan's intention rather than the position. The untouchable-instrument exclusion moved
+    with it, into protection.py, which has always filtered on _protected()."""
     src = template()
-    assert "const untouchable=new Set(" in src
-    assert "filter(sym=>!untouchable.has(sym))" in src
+    assert "stops not armed" in src
+    assert 'href="/stops"' in src
+    assert "sells what you do not own" in src
+
+
+def test_an_untouchable_instrument_is_still_excluded_where_stops_are_now_sized():
+    """analytics/protection.py — an untouchable instrument is deliberately never traded and
+    place_gtt_stop's guard would refuse it, so it must not appear in a stop plan."""
+    from app.analytics import protection as P
+    plan = P.build_stop_plan(
+        [{"symbol": "SGBDE31III", "quantity": 100, "last_price": 5000.0},
+         {"symbol": "TITAN", "quantity": 10, "last_price": 3000.0}], [])
+    assert {r["symbol"] for r in plan["rows"]} == {"TITAN"}
 
 
 # =====================================================================================

@@ -179,12 +179,33 @@ def test_protected_instrument_is_blocked_without_aborting_the_batch(client, monk
     assert {o["tradingsymbol"] for o in fake.kc.orders} == {"DIXON", "POLYCAB"}
 
 
-def test_gtt_stops_are_placed_after_orders(client, monkeypatch):
+def test_execute_does_not_arm_stops_any_more(client, monkeypatch):
+    """CHANGED DELIBERATELY on 18 Aug 2026. This route used to arm a GTT per order for its
+    qty_final, immediately after submitting the batch and therefore before any fill was
+    known. Every trigger was sized to the PLANNED position: the book ended the day carrying
+    10,383 shares of GTT against 9,478 held, with a 438-share stop on a PARAS position that
+    had not filled a single share.
+
+    An over-covered trigger sells shares you do not own when it fires. Arming moved to
+    /stops, which sizes from the broker's holdings and can cancel wrong triggers too.
+    """
     c, fake = client
     monkeypatch.setattr(C, "DRY_RUN", True)
     pid = seed(orders=[order("DIXON", -10, qty_final=10, stop=90.0)])
     body = post(c, pid, stops="true").json()
-    assert body["gtt"] and body["gtt"][0]["status"] == "DRY_RUN_GTT"
+    assert body["gtt"] == []
+    assert body["stops_pending"] is True
+    assert "fills" in body["stops_note"]
+
+
+def test_asking_for_stops_no_longer_places_them(client, monkeypatch):
+    """place_stops=true is honoured as 'yes, protect this' — by telling you where, not by
+    arming the wrong quantity. A silent no-op would be worse than either."""
+    c, fake = client
+    monkeypatch.setattr(C, "DRY_RUN", False)
+    pid = seed(orders=[order("DIXON", -10, qty_final=10, stop=90.0)])
+    body = post(c, pid, stops="true").json()
+    assert body["gtt"] == [] and body["stops_pending"] is True
 
 
 # =====================================================================================

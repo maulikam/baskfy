@@ -33,7 +33,13 @@ PARTIAL = "partial"          # a stop, but for fewer shares than are held
 TOO_FAR = "too_far"          # further below than the configured band allows
 TOO_CLOSE = "too_close"      # tight enough to be noise-triggered
 ORPHAN = "orphan"            # a trigger with no matching holding
-SEVERITY = {MISSING: 0, PARTIAL: 1, ORPHAN: 2, TOO_FAR: 3, TOO_CLOSE: 4}
+EXCESS = "excess"            # triggers covering MORE shares than are held
+# EXCESS outranks everything except a missing stop. An uncovered position loses money if
+# the market falls; an over-covered one sells shares you do not own when it fires, which is
+# short delivery and an auction penalty. On 18 Aug 2026 the book carried 10,383 shares of
+# GTT against 9,478 held, because stops were armed from planned quantities before the
+# orders had filled.
+SEVERITY = {MISSING: 0, EXCESS: 1, PARTIAL: 2, ORPHAN: 3, TOO_FAR: 4, TOO_CLOSE: 5}
 
 ACTIVE = "active"
 
@@ -97,6 +103,13 @@ def review(holdings: Iterable[Mapping], gtts: Iterable[Mapping]) -> dict:
                 "kind": PARTIAL, "symbol": sym, "qty": qty, "covered": covered,
                 "value": round((qty - covered) * px),
                 "detail": f"stop covers {covered} of {qty} shares"})
+        elif covered > qty:
+            findings.append({
+                "kind": EXCESS, "symbol": sym, "qty": qty, "covered": covered,
+                "gtt_ids": [g.get("id") for g in rows],
+                "value": round((covered - qty) * px),
+                "detail": f"stops cover {covered} shares but only {qty} are held; firing "
+                          f"would sell {covered - qty} you do not own"})
 
         if best and px > 0:
             drop = (1 - best / px)
@@ -117,7 +130,7 @@ def review(holdings: Iterable[Mapping], gtts: Iterable[Mapping]) -> dict:
         if sym not in held:
             findings.append({
                 "kind": ORPHAN, "symbol": sym, "qty": sum(_qty(g) for g in rows),
-                "value": 0,
+                "gtt_ids": [g.get("id") for g in rows], "value": 0,
                 "detail": "active trigger with no matching holding"})
 
     findings.sort(key=lambda f: (SEVERITY.get(f["kind"], 9), -f.get("value", 0)))
@@ -166,14 +179,20 @@ DEFAULT_VOL = 0.36
 def build_stop_plan(holdings: Iterable[Mapping], gtts: Iterable[Mapping], *,
                     vol_by_symbol: Mapping[str, float] | None = None,
                     plan_id: str | None = None) -> dict:
-    """Propose a stop for every position that lacks working cover.
+    """Propose stops to arm, and triggers to cancel.
 
-    Only MISSING and PARTIAL positions are proposed for. A stop that merely sits outside
-    the band is left alone: replacing it means cancelling a live trigger, which is a
-    different and riskier action than arming one where there is none.
+    MISSING and PARTIAL are proposed for. A stop that merely sits outside the band is left
+    alone: replacing it means cancelling a live trigger, which is a different and riskier
+    action than arming one where there is none.
 
     For a partially covered position the proposal is for the UNCOVERED shares only, so
     arming it cannot double up on quantity already protected.
+
+    EXCESS AND ORPHAN PRODUCE CANCELS, because they cannot be fixed by adding. A stop
+    covering more shares than are held sells what you do not own when it fires, and no
+    additional trigger makes that better. For EXCESS the remedy is to cancel every trigger
+    on that symbol and arm one for the quantity actually held; the cancel comes first so
+    the two can never both be live.
 
     Pure. Takes prices and volatilities as data and returns a plan; it does not read the
     broker and it cannot place anything.
@@ -186,15 +205,26 @@ def build_stop_plan(holdings: Iterable[Mapping], gtts: Iterable[Mapping], *,
     rev = review(holdings, gtts)
     held = {h["symbol"]: h for h in holdings}
 
+    cancels = []
+    for f in rev["findings"]:
+        if f["kind"] not in (EXCESS, ORPHAN):
+            continue
+        for gid in (f.get("gtt_ids") or []):
+            cancels.append({"symbol": f["symbol"], "gtt_id": gid, "reason": f["kind"],
+                            "detail": f["detail"]})
+
     rows = []
     for f in rev["findings"]:
-        if f["kind"] not in (MISSING, PARTIAL):
+        if f["kind"] not in (MISSING, PARTIAL, EXCESS):
             continue
         h = held.get(f["symbol"])
         if not h:
             continue
         px = float(h.get("last_price") or 0.0)
-        qty = int(f["qty"]) - int(f.get("covered") or 0)
+        # EXCESS re-arms the FULL held quantity, because every existing trigger on that
+        # symbol is being cancelled. PARTIAL tops up only the uncovered shares.
+        qty = (int(f["qty"]) if f["kind"] == EXCESS
+               else int(f["qty"]) - int(f.get("covered") or 0))
         if qty <= 0 or px <= 0:
             continue
         vol = vols.get(f["symbol"])
@@ -214,7 +244,11 @@ def build_stop_plan(holdings: Iterable[Mapping], gtts: Iterable[Mapping], *,
     return {
         "plan_id": plan_id or uuid.uuid4().hex[:12],
         "rows": rows,
+        # Executed BEFORE the arms, so an over-covered symbol is never briefly protected
+        # twice. Cancelling is the risk-reducing half of the operation.
+        "cancels": cancels,
         "count": len(rows),
+        "cancel_count": len(cancels),
         "value": sum(r["value"] for r in rows),
         "at_risk": sum(r["at_risk"] for r in rows),
         "using_default_vol": [r["symbol"] for r in rows if r["vol_source"] == "default"],

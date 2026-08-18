@@ -23,7 +23,7 @@ from typing import Iterator, Sequence
 
 from .. import config as C
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 # --- schema ---------------------------------------------------------------------------
 # Column sets are fixed by the analytics spec; extra *indexes* are fine, extra columns are
@@ -469,6 +469,13 @@ _MIGRATIONS: dict[int, Sequence[str]] = {
         # The underlying, for the same reason. Its token is stable and well known, but a
         # row that carries its own spot source needs no outside knowledge to be replayed.
         """ALTER TABLE option_arms ADD COLUMN underlying_token INTEGER""",
+    ),
+    13: (
+        # The broker's order id, so a submitted order can be reconciled against the order
+        # book later. Without it the only join is the symbol, which breaks the moment a
+        # plan touches the same symbol twice.
+        """ALTER TABLE rebalance_orders ADD COLUMN order_id TEXT""",
+        """ALTER TABLE rebalance_orders ADD COLUMN reconciled_at TEXT""",
     ),
 }
 

@@ -160,6 +160,7 @@
     <a href="/regime/backtest">Backtest</a>
     <a href="/tradebook">Tradebook</a>
     <a href="/stops">Stops</a>
+    <a href="/reconcile">Reconcile</a>
     <a href="/options">Options</a>
     <a href="/ops">Operations</a>
     <a href="/settings">Settings</a>
@@ -358,6 +359,11 @@ const ORDER_STATUS={
                 fix:'Nothing was sent, and a retry will not change that — a guard refuses '
                    +'by policy, not by circumstance. The reason beside each symbol says '
                    +'which one.'},
+  ABORTED:     {kind:'bad',  title:'not attempted — batch stopped',
+                fix:'Three orders in a row failed with the same message, so the rest were '
+                   +'not sent. A systemic refusal does not become less systemic on the '
+                   +'fourth attempt. Fix the cause, then re-run Analyze — nothing below '
+                   +'this point reached the exchange.'},
   ERROR:       {kind:'bad',  title:'rejected',
                 fix:'The call failed, so the exchange status is UNKNOWN — an order may '
                    +'still have been accepted. Check the Kite order book before you '

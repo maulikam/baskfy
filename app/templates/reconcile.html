@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Momentum Desk — Reconcile</title>
+<style>
+  :root{
+    --ink:#0b1220; --panel:#111a2e; --panel-2:#0d1626; --line:#22304d; --paper:#e8edf7;
+    --dim:#8593ad; --saffron:#f2a33c; --up:#3ddc97; --down:#ff6b6b; --orange:#ff9f43;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+    --disp:"Archivo",system-ui,sans-serif;
+    --s2:8px; --s3:14px; --s4:22px;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:13.5px;
+       line-height:1.5;min-height:100vh;padding:26px 3.5vw 90px}
+  header{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;
+         gap:var(--s3);border-bottom:2px solid var(--saffron);padding-bottom:12px;
+         margin-bottom:var(--s4)}
+  h1{font-family:var(--disp);font-weight:900;font-size:clamp(21px,3vw,31px);letter-spacing:-.02em}
+  h1 em{color:var(--saffron);font-style:normal}
+  a{color:var(--saffron)}
+  .nav{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+  .nav a{font-family:var(--disp);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+         color:var(--dim);text-decoration:none;padding:6px 13px;border-radius:7px;
+         border:1px solid transparent;transition:color .15s,border-color .15s,background .15s}
+  .nav a:hover{color:var(--paper);border-color:var(--line);background:#152040}
+  .nav a[aria-current="page"]{color:var(--saffron);border-color:var(--saffron)}
+  .nav .api{font-size:11px;opacity:.65}
+  .badge{font-size:12px;color:var(--dim)}
+  .badge b{color:var(--saffron)} .badge b.warn{color:var(--down)}
+  section{margin-bottom:var(--s4)}
+  h2{font-family:var(--disp);font-size:12px;text-transform:uppercase;letter-spacing:.15em;
+     color:var(--dim);margin-bottom:var(--s2)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+        padding:16px 18px;min-width:0;max-width:100%}
+  .banner{border:1px solid var(--line);border-radius:9px;padding:12px 16px;
+          margin-bottom:var(--s3);background:#16203a;display:flex;gap:var(--s3);
+          align-items:baseline;flex-wrap:wrap}
+  .banner.ok{border-color:var(--up);background:#12241f}
+  .banner.bad{border-color:var(--down);background:#251722}
+  .banner.warn{border-color:var(--saffron);background:#221b12}
+  .banner .tag{font-family:var(--disp);font-size:10px;letter-spacing:.14em;
+               text-transform:uppercase;padding:2px 8px;border-radius:4px;
+               border:1px solid currentColor;white-space:nowrap;font-weight:700}
+  .banner.ok .tag{color:var(--up)} .banner.bad .tag{color:var(--down)}
+  .banner.warn .tag{color:var(--saffron)}
+  .grid{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+  .stat{font-family:var(--disp);font-weight:900;font-size:26px;margin:4px 0 2px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th{font-family:var(--disp);font-size:10px;text-transform:uppercase;letter-spacing:.11em;
+     color:var(--dim);text-align:right;padding:7px 9px;border-bottom:1px solid var(--line);
+     white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:6px 9px;text-align:right;border-bottom:1px solid #182240;font-size:12.5px;
+     white-space:nowrap}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover td{background:#152040}
+  .scroll{overflow-x:auto}
+  .ok{color:var(--up)} .bad{color:var(--down)} .na{color:var(--dim)}
+  .muted{color:var(--dim);font-size:11.5px;line-height:1.6}
+  code{font-size:11.5px;color:var(--saffron)}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:10.5px;
+        font-family:var(--disp);letter-spacing:.08em;border:1px solid currentColor}
+  .pill.mute{color:var(--dim)}
+  button{font-family:var(--disp);font-weight:700;border:0;border-radius:8px;padding:12px 24px;
+         cursor:pointer;font-size:13.5px;transition:filter .15s}
+  button:hover{filter:brightness(1.1)}
+  .btn-danger{background:var(--down);color:#2a0b0b}
+  .btn-saffron{background:var(--saffron);color:#161006}
+  .actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:var(--s3)}
+
+  /* Touch targets. Nav links were ~32px high, under the comfortable 44px, but only on a
+     coarse pointer does that matter — a mouse is precise, a thumb is not. */
+  @media (pointer:coarse){
+    .nav a{min-height:44px;display:flex;align-items:center}
+    button,.btn{min-height:44px}
+    summary{min-height:44px;display:flex;align-items:center}
+  }
+  :focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
+  @media(max-width:780px){body{padding:20px 16px 70px} .card table{display:block;overflow-x:auto}}
+<style>
+  .rec-head{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+            margin-bottom:var(--s3)}
+  .rec-head .fact{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+                  padding:13px 16px}
+  .rec-head .k{font-family:var(--disp);font-size:10px;letter-spacing:.13em;
+               text-transform:uppercase;color:var(--dim)}
+  .rec-head .v{font-family:var(--disp);font-weight:900;font-size:19px;margin:5px 0 3px}
+  .st-ok .v{color:var(--up)} .st-drift .v{color:var(--saffron)} .st-wrong .v{color:var(--down)}
+  td.ok{color:var(--up)} td.drift{color:var(--saffron)} td.wrong{color:var(--down)}
+  /* Same header rules as every other page: the nav absorbs the shrink so the badge stays
+     on the title row instead of wrapping into the left gutter. */
+  header>h1{flex:0 0 auto}
+  header>.nav{flex:1 1 auto;min-width:0}
+  header>.badge{flex:0 0 auto;margin-left:auto;text-align:right}
+</style>
+</head>
+<body>
+<header>
+  <h1>Recon<em>cile</em></h1>
+  <nav class="nav" aria-label="Sections">
+    <a href="/">Desk</a>
+    <a href="/performance">Performance</a>
+    <a href="/regime">Regime</a>
+    <a href="/backtest" style="display:none"></a>
+    <a href="/tradebook">Tradebook</a>
+    <a href="/stops">Stops</a>
+    <a href="/reconcile" aria-current="page">Reconcile</a>
+    <a href="/options">Options</a>
+    <a href="/ops">Operations</a>
+    <a href="/settings">Settings</a>
+    <a class="api" href="/reconcile/data">json</a>
+  </nav>
+  <div class="badge">The broker is the authority</div>
+</header>
+<main>
+
+{% if not v.available %}
+<div class="banner warn"><span class="tag">unavailable</span>
+  <span>{{ v.reason }} &mdash; <a href="/login">log in to Kite</a> and reload.</span></div>
+{% else %}
+
+<div class="banner {{ 'ok' if v.state == 'ok' else ('warn' if v.state == 'drift' else 'bad') }}">
+  <span class="tag">{{ v.state }}</span>
+  <span>{% if v.state == 'ok' %}The local record agrees with the broker on every order,
+      every stop and every position.
+    {% elif v.state == 'drift' %}Nothing is wrong, but something is not yet settled.
+    {% else %}<b>The local record disagrees with the broker.</b> Every defect found on
+      18 Aug 2026 looked like success from inside the system; this page reads the broker
+      instead.{% endif %}
+    {% if v.settled and v.settled.changed %}
+    <span class="muted" style="display:block;margin-top:5px">Loading this page reconciled
+      {{ v.settled.changed|length }} order{{ '' if v.settled.changed|length == 1 else 's' }}
+      against the order book:
+      {% for c in v.settled.changed %}{{ c.symbol }} {{ c.was }}&rarr;{{ c.now }}
+        ({{ c.filled }}/{{ c.planned }}){{ ', ' if not loop.last }}{% endfor %}.</span>
+    {% endif %}
+  </span>
+</div>
+
+<div class="rec-head">
+  <div class="fact st-{{ v.sections.orders }}"><div class="k">Orders</div>
+    <div class="v">{{ v.sections.orders }}</div>
+    <div class="muted">{{ v.counts.orders_wrong }} disagree ·
+      {{ v.counts.orders_drift }} unsettled</div></div>
+  <div class="fact st-{{ v.sections.stops }}"><div class="k">Stops</div>
+    <div class="v">{{ v.sections.stops }}</div>
+    <div class="muted">{{ v.counts.stop_findings }} finding(s) ·
+      {{ v.stops.coverage_pct }}% covered</div></div>
+  <div class="fact st-{{ v.sections.positions }}"><div class="k">Positions</div>
+    <div class="v">{{ v.sections.positions }}</div>
+    <div class="muted">{{ v.counts.positions_off }} away from the plan</div></div>
+</div>
+
+<section>
+  <h2>Orders &mdash; local record against the order book</h2>
+  <div class="card scroll">
+    <table aria-label="Order reconciliation">
+      <thead><tr><th>Symbol</th><th>Side</th><th>Planned</th><th>Local</th>
+        <th>Local filled</th><th>Broker</th><th>Broker filled</th><th>State</th></tr></thead>
+      <tbody>
+      {% for r in v.orders.rows %}
+        <tr>
+          <td>{{ r.symbol }}</td><td>{{ r.side }}</td><td>{{ r.planned }}</td>
+          <td>{{ r.local_status }}</td><td>{{ r.local_filled }}</td>
+          <td>{{ r.broker_status or '—' }}</td><td>{{ r.broker_filled }}</td>
+          <td class="{{ r.state }}" style="text-align:left;white-space:normal">
+            {{ r.state }} <span class="muted">{{ r.why }}</span></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="muted">No plan orders to compare.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Positions &mdash; where the book landed against where the plan aimed</h2>
+  <div class="card scroll">
+    <table aria-label="Position reconciliation">
+      <thead><tr><th>Symbol</th><th>Planned final</th><th>Held</th><th>Diff</th>
+        <th>Why</th></tr></thead>
+      <tbody>
+      {% for r in v.positions.rows %}
+        <tr><td>{{ r.symbol }}</td>
+          <td>{{ r.planned_final if r.planned_final is not none else '—' }}</td>
+          <td>{{ r.held }}</td>
+          <td class="{{ r.state }}">{{ '%+d'|format(r.diff) }}</td>
+          <td style="text-align:left;white-space:normal" class="muted">{{ r.why }}</td></tr>
+      {% else %}
+        <tr><td colspan="5" class="muted">The book matches the plan exactly.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">A difference here is either an order that did
+      not fill or a fill nobody recorded. Both matter before the next rebalance, because it
+      sizes itself against these quantities.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Stops</h2>
+  <div class="card">
+    {% if v.stops.findings %}
+    <ul style="list-style:none;padding:0;display:grid;gap:6px">
+    {% for f in v.stops.findings %}
+      <li><b class="{{ 'bad' if f.kind in ('missing','excess','partial','orphan') else '' }}">{{ f.kind }}</b>
+        {{ f.symbol }} <span class="muted">&mdash; {{ f.detail }}</span></li>
+    {% endfor %}
+    </ul>
+    <p class="muted" style="margin-top:10px"><a href="/stops">Review and fix stops</a>.</p>
+    {% else %}
+    <p class="muted">Every tradeable position carries exactly the cover it should.</p>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+</main>
+</body>
+</html>

@@ -1,15 +1,27 @@
 """Zerodha cost model for NSE equity DELIVERY (CNC).
 
-Built after a live session cost Rs 7,695.87 on Rs 73.5 lakh of turnover — 10.5 bps. The
-breakdown matters more than the total, because it decides what a minimum trade size can
-and cannot achieve:
+Built after the live session of 18 Aug 2026: Rs 73,49,552 of turnover across 163 fills in
+21 scrip-sides. Recomputed against those captured fills on 19 Aug, every component below
+reproduces exactly.
 
-    STT            7,349.55    95%   PROPORTIONAL, 0.1% on BOTH sides
-    stamp duty       840.73     -    proportional, buy side only
-    exchange txn     218.28     -    proportional
-    DP charge        127.44     -    FIXED, ~Rs 15.93 per scrip per day, SELL only
-    SEBI + GST        47.96     -    proportional
-    brokerage           0.00     -    Zerodha charges nothing for delivery
+    STT            7,349.55   85.6%  PROPORTIONAL, 0.1% on BOTH sides
+    stamp duty       840.73    9.8%  proportional, buy side only
+    exchange txn     218.28    2.5%  proportional
+    DP charge        127.44    1.5%  FIXED, ~Rs 15.93 per scrip per day, SELL only
+    SEBI + GST        47.95    0.6%  proportional
+    brokerage          0.00      -   Zerodha charges nothing for delivery
+    ------------------------------
+    TOTAL          8,583.95         = 11.68 bps of turnover
+
+THE Rs 7,695.87 FIGURE THAT NAMED THIS FILE IS A SUBSET, not the total, and this docstring
+asserted otherwise until 19 Aug. It is STT + exchange + DP = Rs 7,695.27 — the charges
+Zerodha bills directly — and it excludes stamp duty, which the state collects, and the
+SEBI/GST line. Pairing that subtotal with the full component list made STT look like 95%
+of the bill when it is 85.6%, and the session look like 10.5 bps when it is 11.68.
+
+The model itself was never wrong: order_cost() has always charged all six components, so
+the no-trade band and MAX_TRADE_COST_PCT were calibrated against the right arithmetic. Only
+the anchor quoted here was.
 
 NO MINIMUM TRADE SIZE AVOIDS STT. It scales with turnover, so the only way to pay less of
 it is to trade less. The one genuinely fixed cost is the DP charge, and it is the reason a

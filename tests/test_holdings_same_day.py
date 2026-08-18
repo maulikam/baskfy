@@ -30,8 +30,9 @@ def hold(sym, qty, t1=0, collat=0, avg=100.0, ltp=100.0):
             "collateral_quantity": collat, "average_price": avg, "last_price": ltp}
 
 
-def pos(sym, qty, product="CNC"):
+def pos(sym, qty, product="CNC", overnight=0):
     return {"tradingsymbol": sym, "exchange": "NSE", "quantity": qty, "product": product,
+            "overnight_quantity": overnight,
             "average_price": 100.0, "last_price": 100.0}
 
 
@@ -118,3 +119,44 @@ def test_the_whole_18_aug_plan_reconciles():
     assert q["CUPID"] == 2536 and q["HSCL"] == 864 and q["SANSERA"] == 172
     assert q["SAILIFE"] == 435 and q["HFCL"] == 1308 and q["WELCORP"] == 302
     assert q.get("EMCURE", 0) == 0
+
+
+# =====================================================================================
+# the other side of the same error: counting a settled position twice
+# =====================================================================================
+def test_a_position_carried_overnight_is_not_added_to_holdings_again():
+    """`quantity` on a net position includes overnight carry. Once Kite rolls its day, a
+    buy from a previous session appears BOTH as overnight_quantity on the position and as
+    t1_quantity in holdings — so folding the whole quantity counts those shares twice.
+
+    That is the Rs 16 lakh mistake with the sign reversed: the first version under-reported
+    holdings and proposed buying again, this one over-reports and would propose selling
+    shares that are not there.
+    """
+    kc = FakeKC([hold("CUPID", 0, t1=2509)], [pos("CUPID", 2509, overnight=2509)])
+    assert held(kc)["CUPID"] == 2509, "the settled position was counted twice"
+
+
+def test_a_same_day_buy_is_still_folded_in():
+    """The original regression must not be undone by the fix for its mirror image."""
+    kc = FakeKC([], [pos("SANSERA", 172, overnight=0)])
+    assert held(kc)["SANSERA"] == 172
+
+
+def test_a_partly_carried_position_folds_only_the_part_bought_today():
+    """The real shape on a day that adds to an existing position: 500 carried, 179 bought
+    today. Holdings already has the 500."""
+    kc = FakeKC([hold("ANANDRATHI", 0, t1=500)], [pos("ANANDRATHI", 679, overnight=500)])
+    assert held(kc)["ANANDRATHI"] == 679
+
+
+def test_a_missing_overnight_field_degrades_to_the_previous_behaviour():
+    """Kite always sends it, but a field that vanishes must not silently zero a holding."""
+    p = pos("HSCL", 864)
+    del p["overnight_quantity"]
+    assert held(FakeKC([], [p]))["HSCL"] == 864
+
+
+def test_a_same_day_sell_is_still_never_subtracted_twice():
+    kc = FakeKC([hold("SAILIFE", 435)], [pos("SAILIFE", -112, overnight=0)])
+    assert held(kc)["SAILIFE"] == 435

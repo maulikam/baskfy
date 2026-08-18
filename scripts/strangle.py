@@ -243,6 +243,10 @@ def main() -> int:
                      "lot_sizing": Z.session_lots_detail(
                          cfg, params.size_mult * (float(win["size_mult"])
                                                   if win["veto"] is None else 1.0)),
+                     # Why a bucket may never trade, stated up front rather than inferred
+                     # from a run of silent vetoes.
+                     "economics": [Z.fixed_cost_drag(cfg, b)
+                                   for b in cfg["session"]["by_days_to_expiry"]],
                      "forward_sessions": len(forward),
                      "band_source": "config" if cfg.get("reference_band") else
                                     ("forward_record" if forward else "none")})

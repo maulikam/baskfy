@@ -237,3 +237,66 @@ def test_the_trail_arms_and_then_governs_the_exit(tmp_path):
     _bk, rec, events = run(frames, tmp_path=tmp_path)
     assert [k for k, _ in events if k == "trail_armed"]
     assert rec["exit_code"] == "E2"
+
+
+# =====================================================================================
+# the frozen snapshot, after the book changes underneath it
+# =====================================================================================
+WIDEN_CONTRACTS = {**CONTRACTS,
+                   "C24850": (24_850, "CE"), "C25350": (25_350, "CE"),
+                   "P23950": (23_950, "PE"), "P23450": (23_450, "PE")}
+WIDEN_PX = {**DEFAULT_PX, "C24850": 4.0, "C25350": 0.4,
+            "P23950": 4.0, "P23450": 0.4}
+
+
+def widen_frame(minutes: int, spot: float, px: dict | None = None):
+    """Like frame(), but the chain carries the strike one step beyond each short — which
+    is what plan_widen asks for. The shared fixture stops at the shorts themselves, so a
+    widen could never be planned there and this path went unexercised."""
+    prices = {**WIDEN_PX, **(px or {})}
+    rows = []
+    for sym, (strike, kind) in WIDEN_CONTRACTS.items():
+        p = prices[sym]
+        rows.append({
+            "symbol": sym, "strike": float(strike), "kind": kind,
+            "bid": round(p - 0.1, 2), "ask": round(p + 0.1, 2), "last": p,
+            "oi": 9_000_000.0, "volume": 5000.0, "average_price": p * 2.0,
+            "depth": {"buy": [{"price": round(p - 0.1, 2), "quantity": 500_000}],
+                      "sell": [{"price": round(p + 0.1, 2), "quantity": 500_000}]},
+        })
+    return MK.ChainSnapshot(as_of=START + dt.timedelta(minutes=minutes), spot=spot,
+                            expiry=D(2026, 8, 25), rows=tuple(rows))
+
+
+def test_a_widen_does_not_kill_the_session_with_a_stale_snapshot(tmp_path):
+    """R.Snapshot is frozen and carries a COPY of the marks. The widen replaces legs
+    mid-iteration, and every rule consulted afterwards — target_overrun,
+    evaluate_adjustment, evaluate_risk_off — was still handed the snapshot built before
+    it. book.pnl deliberately refuses to value a book with a missing leg, so the very next
+    call raised KeyError on the freshly rolled leg and the session died on the tick it
+    started winning on.
+
+    Found by driving a real BANKNIFTY chain through trail activation; unreachable in the
+    shared fixture because its chain has no strike beyond the shorts to widen into.
+    """
+    rich = {"C24800": 6.0, "P24000": 6.0, "C25300": 0.5, "P23500": 0.5}
+    frames = [widen_frame(0, 24_400, rich), widen_frame(1, 24_400, rich)]
+    bk, rec, events = run(frames, tmp_path=tmp_path)          # must not raise
+
+    kinds = [k for k, _ in events]
+    assert "trail_armed" in kinds
+    assert "widened" in kinds, "the widen path still did not fire; the test proves nothing"
+    assert rec["status"] in ("OK", "UNCLOSED")
+
+
+def test_every_rule_after_a_widen_sees_the_legs_the_widen_created(tmp_path):
+    """The narrower guarantee behind the fix: once the book has changed, the marks handed
+    to the remaining rules cover every open leg. A rule reading a stale copy would be
+    valuing a position that no longer exists."""
+    rich = {"C24800": 6.0, "P24000": 6.0, "C25300": 0.5, "P23500": 0.5}
+    bk, _rec, events = run([widen_frame(0, 24_400, rich)], tmp_path=tmp_path)
+    assert [k for k, _ in events if k == "widened"]
+    snap = widen_frame(1, 24_400, rich)
+    marks = S.marks_from(snap, bk)
+    missing = {l.symbol for l in bk.open_legs} - set(marks)
+    assert not missing, f"{missing} would raise inside book.pnl"

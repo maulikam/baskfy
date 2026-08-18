@@ -6,6 +6,7 @@ import uuid
 import pandas as pd
 import numpy as np
 from . import config as C
+from . import costs
 from .scoring import stop_from_vol
 
 SECTORS_FILE = "data/sectors.csv"   # optional: symbol,cluster
@@ -200,14 +201,21 @@ def build_plan(scored: pd.DataFrame, holdings: list[dict], cash: float,
             continue
         val = abs(o["delta"]) * o["ref_price"]
         pct = (abs(o["delta"]) / o["qty_now"] * 100.0) if o["qty_now"] else 100.0
-        if val < C.MIN_TRADE_VALUE or pct < C.MIN_TRADE_PCT:
-            skipped = ("would move {:.2f}% of the position for Rs {:,.0f}; below the "
-                       "no-trade band ({:.0f}% / Rs {:,.0f})").format(
-                           pct, val, C.MIN_TRADE_PCT, C.MIN_TRADE_VALUE)
+        side = "BUY" if o["delta"] > 0 else "SELL"
+        cpct = costs.cost_pct(val, side)
+        o["est_cost"] = round(costs.order_cost(val, side).total, 2)
+        o["est_cost_pct"] = round(cpct, 3)
+        if val < C.MIN_TRADE_VALUE or pct < C.MIN_TRADE_PCT or cpct > C.MAX_TRADE_COST_PCT:
+            skipped = ("would move {:.2f}% of the position for Rs {:,.0f} at a cost of "
+                       "Rs {:,.0f} ({:.2f}% of the trade); below the no-trade band "
+                       "({:.0f}% / Rs {:,.0f} / max {:.2f}% cost)").format(
+                           pct, val, o["est_cost"], cpct, C.MIN_TRADE_PCT,
+                           C.MIN_TRADE_VALUE, C.MAX_TRADE_COST_PCT)
             o["note"] = (o.get("note") + " · " if o.get("note") else "") + skipped
             o["skipped_delta"] = o["delta"]
             o["action"], o["delta"], o["qty_final"] = "HOLD", 0, o["qty_now"]
             o["value"] = round(o["qty_now"] * o["ref_price"])
+            o["est_cost"], o["est_cost_pct"] = 0.0, 0.0
 
     buys = sum(o["delta"] * o["ref_price"] for o in orders if o["delta"] > 0)
     sells = sum(-o["delta"] * o["ref_price"] for o in orders if o["delta"] < 0)
@@ -219,4 +227,5 @@ def build_plan(scored: pd.DataFrame, holdings: list[dict], cash: float,
                 net_cash_use=round(buys - sells), cluster_warnings=cluster_warn,
                 pledged_sells_margin_note=pledged_sells,
                 excluded=[h["symbol"] for h in excluded], unpriced=unpriced,
+                est_costs=costs.plan_cost(orders),
                 orders=orders)

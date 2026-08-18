@@ -415,18 +415,61 @@ def test_no_caller_reparses_the_window_times_for_itself():
         assert len(splits) == allowed, f"{path} parses {len(splits)} time strings itself"
 
 
-def test_a_margin_claim_is_released_however_the_runner_exits():
+def test_a_margin_claim_is_released_however_the_process_exits(tmp_path):
     """The claim was made after sizing and released only on the two paths that reach the
-    management loop. NO_DEPTH and ALREADY_RUNNING returned holding it. A dead process's
-    claim is already invisible to allocation.live(), so this never stranded capital — but
-    every new early return would have leaked again, which is why it is registered rather
-    than remembered."""
-    tree = ast.parse(pathlib.Path("scripts/strangle.py").read_text())
-    registered = [n for n in ast.walk(tree)
-                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-                  and n.func.attr == "register"
-                  and getattr(n.func.value, "id", "") == "atexit"]
-    assert registered, "nothing guarantees the margin claim is given back"
+    management loop; NO_DEPTH and ALREADY_RUNNING returned holding it. It is now released
+    on interpreter exit as well — checked by running a real process rather than by finding
+    an atexit.register call, because the call existing proves nothing about which FILE it
+    releases.
+    """
+    import subprocess
+    import sys
+    ledger = str(tmp_path / "c.json")
+    prog = ("import sys; sys.path.insert(0, %r);"
+            "from app.strategies.strangle import allocation as A;"
+            "A.commit('nifty', 850000, %r);" % (str(pathlib.Path.cwd()), ledger))
+    for tail in ("", "raise SystemExit(3)"):
+        subprocess.run([sys.executable, "-c", prog + tail], capture_output=True)
+        assert ALLOC._read(ledger) == {}, f"the claim outlived the process ({tail or 'clean'})"
+
+
+def test_the_release_targets_the_same_file_the_claim_was_written_to(tmp_path):
+    """The runner used to register `atexit.register(release, slug)` with no path, which is
+    correct only while every caller uses the default. commit() now registers its own
+    release against the path it actually wrote to."""
+    import subprocess
+    import sys
+    ledger = str(tmp_path / "other.json")
+    subprocess.run([sys.executable, "-c",
+                    "import sys; sys.path.insert(0, %r);"
+                    "from app.strategies.strangle import allocation as A;"
+                    "A.commit('sensex', 600000, %r)" % (str(pathlib.Path.cwd()), ledger)],
+                   capture_output=True)
+    assert ALLOC._read(ledger) == {}
+    # and the default ledger was not touched on that instrument's behalf
+    assert "sensex" not in ALLOC._read(ALLOC.PATH)
+
+
+def test_a_hard_kill_leaves_a_claim_that_the_pid_check_still_discounts(tmp_path):
+    """atexit cannot run on SIGKILL, so the row survives. live() must still not count it,
+    or one crash would lock the account out for the rest of the day."""
+    import subprocess
+    import sys
+    import time
+    ledger = str(tmp_path / "c.json")
+    p = subprocess.Popen([sys.executable, "-c",
+                          "import sys, time; sys.path.insert(0, %r);"
+                          "from app.strategies.strangle import allocation as A;"
+                          "A.commit('nifty', 850000, %r); time.sleep(30)"
+                          % (str(pathlib.Path.cwd()), ledger)])
+    for _ in range(60):
+        if "nifty" in ALLOC._read(ledger):
+            break
+        time.sleep(0.1)
+    p.kill()
+    p.wait()
+    assert "nifty" in ALLOC._read(ledger), "the row should survive a kill"
+    assert ALLOC.live(ledger) == {}, "a dead process still holds capital"
 
 
 # --- the ops badge --------------------------------------------------------------------
@@ -505,7 +548,10 @@ def test_concurrent_commits_neither_clobber_nor_crash(tmp_path):
         sys.path.insert(0, {str(pathlib.Path.cwd())!r})
         from app.strategies.strangle import allocation as A
         for _ in range(40):
-            A.commit(sys.argv[2], float(sys.argv[3]), sys.argv[1])
+            # release_on_exit=False: this test is about the read-modify-write, and
+            # a child that tidied up after itself would leave nothing to measure.
+            A.commit(sys.argv[2], float(sys.argv[3]), sys.argv[1],
+                     release_on_exit=False)
     '''))
     ledger = str(tmp_path / "c.json")
     kids = [subprocess.Popen([sys.executable, str(script), ledger, slug, str(m)],

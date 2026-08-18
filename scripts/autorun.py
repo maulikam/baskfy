@@ -28,6 +28,7 @@ from app.strategies.strangle import config as SC
 ARGV = {
     "daily": ["-m", "scripts.daily", "--quiet", "--source", "page"],
     "strangle_collect": ["-m", "scripts.strangle", "--collect"],
+    "strangle_session": ["-m", "scripts.strangle"],
 }
 
 
@@ -69,6 +70,24 @@ def main() -> int:
     ran = []
     for item in items:
         argv = [sys.executable, *ARGV[item["op"]]]
+
+        # A session runs until 15:10. Waiting for it would hold the operations lock for
+        # five hours and block the equity daily job behind it, so it is DETACHED and left
+        # to its own PID lock. Everything else is short and is waited for.
+        if item.get("detached"):
+            try:
+                proc = subprocess.Popen(argv, start_new_session=True,
+                                        stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL)
+                ran.append({"op": item["op"], "label": item["label"], "pid": proc.pid,
+                            "ok": True, "detached": True,
+                            "tail": f"started as pid {proc.pid}; it manages itself and "
+                                    "logs to the strangle journal"})
+            except Exception as exc:                               # noqa: BLE001
+                ran.append({"op": item["op"], "label": item["label"], "ok": False,
+                            "detached": True, "tail": str(exc)[:200]})
+            continue
+
         try:
             p = subprocess.run(argv, capture_output=True, text=True, shell=False,
                                timeout=a.timeout)

@@ -292,3 +292,34 @@ def test_protection_still_cannot_place_or_cancel_anything():
     src = open("app/analytics/protection.py").read()
     for token in ("place_gtt", "delete_gtt", "modify_gtt", "place_order"):
         assert token not in src, token
+
+
+def test_over_coverage_makes_the_book_unhealthy():
+    """The banner said 'stops current' on a book carrying 34 triggers across 16 symbols,
+    every one duplicated, because healthy only looked at MISSING and PARTIAL."""
+    from app.analytics import protection as P
+    rev = P.review([{"symbol": "SONACOMS", "quantity": 342, "last_price": 800.0}],
+                   [gtt_for("SONACOMS", 861, trigger=730.0)])
+    assert not rev["healthy"]
+
+
+def test_an_orphan_trigger_makes_the_book_unhealthy():
+    from app.analytics import protection as P
+    assert not P.review([], [gtt_for("PARAS", 438)])["healthy"]
+
+
+def test_a_correctly_covered_book_is_healthy():
+    from app.analytics import protection as P
+    rev = P.review([{"symbol": "TITAN", "quantity": 100, "last_price": 3000.0}],
+                   [gtt_for("TITAN", 100, trigger=2700.0)])
+    assert rev["healthy"]
+
+
+def test_a_stop_merely_outside_the_band_is_still_healthy():
+    """too_far is drift, not damage: the price rose and the fixed trigger stayed put. It is
+    reported but must not turn the desk red, or the signal stops meaning anything."""
+    from app.analytics import protection as P
+    rev = P.review([{"symbol": "CUPID", "quantity": 100, "last_price": 283.0}],
+                   [gtt_for("CUPID", 100, trigger=245.0)])
+    assert any(f["kind"] == P.TOO_FAR for f in rev["findings"])
+    assert rev["healthy"]

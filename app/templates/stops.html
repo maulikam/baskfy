@@ -210,15 +210,47 @@
     </table>
     <p class="muted" style="margin-top:10px">A partially covered position is proposed for
       its <b>uncovered shares only</b>, so arming cannot double up on quantity that is
-      already protected. Positions whose existing stop merely sits outside the band are
-      left alone: replacing one means cancelling a live trigger, which is a different and
-      riskier action than arming where there is none.</p>
+      already protected. A position whose existing stop merely sits <em>outside the band</em>
+      is still left alone: replacing it means cancelling a live trigger, which is a riskier
+      act than arming where there is none. Over-coverage is different, and is cancelled
+      below &mdash; adding another trigger cannot fix a stop that already sells more shares
+      than you hold.</p>
   </div>
 </section>
+
+{% if plan.cancels %}
+<section>
+  <h2>Triggers to cancel &mdash; {{ plan.cancels|length }}</h2>
+  <div class="banner bad">
+    <span class="tag">will be cancelled</span>
+    <span>These run <b>before</b> anything is armed, so an over-covered symbol is never
+      briefly protected twice. A trigger covering more shares than you hold sells what you
+      do not own when it fires, which is short delivery.</span>
+  </div>
+  <div class="card scroll">
+    <table aria-label="Triggers to cancel">
+      <thead><tr><th>Symbol</th><th>GTT id</th><th>Why</th><th>Detail</th></tr></thead>
+      <tbody>
+      {% for c in plan.cancels %}
+        <tr>
+          <td>{{ c.symbol }}</td>
+          <td>#{{ c.gtt_id }}</td>
+          <td class="bad">{{ c.reason }}</td>
+          <td style="text-align:left;white-space:normal" class="muted">{{ c.detail }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
 
 <section>
   <h2>Confirm</h2>
   <div class="card">
+    {% if plan.cancels %}<p class="muted"><b>{{ plan.cancels|length }} existing trigger{{ ''
+      if plan.cancels|length == 1 else 's' }} will be cancelled first</b>, then
+      {{ plan.rows|length }} armed.</p>{% endif %}
     <p class="muted">Each trigger is a GTT sell at the price shown, valid until it fires or
       Zerodha expires it. Protected instruments are refused at the guard even if one
       reached this list. This plan expires in 30 minutes because every trigger is priced

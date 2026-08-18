@@ -170,6 +170,7 @@ def _next_action(forward: int, ready: Mapping, paper: int, needed: int) -> dict:
 def page(conn, *, journal: str | None = None) -> dict[str, Any]:
     """Everything the options page renders. Read-only."""
     rep = X.report(conn)
+    _blocks = strangles()
     all_arms = [dict(r) for r in conn.execute(
         "SELECT * FROM option_arms ORDER BY entry_at DESC")]
     closed = [a for a in all_arms if a["exit_at"]]
@@ -201,7 +202,8 @@ def page(conn, *, journal: str | None = None) -> dict[str, Any]:
         "mean_vs_zero": rep.get("mean_vs_zero"),
         "tokens": _token_coverage(all_arms),
         "strangle": strangle(),
-        "strangles": strangles(),
+        "strangles": _blocks,
+        "next": _next_overall(_blocks),
         "commitments": _commitments(),
         "jobs": _jobs(conn),
         "sample": {
@@ -234,6 +236,30 @@ def _arm_row(a: dict) -> dict:
         "replayable": bool(contracts),
         "tokens": [c.get("token") for c in contracts],
     }
+
+
+def _next_overall(blocks: list[dict]) -> dict:
+    """What to do next, across all instruments rather than whichever is listed first.
+
+    The banner and the highlighted button used to read p.strangle, which is NIFTY. With
+    three underlyings that is a page telling you about one of them while showing you all
+    three — and it would keep saying "collect" after NIFTY was calibrated and the other
+    two were not.
+    """
+    live = [b for b in blocks if b.get("available")]
+    if not live:
+        return {"op": None, "label": "No instrument is configured",
+                "why": "no strangle config could be read", "instruments": []}
+    # Registry order is deliberate: the op that the most instruments are blocked on wins,
+    # so one control click is the most progress available.
+    counts: dict[str, list[str]] = {}
+    for b in live:
+        counts.setdefault(b["next_action"]["op"], []).append(b["label"])
+    op = max(counts, key=lambda k: len(counts[k]))
+    first = next(b for b in live if b["next_action"]["op"] == op)
+    return {"op": op, "label": first["next_action"]["label"],
+            "why": first["next_action"]["why"], "instruments": counts[op],
+            "ready": all(b["bands_ready"]["ready"] for b in live)}
 
 
 def _commitments() -> dict:
@@ -284,12 +310,23 @@ def _jobs(conn) -> dict:
         last = _ops.last_run(conn)
     except Exception:                                        # noqa: BLE001
         return {"running": None, "last": {}, "controls": []}
+    try:
+        per = _ops.last_run_per_instrument(conn, STRANGLE_OPS)
+    except Exception:                                        # noqa: BLE001
+        per = {}
     controls = []
     for name in STRANGLE_OPS:
         op = _ops.BY_NAME.get(name)
         if op is None:
             continue
+        # Which instrument each recorded run was for. Without it the badge shows the last
+        # run of this operation whatever underlying it was pointed at, so a SENSEX collect
+        # reads as though NIFTY had been collected.
+        runs = sorted(({"instrument": slug, **row}
+                       for (nm, slug), row in per.items() if nm == name),
+                      key=lambda r: r["started_at"], reverse=True)
         controls.append({
+            "last_by_instrument": runs,
             "name": name, "label": op.label, "summary": op.summary,
             "cli": op.cli(), "writes": op.writes, "long_running": op.long_running,
             "params": [{"key": p.key, "label": p.label, "kind": p.kind,

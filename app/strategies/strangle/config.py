@@ -7,7 +7,7 @@ from typing import Any, Sequence
 
 import yaml
 
-from .calendar_nse import Calendar
+from .calendar_nse import Calendar, weekday_num
 from .clock import resolve_expiry
 
 DEFAULT_PATH = "config/strangle.yaml"
@@ -53,12 +53,20 @@ def assert_market_facts(cfg: dict, instruments: Sequence[dict],
     today = today or dt.date.today()
     expiries = sorted({i["expiry"] for i in opts if i.get("expiry")})
     expiry = resolve_expiry(today, expiries)
-    # The calendar, not the weekday alone. A Tuesday holiday legitimately shifts an expiry
-    # back to Monday — the live dump carries one, 2029-12-24 for Christmas — and refusing
-    # to start that week would be the assertion misfiring, not catching anything.
-    cal = calendar or Calendar.build(expiries=expiries,
+    # The calendar, not the weekday alone. A holiday on the expiry weekday legitimately
+    # shifts an expiry back a day — the live dump carries one, 2029-12-24 for Christmas —
+    # and refusing to start that week would be the assertion misfiring, not catching
+    # anything.
+    #
+    # THE WEEKDAY COMES FROM THE CONFIG. Defaulting to Tuesday here did not fail loudly for
+    # SENSEX, which is worse: it PASSED, by inferring that 25 Aug was a holiday and
+    # reporting an ordinary Thursday expiry as "shifted back from a holiday". Six real
+    # trading days ended up marked shut, and every dte derived from that calendar was
+    # short by however many of them fell in the window.
+    weekday = weekday_num(ins["expiry_weekday"])
+    cal = calendar or Calendar.build(expiries=expiries, weekday=weekday,
                                      extra=cfg["session"].get("extra_holidays") or ())
-    valid, why = cal.expiry_is_valid(expiry)
+    valid, why = cal.expiry_is_valid(expiry, weekday)
     if not valid:
         raise StartupRefused(
             f"nearest expiry {expiry} is a {expiry.strftime('%A')}, config expects "

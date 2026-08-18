@@ -404,11 +404,48 @@ def history(conn, limit: int = 25) -> list[dict]:
 
 
 def last_run(conn) -> dict[str, dict]:
-    """Most recent outcome per operation, for the card badges."""
+    """Most recent outcome per operation, for the card badges.
+
+    `id` is selected because the badge links to /ops/job/<id> for the output. It was
+    missing, so that link silently never rendered — Jinja resolves the absent key to
+    Undefined, which is falsy, and the {% if %} guarding it simply never fired.
+
+    `argv_json` is selected so a caller can tell WHICH instrument a run was for. Options
+    operations are one control per operation with an instrument picker, so without it a
+    SENSEX run shows up as NIFTY's last run.
+    """
     out: dict[str, dict] = {}
-    for r in conn.execute(
-            "SELECT name, status, started_at, duration_s FROM ops_jobs ORDER BY id DESC"):
+    for r in conn.execute("SELECT id, name, status, started_at, duration_s, argv_json "
+                          "FROM ops_jobs ORDER BY id DESC"):
         out.setdefault(r["name"], dict(r))
+    return out
+
+
+def argv_instrument(argv_json: str | None) -> str | None:
+    """The --instrument a recorded run was given, if any."""
+    if not argv_json:
+        return None
+    try:
+        argv = json.loads(argv_json)
+    except ValueError:
+        return None
+    for i, tok in enumerate(argv):
+        if tok == "--instrument" and i + 1 < len(argv):
+            return str(argv[i + 1])
+    return None
+
+
+def last_run_per_instrument(conn, names: Sequence[str]) -> dict[tuple[str, str], dict]:
+    """Most recent outcome per (operation, instrument), for the options controls."""
+    out: dict[tuple[str, str], dict] = {}
+    want = set(names)
+    for r in conn.execute("SELECT id, name, status, started_at, duration_s, argv_json "
+                          "FROM ops_jobs ORDER BY id DESC"):
+        if r["name"] not in want:
+            continue
+        slug = argv_instrument(r["argv_json"])
+        if slug:
+            out.setdefault((r["name"], slug), dict(r))
     return out
 
 

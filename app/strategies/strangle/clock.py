@@ -143,7 +143,11 @@ def tradeable_sessions_per_cycle(cfg: dict) -> int:
     is therefore NOT five times a weekly one — it is roughly a quarter of it.
     """
     sess = cfg["session"]
-    span = int(sess["max_dte"]) if sess.get("max_dte") is not None else 3
+    # 4 when unset, matching the weekly cycle this function has always described: with a
+    # Tuesday expiry the tradeable sessions are Wed, Thu, Fri and Mon. Defaulting to 3
+    # here silently cut every expectancy model by a quarter for any config predating
+    # max_dte.
+    span = int(sess["max_dte"]) if sess.get("max_dte") is not None else 4
     n = min(span, 4)                       # dte 1..span, capped at a working week
     return n + (1 if sess.get("allow_expiry_day", False) else 0)
 

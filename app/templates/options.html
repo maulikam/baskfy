@@ -200,8 +200,8 @@
 </div>
 {% endif %}
 
-{% set s = p.strangle %}
-{% if s and s.available %}
+{% set nx = p.next %}
+{% if p.strangles and p.strangles|selectattr('available')|list %}
 <section>
   <h2>Intraday strangle &mdash; run controls</h2>
 
@@ -215,15 +215,19 @@
   </div>
   {% endif %}
 
-  <div class="banner {{ 'ok' if s.bands_ready.ready else 'warn' }}">
+  <div class="banner {{ 'ok' if nx.ready else 'warn' }}">
     <span class="tag">next step</span>
-    <span><b>{{ s.next_action.label }}</b> &mdash; {{ s.next_action.why }}</span>
+    <span><b>{{ nx.label }}</b>
+      {%- if nx.instruments %} for {{ nx.instruments|join(', ') }}{% endif %}
+      &mdash; {{ nx.why }}
+      {%- if nx.instruments|length > 1 %} Run it once per underlying: each keeps its own
+      record, and the picker on the control selects which.{% endif %}</span>
   </div>
 
   <div class="ctl">
     {% for c in p.jobs.controls %}
     <form method="post" action="/options/run"
-          class="{{ 'primary' if c.name == s.next_action.op }}">
+          class="{{ 'primary' if c.name == nx.op }}">
       <input type="hidden" name="op" value="{{ c.name }}">
       <h4>{{ c.label }}</h4>
       <div class="sum">{{ c.summary }}</div>
@@ -240,9 +244,18 @@
       {% endfor %}
       <div class="row">
         <button type="submit"
-                class="{{ 'btn-saffron' if c.name == s.next_action.op else 'btn-ghost' }}"
+                class="{{ 'btn-saffron' if c.name == nx.op else 'btn-ghost' }}"
                 {{ 'disabled' if p.jobs.running }}>Run</button>
-        {% if c.last %}
+        {% if c.last_by_instrument %}
+        <span class="last">last
+          {%- for r in c.last_by_instrument %}
+          <b class="{{ 'ok' if r.status == 'ok' else 'bad' }}">{{ r.instrument|upper }}
+            {{ r.status }}</b> {{ r.started_at[5:16] }}
+          {%- if r.id %} <a href="/ops/job/{{ r.id }}">output</a>{% endif %}
+          {%- if not loop.last %}&middot;{% endif %}
+          {%- endfor %}
+        </span>
+        {% elif c.last %}
         <span class="last">last
           <b class="{{ 'ok' if c.last.status == 'ok' else 'bad' }}">{{ c.last.status }}</b>
           {{ c.last.started_at[5:16] }}

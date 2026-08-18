@@ -28,6 +28,19 @@ MAX_SINGLE_WEIGHT = 15.0                   # % of the equity sleeve
 MIN_POSITION_WEIGHT = 6.0                  # % of the sleeve (half-size entries may sit below)
 CLUSTER_CAP = 25.0                         # % per sector cluster, applied on the sleeve
 TARGET_POSITIONS = (12, 15)                # soft range, resolved by score dispersion
+
+# --- no-trade band -------------------------------------------------------------------
+# A rebalance computes an exact target quantity, so a 0.3% price drift produces a one-share
+# order. On 18 Aug 2026 a plan proposed trimming WELCORP by 1 share of 362, SONACOMS by 3
+# of 861 and HFCL by 4 of 1,308 — Rs 16,102 of sells in total, every one of them costing
+# Rs 20 brokerage plus STT plus half a spread to correct a drift worth less than the fee.
+#
+# So a delta is skipped when it is immaterial by EITHER measure: too small in rupees for
+# the fixed costs to be worth paying, or too small a fraction of the position to be worth
+# correcting. A full EXIT is never skipped — closing a position is risk reduction, and the
+# band must never keep you in something the strategy wants out of.
+MIN_TRADE_VALUE = 10_000.0                 # Rs; below this the fee dominates the benefit
+MIN_TRADE_PCT = 2.0                        # % of the existing position
 MAX_POS_VS_DAY_VALUE = 0.01                # position ≤ 1% of median daily traded value
 HALF_SIZE_WEIGHT = 3.0                     # for short-history listings
 SHORT_HISTORY_MONTHS = 18

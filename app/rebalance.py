@@ -174,6 +174,24 @@ def build_plan(scored: pd.DataFrame, holdings: list[dict], cash: float,
                            value=0, stop=None, pledged=h.get("pledged_qty", 0),
                            rank=None, score=None, note=reason))
 
+    # --- no-trade band -------------------------------------------------------------------
+    # Applied AFTER sizing, so the plan still reports the target it wanted; only the order
+    # is suppressed. A full exit is exempt: the band exists to avoid paying fees for
+    # nothing, not to keep the book in a name the strategy has rejected.
+    for o in orders:
+        if o["delta"] == 0 or o["qty_final"] == 0:
+            continue
+        val = abs(o["delta"]) * o["ref_price"]
+        pct = (abs(o["delta"]) / o["qty_now"] * 100.0) if o["qty_now"] else 100.0
+        if val < C.MIN_TRADE_VALUE or pct < C.MIN_TRADE_PCT:
+            skipped = ("would move {:.2f}% of the position for Rs {:,.0f}; below the "
+                       "no-trade band ({:.0f}% / Rs {:,.0f})").format(
+                           pct, val, C.MIN_TRADE_PCT, C.MIN_TRADE_VALUE)
+            o["note"] = (o.get("note") + " · " if o.get("note") else "") + skipped
+            o["skipped_delta"] = o["delta"]
+            o["action"], o["delta"], o["qty_final"] = "HOLD", 0, o["qty_now"]
+            o["value"] = round(o["qty_now"] * o["ref_price"])
+
     buys = sum(o["delta"] * o["ref_price"] for o in orders if o["delta"] > 0)
     sells = sum(-o["delta"] * o["ref_price"] for o in orders if o["delta"] < 0)
     pledged_sells = [o["symbol"] for o in orders if o["delta"] < 0 and o["pledged"] > 0]  # info: collateral margin will reduce

@@ -138,8 +138,8 @@
            transform:translateX({{ '-100%' if v.bar.cap_marker >= 97 else ('0' if v.bar.cap_marker <= 4 else '-50%') }})">cap {{ '%.0f'|format(v.bar.cap_marker) }}%</div>
     </div>
     <div class="legend">
-      <span><i class="eq-{{ v.tier_key }}" style="background:{{ {'on':'#3ddc97','caution':'#f2a33c','off':'#ff9f43','crash':'#ff6b6b'}[v.tier_key] }}"></i>Equity within cap</span>
-      <span><i style="background:#ff6b6b"></i>Over cap · reduction required</span>
+      <span><i class="eq-{{ v.tier_key }}" style="background:{{ {'on':'#00874f','caution':'#8a5200','off':'#c2410c','crash':'#e12d33'}[v.tier_key] }}"></i>Equity within cap</span>
+      <span><i style="background:#e12d33"></i>Over cap · reduction required</span>
       <span><i style="background:#1a2440"></i>Cash</span>
     </div>
     {% else %}
@@ -230,10 +230,10 @@
           <path d="{{ c.spark.ma }}" fill="none" stroke="#5b6b8c" stroke-width="1"
                 stroke-dasharray="3 2"/>
           <path d="{{ c.spark.price }}" fill="none" stroke-width="1.5"
-                stroke="{{ '#3ddc97' if c.spark.above else '#ff6b6b' }}"
+                stroke="{{ '#00874f' if c.spark.above else '#e12d33' }}"
                 stroke-linejoin="round"/>
           <circle cx="{{ c.spark.last_x }}" cy="{{ c.spark.last_y }}" r="2.2"
-                  fill="{{ '#3ddc97' if c.spark.above else '#ff6b6b' }}"/>
+                  fill="{{ '#00874f' if c.spark.above else '#e12d33' }}"/>
         </svg>
         <p class="muted" style="font-size:10.5px">{{ c.spark.sessions }} sessions ·
           dashed line is the {{ c.spark.ma_len }}-DMA</p>
@@ -241,10 +241,13 @@
       <table aria-label="Index health" style="margin-top:8px">
         <tbody>
         {% for m in c.mas %}
+          {# The state word said "above" beside a distance already carrying its sign, and
+             the fifth column pushed the row out of a 270px card. Colour the number by
+             state instead: one thing to read, and the sign is the state. #}
           <tr><td>{{ m.length }}-DMA</td>
               <td class="muted">{{ '{:,.0f}'.format(m.ma) if m.ma else '—' }}</td>
-              <td>{{ '%+.2f'|format(m.distance_pct) if m.distance_pct is not none else '—' }}%</td>
-              <td class="st-{{ m.state }}">{{ m.state }}</td>
+              <td class="st-{{ m.state }}" title="{{ m.state }}">
+                {{ '%+.2f'|format(m.distance_pct) if m.distance_pct is not none else '—' }}%</td>
               <td class="muted">{{ m.confirmation }}</td></tr>
         {% endfor %}
         </tbody>
@@ -661,8 +664,8 @@
         actual exposure and breadth are all percentages, so they share one axis. The cap
         is a step: it changes only at a transition and holds between evaluations.</p>
       <div class="legend" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px">
-        <span class="muted"><b style="color:#f2a33c">▬</b> permitted cap</span>
-        <span class="muted"><b style="color:#3ddc97">▬</b> actual equity</span>
+        <span class="muted"><b style="color:#8a5200">▬</b> permitted cap</span>
+        <span class="muted"><b style="color:#00874f">▬</b> actual equity</span>
         <span class="muted"><b style="color:#7b6ad0">▬</b> breadth</span>
       </div>
       <div class="scroll">
@@ -679,11 +682,11 @@
             <text x="{{ t.px }}" y="{{ tl.height - 7 }}" text-anchor="middle"
                   fill="#8593ad" font-size="9.5">{{ t.label }}</text>
           {% endfor %}
-          <path d="{{ tl.cap }}" fill="none" stroke="#f2a33c" stroke-width="1.8"
+          <path d="{{ tl.cap }}" fill="none" stroke="#8a5200" stroke-width="1.8"
                 stroke-linejoin="round"/>
           <path d="{{ tl.breadth }}" fill="none" stroke="#7b6ad0" stroke-width="1.4"
                 opacity=".85" stroke-linejoin="round"/>
-          <path d="{{ tl.actual }}" fill="none" stroke="#3ddc97" stroke-width="1.8"
+          <path d="{{ tl.actual }}" fill="none" stroke="#00874f" stroke-width="1.8"
                 stroke-linejoin="round"/>
         </svg>
       </div>

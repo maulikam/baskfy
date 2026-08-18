@@ -45,6 +45,7 @@
   --color-down:       #e12d33;   /* losses — 4.54:1 on paper */
   --color-flag:       #7b5bf2;   /* pending / attention pill */
   --color-warn:       #8a5200;
+  --color-orange:     #c2410c;   /* the OFF tier — 5.8:1 on paper */
   --color-warn-wash:  #fff6e5;
 
   --font-sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont,
@@ -142,12 +143,17 @@
 
   /* --- tables ----------------------------------------------------------- */
   .sc-tablewrap { @apply overflow-x-auto; }
-  .sc-table   { @apply w-full border-collapse text-[13px]; }
+  .sc-table   { @apply w-full border-collapse text-[13px] text-ink; }
   .sc-table thead th {
     @apply sticky top-0 z-10 whitespace-nowrap border-b border-line bg-wash px-3 py-2.5
            text-left text-[12px] font-semibold text-ink-3;
   }
-  .sc-table tbody td { @apply border-b border-line px-3 py-2.5 align-middle text-ink; }
+  /* NO COLOUR HERE. `.sc-table tbody td` is (0,1,3) and outranks a semantic class like
+     .sc-up at (0,1,0), so setting the colour on the cell silently flattened every gain,
+     loss and status in every table to plain ink — the one place colour is doing real
+     work. The table carries the default and cells inherit it, so any class on a cell
+     wins by simply existing. */
+  .sc-table tbody td { @apply border-b border-line px-3 py-2.5 align-middle; }
   .sc-table tbody tr:last-child td { @apply border-b-0; }
   .sc-table tbody tr:hover td { @apply bg-wash; }
   .sc-table .r { @apply text-right; }
@@ -188,7 +194,10 @@
   .card {
     @apply rounded-xl border border-line bg-paper p-5;
   }
-  .card + .card { @apply mt-4; }
+  /* Stacked cards need air between them; cards laid out BY a grid or flex parent already
+     have it, and a margin on all but the first is what pushed the second, third and
+     fourth index card 16px below the first. */
+  :not(.grid):not(.row):not(.ctl):not(.posture):not(.hero) > .card + .card { @apply mt-4; }
   .card h2 { @apply mb-3 text-[15px] font-semibold text-ink; }
 
   .banner {
@@ -233,14 +242,14 @@
     width: 100%;
     max-width: 100%;
     overflow-x: auto;
-    @apply border-collapse text-[13px];
+    @apply border-collapse text-[13px] text-ink;
   }
   main table thead th, .card table thead th {
     @apply whitespace-nowrap border-b border-line bg-wash px-3 py-2.5 text-left
            text-[12px] font-semibold text-ink-3;
   }
   main table tbody td, .card table tbody td {
-    @apply border-b border-line px-3 py-2.5 align-middle text-ink;
+    @apply border-b border-line px-3 py-2.5 align-middle;
   }
   main table tbody tr:last-child td { @apply border-b-0; }
   main table tbody tr:hover td { @apply bg-wash; }
@@ -437,6 +446,17 @@
   .seg { @apply flex items-center justify-center text-[11px] font-bold text-white; }
   .seg:first-child { border-radius: 7px 0 0 7px; }
   .seg:last-child  { border-radius: 0 7px 7px 0; }
+  /* Each tier paints the equity segment in its own colour, so the bar says which regime
+     it is drawn under without reading the label. Without these the segment had no fill at
+     all and its white label sat on white. */
+  .seg.eq-on      { background: var(--color-up); }
+  .seg.eq-caution { background: var(--color-warn); }
+  .seg.eq-off     { background: var(--color-orange); }
+  .seg.eq-crash   { background: var(--color-down); }
+  .seg.excess {
+    background: repeating-linear-gradient(45deg,
+      var(--color-down) 0 7px, #b81f26 7px 14px);
+  }
   .seg.cash { @apply bg-wash-2 text-ink-2; }
   .g4 { grid-template-columns: repeat(auto-fit, minmax(256px, 1fr)); }
   .bar {
@@ -451,4 +471,162 @@
 
   /* --- tradebook: the capacity bar ------------------------------------------ */
   .cap { @apply relative h-3 overflow-hidden rounded-md bg-wash-2; }
+}
+
+/* ==========================================================================
+   Regime overlay.
+
+   This page carried 222 lines of its own stylesheet — more than any other — and
+   consolidating the sheets left its bespoke pieces with no rules at all: the
+   decision summary, the tier ladder, the gauge, the server-rendered bars. The
+   page still said everything it used to say, as an undifferentiated wall of
+   text 15,000px tall. These are those components, retinted.
+   ========================================================================== */
+@layer components {
+
+  /* --- status strip ------------------------------------------------------- */
+  .strip {
+    display: grid; gap: 1px; overflow: hidden;
+    grid-template-columns: repeat(auto-fit, minmax(134px, 1fr));
+    background: var(--color-line);
+    @apply my-5 rounded-xl border border-line;
+  }
+  .strip > div { @apply bg-paper px-3.5 py-2.5; }
+  .strip dt { @apply mb-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-3; }
+  .strip dd { @apply overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-semibold text-ink; }
+  .strip dd.on { @apply text-up; }
+  .strip dd.warn { @apply text-down; }
+  .strip dd.hold { @apply text-warn; }
+
+  .banners { @apply mb-5 flex flex-col gap-2; }
+  .banner.hold { @apply border-warn-wash bg-warn-wash text-warn; }
+  .banner span.d { @apply text-ink-3; }
+
+  /* --- the five answers, above everything that explains them --------------- */
+  /* Hairlines are drawn by each cell rather than by a 1px grid gap. With auto-fit, five
+     answers in a four-column row leave one cell empty, and a gap-coloured container shows
+     that emptiness as a grey slab half the width of the page. */
+  .decide {
+    display: grid; overflow: hidden;
+    /* 206px, not 232: the shell is 1132px inside its padding, and five answers at 232
+       wrap the fifth onto a row of its own. At 206 all five sit on one line where they
+       can be read as one statement. */
+    grid-template-columns: repeat(auto-fit, minmax(206px, 1fr));
+    @apply rounded-xl border border-line bg-paper;
+  }
+  .d-item {
+    @apply flex min-w-0 flex-col gap-1 bg-paper px-4 py-3.5;
+    box-shadow: 0 0 0 0.5px var(--color-line);
+  }
+  .d-q { @apply text-[10px] font-semibold uppercase tracking-[0.13em] text-ink-3; }
+  .d-a { @apply text-[19px] font-bold leading-tight text-ink; overflow-wrap: anywhere; }
+  .d-item .muted { @apply text-[12px]; }
+
+  /* --- tier identity ------------------------------------------------------- */
+  .hero { @apply grid gap-4; grid-template-columns: minmax(255px, 1fr) minmax(340px, 1.7fr); }
+  @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } }
+  .tier { @apply text-[54px] font-extrabold leading-none tracking-[-0.03em]; }
+  .tier-name { @apply mt-1 text-[21px] font-bold tracking-tight; }
+  .lede { @apply mt-3 text-[13.5px] leading-relaxed text-ink-2; }
+  .on { color: var(--color-up); }
+  .caution { color: var(--color-warn); }
+  .off { color: var(--color-orange); }
+  .crash { color: var(--color-down); }
+  .st-above { @apply text-up; }
+  .st-below { @apply text-down; }
+  .st-unknown { @apply text-ink-3; }
+  .warnc { color: var(--color-orange); }
+
+  /* --- gauge ---------------------------------------------------------------- */
+  .gauge { @apply relative my-3 flex h-7 rounded-md border border-line; }
+  .gauge > div {
+    @apply flex items-center justify-start pl-1.5 text-[10px] font-bold text-white;
+  }
+  .gauge > div:first-child { border-radius: 5px 0 0 5px; }
+  .gauge > div:last-child { border-radius: 0 5px 5px 0; }
+  .gauge .b-crash { background: var(--color-down); }
+  .gauge .b-off { background: var(--color-orange); }
+  .gauge .b-caution { background: var(--color-warn); }
+  .gauge .b-on { background: var(--color-up); }
+  .needle { @apply absolute -top-1.5 -bottom-1.5 w-0.5 bg-ink; }
+
+  /* --- tier ladder ---------------------------------------------------------- */
+  .ladder {
+    display: grid; gap: 1px; overflow: hidden;
+    background: var(--color-line);
+    @apply rounded-xl border border-line;
+  }
+  .rung {
+    display: grid; grid-template-columns: 74px 1fr;
+    @apply items-start gap-4 bg-paper px-4 py-3;
+  }
+  .rung.now { @apply bg-wash; box-shadow: inset 3px 0 0 currentColor; }
+  .rung .badge2 { @apply text-[19px] font-extrabold leading-tight; }
+  .rung .cap { @apply text-[11px] text-ink-3; }
+  .rung h3 { @apply mb-0.5 text-[13px] font-bold text-ink; }
+  .rung p { @apply text-[12px] leading-normal text-ink-3; }
+  .rung .youarehere {
+    @apply ml-2 rounded border border-current px-1.5 py-px align-[2px]
+           text-[10px] font-semibold uppercase tracking-[0.11em];
+  }
+  .badge2 { @apply font-extrabold; }
+
+  /* --- switch explainer ------------------------------------------------------ */
+  .switches {
+    display: grid; gap: 1px; overflow: hidden;
+    background: var(--color-line);
+    @apply rounded-xl border border-line;
+  }
+  .switch {
+    display: grid; grid-template-columns: 96px 108px 1fr;
+    @apply items-baseline gap-4 bg-paper px-4 py-2.5 text-[12.5px];
+  }
+  .switch .l { @apply text-[11px] font-semibold uppercase tracking-[0.11em] text-ink-3; }
+  .switch .v { @apply font-bold text-ink; }
+  .switch .v.on { @apply text-up; }
+  .switch .v.caution { @apply text-warn; }
+  .switch .v.off { @apply text-ink-3; }
+  .switch .m { @apply leading-normal text-ink-3; }
+  @media (max-width: 780px) {
+    .switch { grid-template-columns: 1fr; gap: 2px; }
+    .rung { grid-template-columns: 1fr; }
+  }
+
+  /* --- server-rendered bars: no script, no CDN -------------------------------- */
+  .chart { @apply mt-2 flex flex-col gap-1.5; }
+  .crow { display: grid; grid-template-columns: 96px 1fr 74px; @apply items-center gap-2.5 text-[12px]; }
+  .track { @apply relative block h-4 overflow-hidden rounded bg-wash-2; }
+  .fill { @apply block h-full rounded; background: var(--color-brand-lite); min-width: 2px; }
+  .crow .val { @apply text-right text-ink-3; }
+  .dv { @apply relative block h-4 rounded bg-wash-2; }
+  .dv .zero { @apply absolute -top-0.5 -bottom-0.5 left-1/2 w-px; background: var(--color-line-2); }
+  .dv .pos, .dv .neg { @apply absolute top-0 h-full rounded; }
+  .dv .pos { left: 50%; background: var(--color-up); min-width: 2px; }
+  .dv .neg { right: 50%; background: var(--color-down); min-width: 2px; }
+
+  /* --- reasoning list --------------------------------------------------------- */
+  .why { @apply flex list-none flex-col gap-2 text-[14px] leading-relaxed; }
+  .why li { @apply relative pl-5; }
+  .why li::before {
+    content: ""; @apply absolute left-0 h-0.5 w-2.5;
+    top: 0.62em; background: var(--color-brand-lite);
+  }
+
+  /* --- touch targets ---------------------------------------------------------- */
+  /* A mouse is precise; a thumb is not. Only raised on a coarse pointer. */
+  @media (pointer: coarse) {
+    .sc-nav a, button, .btn, summary { min-height: 44px; }
+    .sc-nav a, summary { display: flex; align-items: center; }
+  }
+}
+
+@layer components {
+  /* The index cards hold a five-column table in about 270px. Auto table layout answers
+     that by compressing every column until "20-DMA" breaks after the hyphen and "above"
+     is clipped to "ab". Refusing to wrap makes the table wider than the card, which is
+     what the scroll rule is for — a row you can read and drag beats one that fits and
+     lies. */
+  table[aria-label="Index health"] td,
+  table[aria-label="Index health"] th { white-space: nowrap; }
+  table[aria-label="Index health"] td:first-child { @apply font-medium text-ink; }
 }

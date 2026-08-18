@@ -364,47 +364,55 @@ def _win_cfg(late=True, mult=0.75):
 
 
 def test_the_entry_window_states_are_open_late_then_closed():
-    import scripts.strangle as R
-    assert R._entry_window_state(_win_cfg(), dt.time(9, 30))["state"] == "open"
-    late = R._entry_window_state(_win_cfg(), dt.time(10, 30))
+    assert C.entry_window_state(_win_cfg(), dt.time(9, 30))["state"] == "open"
+    late = C.entry_window_state(_win_cfg(), dt.time(10, 30))
     assert late["state"] == "late" and late["veto"] is None
     assert late["size_mult"] == 0.75
-    assert R._entry_window_state(_win_cfg(), dt.time(13, 0))["state"] == "closed"
+    assert C.entry_window_state(_win_cfg(), dt.time(13, 0))["state"] == "closed"
 
 
 def test_late_entry_disabled_closes_the_window_at_the_configured_time():
-    import scripts.strangle as R
-    shut = R._entry_window_state(_win_cfg(late=False), dt.time(10, 30))
+    shut = C.entry_window_state(_win_cfg(late=False), dt.time(10, 30))
     assert shut["state"] == "closed" and "late entry is disabled" in shut["veto"]
 
 
 def test_an_open_window_never_reduces_size():
-    import scripts.strangle as R
-    assert R._entry_window_state(_win_cfg(), dt.time(9, 15))["size_mult"] == 1.0
+    assert C.entry_window_state(_win_cfg(), dt.time(9, 15))["size_mult"] == 1.0
 
 
-def test_check_and_the_runner_cannot_disagree_about_the_window():
-    """--check claims to list every veto standing between now and an entry. It returned
-    before the window was evaluated, so it reported would_trade on a day the runner
-    refuses on the clock alone. Both now read one helper; a second copy of the rule is the
-    defect this guards."""
-    tree = ast.parse(pathlib.Path("scripts/strangle.py").read_text())
-    calls = sum(1 for n in ast.walk(tree)
-                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-                and n.func.id == "_entry_window_state")
-    assert calls == 2, "check and runner must each call the one helper, and nothing else"
+def test_a_missing_config_falls_back_to_a_closed_window_not_an_open_one():
+    """autorun asks about instruments whose config may be unreadable. Defaulting to open
+    would start a session against rules nobody could load."""
+    st = C.entry_window_state(None, dt.time(10, 30))
+    assert st["state"] == "closed" and st["size_mult"] == 0.0
 
-    # and the rule itself is parsed in exactly one place: two functions each splitting
-    # "09:45" on a colon is how they drift apart.
-    fn = next(n for n in tree.body
-              if isinstance(n, ast.FunctionDef) and n.name == "_entry_window_state")
-    splitters = [n for n in ast.walk(tree)
-                 if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-                 and n.func.attr == "split"
-                 and any(isinstance(a, ast.Constant) and a.value == ":" for a in n.args)]
-    inside = [n for n in ast.walk(fn) if n in splitters]
-    assert len(splitters) == len(inside) + 1, (
-        "a time string is being parsed outside the helper AND outside force_exit")
+
+def test_the_entry_window_rule_is_defined_exactly_once():
+    """Three callers need this answer — the runner entering, --check reporting, and
+    autorun deciding whether to start a process at all — and each grew its own copy.
+    Both drift directions are silent: autorun starts a session that immediately refuses,
+    or declines one that would have traded and the day is lost with no record of why."""
+    defs = []
+    for path in ("app/strategies/strangle/clock.py", "scripts/strangle.py",
+                 "app/analytics/autorun.py"):
+        tree = ast.parse(pathlib.Path(path).read_text())
+        defs += [(path, n.name) for n in ast.walk(tree)
+                 if isinstance(n, ast.FunctionDef)
+                 and n.name in ("entry_window_state", "_entry_window_state",
+                                "_entry_deadline")]
+    assert defs == [("app/strategies/strangle/clock.py", "entry_window_state")], defs
+
+
+def test_no_caller_reparses_the_window_times_for_itself():
+    """A second function splitting "09:45" on a colon is how the copies came back last
+    time. force_exit is the one legitimate other time parse in the runner."""
+    for path, allowed in (("scripts/strangle.py", 1), ("app/analytics/autorun.py", 0)):
+        tree = ast.parse(pathlib.Path(path).read_text())
+        splits = [n for n in ast.walk(tree)
+                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                  and n.func.attr == "split"
+                  and any(isinstance(a, ast.Constant) and a.value == ":" for a in n.args)]
+        assert len(splits) == allowed, f"{path} parses {len(splits)} time strings itself"
 
 
 def test_a_margin_claim_is_released_however_the_runner_exits():
@@ -481,3 +489,107 @@ def test_no_instrument_configured_is_reported_rather_than_crashing():
     from app.analytics import options_view as V
     nx = V._next_overall([])
     assert nx["op"] is None and nx["instruments"] == []
+
+
+def test_concurrent_commits_neither_clobber_nor_crash(tmp_path):
+    """Three sessions committing at once. Before the lock this lost entries; before the
+    unique temp name it RAISED, because each process replaced the same ".tmp" out from
+    under the others and the loser died mid-commit with FileNotFoundError. autorun starts
+    the instruments back to back, which is the case most likely to hit both."""
+    import subprocess
+    import sys
+    import textwrap
+    script = tmp_path / "hammer.py"
+    script.write_text(textwrap.dedent(f'''
+        import sys
+        sys.path.insert(0, {str(pathlib.Path.cwd())!r})
+        from app.strategies.strangle import allocation as A
+        for _ in range(40):
+            A.commit(sys.argv[2], float(sys.argv[3]), sys.argv[1])
+    '''))
+    ledger = str(tmp_path / "c.json")
+    kids = [subprocess.Popen([sys.executable, str(script), ledger, slug, str(m)],
+                             stderr=subprocess.PIPE)
+            for slug, m in (("nifty", 9e5), ("banknifty", 5e5), ("sensex", 6e5))]
+    errs = [(k.communicate()[1] or b"").decode() for k in kids]
+    assert all(k.returncode == 0 for k in kids), f"a commit crashed: {errs}"
+    assert sorted(ALLOC._read(ledger)) == ["banknifty", "nifty", "sensex"]
+
+
+def test_no_temp_file_is_left_behind(tmp_path):
+    ledger = tmp_path / "c.json"
+    ALLOC.commit("nifty", 900_000, str(ledger))
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_check_reports_a_real_size_even_when_the_window_is_shut():
+    """A closed window carries size_mult 0.0 — correct for "may I enter", nonsense for
+    "how big would this be". Multiplying by it made --check report that the multipliers
+    had asked for 0 lots."""
+    from app.strategies.strangle import sizing as Z
+    cfg = yaml.safe_load(open(INS.get("sensex").config))
+    shut = C.entry_window_state(cfg, dt.time(23, 0))
+    assert shut["veto"] and shut["size_mult"] == 0.0
+    mult = 1.0 if shut["veto"] else shut["size_mult"]
+    detail = Z.session_lots_detail(cfg, 1.0 * mult)
+    assert detail["requested"] >= 1, "check would report a zero-lot request"
+
+
+def test_the_min_lots_floor_is_reported_when_it_overrides():
+    """On the "3+" bucket every instrument already sits at min_lots, so the late-entry
+    haircut changes nothing there. Left unreported, the config reads as though 37.5% of
+    base size were being taken when the position is actually the floor."""
+    from app.strategies.strangle import sizing as Z
+    for slug in INS.all_slugs():
+        cfg = yaml.safe_load(open(INS.get(slug).config))
+        far = float(cfg["session"]["by_days_to_expiry"]["3+"]["size_mult"])
+        d = Z.session_lots_detail(cfg, far * 0.75)
+        assert d["floored"] is True and d["note"], slug
+        assert d["lots"] == cfg["sizing"]["min_lots"], slug
+    # and it does NOT claim a floor when the multipliers genuinely win
+    cfg = yaml.safe_load(open(INS.get("nifty").config))
+    near = Z.session_lots_detail(cfg, 1.0)
+    assert near["floored"] is False and near["lots"] == cfg["sizing"]["lots"]
+
+
+def test_far_dated_observations_would_veto_every_tradeable_session():
+    """Pins the DIRECTION of the contamination, which is the dangerous part. Pooling a
+    monthly series' far-dated straddles lifts the band about twofold, so its lower gate
+    sits above any genuine final-week straddle and every real session is refused as "IV
+    below band" — a calibration bug wearing the costume of a market condition."""
+    from app.strategies.strangle import calibrate as CAL
+    obs = [CAL.Observation(session=dt.date(2026, 8, 20), expiry=dt.date(2026, 8, 25),
+                           dte=d, bucket=CAL.bucket_for(d), spot=57000, strike=57000,
+                           call=asp / 2, put=asp / 2)
+           for d, asp in [(1, 700), (2, 760), (3, 790), (4, 810)]]
+    obs += [CAL.Observation(session=dt.date(2026, 8, 3), expiry=dt.date(2026, 8, 25),
+                            dte=d, bucket=CAL.bucket_for(d), spot=57000, strike=57000,
+                            call=(700 + d * 80) / 2, put=(700 + d * 80) / 2)
+            for d in range(5, 19)]
+
+    dirty = CAL.build_bands(obs, min_samples=3)["3+"]
+    clean = CAL.build_bands(obs, min_samples=3, max_dte=4)["3+"]
+
+    real_straddle = 800.0                       # a genuine final-week observation
+    assert dirty["low"] * 0.85 > real_straddle, "the contaminated band must veto it"
+    assert clean["low"] * 0.85 <= real_straddle <= clean["high"] * 1.30
+    assert CAL.excluded_beyond(obs, 4) == 14
+
+
+def test_the_bands_mapping_never_carries_a_non_bucket_key():
+    """It is handed straight to the rules engine as reference_band and iterated by the
+    page, so a bookkeeping key inside it becomes a phantom bucket in both."""
+    from app.strategies.strangle import calibrate as CAL
+    obs = [CAL.Observation(session=dt.date(2026, 8, 20), expiry=dt.date(2026, 8, 25),
+                           dte=d, bucket=CAL.bucket_for(d), spot=57000, strike=57000,
+                           call=400, put=400) for d in (1, 2, 3, 9, 15)]
+    bands = CAL.build_bands(obs, min_samples=1, max_dte=4)
+    assert all(k in ("3+", "2", "1", "0") for k in bands), sorted(bands)
+
+
+def test_readiness_states_how_many_observations_it_discarded():
+    from app.strategies.strangle import calibrate as CAL
+    r = CAL.readiness({"3+": {"sufficient": True}, "2": {"sufficient": True},
+                       "1": {"sufficient": True}}, excluded=14)
+    assert r["excluded_beyond_max_dte"] == 14
+    assert "beyond max_dte" in r["note"]

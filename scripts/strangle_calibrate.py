@@ -66,17 +66,22 @@ def main() -> int:
                                   "contract lacked opening prices in the window"}, indent=2))
         return 1
 
+    max_dte = cfg["session"].get("max_dte")
     bands = CAL.build_bands(obs, low_pct=args.low, high_pct=args.high,
                             min_samples=args.min_samples,
                             iv_low_mult=float(cfg["gates"]["iv_low_multiplier"]),
-                            iv_high_mult=float(cfg["gates"]["iv_high_multiplier"]))
-    ready = CAL.readiness(bands)
+                            iv_high_mult=float(cfg["gates"]["iv_high_multiplier"]),
+                            max_dte=max_dte)
+    excluded = CAL.excluded_beyond(obs, max_dte)
+    ready = CAL.readiness(bands, excluded=excluded)
     span = (min(o.session for o in obs), max(o.session for o in obs))
 
     report = {
         "status": "OK",
         "instrument": und.slug,
         "observations": len(obs),
+        "usable_observations": len(obs) - excluded,
+        "excluded_beyond_max_dte": excluded,
         "history_reached": {"from": span[0].isoformat(), "to": span[1].isoformat(),
                             "calendar_days": (span[1] - span[0]).days,
                             "expiries": len({o.expiry for o in obs})},

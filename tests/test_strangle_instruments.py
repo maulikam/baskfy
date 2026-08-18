@@ -674,3 +674,45 @@ def test_the_page_computes_each_instrument_block_once():
         V.strangle = real
     assert calls["n"] == len(INS.configured())
     assert pg["strangle"]["slug"] == "nifty"
+
+
+# =====================================================================================
+# whether the configured size is economic at all
+# =====================================================================================
+def test_flat_brokerage_drag_is_reported_per_bucket():
+    """Options brokerage is a FLAT Rs 20 per order with no percentage cap, so four legs
+    cost Rs 80 however small the position. Splitting one account three ways cut BANKNIFTY
+    to 2 lots in the far-dated bucket, where 60 units carry 1.33 points of brokerage
+    against a 3.00-point entry-cost budget. The gate vetoing that is the gate telling the
+    truth; what was missing is any way to see it before watching a run of silent vetoes."""
+    from app.strategies.strangle import sizing as Z
+    cfg = yaml.safe_load(open(INS.get("banknifty").config))
+    far = Z.fixed_cost_drag(cfg, "3+")
+    assert far["units"] == 60
+    assert far["brokerage_points"] == pytest.approx(80 / 60, abs=0.01)
+    assert far["drag_pct"] > 40
+    assert far["note"], "an uneconomic bucket must say so"
+
+    near = Z.fixed_cost_drag(cfg, "1")
+    assert near["drag_pct"] < 15 and not near["note"]
+
+
+def test_the_full_size_bucket_is_economic_on_every_instrument():
+    """dte=1 is the one session that runs full target at full size. If flat costs ate the
+    budget there too, the instrument could not be traded at all at this allocation."""
+    from app.strategies.strangle import sizing as Z
+    for slug in INS.all_slugs():
+        cfg = yaml.safe_load(open(INS.get(slug).config))
+        d = Z.fixed_cost_drag(cfg, "1")
+        assert d["drag_pct"] < 20, f"{slug}: {d['drag_pct']}% of the budget is brokerage"
+
+
+def test_a_naked_structure_is_charged_for_two_legs_not_four():
+    from app.strategies.strangle import sizing as Z
+    cfg = yaml.safe_load(open(INS.get("nifty").config))
+    hedged = Z.fixed_cost_drag(cfg, "1")
+    naked = Z.fixed_cost_drag({**cfg, "structure": {**cfg["structure"], "type": "NAKED"}},
+                              "1")
+    # abs tolerance: the field is rounded to three places, so 0.137/2 reads as 0.068
+    assert naked["brokerage_points"] == pytest.approx(hedged["brokerage_points"] / 2,
+                                                      abs=0.001)

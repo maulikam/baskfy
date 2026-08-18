@@ -87,6 +87,38 @@ def session_lots(cfg: dict, size_mult: float, *, loss_streak: int = 0,
     return max(int(s["min_lots"]), min(int(lots), int(ceiling)))
 
 
+def fixed_cost_drag(cfg: dict, bucket: str, *, lots: int | None = None) -> dict:
+    """What the flat per-order brokerage costs as a share of the entry-cost budget.
+
+    Options brokerage is a FLAT Rs 20 per order with no percentage cap, so four legs cost
+    Rs 80 however small the position is. Spread over the position that is a per-point cost
+    of 80/units — and the entry-cost gate only allows stop / min_stop_to_entry_cost_ratio
+    in total.
+
+    This is why position size is not a free parameter here. Splitting one account across
+    three underlyings cut BANKNIFTY to 2 lots in the far-dated bucket, where 60 units carry
+    1.33 points of brokerage against a 3.00-point budget — 44% of it gone before a single
+    spread is crossed, against 20% for NIFTY at the same bucket. The gate is not
+    malfunctioning when it vetoes those; it is reporting that the trade is uneconomic at
+    that size.
+    """
+    sess = cfg["session"]
+    row = sess["by_days_to_expiry"][bucket]
+    lots = lots if lots is not None else session_lots(cfg, float(row["size_mult"]))
+    units = max(lots * int(cfg["instrument"]["lot_size"]), 1)
+    stop = float(row["target_points"]) * float(sess["stop_to_target_ratio"])
+    budget = stop / float(sess["min_stop_to_entry_cost_ratio"])
+    legs = 4 if cfg["structure"]["type"].upper() == "HEDGED" else 2
+    brokerage = float(cfg["costs"]["brokerage_per_order"]) * legs / units
+    return {"bucket": bucket, "lots": lots, "units": units,
+            "stop_points": round(stop, 2), "budget_points": round(budget, 2),
+            "brokerage_points": round(brokerage, 3),
+            "drag_pct": round(brokerage / budget * 100, 1) if budget else None,
+            "note": ("flat brokerage alone consumes most of the entry-cost budget at this "
+                     "size; expect the gate to veto this bucket"
+                     if budget and brokerage / budget > 0.30 else "")}
+
+
 def session_lots_detail(cfg: dict, size_mult: float, *, loss_streak: int = 0,
                         win_streak: int = 0) -> dict:
     """session_lots, plus whether min_lots overrode what the multipliers asked for.

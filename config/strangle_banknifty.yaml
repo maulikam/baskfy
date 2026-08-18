@@ -57,6 +57,17 @@ margin:
   abort_if_query_fails: true
 
 sizing:
+  # ECONOMICS OF THIS SIZE, measured 18 Aug 2026. Options brokerage is a FLAT Rs 20 per
+  # order with no percentage cap, so four legs cost Rs 80 whatever the position size. At
+  # 60 units that is 1.33 points against an entry-cost budget of 3.00 — 44%
+  # of it gone before a spread is crossed. The equivalent figure for NIFTY at the same
+  # bucket is 20%, because its allocation buys it 325 units.
+  #
+  # Consequence: expect the "3+" bucket to be vetoed by the entry-cost gate most days.
+  # That is the gate working, not failing — it is reporting that the trade is uneconomic
+  # at this size. `python -m scripts.strangle --instrument banknifty --check` prints the drag
+  # per bucket. To trade that bucket, this instrument needs a larger allocation, which
+  # means running fewer underlyings at once.
   lots: 4                                   # 0.10 * 47.5L usable / 98,244 = 4.8
   max_catastrophic_loss_pct: 0.15           # [STRUCTURAL]
   catastrophic_loss_denominator: capital_total

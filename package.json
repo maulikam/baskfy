@@ -1,0 +1,25 @@
+{
+  "name": "momentum-desk-ui",
+  "version": "1.0.0",
+  "description": "Vendored stylesheet build for the desk. No CDN at runtime.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "css": "tailwindcss -i app/static/src.css -o app/static/app.css --minify",
+    "css:watch": "tailwindcss -i app/static/src.css -o app/static/app.css --watch",
+    "ui:audit": "node scripts/ui/audit.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "puppeteer-core": "^25.8.0",
+    "tailwindcss": "^4.3.3"
+  },
+  "private": true
+}

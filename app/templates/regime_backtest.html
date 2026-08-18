@@ -1,120 +1,9 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Momentum Desk — Regime Backtest</title>
-<style>
-  :root{
-    --ink:#0b1220; --panel:#111a2e; --panel-2:#0d1626; --line:#22304d; --paper:#e8edf7;
-    --dim:#8593ad; --saffron:#f2a33c; --up:#3ddc97; --down:#ff6b6b; --orange:#ff9f43;
-    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
-    --disp:"Archivo",system-ui,sans-serif;
-    --s2:8px; --s3:14px; --s4:22px;
-  }
-  *{box-sizing:border-box;margin:0}
-  body{background:var(--ink);color:var(--paper);font-family:var(--mono);font-size:13.5px;
-       line-height:1.5;min-height:100vh;padding:26px 3.5vw 90px}
-  header{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;
-         gap:var(--s3);border-bottom:2px solid var(--saffron);padding-bottom:12px;
-         margin-bottom:var(--s4)}
-  h1{font-family:var(--disp);font-weight:900;font-size:clamp(21px,3vw,31px);letter-spacing:-.02em}
-  h1 em{color:var(--saffron);font-style:normal}
-  a{color:var(--saffron)}
-  .nav{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
-  .nav a{font-family:var(--disp);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
-         color:var(--dim);text-decoration:none;padding:6px 13px;border-radius:7px;
-         border:1px solid transparent;transition:color .15s,border-color .15s,background .15s}
-  .nav a:hover{color:var(--paper);border-color:var(--line);background:#152040}
-  .nav a[aria-current="page"]{color:var(--saffron);border-color:var(--saffron)}
-  .nav .api{font-size:11px;opacity:.65}
-  section{margin-bottom:var(--s4)}
-  h2{font-family:var(--disp);font-size:12px;text-transform:uppercase;letter-spacing:.15em;
-     color:var(--dim);margin-bottom:var(--s2)}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;
-        padding:16px 18px;min-width:0;max-width:100%}
-  .banner{border:1px solid var(--saffron);border-radius:9px;padding:12px 16px;
-          background:#221b12;margin-bottom:var(--s4)}
-  .banner b{font-weight:700}
-  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-  th{font-family:var(--disp);font-size:10px;text-transform:uppercase;letter-spacing:.11em;
-     color:var(--dim);text-align:right;padding:7px 9px;border-bottom:1px solid var(--line);
-     white-space:nowrap}
-  th:first-child,td:first-child{text-align:left}
-  td{padding:6px 9px;text-align:right;border-bottom:1px solid #182240;font-size:12.5px;
-     white-space:nowrap}
-  tbody tr:last-child td{border-bottom:0}
-  tbody tr:hover td{background:#152040}
-  .scroll{overflow-x:auto}
-  .ok{color:var(--up)} .bad{color:var(--down)} .na{color:var(--dim)}
-  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:10.5px;
-        font-family:var(--disp);letter-spacing:.08em;border:1px solid currentColor}
-  .pill.warn{color:var(--down)} .pill.mute{color:var(--dim)}
-  .muted{color:var(--dim);font-size:11.5px;line-height:1.6}
-  code{font-size:11.5px;color:var(--saffron)}
-  .grid{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
-  .grid>*{min-width:0}
-  .kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;
-      border-bottom:1px dotted var(--line);font-size:12.5px}
-  .kv:last-child{border-bottom:0}
-  .kv span{color:var(--dim)}
-  .empty{color:var(--dim);font-size:13px;line-height:1.7}
-  .legend{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 12px}
-  .lg{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--dim)}
-  .lg i{width:11px;height:11px;border-radius:3px;display:block;flex:none}
-  .lg i.ring{border:1.5px solid var(--dim);border-radius:50%;background:none}
-  /* Cells are separated by the surface itself rather than by a rule: adjacent fills need
-     a 2px gap so two similar steps of the ramp cannot read as one block. */
-  table.heat{border-collapse:separate;border-spacing:2px}
-  table.heat td{text-align:center;border:0;border-radius:3px;padding:7px 8px}
-  table.heat td:first-child{text-align:right;background:none;color:var(--dim);
-                            font-weight:400}
-  table.heat th{text-align:center} table.heat th:first-child{text-align:right}
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Regime Backtest{% endblock %}
 
-  /* Touch targets. Nav links were ~32px high, under the comfortable 44px, but only on a
-     coarse pointer does that matter — a mouse is precise, a thumb is not. */
-  @media (pointer:coarse){
-    .nav a{min-height:44px;display:flex;align-items:center}
-    button,.btn{min-height:44px}
-    summary{min-height:44px;display:flex;align-items:center}
-  }
-  :focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
-  @media(max-width:780px){
-    body{padding:20px 16px 70px}
-    .card table{display:block;max-width:100%;overflow-x:auto}
-    .kv{flex-wrap:wrap;gap:0}
-  }
+{% block heading %}Regime Backtest{% endblock %}
 
-  /* The badge is the header's third flex item. Once the nav grew, badge+nav no longer fit
-     beside the title, so the badge wrapped to its own row — and under
-     justify-content:space-between a lone item on the second row sits flush LEFT, directly
-     under the title, reading as a stray line rather than as status. The nav absorbs the
-     shrink instead: it already wraps internally, so it gets taller while the title and the
-     badge stay on the first row where they belong. */
-  header>h1{flex:0 0 auto}
-  header>.nav{flex:1 1 auto;min-width:0}
-  header>.badge{flex:0 0 auto;margin-left:auto;text-align:right}
-</style>
-</head>
-<body>
-<header>
-  <h1>Regime <em>Backtest</em></h1>
-  <nav class="nav" aria-label="Sections">
-    <a href="/">Desk</a>
-    <a href="/performance">Performance</a>
-    <a href="/regime">Regime</a>
-    <a href="/regime/backtest" aria-current="page">Backtest</a>
-    <a href="/tradebook">Tradebook</a>
-    <a href="/stops">Stops</a>
-    <a href="/reconcile">Reconcile</a>
-    <a href="/options">Options</a>
-    <a href="/ops">Operations</a>
-    <a href="/settings">Settings</a>
-    <a class="api" href="/status">status</a>
-  </nav>
-</header>
-<main>
-
+{% block content %}
 {% if not b %}
   <section class="card">
     <h2>No backtest results stored</h2>
@@ -630,6 +519,4 @@
 </section>
 
 {% endif %}
-</main>
-</body>
-</html>
+{% endblock %}

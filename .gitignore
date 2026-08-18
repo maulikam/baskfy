@@ -24,3 +24,4 @@ data/uploads/*.csv
 # --- os / editor ---------------------------------------------------------------------
 .DS_Store
 *.swp
+node_modules/

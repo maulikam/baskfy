@@ -459,7 +459,9 @@ def test_a_plain_save_run_still_produces_every_section():
 
 
 def test_the_heatmap_separates_cells_with_the_surface():
-    css = open("app/templates/regime_backtest.html").read()
+    """Two adjacent months of similar return must read as two cells, not one band. The
+    rule lives in the built stylesheet since the per-page style blocks were merged."""
+    css = open("app/static/app.css").read().replace(" ", "")
     assert "border-spacing:2px" in css
 
 

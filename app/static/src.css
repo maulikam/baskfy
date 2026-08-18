@@ -1,0 +1,454 @@
+@import "tailwindcss";
+@source "../templates";
+
+/* Self-hosted, on purpose. A webfont fetched from a CDN at page load is a
+   dependency this app does not need: the desk has to render while you are
+   confirming an order, network or not. One variable file covers 400-700. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/inter-latin.woff2") format("woff2");
+}
+
+/* ==========================================================================
+   Design tokens.
+   Light, near-white surfaces with a teal-green primary and a blue secondary —
+   the palette of the smallcase investment view this UI was asked to match.
+   Every colour is defined once here; nothing is spelled out in a template.
+   ========================================================================== */
+@theme {
+  --color-ink:        #16191f;   /* primary text  */
+  --color-ink-2:      #4a5261;   /* secondary text */
+  --color-ink-3:      #6b7280;   /* muted / labels — 4.83:1 on paper, measured not guessed */
+
+  --color-paper:      #ffffff;   /* card surface */
+  --color-wash:       #f7f8fa;   /* page ground  */
+  --color-wash-2:     #eef1f6;   /* recessed band */
+  --color-line:       #e3e8ef;   /* hairline */
+  --color-line-2:     #d4dbe6;   /* stronger rule */
+
+  /* TWO greens, because one cannot do both jobs. #1ebf8e is smallcase's green and it
+     carries white text at 2.36:1 — unreadable on the primary call to action. The bright
+     tone is kept for marks, rings and rules where it carries no text; anything with a
+     label on it uses the darkest tone that still reads as the same hue. */
+  --color-brand-lite: #1ebf8e;   /* decoration only: never behind text */
+  --color-brand:      #158563;   /* primary action fill, 4.60:1 with white */
+  --color-brand-ink:  #0c7f5c;   /* text on brand-wash, 4.50:1 */
+  --color-brand-wash: #e6f7f0;
+
+  --color-link:       #2f6fed;   /* secondary action, links */
+  --color-link-wash:  #eaf1fe;
+
+  --color-up:         #00874f;   /* gains  — 4.59:1 on paper */
+  --color-down:       #e12d33;   /* losses — 4.54:1 on paper */
+  --color-flag:       #7b5bf2;   /* pending / attention pill */
+  --color-warn:       #8a5200;
+  --color-warn-wash:  #fff6e5;
+
+  --font-sans: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+               "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-num:  "Inter", ui-sans-serif, -apple-system, sans-serif;
+
+  --radius-card: 12px;
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+@layer base {
+  html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  body {
+    background: var(--color-wash);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  /* Figures line up in columns. Tabular numerals are the difference between a
+     price table you can scan and one you have to read. */
+  table, .num, .sc-metric__v { font-variant-numeric: tabular-nums; }
+  a { color: var(--color-link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--color-link); outline-offset: 2px; border-radius: 4px; }
+  h1, h2, h3 { letter-spacing: -0.011em; font-weight: 600; }
+}
+
+/* ==========================================================================
+   Components
+   ========================================================================== */
+@layer components {
+
+  /* --- shell ------------------------------------------------------------ */
+  .sc-shell   { @apply mx-auto w-full max-w-[1180px] px-4 sm:px-6 pb-24; }
+  .sc-topbar  { @apply sticky top-0 z-30 border-b border-line bg-paper/95 backdrop-blur; }
+  .sc-topbar__in { @apply mx-auto flex h-14 max-w-[1180px] items-center gap-1 px-4 sm:px-6; }
+  .sc-brand   { @apply mr-3 flex shrink-0 items-center gap-2 text-[15px] font-bold tracking-tight text-ink; }
+  .sc-brand__mark { @apply grid h-7 w-7 place-items-center rounded-lg bg-brand text-[13px] font-bold text-white; }
+
+  /* min-w-0 IS THE WHOLE FIX. A flex item defaults to min-width:auto, so the nav refuses
+     to shrink below its content, pushes the bar wider than the viewport and takes the
+     whole page with it — at 400px every page scrolled sideways and the hero button sat
+     off-screen. The old stylesheet carried this rule per page; it belongs to the shell
+     now. flex-1 lets it take the slack, min-w-0 lets it give it back. */
+  .sc-nav     { @apply flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto; }
+  .sc-nav::-webkit-scrollbar { height: 0; }
+  .sc-nav a   { @apply whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] font-medium text-ink-2 no-underline transition-colors; }
+  .sc-nav a:hover { @apply bg-wash-2 text-ink no-underline; }
+  .sc-nav a[aria-current="page"] { @apply bg-brand-wash text-brand-ink; }
+
+  /* --- surfaces --------------------------------------------------------- */
+  .sc-card    { @apply rounded-xl border border-line bg-paper; }
+  .sc-card__b { @apply p-5; }
+  .sc-card__h { @apply flex items-center justify-between gap-3 border-b border-line px-5 py-3.5; }
+  .sc-card__h h2 { @apply text-[15px] font-semibold text-ink; }
+
+  /* The page identity block: mark, title, byline, badges. */
+  .sc-hero    { @apply flex flex-wrap items-center gap-4 rounded-xl border border-line bg-paper p-5; }
+  .sc-hero__mark { @apply grid h-14 w-14 shrink-0 place-items-center rounded-full border-2 border-brand-lite text-[13px] font-bold text-brand-ink; }
+  .sc-hero h1 { @apply text-[22px] font-bold tracking-tight text-ink; }
+  .sc-hero__by { @apply mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-3; }
+
+  /* --- metrics ---------------------------------------------------------- */
+  .sc-metrics { @apply grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3; }
+  .sc-metric__k { @apply text-[12px] font-medium text-ink-3; }
+  .sc-metric__v { @apply mt-1 text-[20px] font-semibold tracking-tight text-ink; }
+  .sc-metric__s { @apply mt-0.5 text-[12px] text-ink-3; }
+
+  /* --- badges & pills --------------------------------------------------- */
+  .sc-badge   { @apply inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold; }
+  .sc-badge--ok   { @apply bg-brand-wash text-brand-ink; }
+  .sc-badge--info { @apply bg-link-wash text-link; }
+  .sc-badge--warn { @apply bg-warn-wash text-warn; }
+  .sc-badge--bad  { @apply bg-[#fdecec] text-down; }
+  .sc-badge--flag { @apply bg-flag text-white; }
+  .sc-badge--mute { @apply bg-wash-2 text-ink-2; }
+
+  .sc-up   { @apply font-semibold text-up; }
+  .sc-down { @apply font-semibold text-down; }
+
+  /* --- buttons ---------------------------------------------------------- */
+  .sc-btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5
+                   text-[14px] font-semibold no-underline transition-colors
+                   disabled:cursor-not-allowed disabled:opacity-45; }
+  .sc-btn:hover { @apply no-underline; }
+  .sc-btn--primary { @apply bg-brand text-white hover:bg-brand-ink; }
+  .sc-btn--secondary { @apply border border-link bg-paper text-link hover:bg-link-wash; }
+  .sc-btn--ghost { @apply border border-line-2 bg-paper text-ink-2 hover:bg-wash-2; }
+  .sc-btn--danger { @apply bg-down text-white hover:brightness-95; }
+  .sc-btn--sm { @apply px-3 py-1.5 text-[13px]; }
+  .sc-btn--block { @apply w-full; }
+
+  /* --- tables ----------------------------------------------------------- */
+  .sc-tablewrap { @apply overflow-x-auto; }
+  .sc-table   { @apply w-full border-collapse text-[13px]; }
+  .sc-table thead th {
+    @apply sticky top-0 z-10 whitespace-nowrap border-b border-line bg-wash px-3 py-2.5
+           text-left text-[12px] font-semibold text-ink-3;
+  }
+  .sc-table tbody td { @apply border-b border-line px-3 py-2.5 align-middle text-ink; }
+  .sc-table tbody tr:last-child td { @apply border-b-0; }
+  .sc-table tbody tr:hover td { @apply bg-wash; }
+  .sc-table .r { @apply text-right; }
+  .sc-table .sym { @apply font-medium text-ink; }
+
+  /* --- callouts --------------------------------------------------------- */
+  .sc-note { @apply flex items-start gap-2.5 rounded-lg border px-4 py-3 text-[13px]; }
+  .sc-note--ok   { @apply border-brand-wash bg-brand-wash text-brand-ink; }
+  .sc-note--info { @apply border-link-wash bg-link-wash text-link; }
+  .sc-note--warn { @apply border-warn-wash bg-warn-wash text-warn; }
+  .sc-note--bad  { @apply border-[#fdecec] bg-[#fdecec] text-down; }
+
+  .sc-muted { @apply text-[13px] text-ink-3; }
+  .sc-rule  { @apply my-6 border-t border-line; }
+
+  /* --- side rail -------------------------------------------------------- */
+  .sc-rail { @apply space-y-4; }
+  .sc-list { @apply divide-y divide-line rounded-xl border border-line bg-paper; }
+  .sc-list a, .sc-list button { @apply flex w-full items-center gap-3 px-4 py-3 text-left text-[13px] font-medium text-ink no-underline hover:bg-wash; }
+}
+
+/* ==========================================================================
+   Legacy class map.
+
+   Ten pages were written against a dark, hand-rolled stylesheet that each one
+   carried its own copy of — roughly 1,130 duplicated lines. Rewriting every
+   element would risk ten working pages for a repaint. Instead the old class
+   names are re-pointed at the new tokens here, so the whole surface changes
+   palette from ONE file and the markup keeps working. New work uses the sc-*
+   components above; this block is the bridge, and it shrinks as pages migrate.
+   ========================================================================== */
+@layer components {
+
+  main > section { @apply mb-5; }
+  main h2 { @apply mb-3 text-[15px] font-semibold text-ink; }
+  main h3 { @apply mb-2 text-[14px] font-semibold text-ink; }
+
+  .card {
+    @apply rounded-xl border border-line bg-paper p-5;
+  }
+  .card + .card { @apply mt-4; }
+  .card h2 { @apply mb-3 text-[15px] font-semibold text-ink; }
+
+  .banner {
+    @apply mb-4 flex flex-wrap items-start gap-x-3 gap-y-1 rounded-lg border
+           border-line bg-paper px-4 py-3 text-[13px] text-ink-2;
+  }
+  .banner.ok   { @apply border-brand-wash bg-brand-wash text-brand-ink; }
+  .banner.warn { @apply border-warn-wash bg-warn-wash text-warn; }
+  .banner.bad  { @apply border-[#fdecec] bg-[#fdecec] text-down; }
+
+  .tag, .pill {
+    @apply inline-flex items-center rounded-md bg-wash-2 px-2 py-0.5 text-[11px]
+           font-semibold text-ink-2;
+  }
+  .pill.warn, .tag.warn { @apply bg-warn-wash text-warn; }
+  .pill.bad,  .tag.bad  { @apply bg-[#fdecec] text-down; }
+  .pill.ok,   .tag.ok   { @apply bg-brand-wash text-brand-ink; }
+  .pill.mute, .tag.mute { @apply bg-wash-2 text-ink-2; }
+
+  .muted, .empty, .sub, .help { @apply text-[13px] text-ink-3; }
+  .ok   { @apply text-up; }
+  .bad, .neg  { @apply text-down; }
+  .pos  { @apply text-up; }
+  .warn { @apply text-warn; }
+  .na, .thin { @apply text-ink-3; }
+  .sym  { @apply font-medium text-ink; }
+  .api  { @apply text-[12px] text-ink-3; }
+
+  /* tables ---------------------------------------------------------------- */
+  /* Dense tables scroll at EVERY width, not only on a phone. That rule was once gated
+     behind max-width:780px on the assumption anything wider fits, and the regime
+     exposure table still overflowed the page at 900px: whether a table fits depends on
+     its content, not on the viewport. display:block is what makes the element itself
+     scrollable; width:100% keeps it filling the card.
+
+     NOT width:max-content. That was tried and it is circular on a grid item: the item's
+     max-content grows the TRACK, and the max-width:100% meant to clamp it then resolves
+     against the grown track. Measured on /regime at 390px — a table reporting
+     min-width:100%, max-width:100% and a used width of 786px inside a 316px grid cell. */
+  main table, .card table {
+    display: block;      /* what makes the element itself scrollable */
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    @apply border-collapse text-[13px];
+  }
+  main table thead th, .card table thead th {
+    @apply whitespace-nowrap border-b border-line bg-wash px-3 py-2.5 text-left
+           text-[12px] font-semibold text-ink-3;
+  }
+  main table tbody td, .card table tbody td {
+    @apply border-b border-line px-3 py-2.5 align-middle text-ink;
+  }
+  main table tbody tr:last-child td { @apply border-b-0; }
+  main table tbody tr:hover td { @apply bg-wash; }
+  td.r, th.r, .r { @apply text-right; }
+  .scroll { @apply overflow-x-auto; }
+
+  /* key/value pairs -------------------------------------------------------- */
+  .kv { @apply flex items-baseline justify-between gap-3 border-b border-line py-2 text-[13px]; }
+  .kv:last-child { @apply border-b-0; }
+  .kv .k, .k { @apply text-ink-3; }
+  .kv .v, .v { @apply font-medium text-ink; }
+
+  /* metric-ish blocks ------------------------------------------------------ */
+  /* A grid or flex item defaults to min-width:auto — its MIN-CONTENT width. A card
+     holding a wide table therefore refuses to shrink below that table, and the page
+     scrolls sideways instead of the table scrolling inside its card. Measured on
+     /regime at 390px: two cards at 430px each, a page 823px wide. min-width:0 is what
+     lets the card give way and hand the overflow to the table, which is built to take
+     it. Same defaulting that stopped the nav shrinking, one layer down. */
+  .grid { @apply grid gap-4; }
+  .grid > *, .row > *, .posture > *, .ctl > * { min-width: 0; }
+  .card, .fact, .stat { min-width: 0; }
+  .g2 { @apply sm:grid-cols-2; }
+  .g3 { @apply sm:grid-cols-2 lg:grid-cols-3; }
+  .gm { @apply grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3; }
+  /* A strip of equal cards. The old sheet gave .card flex:1;min-width:220px, so
+     children of .row shared the width; without it they size to content and the strip
+     goes ragged. Basis 300px keeps them equal but lets them wrap on narrow screens. */
+  .row { @apply flex flex-wrap items-stretch gap-4; }
+  .row > .card, .row > .fact, .row > .stat { @apply flex-1; flex-basis: 300px; }
+
+  .metric dt, .stat .k, .fact .k { @apply text-[12px] font-medium text-ink-3; }
+  .metric dd, .stat .v, .fact .v {
+    @apply mt-1 text-[20px] font-semibold tracking-tight text-ink;
+  }
+  .posture { @apply grid gap-4 sm:grid-cols-2 lg:grid-cols-3; }
+  .fact, .stat {
+    @apply rounded-xl border border-line bg-paper p-4;
+  }
+  .fact.good { @apply border-brand-wash bg-brand-wash; }
+  .fact.warn { @apply border-warn-wash bg-warn-wash; }
+  .fact.bad  { @apply border-[#fdecec] bg-[#fdecec]; }
+
+  /* chart chrome ----------------------------------------------------------- */
+  .axis { @apply mt-2 flex justify-between text-[12px] text-ink-3; }
+  .legend { @apply mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-ink-2; }
+  .legend i { @apply mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle; }
+  svg { @apply max-w-full; }
+
+  /* controls --------------------------------------------------------------- */
+  button, .btn {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg
+           border-0 px-4 py-2.5 text-[14px] font-semibold no-underline transition-colors
+           disabled:cursor-not-allowed disabled:opacity-45;
+  }
+  .btn-saffron { @apply bg-brand text-white hover:brightness-110; }
+  .btn-ghost   { @apply border border-line-2 bg-paper text-ink-2 hover:bg-wash-2; }
+  .btn-danger  { @apply bg-down text-white hover:brightness-95; }
+  a.btn:hover, button:hover { @apply no-underline; }
+
+  input, select, textarea {
+    @apply rounded-lg border border-line-2 bg-paper px-3 py-2 text-[14px] text-ink;
+  }
+  input:focus, select:focus, textarea:focus { @apply border-link outline-none; }
+  label { @apply block text-[13px] text-ink-2; }
+
+  code, pre {
+    @apply rounded bg-wash-2 px-1.5 py-0.5 font-mono text-[12px] text-ink-2;
+  }
+  pre { @apply block overflow-x-auto p-3 leading-relaxed; }
+
+  /* ops / options odds and ends -------------------------------------------- */
+  .ctl { @apply grid gap-4 sm:grid-cols-2 lg:grid-cols-3; }
+  .ctl form { @apply rounded-xl border border-line bg-paper p-4; }
+  .ctl form.primary { @apply border-brand-lite; }
+  .ctl h4 { @apply text-[14px] font-semibold text-ink; }
+  .ctl .sum { @apply mt-1 mb-3 text-[13px] text-ink-3; }
+  .ctl .last { @apply text-[12px] text-ink-3; }
+  .steps-path { @apply space-y-2 text-[13px]; }
+  .steps-path > div { @apply flex items-start gap-2.5; }
+  .steps-path .k {
+    @apply mt-0.5 inline-flex shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold;
+  }
+  .steps-path .k.ok  { @apply bg-brand-wash text-brand-ink; }
+  .steps-path .k.bad { @apply bg-[#fdecec] text-down; }
+  .hold { @apply text-ink-2; }
+  .collect { @apply text-[13px] text-ink-2; }
+  details > summary { @apply cursor-pointer select-none text-[13px] font-medium text-ink; }
+  details[open] > summary { @apply mb-3; }
+  /* The heatmap separates its cells WITH THE SURFACE, so two adjacent months of similar
+     return read as two cells rather than one band of colour. */
+  table.heat { border-collapse: separate; border-spacing: 2px; }
+  table.heat td { @apply rounded border-0 px-2 py-1.5 text-center font-medium; }
+  table.heat td:first-child { @apply bg-transparent text-right text-ink-3; }
+  table.heat th { @apply text-center; }
+  table.heat th:first-child { @apply text-right; }
+}
+
+/* ==========================================================================
+   Page components.
+
+   These are NOT theming — they are behaviour. The confirm ticket is display:none
+   until a plan exists, its order list is the only scrolling part so the buttons
+   never leave the screen, and its scrollbar is forced visible because macOS hides
+   overlay bars and you must be able to see that orders are scrolled out of view
+   BEFORE confirming. Losing these rules with the old stylesheet put the live
+   "Confirm & place orders" button on screen with no plan behind it.
+   ========================================================================== */
+@layer components {
+
+  /* --- desk: the confirmation ticket -------------------------------------- */
+  #ticket {
+    position: fixed; inset: 0; display: none; z-index: 50;
+    align-items: center; justify-content: center;
+    padding: 3vh 3vw; overflow-y: auto;
+    background: rgb(16 25 31 / 0.45);
+    backdrop-filter: blur(2px);
+  }
+  #ticket .note {
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+    box-shadow: 0 18px 48px -12px rgb(16 25 31 / 0.28);
+    border-radius: 14px; max-width: 560px; width: 92%;
+    padding: 22px 26px; display: flex; flex-direction: column;
+    overflow: hidden; max-height: 94dvh;
+  }
+  /* Everything is fixed-size EXCEPT the order list, whose >ul rule must out-specify
+     this one (1,1,1 vs 1,1,0) or it can never shrink enough to scroll. */
+  #ticket .note > * { flex: 0 0 auto; }
+  #ticket h3 { @apply text-[19px] font-bold text-ink; margin-bottom: 6px; }
+  #ticket .stamp {
+    @apply self-start rounded-md bg-[#fdecec] px-2.5 py-1 text-[11px] font-bold
+           tracking-[0.12em] text-down uppercase;
+    margin-bottom: 14px;
+  }
+  #ticket .note > ul {
+    list-style: none; margin: 10px 0 0; flex: 1 1 auto; min-height: 0;
+    overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-2) var(--color-wash);
+  }
+  #ticket .note > ul::-webkit-scrollbar { width: 9px; }
+  #ticket .note > ul::-webkit-scrollbar-track { background: var(--color-wash); border-radius: 5px; }
+  #ticket .note > ul::-webkit-scrollbar-thumb { background: var(--color-line-2); border-radius: 5px; }
+  #ticket .note > ul::-webkit-scrollbar-thumb:hover { background: var(--color-ink-3); }
+  #ticket li {
+    @apply flex justify-between gap-4 border-b border-dotted border-line py-1 text-[13px];
+  }
+  #ticket li b { white-space: nowrap; }
+  #ticketTotal {
+    @apply mb-4 flex justify-between gap-4 border-t-2 border-ink pt-2.5 font-semibold;
+  }
+  #ticketCount { @apply mb-0.5; }
+
+  /* --- desk: the plan table ------------------------------------------------ */
+  .act-BUY, .act-ADD  { @apply font-semibold text-up; }
+  .act-TRIM, .act-EXIT { @apply font-semibold text-down; }
+  .act-HOLD { @apply text-ink-3; }
+  .pledged  { @apply text-warn; }
+
+  /* --- desk: the collection strip ------------------------------------------ */
+  .collect {
+    @apply mb-4 flex flex-wrap items-baseline gap-3 rounded-lg border border-line
+           bg-paper px-4 py-3 text-[13px] text-ink-2;
+  }
+  .collect.ok   { @apply border-brand-wash bg-brand-wash text-brand-ink; }
+  .collect.warn { @apply border-warn-wash bg-warn-wash text-warn; }
+  .collect.bad  { @apply border-[#fdecec] bg-[#fdecec] text-down; }
+  .collect .tag { @apply border border-current bg-transparent text-[10px] tracking-[0.12em] uppercase; }
+
+  /* --- desk: the execution report ------------------------------------------ */
+  #result pre {
+    @apply mt-2.5 max-h-[340px] overflow-auto rounded-lg border border-line bg-wash p-3.5 text-[12px];
+  }
+  #result h3 { @apply mt-6 mb-2 text-[12px] font-semibold tracking-[0.1em] text-ink-3 uppercase; }
+  .rep-verdict { @apply text-[17px] font-bold; }
+  .rep-ex {
+    @apply mb-2.5 max-w-[78ch] rounded-lg border border-line bg-wash px-4 py-3;
+    border-left: 3px solid var(--color-ink-3);
+  }
+  .rep-ex.bad  { border-left-color: var(--color-down); }
+  .rep-ex.warn { border-left-color: var(--color-warn); }
+  .rep-ex.ok   { border-left-color: var(--color-up); }
+  #resultRaw summary { @apply mt-5 cursor-pointer text-[12px] text-ink-3; }
+
+  /* --- regime: allocation bars --------------------------------------------- */
+  /* The cap marker is positioned against THIS box, not against .bar, so without a
+     containing block here a marker at left:100% is measured from some ancestor and
+     widens the page by its own 2px. padding-top makes room for the label above. */
+  .barwrap { position: relative; padding-top: 20px; }
+  .caplabel {
+    @apply absolute top-0 text-[11px] font-semibold text-ink-2 whitespace-nowrap;
+  }
+  .seg { @apply flex items-center justify-center text-[11px] font-bold text-white; }
+  .seg:first-child { border-radius: 7px 0 0 7px; }
+  .seg:last-child  { border-radius: 0 7px 7px 0; }
+  .seg.cash { @apply bg-wash-2 text-ink-2; }
+  .g4 { grid-template-columns: repeat(auto-fit, minmax(256px, 1fr)); }
+  .bar {
+    @apply relative flex h-[42px] overflow-hidden rounded-lg border border-line bg-wash;
+  }
+  .bar > * { @apply flex items-center justify-center overflow-hidden whitespace-nowrap
+                    text-[12px] font-semibold text-white; min-width: 0; }
+  .capline { @apply absolute bottom-2 top-5 z-[2] w-0.5 bg-ink; }
+  .strip { @apply overflow-hidden rounded-xl border border-line bg-paper; }
+  .strip dd { @apply overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-semibold; }
+  .crow .nm { @apply overflow-hidden text-ellipsis whitespace-nowrap; }
+
+  /* --- tradebook: the capacity bar ------------------------------------------ */
+  .cap { @apply relative h-3 overflow-hidden rounded-md bg-wash-2; }
+}

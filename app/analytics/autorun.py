@@ -16,9 +16,14 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any, Sequence
 
-# The first tick of the session at which an ATM straddle can be observed. Before 09:15
-# there is no NFO quote at all — there is no pre-open session for options.
-OPTIONS_OPEN = dt.time(9, 15)
+# The first tick of the session at which an ATM straddle can be observed. Before this
+# there is no NFO or BFO quote at all — there is no pre-open session for options.
+#
+# Imported, not redeclared. This module held its own copy while clock.entry_window_state
+# had no floor at all, so the same fact was enforced in one place and missing from the
+# other: autorun correctly refused to start a session at 06:00, while --check and the
+# runner both reported the entry window open.
+from ..strategies.strangle.clock import OPTIONS_OPEN
 MARKET_CLOSE = dt.time(15, 30)
 SESSION_LOCK = "data/outputs/strangle_session.lock"
 
@@ -169,7 +174,8 @@ def _options_items(spec: dict, *, now: dt.datetime, today: dt.date,
     from ..strategies.strangle import clock as _clock
     win = _clock.entry_window_state(cfg, now.time(), default_end=entry_window_end)
 
-    if now.time() < OPTIONS_OPEN or win["veto"]:
+    # win carries the floor now, so this is one question with one answer.
+    if win["veto"]:
         return out
     if _session_live(spec["lock"]) or _session_ran_today(spec["journal"], today):
         return out                      # already running, or already had its say today

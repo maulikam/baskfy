@@ -135,6 +135,9 @@ def session_params(session: dt.date, expiry: dt.date, cfg: dict,
 
 
 DEFAULT_WINDOW_END = dt.time(9, 45)
+# The first tick at which an option has a two-sided quote. NFO and BFO have no pre-open
+# session, so nothing before this is a price.
+OPTIONS_OPEN = dt.time(9, 15)
 
 
 def entry_window_state(cfg: Mapping | None, now_t: dt.time, *,
@@ -152,10 +155,25 @@ def entry_window_state(cfg: Mapping | None, now_t: dt.time, *,
     is left to be right in. Size is the honest lever.
     """
     tm = ((cfg or {}).get("timing") or {})
+    opens = _hhmm(tm.get("entry_early"), OPTIONS_OPEN)
     end = _hhmm(tm.get("entry_window_end"), default_end)
     cutoff = _hhmm(tm.get("no_new_entry_after"), end)
     late_ok = bool(tm.get("allow_late_entry", False))
     mult = float(tm.get("late_entry_size_mult", 1.0)) if late_ok else 1.0
+
+    # THE WINDOW HAS A FLOOR, and it did not until now. Only `now_t <= end` was checked, so
+    # every hour before the open reported "open" — 01:38 and 06:00 alike — and that is the
+    # one field answering "may I enter". The bound was not missing from the system, only
+    # from here: autorun carried its own OPTIONS_OPEN constant, which is the same split
+    # that let the upper bound drift before it was centralised.
+    #
+    # entry_early is the config's own name for the first tick with a chain to trade. There
+    # is no pre-open session for options, so a decision taken before it is priced off a
+    # book that does not exist.
+    if now_t < opens:
+        return {"state": "premarket", "size_mult": 0.0, "deadline": end,
+                "veto": f"before {opens.strftime('%H:%M')}; there is no pre-open session "
+                        "for options, so there is no chain to price an entry against"}
 
     if now_t <= end:
         return {"state": "open", "veto": None, "size_mult": 1.0,

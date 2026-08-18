@@ -157,8 +157,10 @@ async def analyze(scan: UploadFile):
     k = kite()
     if not k.is_authed():
         raise HTTPException(401, "Kite session expired — click Login first.")
-    holdings = [h for h in k.holdings() if h["symbol"] not in C.EXCLUDED_SYMBOLS
-                and not h["symbol"].upper().startswith("SGB")]
+    # No filtering here any more. build_plan applies core/guards.assert_tradeable itself,
+    # so every caller gets the same protection rather than only this route. The SGB* test
+    # that used to live on this line is what kept /analyze safe while the planner was not.
+    holdings = k.holdings()
     cash = k.available_cash()
 
     # Live prices for EVERY name the plan could touch, not just the ones already held.

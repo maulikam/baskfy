@@ -136,6 +136,7 @@
     <p class="muted" id="ticketCount"></p>
     <ul id="ticketLines"></ul>
     <div id="ticketTotal"></div>
+    <div id="ticketFunding"></div>
     <p class="muted">By confirming, orders are placed on your Zerodha account via Kite Connect under your API key. Pledged shares sell directly; collateral margin reduces to the extent sold — check F&O margin headroom if you use collateral. This tool is your own system, not investment advice.</p>
     <div style="display:flex;gap:12px;margin-top:16px">
       <button class="btn-danger" onclick="execute()">Confirm &amp; place orders</button>
@@ -147,6 +148,7 @@
 <div class="card" id="result" style="display:none" tabindex="-1">
   <h2>Execution report</h2>
   <div id="repVerdict"></div>
+  <div id="repFunding"></div>
   <div id="repStops"></div>
   <div id="repExceptions"></div>
   <div id="repRecon"></div>
@@ -204,6 +206,22 @@ function openTicket(){
   // Pinned outside the scroll area so it can never be scrolled out of view.
   document.getElementById('ticketTotal').innerHTML=
     `<span>Net cash use</span><b>₹${fmt(PLAN.net_cash_use)}</b>`;
+  // FUNDING, ON THE TICKET. Pinned outside the scroll area beside the cash figure,
+  // because it is the same kind of number: something you must have seen before
+  // confirming. Measured at analysis by a basket margin query.
+  const f=PLAN.funding||{}, tf=document.getElementById('ticketFunding');
+  if(f.checked && f.shortfall>0){
+    tf.innerHTML=`<div class="sc-note sc-note--bad" style="margin:10px 0 0">
+      <div><b>Short ₹${fmt(f.shortfall)}.</b> This plan needs ₹${fmt(f.required)} of
+      margin against ₹${fmt(f.available)} available. Orders go out largest first, so the
+      last ones will be refused. Confirming will place the rest.</div></div>`;
+  } else if(f.checked){
+    tf.innerHTML=`<p class="muted" style="margin-top:8px">Funded — ₹${fmt(f.required)}
+      required, ₹${fmt(f.available)} available.</p>`;
+  } else {
+    tf.innerHTML=`<p class="muted" style="margin-top:8px">Funding not verified${
+      f.error?' ('+esc(f.error)+')':''}.</p>`;
+  }
   document.getElementById('ticketLines').scrollTop=0;
   document.getElementById('ticket').style.display='flex';
 }
@@ -232,10 +250,18 @@ const ORDER_STATUS={
                    +'not sent. A systemic refusal does not become less systemic on the '
                    +'fourth attempt. Fix the cause, then re-run Analyze — nothing below '
                    +'this point reached the exchange.'},
-  ERROR:       {kind:'bad',  title:'rejected',
-                fix:'The call failed, so the exchange status is UNKNOWN — an order may '
-                   +'still have been accepted. Check the Kite order book before you '
-                   +'re-run Analyze, or you risk sending it twice.'},
+  // A refusal Kite NAMES was decided before the exchange saw anything, so the order does
+  // not exist and re-running cannot double-send. Only a transport failure leaves that
+  // open. Saying "may still have been accepted" after a plain "Insufficient funds" sends
+  // you to the order book to rule out something that was never possible.
+  REJECTED:    {kind:'bad',  title:'refused by the broker',
+                fix:'Kite refused this and said why, so it never reached the exchange — '
+                   +'the reason beside the symbol is the whole story. Fix that, then '
+                   +'re-run Analyze; this order cannot be sitting live.'},
+  ERROR:       {kind:'bad',  title:'no answer from the broker',
+                fix:'The call itself failed, so the exchange status is genuinely UNKNOWN '
+                   +'— an order may still have been accepted. Check the Kite order book '
+                   +'before you re-run Analyze, or you risk sending it twice.'},
 };
 const STOP_OK=new Set(['GTT_PLACED','DRY_RUN_GTT']);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -280,6 +306,26 @@ function renderReport(j){
   // Nothing is armed here any more. Sizing a trigger from a planned quantity, before the
   // fills are known, is what left the book with 10,383 shares of GTT against 9,478 held.
   // The panel's job is now to make the outstanding step impossible to forget.
+  // FUNDING. The preflight has always run — a basket margin query against available
+  // cash — and has always been returned in the response. It was rendered nowhere, so the
+  // one number that predicts a rejection sat in the raw JSON while SHILPAMED was refused
+  // six times for exactly the shortfall it had measured.
+  const pf=j.preflight||{}, fn=document.getElementById('repFunding');
+  if(pf.checked){
+    const short=Number(pf.shortfall)||0;
+    fn.innerHTML=`<h3>Funding</h3><div class="sc-note ${short?'sc-note--bad':'sc-note--ok'}">
+      <div>${short
+        ? `<b>Short ${rupees(short)}.</b> The plan needs ${rupees(pf.required)} of margin
+           and ${rupees(pf.available)} is available. Orders are sent largest first, so the
+           shortfall lands on the last ones — expect those to be refused.`
+        : `<b>Funded.</b> ${rupees(pf.required)} required against ${rupees(pf.available)}
+           available.`}</div></div>`;
+  } else if(pf.error){
+    fn.innerHTML=`<h3>Funding</h3><div class="sc-note sc-note--warn"><div>
+      <b>Not checked.</b> The margin query failed (${esc(pf.error)}), so nothing verified
+      that this plan can be funded.</div></div>`;
+  } else fn.innerHTML='';
+
   const s=document.getElementById('repStops');
   const bought=orders.filter(o=>read(o).kind==='ok'
                              && (o.action==='BUY'||o.action==='ADD')).length;

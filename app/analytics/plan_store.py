@@ -102,6 +102,9 @@ def record_execution(conn, plan_id: str, results: Iterable[Mapping]) -> dict:
                 status, filled = SIMULATED, 0
             elif raw == "DUPLICATE":
                 status, filled = DUPLICATE, rows[sym]["filled_qty"] or 0
+            elif raw == "REJECTED":
+                # Named by the broker: it never reached the exchange.
+                status, filled = FAILED, 0
             elif raw == "BLOCKED":
                 status, filled = BLOCKED, 0
             elif raw == "ABORTED":

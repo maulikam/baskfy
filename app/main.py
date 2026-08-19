@@ -1,6 +1,7 @@
 """Webview + API. Flow: /login → upload scan → /analyze (plan) → review → /execute (confirm-gated).
 Execution NEVER happens without confirm=true + a live plan_id from this session."""
 from __future__ import annotations
+import asyncio
 import io
 import json
 import logging
@@ -205,6 +206,33 @@ def callback(request_token: str = ""):
     return RedirectResponse(f"/?logged_in=1&autorun={started}&note={why}")
 
 
+async def _funding_check(k, orders) -> dict:
+    """What the whole plan needs in margin, against what is available.
+
+    A basket margin query — the same POST an order uses, so it exercises the same
+    permissions — and the number that predicts a rejection before one happens. Run at
+    ANALYSE time as well as at execute: knowing the plan is short after the batch has
+    half-filled is knowing it too late. On 19 Aug it was measured only at execute, shown
+    nowhere, and SHILPAMED was refused six times for the shortfall it had already found.
+    """
+    basket = [{"exchange": "NSE", "tradingsymbol": o["symbol"],
+               "transaction_type": "SELL" if o["delta"] < 0 else "BUY",
+               "variety": "regular", "product": "CNC", "order_type": "MARKET",
+               "quantity": abs(int(o["delta"]))}
+              for o in orders if o["delta"] != 0]
+    if not basket:
+        return {"checked": False, "reason": "nothing to fund"}
+    try:
+        resp = await asyncio.to_thread(k.kc.basket_order_margins, basket)
+        need = float(((resp or {}).get("final") or {}).get("total") or 0.0)
+        have = float(k.available_cash() or 0.0)
+        return {"checked": True, "required": round(need), "available": round(have),
+                "shortfall": round(max(0.0, need - have))}
+    except Exception as exc:                                       # noqa: BLE001
+        # Reported, never fatal: a margin endpoint that is down must not block a plan.
+        return {"checked": False, "error": str(exc)[:200]}
+
+
 @app.post("/analyze")
 async def analyze(scan: UploadFile):
     """Score the uploaded scan, pull live holdings + cash, return the full plan."""
@@ -238,6 +266,8 @@ async def analyze(scan: UploadFile):
 
     plan = build_plan(scored, holdings, cash, live_prices=live)
     plan["audit"] = scan_audit
+    # Before you confirm, not after the batch is half sent.
+    plan["funding"] = await _funding_check(k, plan["orders"])
     plan["created_at"] = time.time()
     PLANS[plan["plan_id"]] = plan
 
@@ -298,23 +328,9 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
     # endpoint, so it exercises the same permissions the orders will need, and it returns
     # the margin the whole plan requires — which is the check that would have caught
     # SAILIFE failing for Rs 802.67 after twelve other orders had already gone out.
-    preflight = {"checked": False}
-    try:
-        basket = [{"exchange": "NSE", "tradingsymbol": o["symbol"],
-                   "transaction_type": "SELL" if o["delta"] < 0 else "BUY",
-                   "variety": "regular", "product": "CNC", "order_type": "MARKET",
-                   "quantity": abs(int(o["delta"]))}
-                  for o in plan["orders"] if o["delta"] != 0]
-        if basket:
-            resp = await asyncio.to_thread(k.kc.basket_order_margins, basket)
-            need = float(((resp or {}).get("final") or {}).get("total") or 0.0)
-            have = float(k.available_cash() or 0.0)
-            preflight = {"checked": True, "required": round(need), "available": round(have),
-                         "shortfall": round(max(0.0, need - have))}
-    except Exception as exc:                                       # noqa: BLE001
-        # Reported, not fatal: a margin endpoint that is down must not block a rebalance
-        # the operator has already confirmed. The circuit breaker below is the hard stop.
-        preflight = {"checked": False, "error": str(exc)[:200]}
+    # Re-checked here because cash moves between analysis and confirmation, and because
+    # this is the last moment it can still stop something.
+    preflight = await _funding_check(k, plan["orders"])
 
     results = []
     # --- circuit breaker -----------------------------------------------------------------

@@ -35,11 +35,17 @@ from . import db
 # An order reaching the exchange is knowable at submission. Whether it TRADED is not:
 # these are LIMIT orders and some rest all day. So submission records SUBMITTED, and
 # reconcile_fills() later reads the broker's own order book to settle it.
-PENDING, SUBMITTED, FILLED, PARTIAL, FAILED, BLOCKED, DUPLICATE, SIMULATED, LAPSED = (
-    "PENDING", "SUBMITTED", "FILLED", "PARTIAL", "FAILED", "BLOCKED", "DUPLICATE",
-    "DRY_RUN", "LAPSED")
+PENDING, SUBMITTED, FILLED, PARTIAL, FAILED, BLOCKED, DUPLICATE, SIMULATED, LAPSED, \
+    ABORTED = (
+        "PENDING", "SUBMITTED", "FILLED", "PARTIAL", "FAILED", "BLOCKED", "DUPLICATE",
+        "DRY_RUN", "LAPSED", "ABORTED")
 
 _OK = {"OK", "PLACED"}                  # reached the exchange; nothing yet about trading
+
+# REACHED THE EXCHANGE. The distinction the whole table exists for: an order Kite refused
+# never got there, and one the circuit breaker held back never left this machine.
+_AT_EXCHANGE = frozenset({SUBMITTED, FILLED, PARTIAL, LAPSED})
+_REFUSED = frozenset({FAILED, BLOCKED})
 _TERMINAL_BROKER = {"COMPLETE", "REJECTED", "CANCELLED"}
 
 
@@ -98,6 +104,12 @@ def record_execution(conn, plan_id: str, results: Iterable[Mapping]) -> dict:
                 status, filled = DUPLICATE, rows[sym]["filled_qty"] or 0
             elif raw == "BLOCKED":
                 status, filled = BLOCKED, 0
+            elif raw == "ABORTED":
+                # The circuit breaker held this back after three identical refusals. It
+                # was never sent, so recording it as FAILED conflates "the exchange said
+                # no" with "we never asked" — on 19 Aug that put five untried orders into
+                # the failed column beside three real rejections.
+                status, filled = ABORTED, 0
             else:
                 status, filled = FAILED, 0
             conn.execute(
@@ -125,11 +137,17 @@ def reconciliation(conn, plan_id: str) -> dict:
 
     sells = [r for r in rows if r["side"] == "SELL"]
     buys = [r for r in rows if r["side"] == "BUY"]
-    submitted = [r for r in rows if r["status"] != PENDING]
+    # NOT "anything that is not PENDING". That counted every refusal as submitted, so a
+    # batch where all eight orders were rejected for a disallowed IP reported
+    # "Submitted Rs 21,23,976" beside "Failed Rs 21,23,976" — the same money, and the
+    # first figure was false. Nothing had reached the exchange at all.
+    submitted = [r for r in rows if r["status"] in _AT_EXCHANGE]
     # FILLED means the broker's order book says so. SUBMITTED alone never counts, which is
     # the whole point of separating them.
     filled = [r for r in rows if r["status"] in (FILLED, PARTIAL)]
-    failed = [r for r in rows if r["status"] in (FAILED, BLOCKED)]
+    failed = [r for r in rows if r["status"] in _REFUSED]
+    aborted = [r for r in rows if r["status"] == ABORTED]
+    simulated = [r for r in rows if r["status"] == SIMULATED]
     working = [r for r in rows if r["status"] == SUBMITTED]
     return {
         "plan_id": plan_id,
@@ -139,6 +157,12 @@ def reconciliation(conn, plan_id: str) -> dict:
         "submitted_value": round(sum(value(r, "planned_qty") for r in submitted)),
         "filled_value": round(sum(value(r, "filled_qty") for r in filled)),
         "failed_value": round(sum(value(r, "planned_qty") for r in failed)),
+        "aborted_value": round(sum(value(r, "planned_qty") for r in aborted)),
+        # A dry run reaches nothing by definition; counting it as submitted would be the
+        # same false figure the DRY_RUN switch exists to prevent.
+        "simulated_value": round(sum(value(r, "planned_qty") for r in simulated)),
+        "aborted_symbols": [r["symbol"] for r in aborted],
+        "reached_exchange": len(submitted),
         "counts": {s: sum(1 for r in rows if r["status"] == s)
                    for s in sorted({r["status"] for r in rows})},
         "not_submitted": [r["symbol"] for r in rows if r["status"] == PENDING],

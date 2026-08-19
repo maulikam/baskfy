@@ -185,12 +185,17 @@ def test_planned_and_filled_are_separate_facts(conn):
     assert r["fills_confirmed"]
 
 
-def test_a_dry_run_plan_submits_value_but_fills_nothing(conn):
+def test_a_dry_run_reaches_nothing_and_fills_nothing(conn):
+    """It used to report the full Rs 2,000 as submitted. A simulation reaches no exchange
+    — that is the entire point of the switch — so the value belongs under simulated."""
     PS.save_plan(conn, plan())
     PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "DRY_RUN"},
                                      {"symbol": "BBB", "status": "DRY_RUN"}])
     r = PS.reconciliation(conn, "p1")
-    assert r["submitted_value"] == 2000 and r["filled_value"] == 0
+    assert r["submitted_value"] == 0
+    assert r["simulated_value"] == 2000
+    assert r["filled_value"] == 0
+    assert r["reached_exchange"] == 0
 
 
 def test_reconciliation_of_an_unknown_plan_is_empty(conn):
@@ -286,3 +291,57 @@ def test_the_sweep_is_idempotent(conn):
     _submitted_yesterday(conn)
     assert PS.lapse_stale_orders(conn, today=dt.date(2026, 8, 19))["n"] == 1
     assert PS.lapse_stale_orders(conn, today=dt.date(2026, 8, 19))["n"] == 0
+
+
+# =====================================================================================
+# "submitted" means reached the exchange
+# =====================================================================================
+def test_a_refused_order_is_not_reported_as_submitted(conn):
+    """On 19 Aug every order in a plan was rejected — the machine's IPv6 address was not
+    on Kite's allowlist — and the report showed "Submitted Rs 21,23,976" beside "Failed
+    Rs 21,23,976". The same money, and the first figure was false: nothing had reached
+    the exchange at all. `submitted` was defined as "any status that is not PENDING"."""
+    PS.save_plan(conn, plan())
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "ERROR",
+                                      "error": "IP not allowed"},
+                                     {"symbol": "BBB", "status": "ERROR",
+                                      "error": "IP not allowed"}])
+    r = PS.reconciliation(conn, "p1")
+    assert r["submitted_value"] == 0, "a refusal was counted as submitted"
+    assert r["reached_exchange"] == 0
+    assert r["failed_value"] == 2000
+
+
+def test_an_order_the_breaker_held_back_is_not_a_failure(conn):
+    """The circuit breaker stopping a batch is not the exchange refusing it. Five orders
+    that never left the machine sat in the failed column beside three real rejections,
+    and only one of those two things means an order might be live."""
+    PS.save_plan(conn, plan())
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "ERROR", "error": "x"},
+                                     {"symbol": "BBB", "status": "ABORTED",
+                                      "error": "batch stopped"}])
+    r = PS.reconciliation(conn, "p1")
+    assert r["failed_value"] == 1000          # AAA only
+    assert r["aborted_value"] == 1000         # BBB, never sent
+    assert r["aborted_symbols"] == ["BBB"]
+    assert r["submitted_value"] == 0
+
+
+def test_a_placed_order_does_count_as_reaching_the_exchange(conn):
+    PS.save_plan(conn, plan())
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "PLACED",
+                                      "order_id": "X1"}])
+    r = PS.reconciliation(conn, "p1")
+    assert r["submitted_value"] == 1000 and r["reached_exchange"] == 1
+
+
+def test_a_lapsed_order_still_counts_as_having_reached_it(conn):
+    """It rested at the exchange all day and expired unfilled. That is not the same as
+    never arriving, and the distinction is what tells you whether a re-run can double-send."""
+    PS.save_plan(conn, plan())
+    PS.record_execution(conn, "p1", [{"symbol": "AAA", "status": "PLACED", "order_id": "X1"}])
+    conn.execute("UPDATE rebalance_versions SET created_ts=? WHERE version_id='p1'",
+                 (str(dt.datetime(2026, 8, 18, 14, 30).timestamp()),))
+    PS.reconcile_fills(conn, "p1", [broker("AAA", status="OPEN", filled=0, oid="X1")])
+    PS.lapse_stale_orders(conn, today=dt.date(2026, 8, 19))
+    assert PS.reconciliation(conn, "p1")["submitted_value"] == 1000

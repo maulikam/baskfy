@@ -874,10 +874,22 @@ def settings_data():
 
 
 @app.get("/status")
-def status():
+def status(ip: str = ""):
+    """Session state. `?ip=1` also reports the address the broker will see.
+
+    That is the one thing a rejected batch turns on and the one thing you cannot read off
+    this machine: Kite authorises orders against an allowlist, and an order refused for a
+    disallowed IP names an address you have to go and look up. Behind a flag because it
+    costs an outbound call, and /status is polled.
+    """
+    out = {"dry_run": C.DRY_RUN, "force_ipv4": C.FORCE_IPV4}
+    if ip:
+        from .core.net import outbound_ip
+        out["outbound_ip"] = outbound_ip()
     try:
         k = kite()
-        return {"authed": k.is_authed(), "dry_run": C.DRY_RUN,
+        out |= {"authed": k.is_authed(),
                 "cash": k.available_cash() if k.is_authed() else None}
     except Exception as exc:
-        return {"authed": False, "dry_run": C.DRY_RUN, "error": str(exc)}
+        out |= {"authed": False, "error": str(exc)}
+    return out

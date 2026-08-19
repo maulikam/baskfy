@@ -5,6 +5,10 @@
 fastapi==0.141.1
 uvicorn[standard]==0.52.3
 jinja2==3.1.6
+# Imported directly by the strangle config loader. It was arriving only as a transitive
+# dependency of uvicorn[standard], so the day that changed, config/strangle*.yaml would
+# have stopped loading with an ImportError on a scheduled run.
+pyyaml==6.0.3
 python-multipart==0.0.32
 pandas==3.0.5
 numpy==2.5.2
@@ -13,6 +17,6 @@ python-dotenv==1.2.2
 orjson==3.11.9
 uvloop==0.22.1; sys_platform != 'win32'
 pytest==9.1.1
-httpx2==0.29.0            # starlette TestClient
+httpx2==2.10.0            # starlette TestClient
 # future engines (uncomment when enabling):
 # py_vollib>=1.0.1   # option greeks

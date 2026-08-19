@@ -91,7 +91,7 @@ def test_units_run_the_interpreter_the_installer_creates():
     """There is no pyproject here, so `uv run` has nothing to resolve; requirements.txt
     and a plain venv are the manifest, exactly as on the laptop."""
     install = (DEPLOY / "install-units.sh").read_text()
-    assert "uv pip install -r requirements.txt" in install
+    assert "uv pip install" in install and "requirements.txt" in install
     for f in UNITS:
         for line in f.read_text().splitlines():
             if line.startswith("ExecStart="):
@@ -161,3 +161,26 @@ def test_the_readme_states_the_password_must_be_set_on_a_hosted_box():
     readme = (DEPLOY / "README.md").read_text()
     assert "DESK_PASSWORD" in readme
     assert "empty by default" in readme
+
+
+def test_the_installer_runs_as_the_admin_and_not_as_the_app_user():
+    """The account that runs an order-placing application has no business holding root,
+    so `desk` is deliberately not a sudoer. The installer does the venv and the stylesheet
+    as desk and the units as root, and says so rather than failing obscurely — which is
+    how the first deploy failed."""
+    s = (DEPLOY / "install-units.sh").read_text()
+    assert 'sudo -u "$APP_USER"' in s, "the app-owned work must run as the app user"
+    assert "cannot sudo" in s, "it must explain, not just fail"
+    assert 'id -u' in s and '-eq 0' in s, "it must refuse to run as root outright"
+
+
+def test_the_installer_can_be_run_more_than_once():
+    """It is what you re-run after every code change; failing on an existing venv makes
+    the second deploy harder than the first."""
+    assert "uv venv --clear" in (DEPLOY / "install-units.sh").read_text()
+
+
+def test_the_app_home_can_be_traversed_but_not_listed():
+    """0711: the admin has to reach the installer inside it, and has no reason to see
+    what else is there."""
+    assert "chmod 0711" in (DEPLOY / "bootstrap.sh").read_text()

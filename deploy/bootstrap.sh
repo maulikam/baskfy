@@ -49,6 +49,10 @@ claude --version 2>/dev/null | sed 's/^/   claude /' || echo "   claude installe
 
 say "directories"
 sudo -u "$APP_USER" mkdir -p "$APP_DIR" "/home/${APP_USER}/logs"
+# 0711: the admin account has to traverse this to run the installer, but has no business
+# listing what is in it. desk deliberately holds no sudo, so the two identities do the two
+# kinds of work — desk owns the app, root owns the units.
+sudo chmod 0711 "/home/${APP_USER}"
 
 say "swap"
 # A Claude session's context spike should be a slow moment, not a killed process. On the

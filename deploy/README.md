@@ -145,7 +145,7 @@ limit on the login. Those are the right next controls if this ever has a second 
    ```
 6. **Start it:**
    ```
-   ssh desk@<ip> 'cd kite-momentum-rebalancer && ./deploy/install-units.sh'
+   ssh ubuntu@<ip> 'cd /home/desk/kite-momentum-rebalancer && ./deploy/install-units.sh'
    ```
 
 ## Daily

@@ -51,8 +51,9 @@ say "directories"
 sudo -u "$APP_USER" mkdir -p "$APP_DIR" "/home/${APP_USER}/logs"
 
 say "swap"
-# A Claude session's context spike should be a slow moment, not a killed process. Cheap
-# insurance on a box where the interactive tool is the memory-hungry one.
+# A Claude session's context spike should be a slow moment, not a killed process. On the
+# 1 GB plan this is not optional: the desk and the OS leave about 700 MB, and one CLI
+# session measured 467 MB. 2 GB of swap is the difference between "slow" and "killed".
 if ! sudo swapon --show | grep -q swapfile; then
   sudo fallocate -l 2G /swapfile
   sudo chmod 600 /swapfile

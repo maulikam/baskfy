@@ -326,11 +326,24 @@ function renderReport(j){
   // FILLED for its full planned quantity, which is not knowable at this instant. Only the
   // figures that are true at submission time are shown.
   const rc=document.getElementById('repRecon');
+  // "Reached the exchange", not "Submitted". The old tile counted every refusal as
+  // submitted, so a batch rejected outright for a disallowed IP reported the same rupees
+  // under Submitted and under Failed. Held-back orders get their own tile: the circuit
+  // breaker stopping a batch is not the exchange refusing it, and only one of those means
+  // an order might be live.
+  const tiles=[['Planned sells',recon.planned_sell_value],
+               ['Planned buys',recon.planned_buy_value],
+               ['Reached the exchange',recon.submitted_value],
+               ['Refused',recon.failed_value]];
+  if(recon.aborted_value) tiles.push(['Held back',recon.aborted_value]);
   rc.innerHTML=recon.orders?`<h3>Value moved</h3><div class="rep-tiles">
-    ${[['Planned sells',recon.planned_sell_value],['Planned buys',recon.planned_buy_value],
-       ['Submitted',recon.submitted_value],['Failed',recon.failed_value]]
-      .map(([k,n])=>`<div class="rep-tile"><span>${k}</span><b>${rupees(n)}</b></div>`).join('')}
-    </div>${recon.not_submitted?.length?`<p class="muted" style="margin-top:9px">
+    ${tiles.map(([k,n])=>`<div class="rep-tile"><span>${k}</span><b>${rupees(n)}</b></div>`).join('')}
+    </div>${!recon.reached_exchange?`<p class="muted" style="margin-top:9px">
+      <b>Nothing reached the exchange.</b> No order can be live, so re-running Analyze
+      after fixing the cause cannot double-send.</p>`:''}
+    ${recon.aborted_symbols?.length?`<p class="muted" style="margin-top:6px">
+      Held back by the circuit breaker: ${recon.aborted_symbols.map(esc).join(', ')}.</p>`:''}
+    ${recon.not_submitted?.length?`<p class="muted" style="margin-top:6px">
       Never submitted: ${recon.not_submitted.map(esc).join(', ')}.</p>`:''}`:'';
 }
 

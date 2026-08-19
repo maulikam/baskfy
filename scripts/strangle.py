@@ -87,9 +87,24 @@ def _release_session_lock(path: str = SESSION_LOCK) -> None:
         pass
 
 
+# Exit codes are a runbook contract, not decoration: a scheduled job is triaged from its
+# status line before anyone opens the log.
+#   0  the session did its work, or decided not to trade
+#   2  NOT LOGGED IN — recoverable, and only by a human, while the market is open
+#   1  anything else
+# 2 is separated because it is the only failure with a different remedy. Every other
+# script already returned it; this one collapsed auth into the generic 1, so a missed
+# morning looked identical to a broken chain in `launchctl list`.
+OK_STATUSES = ("OK", "COLLECTED", "SKIPPED")
+AUTH_EXIT = 2
+
+
 def _out(payload: dict) -> int:
     print(json.dumps(payload, indent=2, default=str))
-    return 0 if payload.get("status") in ("OK", "COLLECTED", "SKIPPED") else 1
+    status = payload.get("status")
+    if status == "AUTH_REQUIRED":
+        return AUTH_EXIT
+    return 0 if status in OK_STATUSES else 1
 
 
 def main() -> int:

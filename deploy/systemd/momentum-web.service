@@ -1,0 +1,22 @@
+[Unit]
+Description=Momentum desk web interface
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=desk
+WorkingDirectory=/home/desk/kite-momentum-rebalancer
+Environment=TZ=Asia/Kolkata
+# LOOPBACK ONLY, DELIBERATELY. This interface places real orders behind a confirmation
+# gate; binding it to 0.0.0.0 would put that gate on the public internet. Reach it with
+#     ssh -L 8420:127.0.0.1:8420 desk@<ip>
+# and open http://127.0.0.1:8420 on the laptop as before — which also keeps the Kite
+# redirect URL registered in the developer console valid, because the browser still
+# arrives at 127.0.0.1.
+ExecStart=/home/desk/kite-momentum-rebalancer/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8420
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

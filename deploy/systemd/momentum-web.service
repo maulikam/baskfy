@@ -15,6 +15,11 @@ Environment=TZ=Asia/Kolkata
 # redirect URL registered in the developer console valid, because the browser still
 # arrives at 127.0.0.1.
 ExecStart=/home/desk/kite-momentum-rebalancer/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8420
+# The Claude CLI shares this box and a long session is the memory-hungry half — measured
+# at 467 MB against the desk's 148 MB. Capping the desk means the kernel kills the CLI
+# first under pressure, rather than the process holding your orders and your plan_ids.
+MemoryMax=768M
+MemoryHigh=512M
 Restart=on-failure
 RestartSec=5
 

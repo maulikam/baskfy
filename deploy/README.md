@@ -9,6 +9,24 @@ collection days were lost this week. A missed session is **not recoverable**:
 
 A small always-on box in Mumbai fixes both, and is nearer the exchange than the laptop.
 
+## Sizing
+
+Measured, not estimated:
+
+| | Resident |
+|---|---|
+| The desk, after touching every page including the regime backtest | 148 MB |
+| Claude CLI, one working session | 467 MB |
+| Ubuntu | ~150 MB |
+| **Together** | **~765 MB** |
+
+The desk is not the expensive half — the CLI is. A 1 GB instance runs the desk fine and
+will OOM a real Claude session, so **4 GB** is the size to take: comfortable for both,
+with room for a context spike. A 2 GB swapfile is created anyway, so a spike is a slow
+moment rather than a killed process, and `momentum-web.service` is capped with
+`MemoryMax` so the kernel takes the CLI first rather than the process holding live
+plan_ids.
+
 ## Cost
 
 | | per month | notes |
@@ -16,6 +34,65 @@ A small always-on box in Mumbai fixes both, and is nearer the exchange than the 
 | AWS Lightsail, Mumbai, 1 GB | ~₹300 ($3.50) | static IP free while attached. Recommended. |
 | Oracle Cloud Always Free | ₹0 | permanent reserved IP; ARM capacity in Mumbai is often unavailable, and free instances can be reclaimed |
 | ISP static IP (business line) | ₹500–1,500 | no extra hop, slowest to provision |
+
+## Backups
+
+The whole irreplaceable set is about 10 MB, and losing it is not a storage problem — it
+is the evidence the strategy is being judged on:
+
+| | Rebuildable |
+|---|---|
+| `snapshots` | **No.** kc.margins() has no history; a lost EOD row is a lost day |
+| `fills` | **No.** Zerodha flushes /trades nightly; only a partial Console export exists |
+| `breadth_readings` | **No.** Needs a scan you no longer have |
+| `rebalance_orders`, `regime_evaluations` | **No.** What was decided, and what happened |
+| `index_series`, `benchmark` | Yes, re-fetchable from Kite |
+
+`momentum-backup.timer` runs at 19:15 — after the 18:30 collection, so the archive holds
+the EOD snapshot that job just wrote rather than yesterday's.
+
+A live SQLite file **must not be copied**: a plain `cp` can catch a write in progress and
+produce a file that opens cleanly and is missing the last transaction, which is the worst
+kind of backup because it looks like one. `scripts/backup.py` uses sqlite's own backup
+API, then reopens the copy, runs an integrity check and counts the rows that matter. A
+run whose integrity check does not say `ok` exits non-zero, so a broken backup is loud in
+`systemctl status` rather than silently green.
+
+```
+python -m scripts.backup            # take one
+python -m scripts.backup --check    # what exists, and what the last one verified
+```
+
+Turn on **Lightsail automatic snapshots** as well — that covers the disk, the OS and the
+venv; this covers the data and proves it can be opened. They answer different questions.
+
+Pull a copy off the box periodically, because a snapshot in the same account as the
+instance is not an offsite backup:
+
+```
+rsync -az desk@<ip>:kite-momentum-rebalancer/data/backups/ ./offsite-backups/
+```
+
+## Why SQLite, and not Postgres
+
+Asked and answered with a measurement rather than a preference. The database is 5.7 MB
+across roughly 42,000 rows, on one host, written by a handful of processes a few hundred
+times a day. It already runs in **WAL** mode with a 30-second busy timeout and
+`BEGIN IMMEDIATE` transactions, which is the configuration that makes concurrent writers
+safe.
+
+Tested: five processes — mimicking the web app, the daily job, the strangle runner, the
+backup and the ops page — each committing 150 transactions. **750 writes in 0.2 seconds,
+zero lock errors.** About 3,750 transactions a second against a workload that needs a few
+hundred a day.
+
+Postgres would add a service to run, patch, monitor and back up on the same box, a second
+credential, a harder restore story, and migration risk on the one dataset that cannot be
+rebuilt — in exchange for nothing measurable today.
+
+Revisit it when any of these becomes true: a second application host, writers on a
+different machine, a database into the many gigabytes, or a need for replication and
+point-in-time recovery. None of them are on the path now.
 
 ## Security
 

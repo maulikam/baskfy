@@ -50,6 +50,18 @@ claude --version 2>/dev/null | sed 's/^/   claude /' || echo "   claude installe
 say "directories"
 sudo -u "$APP_USER" mkdir -p "$APP_DIR" "/home/${APP_USER}/logs"
 
+say "swap"
+# A Claude session's context spike should be a slow moment, not a killed process. Cheap
+# insurance on a box where the interactive tool is the memory-hungry one.
+if ! sudo swapon --show | grep -q swapfile; then
+  sudo fallocate -l 2G /swapfile
+  sudo chmod 600 /swapfile
+  sudo mkswap /swapfile >/dev/null
+  sudo swapon /swapfile
+  grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+fi
+sudo swapon --show | sed 's/^/   /'
+
 say "firewall"
 # SSH ONLY. The web interface places real orders and must never be reachable from the
 # internet — you reach it through an SSH tunnel, so it binds to loopback and nothing else.

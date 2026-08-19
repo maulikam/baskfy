@@ -21,7 +21,21 @@ JOURNAL = "data/outputs/orders_journal.jsonl"
 #
 # DUPLICATE and DRY_RUN are deliberately NOT here: neither is a failure, and neither
 # carries an error to compare.
-FAILED_STATUSES: frozenset[str] = frozenset({"ERROR", "BLOCKED", "RISK_BLOCKED"})
+FAILED_STATUSES: frozenset[str] = frozenset({"ERROR", "REJECTED", "BLOCKED",
+                                             "RISK_BLOCKED"})
+
+# Kite's own exception taxonomy tells you whether the order got anywhere. A refusal it
+# names — bad margin, a disallowed IP, an invalid parameter, an expired token — was
+# decided BEFORE the exchange saw anything, so the order definitively does not exist. A
+# network failure or a timeout is the only case where it might.
+#
+# Collapsing both into one ERROR made the report warn "an order may still have been
+# accepted" after every failure, including six SHILPAMED rejections that each said
+# "Insufficient funds" in plain words. The warning is the right one to give when the
+# outcome is unknown and the wrong one to give when it is not: it sends you to the order
+# book to rule out a double-send that was never possible.
+_DEFINITIVE_REFUSALS = ("InputException", "OrderException", "PermissionException",
+                        "TokenException")
 
 
 class OrderGateway:
@@ -89,5 +103,12 @@ class OrderGateway:
             self._journal({"event": "placed", "order_id": oid, **params})
             return {"symbol": symbol, "status": "PLACED", "order_id": oid}
         except Exception as exc:
-            self._journal({"event": "error", "symbol": symbol, "error": str(exc)})
-            return {"symbol": symbol, "status": "ERROR", "error": str(exc)}
+            definitive = type(exc).__name__ in _DEFINITIVE_REFUSALS
+            status = "REJECTED" if definitive else "ERROR"
+            self._journal({"event": "rejected" if definitive else "error",
+                           "symbol": symbol, "error": str(exc),
+                           "exception": type(exc).__name__})
+            return {"symbol": symbol, "status": status, "error": str(exc),
+                    "exception": type(exc).__name__,
+                    # The one thing the operator needs after a failed batch.
+                    "reached_exchange": False if definitive else None}

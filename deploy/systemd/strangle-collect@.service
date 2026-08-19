@@ -1,0 +1,14 @@
+[Unit]
+Description=Record today's ATM straddle for %i
+
+[Service]
+Type=oneshot
+User=desk
+WorkingDirectory=/home/desk/kite-momentum-rebalancer
+Environment=TZ=Asia/Kolkata
+ExecStart=/home/desk/kite-momentum-rebalancer/.venv/bin/python -m scripts.strangle --instrument %i --collect
+StandardOutput=append:/home/desk/logs/strangle-collect.log
+StandardError=append:/home/desk/logs/strangle-collect.log
+# 2 means nobody has logged in to Kite yet. That is recoverable by a person and is not a
+# failure of this unit, so it is not treated as one.
+SuccessExitStatus=0 2

@@ -2,9 +2,11 @@
 Execution NEVER happens without confirm=true + a live plan_id from this session."""
 from __future__ import annotations
 import asyncio
+import datetime as dt
 import io
 import json
 import logging
+import pathlib
 import time
 from fastapi import FastAPI, UploadFile, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -32,6 +34,10 @@ except Exception:
     pass
 app = FastAPI(title="Kite Momentum Rebalancer", default_response_class=JSONResponse)
 templates = Jinja2Templates(directory="app/templates")
+
+# The same directory ops.py confines its file parameters to, so a retained scan is
+# reachable by the operations page and nothing else can be.
+UPLOAD_DIR = pathlib.Path("data/uploads")
 
 # The stylesheet is BUILT and VENDORED (app/static/app.css, from src.css via the Tailwind
 # CLI) rather than pulled from a CDN. The desk has to render while an order is being
@@ -238,6 +244,18 @@ async def analyze(scan: UploadFile):
     """Score the uploaded scan, pull live holdings + cash, return the full plan."""
     raw = await scan.read()
     df = load_scan(io.BytesIO(raw))
+    # Kept, not discarded. The plan already recorded WHICH scan built it; without the file
+    # itself that name cannot be resolved back to the numbers, and the holdings page has
+    # no current market-cap or beta context — 91% of the book came back "unclassified"
+    # because the only stored scan was the bundled sample.
+    try:
+        import re as _re
+        safe = _re.sub(r"[^A-Za-z0-9._-]", "_", scan.filename or "scan.csv")
+        dest = UPLOAD_DIR / f"scan_{int(time.time())}_{safe}"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(raw)
+    except Exception as exc:                                       # noqa: BLE001
+        logging.warning("could not retain the uploaded scan: %s", exc)
     scan_audit = audit(df)
     scored = score(df)
 
@@ -708,13 +726,74 @@ def ops_job(request: Request, job_id: int):
 
 
 # --- performance -------------------------------------------------------------------------
+def _holdings_block() -> dict:
+    """The live holdings table for the portfolio page.
+
+    Best-effort by design: the performance record is stored and always renders, while this
+    needs a broker session, the GTT book and an uploaded scan. A page that 500s because
+    the token expired would take the whole track record down with it.
+    """
+    from .analytics import holdings_view as _hv
+    out: dict = {"available": False, "gaps": _hv.GAPS}
+    try:
+        k = kite()
+        if not k.is_authed():
+            return {**out, "reason": "not logged in"}
+        held, raw = k.holdings(), k.kc.holdings()
+        cash = k.available_cash()
+    except Exception as exc:                                       # noqa: BLE001
+        return {**out, "reason": str(exc)[:160]}
+
+    # Stop cover, named per symbol, from the same review the /stops page runs.
+    protected: dict[str, str] = {}
+    try:
+        from .analytics import protection as _p
+        rev = _p.review(held, k.kc.get_gtts())
+        protected = {f["symbol"]: f["kind"] for f in rev["findings"]}
+        for h in held:
+            protected.setdefault(h["symbol"], "ok")
+    except Exception as exc:                                       # noqa: BLE001
+        logging.warning("stop cover unavailable for the holdings table: %s", exc)
+
+    scan: dict = {}
+    try:
+        import glob
+        import os
+
+        from .scoring import load_scan
+        files = [f for f in glob.glob("data/uploads/*.csv") if "tradebook" not in f.lower()]
+        if files:
+            df = load_scan(sorted(files, key=os.path.getmtime)[-1])
+            scan = {r["symbol"]: r for r in df.to_dict("records")}
+    except Exception as exc:                                       # noqa: BLE001
+        logging.warning("scan context unavailable for the holdings table: %s", exc)
+
+    fills: list = []
+    try:
+        from .analytics import db as _db
+        with _db.connect() as conn:
+            fills = [dict(r) for r in conn.execute(
+                "SELECT symbol, side, when_ts FROM fills")]
+    except Exception as exc:                                       # noqa: BLE001
+        logging.warning("fill history unavailable for the holdings table: %s", exc)
+
+    rows = _hv.rows(held, raw=raw, scan=scan, fills=fills, protected=protected)
+    summary = _hv.summary(rows, cash=cash)
+    return {"available": True, "rows": rows, "summary": summary,
+            "allocation": _hv.allocation(rows, cash=cash),
+            "warnings": _hv.warnings(rows, summary),
+            "scan_context": bool(scan), "gaps": _hv.GAPS,
+            "as_of": dt.datetime.now().strftime("%Y-%m-%d %H:%M")}
+
+
 @app.get("/performance", response_class=HTMLResponse)
 def performance_page(request: Request):
     from .analytics import db as _db, performance_view as _pv
     with _db.connect() as conn:
         _db.migrate(conn)
         view = _pv.build(conn)
-    return templates.TemplateResponse(request, "performance.html", {"p": view})
+    return templates.TemplateResponse(request, "performance.html",
+                                      {"p": view, "h": _holdings_block()})
 
 
 @app.get("/performance/data")

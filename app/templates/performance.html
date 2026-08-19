@@ -42,6 +42,178 @@
 {% set thin = p.observations < 63 %}
 {% set colours = ['#1ebf8e', '#2f6fed', '#7b5bf2', '#f59e0b'] %}
 
+{# --- holdings ------------------------------------------------------------ #}
+{% if h.available %}
+<section class="sc-card" id="holdings">
+  <div class="sc-card__h">
+    <h2>Holdings</h2>
+    <span class="sc-muted">{{ h.summary.positions }} positions &middot; priced {{ h.as_of }}</span>
+  </div>
+
+  <div class="sc-card__b">
+    <div class="sc-metrics">
+      <div>
+        <div class="sc-metric__k">Invested</div>
+        <div class="sc-metric__v">&#8377;{{ '{:,.0f}'.format(h.summary.invested) }}</div>
+      </div>
+      <div>
+        <div class="sc-metric__k">Current value</div>
+        <div class="sc-metric__v">&#8377;{{ '{:,.0f}'.format(h.summary.value) }}</div>
+      </div>
+      <div>
+        <div class="sc-metric__k">Unrealised P&amp;L</div>
+        <div class="sc-metric__v {{ 'text-up' if h.summary.pnl > 0 else ('text-down' if h.summary.pnl < 0 else '') }}">
+          &#8377;{{ '{:,.0f}'.format(h.summary.pnl) }}</div>
+        {% if h.summary.pnl_pct is not none %}
+        <div class="sc-metric__s">{{ '%+.2f'|format(h.summary.pnl_pct) }}% on cost</div>{% endif %}
+      </div>
+      <div>
+        <div class="sc-metric__k">Today</div>
+        <div class="sc-metric__v {{ 'text-up' if (h.summary.day_pnl or 0) > 0 else ('text-down' if (h.summary.day_pnl or 0) < 0 else '') }}">
+          {% if h.summary.day_pnl is none %}&mdash;{% else %}&#8377;{{ '{:,.0f}'.format(h.summary.day_pnl) }}{% endif %}</div>
+        {% if h.summary.day_pnl_pct is not none %}
+        <div class="sc-metric__s">{{ '%+.2f'|format(h.summary.day_pnl_pct) }}%</div>{% endif %}
+      </div>
+      <div>
+        <div class="sc-metric__k">Cash</div>
+        <div class="sc-metric__v">&#8377;{{ '{:,.0f}'.format(h.summary.cash) }}</div>
+        <div class="sc-metric__s">{{ h.summary.cash_pct }}% of NAV</div>
+      </div>
+      <div>
+        <div class="sc-metric__k">Concentration</div>
+        <div class="sc-metric__v">{{ h.summary.top5_weight }}%</div>
+        <div class="sc-metric__s">top five &middot; largest {{ h.summary.largest }}
+          at {{ h.summary.largest_weight }}%</div>
+      </div>
+    </div>
+
+    {% if h.warnings %}
+    <div class="mt-4 space-y-2">
+      {% for w in h.warnings %}
+        <div class="sc-note {{ 'sc-note--bad' if w.level == 'bad' else 'sc-note--warn' }}">
+          <div>{% if w.symbol %}<b>{{ w.symbol }}</b> &mdash; {% endif %}{{ w.text }}</div>
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {# allocation by the band the planner itself uses #}
+    <div class="mt-5">
+      <h3 class="mb-2 text-[13px] font-semibold text-ink">Allocation</h3>
+      <div class="chart">
+        {% for a in h.allocation.rows %}
+        <div class="crow">
+          <span class="nm">{{ a.band }}</span>
+          <span class="track"><span class="fill" style="width:{{ a.pct }}%"></span></span>
+          <span class="val">{{ a.pct }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% if not h.scan_context %}
+        <p class="mt-2 sc-muted">Bands come from the most recent uploaded scan. Names
+          absent from it are shown as unclassified rather than guessed into a band.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# --- the table ------------------------------------------------------- #}
+  <div class="border-t border-line px-5 py-3">
+    <div class="flex flex-wrap items-center gap-2">
+      <input id="hSearch" type="search" placeholder="Search symbol"
+             class="w-48" aria-label="Search holdings">
+      <select id="hFilter" aria-label="Filter holdings">
+        <option value="all">All positions</option>
+        <option value="win">In profit</option>
+        <option value="lose">At a loss</option>
+        <option value="pledged">Pledged</option>
+        <option value="unprotected">No full stop</option>
+        <option value="long">Long term</option>
+        <option value="short">Short term</option>
+      </select>
+      <span id="hCount" class="sc-muted"></span>
+      <a class="sc-btn sc-btn--ghost sc-btn--sm ml-auto" href="/stops">Stops</a>
+      <button type="button" class="sc-btn sc-btn--ghost sc-btn--sm"
+              onclick="exportHoldings()">Export CSV</button>
+    </div>
+  </div>
+
+  <div class="sc-tablewrap">
+    <table class="sc-table" id="hTable" aria-label="Holdings">
+      <thead><tr>
+        {% for key, label, cls in [
+            ('symbol','Symbol',''), ('quantity','Qty','r'), ('avg_price','Avg','r'),
+            ('last_price','LTP','r'), ('invested','Invested','r'),
+            ('value','Value','r'), ('pnl','P&L','r'), ('pnl_pct','P&L %','r'),
+            ('weight_pct','Weight','r'), ('day_change_pct','Day %','r'),
+            ('day_pnl','Day P&L','r'), ('cap_band','Band',''),
+            ('held_days','Held','r'), ('stop','Stop','')] %}
+          <th class="{{ cls }} cursor-pointer select-none" data-k="{{ key }}"
+              title="Sort by {{ label }}">{{ label }}</th>
+        {% endfor %}
+      </tr></thead>
+      <tbody>
+      {% for r in h.rows %}
+        <tr data-sym="{{ r.symbol }}"
+            data-win="{{ 1 if (r.pnl or 0) > 0 else 0 }}"
+            data-pledged="{{ 1 if r.pledged_qty else 0 }}"
+            data-unprot="{{ 1 if r.stop in ('missing','partial') else 0 }}"
+            data-term="{{ r.term or '' }}">
+          <td class="sym">{{ r.symbol }}
+            {%- if r.pledged_qty %} <span class="sc-badge sc-badge--mute"
+              title="{{ r.pledged_qty }} pledged">P</span>{% endif %}
+            {%- if r.t1_quantity %} <span class="sc-badge sc-badge--info"
+              title="{{ r.t1_quantity }} settling (T+1)">T1</span>{% endif %}</td>
+          <td class="r">{{ r.quantity }}</td>
+          <td class="r">{{ '{:,.2f}'.format(r.avg_price) }}</td>
+          <td class="r">{{ '{:,.2f}'.format(r.last_price) }}</td>
+          <td class="r">{{ '{:,.0f}'.format(r.invested) }}</td>
+          <td class="r">{{ '{:,.0f}'.format(r.value) }}</td>
+          <td class="r {{ 'sc-up' if r.pnl > 0 else ('sc-down' if r.pnl < 0 else '') }}">
+            {{ '{:,.0f}'.format(r.pnl) }}</td>
+          <td class="r {{ 'sc-up' if (r.pnl_pct or 0) > 0 else ('sc-down' if (r.pnl_pct or 0) < 0 else '') }}">
+            {{ '%+.2f'|format(r.pnl_pct) if r.pnl_pct is not none else '—' }}</td>
+          <td class="r">{{ r.weight_pct }}%</td>
+          <td class="r {{ 'sc-up' if (r.day_change_pct or 0) > 0 else ('sc-down' if (r.day_change_pct or 0) < 0 else '') }}">
+            {{ '%+.2f'|format(r.day_change_pct) if r.day_change_pct is not none else '—' }}</td>
+          <td class="r {{ 'sc-up' if (r.day_pnl or 0) > 0 else ('sc-down' if (r.day_pnl or 0) < 0 else '') }}">
+            {{ '{:,.0f}'.format(r.day_pnl) if r.day_pnl is not none else '—' }}</td>
+          <td class="text-ink-3">{{ r.cap_band or '—' }}</td>
+          <td class="r" title="{{ ('first bought ' ~ r.first_bought) if r.first_bought else 'no fill history' }}">
+            {%- if r.held_days is defined and r.held_days is not none -%}
+              {{ r.held_days }}d
+              <span class="sc-badge {{ 'sc-badge--ok' if r.term == 'long' else 'sc-badge--mute' }}">{{ r.term[:2]|upper }}</span>
+            {%- else -%}&mdash;{%- endif -%}</td>
+          <td>
+            {% set tone = {'ok':'sc-badge--ok','too_close':'sc-badge--warn',
+                           'too_far':'sc-badge--warn','partial':'sc-badge--bad',
+                           'missing':'sc-badge--bad','excess':'sc-badge--bad'} %}
+            <span class="sc-badge {{ tone.get(r.stop,'sc-badge--mute') }}">{{ r.stop }}</span>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sc-card__b border-t border-line">
+    <h3 class="text-[13px] font-semibold text-ink">Not shown, and why</h3>
+    <ul class="mt-2 space-y-1">
+      {% for name, why in h.gaps %}
+        <li class="sc-muted"><b class="text-ink-2">{{ name }}</b> &mdash; {{ why }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+{% else %}
+<section class="sc-card">
+  <div class="sc-card__h"><h2>Holdings</h2></div>
+  <div class="sc-card__b">
+    <p class="sc-muted">Not available: {{ h.reason or 'no broker session' }}. The
+      record above is stored and does not need one; this table is priced live.</p>
+  </div>
+</section>
+{% endif %}
+
 <div class="grid gap-5 lg:grid-cols-3">
 
   {# ======================= main column ======================= #}
@@ -397,4 +569,98 @@
 </div>
 
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Sorting, filtering and export, done on the rendered rows. No dependency and no second
+// request: the table is already here, and a holdings page that needs a round trip to sort
+// is slower than one that does not.
+(function () {
+  const table = document.getElementById('hTable');
+  if (!table) return;
+  const body = table.tBodies[0];
+  const rows = () => [...body.rows];
+  const search = document.getElementById('hSearch');
+  const filter = document.getElementById('hFilter');
+  const count = document.getElementById('hCount');
+  let sortKey = null, sortDir = -1;
+
+  // The cell text is formatted for people; sorting needs the number behind it.
+  const num = (s) => {
+    const v = parseFloat(String(s).replace(/[^0-9.\-]/g, ''));
+    return Number.isNaN(v) ? null : v;
+  };
+  const cellOf = (tr, key) => {
+    const i = [...table.tHead.rows[0].cells].findIndex(th => th.dataset.k === key);
+    return tr.cells[i];
+  };
+
+  function apply() {
+    const q = (search.value || '').trim().toUpperCase();
+    const f = filter.value;
+    let shown = 0;
+    for (const tr of rows()) {
+      const d = tr.dataset;
+      let ok = !q || d.sym.toUpperCase().includes(q);
+      if (ok && f === 'win') ok = d.win === '1';
+      if (ok && f === 'lose') ok = d.win === '0';
+      if (ok && f === 'pledged') ok = d.pledged === '1';
+      if (ok && f === 'unprotected') ok = d.unprot === '1';
+      if (ok && (f === 'long' || f === 'short')) ok = d.term === f;
+      tr.hidden = !ok;
+      if (ok) shown++;
+    }
+    count.textContent = shown === rows().length
+      ? `${shown} positions`
+      : `${shown} of ${rows().length} positions`;
+  }
+
+  function sortBy(key) {
+    sortDir = key === sortKey ? -sortDir : -1;
+    sortKey = key;
+    const sorted = rows().sort((a, b) => {
+      const av = cellOf(a, key).textContent.trim();
+      const bv = cellOf(b, key).textContent.trim();
+      const an = num(av), bn = num(bv);
+      // A dash means "no value"; it sorts last whichever way the column is pointed,
+      // rather than pretending to be zero and landing in the middle of the numbers.
+      if (an === null && bn === null) return av.localeCompare(bv);
+      if (an === null) return 1;
+      if (bn === null) return -1;
+      return (an - bn) * sortDir;
+    });
+    sorted.forEach(tr => body.appendChild(tr));
+    for (const th of table.tHead.rows[0].cells) {
+      th.setAttribute('aria-sort', th.dataset.k === key
+        ? (sortDir === -1 ? 'descending' : 'ascending') : 'none');
+    }
+  }
+
+  table.tHead.addEventListener('click', e => {
+    const th = e.target.closest('th[data-k]');
+    if (th) sortBy(th.dataset.k);
+  });
+  search.addEventListener('input', apply);
+  filter.addEventListener('change', apply);
+  apply();
+
+  window.exportHoldings = function () {
+    const head = [...table.tHead.rows[0].cells].map(th => th.textContent.trim());
+    const lines = [head.join(',')];
+    for (const tr of rows()) {
+      if (tr.hidden) continue;   // export what is on screen, not what is hidden
+      lines.push([...tr.cells]
+        .map(td => `"${td.textContent.trim().replace(/\s+/g, ' ').replace(/"/g, '""')}"`)
+        .join(','));
+    }
+    const blob = new Blob([lines.join('\n')], {type: 'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'holdings.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+})();
+</script>
 {% endblock %}

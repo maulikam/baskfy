@@ -9,6 +9,12 @@ load_dotenv()
 KITE_API_KEY = os.getenv("KITE_API_KEY", "")
 KITE_API_SECRET = os.getenv("KITE_API_SECRET", "")
 DRY_RUN = os.getenv("DRY_RUN", "true").lower() != "false"   # simulate orders unless explicitly disabled
+
+# Kite authorises orders against an allowlist of IPs. This connection offers both families
+# and prefers IPv6, so orders were refused for an address that cannot usefully be
+# allowlisted (a rotating residential v6 prefix) while the v4 address sat in the console.
+# Default ON: the failure it prevents is every order in a batch being rejected.
+FORCE_IPV4 = os.getenv("FORCE_IPV4", "true").lower() != "false"
 PORT = int(os.getenv("PORT", "8420"))
 TOKEN_FILE = os.getenv("TOKEN_FILE", "data/.kite_token.json")
 

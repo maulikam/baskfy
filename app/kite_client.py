@@ -7,6 +7,7 @@ import logging
 from kiteconnect import KiteConnect
 from . import config as C
 from .core.guards import assert_not_overnight_option, assert_tradeable
+from .core.net import force_ipv4
 
 log = logging.getLogger("kite")
 
@@ -15,6 +16,10 @@ class Kite:
     def __init__(self):
         if not C.KITE_API_KEY:
             raise RuntimeError("KITE_API_KEY missing — copy .env.example to .env and fill it.")
+        # Before the session exists, so every call it makes leaves on the family the
+        # broker's allowlist can actually name.
+        if C.FORCE_IPV4:
+            force_ipv4()
         self.kc = KiteConnect(api_key=C.KITE_API_KEY)
         self._load_token()
 

@@ -17,6 +17,37 @@ A small always-on box in Mumbai fixes both, and is nearer the exchange than the 
 | Oracle Cloud Always Free | ₹0 | permanent reserved IP; ARM capacity in Mumbai is often unavailable, and free instances can be reclaimed |
 | ISP static IP (business line) | ₹500–1,500 | no extra hop, slowest to provision |
 
+## Security
+
+This interface places real orders and the box holds credentials that do so. What is in
+place, and why:
+
+| Control | Against |
+|---|---|
+| Binds `127.0.0.1` only, firewall opens SSH alone | anything reaching port 8420 from outside |
+| **Host allowlist** (`DESK_ALLOWED_HOSTS`) | DNS rebinding — an attacker's page resolving its own domain to 127.0.0.1 and reading `/performance/data` as same-origin |
+| **Origin required on POST/PUT/DELETE** | CSRF — a form on any site posting to the desk while your tunnel is open. `/settings` and `/ops/run` take no secret, so they were reachable this way |
+| **`DESK_PASSWORD`** (Basic auth) | other accounts, or a compromised process, on the same host. Loopback is not a boundary between users |
+| API docs off (`DESK_DOCS=false`) | handing an attacker the route list, orders included |
+| Credentials forced to `0600` at startup | `.env` and the token being world-readable under a default umask |
+| SSH: keys only, no root, fail2ban, unattended upgrades | the one port that is open |
+
+**Set `DESK_PASSWORD` on the box.** It is empty by default, which is right for a personal
+laptop and wrong for anything hosted:
+
+```
+ssh desk@<ip>
+python3 -c 'import secrets; print(secrets.token_urlsafe(24))'   # generate
+nano kite-momentum-rebalancer/.env                              # DESK_PASSWORD=...
+sudo systemctl restart momentum-web
+```
+
+Any username works at the browser prompt; only the password is checked, in constant time.
+
+What is deliberately **not** claimed: this is a single-user desk behind a tunnel, not a
+multi-tenant application. There is no user model, no audit of who did what, and no rate
+limit on the login. Those are the right next controls if this ever has a second operator.
+
 ## Once
 
 1. **Create the instance.** Lightsail → Mumbai (`ap-south-1`) → Ubuntu 24.04 → 1 GB.

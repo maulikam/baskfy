@@ -32,7 +32,22 @@ try:
     import uvloop; uvloop.install()      # faster asyncio event loop (Linux/macOS)
 except Exception:
     pass
-app = FastAPI(title="Kite Momentum Rebalancer", default_response_class=JSONResponse)
+app = FastAPI(title="Kite Momentum Rebalancer", default_response_class=JSONResponse,
+              # The interactive docs enumerate every route, including the ones that place
+              # orders. Off unless asked for.
+              docs_url="/docs" if C.DESK_DOCS else None,
+              redoc_url="/redoc" if C.DESK_DOCS else None,
+              openapi_url="/openapi.json" if C.DESK_DOCS else None)
+
+from .core.websec import DeskSecurity                     # noqa: E402
+from .core.websec import check_secret_permissions as _secret_perm_check  # noqa: E402
+
+app.add_middleware(DeskSecurity)
+
+# Credential files are tightened at startup rather than trusted to a deploy step, because
+# the deploy step is the thing most likely to be skipped.
+for _bad in _secret_perm_check(fix=True):
+    logging.warning("tightened %s from %s (%s)", _bad["file"], _bad["mode"], _bad["detail"])
 templates = Jinja2Templates(directory="app/templates")
 
 # The same directory ops.py confines its file parameters to, so a retained scan is

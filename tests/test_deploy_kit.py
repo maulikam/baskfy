@@ -125,3 +125,39 @@ def test_the_scripts_are_executable_and_fail_fast(script):
     p = DEPLOY / script
     assert p.stat().st_mode & 0o111, f"{script} is not executable"
     assert "set -euo pipefail" in p.read_text(), f"{script} would continue past an error"
+
+
+# =====================================================================================
+# the box, hardened
+# =====================================================================================
+def test_ssh_is_keys_only_and_root_cannot_log_in():
+    boot = (DEPLOY / "bootstrap.sh").read_text()
+    for rule in ("PasswordAuthentication no", "PermitRootLogin no"):
+        assert rule in boot, rule
+
+
+def test_it_refuses_to_lock_you_out():
+    """Disabling password auth on a box with no authorized_keys produces a machine nobody
+    can reach. The script checks first and says so instead."""
+    boot = (DEPLOY / "bootstrap.sh").read_text()
+    assert "authorized_keys" in boot
+    assert "lock yourself out" in boot
+
+
+def test_the_box_patches_itself_and_resists_brute_force():
+    boot = (DEPLOY / "bootstrap.sh").read_text()
+    assert "unattended-upgrades" in boot and "fail2ban" in boot
+
+
+def test_credentials_are_not_left_world_readable():
+    boot = (DEPLOY / "bootstrap.sh").read_text()
+    assert "chmod 600 .env" in boot
+    # and the app does not rely on the deploy step remembering
+    from app.core import websec as W
+    assert ".env" in W.SECRET_FILES and "data/.kite_token.json" in W.SECRET_FILES
+
+
+def test_the_readme_states_the_password_must_be_set_on_a_hosted_box():
+    readme = (DEPLOY / "README.md").read_text()
+    assert "DESK_PASSWORD" in readme
+    assert "empty by default" in readme

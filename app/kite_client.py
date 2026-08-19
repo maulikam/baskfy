@@ -31,7 +31,12 @@ class Kite:
         data = self.kc.generate_session(request_token, api_secret=C.KITE_API_SECRET)
         self.kc.set_access_token(data["access_token"])
         os.makedirs(os.path.dirname(C.TOKEN_FILE), exist_ok=True)
-        with open(C.TOKEN_FILE, "w") as f:
+        # 0600 BEFORE anything is written. This token places orders for the rest of the
+        # trading day; on a shared or hosted box a default-umask file is readable by every
+        # account on it. Created with the mode rather than chmod'd afterwards, so the
+        # secret is never on disk world-readable even briefly.
+        fd = os.open(C.TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
             json.dump({"access_token": data["access_token"]}, f)
 
     def _load_token(self) -> None:

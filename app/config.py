@@ -15,6 +15,22 @@ DRY_RUN = os.getenv("DRY_RUN", "true").lower() != "false"   # simulate orders un
 # allowlisted (a rotating residential v6 prefix) while the v4 address sat in the console.
 # Default ON: the failure it prevents is every order in a batch being rejected.
 FORCE_IPV4 = os.getenv("FORCE_IPV4", "true").lower() != "false"
+
+# --- browser-facing security ----------------------------------------------------------
+# The interface places real orders. On a cloud host it is reached through an SSH tunnel,
+# so it still answers only on loopback — but the browser holding that tunnel also visits
+# the rest of the internet, and a page there can both read this app (DNS rebinding) and
+# post to it (CSRF) without a single packet arriving from outside. See core/websec.py.
+#
+# "testserver" is the Host the test client sends. It is not a public name and nothing can
+# resolve to it, so allowing it costs nothing and keeps the suite honest about the rest.
+DESK_ALLOWED_HOSTS = os.getenv("DESK_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver")
+DESK_PORT = int(os.getenv("DESK_PORT", "8420"))
+# Empty means no password, which is right for a laptop on loopback. Set it on any shared
+# or hosted box: loopback is not a boundary between users of the same machine.
+DESK_PASSWORD = os.getenv("DESK_PASSWORD", "")
+# The interactive API docs describe every route including the ones that place orders.
+DESK_DOCS = os.getenv("DESK_DOCS", "false").lower() == "true"
 PORT = int(os.getenv("PORT", "8420"))
 TOKEN_FILE = os.getenv("TOKEN_FILE", "data/.kite_token.json")
 

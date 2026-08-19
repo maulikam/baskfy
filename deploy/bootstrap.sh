@@ -60,6 +60,45 @@ sudo ufw allow OpenSSH >/dev/null
 sudo ufw --force enable >/dev/null
 sudo ufw status | sed 's/^/   /'
 
+say "ssh hardening"
+# The only port open to the internet is this one, and it now guards an account that can
+# place orders. Keys only, no root, and a short grace window so a half-open connection
+# cannot be parked.
+sudo install -d -m 0755 /etc/ssh/sshd_config.d
+sudo tee /etc/ssh/sshd_config.d/10-desk.conf >/dev/null <<'CONF'
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+LoginGraceTime 30
+MaxAuthTries 3
+X11Forwarding no
+AllowAgentForwarding no
+CONF
+# Refuse to lock the door with the key inside: if no authorized_keys exists, leave
+# password auth alone and say so, rather than producing a box nobody can log into.
+if sudo test -s "/home/${APP_USER}/.ssh/authorized_keys" || sudo test -s ~/.ssh/authorized_keys; then
+  sudo sshd -t && sudo systemctl reload ssh && echo "   keys only, root login disabled"
+else
+  sudo rm -f /etc/ssh/sshd_config.d/10-desk.conf
+  echo "   SKIPPED: no authorized_keys found. Install your key first, then re-run,"
+  echo "            or you will lock yourself out."
+fi
+
+say "patching and brute-force protection"
+sudo apt-get install -y -qq unattended-upgrades fail2ban
+sudo systemctl enable --now fail2ban >/dev/null 2>&1 || true
+sudo dpkg-reconfigure -f noninteractive unattended-upgrades >/dev/null 2>&1 || true
+systemctl is-active fail2ban | sed 's/^/   fail2ban: /'
+
+say "secret file permissions"
+# The app tightens these at startup too; doing it here means they are never briefly
+# world-readable on a fresh box.
+sudo -u "$APP_USER" bash -lc "
+  cd '$APP_DIR' 2>/dev/null || exit 0
+  chmod 700 . data 2>/dev/null || true
+  chmod 600 .env data/.kite_token.json 2>/dev/null || true"
+echo "   done"
+
 say "done"
 cat <<'NEXT'
    Next, from the laptop:

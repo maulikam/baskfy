@@ -25,3 +25,27 @@ def isolate_order_journal(tmp_path, monkeypatch):
     """
     import app.core.gateway as gateway
     monkeypatch.setattr(gateway, "JOURNAL", str(tmp_path / "orders_journal.jsonl"))
+
+
+# =====================================================================================
+# Browsers send Origin on every POST, including same-origin ones, and core/websec.py
+# requires it — that is what stops a form on another site posting to the desk while the
+# tunnel is open. Route tests are about routes, so the client sends the header the way a
+# browser would; the protection itself is tested directly in tests/test_websec.py, which
+# asserts what happens when the header is absent, wrong, or the Host is a stranger.
+# =====================================================================================
+import pytest as _pytest
+from fastapi.testclient import TestClient as _TestClient
+
+_ORIGIN = {"Origin": "http://testserver:8420"}
+
+
+@_pytest.fixture(autouse=True)
+def _same_origin_by_default(monkeypatch):
+    original = _TestClient.__init__
+
+    def patched(self, app, *a, **kw):
+        headers = {**_ORIGIN, **(kw.pop("headers", None) or {})}
+        original(self, app, *a, headers=headers, **kw)
+
+    monkeypatch.setattr(_TestClient, "__init__", patched)

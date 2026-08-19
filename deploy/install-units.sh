@@ -19,6 +19,7 @@ sudo cp deploy/systemd/*.service deploy/systemd/*.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now momentum-web.service
 sudo systemctl enable --now momentum-daily.timer
+sudo systemctl enable --now momentum-backup.timer
 for i in nifty banknifty sensex; do
   sudo systemctl enable --now "strangle-collect@${i}.timer"
 done

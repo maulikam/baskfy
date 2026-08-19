@@ -25,3 +25,4 @@ data/uploads/*.csv
 .DS_Store
 *.swp
 node_modules/
+data/backups/

@@ -1,0 +1,34 @@
+# TLS front door for the momentum desk.
+#
+# The app itself still listens on 127.0.0.1:8420 and is still unreachable from the
+# internet. Caddy is the only process bound to a public port. It terminates TLS with a
+# certificate it obtains and renews from Let's Encrypt on its own, and proxies to the
+# app over loopback. If Caddy stops, the desk becomes unreachable rather than becoming
+# reachable without TLS -- the safe direction for a failure.
+#
+# The Host header is passed through unchanged, because DeskSecurity checks it against
+# DESK_ALLOWED_HOSTS. Rewriting it here would disable that defence silently.
+
+desk.modelbasket.in {
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:8420 {
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	header {
+		# The desk is HTTPS-only from the first visit onward.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options   nosniff
+		X-Frame-Options          DENY
+		Referrer-Policy          no-referrer
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/desk.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}

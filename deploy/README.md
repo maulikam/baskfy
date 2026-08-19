@@ -215,3 +215,57 @@ state, so a later sync cannot overwrite the database the box has been writing. U
 
 Keep `FORCE_IPV4=true` in `.env`. The box will have a single stable v4 address, but the
 setting costs nothing and removes any chance of the family flipping under you.
+
+## HTTPS on a real hostname
+
+`bash deploy/install-tls.sh` (set `DESK_HOST` first if the name is not
+`desk.modelbasket.in`). It installs Caddy, points it at the app over loopback, obtains
+and renews a Let's Encrypt certificate on its own, and installs a fail2ban jail on
+failed logins.
+
+The app does not move. It still listens on `127.0.0.1:8420`; Caddy is the only process
+bound to a public port. If Caddy stops the desk becomes unreachable, not reachable
+without TLS — the safe direction for a failure.
+
+Two prerequisites live outside the script, and both fail silently if missed:
+
+- **An A record resolvable from PUBLIC DNS.** Let's Encrypt queries public resolvers,
+  not your registrar. A freshly registered domain that has not been delegated by the
+  registry yet will answer at the registrar and nowhere else, and validation will fail
+  with nothing wrong at either end. Check with `dig +short A <host> @8.8.8.8`, not with
+  the registrar's control panel.
+- **Ports 80 and 443 open in the CLOUD firewall as well as ufw.** Lightsail keeps its
+  own firewall, separate from the host's. Port 80 is not optional — it carries the
+  ACME HTTP-01 challenge.
+
+Then set `DESK_ALLOWED_HOSTS` to include the hostname and restart `momentum-web`, or
+every request arrives under a name the app refuses with 421.
+
+### Three ways this looked installed and did nothing
+
+Each was found by testing the behaviour rather than the status, and each would have left
+a jail that reports itself `enabled` while banning nobody:
+
+- **`sudo caddy validate` creates `/var/log/caddy/desk.log` as `root:root 0600`**, after
+  which the `caddy` user cannot open its own log and the service dies at startup with a
+  bare "permission denied" that names no cause.
+- **Caddy timestamps are bare epoch floats** (`"ts":1787157417.79`). No default fail2ban
+  date template parses them, so every line matched the failregex and was then discarded
+  as undated. `fail2ban-regex` reported `Date template hits:` empty — the filter needs
+  `datepattern = "ts":{EPOCH}`.
+- **`jail.d/defaults-debian.conf` sets `backend = systemd` for every jail**, under which
+  `logpath` is ignored entirely. Caddy writes to a file, not the journal, so the jail
+  must set `backend = polling`. The tell is
+  `fail2ban-client get <jail> logpath` returning *"No file is currently monitored"*.
+
+The check that actually means something:
+
+    sudo fail2ban-client get caddy-desk-auth logpath   # must name the file
+    sudo fail2ban-client status caddy-desk-auth        # must count real failures
+
+### If you lock yourself out
+
+Ten failed logins in ten minutes bans the source IP for an hour. SSH is a separate jail
+and stays available, so recovery is:
+
+    sudo fail2ban-client set caddy-desk-auth unbanip <your-ip>

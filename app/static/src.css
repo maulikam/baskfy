@@ -157,7 +157,13 @@
   .sc-table tbody tr:last-child td { @apply border-b-0; }
   .sc-table tbody tr:hover td { @apply bg-wash; }
   .sc-table .r { @apply text-right; }
-  .sc-table .sym { @apply font-medium text-ink; }
+  .sc-table .sym { @apply font-medium text-ink whitespace-nowrap; }
+  /* The pledged and T+1 markers belong on the symbol's line; wrapping them under it
+     doubles every affected row's height and breaks the scan down the column. */
+  .sc-table .sym .sc-badge { @apply align-middle; }
+  /* A dense book table earns tighter gutters: at 14 columns the default padding pushed
+     the last one past the edge on a 1440 screen. */
+  #hTable thead th, #hTable tbody td { @apply px-2.5 whitespace-nowrap; }
 
   /* --- callouts --------------------------------------------------------- */
   .sc-note { @apply flex items-start gap-2.5 rounded-lg border px-4 py-3 text-[13px]; }

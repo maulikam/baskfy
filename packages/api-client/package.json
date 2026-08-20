@@ -1,0 +1,24 @@
+{
+  "name": "@decile/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed client and shared contracts for the Decile API.",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "generate": "openapi-typescript openapi.json -o src/generated/schema.ts",
+    "generate:check": "openapi-typescript openapi.json -o src/generated/schema.ts && git diff --exit-code -- src/generated",
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.17.0",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "openapi-typescript": "^7.13.0",
+    "typescript": "^5.6.3",
+    "vitest": "^3.2.4"
+  }
+}

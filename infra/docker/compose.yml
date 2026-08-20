@@ -1,0 +1,61 @@
+# Local development stack for Decile.
+#
+# NOTE ON THE POSTGRES IMAGE: docs/02-tech-stack-adr.md locks "PostgreSQL 16 + TimescaleDB".
+# The stock `postgres:16` image does not ship the TimescaleDB extension, so we use the official
+# TimescaleDB image built on PostgreSQL 16. It is still PostgreSQL 16.
+name: decile
+
+services:
+  postgres:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: decile-postgres
+    environment:
+      POSTGRES_USER: decile
+      POSTGRES_PASSWORD: decile
+      POSTGRES_DB: decile
+    ports:
+      - "${DECILE_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - decile-pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U decile -d decile"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: decile-redis
+    ports:
+      - "${DECILE_REDIS_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Prompt 12 §3: "Transactional email via Resend with **local delivery to mailpit**".
+  #
+  # Mailpit accepts SMTP on 1025 and serves everything it caught at http://localhost:8025, so a
+  # developer can read the sign-in code they were just sent instead of grepping a log. Nothing
+  # leaves the machine: point DECILE_EMAIL_TRANSPORT at `smtp` and the production Resend path is
+  # never exercised locally, which is the point.
+  mailpit:
+    image: axllent/mailpit:v1.21
+    container_name: decile-mailpit
+    ports:
+      - "${DECILE_SMTP_PORT:-1025}:1025"
+      - "${DECILE_MAILPIT_UI_PORT:-8025}:8025"
+    environment:
+      MP_MAX_MESSAGES: "500"
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  decile-pgdata:

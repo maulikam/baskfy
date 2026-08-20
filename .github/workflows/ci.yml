@@ -1,0 +1,141 @@
+# CI — docs/02 §"The decision in one table": "GitHub Actions -> GHCR images -> deploy".
+#
+# Prompt 7 deliverable 7 requires the client-staleness gate specifically: "a CI step that
+# regenerates the TypeScript client and fails if the checked-in client is stale". docs/07 states
+# it as a rule — "Hand-written request types are a CI failure" — so the check is a job, not a
+# suggestion. The image build and deploy steps belong to Prompt 21.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  DECILE_TEST_DATABASE_URL: postgresql+asyncpg://decile:decile@localhost:5432/decile_test
+  DECILE_REDIS_URL: redis://localhost:6379/0
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # docs/02 locks "PostgreSQL 16 + TimescaleDB"; the stock postgres image has no extension.
+        image: timescale/timescaledb:2.17.2-pg16
+        env:
+          POSTGRES_USER: decile
+          POSTGRES_PASSWORD: decile
+          POSTGRES_DB: decile_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U decile" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: Lint and type-check
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy
+      - name: Tests
+        run: uv run pytest
+
+  client:
+    # docs/07 §"OpenAPI -> TypeScript": "Hand-written request types are a CI failure."
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: uv sync --frozen
+      - run: pnpm install --frozen-lockfile
+      - name: openapi.json is current
+        run: uv run python -m decile_api.openapi --check
+      - name: Generated client is current
+        run: pnpm --filter @decile/api-client run generate
+      - name: Fail if the checked-in client is stale
+        run: git diff --exit-code -- packages/api-client/src/generated packages/api-client/openapi.json
+      - name: Type-check and test the client
+        run: |
+          pnpm --filter @decile/api-client run lint
+          pnpm --filter @decile/api-client run test
+
+  web:
+    # Prompt 8's acceptance criteria (Lighthouse accessibility, the 4,000-row scroll trace, the
+    # keyboard walkthrough, the layout-shift budget) and Prompt 9's (the screens walk-through, the
+    # sentinel behaviour, the URL round-trip). They need a real browser, a production build, and —
+    # since Prompt 9 — a running API with a seeded database, which `playwright.config.ts` starts
+    # itself.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: timescale/timescaledb:2.17.2-pg16
+        env:
+          POSTGRES_USER: decile
+          POSTGRES_PASSWORD: decile
+          POSTGRES_DB: decile
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U decile" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6380:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: uv sync --frozen
+      - run: pnpm install --frozen-lockfile
+      # `openapi.json` is the client's input and the client is the web app's contract, so the
+      # spec is emitted before anything is type-checked against it.
+      - run: uv run python -m decile_api.openapi
+      - run: pnpm --filter @decile/api-client run generate
+      - name: Lint and type-check
+        run: pnpm --filter @decile/web run lint
+      - name: Unit tests
+        run: pnpm --filter @decile/web run test
+      - name: Install Playwright browsers
+        run: pnpm --filter @decile/web exec playwright install --with-deps chromium
+      - name: Create the browser suite's database
+        run: |
+          PGPASSWORD=decile psql -h localhost -p 5433 -U decile -d postgres \
+            -c "CREATE DATABASE decile_e2e;"
+      - name: Acceptance checks
+        # `playwright.config.ts` migrates and seeds `decile_e2e`, starts the API on :8100 and the
+        # web app on :3100, and tears both down.
+        run: pnpm --filter @decile/web run e2e
+        env:
+          DECILE_JWT_SECRET: ci-placeholder-secret-0123456789abcdef
+          AUTH_SECRET: ci-placeholder-secret-0123456789abcdef
+          DECILE_REDIS_URL: redis://localhost:6380/0
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/

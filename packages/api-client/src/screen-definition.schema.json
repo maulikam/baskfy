@@ -1,0 +1,477 @@
+{
+  "$defs": {
+    "AwayFromHighFilter": {
+      "additionalProperties": false,
+      "description": "\"Within X% of high\". ``100`` means ignore (docs/01 §2.4).",
+      "properties": {
+        "ath": {
+          "default": 100,
+          "title": "Ath",
+          "type": "integer"
+        },
+        "one_year": {
+          "default": 100,
+          "title": "One Year",
+          "type": "integer"
+        }
+      },
+      "title": "AwayFromHighFilter",
+      "type": "object"
+    },
+    "CircuitsFilter": {
+      "additionalProperties": false,
+      "description": "Maximum permitted circuit-hit days in the window. ``> 250`` means ignore (docs/01 §2.6).\n\nNote the asymmetry with the other sentinels: the ignore value is a *threshold*, not a single\nmagic number, because any cap above a full year of trading days cannot bind.",
+      "properties": {
+        "m1": {
+          "default": 999,
+          "title": "M1",
+          "type": "integer"
+        },
+        "m12": {
+          "default": 999,
+          "title": "M12",
+          "type": "integer"
+        },
+        "m3": {
+          "default": 999,
+          "title": "M3",
+          "type": "integer"
+        },
+        "m6": {
+          "default": 999,
+          "title": "M6",
+          "type": "integer"
+        },
+        "m9": {
+          "default": 999,
+          "title": "M9",
+          "type": "integer"
+        }
+      },
+      "title": "CircuitsFilter",
+      "type": "object"
+    },
+    "CustomFilter": {
+      "additionalProperties": false,
+      "description": "A field-to-field comparison, e.g. ``ma_50 >= ma_200`` (docs/01 §2.14).",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "left": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Left",
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            ">=",
+            "<=",
+            "="
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "right": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Right",
+          "type": "string"
+        }
+      },
+      "required": [
+        "left",
+        "op",
+        "right"
+      ],
+      "title": "CustomFilter",
+      "type": "object"
+    },
+    "ExtraFactor": {
+      "additionalProperties": false,
+      "description": "Factor two / factor three of the combined ranking (docs/01 §2.12).",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "sort_by": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sort By"
+        },
+        "sort_direction": {
+          "default": "desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "title": "Sort Direction",
+          "type": "string"
+        }
+      },
+      "title": "ExtraFactor",
+      "type": "object"
+    },
+    "MovingAverageFilter": {
+      "additionalProperties": false,
+      "description": "Eight independent switches, AND-combined (docs/01 §2.3).",
+      "properties": {
+        "above_100": {
+          "default": false,
+          "title": "Above 100",
+          "type": "boolean"
+        },
+        "above_20": {
+          "default": false,
+          "title": "Above 20",
+          "type": "boolean"
+        },
+        "above_200": {
+          "default": false,
+          "title": "Above 200",
+          "type": "boolean"
+        },
+        "above_50": {
+          "default": false,
+          "title": "Above 50",
+          "type": "boolean"
+        },
+        "below_100": {
+          "default": false,
+          "title": "Below 100",
+          "type": "boolean"
+        },
+        "below_20": {
+          "default": false,
+          "title": "Below 20",
+          "type": "boolean"
+        },
+        "below_200": {
+          "default": false,
+          "title": "Below 200",
+          "type": "boolean"
+        },
+        "below_50": {
+          "default": false,
+          "title": "Below 50",
+          "type": "boolean"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "MovingAverageFilter",
+      "type": "object"
+    },
+    "PeFilter": {
+      "additionalProperties": false,
+      "description": "P/E band behind its own switch. Undefined P/E is excluded when on (docs/01 §2.8).",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "from": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "From"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "To"
+        }
+      },
+      "title": "PeFilter",
+      "type": "object"
+    },
+    "PositiveDaysFilter": {
+      "additionalProperties": false,
+      "description": "Minimum % of trading days that closed up. ``0`` means ignore (docs/01 §2.5).",
+      "properties": {
+        "m1": {
+          "default": 0,
+          "title": "M1",
+          "type": "integer"
+        },
+        "m12": {
+          "default": 0,
+          "title": "M12",
+          "type": "integer"
+        },
+        "m3": {
+          "default": 0,
+          "title": "M3",
+          "type": "integer"
+        },
+        "m6": {
+          "default": 0,
+          "title": "M6",
+          "type": "integer"
+        },
+        "m9": {
+          "default": 0,
+          "title": "M9",
+          "type": "integer"
+        }
+      },
+      "title": "PositiveDaysFilter",
+      "type": "object"
+    },
+    "RangeFilter": {
+      "additionalProperties": false,
+      "description": "An inclusive ``[from, to]`` band; both ``None`` means ignore (docs/06 step 4).",
+      "properties": {
+        "from": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "From"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "To"
+        }
+      },
+      "title": "RangeFilter",
+      "type": "object"
+    },
+    "TopRiskFilter": {
+      "additionalProperties": false,
+      "description": "\"Ignore Top Beta / Top Volatility\" — a precomputed per-universe flag (docs/06 step 4).",
+      "properties": {
+        "count": {
+          "default": 0,
+          "title": "Count",
+          "type": "integer"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "TopRiskFilter",
+      "type": "object"
+    }
+  },
+  "$id": "https://decile.in/schemas/screen-definition.json",
+  "additionalProperties": false,
+  "description": "The persisted screen configuration.\n\nTwo definitions that mean the same thing produce the same :meth:`canonical_json`, and\ntherefore the same :meth:`definition_hash` — which is what makes the Redis cache key\n(docs/06 §Caching) and ``screen_run.definition_hash`` trustworthy.",
+  "properties": {
+    "apply_filters_on": {
+      "default": "all",
+      "enum": [
+        "all",
+        "decile_1",
+        "decile_2",
+        "decile_3",
+        "decile_4",
+        "decile_5",
+        "top_50",
+        "top_100"
+      ],
+      "title": "Apply Filters On",
+      "type": "string"
+    },
+    "away_from_high": {
+      "$ref": "#/$defs/AwayFromHighFilter"
+    },
+    "circuits": {
+      "$ref": "#/$defs/CircuitsFilter"
+    },
+    "custom_filters": {
+      "items": {
+        "$ref": "#/$defs/CustomFilter"
+      },
+      "title": "Custom Filters",
+      "type": "array"
+    },
+    "factor_three": {
+      "$ref": "#/$defs/ExtraFactor"
+    },
+    "factor_two": {
+      "$ref": "#/$defs/ExtraFactor"
+    },
+    "historical_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Historical Date"
+    },
+    "ignore_above_beta": {
+      "default": 100,
+      "title": "Ignore Above Beta",
+      "type": "integer"
+    },
+    "ignore_top_beta": {
+      "$ref": "#/$defs/TopRiskFilter"
+    },
+    "ignore_top_volatility": {
+      "$ref": "#/$defs/TopRiskFilter"
+    },
+    "index": {
+      "enum": [
+        "nifty-50",
+        "nifty-next-50",
+        "nifty-100",
+        "nifty-200",
+        "nifty-500",
+        "nifty-total-market",
+        "nifty-large-mid-250",
+        "nifty-midcap-150",
+        "nifty-smallcap-250",
+        "nifty-microcap-250",
+        "nifty-mid-small-400",
+        "nifty-allcap",
+        "nifty-fno",
+        "etf"
+      ],
+      "title": "Index",
+      "type": "string"
+    },
+    "marketcap": {
+      "$ref": "#/$defs/RangeFilter"
+    },
+    "median_volume_1y": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Median Volume 1Y"
+    },
+    "min_return_1y": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Min Return 1Y"
+    },
+    "moving_average": {
+      "$ref": "#/$defs/MovingAverageFilter"
+    },
+    "pe": {
+      "$ref": "#/$defs/PeFilter"
+    },
+    "positive_days": {
+      "$ref": "#/$defs/PositiveDaysFilter"
+    },
+    "price": {
+      "$ref": "#/$defs/RangeFilter"
+    },
+    "series": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Series",
+      "type": "array"
+    },
+    "sort_by": {
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "title": "Sort By",
+      "type": "string"
+    },
+    "sort_direction": {
+      "default": "desc",
+      "enum": [
+        "asc",
+        "desc"
+      ],
+      "title": "Sort Direction",
+      "type": "string"
+    }
+  },
+  "required": [
+    "index",
+    "sort_by"
+  ],
+  "title": "ScreenDefinition",
+  "type": "object"
+}

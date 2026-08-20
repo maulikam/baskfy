@@ -1,0 +1,58 @@
+[project]
+name = "decile-api"
+version = "0.1.0"
+description = "Decile FastAPI service and Alembic migrations."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "decile-core",
+    "decile-providers",
+    "alembic>=1.14",
+    "asyncpg>=0.30",
+    "pydantic-settings>=2.6",
+    # docs/02 §"The decision in one table": FastAPI + Pydantic v2 + SQLAlchemy 2.0 async.
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    # docs/02: "Cache / queue broker — Redis 7". The API uses it for the docs/07 rate limits and
+    # the docs/06 screen-result cache; `decile-providers` already depends on it for the Kite
+    # token bucket, and this makes the API's own use explicit rather than transitive.
+    "redis>=5.2",
+    # NOT NAMED IN docs/02. docs/07 requires HS256 bearer tokens issued by the Next.js app, and
+    # docs/11 §Security pins the algorithm, but neither names a library. PyJWT is the reference
+    # implementation, ships `py.typed`, and is the alternative to hand-rolling signature
+    # verification — which is the kind of code that should not be hand-rolled. Flagged in
+    # docs/07a-api-implementation-notes.md.
+    "pyjwt>=2.10",
+    # NOT NAMED IN docs/02. docs/11 §Security names the *algorithm* — "Argon2id password
+    # hashing" — but no library. `argon2-cffi` is the reference binding to the reference C
+    # implementation (the PHC winner's own), ships `py.typed`, and is what every other Python
+    # option wraps. The alternative is hand-rolling a KDF, which is not a thing to hand-roll.
+    # Flagged in docs/12a-auth-implementation-notes.md.
+    "argon2-cffi>=23.1",
+    # Pydantic v2's `EmailStr` needs this to exist at all; docs/02 locks Pydantic v2 and docs/11's
+    # PII inventory starts with "email", so validating the one field the whole account hangs off
+    # is not optional. It is the validator Pydantic itself documents.
+    "email-validator>=2.2",
+    # NOT NAMED IN docs/02 either. docs/02 locks **Resend** for transactional email; Resend is an
+    # HTTPS API with no official Python SDK worth the dependency, so the client is ~40 lines over
+    # httpx — which `decile-providers` already depends on, so this only makes the API's own use
+    # explicit rather than transitive.
+    "httpx>=0.28",
+    # docs/02 §Observability: "OpenTelemetry -> Grafana/Tempo/Loki".
+    "opentelemetry-api>=1.28",
+    "opentelemetry-sdk>=1.28",
+    "opentelemetry-instrumentation-fastapi>=0.49b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.49b0",
+    # The OTLP/HTTP span exporter docs/02 §Observability implies ("OpenTelemetry -> Grafana/Tempo").
+    "opentelemetry-exporter-otlp-proto-http>=1.28",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/decile_api"]
+
+[tool.uv.sources]
+decile-core = { workspace = true }
+decile-providers = { workspace = true }

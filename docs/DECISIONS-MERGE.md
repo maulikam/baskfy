@@ -818,3 +818,58 @@ carries a per-window count and no daily band, and more than one rule reproduces 
 271 rows × ~60 columns meant the first forty failures were forty rows of one column. The assertion
 now prints a per-column count before the examples, which is what turned "7,319 cells failed" into a
 diagnosis. Small change; it is the reason the rest of this entry could be written.
+
+### M11.5 — The per-family hypothesis, tested and refuted; one more real defect found ⚠ UNREVIEWED
+Maulik's hypothesis: the window rule may not be global — bar factors read `K` bars inclusive with
+base = first bar, interval factors read the `K−1` returns inside that same window. If it held for
+all five windows, `docs/05` and `docs/13` would reconcile by naming both concepts.
+
+**Tested by sweeping every family's parameter independently on real bars against all 271 rows.**
+The full evidence table is `decile-blueprint/reconciliation/PARITY-FAMILIES.md`; it is P1.5's
+written explanation.
+
+**Refuted, and precisely.** `positive_days_percent` recovers **exactly** `docs/13` §3's
+22/64/121/185/247 — an independent confirmation of that derivation. The return base wants
+`K−1` for `K` = 22/64/121/**184**/**246**. The two families **agree at the short windows and
+disagree by one bar at nine and twelve months**, which no single `K`-with-`K−1`-intervals scheme
+can produce.
+
+**Two columns turn out not to be window questions at all.** `volatility_*` and `rsi_*` reproduce
+**0 of 268 at every parameter tried**. A grid over return type × `ddof` × annualisation × window
+finds no exact combination for volatility; CUPID comes within 2.6e-6 at simple/`ddof=0`/√250/245,
+but that combination reproduces **1 of 268** file-wide, so it is coincidence. `docs/05` §2
+specifies sample stdev and √252 and the reference does neither. These belong with `circuits_*`:
+**definitions the export cannot arbitrate**, reported unchecked rather than compared.
+
+**And the sweep found a third real defect, independent of the window.** `high_one_year` and
+`away_from_high_one_year` read `close`; the reference reads the **intraday high**:
+
+| input | exact |
+|---|---:|
+| `max(high)` | **249 / 268** |
+| `max(close)` | 6 / 268 |
+
+**Flat across every window length from 243 to 248** — which is what proves it is the input and not
+the window, and what made it safe to fix while the window question stays open. `docs/05` §10's own
+worked example already used CUPID's `299.00`, the highest price it *traded* at, against the
+`294.86` it closed at: the prose contradicted the example, and the engine implemented the prose.
+Corrected spec-first, then the engine, then the oracle.
+
+A property test failed on the change and was **not** the property's fault: `frame_for` synthesises
+`high = close * 1.01`, so every bar now sits exactly 1/1.01 below its own high and
+`away_high_ath` is a constant instead of exactly zero at the peak — hypothesis found two paths to
+the same ratio 2e-13 apart. Compared with an epsilon now, with the reason written down.
+
+**Step 3 — the stratification — answered in passing and worth stating.** ZENTEC's and
+JINDALSTEL's `close` were the two cells `DECISIONS.md` §21.9 reported as out by exactly a dividend.
+They now match to the paisa (1982.4 and 1101.5), which confirms **M10.2's look-ahead fix moved
+these numbers** and that no future-dated action remains in the data.
+
+**Decision, per Maulik's rule: per-family optima are incoherent, so keep only the evidenced
+fixes.** Two landed (return base, intraday highs), taking failures **7,319 → 6,934 → 6,454** with
+the suite green at its M0 baseline throughout. The boundary change stays reverted: it buys the
+return family by breaking the family `docs/13`'s derivation rests on.
+
+**M12 arbitrates.** The desk's `data/uploads/` corpus is the oracle that gates M13 — those CSVs
+are what a real portfolio was scored, ordered and stopped against, and empty top-25 delta tables
+settle the window semantics in the only terms that matter.

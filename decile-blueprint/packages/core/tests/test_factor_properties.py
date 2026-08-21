@@ -188,7 +188,16 @@ class TestMonotonicity:
         ).frame
         assert raised["high_ath"][0] >= base["high_ath"][0]
         # And distance from the all-time high can only shrink towards zero.
-        assert raised["away_high_ath"][0] >= base["away_high_ath"][0]
+        #
+        # Compared with a floating-point epsilon, not exactly, and the reason is this fixture
+        # rather than the property. `frame_for` synthesises `high = close * 1.01`, so once
+        # docs/05 §10 was corrected to read the intraday high (2026-08-22) every bar sits exactly
+        # 1/1.01 below its own high and `away_high_ath` is a CONSTANT -0.990099…. Scaling the last
+        # close scales its high with it, so the two sides differ only in how the same ratio was
+        # arrived at — hypothesis found a pair 2e-13 apart. The property is unchanged; what
+        # changed is that the quantity is no longer exactly zero at the peak, where float
+        # equality was free.
+        assert raised["away_high_ath"][0] >= base["away_high_ath"][0] - 1e-9
 
     @given(returns=log_returns)
     @_SUITE

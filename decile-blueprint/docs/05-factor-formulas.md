@@ -197,16 +197,33 @@ ma_K = mean(P_{t-K+1 … t}),  K ∈ {20, 50, 100, 200}
 ```
 Simple, not exponential. NULL if fewer than `K` bars.
 
-## 10. Highs and distance from high — VERIFIED
+## 10. Highs and distance from high — CORRECTED 2026-08-22 (the high is the INTRADAY high)
 
 ```
-high_1y  = max(P over last 252 bars)          # on adjusted close
-high_ath = max(P over the full history)
+high_1y  = max(HIGH over the last N bars)      # the intraday high, NOT the close
+high_ath = max(HIGH over the full history)
 away_high_1y  = (P_t / high_1y  - 1) × 100    # ≤ 0
 away_high_ath = (P_t / high_ath - 1) × 100    # ≤ 0
 ```
 Verification (CUPID): `284.56 / 299.00 - 1 = -4.83%` — site shows **-4.83%** for both ✅
 Bulk verification against the CSV export: **542 / 542 cells match**, max error 0.005 ✅
+
+**This section previously read "on adjusted close", and its own worked example refuted it.**
+CUPID's `299.00` is the highest price CUPID *traded* at; the highest price it *closed* at over the
+same window is `294.86`. The engine implemented the prose rather than the example, and nothing
+caught it because the parity test needed price history the repository did not have.
+
+Measured against all 271 export rows on real bars, at every window length from 243 to 248 bars:
+
+| input | exact |
+|---|---:|
+| `max(high)` | **249 / 268** |
+| `max(close)` | 6 / 268 |
+
+The result is flat in the window length, so this is the *input* and not the window — which is
+what made it safe to correct while `docs/05` §1's window question was still open
+(`DECISIONS-MERGE.md` M11.5). It also reads the way a person would say it: "away from its
+one-year high" means away from the highest price it traded at.
 
 Filter semantics: "Within Away from All Time High (%) = X" keeps rows where
 `abs(away_high_ath) <= X`. `X = 100` disables the filter.

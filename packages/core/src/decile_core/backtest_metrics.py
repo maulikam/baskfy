@@ -35,6 +35,7 @@ import datetime as dt
 import hashlib
 import json
 import math
+from bisect import bisect_left
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
@@ -637,7 +638,6 @@ def rolling_distribution(
     """
     if len(dates) < _MIN_OBSERVATIONS:
         return RollingDistribution(0, None, None, None, None, None, None, None, None)
-    by_date = dict(zip(dates, equity, strict=True))
     ordered = list(dates)
     samples: list[float] = []
     for index, day in enumerate(ordered):
@@ -645,13 +645,15 @@ def rolling_distribution(
             target = day.replace(year=day.year + 1)
         except ValueError:  # 29 February
             target = day.replace(year=day.year + 1, day=28)
-        later = next((later for later in ordered[index + 1 :] if later >= target), None)
-        if later is None:
+        # Binary search rather than a scan: the naive form is quadratic, and a fifteen-year run
+        # has ~3,900 days, which is 7.6 million comparisons for one summary statistic.
+        position = bisect_left(ordered, target, lo=index + 1)
+        if position >= len(ordered):
             break
-        opening = by_date[day]
+        opening = equity[index]
         if opening <= 0:
             continue
-        samples.append(float(by_date[later] / opening - 1))
+        samples.append(float(equity[position] / opening - 1))
     if not samples:
         return RollingDistribution(0, None, None, None, None, None, None, None, None)
     array = np.array(samples, dtype=np.float64)

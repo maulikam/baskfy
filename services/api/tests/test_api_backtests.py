@@ -336,6 +336,71 @@ async def test_a_config_with_neither_screen_nor_definition_is_rejected(
     assert response.json()["type"] == "invalid-screen-definition"
 
 
+async def test_an_inline_definition_is_accepted_and_validated(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """docs/10 §Config: "screen_public_id … **or an inline definition**".
+
+    A backtest without a saved screen is a first-class case, and its definition is validated at
+    the moment it is posted rather than twenty minutes later on the worker.
+    """
+    user_id, public_id = await make_user(session, "inline.backtest@example.com", subscribed=True)
+    config = _config(screen_definition={"index": "nifty-500", "sort_by": "ret_12m"})
+    async with running_app(_settings(tmp_path), session, task_queue=RecordingQueue()) as client:
+        accepted = await client.post(
+            url("/backtests"),
+            json={"config": json.loads(config.model_dump_json())},
+            headers=bearer(public_id),
+        )
+        rejected = await client.post(
+            url("/backtests"),
+            json={
+                "config": json.loads(
+                    _config(
+                        screen_definition={"index": "nifty-500", "sort_by": "not_a_factor"}
+                    ).model_dump_json()
+                )
+            },
+            headers=bearer(public_id),
+        )
+
+    assert accepted.status_code == 202
+    row = (
+        await session.execute(
+            select(Backtest).where(Backtest.public_id == accepted.json()["public_id"])
+        )
+    ).scalar_one()
+    assert row.user_id == user_id
+    assert row.screen_id is None
+
+    assert rejected.status_code == 400
+    assert rejected.json()["type"] == "invalid-screen-definition"
+
+
+async def test_a_free_tier_universe_restriction_covers_an_inline_definition(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """Prompt 13 §5's ₹0 tier can screen one universe. Checking only the saved-screen branch
+    would leave an inline definition as a way around the restriction."""
+    _, public_id = await make_user(session, "freetier.backtest@example.com", subscribed=False)
+    settings = api_helpers.api_settings(
+        screener_helpers.database_url(),
+        invoice_local_dir=str(tmp_path),
+        free_tier_enabled=True,
+    )
+    config = _config(screen_definition={"index": "nifty-500", "sort_by": "ret_12m"})
+    async with running_app(settings, session, task_queue=RecordingQueue()) as client:
+        response = await client.post(
+            url("/backtests"),
+            json={"config": json.loads(config.model_dump_json())},
+            headers=bearer(public_id),
+        )
+    # The ₹0 tier does not include backtests at all, so the feature gate fires before the
+    # universe one. Both are 402s carrying the upgrade URL, which is the contract that matters.
+    assert response.status_code == 402
+    assert response.json()["upgrade_url"] == "/pricing"
+
+
 async def test_an_unknown_config_key_is_rejected(session: AsyncSession, tmp_path: Path) -> None:
     """The same ``extra="forbid"`` contract docs/07 §Screens gives a screen definition."""
     _, public_id = await make_user(session, "extra.backtest@example.com", subscribed=True)

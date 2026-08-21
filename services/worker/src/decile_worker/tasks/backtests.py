@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Protocol
@@ -292,6 +291,3 @@ async def run_backtest_job(
         trades=len(outcome.result.trades),
         rebalances=len(outcome.result.rebalance_dates),
     )
-
-
-ProgressPublisher = Callable[[str, str], None]

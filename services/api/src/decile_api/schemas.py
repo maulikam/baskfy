@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import datetime as dt
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, JsonValue
 
@@ -1313,3 +1313,41 @@ class TaskAcceptedOut(_Out):
     task_id: str
     target: str
     detail: str
+
+
+# ---------------------------------------------------------------------------
+# Support (Prompt 18 §2 — "/support with a contact form")
+# ---------------------------------------------------------------------------
+
+#: The closed set of subjects the form offers. A closed set rather than free text because the
+#: value reaches an email *subject line*, and a subject line is a header: an arbitrary string
+#: there is a header-injection surface. It also makes the inbox sortable.
+SUPPORT_TOPICS: Final = (
+    "A number looks wrong",
+    "Billing or invoices",
+    "My account",
+    "A feature request",
+    "Something else",
+)
+
+SupportTopic = Literal[
+    "A number looks wrong",
+    "Billing or invoices",
+    "My account",
+    "A feature request",
+    "Something else",
+]
+
+
+class SupportMessageIn(_In):
+    """docs/07 does not describe this endpoint; PROMPTS.md Prompt 18 §2 asks for the form that
+    posts to it, and a form with no destination is a lie told in HTML.
+    ``docs/DECISIONS.md`` §18.5 records the addition.
+
+    Bounds on every field, because every field is anonymous input that ends up in an email.
+    """
+
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    email: Email
+    topic: SupportTopic
+    message: Annotated[str, Field(min_length=20, max_length=4000)]

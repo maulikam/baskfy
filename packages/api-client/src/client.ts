@@ -149,6 +149,9 @@ export type AdminActionOut = Schemas["AdminActionOut"];
 export type AdminActionListOut = Schemas["AdminActionListOut"];
 export type TaskAcceptedOut = Schemas["TaskAcceptedOut"];
 
+/** The contact form's payload (Prompt 18 §2). Not in docs/07 — `docs/DECISIONS.md` §18.5. */
+export type SupportMessageIn = Schemas["SupportMessageIn"];
+
 /** docs/07: "Base: `/api/v1`". */
 export const API_PREFIX = "/api/v1";
 

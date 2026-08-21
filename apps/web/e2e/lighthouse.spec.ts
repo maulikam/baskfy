@@ -23,7 +23,7 @@ import { expect, test } from "@playwright/test";
  */
 const MINIMUM_SCORE = 95;
 
-type Category = "accessibility" | "seo";
+type Category = "accessibility" | "seo" | "performance";
 
 const ACCESSIBILITY_PAGES = [
   { path: "/", name: "landing" },
@@ -33,6 +33,25 @@ const ACCESSIBILITY_PAGES = [
 /** docs/08 §Routes: "`/instruments/[symbol]` | ISR | SEO-optimised (this is the organic-traffic
  * surface)". CUPID is the instrument the whole specification is worked through. */
 const SEO_PAGES = [{ path: "/instruments/CUPID", name: "instrument factsheet" }] as const;
+
+/**
+ * Prompt 18's first acceptance criterion:
+ *
+ *     "All pages are statically generated and score >= 95 on Lighthouse performance and SEO."
+ *
+ * The statically-generated half is asserted by `e2e/static-generation.spec.ts`, which reads the
+ * build manifest; this is the score half. One page per *shape* rather than all eleven — the
+ * landing page (the only one that fetches at build time and the only one with a table), a legal
+ * document (the longest prose), an MDX blog post (the compiled-content path), and the support page
+ * (the only one with a client component on it). A run takes about a minute each, and eleven runs
+ * of four identical shapes buys nothing.
+ */
+const STATIC_PAGES = [
+  { path: "/", name: "landing" },
+  { path: "/terms-conditions", name: "terms" },
+  { path: "/blog/what-a-decile-actually-measures", name: "blog post" },
+  { path: "/support", name: "support" },
+] as const;
 
 const THEMES = ["light", "dark"] as const;
 
@@ -145,4 +164,14 @@ for (const { path, name } of SEO_PAGES) {
     const report = await runLighthouse(`${baseURL}${path}`, "light", "seo");
     assertScore(report, "seo", name);
   });
+}
+
+for (const { path, name } of STATIC_PAGES) {
+  for (const category of ["performance", "seo"] as const) {
+    test(`lighthouse ${category} >= ${MINIMUM_SCORE} on ${name}`, async ({ baseURL }) => {
+      test.slow();
+      const report = await runLighthouse(`${baseURL}${path}`, "light", category);
+      assertScore(report, category, name);
+    });
+  }
 }

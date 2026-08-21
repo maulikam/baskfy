@@ -1,9 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { headers } from "next/headers";
 import type { ReactNode } from "react";
 
-import { Providers } from "@/app/providers";
+import { ConsentBanner } from "@/components/consent/consent-banner";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
 
 import "./globals.css";
@@ -29,6 +28,9 @@ export const metadata: Metadata = {
   },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
+  /* Prompt 18 §4, "canonical URLs". Every page inherits `/` and overrides it with its own path;
+     `src/app/__tests__/canonical.test.ts` asserts that no public route forgets to. */
+  alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     siteName: SITE_NAME,
@@ -52,15 +54,23 @@ export const viewport: Viewport = {
   ],
 };
 
-export default async function RootLayout({ children }: { children: ReactNode }) {
-  /*
-   * The per-request CSP nonce, set by `src/middleware.ts`. Reading it here makes every page
-   * dynamically rendered — which they already are, because the app shell reads the session
-   * cookie, and because a nonce that was baked into a static page at build time would be the
-   * same nonce for every visitor and therefore no protection at all.
-   */
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
-
+/**
+ * The document, and nothing else.
+ *
+ * **This layout reads nothing per request, on purpose.** It used to read the CSP nonce out of the
+ * request headers, and a `headers()` call in the root layout opts *every* route in the app into
+ * dynamic rendering — which made docs/08 §Routes' "`/`, `/pricing`, `/faq`, `/about`, `/blog/*`,
+ * legal | SSG" impossible to satisfy and is Prompt 18's first acceptance criterion. The nonce is
+ * now read by `(app)/layout.tsx` and `(auth)/layout.tsx`, which are dynamic anyway because they
+ * read the session cookie; the statically generated `(marketing)` group supplies no nonce and is
+ * served the hash-free static policy `src/middleware.ts` gives those routes (`docs/DECISIONS.md`
+ * §18.2).
+ *
+ * The consent banner sits here rather than in a group layout because docs/11 §Compliance's DPDP
+ * obligation is not route-scoped: it is the same promise on the marketing page and inside the
+ * app.
+ */
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     /*
      * `suppressHydrationWarning` is required, not incidental: `next-themes` writes the `class` and
@@ -70,7 +80,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
      */
     <html lang="en-IN" suppressHydrationWarning className={inter.variable}>
       <body className="antialiased">
-        <Providers nonce={nonce}>{children}</Providers>
+        {children}
+        <ConsentBanner />
       </body>
     </html>
   );

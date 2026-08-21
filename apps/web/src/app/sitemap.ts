@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 
 import { fetchListings } from "@/lib/market/fetch";
+import { POST_META_BY_DATE } from "@/lib/marketing/post-meta";
+import { PUBLIC_ROUTES } from "@/lib/marketing/routes";
 import { SITE_URL } from "@/lib/site";
 
 /**
@@ -24,12 +26,21 @@ export const revalidate = 86_400;
 
 const MAX_PAGES = 60;
 
-const STATIC_ROUTES: { path: string; priority: number; changeFrequency: "weekly" | "daily" }[] = [
-  { path: "", priority: 1, changeFrequency: "weekly" },
-  { path: "/dashboard", priority: 0.8, changeFrequency: "daily" },
-  { path: "/market-health", priority: 0.8, changeFrequency: "daily" },
-  { path: "/listings", priority: 0.6, changeFrequency: "daily" },
-];
+/**
+ * Prompt 18 §4 widened this from four hand-written entries to the whole public surface. The list
+ * is `lib/marketing/routes`, so a legal page or a content page cannot ship unlisted — a page that
+ * is in no sitemap and in no footer is a page nobody will read.
+ *
+ * The three data-backed routes change daily; everything else changes when we deploy.
+ */
+const DAILY = new Set(["/dashboard", "/market-health", "/listings"]);
+
+const STATIC_ROUTES: { path: string; priority: number; changeFrequency: "weekly" | "daily" }[] =
+  PUBLIC_ROUTES.map((route) => ({
+    path: route.href === "/" ? "" : route.href,
+    priority: route.priority,
+    changeFrequency: DAILY.has(route.href) ? ("daily" as const) : ("weekly" as const),
+  }));
 
 async function instrumentSymbols(): Promise<string[]> {
   const symbols: string[] = [];
@@ -61,11 +72,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: route.changeFrequency,
       priority: route.priority,
     })),
+    /* Prompt 18 §4: "sitemap including every instrument page". */
     ...symbols.map((symbol) => ({
       url: `${SITE_URL}/instruments/${encodeURIComponent(symbol)}`,
       lastModified,
       changeFrequency: "daily" as const,
       priority: 0.7,
+    })),
+    /* A post's `lastModified` is its publication date, not the build time: telling a crawler that
+       a two-month-old essay changed this morning is how a sitemap stops being believed. */
+    ...POST_META_BY_DATE.map((post) => ({
+      url: `${SITE_URL}/blog/${post.slug}`,
+      lastModified: new Date(`${post.date}T00:00:00+05:30`),
+      changeFrequency: "yearly" as const,
+      priority: 0.6,
     })),
   ];
 }

@@ -74,6 +74,7 @@ async def running_app(
     *,
     razorpay: object | None = None,
     task_queue: object | None = None,
+    mailer: object | None = None,
 ) -> AsyncIterator[httpx.AsyncClient]:
     """The real application, with only the session dependency swapped.
 
@@ -98,6 +99,11 @@ async def running_app(
             # swaps in a recorder — otherwise every run would leave a message in the developer's
             # Redis that no worker ever consumes.
             app.state.task_queue = task_queue
+        if mailer is not None:
+            # Prompt 18: `POST /support` sends two emails. The suite is network-blocked, and what
+            # the assertions are about is *the message that would be sent* — so a recording
+            # transport is attached here, the same way the gateway and the broker are.
+            app.state.mailer = mailer
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             yield client

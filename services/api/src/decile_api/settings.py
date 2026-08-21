@@ -98,6 +98,10 @@ class Settings(BaseSettings):
     smtp_port: int = Field(default=1025, gt=0)
     #: The web app's origin, for the links in emails.
     web_origin: str = "http://localhost:3000"
+    #: Where `POST /support` delivers (Prompt 18 §2). A setting, not a constant, so a deployment
+    #: can route it at a real inbox while every test and every local run sends it to the console
+    #: transport or to mailpit.
+    support_email: str = "support@decile.in"
 
     # --- Payments (docs/02 §Payments: Razorpay; Prompt 13) -------------------
     #: Razorpay's REST base. A setting so a test can point it at a local stub and so nothing in

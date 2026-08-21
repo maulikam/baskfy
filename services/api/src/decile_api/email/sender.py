@@ -78,8 +78,11 @@ class ResendTransport:
             "text": message.text,
             "html": message.html,
         }
-        if self._reply_to:
-            payload["reply_to"] = self._reply_to
+        # The message's own `Reply-To` wins over the deployment-wide one: only the support form
+        # sets it, and there it is the whole point (`templates.support_request`).
+        reply_to = message.reply_to or self._reply_to
+        if reply_to:
+            payload["reply_to"] = reply_to
         try:
             async with httpx.AsyncClient(timeout=SEND_TIMEOUT_SECONDS) as client:
                 response = await client.post(
@@ -112,7 +115,7 @@ class SmtpTransport:
             client.send_message(mail)
 
     async def send(self, message: Message) -> None:
-        mail = _mime(message, self._from, self._reply_to)
+        mail = _mime(message, self._from, message.reply_to or self._reply_to)
         try:
             await asyncio.to_thread(self._send_blocking, mail)
         except (OSError, smtplib.SMTPException) as exc:

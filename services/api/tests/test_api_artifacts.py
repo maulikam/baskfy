@@ -108,6 +108,10 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/admin/users/{public_id}": {"get"},
     "/admin/users/{public_id}/entitlements": {"put"},
     "/admin/users/{public_id}/entitlements/{feature}": {"delete"},
+    # Prompt 18 deliverable 2's contact form. docs/07 does not describe it either; a form has to
+    # post somewhere and the mail credential belongs behind the service that already holds it
+    # (`decile_api.routers.support`, `docs/DECISIONS.md` §18.5).
+    "/support": {"post"},
     "/admin/actions": {"get"},
 }
 

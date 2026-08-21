@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { isStaticPublicPath } from "@/lib/marketing/routes";
+
 /**
  * Two jobs, both from docs/11 §Security (Prompt 12 deliverables 2 and 4).
  *
@@ -14,6 +16,15 @@ import { NextResponse, type NextRequest } from "next/server";
  * put in the header; Next reads it back out of the header and stamps it on its own script tags.
  * `strict-dynamic` then lets those scripts load the chunks they need without the policy having to
  * enumerate them.
+ *
+ * **Two policies, not one.** A nonce is per request; a *statically generated* page is one cached
+ * HTML file served to everybody, so its inline script tags cannot carry this request's nonce and
+ * a nonce policy would block the page's own bootstrap. docs/08 §Routes asks for `/`, `/faq`,
+ * `/about`, `/blog/*` and the legal pages to be SSG, and Prompt 18's first acceptance criterion
+ * asks for it again — so those routes get :func:`staticContentSecurityPolicy` instead, which keeps
+ * every other directive and relaxes `script-src` to `'self' 'unsafe-inline'`. The trade, and why
+ * it is acceptable on exactly those routes and nowhere else, is argued in `docs/DECISIONS.md`
+ * §18.2. Everything that renders a session keeps the nonce policy unchanged.
  *
  * The gate is a *convenience*, not the enforcement. Every gated read is authorised again by the
  * API against the bearer token — middleware runs on a cookie the browser sent, and a cookie is
@@ -65,13 +76,10 @@ function apiOrigin(): string {
   }
 }
 
-function contentSecurityPolicy(nonce: string, isDev: boolean): string {
-  const directives = [
+/** The directives both policies share. Only `script-src` differs between them. */
+function commonDirectives(): string[] {
+  return [
     "default-src 'self'",
-    // `strict-dynamic` means "trust what the nonced scripts load"; the hashes and host sources
-    // after it are ignored by browsers that understand it and are the fallback for those that do
-    // not. `unsafe-eval` only in development, where React's refresh runtime needs it.
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     // Next injects a `<style>` element for every CSS module it loads, and there is no nonce hook
     // for them. `unsafe-inline` for styles cannot execute code; it is the standard exception.
     "style-src 'self' 'unsafe-inline'",
@@ -90,6 +98,38 @@ function contentSecurityPolicy(nonce: string, isDev: boolean): string {
     "frame-ancestors 'none'",
     "upgrade-insecure-requests",
   ];
+}
+
+/**
+ * The policy for the statically generated public pages.
+ *
+ * `script-src 'self' 'unsafe-inline'` — the one relaxation. Next inlines its RSC flight payload as
+ * `<script>self.__next_f.push(...)</script>` and `next-themes` inlines the no-flash theme script;
+ * neither can carry a per-request nonce on a page that is one cached file, and neither can be
+ * hashed because the flight payload is content-dependent.
+ *
+ * What makes it acceptable here and nowhere else: these routes render no session, accept no
+ * user-generated content into the DOM, and read nothing from the request. There is no injection
+ * source for `'unsafe-inline'` to amplify. Every directive that matters for clickjacking, data
+ * exfiltration and base-tag hijacking is unchanged, and the *authenticated* surface — where an
+ * injection would actually be worth something — keeps the nonce policy.
+ */
+export function staticContentSecurityPolicy(isDev: boolean): string {
+  return [
+    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+    ...commonDirectives(),
+  ].join("; ");
+}
+
+function contentSecurityPolicy(nonce: string, isDev: boolean): string {
+  const directives = [
+    "default-src 'self'",
+    // `strict-dynamic` means "trust what the nonced scripts load"; the hashes and host sources
+    // after it are ignored by browsers that understand it and are the fallback for those that do
+    // not. `unsafe-eval` only in development, where React's refresh runtime needs it.
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    ...commonDirectives(),
+  ];
   return directives.join("; ");
 }
 
@@ -102,8 +142,18 @@ export function middleware(request: NextRequest): NextResponse {
     return NextResponse.redirect(login);
   }
 
-  const nonce = crypto.randomUUID().replaceAll("-", "");
   const isDev = process.env.NODE_ENV !== "production";
+
+  if (isStaticPublicPath(pathname)) {
+    // No `x-nonce` on these routes, deliberately: `(marketing)/layout.tsx` must not read the
+    // request, or Next opts the whole subtree into dynamic rendering and the pages stop being
+    // static. Nothing downstream looks for one.
+    const response = NextResponse.next();
+    response.headers.set("content-security-policy", staticContentSecurityPolicy(isDev));
+    return response;
+  }
+
+  const nonce = crypto.randomUUID().replaceAll("-", "");
   const csp = contentSecurityPolicy(nonce, isDev);
 
   const headers = new Headers(request.headers);

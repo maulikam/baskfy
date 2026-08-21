@@ -104,6 +104,30 @@ export type RebalanceSummaryOut = Schemas["RebalanceSummaryOut"];
 export type RebalanceHistoryPage = Schemas["RebalanceHistoryPage"];
 export type ExitReason = Schemas["ExitReason"];
 
+/** docs/07 §Backtests — the engine's surface (Prompt 15).
+ *
+ * `BacktestConfig` splits into an `-Input` and an `-Output` variant because Pydantic serialises
+ * `Decimal` as a string on the way out and accepts a number on the way in; `openapi-typescript`
+ * models that faithfully rather than collapsing the two. `BacktestConfigIn` is what a form posts,
+ * `BacktestConfigOut` is what a stored run echoes back.
+ */
+export type BacktestConfigIn = Schemas["BacktestConfig-Input"];
+export type BacktestConfigOut = Schemas["BacktestConfig-Output"];
+export type BacktestCreate = Schemas["BacktestCreate"];
+export type BacktestAcceptedOut = Schemas["BacktestAcceptedOut"];
+export type BacktestOut = Schemas["BacktestOut"];
+export type BacktestSummaryOut = Schemas["BacktestSummaryOut"];
+export type BacktestListOut = Schemas["BacktestListOut"];
+export type BacktestHoldingOut = Schemas["BacktestHoldingOut"];
+export type HoldingPage = Schemas["HoldingPage"];
+export type TradeOut = Schemas["TradeOut"];
+export type TradePage = Schemas["TradePage"];
+export type EquityPointOut = Schemas["EquityPointOut"];
+export type DrawdownPointOut = Schemas["DrawdownPointOut"];
+export type MonthlyReturnOut = Schemas["MonthlyReturnOut"];
+export type FragilityRunOut = Schemas["FragilityRunOut"];
+export type ExportLinkOut = Schemas["ExportLinkOut"];
+
 /** docs/07: "Base: `/api/v1`". */
 export const API_PREFIX = "/api/v1";
 

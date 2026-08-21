@@ -61,7 +61,7 @@ warn_unreachable = true
 # house rule "no `any`" is enforced instead by ruff's ANN401 and by
 # packages/core/tests/test_no_escape_hatches.py, which scan our source rather than generated code.
 plugins = ["pydantic.mypy"]
-mypy_path = "packages/core/src:packages/providers/src:packages/providers/tests:services/api/src:services/api/tests:services/worker/src:services/worker/tests"
+mypy_path = "packages/core/src:packages/core/tests:packages/providers/src:packages/providers/tests:services/api/src:services/api/tests:services/worker/src:services/worker/tests"
 explicit_package_bases = true
 # NOTE: `conftest.py` files are excluded below. Each test tree is a mypy base (so that its
 # sibling helper module — `stubs`, `helpers` — resolves), which makes every conftest the

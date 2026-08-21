@@ -4,7 +4,7 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M7 · **State:** running autonomously
+**Run started:** 22 Aug 2026 · **Current module:** M8 · **State:** running autonomously
 
 Since 22 Aug 2026 this is an **autonomous run** under `CLAUDE.md` §Autonomy charter:
 judgement calls are decided, recorded in `DECISIONS-MERGE.md` (tagged `⚠ UNREVIEWED`
@@ -24,8 +24,8 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M4 | One env schema | ✅ done | 22 Aug 2026 | Root `.env.example`, 371 lines, every var marked (16 user-editable / 122 system-only). Four risk ceilings locked out of `/settings` (M4.1) |
 | M5 | One CI workflow | ✅ done | 22 Aug 2026 | Root `.github/workflows/ci.yml`, 5 jobs. `tools/ci-local.sh` runs it here: 14 pass / 1 fail (M6's) / 5 skip. Found and fixed nested `.git`s (M5.1) |
 | M6 | Freeze the strangle lab | ✅ done | 22 Aug 2026 | 16 of 20 strangle modules + 12 test files + scripts + planners frozen. Desk suite **1202 passed, 17 skipped, 0 failed** — green for the first time |
-| M7 | Local stack up | 🔄 running | 22 Aug 2026 | |
-| M8 | NSE endpoints verified | — | | |
+| M7 | Local stack up | ✅ done | 22 Aug 2026 | `baskfy` stack up, **backfill restored (1,138,300 bars)**, API + worker healthy. `make seed` was overwriting 25,256 real bars — guarded (M7.1) |
+| M8 | NSE endpoints verified | 🔄 running | 22 Aug 2026 | |
 | M9 | Kite creds + backfill | — | | **HUMAN GATE** |
 | M10 | Calendar + corporate actions | — | | |
 | M11 | 271-row parity test | — | | **RED GATE** |
@@ -156,7 +156,53 @@ git log --oneline df6cb72 -- app/main.py     # 29 commits of desk history
 git log --oneline ea5dd0f -- docs/DECISIONS.md   # 9 commits of decile history
 ```
 
-## ⚠️ Carry-forward for M7 — do not migrate an empty database
+## The local stack — how to bring it up (M7)
+
+```bash
+cd decile-blueprint
+make up                       # baskfy-postgres (timescale), baskfy-redis, baskfy-mailpit
+make migrate                  # already at head (0010) if you restored the dump
+make seed                     # idempotent; it will NOT touch bars that already exist
+make integrity                # 1 known failure — see below
+make doctor                   # nse + fixture OK, kite needs a token (M9)
+uv run uvicorn baskfy_api.app:get_app --factory --port 8000   # or `make api`
+uv run celery -A baskfy_worker.celery_app:app worker -Q ingest,compute,backtest,default -l info
+```
+
+**Routes are under `/api/v1`** (`/health` is the exception). `GET /api/v1/meta/status` currently
+answers `as_of 2026-08-18, data_version 1, degraded false` from the restored backfill.
+**Port 8000 is often already taken on this machine** by an unrelated python process — if `/health`
+answers 200 but `/api/v1/*` 404s, you are talking to something else. Use another port.
+
+### Restoring the backfill dump — the order matters
+
+Getting this wrong is **silent**: `pre_restore` fails, the restore looks fine, and `factor_daily`
+comes back with no primary key, which then breaks every upsert.
+
+```bash
+docker exec baskfy-postgres psql -U baskfy -d postgres -c "CREATE DATABASE baskfy;"
+docker exec baskfy-postgres psql -U baskfy -d baskfy -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
+docker exec baskfy-postgres psql -U baskfy -d baskfy -tAc "SELECT timescaledb_pre_restore();"
+docker exec -i baskfy-postgres pg_restore -U baskfy -d baskfy --no-owner --no-privileges \
+  --disable-triggers < ~/baskfy-safety/2026-08-22/pg/decile-preM2.dump
+docker exec baskfy-postgres psql -U baskfy -d baskfy -tAc "SELECT timescaledb_post_restore();"
+```
+
+Then **re-add the three user policies by hand** — `bgw_job` cannot restore (it references the
+pre-rename role), so the compression policy on `ohlcv_daily` and the two continuous-aggregate
+refresh policies must be recreated from migrations `0001` and `0008`. Without that the aggregates
+stop refreshing silently. (`DECISIONS-MERGE.md` M7.2.)
+
+### Two things that are known-not-green
+
+- **`make integrity` fails one check:** `published_runs_have_steps`. The overnight backfill
+  published `data_version 1` without going through the orchestrator, so no `pipeline_run_step`
+  rows exist. It came from the dump. **M9/M10 should produce a run that carries its steps**; if it
+  still fails after that, it is a real defect (`DECISIONS-MERGE.md` M7.3).
+- **`make doctor` reports kite unavailable** — no encrypted token. That is M9's external
+  dependency. `nse` and `fixture` both serve everything.
+
+## ⚠️ Superseded — M7 restored the backfill (kept for the record)
 
 `decile-postgres` holds the overnight backfill, and M2 renamed the database in **configuration
 only** — the live cluster was deliberately left alone:

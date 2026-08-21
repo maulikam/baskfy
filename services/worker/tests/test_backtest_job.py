@@ -16,13 +16,14 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import time
 from decimal import Decimal
 from pathlib import Path
 from typing import Final
 
 import pytest
 from helpers import requires_db
-from sqlalchemy import select
+from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from decile_api.backtests import artefact_key, build_payload, new_public_id
@@ -35,6 +36,7 @@ from decile_core.backtest import (
     RebalanceSpec,
     SelectionSpec,
     TradeReason,
+    rebalance_dates,
 )
 from decile_core.models import (
     AppUser,
@@ -58,6 +60,12 @@ START: Final = dt.date(2026, 3, 2)
 END: Final = dt.date(2026, 8, 18)
 UNIVERSE: Final = "nifty-500"
 NAMES: Final = 12
+
+#: The fifteen-year window docs/11 §"Performance budgets" prices, inside the seeded calendar.
+LONG_START: Final = dt.date(2011, 1, 3)
+LONG_END: Final = dt.date(2026, 1, 2)
+#: Roughly the size of docs/13's reference export (271 rows), so the screen query does real work.
+PERF_INSTRUMENTS: Final = 250
 
 #: The name that stops trading part-way through, so survivorship has something to bite on.
 DOOMED: Final = "SYNDEAD"
@@ -389,3 +397,124 @@ async def test_the_metrics_hash_is_stable_across_two_runs(session: AsyncSession)
     left = build_payload("a" * 24, config, first.result, None)
     right = build_payload("b" * 24, config, second.result, None)
     assert left.metrics_hash == right.metrics_hash
+
+
+# ---------------------------------------------------------------------------
+# docs/11 §"Performance budgets": "Backtest (15y, monthly, 20 names) | < 10 s"
+# ---------------------------------------------------------------------------
+
+
+async def _seed_long_market(
+    session: AsyncSession, instruments: int
+) -> tuple[tuple[dt.date, ...], tuple[dt.date, ...]]:
+    """Fifteen years of bars for ``instruments`` names, and factor rows on the rebalance dates.
+
+    Factor rows and index membership are written **only on the rebalance dates**, because those
+    are the only dates the screener reads: it joins ``index_member_daily`` and ``factor_daily`` at
+    the as-of and nowhere else (docs/06 §step 2). Writing fifteen years of factor rows for a
+    timing test would measure the fixture rather than the query.
+    """
+    calendar = await trading_calendar(session, LONG_START, LONG_END)
+    schedule = rebalance_dates(calendar, LONG_START, LONG_END, RebalanceSpec())
+    index_id = UNIVERSE_BY_SLUG[UNIVERSE].index_id
+    mask = UNIVERSE_BY_SLUG[UNIVERSE].mask_value
+    rebalance_days = set(schedule)
+
+    bars: list[dict[str, object]] = []
+    factors: list[dict[str, object]] = []
+    members: list[dict[str, object]] = []
+    for position in range(instruments):
+        instrument = Instrument(
+            exchange_id=NSE_EXCHANGE_ID,
+            symbol=f"PERF{position:04d}",
+            name=f"PERF{position:04d} LIMITED",
+            series="EQ",
+            instrument_type="EQ",
+            is_active=True,
+        )
+        session.add(instrument)
+        await session.flush()
+        step = Decimal(1) + Decimal((position % 37) + 1) / Decimal(100_000)
+        price = Decimal(50 + position % 900)
+        for day in calendar:
+            price = (price * step).quantize(Decimal("0.0001"))
+            bars.append(
+                {
+                    "instrument_id": instrument.id,
+                    "date": day,
+                    "open": price,
+                    "high": price,
+                    "low": price,
+                    "close": price,
+                    "volume": 100_000,
+                    "close_raw": price,
+                    "volume_raw": 100_000,
+                    "adj_factor": Decimal(1),
+                    "source": "nse",
+                }
+            )
+            if day not in rebalance_days:
+                continue
+            factors.append(
+                {
+                    "instrument_id": instrument.id,
+                    "date": day,
+                    "close": price,
+                    "close_raw": price,
+                    "ret_12m": Decimal((position * 7) % 500),
+                    "vol_12m": Decimal("0.2"),
+                    "marketcap_cr": 1_000 + position,
+                    "series": "EQ",
+                    "universe_mask": mask,
+                }
+            )
+            members.append(
+                {
+                    "index_id": index_id,
+                    "date": day,
+                    "instrument_id": instrument.id,
+                    "source": "nse_file",
+                }
+            )
+
+    for table, rows in ((OhlcvDaily, bars), (FactorDaily, factors), (IndexMemberDaily, members)):
+        for start in range(0, len(rows), 20_000):
+            await session.execute(insert(table), rows[start : start + 20_000])
+    await session.flush()
+    return calendar, schedule
+
+
+@pytest.mark.benchmark
+async def test_a_fifteen_year_monthly_run_over_twenty_names_is_under_ten_seconds(
+    session: AsyncSession,
+) -> None:
+    """docs/11 §"Performance budgets" and PROMPTS.md Prompt 15's last acceptance criterion.
+
+    **Not "the seeded dataset".** The prompt says "on the seeded dataset"; the seeded database is
+    a single trading day of *results* (docs/13's export) with no price history at all, so no
+    multi-year backtest can run against it. This is the closest honest measurement: a synthetic
+    fifteen-year market **in PostgreSQL**, timed across the whole server-side path — 180 screen
+    queries, the bar load, and the simulation. See ``docs/DECISIONS.md`` §15.20.
+    """
+    await _seed_long_market(session, instruments=PERF_INSTRUMENTS)
+    config = BacktestConfig(
+        start=LONG_START,
+        end=LONG_END,
+        initial_capital=Decimal(10_000_000),
+        rebalance=RebalanceSpec(frequency=RebalanceFrequency.MONTHLY),
+        selection=SelectionSpec(top_n=20, hold_buffer=10),
+        benchmark=UNIVERSE,
+    )
+
+    began = time.perf_counter()
+    outcome = await execute_backtest(session, config, _definition(), fragility=False)
+    elapsed = time.perf_counter() - began
+
+    assert len(outcome.result.dates) > 3_500
+    assert len(outcome.result.rebalance_dates) >= 175
+    assert outcome.result.trades
+    # Printed as well as asserted: the headline number in docs/11's budget table is worth
+    # knowing even when it passes, because "under ten seconds" and "0.4 seconds" are different
+    # facts about whether this design has room in it.
+    print(f"\n15y monthly / top 20 / {PERF_INSTRUMENTS} names, end to end: {elapsed:.2f}s")
+    assert elapsed < 10.0, f"the 15-year run took {elapsed:.2f}s; docs/11 budgets 10s"

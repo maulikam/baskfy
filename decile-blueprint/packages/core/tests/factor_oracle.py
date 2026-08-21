@@ -211,6 +211,8 @@ def compute_factors_pandas(
         t = dates.index(as_of)
 
         closes = [float(c) for c in frame["close"].tolist()]
+        # docs/05 §10: the highs are the INTRADAY highs, corrected 2026-08-22.
+        highs = [float(h) for h in frame["high"].tolist()]
         returns = _returns(closes)
         # Typed as float-or-None throughout: docs/05's factors are all numbers, and keeping the
         # identifying columns out until the end means no cast is needed anywhere below.
@@ -279,8 +281,8 @@ def compute_factors_pandas(
         if t - HIGH_1Y_BARS + 1 < 0:
             values["high_1y"] = None
         else:
-            values["high_1y"] = max(closes[t - HIGH_1Y_BARS + 1 : t + 1])
-        values["high_ath"] = max(closes[: t + 1])
+            values["high_1y"] = max(highs[t - HIGH_1Y_BARS + 1 : t + 1])
+        values["high_ath"] = max(highs[: t + 1])
         for high_key, away_key in (("high_1y", "away_high_1y"), ("high_ath", "away_high_ath")):
             high_value = values[high_key]
             if high_value is None or high_value == 0:

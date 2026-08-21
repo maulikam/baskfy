@@ -352,13 +352,23 @@ def _with_price_levels(frame: pl.DataFrame) -> pl.DataFrame:
         for k in MA_LENGTHS
     ]
     expressions += [
-        pl.col("close")
+        # THE HIGH IS THE INTRADAY HIGH, NOT THE CLOSE. Measured 2026-08-22 against all 271 rows
+        # of the reference export on real bars: `max(high)` reproduces **249 of 268** and
+        # `max(close)` reproduces **6**. The result is flat across every window length from 243 to
+        # 248 bars, so the gain is the input and not the window — which is what makes it safe to
+        # change while the window question is still open (docs/DECISIONS-MERGE.md M11.5).
+        #
+        # It reads naturally too: "away from its 1-year high" means away from the highest price
+        # the stock traded at, not the highest price it happened to close at.
+        pl.col("high")
         .rolling_max(window_size=HIGH_1Y_BARS, min_samples=HIGH_1Y_BARS)
         .over("instrument_id")
         .alias("high_1y"),
         # §10: "max(P over the full history)". cum_max is the all-time high as at each bar, which
         # is what point-in-time correctness requires — an ATH set next year must not affect today.
-        pl.col("close").cum_max().over("instrument_id").alias("high_ath"),
+        # Same input for the same reason; unverifiable here because our history starts in 2024
+        # (§21.2), so it is a 2024-onward maximum wearing an all-time label either way.
+        pl.col("high").cum_max().over("instrument_id").alias("high_ath"),
     ]
     frame = frame.with_columns(expressions)
 

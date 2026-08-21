@@ -1,0 +1,34 @@
+[Unit]
+Description=Momentum desk web interface
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=desk
+WorkingDirectory=/home/desk/kite-momentum-rebalancer
+Environment=TZ=Asia/Kolkata
+# LOOPBACK ONLY, DELIBERATELY. This interface places real orders behind a confirmation
+# gate; binding it to 0.0.0.0 would put that gate on the public internet. Reach it with
+#     ssh -L 8420:127.0.0.1:8420 desk@<ip>
+# and open http://127.0.0.1:8420 on the laptop as before — which also keeps the Kite
+# redirect URL registered in the developer console valid, because the browser still
+# arrives at 127.0.0.1.
+ExecStart=/home/desk/kite-momentum-rebalancer/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8420
+# Sized for the 1 GB plan the account is currently capped to. The desk measures 148 MB
+# resident after touching every page including the regime backtest, so 384M is generous
+# headroom for it and still leaves ~600 MB for the OS and anything interactive.
+#
+# The point of the cap is WHICH process dies. The Claude CLI is the memory-hungry half —
+# 467 MB for one working session against the desk's 148 MB — so under pressure the kernel
+# should take the interactive tool, never the process holding live plan_ids and the
+# confirmation gate.
+#
+# On a larger plan later: raise to MemoryHigh=512M / MemoryMax=768M. Nothing else changes.
+MemoryMax=384M
+MemoryHigh=256M
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

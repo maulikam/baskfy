@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up the records that cannot be rebuilt
+
+[Service]
+Type=oneshot
+User=desk
+WorkingDirectory=/home/desk/kite-momentum-rebalancer
+Environment=TZ=Asia/Kolkata
+ExecStart=/home/desk/kite-momentum-rebalancer/.venv/bin/python -m scripts.backup
+StandardOutput=append:/home/desk/logs/momentum-backup.log
+StandardError=append:/home/desk/logs/momentum-backup.log

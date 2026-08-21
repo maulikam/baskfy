@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd template for the daily data run (macOS).
+
+  READ THIS FIRST: Kite access tokens expire daily, around 6am IST, and the standard
+  login flow has no refresh token. A scheduled run WILL FAIL until you have logged in
+  that day at http://127.0.0.1:8420/login. Schedule it for after you normally log in,
+  and check the log — the job exits 0 only when every step landed.
+
+  Install:
+      mkdir -p data/outputs
+      cp scripts/com.momentum.daily.plist.example \
+         ~/Library/LaunchAgents/com.momentum.daily.plist
+      # edit the paths below to match this checkout, then:
+      launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.momentum.daily.plist
+
+  Check:   launchctl list | grep momentum      # columns: PID, last exit, label
+  Logs:    tail -f ~/Library/Logs/momentum-daily.log
+  Test:    launchctl kickstart -p gui/$(id -u)/com.momentum.daily
+  Remove:  launchctl bootout gui/$(id -u)/com.momentum.daily
+
+  load/unload still work but are deprecated; bootstrap/bootout report real errors instead
+  of failing silently.
+
+  Exit 2 means the Kite session was not logged in that day. The job cannot fix that for
+  you and does not retry: see the token note above.
+
+  EXIT 78 WITH AN EMPTY LOG MEANS THE LOG PATH, NOT THE JOB. macOS protects ~/Documents
+  with TCC, and a launchd agent has no access to a file there that it did not create: it
+  cannot open the log, so it refuses to spawn and you see EX_CONFIG with no output at all.
+  That is why the log lives in ~/Library/Logs and not in the checkout.
+
+  This job ran for months writing into data/outputs/daily.log, but only because that file
+  carried a com.apple.macl grant from an approval given long ago. Deleting or rotating it
+  would have broken the job silently — no snapshot, no error anyone reads — and a missed
+  session cannot be backfilled, because kc.margins() has no history.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.momentum.daily</string>
+
+  <!-- EDIT: absolute paths for this checkout -->
+  <key>WorkingDirectory</key>
+  <string>/Users/CHANGE_ME/Documents/portfolio/kite-momentum-rebalancer</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/CHANGE_ME/Documents/portfolio/kite-momentum-rebalancer/.venv/bin/python</string>
+    <string>-m</string>
+    <string>scripts.daily</string>
+    <string>--quiet</string>
+    <string>--source</string>
+    <string>schedule</string>
+  </array>
+
+  <!-- 18:30 local, comfortably after the 15:30 IST close and any evening login.
+       A run before the close would store a provisional candle as if it were final. -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>18</integer><key>Minute</key><integer>30</integer></dict>
+  </array>
+
+  <!-- Run on wake if the machine was asleep at the scheduled time. A missed session
+       cannot be backfilled: margins() has no history. -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/CHANGE_ME/Library/Logs/momentum-daily.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/CHANGE_ME/Library/Logs/momentum-daily.log</string>
+</dict>
+</plist>

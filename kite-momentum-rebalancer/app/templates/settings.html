@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Settings{% endblock %}
+
+{% block heading %}Settings{% endblock %}
+
+{% block content %}
+{% if saved %}
+  <div class="banner ok"><span class="tag">saved</span><span>{{ saved }}</span>
+    <span class="muted">Applied immediately. No restart needed.</span></div>
+{% endif %}
+{% if error %}
+  <div class="banner bad"><span class="tag">rejected</span><span>{{ error }}</span>
+    <span class="muted">Nothing was written. Settings are all-or-nothing.</span></div>
+{% endif %}
+
+<div class="banner">
+  <span class="tag">how this works</span>
+  <span class="muted">Values resolve <b>database → .env → code default</b>. Saving writes
+    an override that beats <code>.env</code> and takes effect on the next plan, without a
+    restart. Every change is recorded below. Reset a setting to hand it back to
+    <code>.env</code>.</span>
+</div>
+
+<form method="post" action="/settings">
+  {#- names the checkboxes this form rendered, so an absent one means "unchecked"
+      rather than being applied to every boolean the system has -#}
+  <input type="hidden" name="_form_bools"
+         value="{{ eff.values() | selectattr('spec.kind','equalto','bool')
+                   | map(attribute='spec.key') | join(',') }}">
+  {% for group in groups %}
+  <section>
+    <h2>{{ group }}</h2>
+    {% if group == 'Risk limits' and risk %}
+      {# A percentage is not a decision. These limits are all derived from NAV, so the
+         number in the field means nothing until it is multiplied out. #}
+      <div class="card" style="margin-bottom:12px">
+        {% if risk.have_nav %}
+          <p class="help" style="margin-bottom:10px">What these settings currently allow,
+            against the latest stored NAV of <b>₹{{ '{:,.0f}'.format(risk.nav) }}</b>
+            ({{ risk.nav_short }}). These are the figures the gateway enforces, not a
+            separate estimate.</p>
+          <table aria-label="Risk limits in rupees" style="width:100%;border-collapse:collapse">
+            <tbody>
+            {% for r in risk.rows %}
+              <tr>
+                <td style="padding:5px 0"><code>{{ r.key }}</code></td>
+                <td style="padding:5px 10px;text-align:right;white-space:nowrap">
+                  <b>{{ r.value }}</b>
+                  {%- if r.short %} <span class="muted">({{ r.short }})</span>{% endif %}</td>
+                <td class="help" style="padding:5px 0">{{ r.means }}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          {% if risk.problems %}
+            <div class="banner bad" style="margin-top:12px;display:block">
+              <b>These limits contradict the strategy's own sizing.</b>
+              <ul style="margin:6px 0 0 18px">
+                {% for p in risk.problems %}<li class="help">{{ p }}</li>{% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+        {% else %}
+          <p class="help">No stored snapshot yet, so these cannot be shown in rupees.
+            Every risk limit is derived from NAV; until a snapshot exists the gateway
+            falls back to fixed defaults that have nothing to do with your book.</p>
+        {% endif %}
+      </div>
+    {% endif %}
+    <div class="card">
+      {% for key, e in eff.items() %}
+        {% if e.spec.group == group %}
+        <div class="row">
+          <div>
+            <label for="{{ key }}">{{ e.spec.label }}</label>
+            {% if e.spec.help %}<div class="help">{{ e.spec.help }}</div>{% endif %}
+            <div class="help"><code>{{ key }}</code></div>
+          </div>
+          <div>
+            {% if e.spec.kind == 'bool' %}
+              <div class="check">
+                <input type="checkbox" id="{{ key }}" name="{{ key }}" value="true"
+                       {{ 'checked' if e.value }}>
+                <span class="muted">{{ 'on' if e.value else 'off' }}</span>
+              </div>
+            {% elif e.spec.kind == 'choice' %}
+              <select id="{{ key }}" name="{{ key }}">
+                {% for c in e.spec.choices %}
+                  <option value="{{ c }}" {{ 'selected' if e.text == c }}>{{ c }}</option>
+                {% endfor %}
+              </select>
+            {% else %}
+              <input type="text" id="{{ key }}" name="{{ key }}" value="{{ e.text }}"
+                     inputmode="decimal"
+                     aria-describedby="{{ key }}-range">
+            {% endif %}
+          </div>
+          <div class="help" id="{{ key }}-range">
+            {%- if e.spec.kind == 'intpair' %}two numbers, min,max
+            {%- elif e.spec.minimum is not none %}range {{ e.spec.minimum }}–{{ e.spec.maximum }}
+            {%- endif %}
+            {%- if e.spec.unit %} <span class="unit">{{ e.spec.unit }}</span>{% endif %}
+          </div>
+          <div class="src {{ 'db' if e.source == 'database' }}">{{ e.source }}</div>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+
+  <section>
+    <div class="card">
+      <div class="row" style="border-bottom:0">
+        <div><label for="note">Why are you changing this?</label>
+          <div class="help">Stored with the change. Six months from now this is the only
+            record of why a threshold moved.</div></div>
+        <div style="grid-column:span 2">
+          <input type="text" id="note" name="note" placeholder="optional but worth it"></div>
+        <div></div>
+      </div>
+      <div class="actions">
+        <button class="btn-saffron" type="submit">Save settings</button>
+        <span class="muted">Validated as a set: if any value is rejected, nothing is
+          written.</span>
+      </div>
+    </div>
+  </section>
+</form>
+
+<section>
+  <h2>Not editable here</h2>
+  <div class="card">
+    {% for l in locked %}
+      <div class="lock">
+        <div><code>{{ l.key }}</code></div>
+        <div><b>{{ l.value }}</b></div>
+        <div class="muted">{{ l.why }}</div>
+      </div>
+    {% endfor %}
+    <p class="muted" style="margin-top:12px">Credentials are never stored in the database
+      and never rendered. The safety switches stay in <code>.env</code> deliberately:
+      enabling live orders should be an act on the machine that runs the system, not a
+      click in a browser. Scoring weights are excluded because they define the strategy
+      rather than tune it.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Change history</h2>
+  <div class="card">
+    {% if history %}
+      <table aria-label="Change history">
+        <thead><tr><th>When</th><th>Setting</th><th>From</th><th>To</th><th>Note</th></tr></thead>
+        <tbody>
+        {% for h in history %}
+          <tr><td>{{ h.changed_at }}</td><td><code>{{ h.key }}</code></td>
+              <td class="muted">{{ h.old_value if h.old_value is not none else '—' }}</td>
+              <td><b>{{ h.new_value }}</b></td>
+              <td class="muted">{{ h.note or '—' }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <form method="post" action="/settings/reset" class="actions">
+        <button class="btn-ghost" type="submit">Reset all overrides to .env</button>
+        <span class="muted">Removes every database override. The reset itself is
+          recorded.</span>
+      </form>
+    {% else %}
+      <p class="muted">No settings have been changed yet. Everything is running on
+        <code>.env</code> and the code defaults.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

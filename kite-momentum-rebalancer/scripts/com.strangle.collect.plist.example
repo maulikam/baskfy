@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd template: record one ATM straddle observation each session (macOS).
+
+  THIS IS THE JOB TO INSTALL TODAY. The IV gates need reference bands, and those cannot be
+  reconstructed from history: Kite drops expired contracts from the instrument dump, so the
+  series that governed any past session is unlookupable. Bands have to be collected
+  forward, one observation a day, and nothing can trade until every tradeable bucket has a
+  sample. Watch progress on http://127.0.0.1:8420/options.
+
+  KITE TOKENS EXPIRE DAILY, around 6am IST, and the standard login flow has no refresh
+  token. This job WILL exit 2 until you have logged in that day at
+  http://127.0.0.1:8420/login. It cannot fix that for you and does not retry.
+
+  Placed at 09:20 IST: after the 09:15 open, because there is no NFO pre-open session and
+  option quotes do not exist before it, and early enough that the observation is taken near
+  entry time rather than mid-decay. The bands are built on opening prints, so an
+  observation recorded at noon would be measured at a different point on the decay curve
+  than the gate that consumes it.
+
+  Install:
+      cp scripts/com.strangle.collect.plist.example \
+         ~/Library/LaunchAgents/com.strangle.collect.plist
+      launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.strangle.collect.plist
+
+  Check:   launchctl list | grep strangle       # columns: PID, last exit, label
+  Logs:    tail -f ~/Library/Logs/strangle-collect.log
+  Test:    launchctl kickstart -p gui/$(id -u)/com.strangle.collect
+  Remove:  launchctl bootout gui/$(id -u)/com.strangle.collect
+
+  A missed day costs one observation and nothing else. What cannot be recovered is that
+  session's chain: nobody stores option quotes on your behalf.
+  LOGS GO TO ~/Library/Logs, NOT INTO THE REPO. macOS protects ~/Documents with TCC, and a
+  launchd agent has no grant for a file it did not create there: it cannot open the log, so
+  it never spawns the process and exits 78 (EX_CONFIG) with no output at all. This was not
+  theory — the first install of this job did exactly that, while the older daily job kept
+  working because its log file carries a com.apple.macl grant from an approval given long
+  ago. ~/Library/Logs is where macOS expects agent logs and is not TCC-restricted.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.strangle.collect</string>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/maulikdave/Documents/portfolio/kite-momentum-rebalancer</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/maulikdave/Documents/portfolio/kite-momentum-rebalancer/.venv/bin/python</string>
+    <string>-m</string>
+    <string>scripts.strangle</string>
+    <string>--collect</string>
+  </array>
+
+  <!-- 09:20 IST, weekdays. The runner refuses on exchange holidays using a calendar
+       derived from index history, so this does not need a holiday list of its own. -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>20</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>20</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>20</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>20</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>20</integer></dict>
+  </array>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/maulikdave/Library/Logs/strangle-collect.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/maulikdave/Library/Logs/strangle-collect.log</string>
+</dict>
+</plist>

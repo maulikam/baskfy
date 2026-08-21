@@ -1,0 +1,522 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Regime Backtest{% endblock %}
+
+{% block heading %}Regime Backtest{% endblock %}
+
+{% block content %}
+{% if not b %}
+  <section class="card">
+    <h2>No backtest results stored</h2>
+    <p class="empty">Detailed backtesting is deliberately kept off the live status page.
+      Run it and save the artifact, then reload:</p>
+    <p class="muted" style="margin-top:10px">
+      <code>python -m scripts.backtest_regime --run --start 2005-04-01 --save</code><br>
+      Expected at <code>{{ path }}</code>.</p>
+  </section>
+{% else %}
+
+<div class="banner">
+  <b>Read the limitations before the numbers.</b>
+  <div class="muted" style="margin-top:8px">
+    {% for k, val in b.limitations.items() %}
+      <div><b>{{ k|replace('_',' ')|title }}:</b> {{ val }}</div>
+    {% endfor %}
+    <div style="margin-top:6px">Window {{ b.generated_for.start }} → {{ b.generated_for.end }}.</div>
+  </div>
+</div>
+
+{% if charts and charts.scatter %}
+{% set sc = charts.scatter %}
+<section>
+  <h2>Which design earns its complexity</h2>
+  <div class="card">
+    <p class="muted" style="margin-bottom:6px">Return against the drawdown you had to sit
+      through to get it. <b>Up and to the left is better.</b> Colour is the design family,
+      not the ranking.</p>
+    <div class="legend">
+      {% for f in sc.families %}
+        <span class="lg"><i style="background:{{ f.color }}"></i>{{ f.label }}</span>
+      {% endfor %}
+      <span class="lg"><i class="ring"></i>best return per unit of drawdown</span>
+    </div>
+    <div class="scroll">
+      <svg viewBox="0 0 {{ sc.width }} {{ sc.height }}" width="100%"
+           style="max-width:{{ sc.width }}px;height:auto;display:block"
+           role="img" aria-label="Return against maximum drawdown for each backtested variant">
+        <!-- grid -->
+        {% for t in sc.yticks %}
+          <line x1="{{ sc.pad_l }}" y1="{{ t.px }}" x2="{{ sc.width - sc.pad_r }}" y2="{{ t.px }}"
+                stroke="#22304d" stroke-width="1"/>
+          <text x="{{ sc.pad_l - 9 }}" y="{{ t.px + 4 }}" text-anchor="end"
+                fill="#8593ad" font-size="10.5">{{ '%.0f'|format(t.v) }}%</text>
+        {% endfor %}
+        {% for t in sc.xticks %}
+          <text x="{{ t.px }}" y="{{ sc.height - sc.pad_b + 18 }}" text-anchor="middle"
+                fill="#8593ad" font-size="10.5">{{ '%.0f'|format(t.v) }}%</text>
+        {% endfor %}
+        <!-- axis titles -->
+        <text x="{{ sc.pad_l + sc.plot_w / 2 }}" y="{{ sc.height - 6 }}" text-anchor="middle"
+              fill="#8593ad" font-size="10.5" letter-spacing="1.1">MAXIMUM DRAWDOWN →</text>
+        <text x="14" y="{{ sc.pad_t + sc.plot_h / 2 }}" text-anchor="middle" fill="#8593ad"
+              font-size="10.5" letter-spacing="1.1"
+              transform="rotate(-90 14 {{ sc.pad_t + sc.plot_h / 2 }})">← CAGR</text>
+        <!-- marks -->
+        {% for m in sc.marks %}
+          {% if m.leader %}
+            <line x1="{{ m.x }}" y1="{{ m.y }}" x2="{{ m.lx - 3 if m.anchor == 'start' else m.lx + 3 }}"
+                  y2="{{ m.ly - 3 }}" stroke="#3a4a6e" stroke-width="1"/>
+          {% endif %}
+          {% if m.best %}
+            <circle cx="{{ m.x }}" cy="{{ m.y }}" r="11" fill="none"
+                    stroke="{{ m.color }}" stroke-width="1.5" opacity=".55"/>
+          {% endif %}
+          <circle cx="{{ m.x }}" cy="{{ m.y }}" r="6.5" fill="{{ m.color }}"
+                  stroke="#111a2e" stroke-width="2"/>
+          <text x="{{ m.lx }}" y="{{ m.ly }}" text-anchor="{{ m.anchor }}"
+                fill="#e8edf7" font-size="11.5">{{ m.key }}{% if m.proxy %} *{% endif %}</text>
+          <text x="{{ m.lx }}" y="{{ m.ly + 12 }}" text-anchor="{{ m.anchor }}"
+                fill="#8593ad" font-size="10">{{ m.cagr }}% / −{{ m.dd }}%</text>
+        {% endfor %}
+      </svg>
+    </div>
+    {% if charts.breadth_caveat %}
+      <p class="muted" style="margin-top:8px"><b>*</b> Breadth was
+        {{ charts.breadth_caveat|lower }}.
+        The tiered variants were therefore measured without the input they were designed
+        around, so their marks understate what the design would do with real breadth
+        history. That cannot be fixed retroactively: breadth cannot be rebuilt from scans
+        that were never taken.</p>
+    {% endif %}
+  </div>
+</section>
+
+{% if charts.curves %}
+{% set cv = charts.curves %}
+<section>
+  <h2>Growth of ₹100, and what it cost to hold</h2>
+  <div class="card">
+    <p class="muted" style="margin-bottom:4px">{{ cv.start }} to {{ cv.end }}. The equity
+      axis is <b>logarithmic</b>: on a linear axis two decades of compounding give almost
+      all the height to the last few years and hide the early drawdowns, which are the
+      ones that decide whether a design is survivable. Same three families as above;
+      A, B_raw and F are labelled.</p>
+    <div class="scroll">
+      <svg viewBox="0 0 {{ cv.width }} {{ cv.eq_h }}" width="100%"
+           style="max-width:{{ cv.width }}px;height:auto;display:block"
+           role="img" aria-label="Growth of 100 rupees by variant, logarithmic scale">
+        {% for t in cv.eq_ticks %}
+          <line x1="{{ cv.pad_l }}" y1="{{ t.px }}" x2="{{ cv.width - cv.pad_r }}"
+                y2="{{ t.px }}" stroke="#22304d" stroke-width="1"/>
+          <text x="{{ cv.pad_l - 8 }}" y="{{ t.px + 4 }}" text-anchor="end"
+                fill="#8593ad" font-size="10">{{ t.label }}</text>
+        {% endfor %}
+        {% for t in cv.xticks %}
+          <text x="{{ t.px }}" y="{{ cv.eq_h - 6 }}" text-anchor="middle"
+                fill="#8593ad" font-size="10">{{ t.label }}</text>
+        {% endfor %}
+        {% for l in cv.lines %}
+          <path d="{{ l.equity }}" fill="none" stroke="{{ l.color }}"
+                stroke-width="{{ 2 if l.callout else 1.2 }}"
+                opacity="{{ 1 if l.callout else 0.4 }}"
+                stroke-linejoin="round"/>
+        {% endfor %}
+        {% for l in cv.lines %}{% if l.callout %}
+          <text x="{{ cv.width - cv.pad_r + 7 }}" y="{{ l.label_y }}" fill="{{ l.color }}"
+                font-size="11">{{ l.key }}</text>
+          <text x="{{ cv.width - cv.pad_r + 7 }}" y="{{ l.label_y + 11 }}" fill="#8593ad"
+                font-size="10">₹{{ '{:,.0f}'.format(l.final) }}</text>
+        {% endif %}{% endfor %}
+      </svg>
+      <p class="muted" style="margin:12px 0 2px;letter-spacing:.11em;font-size:10px;
+                text-transform:uppercase">Drawdown from peak</p>
+      <svg viewBox="0 0 {{ cv.width }} {{ cv.dd_h }}" width="100%"
+           style="max-width:{{ cv.width }}px;height:auto;display:block"
+           role="img" aria-label="Drawdown from peak by variant">
+        {% for t in cv.dd_ticks %}
+          <line x1="{{ cv.pad_l }}" y1="{{ t.px }}" x2="{{ cv.width - cv.pad_r }}"
+                y2="{{ t.px }}" stroke="#22304d" stroke-width="1"/>
+          <text x="{{ cv.pad_l - 8 }}" y="{{ t.px + 4 }}" text-anchor="end"
+                fill="#8593ad" font-size="10">{{ t.label }}</text>
+        {% endfor %}
+        {% for t in cv.xticks %}
+          <text x="{{ t.px }}" y="{{ cv.dd_h - 6 }}" text-anchor="middle"
+                fill="#8593ad" font-size="10">{{ t.label }}</text>
+        {% endfor %}
+        {% for l in cv.lines %}
+          <path d="{{ l.drawdown }}" fill="none" stroke="{{ l.color }}"
+                stroke-width="{{ 1.8 if l.callout else 1.1 }}"
+                opacity="{{ 0.95 if l.callout else 0.35 }}"
+                stroke-linejoin="round"/>
+        {% endfor %}
+      </svg>
+      {% if cv.has_exposure %}
+      <p class="muted" style="margin:12px 0 2px;letter-spacing:.11em;font-size:10px;
+                text-transform:uppercase">Equity exposure, {{ cv.exposure_window }}-week trailing mean · the rest was cash</p>
+      <svg viewBox="0 0 {{ cv.width }} {{ cv.ex_h }}" width="100%"
+           style="max-width:{{ cv.width }}px;height:auto;display:block"
+           role="img" aria-label="Equity exposure by variant; the remainder was held in cash">
+        {% for t in cv.ex_ticks %}
+          <line x1="{{ cv.pad_l }}" y1="{{ t.px }}" x2="{{ cv.width - cv.pad_r }}"
+                y2="{{ t.px }}" stroke="#22304d" stroke-width="1"/>
+          <text x="{{ cv.pad_l - 8 }}" y="{{ t.px + 4 }}" text-anchor="end"
+                fill="#8593ad" font-size="10">{{ t.v }}%</text>
+        {% endfor %}
+        {% for t in cv.xticks %}
+          <text x="{{ t.px }}" y="{{ cv.ex_h - 6 }}" text-anchor="middle"
+                fill="#8593ad" font-size="10">{{ t.label }}</text>
+        {% endfor %}
+        {% for l in cv.lines %}{% if l.exposure %}
+          <path d="{{ l.exposure }}" fill="none" stroke="{{ l.color }}"
+                stroke-width="{{ 1.8 if l.callout else 1.1 }}"
+                opacity="{{ 0.95 if l.callout else 0.3 }}" stroke-linejoin="round"/>
+        {% endif %}{% endfor %}
+        {% for l in cv.lines %}{% if l.callout and l.avg_exposure is not none %}
+          <text x="{{ cv.width - cv.pad_r + 7 }}"
+                y="{{ cv.pad_t + 12 + loop.index0 * 13 }}" fill="{{ l.color }}"
+                font-size="10">{{ l.key }} {{ l.avg_exposure }}%</text>
+        {% endif %}{% endfor %}
+      </svg>
+      {% endif %}
+    </div>
+    <p class="muted" style="margin-top:8px">Drawdown is computed daily and then bucketed
+      weekly by its <b>worst</b> value, so a trough falling mid-week still shows. Bucketing
+      by the week's closing value instead would draw a shallower curve than the table
+      above reports. Exposure is bucketed by its <b>mean</b> and then shown as a
+      {{ cv.exposure_window }}-week trailing average: drawn raw, a binary variant flipping
+      between 0% and 100% over more than a thousand weeks is a picket fence half a pixel
+      wide. The whipsaw count is reported separately, so nothing is hidden by smoothing.</p>
+  </div>
+</section>
+{% endif %}
+
+{% if charts.subperiods %}
+{% set sp = charts.subperiods %}
+<section>
+  <h2>The trade, window by window</h2>
+  <div class="card scroll">
+    <p class="muted" style="margin-bottom:10px">The tiered model against no overlay in
+      periods chosen because they hurt. Both measures are here because they point opposite
+      ways, and showing one alone would argue a case instead of presenting the trade.</p>
+    <table aria-label="The trade, window by window">
+      <thead><tr><th>Period</th><th>Variant</th><th>CAGR</th><th></th>
+        <th>Max drawdown</th><th></th></tr></thead>
+      <tbody>
+      {% for row in sp.rows %}
+        {% for b in row.bars %}
+        <tr>
+          <td>{% if loop.first %}{{ row.label }}{% endif %}</td>
+          <td><code>{{ b.key }}</code></td>
+          <td>{{ '%.2f'|format(b.cagr) }}%</td>
+          <td style="width:{{ sp.bar_w + 20 }}px">
+            <span style="display:block;height:9px;border-radius:2px;
+                         width:{{ b.cagr_w }}px;background:{{ b.color }}"></span></td>
+          <td class="bad">{{ '%.2f'|format(b.dd) }}%</td>
+          <td style="width:{{ sp.bar_w + 20 }}px">
+            <span style="display:block;height:9px;border-radius:2px;
+                         width:{{ b.dd_w }}px;background:{{ b.color }};opacity:.55"></span></td>
+        </tr>
+        {% endfor %}
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">The tiered model cut the drawdown in every
+      window and gave up return in every window. Whether that is worth paying for is a
+      judgement about what you can sit through, not something the table decides.</p>
+  </div>
+</section>
+{% endif %}
+
+{% if charts.timelines %}
+<section>
+  <h2>Event timelines</h2>
+  <div class="grid">
+    {% for t in charts.timelines %}
+    <div class="card">
+      <h3 style="font-family:var(--disp);font-size:13px;margin-bottom:2px">{{ t.label }}</h3>
+      <p class="muted" style="margin-bottom:8px">{{ t.start }} to {{ t.end }}</p>
+      {% if t.unavailable %}
+        <p class="empty">{{ t.unavailable }}</p>
+      {% else %}
+        <svg viewBox="0 0 {{ t.width }} {{ t.height }}" width="100%"
+             style="max-width:{{ t.width }}px;height:auto;display:block"
+             role="img" aria-label="Equity exposure through {{ t.label }}">
+          {% for tk in t.ticks %}
+            <line x1="{{ t.pad_l }}" y1="{{ tk.px }}" x2="{{ t.width - 16 }}" y2="{{ tk.px }}"
+                  stroke="#22304d" stroke-width="1"/>
+            <text x="{{ t.pad_l - 7 }}" y="{{ tk.px + 4 }}" text-anchor="end"
+                  fill="#8593ad" font-size="9.5">{{ tk.v }}%</text>
+          {% endfor %}
+          <path d="{{ t.area }}" fill="#7b6ad0" opacity=".18"/>
+          <path d="{{ t.path }}" fill="none" stroke="#7b6ad0" stroke-width="1.8"
+                stroke-linejoin="round"/>
+          {% for c in t.changes %}
+            <line x1="{{ c.x }}" y1="{{ t.pad_t }}" x2="{{ c.x }}"
+                  y2="{{ t.height - 24 }}" stroke="#8593ad" stroke-width="1"
+                  stroke-dasharray="2 3" opacity=".7"/>
+          {% endfor %}
+          <text x="{{ t.pad_l }}" y="{{ t.height - 8 }}" fill="#8593ad"
+                font-size="9.5">{{ t.first }}</text>
+          <text x="{{ t.width - 16 }}" y="{{ t.height - 8 }}" text-anchor="end"
+                fill="#8593ad" font-size="9.5">{{ t.last }}</text>
+        </svg>
+        <p class="muted" style="margin-top:6px">Held to
+          <b>{{ '%.0f'|format(t.min_exposure) }}%</b> at its lowest,
+          {{ t.changes|length }} tier change{{ '' if t.changes|length == 1 else 's' }}.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <p class="muted" style="margin-top:8px">Exposure is drawn as a step, not a slope: it was
+    constant between weekly evaluations, and an interpolated line would imply a gradual
+    exit that never happened. Dashed rules mark tier changes.</p>
+</section>
+{% endif %}
+
+{% if charts.robustness %}
+{% set rb = charts.robustness %}
+<section>
+  <h2>Parameter sensitivity</h2>
+  <div class="card">
+    <p class="muted" style="margin-bottom:10px">CAGR of the tiered model across every
+      combination of buffer, confirmation days and R4 exposure. Reported, not ranked: a
+      wider buffer is not automatically better because it lowers the whipsaw count.</p>
+    <div class="legend">
+      <span class="lg">{{ rb.min }}%</span>
+      {% for c in rb.ramp %}<span class="lg"><i style="background:{{ c }}"></i></span>{% endfor %}
+      <span class="lg">{{ rb.max }}%</span>
+    </div>
+    <div class="grid">
+      {% for g in rb.grids %}
+      <div>
+        <p class="muted" style="margin-bottom:6px">R4 exposure
+          <b>{{ '%.0f'|format(g.r4) }}%</b></p>
+        <div class="scroll">
+        <table aria-label="Parameter sensitivity" class="heat">
+          <thead><tr><th>buffer \ confirm</th>
+            {% for c in rb.confirms %}<th>{{ c }}d</th>{% endfor %}</tr></thead>
+          <tbody>
+          {% for b in rb.buffers %}
+            <tr>
+              <td>{{ '%.1f'|format(b / 100) }}%</td>
+              {% for c in rb.confirms %}
+                {% set cell = (g.cells | selectattr('buffer','equalto',b)
+                                        | selectattr('confirm','equalto',c) | list | first) %}
+                {% if cell %}
+                <td style="background:{{ cell.color }};color:{{ rb.ink }};font-weight:700">
+                  {{ '%.2f'|format(cell.value) }}%
+                  <span style="display:block;font-weight:400;font-size:10px">
+                    dd {{ cell.dd }}% · {{ cell.whip }}/yr</span>
+                </td>
+                {% else %}<td class="na">—</td>{% endif %}
+              {% endfor %}
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="muted" style="margin-top:12px">
+      {% if rb.narrow %}The whole grid spans <b>{{ rb.spread }} percentage points</b> of
+        CAGR. The tiered result is therefore not an artefact of where these knobs sit —
+        and by the same token cannot be tuned into a different answer.{% endif %}
+      {% if rb.r4_inert %} Every R4 setting produces an identical grid, which means R4 was
+        never reached in this window: that parameter decided nothing here.{% endif %}
+    </p>
+  </div>
+</section>
+{% endif %}
+
+{% if charts.sharpe %}
+{% set sh = charts.sharpe %}
+<section>
+  <h2>Risk-adjusted return, ranked</h2>
+  <div class="card">
+    <p class="muted" style="margin-bottom:8px">Sharpe ratio: return per unit of
+      volatility. The ordering is the reading.</p>
+    <div class="scroll">
+      <svg viewBox="0 0 {{ sh.width }} {{ sh.height }}" width="100%"
+           style="max-width:{{ sh.width }}px;height:auto;display:block"
+           role="img" aria-label="Sharpe ratio by variant, highest first">
+        {% for b in sh.bars %}
+          <text x="{{ sh.pad_l - 10 }}" y="{{ b.y + 17 }}" text-anchor="end"
+                fill="#e8edf7" font-size="11.5">{{ b.key }}</text>
+          <rect x="{{ b.x }}" y="{{ b.y + 6 }}" width="{{ b.w }}" height="14"
+                rx="3" fill="{{ b.color }}"/>
+          <text x="{{ b.x + b.w + 8 }}" y="{{ b.y + 17 }}" fill="#8593ad"
+                font-size="11">{{ '%.3f'|format(b.value) }}</text>
+        {% endfor %}
+      </svg>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{% if charts.ablation %}
+{% set ab = charts.ablation %}
+<section>
+  <h2>What each input contributed</h2>
+  <div class="card">
+    <p class="muted" style="margin-bottom:8px">CAGR of the tiered model with only the
+      named inputs active.</p>
+    <div class="scroll">
+      <svg viewBox="0 0 {{ ab.width }} {{ ab.height }}" width="100%"
+           style="max-width:{{ ab.width }}px;height:auto;display:block"
+           role="img" aria-label="CAGR by ablation variant, highest first">
+        {% for b in ab.bars %}
+          <text x="{{ ab.pad_l - 10 }}" y="{{ b.y + 17 }}" text-anchor="end"
+                fill="#e8edf7" font-size="11">{{ b.label|replace('Ablation: ','') }}</text>
+          <rect x="{{ b.x }}" y="{{ b.y + 6 }}" width="{{ b.w }}" height="14"
+                rx="3" fill="{{ b.color }}"/>
+          <text x="{{ b.x + b.w + 8 }}" y="{{ b.y + 17 }}" fill="#8593ad"
+                font-size="11">{{ '%.2f'|format(b.value) }}%</text>
+        {% endfor %}
+      </svg>
+    </div>
+    <p class="muted" style="margin-top:8px">The pairs that differ only by breadth score
+      identically, which is the ablation confirming the caveat above rather than a
+      coincidence: with breadth disabled for this window, adding it changes nothing.</p>
+  </div>
+</section>
+{% endif %}
+{% endif %}
+
+<section>
+  <h2>Rolling returns and turnover</h2>
+  <div class="card scroll">
+    <p class="muted" style="margin-bottom:10px">A single CAGR hides the experience of
+      holding a design. The worst rolling year is what you would actually have had to sit
+      through; the median 3 and 5-year windows say what a typical holding period returned.
+      Turnover is what the design costs to run.</p>
+    <table aria-label="Rolling returns and turnover by variant">
+      <thead><tr>
+        <th>Variant</th><th>Worst 1Y</th><th>Median 3Y</th><th>Median 5Y</th>
+        <th>Turnover /yr</th><th>Transitions /yr</th><th>Whipsaws /yr</th>
+        <th>Cost drag /yr</th>
+      </tr></thead>
+      <tbody>
+      {% for key, r in b.variants.items() if r.status == 'ok' and not key.startswith('abl_') %}
+        <tr>
+          <td><code>{{ key }}</code></td>
+          <td class="{{ 'bad' if r.roll_1Y_worst_pct is not none and r.roll_1Y_worst_pct < 0 else '' }}">
+            {{ '%+.1f'|format(r.roll_1Y_worst_pct) ~ '%' if r.roll_1Y_worst_pct is not none else '—' }}</td>
+          <td>{{ '%+.1f'|format(r.roll_3Y_med_pct) ~ '%' if r.roll_3Y_med_pct is not none else '—' }}</td>
+          <td>{{ '%+.1f'|format(r.roll_5Y_med_pct) ~ '%' if r.roll_5Y_med_pct is not none else '—' }}</td>
+          <td>{{ '%.0f'|format(r.annual_turnover_pct) }}%</td>
+          <td>{{ '%.1f'|format(r.transitions_per_year) }}</td>
+          <td>{{ '%.2f'|format(r.whipsaws_per_year) }}</td>
+          <td>{{ '%.3f'|format(r.total_cost_drag_pct_yr) }}%</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">Turnover here is <b>regime turnover only</b>:
+      the exposure changes the overlay caused, measured in NAV fractions at trade time. The
+      selection turnover from weekly momentum ranking is NOT included, because this proxy
+      trades an index rather than the stock book, so the two cannot be separated from these
+      results. A live book would carry both.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Strategy comparison</h2>
+  <div class="card scroll">
+    <table aria-label="Strategy comparison">
+      <thead><tr>
+        <th>Variant</th><th>Design</th><th>CAGR</th><th>Max DD</th><th>Vol</th>
+        <th>Sharpe</th><th>Sortino</th><th>Calmar</th><th>Avg exp</th><th>% cash</th>
+        <th>Transitions</th><th>Whip/yr</th><th>Turnover</th><th>Cost drag</th>
+      </tr></thead>
+      <tbody>
+      {% for key, r in b.variants.items() %}
+        <tr>
+          <td><code>{{ key }}</code></td>
+          <td style="white-space:normal">{{ r.label }}
+            {%- if r.note %}<br><span class="pill warn">proxy</span>
+            <span class="muted">{{ r.note }}</span>{% endif %}</td>
+          {% if r.status == 'NOT AVAILABLE' %}
+            <td colspan="12" class="na" style="text-align:left;white-space:normal">
+              <span class="pill warn">not available</span> {{ r.reason }}</td>
+          {% else %}
+            <td>{{ '%.2f'|format(r.CAGR) }}%</td>
+            <td class="bad">{{ '%.2f'|format(r.max_drawdown_pct) }}%</td>
+            <td>{{ '%.2f'|format(r.volatility_pct) }}%</td>
+            <td>{{ '%.3f'|format(r.sharpe) }}</td>
+            <td>{{ '%.3f'|format(r.sortino) }}</td>
+            <td>{{ '%.3f'|format(r.calmar) }}</td>
+            <td>{{ '%.1f'|format(r.avg_equity_exposure) }}%</td>
+            <td>{{ '%.1f'|format(r.pct_time_in_cash) }}%</td>
+            <td>{{ r.transitions|int }}</td>
+            <td>{{ '%.2f'|format(r.whipsaws_per_year) }}</td>
+            <td>{{ '%.0f'|format(r.annual_turnover_pct) }}%</td>
+            <td>{{ '%.3f'|format(r.total_cost_drag_pct_yr) }}%</td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">Reported, not endorsed. Turnover is measured
+      in NAV fractions at trade time; cost drag is per year.</p>
+  </div>
+</section>
+
+<section class="grid">
+  <div class="card">
+    <h2>Tier distribution</h2>
+    <div class="scroll">
+      <table aria-label="Tier distribution">
+        <thead><tr><th>Variant</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th></tr></thead>
+        <tbody>
+        {% for key, d in b.tier_distribution.items() %}
+          <tr><td><code>{{ key }}</code></td>
+            {% for t in ['R1','R2','R3','R4'] %}
+              <td class="{{ 'na' if not d.get(t) }}">{{ '%.1f'|format(d.get(t)) + '%' if d.get(t) else '—' }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="margin-top:10px">Share of weekly evaluations spent in each
+      tier. Binary variants sit at R1/R3 only by construction.</p>
+  </div>
+
+  <div class="card">
+    <h2>Cost model</h2>
+    <p class="muted" style="margin-bottom:8px">Charges apply to traded notional, never to
+      the whole book. Shown for a ₹30 lakh move: an R1→R2 shift on a ₹1 crore portfolio.</p>
+    {% for k, val in b.cost_breakdown.items() %}
+      <div class="kv"><span>{{ k }}</span><b>₹{{ '{:,.0f}'.format(val) }}</b></div>
+    {% endfor %}
+    <div class="kv"><span>One-way total</span><b>₹{{ '{:,.0f}'.format(b.cost_one_way) }}</b></div>
+    <div class="kv"><span>Exit + re-entry</span><b>₹{{ '{:,.0f}'.format(b.cost_round_trip) }}</b></div>
+  </div>
+
+  <div class="card">
+    <h2>Whipsaw sensitivity</h2>
+    <p class="muted" style="margin-bottom:8px">A whipsaw is a ≥20-point exposure cut with
+      ≥80% restored inside the window, while the benchmark never fell 5%.</p>
+    {% for w, val in b.whipsaw_sensitivity.items() %}
+      <div class="kv"><span>{{ w }}-evaluation reversal window</span>
+        <b>{{ '%.2f'|format(val) }} / yr</b></div>
+    {% endfor %}
+  </div>
+
+  {% if b.unavailable %}
+  <div class="card">
+    <h2>Not available</h2>
+    {% for key, reason in b.unavailable.items() %}
+      <div style="padding:6px 0;border-bottom:1px dotted var(--line)">
+        <span class="pill warn">{{ key }}</span>
+        <div class="muted" style="margin-top:4px">{{ reason }}</div>
+      </div>
+    {% endfor %}
+    <p class="muted" style="margin-top:10px">These are reported as unavailable rather than
+      approximated. A stand-in would be a different strategy wearing the same name.</p>
+  </div>
+  {% endif %}
+</section>
+
+{% endif %}
+{% endblock %}

@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Arm Stops{% endblock %}
+
+{% block heading %}Arm Stops{% endblock %}
+
+{% block content %}
+{% if armed %}
+  <div class="banner ok"><span class="tag">done</span><span>{{ armed }}</span>
+    <span class="muted">Reloaded below from the broker, so this reflects what is actually
+      live rather than what was requested.</span></div>
+{% endif %}
+{% if error %}
+  <div class="banner bad"><span class="tag">failed</span><span>{{ error }}</span></div>
+{% endif %}
+
+{% if problem %}
+  <section class="card">
+    <h2>Cannot review stops</h2>
+    <p class="muted" style="margin-top:8px">{{ problem }}</p>
+    <p class="actions"><a class="pill" href="/login">Log in to Kite</a></p>
+  </section>
+{% elif plan and plan.count == 0 %}
+  <div class="banner ok"><span class="tag">nothing to arm</span>
+    <span>Every tradeable position already carries a stop covering its full quantity.</span></div>
+{% elif plan %}
+
+<div class="banner {{ 'warn' if dry_run else 'bad' }}">
+  <span class="tag">{{ 'dry run' if dry_run else 'live orders' }}</span>
+  <span>{% if dry_run %}DRY_RUN is on, so confirming below simulates every trigger and
+      places nothing. Turn it off in <code>.env</code> to arm for real.
+    {% else %}Confirming below places <b>{{ plan.count }} real GTT triggers</b> on your
+      account.{% endif %}</span>
+</div>
+
+<section class="grid">
+  <div class="card">
+    <h2>Positions to cover</h2>
+    <div class="stat">{{ plan.count }}</div>
+    <p class="muted">of {{ review.checked }} tradeable positions.
+      {{ review.active_gtts }} trigger{{ '' if review.active_gtts == 1 else 's' }} active now.</p>
+  </div>
+  <div class="card">
+    <h2>Value protected</h2>
+    <div class="stat">₹{{ '{:,.0f}'.format(plan.value) }}</div>
+    <p class="muted">Currently uncovered by any working stop.</p>
+  </div>
+  <div class="card">
+    <h2>Loss if every stop fires</h2>
+    <div class="stat bad">₹{{ '{:,.0f}'.format(plan.at_risk) }}</div>
+    <p class="muted">The distance from today's price to each trigger. This is what the
+      protection costs in the worst case, not what it saves.</p>
+  </div>
+  <div class="card">
+    <h2>Stop band</h2>
+    <div class="stat">{{ '%.0f'|format(band[0]) }}–{{ '%.0f'|format(band[1]) }}%</div>
+    <p class="muted">Vol-scaled and clamped to this range by <code>stop_from_vol()</code>.</p>
+  </div>
+</section>
+
+{% if plan.at_risk > daily_loss_cap %}
+  <div class="banner warn">
+    <span class="tag">exceeds the daily cap</span>
+    <span class="muted">If every stop triggered on the same day the loss would be
+      ₹{{ '{:,.0f}'.format(plan.at_risk) }}, above the ₹{{ '{:,.0f}'.format(daily_loss_cap) }}
+      daily loss cap. Stops rarely all fire at once, but a single bad session can take
+      many of them, and the kill switch would halt trading part-way through.</span>
+  </div>
+{% endif %}
+
+{% if plan.using_default_vol %}
+  <div class="banner">
+    <span class="tag">sizing note</span>
+    <span class="muted">{{ plan.using_default_vol|length }} of {{ plan.count }} stops are
+      sized from the default volatility, which lands mid-band, because no scan volatility
+      is available for them. Upload a weekly scan on the <a href="/">desk</a> first if you
+      want each stop scaled to its own name.</span>
+  </div>
+{% endif %}
+
+<section>
+  <h2>Proposed stops</h2>
+  <div class="card scroll">
+    <table aria-label="Proposed stops">
+      <thead><tr>
+        <th>Stock</th><th>Qty</th><th>Last price</th><th>Trigger</th><th>Below</th>
+        <th>Value covered</th><th>At risk</th><th>Sizing</th><th>Why</th>
+      </tr></thead>
+      <tbody>
+      {% for r in plan.rows %}
+        <tr>
+          <td><b>{{ r.symbol }}</b></td>
+          <td>{{ '{:,}'.format(r.qty) }}</td>
+          <td>{{ '{:,.1f}'.format(r.last_price) }}</td>
+          <td class="ok">{{ '{:,.1f}'.format(r.trigger) }}</td>
+          <td>−{{ '%.1f'|format(r.drop_pct) }}%</td>
+          <td>₹{{ '{:,.0f}'.format(r.value) }}</td>
+          <td class="bad">₹{{ '{:,.0f}'.format(r.at_risk) }}</td>
+          <td class="muted">{{ r.vol_source }}</td>
+          <td class="muted">{{ 'no stop' if r.reason == 'missing' else 'uncovered shares' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">A partially covered position is proposed for
+      its <b>uncovered shares only</b>, so arming cannot double up on quantity that is
+      already protected. A position whose existing stop merely sits <em>outside the band</em>
+      is still left alone: replacing it means cancelling a live trigger, which is a riskier
+      act than arming where there is none. Over-coverage is different, and is cancelled
+      below &mdash; adding another trigger cannot fix a stop that already sells more shares
+      than you hold.</p>
+  </div>
+</section>
+
+{% if plan.cancels %}
+<section>
+  <h2>Triggers to cancel &mdash; {{ plan.cancels|length }}</h2>
+  <div class="banner bad">
+    <span class="tag">will be cancelled</span>
+    <span>These run <b>before</b> anything is armed, so an over-covered symbol is never
+      briefly protected twice. A trigger covering more shares than you hold sells what you
+      do not own when it fires, which is short delivery.</span>
+  </div>
+  <div class="card scroll">
+    <table aria-label="Triggers to cancel">
+      <thead><tr><th>Symbol</th><th>GTT id</th><th>Why</th><th>Detail</th></tr></thead>
+      <tbody>
+      {% for c in plan.cancels %}
+        <tr>
+          <td>{{ c.symbol }}</td>
+          <td>#{{ c.gtt_id }}</td>
+          <td class="bad">{{ c.reason }}</td>
+          <td style="text-align:left;white-space:normal" class="muted">{{ c.detail }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<section>
+  <h2>Confirm</h2>
+  <div class="card">
+    {% if plan.cancels %}<p class="muted"><b>{{ plan.cancels|length }} existing trigger{{ ''
+      if plan.cancels|length == 1 else 's' }} will be cancelled first</b>, then
+      {{ plan.rows|length }} armed.</p>{% endif %}
+    <p class="muted">Each trigger is a GTT sell at the price shown, valid until it fires or
+      Zerodha expires it. Protected instruments are refused at the guard even if one
+      reached this list. This plan expires in 30 minutes because every trigger is priced
+      off a live quote.</p>
+    <form method="post" action="/stops/arm" class="actions">
+      <input type="hidden" name="plan_id" value="{{ plan.plan_id }}">
+      <input type="hidden" name="confirm" value="true">
+      <button class="{{ 'btn-saffron' if dry_run else 'btn-danger' }}" type="submit">
+        {{ 'Simulate' if dry_run else 'Arm' }} {{ plan.count }} stops</button>
+      <span class="muted">Plan <code>{{ plan.plan_id }}</code> · single use</span>
+    </form>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

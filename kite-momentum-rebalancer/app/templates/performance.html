@@ -1,0 +1,666 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Performance{% endblock %}
+
+{% block content %}
+
+{# ============================================================================
+   Identity. Mark, title, and the one line that says what this record covers.
+   ============================================================================ #}
+<section class="sc-hero mb-5">
+  <div class="sc-hero__mark">
+    {%- if p.available %}{{ '%.0f'|format(p.index_value) }}{% else %}—{% endif -%}
+  </div>
+  <div class="min-w-0 flex-1">
+    <h1>Portfolio Performance</h1>
+    <div class="sc-hero__by">
+      {% if p.available %}
+        <span>{{ p.inception }} &rarr; {{ p.as_of }}</span>
+        <span aria-hidden="true">&middot;</span>
+        <span>{{ p.observations }} sessions</span>
+        <span class="sc-badge {{ 'sc-badge--warn' if p.observations < 63 else 'sc-badge--ok' }}">
+          {{ 'short history' if p.observations < 63 else 'measured' }}</span>
+      {% else %}
+        <span>No track record yet</span>
+      {% endif %}
+    </div>
+  </div>
+  <a class="sc-btn sc-btn--secondary" href="/tradebook">Tradebook</a>
+</section>
+
+{% if not p.available %}
+  <section class="sc-card">
+    <div class="sc-card__b">
+      <h2 class="text-[16px] font-semibold">No track record yet</h2>
+      <p class="mt-2 max-w-[70ch] text-ink-2">{{ p.message }} Performance is measured from
+        stored end-of-day snapshots, so the record starts the first time you take one and
+        grows daily.</p>
+      <p class="mt-3"><code class="rounded bg-wash-2 px-2 py-1 text-[12px]">{{ p.how_to }}</code></p>
+    </div>
+  </section>
+{% else %}
+
+{% set thin = p.observations < 63 %}
+{% set colours = ['#1ebf8e', '#2f6fed', '#7b5bf2', '#f59e0b'] %}
+
+{# --- holdings ------------------------------------------------------------ #}
+{% if h.available %}
+<section class="sc-card" id="holdings">
+  <div class="sc-card__h">
+    <h2>Holdings</h2>
+    <span class="sc-muted">{{ h.summary.positions }} positions &middot; priced {{ h.as_of }}</span>
+  </div>
+
+  <div class="sc-card__b">
+    <div class="sc-metrics">
+      <div>
+        <div class="sc-metric__k">Invested</div>
+        <div class="sc-metric__v">&#8377;{{ '{:,.0f}'.format(h.summary.invested) }}</div>
+      </div>
+      <div>
+        <div class="sc-metric__k">Current value</div>
+        <div class="sc-metric__v">&#8377;{{ '{:,.0f}'.format(h.summary.value) }}</div>
+      </div>
+      <div>
+        <div class="sc-metric__k">Unrealised P&amp;L</div>
+        <div class="sc-metric__v {{ 'text-up' if h.summary.pnl > 0 else ('text-down' if h.summary.pnl < 0 else '') }}">
+          &#8377;{{ '{:,.0f}'.format(h.summary.pnl) }}</div>
+        {% if h.summary.pnl_pct is not none %}
+        <div class="sc-metric__s">{{ '%+.2f'|format(h.summary.pnl_pct) }}% on cost</div>{% endif %}
+      </div>
+      <div>
+        <div class="sc-metric__k">Today</div>
+        <div class="sc-metric__v {{ 'text-up' if (h.summary.day_pnl or 0) > 0 else ('text-down' if (h.summary.day_pnl or 0) < 0 else '') }}">
+          {% if h.summary.day_pnl is none %}&mdash;{% else %}&#8377;{{ '{:,.0f}'.format(h.summary.day_pnl) }}{% endif %}</div>
+        {% if h.summary.day_pnl_pct is not none %}
+        <div class="sc-metric__s">{{ '%+.2f'|format(h.summary.day_pnl_pct) }}%</div>{% endif %}
+      </div>
+      <div>
+        <div class="sc-metric__k">Cash</div>
+        <div class="sc-metric__v">&#8377;{{ '{:,.0f}'.format(h.summary.cash) }}</div>
+        <div class="sc-metric__s">{{ h.summary.cash_pct }}% of NAV</div>
+      </div>
+      <div>
+        <div class="sc-metric__k">Concentration</div>
+        <div class="sc-metric__v">{{ h.summary.top5_weight }}%</div>
+        <div class="sc-metric__s">top five &middot; largest {{ h.summary.largest }}
+          at {{ h.summary.largest_weight }}%</div>
+      </div>
+    </div>
+
+    {% if h.warnings %}
+    <div class="mt-4 space-y-2">
+      {% for w in h.warnings %}
+        <div class="sc-note {{ 'sc-note--bad' if w.level == 'bad' else 'sc-note--warn' }}">
+          <div>{% if w.symbol %}<b>{{ w.symbol }}</b> &mdash; {% endif %}{{ w.text }}</div>
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {# allocation by the band the planner itself uses #}
+    <div class="mt-5">
+      <h3 class="mb-2 text-[13px] font-semibold text-ink">Allocation</h3>
+      <div class="chart">
+        {% for a in h.allocation.rows %}
+        <div class="crow">
+          <span class="nm">{{ a.band }}</span>
+          <span class="track"><span class="fill" style="width:{{ a.pct }}%"></span></span>
+          <span class="val">{{ a.pct }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% if not h.scan_context %}
+        <p class="mt-2 sc-muted">Bands come from the most recent uploaded scan. Names
+          absent from it are shown as unclassified rather than guessed into a band.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# --- the table ------------------------------------------------------- #}
+  <div class="border-t border-line px-5 py-3">
+    <div class="flex flex-wrap items-center gap-2">
+      <input id="hSearch" type="search" placeholder="Search symbol"
+             class="w-48" aria-label="Search holdings">
+      <select id="hFilter" aria-label="Filter holdings">
+        <option value="all">All positions</option>
+        <option value="win">In profit</option>
+        <option value="lose">At a loss</option>
+        <option value="pledged">Pledged</option>
+        <option value="unprotected">No full stop</option>
+        <option value="long">Long term</option>
+        <option value="short">Short term</option>
+      </select>
+      <span id="hCount" class="sc-muted"></span>
+      <a class="sc-btn sc-btn--ghost sc-btn--sm ml-auto" href="/stops">Stops</a>
+      <button type="button" class="sc-btn sc-btn--ghost sc-btn--sm"
+              onclick="exportHoldings()">Export CSV</button>
+    </div>
+  </div>
+
+  <div class="sc-tablewrap">
+    <table class="sc-table" id="hTable" aria-label="Holdings">
+      <thead><tr>
+        {% for key, label, cls in [
+            ('symbol','Symbol',''), ('quantity','Qty','r'), ('avg_price','Avg','r'),
+            ('last_price','LTP','r'), ('invested','Invested','r'),
+            ('value','Value','r'), ('pnl','P&L','r'), ('pnl_pct','P&L %','r'),
+            ('weight_pct','Weight','r'), ('day_change_pct','Day %','r'),
+            ('day_pnl','Day P&L','r'), ('cap_band','Band',''),
+            ('held_days','Held','r'), ('stop','Stop','')] %}
+          <th class="{{ cls }} cursor-pointer select-none" data-k="{{ key }}"
+              title="Sort by {{ label }}">{{ label }}</th>
+        {% endfor %}
+      </tr></thead>
+      <tbody>
+      {% for r in h.rows %}
+        <tr data-sym="{{ r.symbol }}"
+            data-win="{{ 1 if (r.pnl or 0) > 0 else 0 }}"
+            data-pledged="{{ 1 if r.pledged_qty else 0 }}"
+            data-unprot="{{ 1 if r.stop in ('missing','partial') else 0 }}"
+            data-term="{{ r.term or '' }}">
+          <td class="sym">{{ r.symbol }}
+            {%- if r.pledged_qty %} <span class="sc-badge sc-badge--mute"
+              title="{{ r.pledged_qty }} pledged">P</span>{% endif %}
+            {%- if r.t1_quantity %} <span class="sc-badge sc-badge--info"
+              title="{{ r.t1_quantity }} settling (T+1)">T1</span>{% endif %}</td>
+          <td class="r">{{ r.quantity }}</td>
+          <td class="r">{{ '{:,.2f}'.format(r.avg_price) }}</td>
+          <td class="r">{{ '{:,.2f}'.format(r.last_price) }}</td>
+          <td class="r">{{ '{:,.0f}'.format(r.invested) }}</td>
+          <td class="r">{{ '{:,.0f}'.format(r.value) }}</td>
+          <td class="r {{ 'sc-up' if r.pnl > 0 else ('sc-down' if r.pnl < 0 else '') }}">
+            {{ '{:,.0f}'.format(r.pnl) }}</td>
+          <td class="r {{ 'sc-up' if (r.pnl_pct or 0) > 0 else ('sc-down' if (r.pnl_pct or 0) < 0 else '') }}">
+            {{ '%+.2f'|format(r.pnl_pct) if r.pnl_pct is not none else '—' }}</td>
+          <td class="r">{{ r.weight_pct }}%</td>
+          <td class="r {{ 'sc-up' if (r.day_change_pct or 0) > 0 else ('sc-down' if (r.day_change_pct or 0) < 0 else '') }}">
+            {{ '%+.2f'|format(r.day_change_pct) if r.day_change_pct is not none else '—' }}</td>
+          <td class="r {{ 'sc-up' if (r.day_pnl or 0) > 0 else ('sc-down' if (r.day_pnl or 0) < 0 else '') }}">
+            {{ '{:,.0f}'.format(r.day_pnl) if r.day_pnl is not none else '—' }}</td>
+          <td class="text-ink-3">{{ r.cap_band or '—' }}</td>
+          <td class="r" title="{{ ('first bought ' ~ r.first_bought) if r.first_bought else 'no fill history' }}">
+            {%- if r.held_days is defined and r.held_days is not none -%}
+              {{ r.held_days }}d
+              <span class="sc-badge {{ 'sc-badge--ok' if r.term == 'long' else 'sc-badge--mute' }}">{{ r.term[:2]|upper }}</span>
+            {%- else -%}&mdash;{%- endif -%}</td>
+          <td>
+            {% set tone = {'ok':'sc-badge--ok','too_close':'sc-badge--warn',
+                           'too_far':'sc-badge--warn','partial':'sc-badge--bad',
+                           'missing':'sc-badge--bad','excess':'sc-badge--bad'} %}
+            <span class="sc-badge {{ tone.get(r.stop,'sc-badge--mute') }}">{{ r.stop }}</span>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sc-card__b border-t border-line">
+    <h3 class="text-[13px] font-semibold text-ink">Not shown, and why</h3>
+    <ul class="mt-2 space-y-1">
+      {% for name, why in h.gaps %}
+        <li class="sc-muted"><b class="text-ink-2">{{ name }}</b> &mdash; {{ why }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+{% else %}
+<section class="sc-card">
+  <div class="sc-card__h"><h2>Holdings</h2></div>
+  <div class="sc-card__b">
+    <p class="sc-muted">Not available: {{ h.reason or 'no broker session' }}. The
+      record above is stored and does not need one; this table is priced live.</p>
+  </div>
+</section>
+{% endif %}
+
+<div class="grid gap-5 lg:grid-cols-3">
+
+  {# ======================= main column ======================= #}
+  <div class="space-y-5 lg:col-span-2">
+
+    {% if thin %}
+    <div class="sc-note sc-note--warn">
+      <div>
+        <b>{{ p.observations }} sessions since {{ p.inception }}.</b>
+        Ratios below are arithmetic, not evidence: an annualised figure from a few weeks
+        extrapolates noise. Figures drawn from too little data are marked. Volatility needs
+        about 21 sessions, risk-adjusted ratios about 63.
+      </div>
+    </div>
+    {% endif %}
+
+    {# --- the headline block ------------------------------------------------ #}
+    <section class="sc-card">
+      <div class="sc-card__h"><h2>Performance</h2>
+        <span class="sc-muted">as of {{ p.as_of }}</span></div>
+      <div class="sc-card__b">
+        {% set tr = p.index_value - 100.0 %}
+        <div class="sc-metrics">
+          <div>
+            <div class="sc-metric__k">Current value</div>
+            <div class="sc-metric__v">&#8377;{{ '{:,.0f}'.format(p.nav) }}</div>
+            <div class="sc-metric__s">Net asset value, including cash</div>
+          </div>
+          <div>
+            <div class="sc-metric__k">Total return</div>
+            <div class="sc-metric__v {{ 'text-up' if tr > 0 else ('text-down' if tr < 0 else '') }}">
+              {{ '%+.2f'|format(tr) }}%</div>
+            <div class="sc-metric__s">Time-weighted, since {{ p.inception }}</div>
+          </div>
+          <div>
+            <div class="sc-metric__k">Index value</div>
+            <div class="sc-metric__v">{{ '%.2f'|format(p.index_value) }}</div>
+            <div class="sc-metric__s">Rebased to 100 at inception</div>
+          </div>
+        </div>
+
+        <div class="sc-rule"></div>
+
+        <div class="sc-metrics">
+          <div>
+            <div class="sc-metric__k">Positions</div>
+            <div class="sc-metric__v">{{ p.positions }}</div>
+          </div>
+          <div>
+            <div class="sc-metric__k">Cash</div>
+            <div class="sc-metric__v">&#8377;{{ '{:,.0f}'.format(p.cash) }}</div>
+            <div class="sc-metric__s">{{ '%.1f'|format(p.cash_pct) }}% of NAV</div>
+          </div>
+          <div>
+            <div class="sc-metric__k">Cashflows recorded</div>
+            <div class="sc-metric__v {{ '' if p.has_cashflows else 'text-ink-3' }}">
+              {{ 'Yes' if p.has_cashflows else 'None' }}</div>
+            <div class="sc-metric__s">XIRR needs these</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {# --- headline ratios ---------------------------------------------------- #}
+    <section class="sc-card">
+      <div class="sc-card__h"><h2>Headline</h2></div>
+      <div class="sc-card__b">
+        <dl class="sc-metrics">
+          {% for m in p.metrics %}
+            <div>
+              <dt class="sc-metric__k">{{ m.label }}</dt>
+              {% if m.value is none %}
+                <dd class="sc-metric__v text-ink-3">&mdash;</dd>
+              {% elif m.polarity == 'up' %}
+                <dd class="sc-metric__v {{ 'text-up' if m.value > 0 else ('text-down' if m.value < 0 else '') }}">
+                  {{ '%+.2f'|format(m.value) if m.unit == '%' else '%.2f'|format(m.value) }}{{ m.unit }}</dd>
+              {% elif m.polarity == 'loss' %}
+                <dd class="sc-metric__v {{ 'text-down' if m.value|abs > 0.005 else 'text-ink-3' }}">
+                  {{ '%.2f'|format(m.value if m.value < 0 else -m.value) }}{{ m.unit }}</dd>
+              {% else %}
+                <dd class="sc-metric__v">{{ '%.2f'|format(m.value) }}{{ m.unit }}</dd>
+              {% endif %}
+              <div class="sc-metric__s">{{ m.note }}</div>
+              {% if not m.flag.meaningful %}
+                <div class="mt-1 text-[11px] font-medium text-warn">
+                  {{ m.flag.n }} of {{ m.flag.need }} sessions needed</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </dl>
+      </div>
+    </section>
+
+    {# --- equity curve ------------------------------------------------------- #}
+    <section class="sc-card">
+      <div class="sc-card__h"><h2>Equity curve</h2>
+        <span class="sc-muted">rebased to 100 at inception</span></div>
+      <div class="sc-card__b">
+        {% if p.chart.series and p.chart.series[0].points %}
+          <svg viewBox="0 -10 1000 290" class="w-full" role="img"
+               aria-label="Portfolio index against benchmarks, rebased to 100 at inception">
+            <line x1="0" y1="290" x2="1000" y2="290" stroke="#e3e8ef" stroke-width="1"/>
+            {% for s in p.chart.series %}
+              <polyline points="{{ s.points }}" fill="none"
+                        stroke="{{ colours[loop.index0 % 4] }}"
+                        stroke-width="{{ 2.5 if loop.index0 == 0 else 1.6 }}"
+                        stroke-linejoin="round" stroke-linecap="round"
+                        {{ 'stroke-dasharray="4 3"' if loop.index0 > 0 }}/>
+            {% endfor %}
+          </svg>
+          <div class="mt-2 flex justify-between text-[12px] text-ink-3">
+            <span>{{ p.chart.start }}</span>
+            <span>{{ '%.1f'|format(p.chart.lo) }} &ndash; {{ '%.1f'|format(p.chart.hi) }}</span>
+            <span>{{ p.chart.end }}</span>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[13px]">
+            {% for s in p.chart.series %}
+              <span class="inline-flex items-center gap-2">
+                <i class="inline-block h-2.5 w-2.5 rounded-sm"
+                   style="background:{{ colours[loop.index0 % 4] }}"></i>
+                <span class="text-ink-2">{{ s.name }}</span>
+                <b class="text-ink">{{ '%.1f'|format(s.last) }}</b>
+                <span class="sc-badge sc-badge--mute">{{ s.type }}</span>
+              </span>
+            {% endfor %}
+          </div>
+          {% if 'PRI' in p.series_used.values() %}
+            <p class="mt-4 sc-muted"><span class="sc-badge sc-badge--warn">price return</span>
+              A benchmark shown as PRI excludes dividends, so it understates the index by
+              roughly its dividend yield. Load the TRI CSV for a fair comparison:
+              <code class="rounded bg-wash-2 px-1.5 py-0.5 text-[12px]">python -m app.analytics.benchmark --tri &lt;file&gt; --name "NIFTY 500"</code></p>
+          {% endif %}
+          {% for note in p.benchmark_notes %}<p class="mt-2 sc-muted">{{ note }}</p>{% endfor %}
+        {% else %}
+          <p class="sc-muted">At least two snapshots are needed to draw a curve.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    {# --- drawdown ----------------------------------------------------------- #}
+    <div class="grid gap-5 sm:grid-cols-2">
+      <section class="sc-card">
+        <div class="sc-card__h"><h2>Underwater</h2></div>
+        <div class="sc-card__b">
+          {% if p.underwater.points %}
+            <svg viewBox="0 0 1000 100" class="w-full" role="img"
+                 aria-label="Drawdown from the running peak, worst {{ '%.2f'|format(p.underwater.worst) }} percent">
+              <line x1="0" y1="0" x2="1000" y2="0" stroke="#e3e8ef" stroke-width="1"/>
+              <polyline points="{{ p.underwater.points }}" fill="none" stroke="#e5484d"
+                        stroke-width="2" stroke-linejoin="round"/>
+            </svg>
+            <div class="mt-2 flex justify-between text-[12px] text-ink-3">
+              <span>0%</span><span>worst {{ '%.2f'|format(p.underwater.worst) }}%</span></div>
+          {% else %}
+            <p class="sc-muted">Not enough history to plot.</p>
+          {% endif %}
+        </div>
+      </section>
+      <section class="sc-card">
+        <div class="sc-card__h"><h2>Deepest fall</h2></div>
+        <div class="sc-tablewrap">
+          <table class="sc-table">
+            <tbody>
+              <tr><td class="text-ink-2">Depth</td>
+                  <td class="r sc-down">{{ '%.2f'|format(p.drawdown.depth_pct) }}%</td></tr>
+              <tr><td class="text-ink-2">Peak</td><td class="r">{{ p.drawdown.peak or '—' }}</td></tr>
+              <tr><td class="text-ink-2">Trough</td><td class="r">{{ p.drawdown.trough or '—' }}</td></tr>
+              <tr><td class="text-ink-2">Recovered</td>
+                  <td class="r {{ 'sc-up' if p.drawdown.recovered else 'sc-down' }}">
+                    {{ p.drawdown.recovery if p.drawdown.recovered else 'still under water' }}</td></tr>
+              <tr><td class="text-ink-2">Duration</td>
+                  <td class="r">{{ p.drawdown.duration_days }} days</td></tr>
+              <tr><td class="text-ink-2">Current</td>
+                  <td class="r {{ 'sc-down' if p.drawdown.current_pct < -0.005 else 'text-ink-3' }}">
+                    {{ '%.2f'|format(p.drawdown.current_pct) }}%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    {# --- against the benchmark ---------------------------------------------- #}
+    {% if p.relative %}
+    <section class="sc-card">
+      <div class="sc-card__h">
+        <h2>Against {{ p.relative.name }}</h2>
+        <span class="sc-badge sc-badge--mute">{{ p.relative.series_type }}</span>
+      </div>
+      {% if not p.relative_flag.meaningful %}
+        <div class="px-5 pt-4">
+          <div class="sc-note sc-note--warn">
+            <div><b>{{ p.relative_flag.n }} of {{ p.relative_flag.need }} sessions.</b>
+              Beta and tracking error need a meaningful sample before they describe
+              anything.</div>
+          </div>
+        </div>
+      {% endif %}
+      <div class="sc-tablewrap">
+        <table class="sc-table">
+          <thead><tr><th>Measure</th><th class="r">Value</th><th>Reading</th></tr></thead>
+          <tbody>
+            <tr><td class="sym">Beta</td><td class="r">{{ '%.3f'|format(p.relative.beta) }}</td>
+                <td class="sc-muted">Above 1 moves more than the index</td></tr>
+            <tr><td class="sym">Alpha (annualised)</td>
+                <td class="r {{ 'sc-up' if p.relative.alpha > 0 else 'sc-down' }}">
+                  {{ '%+.2f'|format(p.relative.alpha * 100) }}%</td>
+                <td class="sc-muted">Return beyond what beta explains</td></tr>
+            <tr><td class="sym">Tracking error</td>
+                <td class="r">{{ '%.2f'|format(p.relative.tracking_error * 100) }}%</td>
+                <td class="sc-muted">How far the paths diverge</td></tr>
+            <tr><td class="sym">Information ratio</td>
+                <td class="r">{{ '%.3f'|format(p.relative.information_ratio) if p.relative.information_ratio == p.relative.information_ratio else '—' }}</td>
+                <td class="sc-muted">Excess return per unit of divergence</td></tr>
+            <tr><td class="sym">Up capture</td>
+                <td class="r">{{ '%.2f'|format(p.relative.up_capture) if p.relative.up_capture == p.relative.up_capture else '—' }}</td>
+                <td class="sc-muted">Share of the index's up months captured</td></tr>
+            <tr><td class="sym">Down capture</td>
+                <td class="r">{{ '%.2f'|format(p.relative.down_capture) if p.relative.down_capture == p.relative.down_capture else '—' }}</td>
+                <td class="sc-muted">Below 1 is good: you fell less</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+
+    {# --- monthly ------------------------------------------------------------ #}
+    <section class="sc-card">
+      <div class="sc-card__h"><h2>Monthly returns</h2></div>
+      {% if p.monthly and p.monthly_flag.meaningful %}
+        <div class="sc-tablewrap">
+          <table class="sc-table">
+            <thead><tr><th>Year</th>
+              {% for m in ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] %}
+                <th class="r">{{ m }}</th>{% endfor %}
+            </tr></thead>
+            <tbody>
+            {% for y in p.monthly.years %}
+              <tr><td class="sym">{{ y }}</td>
+                {% for v in p.monthly.rows[loop.index0] %}
+                  {% if v is none %}<td class="r text-ink-3">&middot;</td>
+                  {% else %}
+                    <td class="r font-medium"
+                        style="background:{{ 'rgba(0,135,79,%.2f)'|format([v/10, 0.85]|min)
+                                              if v > 0 else 'rgba(225,45,51,%.2f)'|format([-v/10, 0.85]|min) }};
+                               color:{{ '#0b3d29' if v > 0 else '#5c1417' }}">
+                      {{ '%+.1f'|format(v) }}</td>
+                  {% endif %}
+                {% endfor %}
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="sc-card__b"><p class="sc-muted">A month-by-month grid needs at least
+          {{ p.monthly_flag.need }} completed months; there
+          {{ 'is' if p.monthly_flag.n == 1 else 'are' }} {{ p.monthly_flag.n }}. It fills in
+          as the record grows.</p></div>
+      {% endif %}
+    </section>
+
+    {# --- closed trades ------------------------------------------------------- #}
+    <section class="sc-card">
+      <div class="sc-card__h"><h2>Closed trades</h2>
+        {% if p.trades %}<span class="sc-muted">{{ p.trades.closed }} round trips</span>{% endif %}
+      </div>
+      {% if p.trades %}
+        <div class="sc-card__b">
+          <div class="sc-metrics">
+            {% for label, val, unit in [
+                ('Win rate', p.trades.win_rate, '%'),
+                ('Avg win', p.trades.avg_win, '₹'), ('Avg loss', p.trades.avg_loss, '₹'),
+                ('Payoff', p.trades.payoff, 'x'), ('Profit factor', p.trades.profit_factor, 'x'),
+                ('Expectancy', p.trades.expectancy, '₹'),
+                ('Avg hold', p.trades.avg_hold_days, 'd')] %}
+              <div>
+                <div class="sc-metric__k">{{ label }}</div>
+                <div class="sc-metric__v {{ 'text-up' if val > 0 else ('text-down' if val < 0 else '') }}">
+                  {%- if unit == '₹' %}&#8377;{{ '{:,.0f}'.format(val) }}
+                  {%- else %}{{ '%.2f'|format(val) }}{{ unit }}{% endif -%}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="sc-tablewrap">
+          <table class="sc-table">
+            <thead><tr><th>Stock</th><th class="r">Trades</th><th class="r">P&amp;L</th>
+              <th class="r">Share</th></tr></thead>
+            <tbody>
+            {% for r in p.trades.by_symbol %}
+              <tr><td class="sym">{{ r.symbol }}</td>
+                  <td class="r">{{ r.trades }}</td>
+                  <td class="r {{ 'sc-up' if r.pnl >= 0 else 'sc-down' }}">
+                    &#8377;{{ '{:,.0f}'.format(r.pnl) }}</td>
+                  <td class="r text-ink-3">{{ '%.1f'|format(r.share_pct) }}%</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="sc-card__b"><p class="sc-muted">No closed trades recorded. Realised P&amp;L,
+          win rate and holding periods come from the tax-lot history &mdash; import a Console
+          tradebook on the <a href="/tradebook">tradebook page</a> and this section fills
+          in.</p></div>
+      {% endif %}
+    </section>
+  </div>
+
+  {# ======================= right rail ======================= #}
+  <aside class="sc-rail lg:sticky lg:top-20 lg:self-start">
+    <div class="sc-card">
+      <div class="sc-card__b space-y-2">
+        <a class="sc-btn sc-btn--primary sc-btn--block" href="/">Go to the desk</a>
+        <a class="sc-btn sc-btn--secondary sc-btn--block" href="/ops">Run collection</a>
+      </div>
+    </div>
+
+    <div>
+      <h3 class="mb-2 px-1 text-[13px] font-semibold text-ink">Where it stands</h3>
+      <div class="sc-card">
+        <div class="sc-tablewrap">
+          <table class="sc-table">
+            <tbody>
+              <tr><td class="text-ink-2">NAV</td>
+                  <td class="r sym">&#8377;{{ '{:,.0f}'.format(p.nav) }}</td></tr>
+              <tr><td class="text-ink-2">Index value</td>
+                  <td class="r sym">{{ '%.4f'|format(p.index_value) }}</td></tr>
+              <tr><td class="text-ink-2">Positions</td>
+                  <td class="r sym">{{ p.positions }}</td></tr>
+              <tr><td class="text-ink-2">Cash</td>
+                  <td class="r sym">&#8377;{{ '{:,.0f}'.format(p.cash) }}</td></tr>
+              <tr><td class="text-ink-2">Sessions</td>
+                  <td class="r sym">{{ p.observations }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="sc-card">
+      <div class="sc-card__b">
+        <h3 class="text-[13px] font-semibold text-ink">How this is measured</h3>
+        <p class="mt-2 sc-muted">The index is a time-weighted chain, so deposits and
+          withdrawals never register as performance.</p>
+        {% if not p.has_cashflows %}
+          <p class="mt-3 sc-muted">Without recorded cashflows XIRR cannot be computed:</p>
+          <code class="mt-2 block overflow-x-auto rounded-lg bg-wash-2 px-3 py-2 text-[12px] text-ink-2">python -m app.analytics.snapshot --cashflow -100000</code>
+        {% endif %}
+      </div>
+    </div>
+  </aside>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Sorting, filtering and export, done on the rendered rows. No dependency and no second
+// request: the table is already here, and a holdings page that needs a round trip to sort
+// is slower than one that does not.
+(function () {
+  const table = document.getElementById('hTable');
+  if (!table) return;
+  const body = table.tBodies[0];
+  const rows = () => [...body.rows];
+  const search = document.getElementById('hSearch');
+  const filter = document.getElementById('hFilter');
+  const count = document.getElementById('hCount');
+  let sortKey = null, sortDir = -1;
+
+  // The cell text is formatted for people; sorting needs the number behind it.
+  const num = (s) => {
+    const v = parseFloat(String(s).replace(/[^0-9.\-]/g, ''));
+    return Number.isNaN(v) ? null : v;
+  };
+  const cellOf = (tr, key) => {
+    const i = [...table.tHead.rows[0].cells].findIndex(th => th.dataset.k === key);
+    return tr.cells[i];
+  };
+
+  function apply() {
+    const q = (search.value || '').trim().toUpperCase();
+    const f = filter.value;
+    let shown = 0;
+    for (const tr of rows()) {
+      const d = tr.dataset;
+      let ok = !q || d.sym.toUpperCase().includes(q);
+      if (ok && f === 'win') ok = d.win === '1';
+      if (ok && f === 'lose') ok = d.win === '0';
+      if (ok && f === 'pledged') ok = d.pledged === '1';
+      if (ok && f === 'unprotected') ok = d.unprot === '1';
+      if (ok && (f === 'long' || f === 'short')) ok = d.term === f;
+      tr.hidden = !ok;
+      if (ok) shown++;
+    }
+    count.textContent = shown === rows().length
+      ? `${shown} positions`
+      : `${shown} of ${rows().length} positions`;
+  }
+
+  function sortBy(key) {
+    sortDir = key === sortKey ? -sortDir : -1;
+    sortKey = key;
+    const sorted = rows().sort((a, b) => {
+      const av = cellOf(a, key).textContent.trim();
+      const bv = cellOf(b, key).textContent.trim();
+      const an = num(av), bn = num(bv);
+      // A dash means "no value"; it sorts last whichever way the column is pointed,
+      // rather than pretending to be zero and landing in the middle of the numbers.
+      if (an === null && bn === null) return av.localeCompare(bv);
+      if (an === null) return 1;
+      if (bn === null) return -1;
+      return (an - bn) * sortDir;
+    });
+    sorted.forEach(tr => body.appendChild(tr));
+    for (const th of table.tHead.rows[0].cells) {
+      th.setAttribute('aria-sort', th.dataset.k === key
+        ? (sortDir === -1 ? 'descending' : 'ascending') : 'none');
+    }
+  }
+
+  table.tHead.addEventListener('click', e => {
+    const th = e.target.closest('th[data-k]');
+    if (th) sortBy(th.dataset.k);
+  });
+  search.addEventListener('input', apply);
+  filter.addEventListener('change', apply);
+  apply();
+
+  window.exportHoldings = function () {
+    const head = [...table.tHead.rows[0].cells].map(th => th.textContent.trim());
+    const lines = [head.join(',')];
+    for (const tr of rows()) {
+      if (tr.hidden) continue;   // export what is on screen, not what is hidden
+      lines.push([...tr.cells]
+        .map(td => `"${td.textContent.trim().replace(/\s+/g, ' ').replace(/"/g, '""')}"`)
+        .join(','));
+    }
+    const blob = new Blob([lines.join('\n')], {type: 'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'holdings.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,10 @@
+import puppeteer from "puppeteer-core";
+const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const [base, path, width, out, full] = process.argv.slice(2);
+const b = await puppeteer.launch({ executablePath: CHROME, headless: "new" });
+const p = await b.newPage();
+await p.setViewport({ width: Number(width), height: 1200, deviceScaleFactor: 2 });
+await p.goto(base + path, { waitUntil: "networkidle0" });
+await p.screenshot({ path: out, fullPage: full === "full" });
+await b.close();
+console.log("wrote", out);

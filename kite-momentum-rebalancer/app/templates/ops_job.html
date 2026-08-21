@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Job {{ j.id }}{% endblock %}
+
+{% block heading %}Job {{ j.id }} · {{ j.name }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="kv"><span>Status</span><b><span class="st {{ j.status }}">{{ j.status }}</span></b></div>
+  <div class="kv"><span>Command</span><b><code>python {{ (j.argv_json | fromjson) | join(' ') }}</code></b></div>
+  <div class="kv"><span>Started</span><b>{{ j.started_at }}</b></div>
+  <div class="kv"><span>Finished</span><b>{{ j.finished_at or 'still running' }}</b></div>
+  <div class="kv"><span>Duration</span><b>{{ '%.2f'|format(j.duration_s) + 's' if j.duration_s else '—' }}</b></div>
+  <div class="kv"><span>Exit code</span><b>{{ j.exit_code if j.exit_code is not none else '—' }}</b></div>
+  {% if j.output %}<pre>{{ j.output }}</pre>
+  {% else %}<p class="muted" style="margin-top:14px">No output captured yet.</p>{% endif %}
+</div>
+{% endblock %}

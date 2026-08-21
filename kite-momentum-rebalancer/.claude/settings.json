@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python*)", "Bash(uvicorn*)", "Bash(pip*)",
+      "Read", "Edit", "Write", "Glob", "Grep"
+    ],
+    "deny": ["Bash(rm -rf*)"]
+  },
+  "mcpServers": {
+    "kite": {
+      "type": "http",
+      "url": "https://mcp.kite.trade/mcp"
+    }
+  }
+}

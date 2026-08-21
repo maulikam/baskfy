@@ -1,0 +1,247 @@
+# =============================================================================
+# BANKNIFTY Intraday Balanced-Premium Strangle — configuration
+# Derived from config/strangle.yaml (NIFTY). PAPER ONLY.
+#
+# READ THIS FIRST: BANKNIFTY HAS NO WEEKLY EXPIRY.
+# The live dump on 18 Aug 2026 lists six contracts, all last-Tuesday-of-month:
+# 2026-08-25, 09-29, 10-27, 12-29, 2027-03-30, 06-29 (three serial months then
+# quarterlies — November is genuinely absent, that is the F&O convention, not a gap
+# in the data). Every other parameter here follows from that one fact.
+#
+# The strategy is an INTRADAY DECAY trade whose session table tops out at "3+", written
+# for a weekly cycle where the furthest session is four days from expiry. A monthly
+# series spends ~18 of 21 sessions at dte 5..25, all of which would fall into that same
+# "3+" row and be handed a target calibrated for an option about to expire. So
+# session.max_dte confines this instrument to its final week — roughly 4 sessions a
+# month, not 20. Collecting 60 paper sessions here will take about 15 months, and that
+# is the honest number rather than the encouraging one.
+#
+# POINT SCALING. BANKNIFTY closed at 57,262 against NIFTY's 24,155 — 2.371x. Every
+# points-denominated parameter below is NIFTY's value times that ratio, so a target
+# asks for the same fractional move of the index rather than the same absolute number,
+# which on a 2.4x larger index would be a 2.4x easier trade.
+# =============================================================================
+
+meta:
+  strategy: banknifty_balanced_premium_strangle
+  version: "2.1"
+  mode: paper
+  source: "Face2Face / Shreyas Bandi, 2021 — mechanically reconstructed, NOT validated"
+
+instrument:
+  underlying: "NIFTY BANK"
+  index_key: "NSE:NIFTY BANK"
+  exchange: NFO
+  name: BANKNIFTY
+  lot_size: 30                    # [VERIFIED] every BANKNIFTY option contract, 18 Aug 2026
+  strike_step: 100                # [VERIFIED] modal gap across the live chain
+  expiry_weekday: TUESDAY         # [VERIFIED] all six listed expiries are Tuesdays
+  expiry_series: monthly          # [VERIFIED] last Tuesday of the month; no weeklies exist
+  holiday_rule: previous_trading_day
+
+capital:
+  total: 5000000
+  cash: 2500000
+  pledged_market_value: 2500000
+  pledge_haircut_pct: 0.10
+  enforce_cash_collateral_ratio: true
+
+margin:
+  # [VERIFIED] basket_order_margins on a 20-lot 1200-pt condor, 18 Aug 2026:
+  # initial Rs 39,95,266 -> final Rs 19,64,884 = Rs 98,244/lot, hedge benefit 2.03x.
+  # The same shape as NIFTY: SPAN nets down hard, exposure margin gets no benefit at all.
+  max_utilisation_pct: 0.10            # this instrument's ALLOCATION of the account
+  portfolio_max_utilisation_pct: 0.40  # the ACCOUNT ceiling, shared by all instruments
+  margin_per_lot_estimate: 98250       # [CALIBRATE] sanity bound only; queried before entry
+  query_before_every_entry: true
+  abort_if_query_fails: true
+
+sizing:
+  # ECONOMICS OF THIS SIZE, measured 18 Aug 2026. Options brokerage is a FLAT Rs 20 per
+  # order with no percentage cap, so four legs cost Rs 80 whatever the position size. At
+  # 60 units that is 1.33 points against an entry-cost budget of 3.00 — 44%
+  # of it gone before a spread is crossed. The equivalent figure for NIFTY at the same
+  # bucket is 20%, because its allocation buys it 325 units.
+  #
+  # Consequence: expect the "3+" bucket to be vetoed by the entry-cost gate most days.
+  # That is the gate working, not failing — it is reporting that the trade is uneconomic
+  # at this size. `python -m scripts.strangle --instrument banknifty --check` prints the drag
+  # per bucket. To trade that bucket, this instrument needs a larger allocation, which
+  # means running fewer underlyings at once.
+  lots: 4                                   # 0.10 * 47.5L usable / 98,244 = 4.8
+  max_catastrophic_loss_pct: 0.15           # [STRUCTURAL]
+  catastrophic_loss_denominator: capital_total
+  max_lots_at_current_wing: 20              # 750,000 / (1200 * 30); do not hand-edit
+  scale_by_session_multiplier: true
+  never_increase_qty_after_entry: true      # [STRUCTURAL]
+  loss_streak_multiplier: 0.75
+  min_lots: 2
+  win_streak_multiplier: 1.15
+  max_lots_multiplier: 1.00                 # [STRUCTURAL]
+
+structure:
+  type: HEDGED
+  wing_width_points: 1200         # 500 * 2.371, rounded to the 100-point strike step
+  wing_widen_to: 1700
+  max_wing_cost_pct: 0.20
+  wing_width_invariant: true      # [STRUCTURAL]
+
+session:
+  stop_to_target_ratio: 0.50      # [STRUCTURAL] this ratio IS the edge. Do not fit it.
+  allow_expiry_day: false
+  # THE FAR-DATED GATE — see the header. Without it every mid-month session trades a
+  # 20-day option on a 3-day option's parameters.
+  max_dte: 4
+  by_days_to_expiry:              # [CALIBRATE] NIFTY's points * 2.371
+    "3+": {target_points: 12, size_mult: 0.50}
+    "2":  {target_points: 17, size_mult: 0.75}
+    "1":  {target_points: 24, size_mult: 1.00}
+    "0":  {target_points: 24, size_mult: 0.60}
+  reject_negative_dte: true
+  min_stop_to_entry_cost_ratio: 2.0
+  extra_holidays: []
+
+timing:
+  premarket_setup: "09:00"
+  entry_early: "09:15"
+  entry_normal: "09:30"
+  entry_window_end: "09:45"
+  allow_late_entry: true
+  late_entry_size_mult: 0.75
+  no_new_entry_after: "12:30"
+  force_exit: "15:10"
+
+levels:
+  swing_timeframe: "1h"
+  swing_lookback_days: 10
+  swing_left_bars: 2
+  swing_right_bars: 2
+  swing_recency_lambda: 0.05
+  cluster_tolerance_points: 120   # 50 * 2.371
+  use_unconfirmed_candle: false   # [STRUCTURAL]
+
+priced_range:
+  multiplier: 1.0                 # [STRUCTURAL]
+
+open_interest:
+  snapshot_interval_seconds: 180
+  lookback_minutes: 30
+  min_oi_percentile: 70
+  treat_as_filter_not_truth: true
+
+gates:
+  gap_veto_pct: 0.0125
+  iv_low_multiplier: 0.85
+  iv_high_multiplier: 1.30
+  # [MEASURED, not scaled] Set from BANKNIFTY's OWN chain, 18 Aug 2026, across the 1.5-3%
+  # OTM band the legs are actually selected from: p10 83k, p25 107k, p50 163k, p75 213k.
+  #
+  # Scaling NIFTY's 500k by lot size gave 230k and admitted only 4 of 17 candidate legs —
+  # the assumption that open interest scales with lot size is simply false. In LOTS the
+  # three are 28.5k (NIFTY), 23.8k (SENSEX) and 5.4k (BANKNIFTY): the monthly-only series
+  # genuinely carries a quarter of the open interest, because there is no weekly churn
+  # rolling through it.
+  #
+  # 100k excludes the thinnest quartile while still being a real bar — at 4 lots the
+  # position is 120 units against 100,000 of open interest, under 0.2% of it.
+  min_leg_oi: 100000
+  max_bid_ask_spread_pct: 0.03
+  max_data_staleness_seconds: 5
+  require_secondary_broker: true
+  max_consecutive_loss_days: 3
+  event_blacklist: [rbi_policy, union_budget, fed_fomc, cpi_india, election_result]
+
+reference_band: {}                # [CALIBRATE] ships empty on purpose
+reference_band_required_in_paper: true
+
+entry_timing_gate:
+  same_or_higher_than_prev_close: 1.00
+  min_fraction_of_prev_close: 0.90
+
+selection:
+  min_strikes_beyond_priced_range: 1
+  min_leg_premium: 19             # 8 * 2.371
+  premium_balance_tolerance_pct: 0.10   # [STRUCTURAL] balance by PREMIUM, not distance
+  must_be_beyond_oi_wall: true
+  must_be_beyond_swing_level: true
+
+management:
+  poll_seconds: 5
+  rebalance_ratio: 1.25
+  min_adjustment_interval_minutes: 5
+  max_adjustments_per_day: 3
+  rebalance_allowed_above_pct_of_stop: -0.85
+  break_confirmation_closes: 2
+  break_confirmation_timeframe: "1m"
+  risk_on: {match_premium_multiplier: 1.00, trending_day_multiplier: 1.05,
+            min_fill_fraction: 0.90}
+  risk_off: {trigger_at_pct_of_stop: 0.60, min_premium_reduction_pct: 0.25}
+  vwap_filter: {enabled: true, never_riskoff_threatened_leg: true,
+                both_above_vwap_action: EXIT}
+
+exits:
+  hard_stop_ends_day: true        # [STRUCTURAL]
+  trail_trigger_pct: 0.80
+  trail_give_back_points: 4.7     # 2.0 * 2.371
+  trail_ratchets_off_high_water_mark: true
+  widen_legs_on_trail_activation: true
+  widen_min_premium_fraction: 0.50
+  target_overrun_multiplier: 1.5
+  proximity_abort_asp_fraction: 0.60
+  efficiency_abort_window: ["12:00", "12:30"]
+  efficiency_abort_pct_of_target: 0.30
+  efficiency_abort_no_improvement_minutes: 20
+  premium_exhausted_pct_of_credit: 0.15
+  allow_single_reentry: true
+  reentry_min_extra_strikes: 2
+  reentry_min_target_points: 9.5  # 4.0 * 2.371
+  reentry_stop_ratio: 0.50        # [STRUCTURAL]
+
+fills:
+  mode: depth_walk                # [STRUCTURAL] never LTP, never mid
+  sell_at: BID
+  buy_at: ASK
+  walk_depth_levels: 5
+  refuse_if_depth_unavailable: true
+  queue_position_penalty_ticks: 1
+  tick_size: 0.05
+  slice_above_lots: 10
+  abort_slices_if_slippage_points: 4.7
+
+costs:
+  # Same statutory stack as NIFTY: both are NSE (NFO) contracts, so every rate carries
+  # over unchanged. Only the points-denominated sanity targets are scaled.
+  brokerage_per_order: 20
+  stt_sell_pct: 0.0015
+  exchange_txn_pct: 0.0003553
+  sebi_fee_pct: 0.000001
+  stamp_duty_buy_pct: 0.00003
+  ipft_pct: 0.000005
+  gst_pct: 0.18
+  assumed_entry_exit_points: 2.1
+  assumed_points_per_adjustment: 1.2
+  planning_case_points: 4.5
+
+accounting:
+  mark_basis: liquidation
+  book_pnl_is_net_of_costs: true
+  realised_legs_already_net: true
+
+operational:
+  secondary_broker_required: true
+  heartbeat_seconds: 10
+  heartbeat_max_misses: 3
+  kill_switch_multiple_of_stop: 2.0
+  lockout_persists_to_disk: true
+  basket_orders_only_on_exit: true
+  # Paths are derived from the instrument slug by strategies/strangle/instruments.py and
+  # overridden at load. Listed here so a reader knows where the state goes.
+  journal_path: "data/outputs/strangle_banknifty_journal.jsonl"
+  lockout_path: "data/outputs/strangle_banknifty_lockout.json"
+  journal_append_only: true
+
+live:
+  enabled: false
+  require_typed_confirmation: true
+  min_paper_sessions_before_live: 60
+  require_expectancy_within_tolerance: true

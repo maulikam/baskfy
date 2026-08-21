@@ -1,0 +1,422 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Rebalancer{% endblock %}
+
+{% block heading %}{% endblock %}
+
+{% block content %}
+{# Post-login collection. Shown because a job that runs itself without saying so is one
+   nobody trusts — and because the thing it collects cannot be recovered if it silently
+   fails. #}
+{% if auto %}
+  {% if auto.running %}
+  <div class="collect warn">
+    <span class="tag">collecting</span>
+    <span>{% if auto.just_logged_in %}Logged in. {% endif %}Today's outstanding collection
+      is running — started {{ auto.running.started_at[11:16] }}.
+      <a href="/ops/job/{{ auto.running.id }}">Watch it</a>, or reload this page when it
+      finishes.</span>
+  </div>
+  {% elif auto.last and auto.last.status == 'ok' %}
+  <div class="collect ok">
+    <span class="tag">collected</span>
+    <span class="muted">Today's collection ran at {{ auto.last.started_at[11:16] }} and
+      landed. {% if auto.last.id %}<a href="/ops/job/{{ auto.last.id }}">See what it
+      did</a>.{% endif %}</span>
+  </div>
+  {% elif auto.last %}
+  <div class="collect bad">
+    <span class="tag">collection failed</span>
+    <span>The post-login run at {{ auto.last.started_at[11:16] }} ended
+      <b>{{ auto.last.status }}</b>. Today's data cannot be backfilled, so this is worth
+      opening now.
+      {% if auto.last.id %}<a href="/ops/job/{{ auto.last.id }}">Read the output</a>.{% endif %}</span>
+  </div>
+  {% elif auto.just_logged_in %}
+  <div class="collect ok">
+    <span class="tag">logged in</span>
+    <span class="muted">{{ auto.note or 'Nothing outstanding — today is already collected.' }}</span>
+  </div>
+  {% endif %}
+{% endif %}
+
+{# Only shown when something is wrong. A healthy collection needs no banner: a status
+   line that is always present stops being read, and this one has to be believed on the
+   day it turns red. #}
+{% if collection and not collection.healthy %}
+  {% if not collection.ever_ran %}
+  <div class="collect warn">
+    <span class="tag">collection idle</span>
+    <span>The daily job has never run. Nothing is being recorded yet, and a missed
+      session cannot be backfilled: margins have no history and Kite's trade book is
+      same-day only. <a href="/ops">Run it now</a>.</span>
+  </div>
+  {% else %}
+  <div class="collect {{ 'bad' if collection.consecutive_failures > 1 else 'warn' }}">
+    <span class="tag">
+      {%- if collection.consecutive_failures > 1 -%}
+        {{ collection.consecutive_failures }} runs failed
+      {%- else -%}last run failed{%- endif -%}
+    </span>
+    <span>{{ collection.message }}
+      {%- if collection.stale_days %} Nothing has been collected for
+        {{ collection.stale_days }} day{{ '' if collection.stale_days == 1 else 's' }},
+        and those sessions cannot be recovered.
+      {%- elif not collection.stale_days is none %} Today is still covered.{% endif %}
+      {% if collection.outcome == 'auth' %}<a href="/login">Log in to Kite</a>, then
+        <a href="/ops">re-run the collection</a>.{% else %}
+        <a href="/ops">Open Operations</a> to re-run it.{% endif %}</span>
+  </div>
+  {% endif %}
+{% endif %}
+
+{# Checked against the broker, not inferred from the code that placed them. A stop can
+   fail to place, expire, be cancelled, or cover fewer shares than are now held — every
+   one of those is silent, and every one leaves money uncovered. #}
+{% if protection and not protection.healthy %}
+  <div class="collect bad">
+    <span class="tag">{{ protection.counts.missing + protection.counts.partial }} unprotected</span>
+    <span>₹{{ '{:,.0f}'.format(protection.unprotected_value) }} of
+      ₹{{ '{:,.0f}'.format(protection.tradeable_value) }} has no working stop
+      ({{ protection.coverage_pct }}% covered, {{ protection.active_gtts }} active GTT{{ '' if protection.active_gtts == 1 else 's' }}).
+      <span class="muted">Largest:
+        {%- for f in protection.findings[:4] %}
+          {{ f.symbol }} ₹{{ '{:,.0f}'.format(f.value) }}{{ ',' if not loop.last }}
+        {%- endfor %}{% if protection.findings|length > 4 %}
+          and {{ protection.findings|length - 4 }} more{% endif %}.
+        <a href="/stops">Review and arm stops</a>, or run
+        <code>python -m app.analytics.protection</code> for the full list. Nothing is
+        placed without an explicit confirmation.</span></span>
+  </div>
+{% elif protection and protection.checked %}
+  <div class="collect ok">
+    <span class="tag">stops current</span>
+    <span class="muted">All {{ protection.checked }} tradeable positions carry a stop
+      covering their full quantity.</span>
+  </div>
+{% endif %}
+
+<div class="row">
+  <div class="card">
+    <h2>1 · Session</h2>
+    <p class="muted" style="margin-bottom:10px">Authenticate with Zerodha before analysing. Token lasts the trading day.</p>
+    <a class="btn btn-ghost" href="/login">Log in to Kite</a>
+  </div>
+  <div class="card">
+    <h2>2 · Upload weekly scan</h2>
+    <form id="f" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <input type="file" name="scan" accept=".csv" required>
+      <button class="btn-saffron" type="submit">Analyze &amp; build plan</button>
+    </form>
+    <p class="muted" style="margin-top:8px">Scores the universe, pulls live holdings, margins &amp; LTP, returns the full order plan. Nothing is executed at this step.</p>
+  </div>
+</div>
+
+<div class="card" id="summary" style="display:none">
+  <h2>Plan summary</h2>
+  <div class="row" id="stats"></div>
+  <div id="warns"></div>
+</div>
+
+<div class="card" id="planCard" style="display:none">
+  <h2>Order plan — review every line</h2>
+  <table aria-label="Order plan review every line" id="plan"><thead><tr>
+    <th>Symbol</th><th>Rank</th><th>Score</th><th>Action</th><th>Now</th><th>Δ Order</th>
+    <th>Final</th><th>Ref ₹</th><th>Value ₹</th><th>Wt%</th><th>GTT stop</th><th>Pledged</th>
+  </tr></thead><tbody></tbody></table>
+  <div style="margin-top:18px;display:flex;gap:12px;align-items:center">
+    <button class="btn-danger" onclick="openTicket()">Execute plan…</button>
+    <span class="muted">Opens a contract-note confirmation. Sells first, then buys, then GTT stops.</span>
+  </div>
+</div>
+
+<div id="ticket">
+  <div class="note">
+    <div class="stamp">{{ 'SIMULATION' if dry_run else 'LIVE — REAL MONEY' }}</div>
+    <h3>Contract note — confirm execution</h3>
+    <p class="muted" id="ticketCount"></p>
+    <ul id="ticketLines"></ul>
+    <div id="ticketTotal"></div>
+    <div id="ticketFunding"></div>
+    <p class="muted">By confirming, orders are placed on your Zerodha account via Kite Connect under your API key. Pledged shares sell directly; collateral margin reduces to the extent sold — check F&O margin headroom if you use collateral. This tool is your own system, not investment advice.</p>
+    <div style="display:flex;gap:12px;margin-top:16px">
+      <button class="btn-danger" onclick="execute()">Confirm &amp; place orders</button>
+      <button class="btn-ghost" onclick="document.getElementById('ticket').style.display='none'">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="card" id="result" style="display:none" tabindex="-1">
+  <h2>Execution report</h2>
+  <div id="repVerdict"></div>
+  <div id="repFunding"></div>
+  <div id="repStops"></div>
+  <div id="repExceptions"></div>
+  <div id="repRecon"></div>
+  <details id="resultRaw">
+    <summary>Raw response</summary>
+    <pre id="resultBody"></pre>
+  </details>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let PLAN=null;
+const fmt=n=>n==null?'—':Number(n).toLocaleString('en-IN');
+document.getElementById('f').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const fd=new FormData(e.target);
+  const r=await fetch('/analyze',{method:'POST',body:fd});
+  if(!r.ok){alert(await r.text());return}
+  PLAN=await r.json(); render();
+});
+function render(){
+  const s=document.getElementById('stats');
+  s.innerHTML=['Capital ₹'+fmt(PLAN.capital),'Book ₹'+fmt(PLAN.book_value),
+    'Cash ₹'+fmt(PLAN.cash),'Breadth>20DMA '+PLAN.breadth_above_20dma+'%',
+    'Cash target '+PLAN.cash_target_pct+'%','Buys ₹'+fmt(PLAN.buys_value),
+    'Sells ₹'+fmt(PLAN.sells_value)]
+    .map(x=>`<div class="card" style="padding:10px 14px;min-width:150px">${x}</div>`).join('');
+  const w=document.getElementById('warns'); let wh='';
+  if(PLAN.pledged_sells_margin_note.length)
+    wh+=`<p class="pledged">ℹ Pledged shares sell directly (Zerodha instant sale) — collateral margin will reduce: ${PLAN.pledged_sells_margin_note.join(', ')}</p>`;
+  (PLAN.cluster_warnings||[]).forEach(c=>wh+=`<p class="pledged">⚠ Cluster: ${c}</p>`);
+  w.innerHTML=wh;
+  const tb=document.querySelector('#plan tbody');
+  tb.innerHTML=PLAN.orders.map(o=>`<tr>
+    <td>${o.symbol}${o.note?` <span class="muted">· ${o.note}</span>`:''}</td>
+    <td>${o.rank??'—'}</td><td>${o.score??'—'}</td>
+    <td class="act-${o.action}">${o.action}</td>
+    <td>${fmt(o.qty_now)}</td><td>${o.delta>0?'+':''}${fmt(o.delta)}</td>
+    <td>${fmt(o.qty_final)}</td><td>${fmt(o.ref_price)}</td><td>${fmt(o.value)}</td>
+    <td>${o.weight??'—'}</td><td>${fmt(o.stop)}</td>
+    <td class="${o.pledged?'pledged':''}">${fmt(o.pledged)}</td></tr>`).join('');
+  document.getElementById('summary').style.display='block';
+  document.getElementById('planCard').style.display='block';
+}
+function openTicket(){
+  const act=PLAN.orders.filter(o=>o.delta!==0);
+  const sells=act.filter(o=>o.delta<0).length, buys=act.length-sells;
+  document.getElementById('ticketCount').textContent=
+    `${act.length} orders — ${sells} sell, ${buys} buy. Sells go first, then buys, then GTT stops.`;
+  // Sells first, matching the order /execute actually places them in.
+  const seq=[...act].sort((a,b)=>(a.delta>0)-(b.delta>0));
+  document.getElementById('ticketLines').innerHTML=
+    seq.map(o=>`<li><span>${o.delta<0?'SELL':'BUY'} ${o.symbol}</span><b>${Math.abs(o.delta)} @ ~₹${fmt(o.ref_price)}</b></li>`).join('');
+  // Pinned outside the scroll area so it can never be scrolled out of view.
+  document.getElementById('ticketTotal').innerHTML=
+    `<span>Net cash use</span><b>₹${fmt(PLAN.net_cash_use)}</b>`;
+  // FUNDING, ON THE TICKET. Pinned outside the scroll area beside the cash figure,
+  // because it is the same kind of number: something you must have seen before
+  // confirming. Measured at analysis by a basket margin query.
+  const f=PLAN.funding||{}, tf=document.getElementById('ticketFunding');
+  if(f.checked && f.shortfall>0){
+    tf.innerHTML=`<div class="sc-note sc-note--bad" style="margin:10px 0 0">
+      <div><b>Short ₹${fmt(f.shortfall)}.</b> This plan needs ₹${fmt(f.required)} of
+      margin against ₹${fmt(f.available)} available. Orders go out largest first, so the
+      last ones will be refused. Confirming will place the rest.</div></div>`;
+  } else if(f.checked){
+    tf.innerHTML=`<p class="muted" style="margin-top:8px">Funded — ₹${fmt(f.required)}
+      required, ₹${fmt(f.available)} available.</p>`;
+  } else {
+    tf.innerHTML=`<p class="muted" style="margin-top:8px">Funding not verified${
+      f.error?' ('+esc(f.error)+')':''}.</p>`;
+  }
+  document.getElementById('ticketLines').scrollTop=0;
+  document.getElementById('ticket').style.display='flex';
+}
+// How each status the gateway and kite_client can return is to be read, and what to do
+// about it. Anything NOT named here is treated as a failure and shown with its raw status:
+// a status added upstream must never render as a silent success.
+const ORDER_STATUS={
+  PLACED:      {kind:'ok',   title:'submitted'},
+  DRY_RUN:     {kind:'sim',  title:'simulated — not sent',
+                fix:'DRY_RUN is on, so nothing reached the exchange. Turn it off in '
+                   +'Settings to trade for real.'},
+  DUPLICATE:   {kind:'info', title:'already sent',
+                fix:'This plan had already been executed, so no second order went out. '
+                   +'The book is unchanged by this run.'},
+  RISK_BLOCKED:{kind:'bad',  title:'refused by risk limits',
+                fix:'Nothing was sent. Raise the limit in Settings or cut position size, '
+                   +'then re-run Analyze — the plan cannot be re-confirmed as it stands.'},
+  // BLOCKED covers every hard guard, not just the untouchable list: the product gates and
+  // the overnight-option rule return it too. The heading must not name one of them.
+  BLOCKED:     {kind:'bad',  title:'refused by a guard',
+                fix:'Nothing was sent, and a retry will not change that — a guard refuses '
+                   +'by policy, not by circumstance. The reason beside each symbol says '
+                   +'which one.'},
+  ABORTED:     {kind:'bad',  title:'not attempted — batch stopped',
+                fix:'Three orders in a row failed with the same message, so the rest were '
+                   +'not sent. A systemic refusal does not become less systemic on the '
+                   +'fourth attempt. Fix the cause, then re-run Analyze — nothing below '
+                   +'this point reached the exchange.'},
+  // A refusal Kite NAMES was decided before the exchange saw anything, so the order does
+  // not exist and re-running cannot double-send. Only a transport failure leaves that
+  // open. Saying "may still have been accepted" after a plain "Insufficient funds" sends
+  // you to the order book to rule out something that was never possible.
+  REJECTED:    {kind:'bad',  title:'refused by the broker',
+                fix:'Kite refused this and said why, so it never reached the exchange — '
+                   +'the reason beside the symbol is the whole story. Fix that, then '
+                   +'re-run Analyze; this order cannot be sitting live.'},
+  ERROR:       {kind:'bad',  title:'no answer from the broker',
+                fix:'The call itself failed, so the exchange status is genuinely UNKNOWN '
+                   +'— an order may still have been accepted. Check the Kite order book '
+                   +'before you re-run Analyze, or you risk sending it twice.'},
+};
+const STOP_OK=new Set(['GTT_PLACED','DRY_RUN_GTT']);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const rupees=n=>'₹'+fmt(Math.round(Number(n)||0));
+
+function renderReport(j){
+  const orders=j.orders||[], gtt=j.gtt||[], recon=j.reconciliation||{};
+  const read=o=>ORDER_STATUS[o.status]
+    ||{kind:'bad',title:'unrecognised status — '+(o.status||'none'),
+       fix:'This status is not one the report knows how to read. Treat it as unresolved '
+          +'and check the Kite order book.'};
+  const bad=orders.filter(o=>read(o).kind==='bad');
+  const done=orders.filter(o=>read(o).kind==='ok');
+
+  // --- verdict -------------------------------------------------------------------------
+  // The headline enumerates every outcome present rather than reporting one number, because
+  // any single number contradicts itself somewhere: "all submitted" is false for a re-posted
+  // plan where nothing was sent, and "0 of 2 submitted" reads as failure for a clean dry run.
+  const v=document.getElementById('repVerdict');
+  const n={ok:done.length, bad:bad.length,
+           info:orders.filter(o=>read(o).kind==='info').length,
+           sim:orders.filter(o=>read(o).kind==='sim').length};
+  const say=(c,w)=>c?`${c} ${w}`:null;
+  const head=[say(n.ok,'submitted'),say(n.sim,'simulated'),say(n.info,'already sent'),
+              say(n.bad,'failed')].filter(Boolean).join(' · ')
+              ||'nothing to place';
+  const tone=n.bad?'bad':(n.sim||n.info)?'warn':'ok';
+  const tag=n.bad?`${n.bad} of ${orders.length} failed`
+           :n.sim?'simulation':n.info?'already executed':'all submitted';
+  v.className='collect '+tone;
+  v.innerHTML=`<span class="tag">${esc(tag)}</span><span>
+    <span class="rep-verdict">${esc(head)}</span>
+    ${j.dry_run?'<b class="pledged" style="display:block;margin-top:4px">DRY_RUN is on — '
+      +'nothing reached the exchange.</b>':''}
+    ${n.ok?`<span class="muted" style="display:block;margin-top:5px">
+      Submitted is not filled. These are LIMIT orders at the plan's reference price; any
+      that don't trade stay working until the close and then lapse. What actually filled
+      is recorded by tomorrow's trade capture, and shown on
+      <a href="/tradebook">Tradebook</a>.</span>`:''}</span>`;
+
+  // --- stop coverage -------------------------------------------------------------------
+  // Nothing is armed here any more. Sizing a trigger from a planned quantity, before the
+  // fills are known, is what left the book with 10,383 shares of GTT against 9,478 held.
+  // The panel's job is now to make the outstanding step impossible to forget.
+  // FUNDING. The preflight has always run — a basket margin query against available
+  // cash — and has always been returned in the response. It was rendered nowhere, so the
+  // one number that predicts a rejection sat in the raw JSON while SHILPAMED was refused
+  // six times for exactly the shortfall it had measured.
+  const pf=j.preflight||{}, fn=document.getElementById('repFunding');
+  if(pf.checked){
+    const short=Number(pf.shortfall)||0;
+    fn.innerHTML=`<h3>Funding</h3><div class="sc-note ${short?'sc-note--bad':'sc-note--ok'}">
+      <div>${short
+        ? `<b>Short ${rupees(short)}.</b> The plan needs ${rupees(pf.required)} of margin
+           and ${rupees(pf.available)} is available. Orders are sent largest first, so the
+           shortfall lands on the last ones — expect those to be refused.`
+        : `<b>Funded.</b> ${rupees(pf.required)} required against ${rupees(pf.available)}
+           available.`}</div></div>`;
+  } else if(pf.error){
+    fn.innerHTML=`<h3>Funding</h3><div class="sc-note sc-note--warn"><div>
+      <b>Not checked.</b> The margin query failed (${esc(pf.error)}), so nothing verified
+      that this plan can be funded.</div></div>`;
+  } else fn.innerHTML='';
+
+  const s=document.getElementById('repStops');
+  const bought=orders.filter(o=>read(o).kind==='ok'
+                             && (o.action==='BUY'||o.action==='ADD')).length;
+  s.innerHTML=j.stops_pending===false ? '' : `<div class="collect warn" style="margin-top:14px">
+      <span class="tag">stops not armed</span>
+      <span>${bought?`${bought} position${bought===1?'':'s'} opened or added by this run
+        ${bought===1?'is':'are'} `:'The book is '}<b>not yet protected</b>.
+        <a href="/stops">Arm stops</a> once the fills settle — sizing them here would use
+        the quantities this plan intended, not the ones that actually filled, and a trigger
+        for more shares than you hold sells what you do not own.
+        <span class="muted" style="display:block;margin-top:5px">${esc(j.stops_note||'')}</span>
+      </span></div>`;
+
+  // --- exceptions ----------------------------------------------------------------------
+  // Grouped by cause, not listed per order: the remedy belongs to the cause and repeating
+  // it on every row buries it. Successes are deliberately absent — they are the count above.
+  const ex=document.getElementById('repExceptions');
+  const groups=new Map();
+  for(const o of orders){
+    const r=read(o);
+    if(r.kind==='ok') continue;
+    if(!groups.has(r.title)) groups.set(r.title,{r,rows:[]});
+    groups.get(r.title).rows.push(o);
+  }
+  for(const g of gtt.filter(g=>!STOP_OK.has(g.status))){
+    const t='stop not armed';
+    if(!groups.has(t)) groups.set(t,{r:{kind:'bad',title:t,
+      fix:'The position may be held with no downside protection. Arm it from '
+         +'<a href="/stops">Stops</a>.'},rows:[]});
+    groups.get(t).rows.push(g);
+  }
+  const rank={bad:0,info:1,sim:2};
+  const blocks=[...groups.values()].sort((a,b)=>rank[a.r.kind]-rank[b.r.kind]);
+  ex.innerHTML=blocks.length?'<h3>What needs your attention</h3>'+blocks.map(g=>`
+    <div class="rep-ex ${g.r.kind}">
+      <h4>${g.rows.length} ${esc(g.r.title)}</h4>
+      <ul>${g.rows.map(o=>`<li><span>${esc(o.action||'')} ${esc(o.symbol)}</span>
+        <span class="why">${esc(o.error||o.status||'')}</span></li>`).join('')}</ul>
+      <p class="muted">${g.r.fix||''}</p>
+    </div>`).join(''):'';
+
+  // --- rupees --------------------------------------------------------------------------
+  // Deliberately NOT reconciliation.filled_value: record_execution marks a PLACED order
+  // FILLED for its full planned quantity, which is not knowable at this instant. Only the
+  // figures that are true at submission time are shown.
+  const rc=document.getElementById('repRecon');
+  // "Reached the exchange", not "Submitted". The old tile counted every refusal as
+  // submitted, so a batch rejected outright for a disallowed IP reported the same rupees
+  // under Submitted and under Failed. Held-back orders get their own tile: the circuit
+  // breaker stopping a batch is not the exchange refusing it, and only one of those means
+  // an order might be live.
+  const tiles=[['Planned sells',recon.planned_sell_value],
+               ['Planned buys',recon.planned_buy_value],
+               ['Reached the exchange',recon.submitted_value],
+               ['Refused',recon.failed_value]];
+  if(recon.aborted_value) tiles.push(['Held back',recon.aborted_value]);
+  rc.innerHTML=recon.orders?`<h3>Value moved</h3><div class="rep-tiles">
+    ${tiles.map(([k,n])=>`<div class="rep-tile"><span>${k}</span><b>${rupees(n)}</b></div>`).join('')}
+    </div>${!recon.reached_exchange?`<p class="muted" style="margin-top:9px">
+      <b>Nothing reached the exchange.</b> No order can be live, so re-running Analyze
+      after fixing the cause cannot double-send.</p>`:''}
+    ${recon.aborted_symbols?.length?`<p class="muted" style="margin-top:6px">
+      Held back by the circuit breaker: ${recon.aborted_symbols.map(esc).join(', ')}.</p>`:''}
+    ${recon.not_submitted?.length?`<p class="muted" style="margin-top:6px">
+      Never submitted: ${recon.not_submitted.map(esc).join(', ')}.</p>`:''}`:'';
+}
+
+async function execute(){
+  document.getElementById('ticket').style.display='none';
+  const fd=new FormData();
+  fd.append('plan_id',PLAN.plan_id); fd.append('confirm','true'); fd.append('place_stops','true');
+  const res=document.getElementById('result');
+  const r=await fetch('/execute',{method:'POST',body:fd});
+  res.style.display='block';
+  if(!r.ok){
+    // A 4xx from the gates (stale plan, unknown plan_id, missing confirm) is not an
+    // execution result and must not be dressed as one — no orders were placed at all.
+    const msg=await r.text();
+    document.getElementById('repVerdict').className='collect bad';
+    document.getElementById('repVerdict').innerHTML=
+      `<span class="tag">not executed</span><span>The plan was rejected before any order
+       was placed. <span class="muted" style="display:block;margin-top:5px">${esc(msg)}</span></span>`;
+    ['repStops','repExceptions','repRecon'].forEach(id=>document.getElementById(id).innerHTML='');
+    document.getElementById('resultBody').textContent=msg;
+  } else {
+    const j=await r.json();
+    document.getElementById('resultBody').textContent=JSON.stringify(j,null,2);
+    renderReport(j);
+  }
+  res.scrollIntoView({behavior:'smooth',block:'start'});
+  res.focus({preventScroll:true});
+}
+</script>
+{% endblock %}

@@ -135,6 +135,17 @@ class TestRegisteredTasks:
         assert "decile.compute.reprocess_instrument" in names
         assert "decile.pipeline.integrity_audit" in names
 
+    def test_the_backtest_task_is_registered_and_routed_to_its_own_queue(self) -> None:
+        """PROMPTS.md Prompt 15 §4: "Celery task on the `backtest` queue".
+
+        Registration and routing are separate facts and both matter: a task that exists but is
+        not routed runs on `default`, where a fifteen-year simulation would sit in front of the
+        nightly publish.
+        """
+        app = build_celery(settings())
+        assert "decile.backtest.run" in app.tasks
+        assert TASK_ROUTES["decile.backtest.*"]["queue"] == QUEUE_BACKTEST
+
     def test_results_expire(self) -> None:
         """Result rows for a nightly job are useful for a week, not forever."""
         assert build_celery(settings()).conf.result_expires == dt.timedelta(days=7)

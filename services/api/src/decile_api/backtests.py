@@ -78,12 +78,13 @@ __all__ = [
 
 PUBLIC_ID_BYTES: Final = 12
 
-#: PROMPTS.md Prompt 15 §4: "a per-user concurrency cap of 1, and a global cap."
+#: PROMPTS.md Prompt 15 §4: "a per-user concurrency cap of 1, and a global cap." These are the
+#: defaults; the live numbers are ``DECILE_BACKTEST_USER_CONCURRENCY`` and
+#: ``DECILE_BACKTEST_GLOBAL_CONCURRENCY``, which the router passes in. The global cap is **not in
+#: the bundle** — docs/03 §"Scaling plan" step 4 only says the queue gets its own worker pool —
+#: so eight is a chosen number, and it is configuration rather than a constant precisely because
+#: the right value depends on how big that pool is. ``docs/DECISIONS.md`` §15.
 BACKTEST_USER_CONCURRENCY: Final = 1
-#: The global cap. Not in the bundle — docs/03 §"Scaling plan" step 4 only says the queue gets its
-#: own worker pool. Eight is the number of simultaneous fifteen-year runs one such pool can hold
-#: in memory without the box swapping; it is a setting, not a constant, so an operator can move it
-#: without a deploy. ``docs/DECISIONS.md`` §15.
 BACKTEST_GLOBAL_CONCURRENCY: Final = 8
 
 #: The statuses that occupy a slot. docs/04: ``queued|running|done|failed``.

@@ -147,6 +147,13 @@ class Settings(BaseSettings):
     #: archive's default so a laptop has one place to look.
     invoice_local_dir: str = ".archive"
 
+    # --- Backtests (docs/10, PROMPTS.md Prompt 15 §4) ------------------------
+    #: PROMPTS.md Prompt 15 §4: "a per-user concurrency cap of 1, and a global cap." The per-user
+    #: number is the document's; the global one is not in the bundle at all. Both are settings so
+    #: a deployment with a bigger backtest pool can raise them without a code change.
+    backtest_user_concurrency: int = Field(default=1, gt=0)
+    backtest_global_concurrency: int = Field(default=8, gt=0)
+
     # --- Rate limits (docs/07 §Conventions) ----------------------------------
     rate_limit_anonymous_per_minute: int = Field(default=10, gt=0)
     rate_limit_authenticated_per_minute: int = Field(default=60, gt=0)

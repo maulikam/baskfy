@@ -1,0 +1,134 @@
+{/*
+================================================================================================
+DRAFT REQUIRING LEGAL REVIEW — NOT REVIEWED BY A LAWYER.
+
+Written by engineers from PROMPTS.md Prompt 18 §3 and docs/11 §"Compliance & legal (India)"
+("DPDP Act: consent record, data export and deletion endpoints, breach notification runbook")
+and §Security's PII inventory. Read src/content/legal/DRAFT-NOTICE.md before publishing.
+No Data Protection Officer and no grievance officer has been appointed; both are [BRACKETED].
+================================================================================================
+*/}
+
+This policy explains what personal data Decile collects, why, how long it is kept, and what you
+can do about it. It is written against the Digital Personal Data Protection Act, 2023.
+
+The data fiduciary is [SUPPLIER LEGAL NAME], [SUPPLIER ADDRESS].
+
+## 1. What we collect
+
+**Because you gave it to us**
+
+- Your email address. Required — it is your identity on the Service and where we send sign-in
+  codes.
+- Your display name, if you set one. Optional.
+- The contents of any message you send us through the support form.
+
+**Because you used the Service**
+
+- Your saved screens, column layouts, portfolios, backtests and preferences.
+- Sign-in events, refresh-token records and failed-attempt counts, which is what makes account
+  lockout and session revocation possible.
+- Server logs containing your IP address, the request path and a request identifier.
+
+**Because you paid us**
+
+- Payment metadata from Razorpay: an order identifier, a payment identifier, the amount, and the
+  status.
+- The tax invoices we issued you.
+
+**We never collect** your card or bank details — Razorpay handles the payment and we receive only
+the outcome — and we never ask for a broker login, a trading credential or an API key for your
+broker. The Service does not place trades and has no mechanism to.
+
+## 2. Cookies
+
+We set the following, and only the following:
+
+| Cookie | Purpose | Refusable |
+|---|---|---|
+| Session token | Keeps you signed in | No — the Service cannot work without it |
+| Refresh token | Renews your session without asking for the password again | No |
+| CSRF token pair | Prevents another site submitting forms as you | No |
+| Consent record | Remembers this choice | No |
+| Announcement dismissal | Stops a banner reappearing | No |
+
+We run **no advertising network, no analytics tag and no third-party tracker**. The consent banner
+defaults to essential-only and there is presently nothing else to consent to. If that ever changes,
+the additional category will be off until you switch it on.
+
+## 3. Why we are allowed to process it
+
+For your account, your saved work and your session: because it is necessary to provide the service
+you asked for.
+
+For payment records and tax invoices: because Indian tax law requires us to keep them.
+
+For security logs, lockout counters and rate-limit counters: because we have a legitimate need to
+keep the Service and your account safe.
+
+For anything else — and there is presently nothing else — because you consented, in which case you
+may withdraw consent at any time.
+
+## 4. Who we share it with
+
+- **Razorpay**, to take payment and issue receipts.
+- **[EMAIL PROVIDER]**, to deliver sign-in codes, receipts and notices.
+- **[HOSTING PROVIDER]** and **Cloudflare R2**, which host the servers and the object storage the
+  Service runs on.
+- **Sentry**, which receives error reports. Our logging strips passwords, tokens and codes before
+  anything leaves the process.
+
+We do not sell personal data and we do not share it for advertising. Some of these providers
+process data outside India; we rely on the transfer mechanisms permitted under the DPDP Act for
+that. [CONFIRM THE MECHANISM AND THE COUNTRIES.]
+
+## 5. How long we keep it
+
+| Data | Kept for |
+|---|---|
+| Account, saved screens, portfolios | Until you delete the account |
+| Session and refresh-token records | Until expiry or revocation |
+| Payment records and tax invoices | Eight years, as Indian tax law requires |
+| Consent records | For as long as the account exists, plus the statutory period |
+| Server logs | [RETENTION PERIOD — NOT YET SET] |
+
+## 6. Your rights
+
+You can, from your profile page and without asking us:
+
+- **See and export** everything we hold about you, as a machine-readable file.
+- **Correct** your display name.
+- **Delete** your account. Deletion is a seven-day soft delete you can reverse by signing in
+  again; after that it is permanent.
+
+One consequence is worth stating plainly: **if you have ever been issued a tax invoice, deleting
+your account anonymises it rather than removing it.** The invoice and the payment record must
+survive for the statutory retention period, and they are linked to an account row that therefore
+cannot be dropped. Your email, name and saved work are erased; a stripped account row and the
+invoices remain.
+
+Changing your email address is not something the profile page can do, because a new address has to
+be proved before it takes effect and that flow is not built. Write to support.
+
+## 7. Security
+
+Passwords are hashed with Argon2id. Sign-in codes and refresh tokens are stored as SHA-256 digests
+rather than in the clear. Sessions are httpOnly, SameSite cookies. All traffic is over TLS. Our
+logging filter redacts secrets, and our error reporter receives redacted records.
+
+No system is perfectly secure. If a breach affects your data we will notify you and the Data
+Protection Board of India as the DPDP Act requires.
+
+## 8. Children
+
+The Service is not for anyone under 18 and we do not knowingly collect data from children.
+
+## 9. Changes
+
+We will post any change here and update the date at the foot of the page. A change that materially
+affects how we use your data will be notified before it takes effect.
+
+## 10. Contact
+
+Questions, requests and complaints: [GRIEVANCE OFFICER NAME], [GRIEVANCE OFFICER EMAIL]. You may
+also complain to the Data Protection Board of India.

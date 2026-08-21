@@ -1,0 +1,1127 @@
+[
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "minimal",
+    "reason": "index and sort_by are the only required keys; everything else defaults to 'off'",
+    "valid": true,
+    "value": {
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [
+        {
+          "enabled": true,
+          "left": "ma_50",
+          "op": ">=",
+          "right": "ma_200"
+        }
+      ],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-total-market",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": 10000000,
+      "min_return_1y": null,
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "avg_sharpe_12_6_3_1",
+      "sort_direction": "desc"
+    },
+    "name": "docs-04-full-example",
+    "reason": "docs/04 §Screens prints this exact object as the definition shape",
+    "valid": true,
+    "value": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [
+        {
+          "enabled": true,
+          "left": "ma_50",
+          "op": ">=",
+          "right": "ma_200"
+        }
+      ],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-total-market",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": 10000000,
+      "min_return_1y": null,
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "avg_sharpe_12_6_3_1",
+      "sort_direction": "desc"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "unknown-top-level-key",
+    "reason": "docs/07: \"Unknown keys are rejected (extra=\\\"forbid\\\")\"",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "sort_bee": "ret_12m",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "unknown-nested-key",
+    "reason": "extra=forbid applies to every nested node, not just the root",
+    "valid": false,
+    "value": {
+      "away_from_high": {
+        "ath": 25,
+        "ath_pct": 25,
+        "one_year": 25
+      },
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "unknown-universe",
+    "reason": "docs/01 §2.1 fixes the 14 selectable universes",
+    "valid": false,
+    "value": {
+      "index": "nifty-4000",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 25
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "away-from-high-sentinel",
+    "reason": "docs/01 §2.4: 100 = ignore, and is therefore the top of the valid range",
+    "valid": true,
+    "value": {
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 25
+      },
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "away-from-high-above-sentinel",
+    "reason": "a value above the 100 sentinel has no meaning",
+    "valid": false,
+    "value": {
+      "away_from_high": {
+        "ath": 101
+      },
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "away-from-high-negative",
+    "reason": "\"within X% of high\" cannot be negative",
+    "valid": false,
+    "value": {
+      "away_from_high": {
+        "one_year": -1
+      },
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 55,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "positive-days-sentinel",
+    "reason": "docs/01 §2.5: 0 = ignore",
+    "valid": true,
+    "value": {
+      "index": "nifty-500",
+      "positive_days": {
+        "m12": 0,
+        "m6": 55
+      },
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "positive-days-above-100",
+    "reason": "a percentage of trading days cannot exceed 100",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "positive_days": {
+        "m3": 101
+      },
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 3,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "circuits-ignore-threshold",
+    "reason": "docs/01 §2.6: any cap above 250 cannot bind, so 999 is the idiomatic 'off'",
+    "valid": true,
+    "value": {
+      "circuits": {
+        "m1": 3,
+        "m12": 999
+      },
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "circuits-negative",
+    "reason": "a maximum count of circuit days cannot be negative",
+    "valid": false,
+    "value": {
+      "circuits": {
+        "m6": -1
+      },
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "ignore-above-beta-sentinel",
+    "reason": "docs/01 §2.10: 100 = ignore",
+    "valid": true,
+    "value": {
+      "ignore_above_beta": 100,
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ignore-above-beta-negative",
+    "reason": "a beta ceiling cannot be negative",
+    "valid": false,
+    "value": {
+      "ignore_above_beta": -1,
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "series-unknown",
+    "reason": "docs/01 §2.9: the screener switches on EQ and BE only",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "series": [
+        "EQ",
+        "SM"
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "series-duplicated",
+    "reason": "a duplicated series would double-count in the IN predicate",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "series": [
+        "EQ",
+        "EQ"
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "four-custom-filters",
+    "reason": "docs/01 §2.14: the screener exposes exactly three slots",
+    "valid": false,
+    "value": {
+      "custom_filters": [
+        {
+          "enabled": true,
+          "left": "ma_50",
+          "op": ">=",
+          "right": "ma_200"
+        },
+        {
+          "enabled": true,
+          "left": "ma_20",
+          "op": ">=",
+          "right": "ma_50"
+        },
+        {
+          "enabled": true,
+          "left": "close",
+          "op": ">=",
+          "right": "ma_20"
+        },
+        {
+          "enabled": true,
+          "left": "vol_avg_1w",
+          "op": ">=",
+          "right": "vol_avg_12m"
+        }
+      ],
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "custom-filter-bad-operator",
+    "reason": "docs/01 §2.14: operator ∈ >=, <=, =",
+    "valid": false,
+    "value": {
+      "custom_filters": [
+        {
+          "enabled": true,
+          "left": "ma_50",
+          "op": ">",
+          "right": "ma_200"
+        }
+      ],
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "factor-two-enabled-without-key",
+    "reason": "docs/01 §2.12: an enabled factor must name the factor it ranks by",
+    "valid": false,
+    "value": {
+      "factor_two": {
+        "enabled": true,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "factor-three-without-factor-two",
+    "reason": "docs/01 §2.12: factor three is revealed by, and ranks after, factor two",
+    "valid": false,
+    "value": {
+      "factor_three": {
+        "enabled": true,
+        "sort_by": "vol_12m",
+        "sort_direction": "asc"
+      },
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": true,
+        "sort_by": "vol_12m",
+        "sort_direction": "asc"
+      },
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "per-factor-direction",
+    "reason": "docs/06 §5: \"a user can rank by highest 12-month Sharpe and lowest volatility\"",
+    "valid": true,
+    "value": {
+      "factor_two": {
+        "enabled": true,
+        "sort_by": "vol_12m",
+        "sort_direction": "asc"
+      },
+      "index": "nifty-500",
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "moving-average-above-and-below-same-window",
+    "reason": "no close is both above and below its 200-day MA; the screen would always be empty",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "moving_average": {
+        "above_200": true,
+        "below_200": true,
+        "enabled": true
+      },
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "inverted-marketcap-range",
+    "reason": "docs/01 §2.7: the range is inclusive [from, to]",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "marketcap": {
+        "from": 5000,
+        "to": 100
+      },
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "decile_1",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "apply-filters-on-decile",
+    "reason": "docs/06 step 3 enumerates all | decile_1..5 | top_50 | top_100",
+    "valid": true,
+    "value": {
+      "apply_filters_on": "decile_1",
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "apply-filters-on-unknown-bucket",
+    "reason": "decile_6 is not one of the enumerated buckets",
+    "valid": false,
+    "value": {
+      "apply_filters_on": "decile_6",
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "historical_date": "2025-04-15",
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "historical-date",
+    "reason": "docs/01 §2.13: re-runs the screen as of a past date",
+    "valid": true,
+    "value": {
+      "historical_date": "2025-04-15",
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "historical-date-not-a-date",
+    "reason": "historical_date is a date input",
+    "valid": false,
+    "value": {
+      "historical_date": "not-a-date",
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "sort-direction-unknown",
+    "reason": "docs/01 §2.1: Highest to Lowest | Lowest to Highest",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "sort_by": "ret_12m",
+      "sort_direction": "sideways"
+    }
+  }
+]

@@ -1,0 +1,205 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * Decile's design tokens — docs/08 §"Design principles".
+ *
+ *   "neutral greyscale carries the layout; colour is reserved for meaning only —
+ *    positive/negative, rank emphasis, and one accent for primary actions."
+ *
+ * Every colour below that carries text is verified against its surface at >= 4.5:1 in BOTH
+ * themes by `src/lib/__tests__/contrast.test.ts`, which parses this file. docs/11 §Accessibility
+ * makes that a requirement rather than an aspiration, and the positive/negative pair is called
+ * out there by name because it is the one people get wrong.
+ *
+ * Tailwind v4 has no `tailwind.config.js`: the theme *is* this file.
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+
+  /* --- Neutral greyscale: the whole layout ------------------------------- */
+  --background: #fbfbfd;
+  --foreground: #0d1117;
+  --card: #ffffff;
+  --card-foreground: #0d1117;
+  --popover: #ffffff;
+  --popover-foreground: #0d1117;
+  --muted: #f1f2f5;
+  --muted-foreground: #596273;
+  --border: #e2e4ea;
+  --input: #d7dae2;
+  --ring: #2d5bd0;
+
+  /* --- The one accent ---------------------------------------------------- */
+  --accent: #2d5bd0;
+  --accent-foreground: #ffffff;
+  --accent-muted: #eaf0ff;
+
+  /* --- Semantic meaning. Never decoration. ------------------------------- */
+  --positive: #077a48;
+  --positive-muted: #e6f5ee;
+  --negative: #bd2437;
+  --negative-muted: #fdeaec;
+  --warning: #8a5a00;
+  --warning-muted: #fdf3e0;
+
+  /* --- Density (docs/08: "default row height 34px") ---------------------- */
+  --row-height: 34px;
+  --row-height-compact: 28px;
+
+  --radius: 0.5rem;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --background: #0b0d11;
+  --foreground: #e8ebf0;
+  --card: #14181e;
+  --card-foreground: #e8ebf0;
+  --popover: #14181e;
+  --popover-foreground: #e8ebf0;
+  --muted: #1b212a;
+  --muted-foreground: #949eae;
+  --border: #262d38;
+  --input: #313a47;
+  --ring: #78a1ff;
+
+  --accent: #78a1ff;
+  --accent-foreground: #0b0d11;
+  --accent-muted: #1a2440;
+
+  --positive: #3ecf90;
+  --positive-muted: #10301f;
+  --negative: #fd7684;
+  --negative-muted: #331319;
+  --warning: #e0a63a;
+  --warning-muted: #2c220d;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-muted: var(--accent-muted);
+  --color-positive: var(--positive);
+  --color-positive-muted: var(--positive-muted);
+  --color-negative: var(--negative);
+  --color-negative-muted: var(--negative-muted);
+  --color-warning: var(--warning);
+  --color-warning-muted: var(--warning-muted);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+
+  /* docs/08 §Motion: "<=150 ms". Height is not transform/opacity, but an accordion cannot open
+     without it; the duration is kept at the floor and `prefers-reduced-motion` removes it. */
+  --animate-accordion-down: accordion-down 140ms ease-out;
+  --animate-accordion-up: accordion-up 140ms ease-out;
+}
+
+@keyframes accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    /*
+     * docs/08: "one tabular-figure setting for every number". Set once, at the root, rather than
+     * on each numeric component — a per-component setting is a per-component thing to forget, and
+     * a screener whose columns do not align is the one visual defect users notice immediately.
+     */
+    font-variant-numeric: tabular-nums;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    /* Reserve the scrollbar so a short page and a long one do not shift horizontally. */
+    scrollbar-gutter: stable;
+  }
+
+  /*
+   * docs/11 §Accessibility and docs/08 §"Accessibility & quality bar": every interactive element
+   * is keyboard reachable, and reachable means *visible*. `:focus-visible` keeps the ring off
+   * mouse clicks without ever hiding it from a keyboard.
+   */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* docs/08 §Motion: "<=150 ms, transform/opacity only. No animated tables." */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Explicit opt-in for anywhere the root setting could be overridden by a font stack. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * docs/08 §"Accessibility & quality bar" — the skip link is the first thing a keyboard user
+   * meets, so it must be invisible until focused and unmissable after.
+   */
+  .skip-link {
+    position: absolute;
+    left: 0.5rem;
+    top: 0.5rem;
+    z-index: 100;
+    transform: translateY(-200%);
+    transition: transform 120ms ease-out;
+  }
+
+  .skip-link:focus-visible {
+    transform: translateY(0);
+  }
+}

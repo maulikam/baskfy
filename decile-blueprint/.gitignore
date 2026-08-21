@@ -1,0 +1,31 @@
+.venv/
+node_modules/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.next/
+.turbo/
+.env
+.secrets/
+.archive/
+# Local pg_dump output (infra/backup/pg_backup.sh). Never committed: it is the database.
+.backups/
+.env.*
+!.env.example
+.DS_Store
+.overnight/
+
+# Prompt 16: one JSON file per measurement, written by `make bench`. The rendered table
+# (benchmarks/AS-MEASURED.md) is committed; the raw samples are not — they are machine-specific.
+benchmarks/results/
+
+# Prompt 19's mutation harness: throwaway copies of decile_core, one per worker.
+.mutants/
+coverage.json

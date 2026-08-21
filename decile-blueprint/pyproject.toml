@@ -1,0 +1,162 @@
+[project]
+name = "decile"
+version = "0.1.0"
+description = "Decile — India-equities momentum screener (workspace root)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "decile-core",
+    "decile-api",
+    "decile-providers",
+    "decile-worker",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/core", "packages/providers", "services/api", "services/worker"]
+
+[tool.uv.sources]
+decile-core = { workspace = true }
+decile-api = { workspace = true }
+decile-providers = { workspace = true }
+decile-worker = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "hypothesis>=6.112",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "types-requests>=2.32",
+    # docs/07 acceptance criteria: "Contract tests for every endpoint using httpx".
+    "httpx>=0.28",
+    "pyyaml>=6.0",
+    "types-pyyaml>=6.0",
+    "pandas>=2.2",
+    "pandas-stubs>=2.2",
+]
+
+# ---------------------------------------------------------------------------
+# Tooling (shared by every workspace member)
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["packages/core/src", "packages/providers/src", "services/api/src", "services/worker/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "RUF", "TID", "PL"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["PLR2004"]
+# Prompt 19 §3's pandas oracle is deliberately one flat transcription of docs/05, section by
+# section, with no helpers of its own. Splitting it to satisfy the branch and statement limits
+# would introduce exactly the shared abstraction an oracle exists to avoid: the value of the
+# cross-validation is that the two implementations have no structure in common.
+"packages/core/tests/factor_oracle.py" = ["PLR0912", "PLR0915"]
+"services/api/alembic/versions/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+# NOT set: disallow_any_explicit. The pydantic mypy plugin synthesises `__init__(**data: Any)`
+# on every model, so the flag fires on our own class statements and cannot be satisfied. The
+# house rule "no `any`" is enforced instead by ruff's ANN401 and by
+# packages/core/tests/test_no_escape_hatches.py, which scan our source rather than generated code.
+plugins = ["pydantic.mypy"]
+mypy_path = "packages/core/src:packages/core/tests:packages/providers/src:packages/providers/tests:services/api/src:services/api/tests:services/worker/src:services/worker/tests"
+explicit_package_bases = true
+# NOTE: `conftest.py` files are excluded below. Each test tree is a mypy base (so that its
+# sibling helper module — `stubs`, `helpers` — resolves), which makes every conftest the
+# top-level module `conftest`, and they collide. Fixtures live in conftest; everything with logic
+# worth checking lives in the helper modules and in `network_guard.py`, which are checked.
+exclude = ["(^|/)conftest\\.py$"]
+files = [
+    "network_guard.py",
+    # Prompt 19's repo-level tooling: the per-package coverage gate and the mutation harness.
+    # `benchmarks/` predates this list and is checked by ruff only.
+    "tools",
+    "packages/core/src",
+    "packages/core/tests",
+    "packages/providers/src",
+    "packages/providers/tests",
+    "services/api/src",
+    "services/api/tests",
+    "services/worker/src",
+    "services/worker/tests",
+]
+
+[[tool.mypy.overrides]]
+module = ["alembic.*"]
+ignore_missing_imports = true
+
+# kiteconnect ships no py.typed marker and no stubs. decile_providers.kite therefore declares a
+# `KiteClientLike` Protocol covering exactly the calls we make, and translates the vendor's
+# exceptions at its own boundary, so the untyped surface stops there.
+[[tool.mypy.overrides]]
+module = ["kiteconnect.*"]
+ignore_missing_imports = true
+
+# boto3 ships no inline types. The `boto3-stubs` package models every S3 operation with generated
+# `Unpack[TypedDict]` signatures, which by construction cannot satisfy a narrow structural
+# Protocol — and the narrow Protocol is the thing we actually want to depend on, since
+# decile_providers.archive uses exactly three S3 calls. So: no stubs, and `S3ClientLike` in
+# decile_providers.archive is the contract that gets type-checked.
+[[tool.mypy.overrides]]
+module = ["boto3.*", "botocore.*"]
+ignore_missing_imports = true
+
+# celery ships no py.typed marker, so `@shared_task` is an untyped decorator. The work each task
+# wraps lives in a fully typed `run_*` coroutine beside it; only the thin binding is affected.
+[[tool.mypy.overrides]]
+module = ["celery.*", "kombu.*"]
+ignore_missing_imports = true
+
+# `opentelemetry-instrumentation-celery` ships no `py.typed` either, so `CeleryInstrumentor()` is
+# an untyped call. It is invoked in exactly two places — `decile_api.telemetry.configure_telemetry`
+# and `decile_worker.telemetry.install_worker_observability` — and both are one line that installs
+# a library patch and returns nothing. The alternative is a `# type: ignore`, which CLAUDE.md
+# house rule 3 forbids outright.
+[[tool.mypy.overrides]]
+module = ["opentelemetry.instrumentation.celery.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["decile_api.telemetry", "decile_worker.telemetry"]
+disallow_untyped_calls = false
+
+# `celery.signals.worker_process_init.connect` is an untyped decorator, exactly like
+# `@shared_task` above and for the same reason.
+[[tool.mypy.overrides]]
+module = ["decile_worker.celery_app"]
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = ["decile_worker.tasks.celery_tasks"]
+disallow_untyped_decorators = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = [
+    "packages/core/tests",
+    "packages/providers/tests",
+    "services/api/tests",
+    "services/worker/tests",
+]
+addopts = "-q --strict-markers --strict-config"
+markers = [
+    "db: test requires a live PostgreSQL+TimescaleDB instance (DECILE_TEST_DATABASE_URL)",
+    "redis: test requires a live Redis instance (DECILE_REDIS_URL); `make up` provides one",
+    "benchmark: measures a docs/11 performance budget rather than asserting behaviour",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["decile_core", "decile_api", "decile_providers", "decile_worker"]
+

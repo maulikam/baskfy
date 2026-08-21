@@ -1,0 +1,52 @@
+Three things change in December 2026: what the product covers, what it costs, and what it admits
+it cannot do yet. This page is the whole of it, in that order.
+
+## What is being added
+
+**A longer price history.** Published factor history currently starts on 1 November 2024, which
+bounds every historical screen and every backtest. The backfill to 2011 is the largest outstanding
+piece of work in the build and is what the December release is organised around. Until it lands, a
+backtest requesting an earlier start date fails with a clear message rather than silently
+truncating to whatever exists.
+
+**Backtests over real history.** The engine, the metrics, the fragility runs and the artefact
+export are all built and tested. They currently run against a synthetic market because there is no
+real history to run them against. The backfill is what turns them on.
+
+**Dividend-adjusted totals throughout.** Cash dividends are already folded into the adjustment
+factor, which makes every factor a total-return figure. What is not built is a dividend-stripped
+series, which is why the backtest engine refuses `dividends: "cash"` and `dividends: "ignore"`
+rather than quietly serving the reinvested variant under a different name.
+
+## What the prices become
+
+{props.priceTable}
+
+Every price is inclusive of GST. Existing subscriptions are not repriced mid-term: a yearly plan
+bought before the change renews at the new price at its next renewal, and a Forever plan bought
+before the change is not affected by it at all — that is what buying it means.
+
+The pricing page reads these numbers from the billing service, not from this page, so what it
+shows is what will actually be charged.
+
+## What "Forever" means
+
+The lifetime of the service, not the lifetime of the buyer. It is stated at the point of sale, in
+the terms, and here, because a one-time price on a subscription product has exactly one honest
+reading and three dishonest ones.
+
+## What is still not solved
+
+- **Fundamentals.** Nothing ingests them, so the P/E column and the P/E filter are empty for every
+  instrument. This is not scheduled for December.
+- **The risk-free rate.** Backtest Sharpe and Sortino figures are excess over zero until a
+  Treasury-bill series exists. The number on the page is correct for what it measures and is not
+  the number a performance report would quote.
+- **The public API.** Built, tested, and deliberately switched off pending a written
+  data-redistribution opinion. It is not a launch date question.
+- **Refunds.** `refund` events from the payment gateway are acknowledged and otherwise ignored;
+  there is no refund endpoint. The refund policy sets out how a refund is actually handled today,
+  which is by hand.
+
+None of this is a roadmap commitment. It is a list of things that are wrong, published because a
+tool that hides its limits is asking to be trusted further than it has earned.

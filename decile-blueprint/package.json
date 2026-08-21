@@ -1,0 +1,11 @@
+{
+  "name": "decile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Decile — India-equities momentum screener (workspace root).",
+  "packageManager": "pnpm@11.22.0",
+  "scripts": {
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test"
+  }
+}

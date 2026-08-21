@@ -72,6 +72,8 @@ def _asset_version() -> str:
 
 ASSET_V = _asset_version()
 templates.env.globals["asset_v"] = ASSET_V
+# The options lab is frozen (M6); its nav entry and routes appear together or not at all.
+templates.env.globals["options_enabled"] = C.OPTIONS_ENABLED
 # Argv is stored as JSON so the exact command can be shown back without re-quoting it.
 templates.env.filters["fromjson"] = json.loads
 
@@ -490,6 +492,25 @@ STOP_PLANS: dict[str, dict] = {}
 STOP_OK = frozenset({"GTT_PLACED", "DRY_RUN_GTT"})
 
 
+# --- the options lab: frozen (M6) ---------------------------------------------------------
+# The strangle subsystem lives in frozen/strangle/ and is outside every gate. These three
+# routes are its only web surface, and they stay mounted rather than being deleted so that
+# thawing the subsystem is a `git mv` and nothing else. With OPTIONS_ENABLED off — the
+# default, and one of the desk's seven non-negotiables — they answer 404, which is what a
+# route that does not exist should say to anyone probing for it.
+def _options_view():
+    """The options page module, or a 404. Never raises ImportError into a request."""
+    if not C.OPTIONS_ENABLED:
+        raise HTTPException(status_code=404)
+    try:
+        from .analytics import options_view as _ov
+    except ImportError:
+        logging.warning("OPTIONS_ENABLED is set, but the strangle subsystem is frozen "
+                        "(frozen/strangle/); the options pages are unavailable.")
+        raise HTTPException(status_code=404) from None
+    return _ov
+
+
 @app.get("/options", response_class=HTMLResponse)
 def options_page(request: Request, started: str = "", error: str = ""):
     """The options lab: paper-only, read-only, no session required.
@@ -498,7 +519,8 @@ def options_page(request: Request, started: str = "", error: str = ""):
     not doing, and a page that could only answer that while authenticated would be
     unavailable at exactly the moment someone wondered.
     """
-    from .analytics import db as _db, options_view as _ov
+    _ov = _options_view()
+    from .analytics import db as _db
     with _db.connect() as conn:
         _db.migrate(conn)
         p = _ov.page(conn)
@@ -514,7 +536,8 @@ async def options_run(request: Request):
     command — and restricted further to the options group, so this route cannot start the
     equity jobs even if the form is edited.
     """
-    from .analytics import db as _db, ops as _ops, options_view as _ov
+    _ov = _options_view()
+    from .analytics import db as _db, ops as _ops
     form = await request.form()
     name = str(form.get("op") or "")
     if name not in _ov.STRANGLE_OPS:
@@ -532,7 +555,8 @@ async def options_run(request: Request):
 
 @app.get("/options/data")
 def options_data():
-    from .analytics import db as _db, options_view as _ov
+    _ov = _options_view()
+    from .analytics import db as _db
     with _db.connect() as conn:
         _db.migrate(conn)
         return _ov.page(conn)
@@ -786,7 +810,7 @@ def ops_data():
                              "history": _ops.history(conn),
                              "operations": [{"name": o.name, "label": o.label,
                                              "group": o.group, "cli": o.cli()}
-                                            for o in _ops.OPERATIONS]})
+                                            for o in _ops.all_operations()]})
 
 
 @app.get("/ops/job/{job_id}", response_class=HTMLResponse)

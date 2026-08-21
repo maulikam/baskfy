@@ -29,6 +29,10 @@ EXCLUDES=(
   ':!MERGE-PROMPTS.md'
   ':!decile-blueprint/PROMPTS.md'
   ':!tools/check-namespace.sh'
+  # frozen/ is outside every gate (CLAUDE.md safety rails, frozen/strangle/README.md).
+  # A namespace sweep that "fixed" a file under here would be exactly the edit that is
+  # forbidden, so the check does not look.
+  ':!frozen/*'
 )
 
 # --- Tokens that are vocabulary, not namespace ----------------------------------------

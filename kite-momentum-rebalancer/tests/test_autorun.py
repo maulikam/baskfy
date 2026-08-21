@@ -12,6 +12,8 @@ import json
 
 import pytest
 
+from ._frozen import options_lab
+
 from app.analytics import autorun as AR, db
 
 D, T = dt.date, dt.time
@@ -112,12 +114,14 @@ def test_yesterdays_run_does_not_settle_today(conn):
 # =====================================================================================
 # the straddle observation
 # =====================================================================================
+@options_lab
 def test_the_straddle_is_due_when_none_was_recorded(conn, tmp_path):
     fwd = str(tmp_path / "fwd.jsonl")
     assert "strangle_collect" in ops(AR.needed(conn, now=at(10), is_trading_day=True,
                                                forward_path=fwd))
 
 
+@options_lab
 def test_an_observation_already_recorded_settles_it(conn, tmp_path):
     from app.strategies.strangle import calibrate as CAL
     fwd = str(tmp_path / "fwd.jsonl")
@@ -127,6 +131,7 @@ def test_an_observation_already_recorded_settles_it(conn, tmp_path):
                                                    forward_path=fwd))
 
 
+@options_lab
 def test_a_late_observation_says_it_is_late(conn, tmp_path):
     """The bands are built on opening prints, so an afternoon reading sits further down
     the decay curve than the gate that will consume it. Recorded anyway — a late point
@@ -194,6 +199,7 @@ def sess_kwargs(tmp_path, **over):
     return d
 
 
+@options_lab
 def test_a_session_is_started_inside_the_opening_window(conn, tmp_path):
     """The login time is not fixed, so the session starts whenever the login happens —
     provided the window is still open."""
@@ -227,6 +233,7 @@ def test_a_live_session_is_not_started_twice(conn, tmp_path):
                   **sess_kwargs(tmp_path, lock_path=str(lock))))
 
 
+@options_lab
 def test_a_stale_lock_does_not_block_a_session(conn, tmp_path):
     """A crash at 09:31 must not cost the day."""
     lock = tmp_path / "s.lock"
@@ -236,6 +243,7 @@ def test_a_stale_lock_does_not_block_a_session(conn, tmp_path):
                   **sess_kwargs(tmp_path, lock_path=str(lock))))
 
 
+@options_lab
 def test_a_session_that_already_had_its_say_is_not_restarted(conn, tmp_path):
     """Including one that vetoed. A day the strategy declined is a day it decided about,
     not a gap to fill."""
@@ -264,6 +272,7 @@ def test_the_session_is_detached_so_it_cannot_hold_the_operations_lock():
     assert 'item.get("detached")' in src
 
 
+@options_lab
 def test_the_runner_refuses_a_first_entry_after_the_window():
     """Never enforced until the start time became a human login."""
     src = open("scripts/strangle.py").read()

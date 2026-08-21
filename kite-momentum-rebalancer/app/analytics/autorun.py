@@ -14,16 +14,21 @@ so the decision can be tested without a broker or a subprocess.
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from typing import Any, Sequence
 
 # The first tick of the session at which an ATM straddle can be observed. Before this
 # there is no NFO or BFO quote at all — there is no pre-open session for options.
 #
-# Imported, not redeclared. This module held its own copy while clock.entry_window_state
-# had no floor at all, so the same fact was enforced in one place and missing from the
-# other: autorun correctly refused to start a session at 06:00, while --check and the
-# runner both reported the entry window open.
-from ..strategies.strangle.clock import OPTIONS_OPEN
+# Imported, not redeclared, and that has not changed. This module held its own copy while
+# clock.entry_window_state had no floor at all, so the same fact was enforced in one place
+# and missing from the other: autorun correctly refused to start a session at 06:00, while
+# --check and the runner both reported the entry window open.
+#
+# What changed at M6 is only WHEN: the strangle subsystem is frozen (frozen/strangle/), and
+# autorun runs on every login, so importing it at module scope would make the equity desk
+# depend on the options lab being present. The import moved into _options_items(), which is
+# the one place that reads it and which no longer runs at all unless OPTIONS_ENABLED.
 MARKET_CLOSE = dt.time(15, 30)
 SESSION_LOCK = "data/outputs/strangle_session.lock"
 
@@ -125,9 +130,20 @@ def needed(conn, *, now: dt.datetime, is_trading_day: bool,
             "note": ("the EOD snapshot will be skipped before 15:30 and is left to the "
                      "18:30 job" if now.time() < MARKET_CLOSE else "")})
 
-    for spec in _underlyings(forward_path, session_journal, lock_path):
-        out.extend(_options_items(spec, now=now, today=today,
-                                  entry_window_end=entry_window_end))
+    # The options lab is a separate, paper-only subsystem and it is frozen (M6). Off by
+    # default, and when off this loop must not import it — autorun runs on every login.
+    from .. import config as C
+
+    if C.OPTIONS_ENABLED:
+        try:
+            for spec in _underlyings(forward_path, session_journal, lock_path):
+                out.extend(_options_items(spec, now=now, today=today,
+                                          entry_window_end=entry_window_end))
+        except ImportError:
+            logging.warning(
+                "OPTIONS_ENABLED is set, but the strangle subsystem is frozen "
+                "(frozen/strangle/). Today's options collection is not offered; the equity "
+                "collection above is unaffected.")
     return out
 
 
@@ -155,6 +171,8 @@ def _options_items(spec: dict, *, now: dt.datetime, today: dt.date,
     slug, label = spec["slug"], spec["label"]
     tag = f" ({label})" if label else ""
     args = {"instrument": slug} if slug else {}
+
+    from ..strategies.strangle.clock import OPTIONS_OPEN
 
     if now.time() >= OPTIONS_OPEN and not _observed_today(spec["forward"], today):
         out.append({

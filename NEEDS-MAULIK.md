@@ -50,3 +50,24 @@ _(nothing yet)_
 - **M21 — deleting `../_baskfy_subtree_tmp/`.** The pre-merge rollback copy of both repositories.
   An agent never deletes it. It becomes safe for you to remove once you have skimmed the final
   status page.
+
+### 2. The box's strangle collectors will point at moved paths after the next deploy
+**Status:** informational, no action until you deploy · **Raised:** M6, 22 Aug 2026
+
+M6 froze the options lab into `frozen/strangle/`. Per the module's own instruction the live box
+was **not** touched: `strangle-collect@{nifty,banknifty,sensex}.timer` still runs at 09:20 and
+still writes to `data/outputs/strangle_*`, which was left in place because the observation series
+cannot be rebuilt.
+
+**When you next deploy the desk from this tree**, those units will invoke `-m scripts.strangle`,
+which has moved. Decide then between three options:
+
+1. **Retire the collectors.** The straddle record stops growing. Everything collected so far is
+   kept.
+2. **Repoint them** at `frozen/strangle/kite-momentum-rebalancer/scripts/strangle.py` — the
+   subsystem still runs, it is just not maintained or gated.
+3. **Thaw** (`frozen/strangle/README.md` has the exact `git mv`s) and set `OPTIONS_ENABLED=true`.
+
+Nothing breaks until you deploy, and the equity desk is unaffected by all three.
+
+**Blocks:** nothing.

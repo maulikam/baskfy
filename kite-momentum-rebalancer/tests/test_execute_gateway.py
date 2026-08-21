@@ -458,7 +458,16 @@ def test_a_named_refusal_is_reported_as_definitively_not_placed(exc_name, monkey
     never possible."""
     import kiteconnect.exceptions as KE
 
+    from app import config as C
     from app.core import gateway as G
+
+    # These assert what the gateway reports when the BROKER refuses, which is a live-path
+    # outcome: under DRY_RUN the gateway short-circuits at gateway.py:85 and never calls
+    # place_order at all. The mode is set here rather than inherited from the environment,
+    # because CI forces DRY_RUN=true everywhere (CLAUDE.md safety rails) and a test whose
+    # meaning depends on an ambient flag is a test that silently stops testing. Nothing here
+    # touches a network or a credential: the broker is the stub KC class below.
+    monkeypatch.setattr(C, "DRY_RUN", False)
 
     exc = getattr(KE, exc_name)("Insufficient funds")
 
@@ -474,10 +483,19 @@ def test_a_named_refusal_is_reported_as_definitively_not_placed(exc_name, monkey
     assert res["exception"] == exc_name
 
 
-def test_a_transport_failure_stays_unknown():
+def test_a_transport_failure_stays_unknown(monkeypatch):
     """The one case where the warning is right. A call that never got an answer may have
     been accepted, and that is worth checking the order book for."""
+    from app import config as C
     from app.core import gateway as G
+
+    # These assert what the gateway reports when the BROKER refuses, which is a live-path
+    # outcome: under DRY_RUN the gateway short-circuits at gateway.py:85 and never calls
+    # place_order at all. The mode is set here rather than inherited from the environment,
+    # because CI forces DRY_RUN=true everywhere (CLAUDE.md safety rails) and a test whose
+    # meaning depends on an ambient flag is a test that silently stops testing. Nothing here
+    # touches a network or a credential: the broker is the stub KC class below.
+    monkeypatch.setattr(C, "DRY_RUN", False)
 
     class KC:
         def place_order(self, **kw):

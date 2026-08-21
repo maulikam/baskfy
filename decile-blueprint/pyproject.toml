@@ -60,6 +60,13 @@ ignore = []
 # cross-validation is that the two implementations have no structure in common.
 "packages/core/tests/factor_oracle.py" = ["PLR0912", "PLR0915"]
 "services/api/alembic/versions/*" = ["E501"]
+# The Momentum Quality Score, ported from the desk at M15 and byte-identical to the pipeline the
+# live account was traded on. Its thresholds ARE the strategy -- RSI over 82, volatility over 0.55,
+# extension over 25% -- and they are specified that way in
+# kite-momentum-rebalancer/.claude/skills/momentum-rebalance/SKILL.md. Lifting each to a named
+# constant would be a rewrite of the one file whose whole point is that it did not change, and it
+# would put the numbers a step further from the spec that defines them.
+"packages/core/src/baskfy_core/score.py" = ["PLR2004"]
 
 [tool.mypy]
 python_version = "3.12"

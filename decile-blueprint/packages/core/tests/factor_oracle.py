@@ -26,7 +26,8 @@ WHAT IS NOT ORACLED, AND WHY
 ``regime`` (docs/05 §15) is an INFERRED *design* rather than a formula — docs/05 §15 specifies a
 procedure ("take two reference distributions from that instrument's own history") whose
 discretisation is a choice this repository made, not a number the document fixes. Transcribing
-:mod:`baskfy_core.regime` into pandas would produce a copy, not an oracle, so it is left out and
+:mod:`baskfy_core.instrument_regime` into pandas would produce a copy, not an oracle, so it is
+left out and
 said so here rather than counted as covered.
 """
 

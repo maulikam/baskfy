@@ -97,7 +97,8 @@ async def _reset_and_seed(url: str) -> None:
             # first insert into a hypertable is then routed into stale storage and fails with
             # something that looks like a seeding bug and is not — the shape it took here was
             #
-            #   insert on "_hyper_3_5_chunk" violates "5_10_fk_index_member_daily_index_id_index_def"
+            #   insert on "_hyper_3_5_chunk" violates
+            #   "5_10_fk_index_member_daily_index_id_index_def"
             #   Key (index_id)=(5) is not present in table "index_def"
             #
             # while `index_def` demonstrably held all fourteen rows. Dropping the extension is what

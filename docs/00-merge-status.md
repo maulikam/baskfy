@@ -4,7 +4,7 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M15 (M11 red; M12–M14 blocked by rule 7) · **State:** running autonomously
+**Run started:** 22 Aug 2026 · **Current module:** M15 (partial) · M11/M12 red; M13–M14 blocked by rule 7 · **State:** running autonomously
 
 Since 22 Aug 2026 this is an **autonomous run** under `CLAUDE.md` §Autonomy charter:
 judgement calls are decided, recorded in `DECISIONS-MERGE.md` (tagged `⚠ UNREVIEWED`
@@ -32,7 +32,7 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M12 | Desk parity | 🔴 **red, informative** | 22 Aug 2026 | **23/25 top-25 shared.** Gap is **missing corporate actions (40/271 symbols)**, not the window. `reconciliation/DESK-PARITY.md` (M12.1) |
 | M13 | MomentumScan — CSV cord cut | — | | |
 | M14 | Breadth + shadow harness | — | | |
-| M15 | Desk brains → core | 🔄 next | | Rule 11 — depends on code + the uploads corpus, not on M11's numbers |
+| M15 | Desk brains → core | ⚠️ partial | 22 Aug 2026 | `score.py` + `costs.py` in core, **byte-identical** and golden-tested; regime collision closed. `rebalance.py` and `exposure/` remain (M15.5) |
 | M16 | Execution package + broker split | — | | |
 | M17 | Rank buffer demoted | — | | |
 | M18 | Database migration | — | | **HUMAN GATE** |

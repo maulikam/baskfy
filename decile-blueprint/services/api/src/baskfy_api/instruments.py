@@ -40,6 +40,7 @@ from sqlalchemy import Select, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core import pros_cons
+from baskfy_core.instrument_regime import RegimeConfig, classify_series
 from baskfy_core.models import (
     CorporateAction,
     FactorDaily,
@@ -47,7 +48,6 @@ from baskfy_core.models import (
     Instrument,
     OhlcvDaily,
 )
-from baskfy_core.regime import RegimeConfig, classify_series
 from baskfy_core.universes import UNIVERSES, Universe
 
 #: docs/01 §5 block 4 — the five metric cards, and where each one's history lives.
@@ -366,7 +366,8 @@ async def _regime(
     """docs/05 §15's label and its two Wasserstein distances, from the instrument's own bars.
 
     Returns ``(None, None, None)`` when there is not enough history — which is the honest answer,
-    and the one ``baskfy_core.regime`` gives: "an instrument with too little history to build
+    and the one ``baskfy_core.instrument_regime`` gives: "an instrument with too little history
+    to build
     references gets NEUTRAL and NULL distances".
 
     The stored ``factor_daily.regime`` still wins when it is populated (see ``build_factsheet``);

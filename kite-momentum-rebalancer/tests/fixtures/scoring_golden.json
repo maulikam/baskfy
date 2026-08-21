@@ -1,0 +1,36 @@
+{
+  "sample_scan.csv": {
+    "rows": 56,
+    "cols": 40,
+    "sha256": "e54448d7f272c4102b6b3150785dcec86cce4900f3b37172d61bfd1abaf994e0",
+    "top10": [
+      "DIXON",
+      "KAYNES",
+      "POLYCAB",
+      "PGEL",
+      "RRKABEL",
+      "BSE",
+      "PERSISTENT",
+      "SUZLON",
+      "LAURUSLABS",
+      "AMBER"
+    ]
+  },
+  "scan_1787143663_Investing_001__1_.csv": {
+    "rows": 271,
+    "cols": 103,
+    "sha256": "4c74ad7eaaecd21399438433d2585822112ee96889287321ac93dbf0f69849f0",
+    "top10": [
+      "LAURUSLABS",
+      "SONACOMS",
+      "SYRMA",
+      "RRKABEL",
+      "ATHERENERG",
+      "WELCORP",
+      "SANSERA",
+      "SKYGOLD",
+      "CUPID",
+      "SHILPAMED"
+    ]
+  }
+}

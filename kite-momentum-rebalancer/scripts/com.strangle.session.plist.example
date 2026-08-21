@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd template: run the full paper session, unattended (macOS).
+
+  DO NOT INSTALL THIS YET. Until the reference bands are calibrated the session vetoes
+  every day on the IV gate, so it would run for five hours a day to log the same refusal.
+  Install com.strangle.collect first, watch the band progress on
+  http://127.0.0.1:8420/options, and come back to this once that page says the bands are
+  ready. Installing it early costs nothing but noise — it cannot trade either way, since
+  live execution sits behind seven locks and all of them are shut.
+
+  IT IS PAPER. Fills are simulated against real depth; no code path here places an order.
+
+  09:30 to about 15:10 IST, one process, polling every five seconds. That is a long-lived
+  job and two things follow from it:
+
+    - A SECOND SESSION IS REFUSED. The button on /options and this job cannot see each
+      other's in-process locks, so the runner keeps a PID lock file. Two sessions on one
+      day would both enter and both journal, producing a paper record describing a position
+      nobody held — and that record is what gates live trading.
+
+    - IF THE MACHINE SLEEPS, THE SESSION DIES ON PURPOSE. A suspended process wakes to
+      stale quotes; the kill switch trips on feed staleness, flattens the book and halts.
+      That is correct — a book you have not been watching is not a book you can manage —
+      but it means a laptop that sleeps at lunch will not produce a complete session.
+      Either keep it awake (caffeinate -i) or accept the gap; do not disable the kill
+      switch to paper over it.
+
+  KITE TOKENS EXPIRE DAILY and there is no refresh. Exit 2 means you had not logged in.
+
+  Install (later):
+      cp scripts/com.strangle.session.plist.example \
+         ~/Library/LaunchAgents/com.strangle.session.plist
+      launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.strangle.session.plist
+
+  Logs:    tail -f ~/Library/Logs/strangle-session.log
+  Remove:  launchctl bootout gui/$(id -u)/com.strangle.session
+  LOGS GO TO ~/Library/Logs, NOT INTO THE REPO. macOS protects ~/Documents with TCC, and a
+  launchd agent has no grant for a file it did not create there: it cannot open the log, so
+  it never spawns the process and exits 78 (EX_CONFIG) with no output at all. This was not
+  theory — the first install of this job did exactly that, while the older daily job kept
+  working because its log file carries a com.apple.macl grant from an approval given long
+  ago. ~/Library/Logs is where macOS expects agent logs and is not TCC-restricted.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.strangle.session</string>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/maulikdave/Documents/portfolio/kite-momentum-rebalancer</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/maulikdave/Documents/portfolio/kite-momentum-rebalancer/.venv/bin/python</string>
+    <string>-m</string>
+    <string>scripts.strangle</string>
+  </array>
+
+  <!-- 09:30 IST: the normal entry time. The runner still applies its own entry window,
+       the day vetoes and the entry-cost gate, so starting the process is not entering a
+       position. -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>30</integer></dict>
+  </array>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <!-- Never restarted automatically. A session that died mid-book must be looked at, not
+       relaunched into a position it has forgotten about. -->
+  <key>KeepAlive</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/maulikdave/Library/Logs/strangle-session.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/maulikdave/Library/Logs/strangle-session.log</string>
+</dict>
+</plist>

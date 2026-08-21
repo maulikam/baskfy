@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Operations{% endblock %}
+
+{% block heading %}Operations{% endblock %}
+
+{% block content %}
+{% if running %}
+  <div class="banner run">
+    <span class="tag">running</span>
+    <b>{{ running.name }}</b>
+    <span class="muted">started {{ running.started_at }}. This page refreshes every few
+      seconds; operations are not run concurrently because they share the database and the
+      broker session.</span>
+  </div>
+{% endif %}
+{% if started %}
+  <div class="banner ok"><span class="tag">started</span><span>{{ started }}</span></div>
+{% endif %}
+{% if error %}
+  <div class="banner bad"><span class="tag">refused</span><span>{{ error }}</span></div>
+{% endif %}
+
+{# Collection health, stated whether good or bad: this is the page you come to when you
+   suspect something did not run, so silence here would be ambiguous. #}
+<div class="banner {{ 'ok' if collection.healthy else ('bad' if collection.consecutive_failures > 1 or not collection.ever_ran else 'run') }}">
+  <span class="tag">
+    {%- if not collection.ever_ran %}never run
+    {%- elif collection.healthy %}collection healthy
+    {%- elif collection.consecutive_failures > 1 %}{{ collection.consecutive_failures }} failures
+    {%- else %}last run failed{% endif %}</span>
+  <span>{{ collection.message }}
+    {%- if collection.ran_at %} <span class="muted">Last attempt {{ collection.ran_at }}
+      ({{ collection.trigger }}){% if collection.stale_days %}; nothing collected for
+      {{ collection.stale_days }} day{{ '' if collection.stale_days == 1 else 's' }},
+      which cannot be recovered{% endif %}.</span>{% endif %}</span>
+</div>
+
+{% if daily_history %}
+<section>
+  <h2>Daily collection history</h2>
+  <div class="card">
+    <table aria-label="Daily collection history">
+      <thead><tr><th>Ran at</th><th>Session</th><th>Trigger</th><th>Outcome</th>
+        <th>Steps that failed</th></tr></thead>
+      <tbody>
+      {% for r in daily_history %}
+        <tr>
+          <td>{{ r.ran_at }}</td>
+          <td class="muted">{{ r.session_date }}</td>
+          <td class="muted">{{ r.trigger }}</td>
+          <td><span class="st {{ 'ok' if r.outcome == 'ok' else ('running' if r.outcome == 'partial' else 'failed') }}">{{ r.outcome }}</span></td>
+          <td class="muted">
+            {%- set bad = (r.steps_json | fromjson) | selectattr(1, 'equalto', 'FAILED') | map(attribute=0) | list -%}
+            {{ bad | join(', ') if bad else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">Scheduled runs appear here even though they
+      never touch the buttons above. A run started from this page is also recorded in
+      <em>Run history</em> below, which tracks processes rather than collection outcomes.</p>
+  </div>
+</section>
+{% endif %}
+
+<div class="banner">
+  <span class="tag">how this works</span>
+  <span class="muted">Each button runs one <b>allowlisted</b> command with a fixed argument
+    template — there is deliberately no free-form command box, because a page that runs an
+    arbitrary string is remote code execution on the machine holding your broker
+    credentials. Nothing here places an order; execution stays on the
+    <a href="/">desk</a> behind its confirmation gate. Every run is logged below with its
+    exact command and full output.</span>
+</div>
+
+{% for group in groups %}
+<section>
+  <h2>{{ group }}</h2>
+  <div class="grid">
+    {% for entry in operations %}
+      {% if entry.op.group == group %}
+      <div class="card op">
+        <h3>{{ entry.op.label }}
+          {%- if entry.last %} <span class="st {{ entry.last.status }}">{{ entry.last.status }}</span>{% endif %}</h3>
+        <p>{{ entry.op.summary }}</p>
+        <div class="flags" style="margin-top:9px">
+          {% if entry.op.needs_kite %}<span class="flag kite">needs login</span>{% endif %}
+          {% if entry.op.writes %}<span class="flag write">writes</span>
+          {% else %}<span class="flag read">read only</span>{% endif %}
+          {% if entry.op.long_running %}<span class="flag slow">slow</span>{% endif %}
+          {% if entry.last %}<span class="flag">last {{ entry.last.started_at }}</span>{% endif %}
+        </div>
+        <code class="cli">{{ entry.cli }}</code>
+        <form method="post" action="/ops/run">
+          <input type="hidden" name="op" value="{{ entry.op.name }}">
+          <div class="row">
+            {% for prm in entry.op.params %}
+              {% if prm.kind == 'flag' %}
+                <label class="inline"><input type="checkbox" name="{{ prm.key }}" value="true">
+                  {{ prm.label }}</label>
+              {% elif prm.kind == 'upload' %}
+                <label class="inline">{{ prm.label }}
+                  <select name="{{ prm.key }}">
+                    <option value="">none</option>
+                    {% for f in entry.scans %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+                  </select></label>
+              {% elif prm.kind == 'date' %}
+                <label class="inline">{{ prm.label }}
+                  <input type="text" name="{{ prm.key }}" value="{{ prm.default or '' }}"
+                         placeholder="YYYY-MM-DD"></label>
+              {% endif %}
+            {% endfor %}
+            <button class="btn-saffron" type="submit" {{ 'disabled' if running }}>
+              {{ 'Busy' if running else 'Run' }}</button>
+          </div>
+        </form>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+
+<section>
+  <h2>Run history</h2>
+  <div class="card">
+    {% if history %}
+      <table aria-label="Run history">
+        <thead><tr><th>Started</th><th>Operation</th><th>Command</th><th>Status</th>
+          <th>Took</th><th>Output</th></tr></thead>
+        <tbody>
+        {% for j in history %}
+          <tr>
+            <td>{{ j.started_at }}</td>
+            <td>{{ j.name }}</td>
+            <td class="muted"><code>python {{ (j.argv_json | fromjson) | join(' ') }}</code></td>
+            <td><span class="st {{ j.status }}">{{ j.status }}</span>
+              {%- if j.exit_code %} <span class="muted">exit {{ j.exit_code }}</span>{% endif %}</td>
+            <td class="muted">{{ '%.1f'|format(j.duration_s) + 's' if j.duration_s else '—' }}</td>
+            <td><a href="/ops/job/{{ j.id }}">view</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Nothing has been run from here yet. Every run is recorded with its
+        exact command, exit code and full output.</p>
+    {% endif %}
+  </div>
+</section>
+
+{% if history and history[0].output %}
+<section>
+  <h2>Last output — {{ history[0].name }}</h2>
+  <div class="card">
+    <pre>{{ history[0].output }}</pre>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

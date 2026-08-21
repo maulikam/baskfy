@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the daily collection after the close, on trading weekdays
+
+[Timer]
+# 18:30 IST, Monday to Friday — the same slot the laptop used. After the close on
+# purpose: the EOD snapshot is the point, and kc.margins() has no history, so a run
+# before 15:30 cannot produce one.
+OnCalendar=Mon..Fri 18:30
+# If the box was down at 18:30, run on boot rather than skip the day.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

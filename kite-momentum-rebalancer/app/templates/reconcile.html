@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Reconcile{% endblock %}
+
+{% block heading %}Reconcile{% endblock %}
+
+{% block content %}
+{% if not v.available %}
+<div class="banner warn"><span class="tag">unavailable</span>
+  <span>{{ v.reason }} &mdash; <a href="/login">log in to Kite</a> and reload.</span></div>
+{% else %}
+
+<div class="banner {{ 'ok' if v.state == 'ok' else ('warn' if v.state == 'drift' else 'bad') }}">
+  <span class="tag">{{ v.state }}</span>
+  <span>{% if v.state == 'ok' %}The local record agrees with the broker on every order,
+      every stop and every position.
+    {% elif v.state == 'drift' %}Nothing is wrong, but something is not yet settled.
+    {% else %}<b>The local record disagrees with the broker.</b> Every defect found on
+      18 Aug 2026 looked like success from inside the system; this page reads the broker
+      instead.{% endif %}
+    {% if v.settled and v.settled.changed %}
+    <span class="muted" style="display:block;margin-top:5px">Loading this page reconciled
+      {{ v.settled.changed|length }} order{{ '' if v.settled.changed|length == 1 else 's' }}
+      against the order book:
+      {% for c in v.settled.changed %}{{ c.symbol }} {{ c.was }}&rarr;{{ c.now }}
+        ({{ c.filled }}/{{ c.planned }}){{ ', ' if not loop.last }}{% endfor %}.</span>
+    {% endif %}
+  </span>
+</div>
+
+<div class="rec-head">
+  <div class="fact st-{{ v.sections.orders }}"><div class="k">Orders</div>
+    <div class="v">{{ v.sections.orders }}</div>
+    <div class="muted">{{ v.counts.orders_wrong }} disagree ·
+      {{ v.counts.orders_drift }} unsettled</div></div>
+  <div class="fact st-{{ v.sections.stops }}"><div class="k">Stops</div>
+    <div class="v">{{ v.sections.stops }}</div>
+    <div class="muted">{{ v.counts.stop_findings }} finding(s) ·
+      {{ v.stops.coverage_pct }}% covered</div></div>
+  <div class="fact st-{{ v.sections.positions }}"><div class="k">Positions</div>
+    <div class="v">{{ v.sections.positions }}</div>
+    <div class="muted">{{ v.counts.positions_off }} away from the plan</div></div>
+</div>
+
+<section>
+  <h2>Orders &mdash; local record against the order book</h2>
+  <div class="card scroll">
+    <table aria-label="Order reconciliation">
+      <thead><tr><th>Symbol</th><th>Side</th><th>Planned</th><th>Local</th>
+        <th>Local filled</th><th>Broker</th><th>Broker filled</th><th>State</th></tr></thead>
+      <tbody>
+      {% for r in v.orders.rows %}
+        <tr>
+          <td>{{ r.symbol }}</td><td>{{ r.side }}</td><td>{{ r.planned }}</td>
+          <td>{{ r.local_status }}</td><td>{{ r.local_filled }}</td>
+          <td>{{ r.broker_status or '—' }}</td><td>{{ r.broker_filled }}</td>
+          <td class="{{ r.state }}" style="text-align:left;white-space:normal">
+            {{ r.state }} <span class="muted">{{ r.why }}</span></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="muted">No plan orders to compare.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Positions &mdash; where the book landed against where the plan aimed</h2>
+  <div class="card scroll">
+    <table aria-label="Position reconciliation">
+      <thead><tr><th>Symbol</th><th>Planned final</th><th>Held</th><th>Diff</th>
+        <th>Why</th></tr></thead>
+      <tbody>
+      {% for r in v.positions.rows %}
+        <tr><td>{{ r.symbol }}</td>
+          <td>{{ r.planned_final if r.planned_final is not none else '—' }}</td>
+          <td>{{ r.held }}</td>
+          <td class="{{ r.state }}">{{ '%+d'|format(r.diff) }}</td>
+          <td style="text-align:left;white-space:normal" class="muted">{{ r.why }}</td></tr>
+      {% else %}
+        <tr><td colspan="5" class="muted">The book matches the plan exactly.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">A difference here is either an order that did
+      not fill or a fill nobody recorded. Both matter before the next rebalance, because it
+      sizes itself against these quantities.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Stops</h2>
+  <div class="card">
+    {% if v.stops.findings %}
+    <ul style="list-style:none;padding:0;display:grid;gap:6px">
+    {% for f in v.stops.findings %}
+      <li><b class="{{ 'bad' if f.kind in ('missing','excess','partial','orphan') else '' }}">{{ f.kind }}</b>
+        {{ f.symbol }} <span class="muted">&mdash; {{ f.detail }}</span></li>
+    {% endfor %}
+    </ul>
+    <p class="muted" style="margin-top:10px"><a href="/stops">Review and fix stops</a>.</p>
+    {% else %}
+    <p class="muted">Every tradeable position carries exactly the cover it should.</p>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

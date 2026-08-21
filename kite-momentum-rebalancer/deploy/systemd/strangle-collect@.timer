@@ -1,0 +1,13 @@
+[Unit]
+Description=Record %i's straddle a few minutes after the open
+
+[Timer]
+# 09:20 IST — after 09:15, when options first carry a two-sided quote, and early enough
+# that the observation still sits near the open. The bands are built on opening prints.
+OnCalendar=Mon..Fri 09:20
+# NOT Persistent: a straddle recorded hours late is a different point on the decay curve
+# and would quietly bias the band it feeds. Better to miss the day than to mislabel it.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

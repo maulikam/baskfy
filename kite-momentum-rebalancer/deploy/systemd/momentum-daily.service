@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily collection (index history, benchmarks, EOD snapshot, fills, stale orders)
+
+[Service]
+Type=oneshot
+User=desk
+WorkingDirectory=/home/desk/kite-momentum-rebalancer
+Environment=TZ=Asia/Kolkata
+ExecStart=/home/desk/kite-momentum-rebalancer/.venv/bin/python -m scripts.daily --quiet --source schedule
+StandardOutput=append:/home/desk/logs/momentum-daily.log
+StandardError=append:/home/desk/logs/momentum-daily.log

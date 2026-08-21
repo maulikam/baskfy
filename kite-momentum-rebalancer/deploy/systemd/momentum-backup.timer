@@ -1,0 +1,12 @@
+[Unit]
+Description=Back up nightly, after the day's collection has landed
+
+[Timer]
+# 19:15 — after momentum-daily at 18:30, so the backup contains the EOD snapshot the
+# daily job just wrote rather than yesterday's.
+OnCalendar=*-*-* 19:15
+# Every day, not only weekdays: a backup on a holiday costs nothing and a gap does not.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,259 @@
+# =============================================================================
+# NIFTY Intraday Balanced-Premium Strangle — configuration
+# Account: Rs 50,00,000 (pledged + cash) | Broker: Zerodha Kite | V1: PAPER ONLY
+#
+#   [STRUCTURAL]  do NOT optimise. Changing it changes the strategy's edge.
+#   [CALIBRATE]   must be fitted on your own data before live.
+#   [TUNE]        safe to walk-forward optimise.
+#
+# CHANGES FROM THE BRIEF, each verified against the live account on 16 Aug 2026.
+# Every one is marked [VERIFIED] below with what was measured.
+# =============================================================================
+
+meta:
+  strategy: nifty_balanced_premium_strangle
+  version: "2.1"
+  mode: paper
+  source: "Face2Face / Shreyas Bandi, 2021 — mechanically reconstructed, NOT validated"
+
+instrument:
+  underlying: "NIFTY 50"
+  index_key: "NSE:NIFTY 50"
+  exchange: NFO
+  name: NIFTY
+  lot_size: 65                    # [VERIFIED] 1,722 of 1,722 NIFTY option contracts
+  strike_step: 50                 # [VERIFIED] modal gap across the live chain
+  expiry_weekday: TUESDAY         # [VERIFIED] next five expiries all Tuesdays
+  expiry_series: weekly
+  holiday_rule: previous_trading_day
+
+capital:
+  total: 5000000
+  cash: 2500000
+  pledged_market_value: 2500000
+  pledge_haircut_pct: 0.10
+  enforce_cash_collateral_ratio: true    # usable = min(cash + collateral, 2 * cash)
+
+margin:
+  # [VERIFIED] basket_order_margins on a 20-lot 500-pt condor returned Rs 92,497/lot
+  # (final, i.e. after hedge benefit), stable at Rs 83k-96k across three expiries and
+  # three strike distances. The brief's Rs 32,500 was low by 2.85x.
+  #
+  # WHY the hedge saves less than the brief assumed: SPAN nets down hard
+  # (Rs 24.9L -> Rs 6.0L, -76%) but EXPOSURE margin receives no hedge benefit at all —
+  # Rs 12.7L flat for 20 lots, about Rs 63k/lot on its own, which is already 1.95x the
+  # brief's whole estimate. Consequence: this strategy is MARGIN-bound, not risk-bound,
+  # which reverses the brief's section 3.2. max_catastrophic_loss_pct is not the binding
+  # constraint here; utilisation is.
+  #
+  # SPLIT INTO TWO CAPS when BANKNIFTY and SENSEX were added, 18 Aug 2026. One number
+  # cannot do both jobs. At 20 lots NIFTY alone was 39% of the account, so a second
+  # instrument starting the same morning would have found nothing left — and, worse,
+  # would only have discovered that after the first two had already entered, leaving the
+  # account holding whichever pair happened to start first.
+  #   max_utilisation_pct           this instrument's ALLOCATION  (0.18 + 0.12 + 0.10)
+  #   portfolio_max_utilisation_pct the ACCOUNT ceiling, unchanged at the old 0.40
+  # Enforcement is in sizing.evaluate against a shared ledger of live commitments
+  # (strategies/strangle/allocation.py), because the three run as separate processes and
+  # basket_order_margins is called with consider_positions=False.
+  max_utilisation_pct: 0.18
+  portfolio_max_utilisation_pct: 0.40
+  margin_per_lot_estimate: 92500  # [CALIBRATE] sanity bound only; queried before entry
+  query_before_every_entry: true
+  abort_if_query_fails: true      # never fall back to the estimate
+
+sizing:
+  # 20 -> 9 when the account became a three-instrument account: 0.18 * 47.5L usable /
+  # 92,497 = 9.2. To run NIFTY alone at the original size again, set max_utilisation_pct
+  # back to 0.40 and lots back to 20 — nothing else here depends on the number.
+  lots: 9                                   # [TUNE]
+  max_catastrophic_loss_pct: 0.15           # [STRUCTURAL] wing_width * units <= pct * total
+  catastrophic_loss_denominator: capital_total
+  max_lots_at_current_wing: 23              # derived at startup; do not hand-edit
+  scale_by_session_multiplier: true
+  never_increase_qty_after_entry: true      # [STRUCTURAL] no averaging, ever
+  loss_streak_multiplier: 0.75
+  min_lots: 5
+  win_streak_multiplier: 1.15
+  max_lots_multiplier: 1.00                 # [STRUCTURAL] never scale above configured lots
+
+structure:
+  type: HEDGED                    # HEDGED (iron condor) | NAKED (strangle)
+  wing_width_points: 500          # [TUNE]
+  wing_widen_to: 700              # widening re-runs the sizing assert and may cut lots
+  max_wing_cost_pct: 0.20         # of credit received; else skip the day
+  wing_width_invariant: true      # [STRUCTURAL] wings roll WITH the shorts
+
+session:
+  stop_to_target_ratio: 0.50      # [STRUCTURAL] this ratio IS the edge. Do not fit it.
+  allow_expiry_day: false
+  # A weekly series never reaches dte 5, so this is a no-op for NIFTY. It is stated
+  # anyway because BANKNIFTY's monthly series does, and a reader comparing the three
+  # files should see the gate exists everywhere rather than wonder why one has it.
+  max_dte: 4
+  by_days_to_expiry:              # [CALIBRATE] derived from a Thursday-expiry era
+    "3+": {target_points: 5,  size_mult: 0.50}   # Wed + Thu
+    "2":  {target_points: 7,  size_mult: 0.75}   # Fri
+    "1":  {target_points: 10, size_mult: 1.00}   # Mon
+    "0":  {target_points: 10, size_mult: 0.60}   # Tue, unreachable while disabled
+  reject_negative_dte: true
+  # THE dte>=3 ENTRY-COST GATE. [TUNE]
+  # At dte>=3 the stop is 5 * 0.5 = 2.5 pts while entering costs the four crossing spreads
+  # plus the statutory stack. If that comes to 1.5 pts, 60% of the risk budget is gone
+  # before the market moves and Lever B is armed AT ENTRY. Rather than change the stop —
+  # which would break the [STRUCTURAL] 2:1 ratio — or net the cost out of the mark — which
+  # the accounting section forbids — the session is simply not taken.
+  #
+  # The cost is MEASURED per session against live depth at the candidate strikes, walked
+  # for the real size, so a day with tight spreads trades and the same day with blown-out
+  # spreads does not. Two of the four weekly sessions sit in the dte>=3 bucket, so expect
+  # this to skip days; the report says how often and why.
+  min_stop_to_entry_cost_ratio: 2.0
+  # NSE holidays that the derived calendar cannot see. It reads past holidays exactly from
+  # index history and infers future ones from expiries that shifted off a Tuesday — but a
+  # holiday that moves no expiry leaves no trace in any Kite endpoint. Add those from the
+  # NSE circular; scripts/strangle.py --check prints how far the derived calendar reaches.
+  extra_holidays: []
+
+timing:
+  premarket_setup: "09:00"
+  entry_early: "09:15"            # "first tick with a complete, non-stale chain"
+  entry_normal: "09:30"
+  entry_window_end: "09:45"
+  # LATE ENTRY. entry_window_end was configured from V1 and never enforced, which did not
+  # matter while the session only ever started at 09:30 from the scheduler — and started
+  # mattering the moment the trigger became a human login at an unpredictable hour.
+  # With allow_late_entry the session still takes a first position after the window, up to
+  # no_new_entry_after, at a reduced size: the target and stop are calibrated for a full
+  # day of decay and a late entry gets less of it, so it takes less risk. Past
+  # no_new_entry_after there is under three hours to force_exit and no entry is taken.
+  allow_late_entry: true
+  late_entry_size_mult: 0.75
+  no_new_entry_after: "12:30"
+  force_exit: "15:10"
+
+levels:
+  swing_timeframe: "1h"
+  swing_lookback_days: 10
+  swing_left_bars: 2
+  swing_right_bars: 2
+  swing_recency_lambda: 0.05
+  cluster_tolerance_points: 50
+  use_unconfirmed_candle: false   # [STRUCTURAL] true = look-ahead bias
+
+priced_range:
+  multiplier: 1.0                 # [STRUCTURAL] FULL straddle. ASP/2 halves the range.
+
+open_interest:
+  snapshot_interval_seconds: 180
+  lookback_minutes: 30
+  min_oi_percentile: 70
+  treat_as_filter_not_truth: true
+
+gates:
+  gap_veto_pct: 0.0125
+  iv_low_multiplier: 0.85
+  iv_high_multiplier: 1.30
+  min_leg_oi: 500000
+  max_bid_ask_spread_pct: 0.03
+  max_data_staleness_seconds: 5
+  require_secondary_broker: true
+  max_consecutive_loss_days: 3
+  event_blacklist: [rbi_policy, union_budget, fed_fomc, cpi_india, election_result]
+
+reference_band: {}                # [CALIBRATE] ships empty on purpose
+reference_band_required_in_paper: true
+
+entry_timing_gate:
+  same_or_higher_than_prev_close: 1.00
+  min_fraction_of_prev_close: 0.90
+
+selection:
+  min_strikes_beyond_priced_range: 1
+  min_leg_premium: 8
+  premium_balance_tolerance_pct: 0.10   # [STRUCTURAL] balance by PREMIUM, not distance
+  must_be_beyond_oi_wall: true
+  must_be_beyond_swing_level: true
+
+management:                        # V2/V3 — parsed but unused in V1
+  poll_seconds: 5
+  rebalance_ratio: 1.25
+  min_adjustment_interval_minutes: 5
+  max_adjustments_per_day: 3
+  rebalance_allowed_above_pct_of_stop: -0.85
+  break_confirmation_closes: 2
+  break_confirmation_timeframe: "1m"
+  risk_on: {match_premium_multiplier: 1.00, trending_day_multiplier: 1.05,
+            min_fill_fraction: 0.90}
+  risk_off: {trigger_at_pct_of_stop: 0.60, min_premium_reduction_pct: 0.25}
+  vwap_filter: {enabled: true, never_riskoff_threatened_leg: true,
+                both_above_vwap_action: EXIT}
+
+exits:
+  hard_stop_ends_day: true        # [STRUCTURAL]
+  trail_trigger_pct: 0.80
+  trail_give_back_points: 2.0
+  trail_ratchets_off_high_water_mark: true
+  widen_legs_on_trail_activation: true
+  widen_min_premium_fraction: 0.50
+  target_overrun_multiplier: 1.5
+  proximity_abort_asp_fraction: 0.60
+  efficiency_abort_window: ["12:00", "12:30"]
+  efficiency_abort_pct_of_target: 0.30
+  efficiency_abort_no_improvement_minutes: 20
+  premium_exhausted_pct_of_credit: 0.15
+  allow_single_reentry: true
+  reentry_min_extra_strikes: 2
+  reentry_min_target_points: 4.0
+  reentry_stop_ratio: 0.50        # [STRUCTURAL]
+
+fills:
+  mode: depth_walk                # [STRUCTURAL] never LTP, never mid
+  sell_at: BID
+  buy_at: ASK
+  walk_depth_levels: 5
+  refuse_if_depth_unavailable: true
+  queue_position_penalty_ticks: 1
+  tick_size: 0.05
+  slice_above_lots: 10
+  abort_slices_if_slippage_points: 2.0
+
+costs:
+  # Delegated to app/strategies/options_costs.py, which carries each rate's source and
+  # effective date and is covered by its own tests. Listed here only so a reader sees
+  # what is charged.
+  # [VERIFIED] stt_sell is 0.0015 (0.15% of premium, sell side) from 1 Apr 2026.
+  # The brief's 0.001 is the pre-April rate and understates the largest statutory
+  # component by a third. Options brokerage is a FLAT Rs 20 with no percentage cap.
+  brokerage_per_order: 20
+  stt_sell_pct: 0.0015
+  exchange_txn_pct: 0.0003553
+  sebi_fee_pct: 0.000001
+  stamp_duty_buy_pct: 0.00003
+  ipft_pct: 0.000005
+  gst_pct: 0.18
+  assumed_entry_exit_points: 0.9      # sanity target only; the model charges per leg
+  assumed_points_per_adjustment: 0.5
+  planning_case_points: 1.9
+
+accounting:
+  mark_basis: liquidation         # shorts at ask, longs at bid
+  book_pnl_is_net_of_costs: true
+  realised_legs_already_net: true
+
+operational:
+  secondary_broker_required: true
+  heartbeat_seconds: 10
+  heartbeat_max_misses: 3
+  kill_switch_multiple_of_stop: 2.0
+  lockout_persists_to_disk: true
+  basket_orders_only_on_exit: true
+  journal_path: "data/outputs/strangle_journal.jsonl"
+  lockout_path: "data/outputs/strangle_lockout.json"
+  journal_append_only: true
+
+live:
+  enabled: false
+  require_typed_confirmation: true
+  min_paper_sessions_before_live: 60
+  require_expectancy_within_tolerance: true

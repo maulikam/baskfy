@@ -1,0 +1,434 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Options{% endblock %}
+
+{% block heading %}Options Lab{% endblock %}
+
+{% block content %}
+{% if started %}<div class="banner ok"><span class="tag">started</span>
+  <span>{{ started }} is running. Output appears below when it finishes, and on
+  <a href="/ops">Operations</a> while it runs.</span></div>{% endif %}
+{% if error %}<div class="banner bad"><span class="tag">refused</span>
+  <span>{{ error }}</span></div>{% endif %}
+
+{# The claim this page has to earn. Counted from the order journal — the gateway's record
+   of everything it has ever done — rather than asserted. #}
+{% if p.orders.placed %}
+<div class="banner bad">
+  <span class="tag">{{ p.orders.placed }} option orders</span>
+  <span>The order journal records {{ p.orders.placed }} option order{{ '' if p.orders.placed == 1 else 's' }}.
+    This program is supposed to be paper-only, so either the journal or that assumption is
+    wrong. Read <code>data/outputs/orders_journal.jsonl</code> before doing anything else.</span>
+</div>
+{% else %}
+<div class="banner ok">
+  <span class="tag">paper only</span>
+  <span class="muted">No option order has ever been placed. Counted from the gateway's own
+    journal, which records every placement, dry run and refusal it has made — not asserted
+    from intent. Nothing on this page can reach the broker.</span>
+</div>
+{% endif %}
+
+{% set nx = p.next %}
+{% if p.strangles and p.strangles|selectattr('available')|list %}
+<section>
+  <h2>Intraday strangle &mdash; run controls</h2>
+
+  {% if p.jobs.running %}
+  <div class="banner warn">
+    <span class="tag">busy</span>
+    <span><b>{{ p.jobs.running.name }}</b> has been running since
+      {{ p.jobs.running.started_at[11:16] }}. Operations share one database and one broker
+      session, so the controls below are disabled until it finishes &mdash; including the
+      equity daily job. <a href="/ops/job/{{ p.jobs.running.id }}">Watch it</a>.</span>
+  </div>
+  {% endif %}
+
+  <div class="banner {{ 'ok' if nx.ready else 'warn' }}">
+    <span class="tag">next step</span>
+    <span><b>{{ nx.label }}</b>
+      {%- if nx.instruments %} for {{ nx.instruments|join(', ') }}{% endif %}
+      &mdash; {{ nx.why }}
+      {%- if nx.instruments|length > 1 %} Run it once per underlying: each keeps its own
+      record, and the picker on the control selects which.{% endif %}</span>
+  </div>
+
+  <div class="ctl">
+    {% for c in p.jobs.controls %}
+    <form method="post" action="/options/run"
+          class="{{ 'primary' if c.name == nx.op }}">
+      <input type="hidden" name="op" value="{{ c.name }}">
+      <h4>{{ c.label }}</h4>
+      <div class="sum">{{ c.summary }}</div>
+      {% for prm in c.params %}
+        <label>{{ prm.label }}
+          <select name="{{ prm.key }}">
+            {% for ch in prm.choices %}
+            <option value="{{ ch }}" {{ 'selected' if ch == prm.default }}>
+              {{ ch|upper if prm.key == 'instrument' else ch ~ ' polls' }}</option>
+            {% endfor %}
+          </select>
+          <span class="muted">{{ prm.help }}</span>
+        </label>
+      {% endfor %}
+      <div class="row">
+        <button type="submit"
+                class="{{ 'btn-saffron' if c.name == nx.op else 'btn-ghost' }}"
+                {{ 'disabled' if p.jobs.running }}>Run</button>
+        {% if c.last_by_instrument %}
+        <span class="last">last
+          {%- for r in c.last_by_instrument %}
+          <b class="{{ 'ok' if r.status == 'ok' else 'bad' }}">{{ r.instrument|upper }}
+            {{ r.status }}</b> {{ r.started_at[5:16] }}
+          {%- if r.id %} <a href="/ops/job/{{ r.id }}">output</a>{% endif %}
+          {%- if not loop.last %}&middot;{% endif %}
+          {%- endfor %}
+        </span>
+        {% elif c.last %}
+        <span class="last">last
+          <b class="{{ 'ok' if c.last.status == 'ok' else 'bad' }}">{{ c.last.status }}</b>
+          {{ c.last.started_at[5:16] }}
+          {% if c.last.id %}&middot; <a href="/ops/job/{{ c.last.id }}">output</a>{% endif %}
+        </span>
+        {% else %}<span class="last">never run</span>{% endif %}
+      </div>
+    </form>
+    {% endfor %}
+  </div>
+  <p class="muted" style="margin-top:11px">Every control is on the same fixed allowlist as
+    <a href="/ops">Operations</a>: the browser sends an operation name, never a command.
+    A paper session is bounded by its poll count on purpose &mdash; operations hold one
+    shared lock, so an unbounded run would block the equity daily job behind it. A full
+    unattended session belongs in the scheduler.</p>
+</section>
+
+<section>
+  <h2>Strangle status</h2>
+
+  {% set acc = p.commitments %}
+  <div class="banner {{ 'warn' if acc.pct and acc.pct > 90 else 'ok' }}">
+    <span class="tag">one account</span>
+    <span>Three underlyings draw on the same Rs
+      {{ '{:,}'.format(acc.usable) if acc.usable else '&mdash;' }} of usable margin. Each
+      config is allowed its own slice, and the ceiling across all of them is Rs
+      {{ '{:,}'.format(acc.ceiling) if acc.ceiling else '&mdash;' }}.
+      {% if acc.live %}
+        <b>Rs {{ '{:,}'.format(acc.committed) }}</b> is committed right now by
+        {{ acc.live.keys()|join(', ')|upper }} &mdash; Rs
+        {{ '{:,}'.format(acc.free) }} left for anything starting after them.
+      {% else %}
+        Nothing is committed; the full ceiling is available.
+      {% endif %}
+      A session that would breach it is refused at sizing rather than discovered halfway
+      through a basket.</span>
+  </div>
+
+  <div class="card scroll" style="margin-top:var(--s3)">
+    <table aria-label="Instruments">
+      <thead><tr>
+        <th>Underlying</th><th>Expiry</th><th>Lot</th><th>Lots</th><th>Wings</th>
+        <th>Allocation</th><th>Bands</th><th>Paper</th><th>Next</th>
+      </tr></thead>
+      <tbody>
+      {% for u in p.strangles %}
+        {% if u.available %}
+        <tr>
+          <td><b>{{ u.label }}</b><br><span class="muted">{{ u.exchange }}</span></td>
+          <td>{{ u.expiry_weekday }}<br><span class="muted">{{ u.expiry_series }}</span></td>
+          <td>{{ u.lot_size }}</td>
+          <td>{{ u.lots }}</td>
+          <td>{{ u.wing_width }}</td>
+          <td>{{ u.allocation_pct }}%<br>
+            <span class="muted">Rs {{ '{:,}'.format(u.margin_per_lot) }}/lot</span></td>
+          <td class="{{ 'ok' if u.bands_ready.ready else 'bad' }}">
+            {{ u.forward_sessions }} rec</td>
+          <td>{{ u.paper_sessions }} / {{ u.paper_needed }}</td>
+          <td class="muted">{{ u.next_action.label }}</td>
+        </tr>
+        {% else %}
+        <tr><td><b>{{ u.label }}</b></td>
+          <td colspan="8" class="bad">config unreadable &mdash; {{ u.error }}</td></tr>
+        {% endif %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="muted" style="margin-top:11px">Each underlying keeps its own bands, journal,
+    lockout and paper record. Pooling them would not widen a reference band, it would
+    build one from three different distributions and make it meaningless. BANKNIFTY has
+    <b>no weekly expiry</b> &mdash; the live dump lists only last-Tuesday-of-month
+    contracts &mdash; so it trades roughly four sessions a month rather than four a week,
+    and 60 paper sessions there will take about fifteen months.</p>
+
+  {% for u in p.strangles %}{% if u.available %}
+  <details style="margin-top:var(--s3)">
+    <summary><b>{{ u.label }}</b> &mdash; {{ u.next_action.why }}</summary>
+
+    <div class="posture" style="margin-top:var(--s3)">
+      <div class="fact {{ 'good' if u.mode == 'paper' else 'warn' }}">
+        <div class="k">Mode</div><div class="v">{{ u.mode|upper }}</div>
+        <div class="muted">{{ u.lots }} lots &middot; {{ u.structure|lower }} &middot;
+          {{ u.wing_width }}-point wings &middot;
+          Rs {{ '{:,}'.format(u.margin_per_lot) }}/lot, {{ u.allocation_pct }}% of the
+          account against a {{ u.max_utilisation_pct }}% ceiling shared with the others.</div>
+      </div>
+      <div class="fact {{ 'good' if u.bands_ready.ready else 'warn' }}">
+        <div class="k">Reference bands</div>
+        <div class="v">{{ u.forward_sessions }} rec</div>
+        <div class="muted">{{ u.bands_ready.note }}</div>
+      </div>
+      <div class="fact warn">
+        <div class="k">Paper record</div>
+        <div class="v">{{ u.paper_sessions }} / {{ u.paper_needed }}</div>
+        <div class="muted">Completed sessions that reached a flat book. An unclosed
+          session is not experience and is not counted.</div>
+      </div>
+      <div class="fact {{ 'warn' if u.allow_expiry_day else 'good' }}">
+        <div class="k">Expiry day</div>
+        <div class="v">{{ 'TRADED' if u.allow_expiry_day else 'SKIPPED' }}</div>
+        <div class="muted">dte=0 carries the most gamma of any session: the same index
+          move that costs one point on Monday can cost many multiples of it at the bell,
+          and the stop is the same size. Sessions beyond dte {{ u.max_dte }} are skipped
+          too &mdash; the table has no row calibrated for them.</div>
+      </div>
+      <div class="fact {{ 'warn' if u.allow_late_entry else 'good' }}">
+        <div class="k">Entry window</div>
+        <div class="v">{{ u.entry_window_end }}{{ '+' if u.allow_late_entry }}</div>
+        <div class="muted">
+          {% if u.allow_late_entry %}
+            A first entry after {{ u.entry_window_end }} is still taken, up to
+            {{ u.no_new_entry_after }}, at {{ (u.late_entry_size_mult * 100)|int }}% size.
+            The target and stop do not move &mdash; that ratio is the strategy &mdash; so
+            size carries the fact that less of the session is left.
+          {% else %}
+            A first entry is only opened inside the opening window.
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {% if u.bands %}
+    <div class="card scroll" style="margin-top:var(--s3)">
+      <table aria-label="Reference bands for {{ u.label }}">
+        <thead><tr><th>dte</th><th>n</th><th>low</th><th>high</th><th>would veto</th>
+          <th>sample</th></tr></thead>
+        <tbody>
+        {% for b, r in u.bands.items() %}
+          <tr><td>{{ b }}</td><td>{{ r.n }}</td><td>{{ '%.1f'|format(r.low) }}</td>
+            <td>{{ '%.1f'|format(r.high) }}</td><td>{{ r.vetoes_pct }}%</td>
+            <td class="{{ 'ok' if r.sufficient else 'bad' }}">
+              {{ 'ok' if r.sufficient else 'THIN' }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <div class="card" style="margin-top:var(--s3)">
+      <div class="steps-path">
+        {% for l in u.locks.locks %}
+        <div><span class="k {{ 'ok' if l.open else 'bad' }}">{{ 'open' if l.open else 'shut' }}</span>
+          <span><b>{{ l.lock }}</b> &mdash; <span class="muted">{{ l.detail }}</span></span></div>
+        {% endfor %}
+      </div>
+      <p class="muted" style="margin-top:11px">All
+        {{ u.locks.closed_locks|length }} closed. The last two are enforced inside
+        <code>core/gateway.py</code>, so a caller that skipped every check on this page
+        would still be refused at the layer that talks to Kite. The entry-cost gate
+        additionally skips any session whose stop is under {{ u.min_stop_to_cost }}x the
+        measured cost of entering it.</p>
+    </div>
+  </details>
+  {% endif %}{% endfor %}
+</section>
+{% endif %}
+
+<section>
+  <h2>Safety posture</h2>
+  <div class="posture">
+    <div class="fact {{ 'warn' if p.gates.options_enabled else 'good' }}">
+      <div class="k">F&amp;O orders</div>
+      <div class="v">{{ 'ENABLED' if p.gates.options_enabled else 'OFF' }}</div>
+      <div class="muted">config.OPTIONS_ENABLED — the gateway refuses every NFO/BFO order
+        while this is off.</div>
+    </div>
+    <div class="fact {{ 'warn' if p.gates.intraday_enabled else 'good' }}">
+      <div class="k">Intraday (MIS)</div>
+      <div class="v">{{ 'ENABLED' if p.gates.intraday_enabled else 'OFF' }}</div>
+      <div class="muted">config.INTRADAY_ENABLED — MIS is an intraday product on every
+        segment, so this gates the engine as well as the product.</div>
+    </div>
+    <div class="fact good">
+      <div class="k">Overnight carry</div>
+      <div class="v">BLOCKED</div>
+      <div class="muted">{{ p.gates.carry_products_blocked|join(' and ') }} are refused on
+        any option, in both directions. Hard-coded in <code>core/guards.py</code>, not a
+        setting — a knob that can be turned is not a guarantee.</div>
+    </div>
+  </div>
+  <p class="muted">The overnight arm was dropped on 16 Aug 2026 as a risk decision, not a
+    result. Bhat (2024) reports the NIFTY variance risk premium is earned overnight and
+    given back intraday; if that holds, a negative result below is <em>consistent</em> with
+    the literature and is not evidence the overnight trade would have worked. Gap risk is
+    exactly what the policy declined to take.</p>
+</section>
+
+<section>
+  <h2>Sample</h2>
+  <div class="card">
+    <div class="prog"><i style="width:{{ p.sample.pct }}%"></i></div>
+    <div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap">
+      <span><b class="{{ 'ok' if p.sample.have >= p.sample.need_low else 'na' }}">{{ p.sample.have }}</b>
+        of {{ p.sample.need_low }}–{{ p.sample.need_high }} observations</span>
+      <span class="muted">{{ p.sample.sessions_remaining }} more sessions at roughly one a day</span>
+    </div>
+    <p class="muted" style="margin-top:10px">A high-win-rate condor needs roughly
+      {{ p.sample.need_low }}–{{ p.sample.need_high }} observations to separate a real edge
+      from noise at 80% power once costs are taken out. Anything read off a smaller sample
+      is a story about variance. The count is shown against that denominator for exactly
+      that reason.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Preregistered variants — {{ p.trials }} trial{{ '' if p.trials == 1 else 's' }}</h2>
+  <div class="card scroll">
+    <table aria-label="Preregistered variants">
+      <thead><tr><th>Variant</th><th>Short Δ</th><th>Wing Δ</th><th>Registered</th>
+        <th>Closed</th><th>Note</th></tr></thead>
+      <tbody>
+      {% for v in p.variants %}
+        <tr>
+          <td>{{ v.name }}</td>
+          <td>{{ v.spec.short_delta }}</td>
+          <td>{{ v.spec.wing_delta }}</td>
+          <td>{{ v.registered_at[:10] }}</td>
+          <td class="{{ 'na' if not v.closed }}">{{ v.closed }}</td>
+          <td style="text-align:left;white-space:normal" class="muted">{{ v.note or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">Expected best Sharpe from N trials on a
+      worthless strategy is about 1.19 at N=5 and 1.58 at N=10 (Bailey, Borwein,
+      López de Prado &amp; Zhu), so the number of variants tried is part of the result.
+      Adding one after collection begins invalidates the deflated Sharpe for everything
+      already collected.</p>
+  </div>
+</section>
+
+{% if p.open_arms %}
+<section>
+  <h2>Open now</h2>
+  <div class="card scroll">
+    <table aria-label="Open arms">
+      <thead><tr><th>Arm</th><th>Session</th><th>Expiry</th><th>In</th><th>Credit ₹</th>
+        <th>Margin ₹</th><th>Legs</th><th>Breach</th></tr></thead>
+      <tbody>
+      {% for a in p.open_arms %}
+        <tr>
+          <td>{{ a.arm_id[:8] }}</td><td>{{ a.session_date }}</td><td>{{ a.expiry }}</td>
+          <td>{{ a.entry_at }}</td>
+          <td>{{ '{:,.0f}'.format(a.entry_credit or 0) }}</td>
+          <td>{{ '{:,.0f}'.format(a.margin) if a.margin else '—' }}</td>
+          <td>{{ a.legs }}</td>
+          <td class="{{ 'bad' if a.breach_seen else 'na' }}">{{ 'yes' if a.breach_seen else 'no' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<section>
+  <h2>Results</h2>
+  {% if p.closed_count %}
+  <div class="card">
+    <div class="grid">
+      <div><div class="k muted">Closed</div><div class="stat">{{ p.closed_count }}</div></div>
+      <div><div class="k muted">Mean net ₹</div>
+        <div class="stat {{ 'ok' if (p.summary.net_pnl_mean or 0) > 0 else 'bad' }}">
+          {{ '{:,.0f}'.format(p.summary.net_pnl_mean or 0) }}</div></div>
+      <div><div class="k muted">Win rate</div>
+        <div class="stat">{{ p.summary.win_rate_pct if p.summary.win_rate_pct is not none else '—' }}%</div></div>
+      <div><div class="k muted">Cost / gross</div>
+        <div class="stat">{{ p.summary.cost_ratio if p.summary.cost_ratio is not none else '—' }}</div></div>
+    </div>
+    {% if p.mean_vs_zero %}
+    <p class="muted" style="margin-top:12px">Mean net P&amp;L is
+      ₹{{ '{:,.0f}'.format(p.mean_vs_zero.net_pnl_mean) }} against a standard error of
+      {% if p.mean_vs_zero.standard_error %}₹{{ '{:,.0f}'.format(p.mean_vs_zero.standard_error) }}
+      (t = {{ p.mean_vs_zero.t }}){% else %}—{% endif %}.
+      {% if p.mean_vs_zero.conclusive %}That clears two standard errors. It is still one
+        strategy on one instrument over one period.{% else %}<b>That does not clear two
+        standard errors, so it says nothing yet</b> — the sign of a mean this noisy is not
+        a finding.{% endif %}</p>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <h3>No observation has been recorded yet</h3>
+    <p class="muted">The variants are preregistered and the schema is ready. Collection is
+      three commands a day, and every one of them is read-only.</p>
+    <ul class="steps">
+      <li><span class="n">1</span><span>Around 09:45, once the opening range has formed
+        <pre class="cmd">python -m scripts.options_ab open</pre></span></li>
+      <li><span class="n">2</span><span>Any time during the session, to record a short-strike touch
+        <pre class="cmd">python -m scripts.options_ab watch</pre></span></li>
+      <li><span class="n">3</span><span>By 15:12, before the broker's own square-off
+        <pre class="cmd">python -m scripts.options_ab close --reason square_off</pre></span></li>
+    </ul>
+    <p class="muted" style="margin-top:14px">A missed session is simply a missing
+      observation — nothing breaks, and the count above stays where it is. What cannot be
+      recovered is a session's chain: quotes are not stored by anyone on your behalf.</p>
+  </div>
+  {% endif %}
+</section>
+
+{% if p.recent %}
+<section>
+  <h2>Recent sessions</h2>
+  <div class="card scroll">
+    <table aria-label="Recent closed arms">
+      <thead><tr><th>Session</th><th>In</th><th>Out</th><th>Reason</th><th>Spot move %</th>
+        <th>Net ₹</th><th>RoM %</th><th>Replayable</th></tr></thead>
+      <tbody>
+      {% for a in p.recent %}
+        <tr>
+          <td>{{ a.session_date }}</td><td>{{ a.entry_at }}</td><td>{{ a.exit_at }}</td>
+          <td>{{ a.exit_reason }}</td>
+          <td>{{ '%+.2f'|format(a.spot_move_pct) if a.spot_move_pct is not none else '—' }}</td>
+          <td class="{{ 'ok' if (a.net_pnl or 0) > 0 else 'bad' }}">
+            {{ '{:,.0f}'.format(a.net_pnl) if a.net_pnl is not none else 'n/a' }}</td>
+          <td>{{ '%+.2f'|format(a.return_on_margin_pct) if a.return_on_margin_pct is not none else '—' }}</td>
+          <td class="{{ 'ok' if a.replayable else 'bad' }}">{{ 'yes' if a.replayable else 'NO' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<section>
+  <h2>Replayability</h2>
+  <div class="card">
+    {% if p.tokens.total %}
+    <p><b class="{{ 'ok' if p.tokens.without == 0 else 'bad' }}">{{ p.tokens.with_tokens }}
+      of {{ p.tokens.total }}</b> recorded arms carry their instrument tokens.</p>
+    {% else %}
+    <p class="muted">No arms recorded yet. Every arm opened from now on stores its tokens.</p>
+    {% endif %}
+    <p class="muted" style="margin-top:9px">Kite lists only <em>live</em> contracts: checked
+      on 16 Aug 2026, zero of the eighteen NIFTY expiries on file were in the past. Once a
+      contract expires its token cannot be looked up again, and <code>historical_data</code>
+      takes a token rather than a symbol — so an option's price history becomes unreachable
+      the moment it expires unless the token was written down first. Each arm stores its
+      own, which is the difference between a dataset and a summary.</p>
+    <p class="muted" style="margin-top:9px">It also settles an open question. Whether a
+      token recorded <em>before</em> expiry still resolves <em>after</em> it could not be
+      tested, because no such token existed. The first arms to pass their expiry will say.</p>
+  </div>
+</section>
+{% endblock %}

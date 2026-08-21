@@ -372,3 +372,100 @@ and lists them again in its summary.
 A local runner that prints all-green while silently skipping a third of the workflow is worse than
 one that says what it did not do — the same reasoning both repositories already apply to their own
 open-items lists. First run: **14 passed, 2 failed, 5 skipped**.
+
+---
+
+## M6
+
+### M6.1 — The options lab is disconnected by deferring imports, not by deleting them ⚠ UNREVIEWED
+Three live modules imported the subsystem at **module scope**, so freezing it would have stopped
+the equity desk booting: `analytics/ops.py` (the instrument registry, on the `/ops` page's import
+path), `analytics/autorun.py` (`OPTIONS_OPEN`, and autorun runs on every login), and `main.py`'s
+three `/options*` routes.
+
+**Decided.** Each deferred behind the existing `OPTIONS_ENABLED` gate rather than removed, so a
+thaw is a `git mv` and needs no edits to live code:
+
+- `ops.OPERATIONS` is now the equity operations only. `all_operations()`, `by_name()` and
+  `groups()` add the options controls when they are genuinely available; `_options_operations()`
+  returns `()` unless the gate is on, and logs once instead of raising if the gate is on but the
+  subsystem is absent.
+- `autorun.needed()`'s options loop is gated, and `OPTIONS_OPEN` is imported at its single use
+  site — the comment explaining *why it is imported rather than redeclared* is preserved, because
+  that reasoning is still right; only the timing changed.
+- The `/options*` routes stay mounted and answer **404** while frozen, which is what a route that
+  does not exist should say. The nav entry is gated with them: a link to a 404 reads as a broken
+  desk rather than an absent feature.
+
+**A regression this caused, and how it was caught.** Making `start()` resolve through `by_name()`
+broke the seam four `test_ops.py` tests use to inject a fake operation by monkeypatching
+`ops.BY_NAME`. `by_name()` now layers the module attribute last, so the patch still wins. Worth
+recording because the fix is invisible unless you know the tests exist.
+
+### M6.2 — Four modules did not freeze, because the equity desk's calendar depends on them ⚠ UNREVIEWED
+`scripts/autorun.py` answers "is today a trading day" from
+`strategies.strangle.calendar_nse.build_from_kite`, seeded with the default underlying's index
+token (`instruments`) and `session.extra_holidays` (`config`, which needs `clock`). **Autorun runs
+on every login and collects the day's snapshot, fills and benchmarks — none of it backfillable**
+(`docs/02` §6). Its existing failure path for a missing calendar is `CALENDAR_UNAVAILABLE`, exit 1,
+so freezing those modules would have stopped the desk's most load-bearing daily job.
+
+**Decided: freeze the strategy, not the market infrastructure.** Sixteen of the twenty modules
+moved. `calendar_nse`, `clock`, `instruments` and `config` stayed, with a new package `__init__`
+that explains the split. The four are dependency-free — stdlib plus PyYAML — and none can reach
+an order path. `config/strangle*.yaml` stayed with them, because `extra_holidays` lives there.
+
+**Rejected:** writing an equity-owned trading calendar during a freeze module. That is new logic on
+a load-bearing path, in the one module whose job is to *stop* touching this code.
+
+**The frozen tree keeps its own copies of all four**, so a thaw is self-contained and needs nothing
+from the live tree.
+
+**This is a seam, not a resting place.** The screener already has `baskfy_core.trading_calendar`.
+**M15 should make these one** when the desk's brains move into `packages/core` — an NSE trading
+calendar has no business living in a package named after an options strategy. Flagged there.
+
+### M6.3 — Tests that exercise frozen code are skipped with a reason, not deleted ⚠ UNREVIEWED
+Twelve test files were entirely strangle and moved with it. Three files were **mixed**, and moving
+them would have taken equity coverage along:
+
+| File | Handling |
+|---|---|
+| `test_exit_codes.py` | 10 of 12 tests need `scripts/strangle.py`. Marked `@options_lab`; the two script-wide sweeps (every unattended script exits 2 on an expired token) stay live and assert `strangle.py` only when present |
+| `test_autorun.py` | 7 of 25 marked |
+| `test_pages.py`, `test_regime_view_backtest.py` | The page sweep and the two nav tests now derive their route list from `OPTIONS_ENABLED`, asserting the **rule** — link and route appear together or not at all — rather than either outcome |
+
+`tests/_frozen.py` holds the one skip marker and the one reason string. A route dropped from a
+sweep is replaced by a positive assertion that it 404s, because silently shrinking a parametrize
+list is how coverage disappears without anyone noticing.
+
+**Desk suite: 1202 passed, 17 skipped, 0 failed** — green for the first time in this run. The M0
+baseline's single failure (the strangle plist asserting a pre-move path) went to `frozen/` with the
+rest, which is what M5.2 said would close it.
+
+### M6.4 — What deliberately did NOT move
+- **`deploy/systemd/strangle-collect@.{service,timer}`** — M6 step 4 is explicit that the live box
+  is not touched. The units stay in the deploy kit; the box runs the pre-freeze layout until its
+  next deliberate deploy, and at that point the paths they name will have moved. Queued as a note,
+  not an action.
+- **`data/outputs/strangle_*`** — the straddle records, journals and lockouts. Untracked, and the
+  observation series is not rebuildable from anything (`docs/02` §6 counts it among the data that
+  cannot be reconstructed). D4 keeps the collectors running.
+
+### M6.5 — Five gateway tests declared their mode instead of inheriting it ⚠ UNREVIEWED
+CI forces `DRY_RUN=true` on the desk job (`CLAUDE.md` safety rails: an agent's environment is
+never one variable away from a live order path). Under that flag five `test_execute_gateway.py`
+tests failed, and they are the ones asserting that **a refusal the broker names is not an unknown
+outcome** — the fix for six SHILPAMED rejections that each sent the operator to the order book to
+rule out a double-send that was never possible.
+
+They failed because the gateway short-circuits at `gateway.py:85` under `DRY_RUN` and never calls
+`place_order`, so the refusal path they exercise does not run. Both drive a **stub broker class**;
+neither opens a socket or reads a credential.
+
+**Decided.** Each now sets `DRY_RUN=False` on itself via `monkeypatch`, with the reason in the
+test. This is the opposite of weakening: a test whose meaning depends on an ambient flag is a test
+that silently stops testing, and this one had already stopped under CI's own configuration.
+The suite is now identical under both — **1202 passed, 17 skipped** with `DRY_RUN=true` forced and
+with the repository defaults. Supersedes the workaround noted in M0.4, which baselined at repo
+defaults precisely to avoid this collision.

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -123,16 +124,90 @@ TICKS = Param("ticks", "Poll for", "text_choice", default="60",
 
 # Which underlying an options control acts on. Each keeps its own config, journal,
 # lockout, straddle record and session lock, so these never interfere with each other.
-from ..strategies.strangle import instruments as _INS       # noqa: E402
-
-INSTRUMENT = Param("instrument", "Underlying", "text_choice", default=_INS.DEFAULT,
-                   choices=tuple(_INS.all_slugs()),
-                   help="NIFTY and SENSEX expire weekly (Tue / Thu); BANKNIFTY is "
-                        "monthly and only trades its final week")
-
-
+#
+# FROZEN SUBSYSTEM (M6). The strangle package lives in frozen/strangle/ and is outside
+# every gate, so this import must not run at module scope: importing app.analytics.ops is
+# on the path of the *equity* /ops page, and the desk has to boot whether or not the
+# options lab is present. Both the import and the controls it builds are therefore
+# deferred into _options_operations(), which returns nothing unless OPTIONS_ENABLED is
+# set AND the subsystem has been thawed. See frozen/strangle/README.md.
 def _slug(v: Mapping[str, Any]) -> str:
+    from ..strategies.strangle import instruments as _INS
     return str(v.get("instrument") or _INS.DEFAULT)
+
+
+def _options_operations() -> tuple["Operation", ...]:
+    """The strangle controls, or nothing.
+
+    Nothing is the normal answer: OPTIONS_ENABLED defaults off, and since M6 the code it
+    would drive is frozen. A missing subsystem is reported once, plainly, rather than
+    raising an ImportError out of a page that has nothing to do with options.
+    """
+    from .. import config as C
+
+    if not C.OPTIONS_ENABLED:
+        return ()
+    try:
+        from ..strategies.strangle import instruments as _INS
+    except ImportError:
+        logging.warning(
+            "OPTIONS_ENABLED is set, but the strangle subsystem is frozen "
+            "(frozen/strangle/). The options controls are unavailable until it is thawed; "
+            "everything else is unaffected.")
+        return ()
+
+    INSTRUMENT = Param("instrument", "Underlying", "text_choice", default=_INS.DEFAULT,
+                       choices=tuple(_INS.all_slugs()),
+                       help="NIFTY and SENSEX expire weekly (Tue / Thu); BANKNIFTY is "
+                            "monthly and only trades its final week")
+    return _OPTIONS_OPERATIONS(INSTRUMENT)
+
+
+def _OPTIONS_OPERATIONS(INSTRUMENT: "Param") -> tuple["Operation", ...]:
+    """The five strangle controls, built only when the subsystem is present.
+
+    Lifted out of OPERATIONS at M6 so that importing this module never reaches
+    frozen/strangle/. The bodies are unchanged; only the indentation and the INSTRUMENT
+    parameter moved.
+    """
+    return (
+        # --- options: the intraday strangle. PAPER ONLY. ---------------------------------
+        # Live execution sits behind seven locks (app/strategies/strangle/live.py) and every
+        # one of them is shut, so none of these can reach a real order however they are run.
+        Operation(
+            "strangle_check", "Check the strangle", "Options",
+            "Market facts, the trading calendar, today's session parameters and every veto "
+            "standing between now and an entry. Places nothing and writes nothing.",
+            lambda v: ["-m", "scripts.strangle", "--instrument", _slug(v), "--check"],
+            timeout=180, params=(INSTRUMENT,), needs_kite=True, writes=False),
+        Operation(
+            "strangle_collect", "Record today's straddle", "Options",
+            "One ATM straddle observation for the reference bands, then stops. This is the "
+            "daily job while the bands are being built: the IV gates cannot be calibrated "
+            "from history because Kite drops expired contracts.",
+            lambda v: ["-m", "scripts.strangle", "--instrument", _slug(v), "--collect"],
+            timeout=180, params=(INSTRUMENT,), needs_kite=True),
+        Operation(
+            "strangle_calibrate", "Calibrate bands (report)", "Options",
+            "Rebuild the ATM straddle bands from the forward record and report the veto rate "
+            "each would produce on its own history. Writes nothing.",
+            lambda v: ["-m", "scripts.strangle_calibrate", "--instrument", _slug(v)],
+            timeout=900, params=(INSTRUMENT,), needs_kite=True, writes=False,
+            long_running=True),
+        Operation(
+            "strangle_calibrate_write", "Calibrate bands and save", "Options",
+            "The same, but writes the bands into the selected instrument's config. Refuses "
+            "to write while any tradeable bucket is missing or thin.",
+            lambda v: ["-m", "scripts.strangle_calibrate", "--instrument", _slug(v), "--write"],
+            timeout=900, params=(INSTRUMENT,), needs_kite=True, long_running=True),
+        Operation(
+            "strangle_session", "Run a paper session", "Options",
+            "Enter on live quotes, then manage the book: exits first, then at most one "
+            "adjustment per poll. Fills are simulated against real depth; no order is placed.",
+            lambda v: ["-m", "scripts.strangle", "--instrument", _slug(v),
+                       "--max-ticks", str(v.get("ticks") or "60")],
+            timeout=3600, params=(INSTRUMENT, TICKS), needs_kite=True, long_running=True),
+    )
 
 
 OPERATIONS: tuple[Operation, ...] = (
@@ -258,43 +333,6 @@ OPERATIONS: tuple[Operation, ...] = (
         lambda v: ["-m", "scripts.autorun", "--check"],
         timeout=180, needs_kite=True, writes=False),
 
-    # --- options: the intraday strangle. PAPER ONLY. ---------------------------------
-    # Live execution sits behind seven locks (app/strategies/strangle/live.py) and every
-    # one of them is shut, so none of these can reach a real order however they are run.
-    Operation(
-        "strangle_check", "Check the strangle", "Options",
-        "Market facts, the trading calendar, today's session parameters and every veto "
-        "standing between now and an entry. Places nothing and writes nothing.",
-        lambda v: ["-m", "scripts.strangle", "--instrument", _slug(v), "--check"],
-        timeout=180, params=(INSTRUMENT,), needs_kite=True, writes=False),
-    Operation(
-        "strangle_collect", "Record today's straddle", "Options",
-        "One ATM straddle observation for the reference bands, then stops. This is the "
-        "daily job while the bands are being built: the IV gates cannot be calibrated "
-        "from history because Kite drops expired contracts.",
-        lambda v: ["-m", "scripts.strangle", "--instrument", _slug(v), "--collect"],
-        timeout=180, params=(INSTRUMENT,), needs_kite=True),
-    Operation(
-        "strangle_calibrate", "Calibrate bands (report)", "Options",
-        "Rebuild the ATM straddle bands from the forward record and report the veto rate "
-        "each would produce on its own history. Writes nothing.",
-        lambda v: ["-m", "scripts.strangle_calibrate", "--instrument", _slug(v)],
-        timeout=900, params=(INSTRUMENT,), needs_kite=True, writes=False,
-        long_running=True),
-    Operation(
-        "strangle_calibrate_write", "Calibrate bands and save", "Options",
-        "The same, but writes the bands into the selected instrument's config. Refuses "
-        "to write while any tradeable bucket is missing or thin.",
-        lambda v: ["-m", "scripts.strangle_calibrate", "--instrument", _slug(v), "--write"],
-        timeout=900, params=(INSTRUMENT,), needs_kite=True, long_running=True),
-    Operation(
-        "strangle_session", "Run a paper session", "Options",
-        "Enter on live quotes, then manage the book: exits first, then at most one "
-        "adjustment per poll. Fills are simulated against real depth; no order is placed.",
-        lambda v: ["-m", "scripts.strangle", "--instrument", _slug(v),
-                   "--max-ticks", str(v.get("ticks") or "60")],
-        timeout=3600, params=(INSTRUMENT, TICKS), needs_kite=True, long_running=True),
-
     Operation(
         "tests", "Run the test suite", "Diagnostics",
         "The full suite. Slow, but the fastest way to know the system is intact after a "
@@ -303,6 +341,33 @@ OPERATIONS: tuple[Operation, ...] = (
         long_running=True),
 )
 
+def all_operations() -> tuple[Operation, ...]:
+    """Every operation the page may offer, options included when they are available.
+
+    A function rather than a constant: whether the options controls exist depends on
+    OPTIONS_ENABLED and on whether the frozen subsystem has been thawed, and neither is
+    knowable at import time (M6).
+    """
+    return OPERATIONS + _options_operations()
+
+
+def by_name() -> Mapping[str, Operation]:
+    """Name -> operation, options included when available.
+
+    BY_NAME is layered on last on purpose. It is the module attribute tests monkeypatch to
+    inject a fake operation, and resolving `start()` through a freshly built dict would have
+    silently ignored the patch — which is exactly how four ops tests failed when this became
+    a function at M6.
+    """
+    return {**{o.name: o for o in _options_operations()}, **BY_NAME}
+
+
+def groups() -> tuple[str, ...]:
+    return tuple(dict.fromkeys(o.group for o in all_operations()))
+
+
+#: Back-compatible module attributes. The equity operations are fixed at import; callers
+#: that need the options ones too use all_operations() / by_name() / groups().
 BY_NAME: Mapping[str, Operation] = {o.name: o for o in OPERATIONS}
 GROUPS: tuple[str, ...] = tuple(dict.fromkeys(o.group for o in OPERATIONS))
 
@@ -371,7 +436,7 @@ def _execute(job_id: int, argv: list[str], timeout: int, started: dt.datetime):
 
 def start(conn, name: str, values: Mapping[str, Any] | None = None) -> dict:
     """Validate, record and launch. Refuses if another operation is already running."""
-    op = BY_NAME.get(name)
+    op = by_name().get(name)
     if op is None:
         raise OpsError(f"{name!r} is not a known operation")
     argv = op.argv(values or {})            # raises OpsError before anything starts
@@ -454,10 +519,10 @@ def view(conn) -> dict:
     running = running_job(conn)
     last = last_run(conn)
     return {
-        "groups": GROUPS,
+        "groups": groups(),
         "operations": [{
             "op": o, "scans": _scan_choices() if any(p.kind == "upload" for p in o.params)
-            else (), "last": last.get(o.name), "cli": o.cli()} for o in OPERATIONS],
+            else (), "last": last.get(o.name), "cli": o.cli()} for o in all_operations()],
         "running": running,
         "history": history(conn),
         "dry_run": C.DRY_RUN,

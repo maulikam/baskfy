@@ -20,11 +20,16 @@
     </a>
     <nav class="sc-nav" aria-label="Sections">
       {% set here = request.url.path %}
+      {#- The Options entry appears only when the options lab is enabled. Since M6 the
+          subsystem is frozen (frozen/strangle/) and its routes answer 404, and a nav link to
+          a 404 is worse than no link: it reads as a broken desk rather than an absent
+          feature. `options_enabled` is injected by app.main. -#}
       {% for href, label in [
            ('/', 'Desk'), ('/indices', 'Indices'), ('/performance', 'Performance'), ('/regime', 'Regime'),
            ('/regime/backtest', 'Backtest'), ('/tradebook', 'Tradebook'),
-           ('/stops', 'Stops'), ('/reconcile', 'Reconcile'), ('/options', 'Options'),
-           ('/ops', 'Operations'), ('/settings', 'Settings')] %}
+           ('/stops', 'Stops'), ('/reconcile', 'Reconcile')]
+           + ([('/options', 'Options')] if options_enabled else [])
+           + [('/ops', 'Operations'), ('/settings', 'Settings')] %}
         <a href="{{ href }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>
       {% endfor %}
     </nav>

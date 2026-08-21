@@ -171,9 +171,8 @@ def client(monkeypatch, conn):
     return TestClient(M.app)
 
 
-@pytest.mark.parametrize("path", ["/performance", "/tradebook", "/options",
-                                  "/performance/data", "/tradebook/data",
-                                  "/options/data"])
+@pytest.mark.parametrize("path", ["/performance", "/tradebook",
+                                  "/performance/data", "/tradebook/data"])
 def test_pages_render(client, path):
     assert client.get(path).status_code == 200
 
@@ -245,3 +244,16 @@ def test_regime_tables_scroll_at_every_width_not_just_on_a_phone():
     head = css[:css.index(scrollers[0])]
     assert "@media" not in head or head.rfind("}") > head.rfind("@media"), \
         "the table scroll rule is gated behind a breakpoint again"
+
+
+def test_the_options_pages_are_absent_while_the_lab_is_frozen(client):
+    """They were in the page sweep above until M6. Removing a route from a sweep without
+    saying why is how coverage quietly disappears, so the sweep lost them and this took
+    their place: while the subsystem is frozen the routes must 404, not 500 and not render.
+    """
+    from app import config as C
+
+    if C.OPTIONS_ENABLED:
+        pytest.skip("the options lab is enabled; the page sweep covers these")
+    for path in ("/options", "/options/data"):
+        assert client.get(path).status_code == 404

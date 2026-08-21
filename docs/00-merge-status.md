@@ -4,7 +4,7 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M6 · **State:** running autonomously
+**Run started:** 22 Aug 2026 · **Current module:** M7 · **State:** running autonomously
 
 Since 22 Aug 2026 this is an **autonomous run** under `CLAUDE.md` §Autonomy charter:
 judgement calls are decided, recorded in `DECISIONS-MERGE.md` (tagged `⚠ UNREVIEWED`
@@ -23,8 +23,8 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M3 | Working agreement + status page | ✅ done | 22 Aug 2026 | Root CLAUDE.md absorbed the screener's nine house rules and the GTT caveat it had dropped; both sub-files marked; status page linked first |
 | M4 | One env schema | ✅ done | 22 Aug 2026 | Root `.env.example`, 371 lines, every var marked (16 user-editable / 122 system-only). Four risk ceilings locked out of `/settings` (M4.1) |
 | M5 | One CI workflow | ✅ done | 22 Aug 2026 | Root `.github/workflows/ci.yml`, 5 jobs. `tools/ci-local.sh` runs it here: 14 pass / 1 fail (M6's) / 5 skip. Found and fixed nested `.git`s (M5.1) |
-| M6 | Freeze the strangle lab | 🔄 running | 22 Aug 2026 | |
-| M7 | Local stack up | — | | |
+| M6 | Freeze the strangle lab | ✅ done | 22 Aug 2026 | 16 of 20 strangle modules + 12 test files + scripts + planners frozen. Desk suite **1202 passed, 17 skipped, 0 failed** — green for the first time |
+| M7 | Local stack up | 🔄 running | 22 Aug 2026 | |
 | M8 | NSE endpoints verified | — | | |
 | M9 | Kite creds + backfill | — | | **HUMAN GATE** |
 | M10 | Calendar + corporate actions | — | | |
@@ -225,6 +225,24 @@ pre-merge repo — it silently failed a CI step and could have swallowed a commi
 to `~/baskfy-safety/2026-08-22/nested-git/` after verifying the rollback copies and that both tips
 are ancestors of HEAD. **If you repeat M1's recipe anywhere, add `--exclude=.git`.**
 (`DECISIONS-MERGE.md` M5.1.)
+
+## The options lab is frozen (M6)
+
+`frozen/strangle/` — 68 files, 43 modules, 12 test suites. Read `frozen/strangle/README.md`
+before touching anything under it; the safety rails say it is untouched, and a repository-wide
+sweep must exclude the directory rather than edit a file inside it.
+
+**Four modules did not freeze.** `calendar_nse`, `clock`, `instruments` and `config` stayed in
+`kite-momentum-rebalancer/app/strategies/strangle/` because `scripts/autorun.py` derives the NSE
+trading-day answer from them, and autorun runs on every login collecting data that cannot be
+backfilled. They are dependency-free and cannot reach an order path.
+**M15 should fold these into `baskfy_core.trading_calendar`** — an NSE calendar has no business
+living in a package named after an options strategy (`DECISIONS-MERGE.md` M6.2).
+
+**Two things deliberately stayed behind**, both box concerns rather than repo state:
+`deploy/systemd/strangle-collect@.{service,timer}`, and `data/outputs/strangle_*` (the
+observation series, which is not rebuildable). **The live box runs the pre-freeze layout until
+its next deliberate deploy, at which point those units will name paths that have moved.**
 
 ## Things a future session must know
 

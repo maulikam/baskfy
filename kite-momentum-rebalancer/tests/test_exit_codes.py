@@ -18,6 +18,8 @@ import pathlib
 
 import pytest
 
+from ._frozen import PRESENT, options_lab
+
 SCRIPTS = sorted(pathlib.Path("scripts").glob("*.py"))
 
 
@@ -30,6 +32,7 @@ def _code(payload: dict) -> int:
 # =====================================================================================
 # the runner that got it wrong
 # =====================================================================================
+@options_lab
 def test_not_logged_in_exits_two():
     """This is the fix. scripts/strangle.py funnelled every status through one helper
     that returned 1 for anything not OK, so the 09:20 collect job reported the same
@@ -37,18 +40,21 @@ def test_not_logged_in_exits_two():
     assert _code({"status": "AUTH_REQUIRED", "login_url": "https://..."}) == 2
 
 
+@options_lab
 @pytest.mark.parametrize("status", ["OK", "COLLECTED", "SKIPPED"])
 def test_a_session_that_did_its_work_exits_zero(status):
     """SKIPPED counts: a day the gates vetoed is a day the strategy decided about."""
     assert _code({"status": status}) == 0
 
 
+@options_lab
 @pytest.mark.parametrize("status", ["NO_ASP", "STARTUP_REFUSED", "NO_DEPTH",
                                     "CONFIG_MISMATCH", "SIZING_REFUSED"])
 def test_a_real_failure_still_exits_one(status):
     assert _code({"status": status}) == 1
 
 
+@options_lab
 def test_an_unknown_status_is_a_failure_not_a_success():
     """The safe direction. A status added later must not be read as a clean run."""
     assert _code({"status": "SOMETHING_NEW"}) == 1
@@ -94,6 +100,14 @@ def test_every_script_that_can_hit_an_expired_token_exits_two():
 
 
 def test_the_scripts_that_check_auth_are_the_ones_we_think():
-    """So a new unattended script cannot quietly join the schedule without a code."""
+    """So a new unattended script cannot quietly join the schedule without a code.
+
+    strangle.py is asserted only while the options lab is present: it moved to
+    frozen/strangle/ at M6 and this sweep reads the live scripts/ directory. The equity
+    scripts are the point of the test either way — they are the ones that still run
+    unattended every morning.
+    """
     checkers = {f.name for f in SCRIPTS if _checks_auth(f.read_text())}
-    assert "strangle.py" in checkers and "daily.py" in checkers and "autorun.py" in checkers
+    assert "daily.py" in checkers and "autorun.py" in checkers
+    if PRESENT:
+        assert "strangle.py" in checkers

@@ -35,6 +35,7 @@ from decile_core.backtest import (
     BacktestConfigError,
     BacktestData,
     BacktestDataError,
+    BacktestResult,
     CostSpec,
     DividendPolicy,
     LookAheadError,
@@ -460,15 +461,16 @@ def test_the_hold_buffer_reduces_turnover() -> None:
     strict = run_backtest(_config(selection=SelectionSpec(top_n=20, hold_buffer=0)), data)
     buffered = run_backtest(_config(selection=SelectionSpec(top_n=20, hold_buffer=10)), data)
 
-    def churn(result: object) -> int:
-        trades = getattr(result, "trades", ())
+    def churn(result: BacktestResult) -> int:
         return sum(
-            1
-            for trade in trades
-            if trade.reason in {TradeReason.ENTER, TradeReason.EXIT}
+            1 for trade in result.trades if trade.reason in {TradeReason.ENTER, TradeReason.EXIT}
         )
 
-    assert compute_metrics(buffered).annual_turnover < compute_metrics(strict).annual_turnover
+    buffered_turnover = compute_metrics(buffered).annual_turnover
+    strict_turnover = compute_metrics(strict).annual_turnover
+    assert buffered_turnover is not None
+    assert strict_turnover is not None
+    assert buffered_turnover < strict_turnover
     assert churn(buffered) < churn(strict)
     assert buffered.total_costs < strict.total_costs
 

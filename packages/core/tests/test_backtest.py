@@ -29,6 +29,7 @@ from itertools import pairwise
 import backtest_fixtures as fixtures
 import polars as pl
 import pytest
+from benchmarks.budgets import record
 
 from decile_core.backtest import (
     BacktestConfig,
@@ -845,3 +846,14 @@ def test_fifteen_year_monthly_backtest_over_twenty_positions_is_under_ten_second
     assert len(result.rebalance_dates) >= 180
     assert metrics.cagr is not None
     assert elapsed < 10.0, f"the 15-year run took {elapsed:.2f}s; docs/11 budgets 10s"
+    # Prompt 16 acceptance criterion 1: the number, for benchmarks/AS-MEASURED.md.
+    record(
+        "backtest_15y",
+        elapsed,
+        unit="s",
+        method="run_backtest + compute_metrics over 15 years, monthly, top 20 of 300 names",
+        dataset=(
+            "the synthetic market in packages/core/tests/backtest_fixtures.py — NOT the seeded "
+            "dataset, which holds no price history (docs/DECISIONS.md §15)"
+        ),
+    )

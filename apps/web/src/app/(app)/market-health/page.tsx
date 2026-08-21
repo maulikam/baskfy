@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
-import { BreadthHistory, type BreadthKey } from "@/components/market/breadth-history";
+import type { BreadthKey } from "@/components/market/breadth-history";
+// The chart itself is loaded on demand — see `breadth-history-lazy.tsx`.
+import { BreadthHistory } from "@/components/market/breadth-history-lazy";
 import { BreadthGauge } from "@/components/market/breadth-gauge";
 import { MarketHealthControls } from "@/components/market/market-health-controls";
 import { formatTradeDate } from "@/lib/format";

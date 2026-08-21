@@ -76,4 +76,16 @@ export default tseslint.config(
     files: ["**/*.mjs"],
     ...tseslint.configs.disableTypeChecked,
   },
+  {
+    /*
+     * Build tooling runs under Node, not in a browser: `scripts/bundle-budget.mjs` (Prompt 16
+     * deliverable 5) reads the build manifest and writes a measurement, so `process` and
+     * `console` are the point of it. Declared here rather than by adding the `globals` package —
+     * these three are all any script in this directory uses.
+     */
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { process: "readonly", console: "readonly", Buffer: "readonly" },
+    },
+  },
 );

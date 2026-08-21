@@ -210,3 +210,56 @@ async def flush_screen_namespace(client: object) -> int:
 def export_symbols_in_file_order() -> Sequence[str]:
     """The 271 symbols in the order the reference export lists them (docs/13)."""
     return [str(row["symbol"]) for row in to_rows().factors]
+
+
+def synthetic_universe_sql(index_id: int, instruments: int, days: int) -> tuple[str, str, str]:
+    """Three statements that build a production-sized universe of synthetic instruments.
+
+    Shared by ``test_screener_performance`` (Prompt 6's cold-query budget) and
+    ``test_benchmarks`` (Prompt 16's CSV-export budget, which needs 4,000 rows and the reference
+    export has 271). Both need the *same* dataset shape, and two copies of it would eventually
+    disagree about what "production-sized" means.
+
+    Written as ``INSERT … SELECT`` over ``generate_series`` rather than as Python round trips:
+    276,000 fact rows through the ORM would take longer to insert than the whole rest of the
+    suite takes to run, and none of that work is what is under test.
+    """
+    instrument_sql = f"""
+        INSERT INTO instrument (exchange_id, symbol, name, series, instrument_type, is_active)
+        SELECT 1, 'PERF' || lpad(i::text, 5, '0'), 'PERF ' || i, 'EQ', 'EQ', true
+        FROM generate_series(1, {instruments}) AS i
+    """
+    dates_cte = f"""
+        WITH perf_dates AS (
+            SELECT date FROM trading_day
+            WHERE exchange_id = 1 AND is_trading_day AND date <= DATE '{AS_OF.isoformat()}'
+            ORDER BY date DESC LIMIT {days}
+        ),
+        perf_instruments AS (
+            SELECT id, row_number() OVER (ORDER BY id) AS n
+            FROM instrument WHERE symbol LIKE 'PERF%'
+        )
+    """
+    factor_sql = f"""
+        {dates_cte}
+        INSERT INTO factor_daily (
+            instrument_id, date, close, close_raw, ret_12m, sharpe_12m, sharpe_6m, sharpe_3m,
+            sharpe_1m, vol_12m, beta_12m, ma_200, marketcap_cr, median_vol_12m, series,
+            universe_mask, top_beta_mask, top_volatility_mask
+        )
+        SELECT p.id, d.date,
+               100 + (p.n % 900), 100 + (p.n % 900),
+               (p.n % 500) - 100, ((p.n % 500) - 100) / 40.0, ((p.n % 470) - 100) / 40.0,
+               ((p.n % 430) - 100) / 40.0, ((p.n % 390) - 100) / 40.0,
+               0.15 + (p.n % 400) / 1000.0, 0.5 + (p.n % 150) / 100.0, 90 + (p.n % 800),
+               1000 + (p.n * 37) % 900000, 20000000 + (p.n * 991) % 5000000, 'EQ',
+               {1 << (index_id - 1)}, 0, 0
+        FROM perf_instruments p CROSS JOIN perf_dates d
+    """
+    membership_sql = f"""
+        {dates_cte}
+        INSERT INTO index_member_daily (index_id, date, instrument_id, source)
+        SELECT {index_id}, d.date, p.id, 'nse_file'
+        FROM perf_instruments p CROSS JOIN perf_dates d
+    """
+    return instrument_sql, factor_sql, membership_sql

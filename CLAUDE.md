@@ -112,6 +112,17 @@ database, a network or a disk belongs in `services/` or `packages/providers`.
 | Config form, progress, results, fragility, assumptions | `apps/web/src/components/backtests/` |
 | Backtest reads, the SSE reader, metric labels | `apps/web/src/lib/backtests/` |
 | **Every Prompt 15 decision taken under ambiguity** | `docs/DECISIONS.md` §15 |
+| **The docs/11 budget table, and what each was measured on** | `benchmarks/AS-MEASURED.md` |
+| Budgets as data + the measurement recorder | `benchmarks/budgets.py` |
+| The concurrent load driver (50 screen runs) | `benchmarks/load_screens.py` |
+| ETags, `stale-while-revalidate`, the 304 path | `services/api/src/decile_api/http_cache.py` |
+| The single-flight that collapses a cache stampede | `decile_api.screener.SingleFlight` |
+| Hot queries, `EXPLAIN ANALYZE`, the plan gate | `services/api/src/decile_api/query_plans.py` |
+| The committed plan baseline CI regresses against | `services/api/tests/query_plan_baseline.json` |
+| Connection-pool sizing and the pgbouncer note | `services/api/src/decile_api/db.py` |
+| Indexes + the two continuous aggregates | `services/api/alembic/versions/0008_performance_indexes.py` |
+| Client-JS budget (250 KB gzip, screens route) | `apps/web/scripts/bundle-budget.mjs` |
+| **Every Prompt 16 decision taken under ambiguity** | `docs/DECISIONS.md` §16 |
 | Auth tables not in `docs/04` | `docs/04c-auth-tables-addendum.md` |
 | HTTP rate limiting (docs/07 §Conventions) | `services/api/src/decile_api/ratelimit.py` |
 | Streaming CSV export | `services/api/src/decile_api/csv_export.py` |
@@ -206,6 +217,10 @@ make client      regenerate the TypeScript client from openapi.json (CI fails if
 make web         run the Next.js dev server on :3000
 make web-build   production build of the web app
 make e2e         Playwright acceptance checks (builds and starts the app itself)
+make bench       measure every docs/11 budget; writes benchmarks/AS-MEASURED.md
+make loadtest    50 concurrent screen runs against a live API: make loadtest URL=...
+make plans       EXPLAIN ANALYZE every hot query (WRITE=1 re-records the CI baseline)
+make bundle      client-JS budget for the screens route (needs make web-build first)
 ```
 
 `make test-db` needs `DECILE_TEST_DATABASE_URL`. Without it those tests skip rather than fail.
@@ -295,6 +310,25 @@ make e2e         Playwright acceptance checks (builds and starts the app itself)
   `DeadlockDetectedError` on its `DROP SCHEMA ... CASCADE` during a full `pytest` run, then passed
   on two further full runs and on every targeted run. Two connections to the same test database
   contending; worth pinning down before CI relies on it.
+
+- **The docs/11 "as measured" column lives in `benchmarks/AS-MEASURED.md`, not in `docs/11`.**
+  The overnight run could not edit the spec, so the rendered table is committed beside the
+  benchmarks and needs pasting in by hand (`docs/DECISIONS.md` §16.1).
+- **The nightly-pipeline budget (< 45 min) is the one docs/11 row nothing measures.** Nine of
+  docs/03's ten steps are network fetches and the suite is network-blocked; only
+  `compute_factors` is timed, on a synthetic panel with no database on either side. The row reads
+  "not measured" rather than being dropped.
+- **Every server-side benchmark is in-process over an ASGI transport** — no socket, no uvicorn
+  worker pool, one event loop. They are floors, not production p95s. `make loadtest URL=...`
+  takes the same numbers against a running server and has never been run against a deployment.
+- **`market_health_daily` and `index_snapshot_daily` are now hypertables,** which `docs/04`'s DDL
+  does not say. `docs/03` §"Scaling plan" step 3 asks for continuous aggregates over them and a
+  continuous aggregate needs a hypertable (`docs/DECISIONS.md` §16.2). The two aggregates
+  (`market_health_monthly`, `index_snapshot_monthly`) exist, refresh on a policy and are asserted
+  to agree with their source — **and nothing reads them.**
+- **The screen cache's single-flight is per process, not distributed.** It collapses a cold
+  stampede from N callers to one *per uvicorn worker*, which took the 50-concurrent p95 from
+  503 ms to 304 ms. It is not a lock (`docs/DECISIONS.md` §16.8).
 
 - **The trading calendar reconciles itself now, but only where data exists.** `reconcile_calendar`
   (Prompt 3) promotes dates with bars to `bhavcopy` and infers holidays across densely populated
@@ -407,10 +441,10 @@ make e2e         Playwright acceptance checks (builds and starts the app itself)
   271 positions differ from the file, every one of them inside that rounding granularity
   (`docs/06a` §7). Note that the 48 inversions `docs/13` reports *do* reproduce exactly with
   `Decimal` — the note below about 53 was a float artefact.
-- **`ix_factor_daily_date_marketcap_cr` is dead weight today.** `ix_factor_daily_date` is a
-  cheaper prefix index for the same predicate and PostgreSQL always picks it; neither can go
-  index-only because a screen needs `instrument_id`. Prompt 16 should drop one or rebuild the
-  other with `INCLUDE (instrument_id)` (`docs/06a` §8).
+- **~~`ix_factor_daily_date_marketcap_cr` is dead weight today.~~ Fixed in Prompt 16.**
+  Migration 0008 drops `ix_factor_daily_date` and rebuilds the composite with
+  `INCLUDE (instrument_id)`. Prompt 6's fifth acceptance criterion — "assert with EXPLAIN that it
+  uses the (date, marketcap_cr) index" — now holds as written (`docs/DECISIONS.md` §16.4).
 - **`docs/05` §2 and `docs/13` §4 disagree on volatility units** — percent vs decimal fraction.
   The export is the arbiter: it is a fraction. Resolve in Prompt 5.
 - **`docs/02` and `docs/09` disagree on Kite adjustment.** `docs/02` says Kite gives

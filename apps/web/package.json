@@ -9,7 +9,8 @@
     "start": "next start --port 3000",
     "lint": "tsc --noEmit && eslint .",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "bundle-budget": "node scripts/bundle-budget.mjs --check"
   },
   "dependencies": {
     "@auth/core": "^0.41.3",

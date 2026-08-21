@@ -17,7 +17,13 @@ from collections.abc import AsyncIterator
 from decimal import Decimal
 
 import pytest
-from screener_helpers import AS_OF, DATA_VERSION, requires_db, seeded_database
+from screener_helpers import (
+    AS_OF,
+    DATA_VERSION,
+    requires_db,
+    seeded_database,
+    synthetic_universe_sql,
+)
 from sqlalchemy import create_mock_engine, text
 from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -39,9 +45,9 @@ PERF_DAYS = 120
 #: itself to 300 ms, which is the part this measures — no HTTP, no serialisation, no cache.
 COLD_BUDGET_MS = 300.0
 
-#: The two indexes that can serve ``WHERE factor_daily.date = :as_of``. Prompt 6 names the second
-#: one; see :class:`TestThePlan` for why PostgreSQL never picks it.
-DATE_INDEX = "ix_factor_daily_date"
+#: The index that serves ``WHERE factor_daily.date = :as_of``. Prompt 6's acceptance criterion
+#: names it; migration 0008 (Prompt 16) dropped the narrower ``ix_factor_daily_date`` that used to
+#: shadow it. See :class:`TestThePlan`.
 DATE_MARKETCAP_INDEX = "ix_factor_daily_date_marketcap_cr"
 
 #: Rendering-only PostgreSQL dialect. ``create_mock_engine`` is the typed way to get one; the
@@ -50,54 +56,6 @@ PG_DIALECT: Dialect = create_mock_engine("postgresql+asyncpg://", lambda *args: 
 
 TOTAL_MARKET = UNIVERSE_BY_SLUG["nifty-total-market"].index_id
 INVESTING_001 = next(s for s in EXAMPLE_SCREENS if s.name == "Investing 001").definition
-
-
-def _generate_sql(index_id: int, instruments: int, days: int) -> tuple[str, str, str]:
-    """Three statements that build a production-sized single-date universe.
-
-    Written as ``INSERT … SELECT`` over ``generate_series`` rather than as Python round trips:
-    276,000 fact rows through the ORM would take longer to insert than the whole rest of the
-    suite takes to run, and none of that work is what is under test.
-    """
-    instrument_sql = f"""
-        INSERT INTO instrument (exchange_id, symbol, name, series, instrument_type, is_active)
-        SELECT 1, 'PERF' || lpad(i::text, 5, '0'), 'PERF ' || i, 'EQ', 'EQ', true
-        FROM generate_series(1, {instruments}) AS i
-    """
-    dates_cte = f"""
-        WITH perf_dates AS (
-            SELECT date FROM trading_day
-            WHERE exchange_id = 1 AND is_trading_day AND date <= DATE '{AS_OF.isoformat()}'
-            ORDER BY date DESC LIMIT {days}
-        ),
-        perf_instruments AS (
-            SELECT id, row_number() OVER (ORDER BY id) AS n
-            FROM instrument WHERE symbol LIKE 'PERF%'
-        )
-    """
-    factor_sql = f"""
-        {dates_cte}
-        INSERT INTO factor_daily (
-            instrument_id, date, close, close_raw, ret_12m, sharpe_12m, sharpe_6m, sharpe_3m,
-            sharpe_1m, vol_12m, beta_12m, ma_200, marketcap_cr, median_vol_12m, series,
-            universe_mask, top_beta_mask, top_volatility_mask
-        )
-        SELECT p.id, d.date,
-               100 + (p.n % 900), 100 + (p.n % 900),
-               (p.n % 500) - 100, ((p.n % 500) - 100) / 40.0, ((p.n % 470) - 100) / 40.0,
-               ((p.n % 430) - 100) / 40.0, ((p.n % 390) - 100) / 40.0,
-               0.15 + (p.n % 400) / 1000.0, 0.5 + (p.n % 150) / 100.0, 90 + (p.n % 800),
-               1000 + (p.n * 37) % 900000, 20000000 + (p.n * 991) % 5000000, 'EQ',
-               {1 << (index_id - 1)}, 0, 0
-        FROM perf_instruments p CROSS JOIN perf_dates d
-    """
-    membership_sql = f"""
-        {dates_cte}
-        INSERT INTO index_member_daily (index_id, date, instrument_id, source)
-        SELECT {index_id}, d.date, p.id, 'nse_file'
-        FROM perf_instruments p CROSS JOIN perf_dates d
-    """
-    return instrument_sql, factor_sql, membership_sql
 
 
 @pytest.fixture(scope="module")
@@ -114,7 +72,7 @@ def perf_url() -> str:
         engine = create_async_engine(url)
         try:
             async with engine.begin() as connection:
-                for statement in _generate_sql(TOTAL_MARKET, PERF_INSTRUMENTS, PERF_DAYS):
+                for statement in synthetic_universe_sql(TOTAL_MARKET, PERF_INSTRUMENTS, PERF_DAYS):
                     await connection.execute(text(statement))
                 await connection.execute(text("ANALYZE factor_daily"))
                 await connection.execute(text("ANALYZE index_member_daily"))
@@ -198,21 +156,19 @@ class TestFullUniverseCost:
 
 
 class TestThePlan:
-    """What the planner does with the statement, and one finding about the schema.
+    """What the planner does with the statement.
 
-    Prompt 6 asks this suite to "assert with EXPLAIN that it uses the (date, marketcap_cr) index".
-    It does not, and the reason is not the query: ``factor_daily`` carries **two** indexes whose
-    leading column is ``date`` — ``ix_factor_daily_date`` and ``ix_factor_daily_date_marketcap_cr``
-    — and the narrower one is a strictly cheaper way to answer ``WHERE date = :as_of``. Neither
-    can be an index-only scan, because the screen needs ``instrument_id`` and the row itself, so
-    the wider index buys nothing and costs more pages to walk. Dropping the narrow index makes
-    PostgreSQL choose the composite immediately, which is how we know the composite is shadowed
-    rather than unusable.
+    Prompt 6 asks this suite to "assert with EXPLAIN that it uses the (date, marketcap_cr) index",
+    and until Prompt 16 it could not: ``factor_daily`` carried **two** indexes whose leading
+    column is ``date`` — ``ix_factor_daily_date`` and ``ix_factor_daily_date_marketcap_cr`` — and
+    the narrower one was a strictly cheaper way to answer ``WHERE date = :as_of``, so PostgreSQL
+    picked it every time and the composite was dead weight.
 
-    That is a redundancy in the Prompt 1 schema, not a property of this query, so it is written up
-    in ``docs/06a-screener-implementation-notes.md`` for Prompt 16 rather than fixed here by a
-    migration written to make a test pass. What these tests assert is the thing that actually
-    matters and that the criterion is a proxy for: the hot path is index-driven at both ends.
+    Migration 0008 drops the narrow index and rebuilds the composite with
+    ``INCLUDE (instrument_id)``. ``(date)`` is a prefix of ``(date, marketcap_cr)``, so nothing
+    the narrow index served is lost, the nightly ``compute_factors`` step writes one index instead
+    of two, and docs/06 §step 3's decile bucketing can now read ``(instrument_id, marketcap_cr)``
+    for one date index-only. Prompt 6's criterion is therefore asserted here **as written**.
     """
 
     async def test_factor_daily_is_reached_by_an_index_not_a_sequential_scan(
@@ -220,7 +176,7 @@ class TestThePlan:
     ) -> None:
         plan = await _explain(perf_session, full_universe_screen())
         assert "Seq Scan on factor_daily" not in plan, plan
-        assert DATE_INDEX in plan or DATE_MARKETCAP_INDEX in plan, plan
+        assert DATE_MARKETCAP_INDEX in plan, plan
 
     async def test_the_point_in_time_universe_join_is_index_driven(
         self, perf_session: AsyncSession

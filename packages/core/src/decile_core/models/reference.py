@@ -20,6 +20,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,6 +50,17 @@ class Instrument(Base):
         CheckConstraint("instrument_type IN ('EQ', 'ETF', 'INDEX')", name="instrument_type_known"),
         Index("ix_instrument_symbol", "symbol"),
         Index("ix_instrument_kite_token", "kite_token"),
+        # The listings register's exact sort key: `coalesce(listed_on, '0001-01-01') DESC,
+        # symbol ASC` over active rows (`decile_api.market_data.listings`). An expression index,
+        # because the sort key is an expression — an index on `listed_on` alone cannot serve it,
+        # and without this the keyset page is a sequential scan even with `enable_seqscan = off`.
+        # Prompt 16 deliverable 2 — migration 0008.
+        Index(
+            "ix_instrument_listings_page",
+            text("(coalesce(listed_on, DATE '0001-01-01')) DESC"),
+            text("symbol ASC"),
+            postgresql_where=text("is_active IS TRUE"),
+        ),
     )
 
     id: Mapped[BigIntPk]

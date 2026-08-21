@@ -61,10 +61,17 @@ class FactorDaily(Base):
     __tablename__ = "factor_daily"
     __table_args__ = (
         PrimaryKeyConstraint("instrument_id", "date"),
-        Index("ix_factor_daily_date", "date"),
-        # Covering index for the hot screen query's decile bucketing (docs/06 step 3).
+        # Covering index for the hot screen query's decile bucketing (docs/06 step 3). ``date`` is
+        # the leading column, so this also serves every predicate the dropped
+        # ``ix_factor_daily_date`` used to; ``instrument_id`` is in the payload so the bucketing
+        # pass reads ``(instrument_id, marketcap_cr)`` for one date index-only. Prompt 16
+        # deliverable 2 — migration 0008 has the reasoning.
         Index(
-            "ix_factor_daily_date_marketcap_cr", "date", "marketcap_cr", postgresql_using="btree"
+            "ix_factor_daily_date_marketcap_cr",
+            "date",
+            "marketcap_cr",
+            postgresql_using="btree",
+            postgresql_include=["instrument_id"],
         ),
     )
 

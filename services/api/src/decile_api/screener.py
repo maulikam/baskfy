@@ -18,8 +18,10 @@ same screen twice and compare the strings.
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 from collections.abc import Awaitable, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Final, Protocol, runtime_checkable
 
@@ -282,6 +284,68 @@ async def execute_screen(  # noqa: PLR0913 - as_of, data_version and the project
     )
 
 
+class SingleFlight:
+    """Collapse concurrent misses on one cache key into a single query, per process.
+
+    The problem this solves is a cache stampede, and it is not hypothetical: fifty concurrent
+    callers running the *same* screen the moment after a publish all miss the same key and all
+    issue the same statement. Measured over Prompt 16's load test (50 concurrent runs of one
+    definition), the cold p95 was 503 ms against a 400 ms criterion; with the misses collapsed it
+    is a fraction of that, because forty-nine of the fifty queries never happened.
+
+    docs/06 §Caching's warm-up — "warm the top 200 most-run screen definitions after each publish"
+    — is the *other* half of the same fix, and the more important one: a warmed key is never
+    missed at all. This covers the definitions nobody warmed.
+
+    **Per process, deliberately.** A cross-process lock means a Redis ``SET NX`` with a lease, a
+    fencing token and a story for what happens when the leader dies holding it. With one uvicorn
+    worker per core (docs/11 §"Cost envelope" sizes the box at 8) the stampede is reduced from N
+    callers to 8 — which is a query per core, not a query per request, and that is where the cost
+    stops mattering. Written down rather than left as a surprise: this is not a distributed lock
+    and must not be relied on as one.
+    """
+
+    def __init__(self) -> None:
+        self._waiters: dict[str, asyncio.Event] = {}
+
+    def claim(self, key: str) -> tuple[bool, asyncio.Event]:
+        """``(leading, event)``. The leader computes and signals; a follower waits on the event.
+
+        No lock: every statement here is synchronous, so the whole method runs without the event
+        loop getting a chance to interleave another coroutine into the middle of it.
+        """
+        existing = self._waiters.get(key)
+        if existing is not None:
+            return False, existing
+        event = asyncio.Event()
+        self._waiters[key] = event
+        return True, event
+
+    def release(self, key: str, event: asyncio.Event) -> None:
+        """Signal every follower — whether the leader succeeded or raised.
+
+        Waking followers after a *failure* is deliberate: they re-read the cache, find nothing,
+        and compute for themselves. Leaving them blocked until the timeout would turn one failed
+        query into fifty slow ones.
+        """
+        self._waiters.pop(key, None)
+        event.set()
+
+    def in_flight(self) -> int:
+        """How many distinct keys are being computed. For tests and for a future metric."""
+        return len(self._waiters)
+
+
+#: One per process. Module-level for the same reason the engine is: a per-request instance would
+#: collapse nothing.
+SCREEN_FLIGHT: Final = SingleFlight()
+
+#: How long a follower waits for the leader before giving up and querying for itself. Above the
+#: 800 ms docs/11 budgets for a cold screen run, so a healthy leader is always waited for; low
+#: enough that a leader wedged on a lost connection costs one request's latency, not a hang.
+SINGLE_FLIGHT_TIMEOUT_SECONDS: Final = 5.0
+
+
 async def run_screen(  # noqa: PLR0913 - the request, the projection and the cache are separate concerns
     session: AsyncSession,
     definition: ScreenDefinition,
@@ -300,6 +364,8 @@ async def run_screen(  # noqa: PLR0913 - the request, the projection and the cac
     data_version = await current_data_version(session)
     key = cache_key(definition, resolution.as_of, data_version, columns=columns)
 
+    leading = False
+    flight: asyncio.Event | None = None
     if cache is not None:
         cached = _cached_payload(await cache.get(key))
         if cached is not None:
@@ -309,18 +375,36 @@ async def run_screen(  # noqa: PLR0913 - the request, the projection and the cac
                 data_version=data_version,
                 cache_hit=True,
             )
+        leading, flight = SCREEN_FLIGHT.claim(key)
+        if not leading:
+            # Someone in this process is already computing this exact key. Wait for them rather
+            # than issuing a second identical query — see :class:`SingleFlight`.
+            with suppress(TimeoutError):
+                await asyncio.wait_for(flight.wait(), SINGLE_FLIGHT_TIMEOUT_SECONDS)
+            cached = _cached_payload(await cache.get(key))
+            if cached is not None:
+                return ScreenRunResult(
+                    payload=cached,
+                    resolution=resolution,
+                    data_version=data_version,
+                    cache_hit=True,
+                )
 
-    result = await execute_screen(
-        session,
-        definition,
-        as_of=resolution.as_of,
-        data_version=data_version,
-        columns=columns,
-        requested_as_of=requested,
-    )
-    payload = result.to_json()
-    if cache is not None:
-        await cache.set(key, payload, ttl_seconds)
+    try:
+        result = await execute_screen(
+            session,
+            definition,
+            as_of=resolution.as_of,
+            data_version=data_version,
+            columns=columns,
+            requested_as_of=requested,
+        )
+        payload = result.to_json()
+        if cache is not None:
+            await cache.set(key, payload, ttl_seconds)
+    finally:
+        if leading and flight is not None:
+            SCREEN_FLIGHT.release(key, flight)
     return ScreenRunResult(
         payload=payload,
         resolution=resolution,

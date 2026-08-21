@@ -144,6 +144,9 @@ class IndexMemberDaily(Base):
             "source IN ('nse_file', 'reconstructed', 'derived')", name="index_member_source"
         ),
         Index("ix_index_member_daily_date_index_id", "date", "index_id"),
+        # The factsheet's direction of the same question: which indices was *this instrument* in
+        # on this date (docs/10a §4). Prompt 16 deliverable 2 — migration 0008.
+        Index("ix_index_member_daily_date_instrument_id", "date", "instrument_id"),
     )
 
     index_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("index_def.id"))

@@ -19,3 +19,7 @@ build/
 !.env.example
 .DS_Store
 .overnight/
+
+# Prompt 16: one JSON file per measurement, written by `make bench`. The rendered table
+# (benchmarks/AS-MEASURED.md) is committed; the raw samples are not — they are machine-specific.
+benchmarks/results/

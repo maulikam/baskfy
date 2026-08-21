@@ -35,6 +35,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from decile_api import invoices
 from decile_api.db import create_engine, session_factory
 from decile_api.email import Mailer, build_transport
+from decile_api.http_cache import register_http_cache
 from decile_api.logging import (
     REQUEST_ID_HEADER,
     configure_logging,
@@ -223,6 +224,11 @@ _TYPE_FOR_STATUS = {
 
 
 def register_middleware(app: FastAPI, settings: Settings) -> None:
+    # Registered first, which in Starlette means it sits *inside* everything added after it: the
+    # request-id middleware below wraps it, so a 304 still carries an `X-Request-Id`. Prompt 16
+    # deliverable 3.
+    register_http_cache(app, settings)
+
     @app.middleware("http")
     async def _request_context(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]

@@ -24,14 +24,12 @@ import datetime as dt
 import logging
 import secrets
 from collections.abc import Sequence
-from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 from sqlalchemy import delete, func, select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from decile_api import idempotency
@@ -63,12 +61,13 @@ from decile_api.screener import (
     AsOfResolution,
     ScreenRunResult,
     current_data_version,
+    record_run,
     resolve_as_of,
     run_screen,
 )
 from decile_core.models import Screen, ScreenRun
 from decile_core.screen_definition import ScreenDefinition
-from decile_core.screener import DEFAULT_RESULT_COLUMNS, ScreenResult, resolve_columns
+from decile_core.screener import DEFAULT_RESULT_COLUMNS, resolve_columns
 from decile_core.seed_data import DEFAULT_COLUMNS
 
 log = logging.getLogger(__name__)
@@ -174,58 +173,6 @@ async def _check_data_version(session: AsyncSession, sent: int | None) -> int:
     if sent is not None and sent != current:
         raise stale_data_version(sent, current)
     return current
-
-
-async def _record_run(
-    session: AsyncSession, screen_id: int, result: ScreenResult, definition_hash: str
-) -> None:
-    """``screen_run`` — docs/04 calls it "audit + historical ranks cache".
-
-    Only written when the result was computed rather than served from Redis: docs/04's row stores
-    ``[{rank, instrument_id, factor_value}]``, and a cached payload carries no ``instrument_id``
-    to store. A cache hit therefore leaves the earlier row for that (screen, as_of, definition)
-    exactly as it was, which is the row it would have written anyway.
-    """
-    rows = [
-        {
-            "rank": row.rank,
-            "instrument_id": row.instrument_id,
-            "factor_value": _json_number(row.values.get("sorting_factor")),
-        }
-        for row in result.rows
-    ]
-    statement = insert(ScreenRun).values(
-        screen_id=screen_id,
-        as_of=result.as_of,
-        definition_hash=definition_hash,
-        result_count=result.result_count,
-        results=rows,
-    )
-    await session.execute(
-        statement.on_conflict_do_update(
-            index_elements=[ScreenRun.screen_id, ScreenRun.as_of, ScreenRun.definition_hash],
-            set_={
-                "result_count": statement.excluded.result_count,
-                "results": statement.excluded.results,
-            },
-        )
-    )
-
-
-def _json_number(value: object) -> str | None:
-    """A factor value as it goes into ``screen_run.results`` (JSONB).
-
-    The exact decimal **as a string**. asyncpg serialises JSONB with ``json.dumps``, which has no
-    ``Decimal`` support, and routing through ``float`` would put ``13.0`` in the audit trail where
-    the API returned ``13.00`` — the disagreement CLAUDE.md house rule 8 exists to prevent. A
-    string keeps every digit, and the column is an internal audit record rather than a wire
-    format. Recorded in docs/07a §6.
-    """
-    if value is None:
-        return None
-    if isinstance(value, Decimal):
-        return format(value, "f")
-    return str(value)
 
 
 def _json(outcome: ScreenRunResult) -> Response:
@@ -487,7 +434,7 @@ async def run_saved_screen(  # noqa: PLR0913, PLR0917 - FastAPI injects one para
         cache=_cache(request),
     )
     if outcome.result is not None:
-        await _record_run(session, screen.id, outcome.result, definition.definition_hash())
+        await record_run(session, screen.id, outcome.result, definition.definition_hash())
     return _json(outcome)
 
 

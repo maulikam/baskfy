@@ -159,6 +159,31 @@ class RateLimiter:
             retry_after_seconds=max(1, math.ceil(wait)),
         )
 
+    async def check_key(self, prefix: str, limit_per_minute: int) -> Decision:
+        """The per-key bucket (PROMPTS.md Prompt 20 §1: "per-key rate limits").
+
+        Keyed by the key's clear-text prefix rather than by its owner: two keys on one account
+        must not share a quota, or a runaway cron job takes the production integration down with
+        it. The prefix is safe to use as a cache key — it is the half of the credential that is
+        stored unhashed and shown in the UI (``decile_core.api_keys``).
+        """
+        rate = limit_per_minute / SECONDS_PER_MINUTE
+        key = f"{KEY_PREFIX}apikey:{prefix}"
+        try:
+            raw = await self._script(keys=[key], args=[limit_per_minute, rate, time.monotonic(), 1])
+        except RedisError as exc:
+            log.error("rate limiter unavailable", extra={"error": str(exc)})
+            raise Problem(
+                ProblemType.PIPELINE_DEGRADED,
+                "Rate limiting is unavailable, so the request was refused.",
+            ) from exc
+        granted, wait = _decode(raw)
+        return Decision(
+            allowed=granted,
+            limit_per_minute=limit_per_minute,
+            retry_after_seconds=max(1, math.ceil(wait)),
+        )
+
     async def enforce(
         self,
         principal: Principal,

@@ -9,9 +9,11 @@ from decile_api.email.sender import (
     Transport,
     build_transport,
 )
-from decile_api.email.templates import Message, SupportSubmission
+from decile_api.email.templates import AlertRow, AlertSection, Message, SupportSubmission
 
 __all__ = [
+    "AlertRow",
+    "AlertSection",
     "ConsoleTransport",
     "EmailNotSent",
     "Mailer",

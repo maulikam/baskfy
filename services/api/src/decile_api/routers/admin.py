@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from decile_api import admin
 from decile_api.auth import StaffDep, require_staff
 from decile_api.db import SessionDep
+from decile_api.routers import public
 from decile_api.schemas import (
     AdminActionListOut,
     AdminActionOut,
@@ -43,10 +44,18 @@ from decile_api.schemas import (
     PipelineStepOut,
     ProviderHealthListOut,
     ProviderHealthOut,
+    PublicApiGateOut,
     TaskAcceptedOut,
 )
 from decile_api.settings import Settings, get_settings
 from decile_core.models import AdminAction, AppUser, EntitlementOverride, PipelineRun
+from decile_core.public_api import (
+    DATA_REDISTRIBUTION_REVIEW,
+    PUBLIC_API_PREFIX,
+    PUBLIC_API_VERSION,
+    PUBLIC_COLUMNS,
+    WITHHELD_COLUMNS,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_staff)])
 
@@ -314,4 +323,34 @@ async def list_actions(
             )
             for row in rows
         ]
+    )
+
+
+@router.get(
+    "/public-api",
+    response_model=PublicApiGateOut,
+    summary="Whether the public read API may serve, and why not",
+)
+async def public_api_gate(request: Request, staff: StaffDep) -> PublicApiGateOut:
+    """PROMPTS.md Prompt 20 §2: "make that dependency explicit in the code **and the admin UI**".
+
+    This is a read of two constants and one setting — no database, no side effect. It exists so
+    that "why is the public API not serving" has an answer a staff member can read, in the exact
+    words docs/11 uses, rather than a shrug and a grep.
+    """
+    del staff
+    settings = _settings(request)
+    review = DATA_REDISTRIBUTION_REVIEW
+    return PublicApiGateOut(
+        flag_enabled=settings.public_api_enabled,
+        review_signed_off=review.signed_off,
+        serving=public.is_enabled(settings),
+        requirement=review.requirement,
+        opinion_reference=review.opinion_reference,
+        signed_off_on=review.signed_off_on,
+        signed_off_by=review.signed_off_by,
+        api_version=PUBLIC_API_VERSION,
+        prefix=PUBLIC_API_PREFIX,
+        served_fields=list(PUBLIC_COLUMNS),
+        withheld_fields=list(WITHHELD_COLUMNS),
     )

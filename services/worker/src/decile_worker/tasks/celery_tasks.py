@@ -34,6 +34,7 @@ from decile_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
 from decile_worker.providers import build_cache, build_pipeline_dependencies
 from decile_worker.steps import StepOutcome
 from decile_worker.tasks.adjustments import instruments_with_actions, reprocess_instrument
+from decile_worker.tasks.alerts import SWEEP_BATCH, run_alert_dispatch, run_webhook_sweep
 from decile_worker.tasks.backtests import (
     BacktestNotRunnable,
     build_backtest_archive,
@@ -291,3 +292,29 @@ def run_backtest_task(public_id: str, fragility: bool = True) -> JsonObject:
         if publisher is not None:
             publisher.close()
     return outcome.as_dict()
+
+
+@shared_task(name="decile.alerts.dispatch", acks_late=True)
+def dispatch_screen_alerts_task(trade_date: str | None = None) -> JsonObject:
+    """PROMPTS.md Prompt 20 §3: the nightly screen-alert email, after publish.
+
+    Deliberately **not** auto-retried. Every send is recorded in ``screen_alert_delivery``, which
+    is unique on ``(alert, as_of)``, so re-running the task for a date is a no-op rather than a
+    second email — but a retry loop on a broken mail transport would still hammer the provider
+    for the alerts that *had* not been recorded yet, and the failure belongs in an alert (Prompt
+    17) rather than in a loop.
+    """
+    day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
+    return run_in_session(lambda session: run_alert_dispatch(session, day))
+
+
+@shared_task(name="decile.alerts.sweep_webhooks")
+def sweep_webhooks_task(limit: int = SWEEP_BATCH) -> JsonObject:
+    """PROMPTS.md Prompt 20 §4's "retry with backoff", driven by a timer rather than by Celery.
+
+    The backoff schedule lives on the ``webhook_delivery`` row (``next_attempt_at``), not in
+    Celery's retry machinery, for one reason: a retry held inside a task is lost when the worker
+    dies, and a webhook that a receiver never got and nobody remembers to resend is worse than a
+    late one. The row survives a restart; the sweep picks it up.
+    """
+    return run_in_session(lambda session: run_webhook_sweep(session, limit=limit))

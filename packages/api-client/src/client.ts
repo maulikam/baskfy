@@ -152,6 +152,33 @@ export type TaskAcceptedOut = Schemas["TaskAcceptedOut"];
 /** The contact form's payload (Prompt 18 §2). Not in docs/07 — `docs/DECISIONS.md` §18.5. */
 export type SupportMessageIn = Schemas["SupportMessageIn"];
 
+/**
+ * API keys, screen alerts and outbound webhooks (Prompt 20). Not in docs/07 either, and typed for
+ * the same reason `/admin` is — see `docs/DECISIONS.md` §20.
+ *
+ * Note what is **not** here: nothing from `/api/public/v1`. The public tier's routes are absent
+ * from `openapi.json` because the router is not mounted while the data-redistribution review is
+ * outstanding (`docs/DECISIONS.md` §20.1), so there is nothing to generate a type from.
+ */
+export type ApiKeyOut = Schemas["ApiKeyOut"];
+export type ApiKeyListOut = Schemas["ApiKeyListOut"];
+export type ApiKeyCreate = Schemas["ApiKeyCreate"];
+export type ApiKeyIssuedOut = Schemas["ApiKeyIssuedOut"];
+export type ApiKeyUsageOut = Schemas["ApiKeyUsageOut"];
+export type ApiKeyUsagePointOut = Schemas["ApiKeyUsagePointOut"];
+export type ScreenAlertOut = Schemas["ScreenAlertOut"];
+export type ScreenAlertListOut = Schemas["ScreenAlertListOut"];
+export type ScreenAlertCreate = Schemas["ScreenAlertCreate"];
+export type ScreenAlertUpdate = Schemas["ScreenAlertUpdate"];
+export type ScreenAlertDeliveryOut = Schemas["ScreenAlertDeliveryOut"];
+export type UnsubscribeOut = Schemas["UnsubscribeOut"];
+export type WebhookEndpointOut = Schemas["WebhookEndpointOut"];
+export type WebhookEndpointListOut = Schemas["WebhookEndpointListOut"];
+export type WebhookEndpointCreate = Schemas["WebhookEndpointCreate"];
+export type WebhookEndpointWithSecretOut = Schemas["WebhookEndpointWithSecretOut"];
+export type WebhookDeliveryOut = Schemas["WebhookDeliveryOut"];
+export type PublicApiGateOut = Schemas["PublicApiGateOut"];
+
 /** docs/07: "Base: `/api/v1`". */
 export const API_PREFIX = "/api/v1";
 

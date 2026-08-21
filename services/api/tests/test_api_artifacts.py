@@ -113,6 +113,28 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # (`decile_api.routers.support`, `docs/DECISIONS.md` §18.5).
     "/support": {"post"},
     "/admin/actions": {"get"},
+    # Prompt 20. docs/07 mentions `X-API-Key` in its header section and describes no endpoint that
+    # issues one, and it describes neither alerts nor outbound webhooks at all. Listed here for the
+    # same reason `/admin` and `/support` are: a route that is served and not written down is a
+    # surface nobody agreed to. Each is argued for in its router and in docs/DECISIONS.md §20.
+    "/keys": {"get", "post"},
+    "/keys/{public_id}": {"delete"},
+    "/keys/{public_id}/rotate": {"post"},
+    "/keys/{public_id}/revoke": {"post"},
+    "/keys/{public_id}/usage": {"get"},
+    "/alerts": {"get", "post"},
+    "/alerts/{public_id}": {"patch", "delete"},
+    "/alerts/{public_id}/deliveries": {"get"},
+    "/alerts/unsubscribe": {"post"},
+    "/webhook-endpoints": {"get", "post"},
+    "/webhook-endpoints/{public_id}": {"patch", "delete"},
+    "/webhook-endpoints/{public_id}/rotate-secret": {"post"},
+    "/webhook-endpoints/{public_id}/deliveries": {"get"},
+    "/admin/public-api": {"get"},
+    # NOT LISTED, and deliberately: nothing under `/api/public/v1`. The public tier's router is
+    # not mounted while the data-redistribution review docs/11 §Compliance requires is
+    # outstanding, so it is absent from this document by construction —
+    # `test_public_api_flag.py` asserts that positively.
 }
 
 

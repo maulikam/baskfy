@@ -159,6 +159,19 @@ database, a network or a disk belongs in `services/` or `packages/providers`.
 | The disclaimer sweep and the static-generation check | `apps/web/e2e/{disclaimer-sweep,static-generation}.spec.ts` |
 | The contact form's endpoint | `services/api/src/decile_api/routers/support.py` |
 | **Every Prompt 18 decision taken under ambiguity** | `docs/DECISIONS.md` §18 |
+| **The public-API compliance gate (docs/11 §Compliance, as a constant)** | `packages/core/src/decile_core/public_api.py` |
+| The public read API, and the two locks on it | `services/api/src/decile_api/routers/public.py` |
+| The interactive reference + the curl/Python/TS samples | `services/api/src/decile_api/public_docs.py` |
+| API keys: minting, verification, rotation, usage | `services/api/src/decile_api/api_keys.py` |
+| Key shape, scopes (all reads), the `dk_` format | `packages/core/src/decile_core/api_keys.py` |
+| **The screen diff behind every alert email (pure)** | `packages/core/src/decile_core/screen_diff.py` |
+| Alert subscriptions, dispatch, unsubscribe | `services/api/src/decile_api/alerts.py` |
+| The alert email, and its committed snapshot | `decile_api.email.templates.screen_alert`, `tests/fixtures/alerts/` |
+| Webhook signing, retry and backoff | `services/api/src/decile_api/webhooks.py` |
+| The nightly alert dispatch + the webhook sweeper | `services/worker/src/decile_worker/tasks/alerts.py` |
+| `/keys`, `/alerts`, `/webhook-endpoints`, `/admin/public-api` | `services/api/src/decile_api/routers/` |
+| The key, alert and gate pages | `apps/web/src/app/(app)/{api-keys,alerts,admin/public-api}/` |
+| **Every Prompt 20 decision taken under ambiguity** | `docs/DECISIONS.md` §20 |
 | Auth tables not in `docs/04` | `docs/04c-auth-tables-addendum.md` |
 | HTTP rate limiting (docs/07 §Conventions) | `services/api/src/decile_api/ratelimit.py` |
 | Streaming CSV export | `services/api/src/decile_api/csv_export.py` |
@@ -273,6 +286,49 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
 `make test-db` needs `DECILE_TEST_DATABASE_URL`. Without it those tests skip rather than fail.
 
 ## Open items carried forward
+
+- **THE PUBLIC API IS OFF, AND TWO THINGS HOLD IT SHUT.** `DECILE_PUBLIC_API_ENABLED` is false
+  everywhere, and `decile_core.public_api.DATA_REDISTRIBUTION_REVIEW.signed_off` is a **source
+  constant** that is `False` and must stay `False` until a lawyer has produced the written
+  data-redistribution opinion docs/11 §Compliance requires. The router is not mounted while either
+  is shut, so the routes are absent from `openapi.json` and from the generated client entirely.
+  `packages/core/tests/test_public_api_policy.py` fails the build if the constant is flipped
+  (`docs/DECISIONS.md` §20.1). **Flipping it is a commit, not a config change. Do not do it
+  without the opinion.**
+- **The "derived analytics, not raw bars" line is drawn at "no field priced in rupees per
+  share"**, and it is not airtight. `ma_20(t)·20 − ma_20(t−1)·20` recovers `close(t) − close(t−20)`,
+  which is why the moving averages are withheld too — but no analysis bounds what a determined
+  caller could reconstruct from the *served* series jointly across many `as_of` dates. Treat
+  `PUBLIC_COLUMNS` as a starting position for the legal opinion, not a solved problem
+  (`docs/DECISIONS.md` §20.4).
+- **The webhook sender does no SSRF protection.** `_check_url` refuses a non-`http(s)` scheme and
+  plain `http` in production, and does **not** resolve the host or block loopback, link-local or
+  RFC 1918 ranges. An authenticated user can point an endpoint at `169.254.169.254` and have the
+  server POST a signed body to it (blind — the response never reaches them). Not fixed; the
+  feature's unreleased state is what is containing it (`docs/DECISIONS.md` §20.9).
+- **No API key has ever authenticated a request outside the test suite,** because the surface they
+  open is not mounted in any committed configuration. Key creation, rotation, revocation and the
+  usage dashboard all work today and meter nothing.
+- **No alert email has ever been delivered.** The dispatch, the diff, the digest grouping and the
+  unsubscribe link are all tested against a real database and a recording transport; no Celery
+  worker has run `decile.alerts.dispatch` and no mail has left the machine. Same class of gap as
+  the Razorpay webhook and the API → broker → worker wire.
+- **No webhook has ever been POSTed to a real receiver.** Every delivery test drives an
+  `httpx.MockTransport`.
+- **The alert dispatch runs a screen query per subscribed screen, every night.**
+  `decile_api.alerts.ensure_run` evaluates each subscribed screen for the published date because
+  the nightly publish records no `screen_run` row. Nothing bounds how many subscriptions that is
+  (`docs/DECISIONS.md` §20.15).
+- **`api_key_usage_daily` is written on the request path** — one upsert per accepted public
+  request. Correct at this scale, and the first thing to move if the public API ever carries
+  volume (`docs/DECISIONS.md` §20.6).
+- **The interactive reference loads Redoc from a CDN with no Subresource Integrity hash.** The URL
+  is version-pinned and configurable; the hash is missing because computing one needs a network
+  fetch and the suite is network-blocked. Add one before the reference is served publicly
+  (`docs/DECISIONS.md` §20.8).
+- **`/api-keys` and `/alerts` are not in the sidebar.** `docs/08`'s Account group is four items and
+  `src/lib/nav.ts` is pinned to it by a test, so both live in the user menu — the same arrangement
+  `/admin` has. Neither page has Playwright coverage.
 
 - **`docs/05` §8's skip-month definition is now REFUTED, not resolved.** Prompt 19's
   reconciliation shows candidate A (`P_{t-21}/P_{t-252}`, the one we ship) implies **521.31%** for

@@ -55,6 +55,10 @@ export default async function AdminPage() {
           ·{" "}
           <Link className="underline underline-offset-2" href="/admin/users">
             User lookup
+          </Link>{" "}
+          ·{" "}
+          <Link className="underline underline-offset-2" href="/admin/public-api">
+            Public API gate
           </Link>
         </p>
       </header>

@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import datetime as dt
 import os
-from collections.abc import AsyncIterator, Mapping, Sequence
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Iterator, Mapping, Sequence
+from contextlib import asynccontextmanager, contextmanager
 from typing import Final
+from unittest import mock
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,8 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from decile_api.app import create_app
 from decile_api.auth import encode_token
 from decile_api.db import get_session
+from decile_api.routers import public as public_router
 from decile_api.settings import Settings
 from decile_core.models import AppUser, Subscription
+from decile_core.public_api import DATA_REDISTRIBUTION_REVIEW as REVIEW
+from decile_core.public_api import DataRedistributionReview
 from decile_core.seed_data import PLANS
 
 #: 32 bytes, because RFC 7518 §3.2 requires an HS256 key at least as long as the hash output and
@@ -180,3 +184,42 @@ def row_values(body: dict[str, object], column: str) -> Sequence[object]:
     rows = body["rows"]
     assert isinstance(rows, list)
     return [row[column] for row in rows if isinstance(row, dict)]
+
+
+# ---------------------------------------------------------------------------
+# Prompt 20 — driving the public read API in a test
+# ---------------------------------------------------------------------------
+#
+# The public router is mounted only when *both* locks are open (`docs/DECISIONS.md` §20.1), and
+# one of them is a source constant that must stay False in every committed build. A contract test
+# for the surface therefore has to open it deliberately, for the duration of one app, and put it
+# back — which is what this does.
+#
+# `packages/core/tests/test_public_api_policy.py` asserts the constant itself is False, so this
+# helper cannot be used to hide a flipped gate: it patches the name the router reads, not the
+# value the policy test reads.
+
+
+@contextmanager
+def review_signed_off() -> Iterator[None]:
+    """Pretend, for the duration of the block, that the docs/11 opinion exists."""
+    signed = DataRedistributionReview(
+        requirement=REVIEW.requirement,
+        signed_off=True,
+        opinion_reference="TEST — not a real opinion",
+        signed_off_on="2026-08-21",
+        signed_off_by="the test suite",
+    )
+    with mock.patch.object(public_router, "DATA_REDISTRIBUTION_REVIEW", signed):
+        yield
+
+
+@asynccontextmanager
+async def running_public_app(
+    settings: Settings, session: AsyncSession
+) -> AsyncIterator[httpx.AsyncClient]:
+    """A live app with the public read API mounted. See :func:`review_signed_off`."""
+    with review_signed_off():
+        opened = settings.model_copy(update={"public_api_enabled": True})
+        async with running_app(opened, session) as client:
+            yield client

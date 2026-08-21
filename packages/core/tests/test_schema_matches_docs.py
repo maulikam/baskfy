@@ -44,6 +44,15 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "screen_run": ("id",),
     # Market health
     "market_health_daily": ("index_id", "date"),
+    # Public API, screen alerts and outbound webhooks — not in docs/04's DDL. Prompt 20 builds
+    # three features the data model predates; each table is argued for in docs/DECISIONS.md §20
+    # and on `decile_core.models.integrations`.
+    "api_key": ("id",),
+    "api_key_usage_daily": ("api_key_id", "date"),
+    "screen_alert": ("id",),
+    "screen_alert_delivery": ("id",),
+    "webhook_endpoint": ("id",),
+    "webhook_delivery": ("id",),
     # Accounts, billing, portfolios, backtests
     "app_user": ("id",),
     "plan": ("id",),
@@ -157,6 +166,12 @@ def test_billing_tables_are_recorded_in_decisions() -> None:
         "portfolio_rebalance",
         "entitlement_override",
         "admin_action",
+        "api_key",
+        "api_key_usage_daily",
+        "screen_alert",
+        "screen_alert_delivery",
+        "webhook_endpoint",
+        "webhook_delivery",
     ):
         assert table in decisions, f"{table} is not described in docs/DECISIONS.md"
 

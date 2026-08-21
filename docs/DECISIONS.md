@@ -1346,3 +1346,244 @@ file full of "probably fine".
 mutating one of them survived. A test now asserts they agree — a patch over a duplication that
 should simply be removed, by having one module import the other. Not done here: it changes a
 public name's home, which is a Prompt 5 decision rather than a Prompt 19 one.
+
+---
+
+## Prompt 20 — Public API, alerts, and API keys (2026-08-21)
+
+Prompt 20 opens with "Read docs/07 and docs/11 'Compliance' first — especially the data-licensing
+constraint." That constraint decides the shape of the whole module, so it is §20.1 and everything
+else hangs off it.
+
+### 20.1 The public API has two locks, and one of them is a source constant
+
+docs/11 §"Compliance & legal (India)":
+
+> **Data licensing:** broker-sourced market data is licensed for the licensee's own use. Serve
+> derived analytics; do not expose a raw-bar API to third parties without written clearance. Get a
+> written data-redistribution opinion before enabling the public API tier.
+
+Prompt 20 §2 asks for the feature to be "behind a flag that stays OFF until the data-redistribution
+review in docs/11 is signed off; make that dependency explicit in the code and the admin UI."
+
+A single environment variable would satisfy the letter and not the intent: an operator with shell
+access could turn on data redistribution at 2am with no reviewer, no diff and no record. So there
+are two:
+
+1. `DECILE_PUBLIC_API_ENABLED` — a setting, `False` in `Settings`, in `.env.example`, and in
+   `infra/docker/compose.yml`. This is the operational off switch.
+2. `decile_core.public_api.DATA_REDISTRIBUTION_REVIEW.signed_off` — a **source constant**, `False`,
+   carrying docs/11's sentence verbatim plus empty `opinion_reference` / `signed_off_by` /
+   `signed_off_on` fields. This is the compliance gate.
+
+`decile_api.routers.public.is_enabled` reads both; `create_app` mounts the router only if both are
+open. When shut, there is no handler, nothing in the OpenAPI document and nothing in the generated
+TypeScript client — a stronger statement than a route that answers 403. A caller gets a plain 404,
+because "we do not have a public tier" and "we have one and it is switched off" are different
+statements and only the first is currently true.
+
+`packages/core/tests/test_public_api_policy.py::test_the_data_redistribution_review_is_not_signed_off`
+fails the build if anyone flips it. **Turning the public API on means editing a Python constant and
+deleting a test assertion, in a reviewable commit.** That is the closest thing a codebase has to a
+signature.
+
+The admin surface renders the same object: `GET /api/v1/admin/public-api` and
+`/admin/public-api` in the web app both state the requirement and that it is outstanding.
+
+### 20.2 "Never raw vendor bars" is enforced as "no field denominated in rupees per share"
+
+"Derived analytics, never raw vendor bars" needs an operational test, because every derived number
+is downstream of a bar. The rule in `decile_core.public_api.is_public_column` is:
+
+> a public field may not have `FactorUnit.PRICE`, and may not be named in `RAW_BAR_FIELDS`.
+
+That withholds `close`, `close_raw`, `high_1y`, `high_ath` and the four moving averages, and serves
+returns, sharpe returns, RSI, volatility, beta, marketcap, P/E, away-from-high percentages, circuit
+counts, median traded value and the series code. Every column of docs/01 §4's picker lands in
+exactly one of the two lists, asserted, so a column added later cannot become public by nobody
+thinking about it.
+
+The moving averages are the interesting exclusion: `ma_20` is a *derived* statistic by any ordinary
+reading, and it was excluded anyway. See §20.4.
+
+The public screen endpoint additionally refuses to run a screen whose **sorting factor** is a
+withheld column, because docs/06 always projects `sorting_factor` alongside the requested columns —
+a screen sorted by `close_raw` would put an exchange print through a door the column whitelist does
+not cover.
+
+### 20.3 An API key is verified from the row on every request, with no cache
+
+Prompt 20's first acceptance criterion is "a revoked key is rejected within one second (no
+cached-auth window)". `decile_api.api_keys.authenticate` therefore reads `api_key` on every request:
+one unique-index probe on the clear-text `prefix` plus a constant-time digest comparison, cheaper
+than the JWT verification every other authenticated route already pays. There is no TTL to tune and
+no invalidation to get wrong.
+
+A key is `dk_<12 hex prefix>_<43 url-safe chars>`. The prefix is stored in the clear because it is
+what the lookup indexes on and what the UI displays; the secret is SHA-256 at rest, like every other
+high-entropy token in this codebase (`decile_api.security`), and exists in plaintext exactly once —
+in the response that created it.
+
+### 20.4 The residual risk the whitelist does not close
+
+`ma_20(t)*20 − ma_20(t−1)*20 = close(t) − close(t−20)`. A caller who sweeps `as_of` across every
+trading day can difference a moving-average series and recover exact daily closes. That is why the
+moving averages are withheld despite being derived: the whitelist is drawn at "no per-share price,
+and nothing one subtraction away from one".
+
+It is still not airtight. `away_high_1y` is a percentage distance from a rolling high; a determined
+caller with enough dates and enough algebra can extract information about the price path from
+several of the served series jointly. **No analysis has been done to bound what is recoverable.**
+The mitigations that exist are the day-granularity cache header, the per-key rate limit, the
+terms-of-use clause that prohibits reconstruction, and — decisively — the fact that the feature
+ships **off**. A reviewer should treat the whitelist as a starting position for the legal opinion,
+not as a solved problem.
+
+### 20.5 Rotation revokes the old key immediately, with no grace window
+
+An overlap would be friendlier to an integration mid-deploy. It is also indistinguishable, from
+outside, from a key that was not really rotated — the wrong default for a credential whose whole
+rotation story exists because it may have leaked. An owner who wants an overlap creates a second
+key, deploys it, then revokes the first: two explicit steps rather than one implicit window.
+
+### 20.6 Usage is counted with a write on the request path
+
+`api_key_usage_daily` is one `INSERT … ON CONFLICT DO UPDATE` per accepted request (plus a
+`last_used_at` touch at most once a minute). That is a write per read, which is the honest cost of
+the dashboard Prompt 20 §1 asks for at this scale. A Redis counter flushed periodically would be
+cheaper and would lose the tail on a restart. **If the public API ever carries real volume this is
+the first thing to move.**
+
+### 20.7 New endpoints reuse docs/07's single 400
+
+docs/07's error catalogue has exactly one 400 (`invalid-screen-definition`) and no general
+bad-request type. `routers/portfolios.py` already reuses it for a malformed upload; `/keys`,
+`/alerts` and `/webhook-endpoints` do the same, with a precise `detail` and an `errors[]` entry. A
+client handling an undocumented `type` is worse off than one handling a documented type whose
+`detail` says what went wrong. A scope a key does not carry answers **402**, not 403: docs/07 has no
+`forbidden`, and "your credential does not include this" is what `payment-required` already means
+on this service.
+
+### 20.8 The interactive reference is Redoc from a CDN, with no Subresource Integrity hash
+
+docs/02 locks the stack and names no documentation renderer. Redoc is FastAPI's own built-in choice
+and needs no new dependency — a single `<script>` tag — and, decisively, it renders the
+`x-codeSamples` vendor extension natively. That puts the curl / Python / TypeScript examples Prompt
+20 §5 asks for **inside the OpenAPI document**, where they are machine-readable, versioned with the
+spec and asserted by a test, rather than in hand-written HTML beside it.
+
+The script URL is pinned by version in `DECILE_REDOC_SCRIPT_URL` and an air-gapped deployment can
+repoint it at a self-hosted copy. There is **no `integrity` attribute**: computing an SRI hash means
+fetching the file, and this repository's suite is network-blocked, so any hash committed here would
+be one nobody had verified. Add one before the reference is served publicly.
+
+The public document is a *filtered copy* of the service's single OpenAPI document rather than a
+separate FastAPI sub-application, because a sub-app has its own dependency graph and would fall
+outside the test harness's session override (`services/api/tests/api_helpers.running_app`).
+
+### 20.9 The webhook sender does no SSRF protection
+
+`routers/webhook_endpoints._check_url` refuses anything that is not an absolute `http(s)` URL with a
+host, and refuses plain `http` in production. It does **not** resolve the hostname, and does not
+block loopback, link-local or RFC 1918 destinations. An authenticated user can therefore point an
+endpoint at `http://169.254.169.254/…` and have the server POST a signed JSON body to it.
+
+The body carries only symbols, ranks and a screen name, and the response is never returned to the
+user — so this is a blind request, not an exfiltration channel — but it is still a real
+server-side-request-forgery surface. Doing it properly means resolving the host at *attempt* time
+and re-checking after redirects, which is a piece of machinery worth writing deliberately. **Not
+written. The feature's unreleased state is what is containing it.**
+
+### 20.10 A public screen response is capped at 500 rows
+
+The product API allows 4,000 (docs/03 §"Request path"). A public tier is for looking things up; a
+caller who wants the whole universe every night is asking for the dataset, which is exactly what
+docs/11's licence does not permit us to serve.
+
+### 20.11 The public API does not use the screen cache
+
+`run_screen` returns cached *bytes* — the product API's full payload. A public response has to be
+assembled field by field from the whitelist, and reading a cached blob and filtering it afterwards
+is the shape of bug that leaks a column the day someone adds one. So the public endpoint calls
+`execute_screen` directly and builds the payload from the allowed keys. The cost is that public
+screen reads always hit PostgreSQL; the `Cache-Control: max-age=86400` header is what is expected to
+absorb the traffic.
+
+### 20.12 A webhook signing secret is derived, not stored
+
+An HMAC needs the secret in the clear at signing time, so "hash it at rest" is not available. The
+alternatives were to encrypt it (a key to manage, a decryption per delivery) or to derive it:
+
+    secret = "whsec_" + HMAC-SHA256(master, f"{endpoint.public_id}:{secret_version}")[:32 hex]
+
+Rotation is `secret_version += 1`; nothing secret is written to a row; a database dump yields no
+signing key; and the value can be shown to its owner again without us keeping a decryptable copy.
+The master is `DECILE_WEBHOOK_SIGNING_SECRET`, falling back to `DECILE_JWT_SECRET` (which production
+already requires). A deployment with neither cannot create an endpoint — creation answers 503 rather
+than signing with an empty key.
+
+The same derivation produces the **unsubscribe token** in every alert email. A random token would
+exist in plaintext only in the response that created the alert, and every email afterwards would
+have nothing to put in the link. Its SHA-256 is still stored (`screen_alert.unsubscribe_token_hash`,
+unique) so the endpoint resolves a bare token in one indexed probe.
+
+The signature format is Stripe's — `X-Decile-Signature: t=<unix>,v1=<hex>` over `"<t>.<body>"` —
+because it is the one a receiver is most likely to already have code for, and the timestamp inside
+the signed payload is what makes a captured delivery un-replayable.
+
+### 20.13 A 4xx is permanent; the backoff lives on the row, not in Celery
+
+`webhook_delivery` carries `attempts` and `next_attempt_at`; `decile.alerts.sweep_webhooks` runs
+every two minutes and attempts whatever is due. A retry held inside a Celery task is lost when the
+worker dies, and a webhook a receiver never got and nobody remembers to resend is worse than a late
+one.
+
+A 2xx is success. A 4xx that is not 408, 425 or 429 is **permanent** — the receiver understood and
+refused, and retrying a 401 twenty times is how a misconfigured integration becomes a self-inflicted
+denial of service. Everything else retries at 30s, 2m, 8m, 32m, 2h8m. Twenty consecutive failures
+disable the endpoint.
+
+### 20.14 "Digest preference" is per alert, not per account
+
+Prompt 20 §3 says "Include an unsubscribe link and a digest preference" and does not say what a
+digest is a preference *over*. `screen_alert.digest` means "fold this screen into one combined email
+covering every digest alert on this account"; alerts with it off get their own message. Per alert
+rather than per account so a user can have one screen shout and five whisper — and because a
+per-account preference would need a column on `app_user`, which docs/04 defines and this build may
+not edit.
+
+### 20.15 The alert dispatch runs the screen itself when the night has no run
+
+`screen_run` is written when *a user* runs a screen. The nightly publish warms the Redis cache and
+records no run. So "daily after publish" would have meant "no run for that date" every night for a
+subscriber who did not happen to open the page. `decile_api.alerts.ensure_run` evaluates the screen
+for the published date and writes the row through the same upsert the API route uses
+(`decile_api.screener.record_run`, extracted from `routers/screens.py` for this reason), so the row
+an alert diffs is the row a user's own run would have produced.
+
+Two consequences: a nightly dispatch does real query work per subscribed screen, and an alert diffs
+runs of the **same `definition_hash`** only — a user who edited their screen yesterday gets a
+`definition_changed` skip rather than an email claiming the whole universe entered and exited.
+
+### 20.16 Six tables that docs/04 does not define
+
+`api_key`, `api_key_usage_daily`, `screen_alert`, `screen_alert_delivery`, `webhook_endpoint`,
+`webhook_delivery`. Migration `0010_public_api_alerts_webhooks`. The reasoning per table is on
+`decile_core.models.integrations`; the same precedent as docs/04c's auth tables and §13/§14/§17's
+additions here. `screen_alert_delivery` is unique on `(alert_id, as_of)` and `webhook_delivery` on
+`(endpoint_id, idempotency_key)`, which is what makes a re-run of a night's dispatch send nothing
+(CLAUDE.md house rule 7).
+
+### 20.17 Ten keys and ten webhook endpoints per account
+
+Not in the bundle. Enough for one credential per environment per integration, small enough that a
+compromised session cannot quietly mint a thousand.
+
+### 20.18 `api_access` stays false for every plan
+
+`decile_core.entitlements.API_ACCESS_AVAILABLE` is still `False`, so no plan grants docs/07's
+`api_access` entitlement, and `GET /me` still reports it as false for everyone. That is deliberate
+and consistent with §20.1: the public tier does not exist yet, so no plan can include it. **The key
+lifecycle is not gated on it** — an account can create keys today, and they authenticate nothing
+until the public API is mounted. That is the honest arrangement for a feature whose credentials must
+be issuable and testable before the surface they open is legal to serve.

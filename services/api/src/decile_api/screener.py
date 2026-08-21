@@ -23,10 +23,12 @@ import datetime as dt
 from collections.abc import Awaitable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Final, Protocol, runtime_checkable
 
 from pydantic import ValidationError
 from sqlalchemy import Row, func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from decile_api.metrics import observe_cache
@@ -284,6 +286,62 @@ async def execute_screen(  # noqa: PLR0913 - as_of, data_version and the project
         requested_as_of=requested_as_of,
         truncated=truncated,
     )
+
+
+async def record_run(
+    session: AsyncSession, screen_id: int, result: ScreenResult, definition_hash: str
+) -> None:
+    """``screen_run`` — docs/04 calls it "audit + historical ranks cache".
+
+    Public, and here rather than in the router, because Prompt 20's nightly alert dispatch writes
+    the same row (``decile_api.alerts.ensure_run``): an alert diffs ``screen_run`` rows, and a
+    second copy of this upsert would be a second place for the audit trail's shape to drift.
+
+    Only written when the result was computed rather than served from Redis: docs/04's row stores
+    ``[{rank, instrument_id, factor_value}]``, and a cached payload carries no ``instrument_id``
+    to store. A cache hit therefore leaves the earlier row for that (screen, as_of, definition)
+    exactly as it was, which is the row it would have written anyway.
+    """
+    rows = [
+        {
+            "rank": row.rank,
+            "instrument_id": row.instrument_id,
+            "factor_value": json_number(row.values.get("sorting_factor")),
+        }
+        for row in result.rows
+    ]
+    statement = insert(ScreenRun).values(
+        screen_id=screen_id,
+        as_of=result.as_of,
+        definition_hash=definition_hash,
+        result_count=result.result_count,
+        results=rows,
+    )
+    await session.execute(
+        statement.on_conflict_do_update(
+            index_elements=[ScreenRun.screen_id, ScreenRun.as_of, ScreenRun.definition_hash],
+            set_={
+                "result_count": statement.excluded.result_count,
+                "results": statement.excluded.results,
+            },
+        )
+    )
+
+
+def json_number(value: object) -> str | None:
+    """A factor value as it goes into ``screen_run.results`` (JSONB).
+
+    The exact decimal **as a string**. asyncpg serialises JSONB with ``json.dumps``, which has no
+    ``Decimal`` support, and routing through ``float`` would put ``13.0`` in the audit trail where
+    the API returned ``13.00`` — the disagreement CLAUDE.md house rule 8 exists to prevent. A
+    string keeps every digit, and the column is an internal audit record rather than a wire
+    format. Recorded in docs/07a §6.
+    """
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return format(value, "f")
+    return str(value)
 
 
 class SingleFlight:

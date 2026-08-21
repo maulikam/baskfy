@@ -136,6 +136,39 @@ class Kite:
         data = self.kc.ltp(keys)
         return {k.split(":", 1)[1]: v["last_price"] for k, v in data.items()}
 
+    def quotes(self, symbols: list[str], exchange: str = "NSE") -> dict[str, dict]:
+        """Full quote — last price, the day's OHLC, previous close and volume.
+
+        Kite caps a quote call at 500 instruments, so this chunks below that rather than
+        letting a Nifty 500 drill-down fail as one oversized request. An unknown symbol is
+        simply absent from Kite's reply, so callers get a short dict rather than an error:
+        a delisted or renamed constituent must not take the whole panel down.
+
+        Read-only. A quote is never a step towards an order — those go through
+        core/gateway.py, which is the only path allowed to place one.
+        """
+        out: dict[str, dict] = {}
+        clean = [s for s in dict.fromkeys(symbols) if s]
+        for i in range(0, len(clean), 400):
+            keys = [f"{exchange}:{s}" for s in clean[i:i + 400]]
+            try:
+                data = self.kc.quote(keys)
+            except Exception as e:                              # noqa: BLE001
+                log.warning("quote batch failed (%d symbols): %s", len(keys), e)
+                continue
+            for k, v in data.items():
+                ohlc = v.get("ohlc") or {}
+                out[k.split(":", 1)[1]] = {
+                    "last_price": v.get("last_price"),
+                    "net_change": v.get("net_change"),
+                    "open": ohlc.get("open"),
+                    "high": ohlc.get("high"),
+                    "low": ohlc.get("low"),
+                    "prev_close": ohlc.get("close"),
+                    "volume": v.get("volume") or v.get("volume_traded"),
+                }
+        return out
+
     # ---------- writes (caller must gate with user confirmation) ----------
     def place_cnc_order(self, symbol: str, qty: int, side: str, limit_price: float | None,
                         exchange: str = "NSE") -> dict:

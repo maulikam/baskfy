@@ -70,13 +70,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: "/dashboard", label: "Dashboard", icon: "layout-dashboard", status: "ready" },
       { href: "/market-health", label: "Market Health", icon: "activity", status: "ready" },
       { href: "/screens", label: "Screens", icon: "table-2", status: "ready" },
-      {
-        href: "/portfolios",
-        label: "Rebalance Tracker",
-        icon: "scale",
-        status: "planned",
-        arrivesIn: "Prompt 14",
-      },
+      { href: "/portfolios", label: "Rebalance Tracker", icon: "scale", status: "ready" },
       {
         href: "/backtests",
         label: "Backtests",

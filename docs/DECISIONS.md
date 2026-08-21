@@ -182,3 +182,106 @@ than growing a second storage abstraction; the boto3 calls run on a worker threa
 is neither, and Razorpay retries a failed delivery — metering it at the anonymous rate would drop
 events. `/webhooks/*` has its own per-IP bucket at `DECILE_RATE_LIMIT_WEBHOOK_PER_MINUTE`
 (default 600), so the endpoint is still metered rather than open.
+
+---
+
+## Prompt 14 — Portfolios and rebalance tracker (2026-08-21)
+
+Sources: `docs/01` §8 (the tracker as the reference product ships it), `docs/07`
+§"Portfolios & rebalance" (six routes and the `inside_wrh` definition), `docs/08` §Routes and
+§"Rebalance tracker" (the wizard), `docs/04` (`portfolio`, `portfolio_holding`). Each decision
+below is a place those documents do not settle the question.
+
+### 14.1 Target weights are equal-weight
+
+`docs/07` asks the rebalance response for `target_weights` and says nothing about how they are
+computed. `docs/10` §"Execution model" offers four schemes (`equal | inverse_volatility | rank |
+marketcap`), but that is the *backtest's* configuration and Prompt 14 §3's wizard has no weighting
+input — portfolio, screen, `top_n`, `hold_buffer`, and nothing else. Equal weight is `docs/10`'s
+own default, needs no factor the tracker does not already have, and is the only scheme that cannot
+be wrong for a reason the user was never asked about. `decile_core.rebalance._target_weights`.
+The last name absorbs the rounding remainder so the column sums to exactly `1.000000` at
+`numeric(10,6)` — `docs/04`'s precision for `index_member_daily.weight`, reused because the
+bundle gives portfolio weights none.
+
+### 14.2 A fourth list, `holds`
+
+`docs/01` §8 and `docs/07` name three lists: exits, inside_wrh, entries. A held name ranked
+*inside* `top_n` is in none of them, yet it is in the target weights. It is returned as `holds`,
+an additive field: three columns that omit half of someone's portfolio read as if we had lost it.
+The web app renders the three docs/01 columns and nothing more; `holds` feeds the weights table.
+
+### 14.3 `portfolio_rebalance` — a table not in `docs/04`
+
+Prompt 14 §4 requires the history in as many words. `payload` stores the response **verbatim**
+rather than columns to re-render from: the screen can be edited, the buffer changed and a name
+delisted afterwards, and a record of advice given must still say what the user saw. `screen_id` is
+`ON DELETE SET NULL` so deleting a screen cannot erase the history of what it once told someone;
+the screen's name and public id are inside `payload`. Migration `0007_portfolio_rebalance`, which
+also indexes `portfolio_holding.instrument_id` — the composite primary key leads on
+`portfolio_id` and cannot serve the direction the rebalance join reads.
+
+### 14.4 A BSE scrip code is reported, never resolved
+
+Prompt 14's acceptance criterion names "a BSE-style code" among the messy inputs. This service
+holds NSE instruments and has no BSE-code mapping, so a six-digit numeric token is classified as
+`bse_code` and reported unmatched **with that reason**. Guessing an NSE symbol from a BSE code
+would put a position in someone's portfolio that they did not choose.
+
+### 14.5 "Ambiguous" is a verdict, not a tie to break
+
+`instrument` is unique on `(exchange_id, symbol, series)`, so one symbol can name several rows —
+the `EQ`/`BE` pair of one company is the ordinary case. Resolution goes active listing → any
+listing → `symbol_alias`, and a tier returning more than one row stops there as `ambiguous` with
+its candidates listed. Nothing is imported for it. Silently preferring `EQ` would be a guess about
+which security someone owns.
+
+### 14.6 Four routes `docs/07` does not list
+
+* `PATCH` and `DELETE /portfolios/{id}` — Prompt 14 §1 says "Portfolio CRUD"; `docs/07`'s six
+  routes have no update or delete, and a portfolio that can never be renamed or removed is not
+  CRUD.
+* `GET /portfolios/sample-csv` — `docs/01` §8 and `docs/08` both require a downloadable sample.
+  Served by the API rather than as a static asset in the web app so the file a user downloads is
+  the file `decile_core.portfolio_csv` is tested against.
+* `GET /portfolios/{id}/rebalances` and `/rebalances/{rebalance_id}` — §4's history has to be
+  readable to be worth persisting. The single-record read returns the stored payload verbatim.
+
+### 14.7 `{id}` is the numeric `portfolio.id`
+
+`docs/04` gives `screen` a `public_id` and `portfolio` none. So the path parameter is the numeric
+id, and a portfolio belonging to someone else is a `404` — the rule `docs/07`'s screens surface
+already follows, for the same reason: a `403` confirms the id exists.
+
+### 14.8 The tracker is not entitlement-gated
+
+`docs/07` §Entitlements gates seven things and a portfolio is none of them, so any signed-in
+account can keep portfolios and rebalance them. The **screen** a rebalance runs keeps its own
+gates: the ₹0 tier's universe restriction, and `historical_ranks` when a past `as_of` is asked
+for.
+
+### 14.9 A holdings `PUT` replaces, and keeps `added_on`
+
+`PUT /portfolios/{id}/holdings` is a replacement, not a merge — a merge would leave no way to sell
+a position. A name that was already held keeps its original `added_on`, so re-uploading the same
+file does not reset every purchase date; `docs/04` gives the column no meaning other than "the day
+this row appeared".
+
+### 14.10 `python-multipart` is a new dependency
+
+`docs/07` specifies `POST /portfolios/import-csv  multipart`, and Starlette cannot parse a
+multipart body without it. Not named in `docs/02`; the alternative is hand-rolling RFC 7578
+boundary parsing. Flagged here per house rule 1.
+
+### 14.11 What is **not** built
+
+* **No holdings editor.** Holdings are set by CSV upload or by a JSON `PUT`; there is no
+  add-one-row form in the web app. `docs/08` §"Rebalance tracker" describes the wizard and does
+  not ask for one.
+* **Nothing reconciles quantities.** `quantity` and `avg_price` are stored and echoed; no weight,
+  exposure or P&L is computed from them. `docs/01` §8's tracker is a symbol diff, and inventing a
+  valuation would be inventing a feature.
+* **The rebalance response is not cached.** The screen behind it is executed uncached on every
+  call, because `run_screen`'s cached bytes carry no `instrument_id` and the rule matches on
+  `instrument_id`, never on symbol (a symbol diff would exit a position on the day NSE renames
+  it).

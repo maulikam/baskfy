@@ -11,6 +11,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     PrimaryKeyConstraint,
@@ -154,7 +155,12 @@ class Portfolio(Base):
 
 class PortfolioHolding(Base):
     __tablename__ = "portfolio_holding"
-    __table_args__ = (PrimaryKeyConstraint("portfolio_id", "instrument_id"),)
+    #: The composite primary key leads on ``portfolio_id``, so it cannot serve a predicate on
+    #: ``instrument_id`` alone — which is the direction the rebalance join reads.
+    __table_args__ = (
+        PrimaryKeyConstraint("portfolio_id", "instrument_id"),
+        Index("ix_portfolio_holding_instrument_id", "instrument_id"),
+    )
 
     portfolio_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("portfolio.id", ondelete="CASCADE")
@@ -163,6 +169,46 @@ class PortfolioHolding(Base):
     quantity: Mapped[Decimal | None] = mapped_column(QUANTITY)
     avg_price: Mapped[Decimal | None] = mapped_column(PRICE_RAW)
     added_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+
+
+class PortfolioRebalance(Base):
+    """One computed rebalance, kept so the user can see what they were told and when.
+
+    **NOT IN docs/04.** PROMPTS.md Prompt 14 §4 requires it in as many words — "Rebalance history:
+    persist each computed rebalance so a user can see what they were told and when" — and docs/04
+    stops at ``portfolio`` and ``portfolio_holding``. Same footing as the auth tables of
+    ``docs/04c`` and the billing tables of ``decile_core.models.billing``: an addition a numbered
+    deliverable asks for, recorded in ``docs/DECISIONS.md`` §14.
+
+    ``payload`` is the response body **verbatim**, not a set of columns to re-render from. The
+    point of the history is that it is a record of advice given on a date: the screen can be
+    edited, the buffer changed, a name delisted, and this row must still say what the user saw.
+    Recomputing it from ``screen_id`` + ``as_of`` would produce today's answer under yesterday's
+    timestamp, which is the one thing an audit trail may not do.
+
+    ``screen_id`` is ``ON DELETE SET NULL`` rather than ``CASCADE`` for the same reason: deleting
+    a screen must not erase the history of what it once told someone. The screen's name and public
+    id are inside ``payload``.
+    """
+
+    __tablename__ = "portfolio_rebalance"
+    __table_args__ = (Index("ix_portfolio_rebalance_portfolio_id", "portfolio_id"),)
+
+    id: Mapped[BigIntPk]
+    portfolio_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("portfolio.id", ondelete="CASCADE"), nullable=False
+    )
+    screen_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("screen.id", ondelete="SET NULL")
+    )
+    #: The trading day the screen was run for (docs/06 §step 1's resolved as-of).
+    as_of: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    #: The published data version behind it, so a stale answer is identifiable as stale.
+    data_version: Mapped[int | None] = mapped_column(BigInteger)
+    top_n: Mapped[int] = mapped_column(Integer, nullable=False)
+    hold_buffer: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[JsonObject] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[CreatedAt]
 
 
 class Backtest(Base):

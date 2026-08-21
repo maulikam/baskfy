@@ -21,6 +21,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, JsonValue
 
+from decile_core.portfolio_csv import MatchStatus, RowIssue, SkipReason, UnmatchedReason
+from decile_core.rebalance import Action, ExitReason
 from decile_core.screen_definition import ScreenDefinition
 
 #: docs/07 §Conventions: "Cursor pagination: `?limit=100&cursor=…`".
@@ -770,4 +772,232 @@ class InvoicePage(_Out):
     """docs/07 §Conventions: `{ "data": [...], "next_cursor": "…" }`."""
 
     data: list[InvoiceOut]
+    next_cursor: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Portfolios & rebalance (Prompt 14) — docs/07 §"Portfolios & rebalance"
+# ---------------------------------------------------------------------------
+
+#: Bounds on the two rule inputs. docs/07's example body uses `top_n: 20, hold_buffer: 10` and
+#: fixes no range; these exist so a malformed client cannot ask for a rebalance against a
+#: four-thousand-name target portfolio. Wide enough that no real portfolio meets them.
+MAX_TOP_N = 1000
+MAX_HOLD_BUFFER = 1000
+
+
+class HoldingIn(_In):
+    """docs/07: `POST /portfolios { name, holdings:[{symbol, quantity?, avg_price?}] }`."""
+
+    symbol: str = Field(min_length=1, max_length=30)
+    quantity: Decimal | None = None
+    avg_price: Decimal | None = None
+
+
+class PortfolioCreate(_In):
+    name: str = Field(min_length=1, max_length=120)
+    holdings: list[HoldingIn] = Field(default_factory=list)
+
+
+class PortfolioRename(_In):
+    """`PATCH /portfolios/{id}` — an addition; docs/07 lists no rename.
+
+    See docs/DECISIONS.md §14.
+    """
+
+    name: str = Field(min_length=1, max_length=120)
+
+
+class HoldingsIn(_In):
+    """docs/07: `PUT /portfolios/{id}/holdings`. A replacement, not a merge."""
+
+    holdings: list[HoldingIn]
+
+
+class HoldingOut(_Out):
+    instrument_id: int
+    symbol: str
+    name: str
+    quantity: Decimal | None = None
+    avg_price: Decimal | None = None
+    added_on: dt.date
+    #: docs/01 §10 keeps delisted instruments, so a portfolio can still name one.
+    delisted_on: dt.date | None = None
+
+
+class CandidateOut(_Out):
+    """One instrument an ambiguous symbol could mean."""
+
+    instrument_id: int
+    symbol: str
+    name: str
+    series: str | None = None
+
+
+class ImportRowOut(_Out):
+    """What one line of the upload became — Prompt 14 §1's "parse report"."""
+
+    line: int
+    raw_symbol: str
+    symbol: str
+    status: MatchStatus
+    reason: UnmatchedReason | None = None
+    instrument_id: int | None = None
+    name: str | None = None
+    candidates: list[CandidateOut]
+    #: Corrections the parser made (`suffix_stripped`) or numbers it could not read.
+    issues: list[RowIssue]
+    matched_via_alias: bool = False
+    quantity: Decimal | None = None
+    avg_price: Decimal | None = None
+
+
+class SkippedRowOut(_Out):
+    """A line that produced no holding — blank, duplicated, or with no symbol cell."""
+
+    line: int
+    reason: SkipReason
+    raw: str = ""
+
+
+class ImportReportOut(_Out):
+    """Prompt 14 §1: "a parse report listing matched, ambiguous and unmatched symbols rather than
+    silently dropping rows"."""
+
+    total_lines: int
+    matched: int
+    ambiguous: int
+    unmatched: int
+    skipped: int
+    imported: int
+    rows: list[ImportRowOut]
+    skipped_rows: list[SkippedRowOut]
+    #: Header columns the parser ignored, so "extra columns were fine" is visible, not assumed.
+    ignored_columns: list[str]
+
+
+class PortfolioOut(_Out):
+    id: int
+    name: str
+    created_at: dt.datetime
+    holdings: list[HoldingOut]
+
+
+class PortfolioSummaryOut(_Out):
+    id: int
+    name: str
+    created_at: dt.datetime
+    holdings_count: int
+
+
+class PortfolioListOut(_Out):
+    data: list[PortfolioSummaryOut]
+
+
+class PortfolioWriteOut(_Out):
+    """A create, an import or a holdings replacement: the portfolio, and what became of the input.
+
+    The report is present on every write, including one with no unresolved symbols, so a client
+    never has to branch on whether it exists.
+    """
+
+    portfolio: PortfolioOut
+    report: ImportReportOut
+
+
+class RebalanceIn(_In):
+    """docs/07: `{ "screen_public_id": "...", "top_n": 20, "hold_buffer": 10, "as_of": null }`."""
+
+    screen_public_id: str
+    top_n: int = Field(ge=1, le=MAX_TOP_N)
+    hold_buffer: int = Field(ge=0, le=MAX_HOLD_BUFFER)
+    as_of: dt.date | None = None
+    #: docs/07a §2: an optional field on run bodies, so a stale client gets the documented 409.
+    data_version: int | None = None
+
+
+class RebalanceNameOut(_Out):
+    """A name on one of docs/07's three lists.
+
+    `rank` is null for a holding the screen did not return at all; `reason` is set on exits only.
+    """
+
+    instrument_id: int
+    symbol: str
+    name: str
+    rank: int | None = None
+    reason: ExitReason | None = None
+
+
+class TargetWeightOut(_Out):
+    """A fraction of the portfolio, not a percentage (docs/06a §10's convention)."""
+
+    instrument_id: int
+    symbol: str
+    name: str
+    rank: int
+    weight: Decimal
+    action: Action
+
+
+class RebalanceScreenOut(_Out):
+    public_id: str
+    name: str
+
+
+class RebalancePayload(_Out):
+    """docs/07's response, plus the envelope §Conventions requires on every analytics response.
+
+    `holds` is not in docs/07's four keys. It is the held names ranked *inside* `top_n`, which
+    belong to none of the three lists and which the target weights include — see
+    `decile_core.rebalance` and docs/DECISIONS.md §14.
+
+    This is also exactly what `portfolio_rebalance.payload` stores, which is why it is a model in
+    its own right: the record and the response are serialised by the same code, so they cannot
+    round a weight differently (CLAUDE.md house rule 8).
+    """
+
+    as_of: dt.date
+    requested_as_of: dt.date | None = None
+    data_version: int
+    screen: RebalanceScreenOut
+    top_n: int
+    hold_buffer: int
+    exits: list[RebalanceNameOut]
+    inside_wrh: list[RebalanceNameOut]
+    entries: list[RebalanceNameOut]
+    holds: list[RebalanceNameOut]
+    target_weights: list[TargetWeightOut]
+    holdings_count: int
+    screen_result_count: int
+    delisted_count: int
+
+
+class RebalanceOut(RebalancePayload):
+    """The payload as served: the stored record, plus the two columns the row itself carries."""
+
+    id: int
+    created_at: dt.datetime
+
+
+class RebalanceSummaryOut(_Out):
+    """One row of the history list — Prompt 14 §4."""
+
+    id: int
+    as_of: dt.date
+    data_version: int | None = None
+    top_n: int
+    hold_buffer: int
+    screen_name: str | None = None
+    screen_public_id: str | None = None
+    exits: int
+    inside_wrh: int
+    entries: int
+    created_at: dt.datetime
+
+
+class RebalanceHistoryPage(_Out):
+    """docs/07 §Conventions: `{ "data": [...], "next_cursor": "…" }`."""
+
+    data: list[RebalanceSummaryOut]
     next_cursor: str | None = None

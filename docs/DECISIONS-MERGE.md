@@ -924,3 +924,80 @@ Recorded now so M14 does not discover it as a surprise.
 Rule 7. The gate is materially closer than the cell-level parity implied, and the remaining gap has
 a name and an owner: a corporate-action backfill needs a source that serves history — the same
 dependency `NEEDS-MAULIK.md` item 3 already carries for bar depth. Queued there.
+
+---
+
+## M15 — partial: two modules in core, the regime collision closed
+
+### M15.1 — `score.py` moved with its formulas byte-for-byte, and pandas came with it ⚠ UNREVIEWED
+`app/scoring.py` → `baskfy_core.score`. **Two things changed and only two:**
+
+1. **Configuration is passed, not imported.** The desk's `config.py` reads the environment at
+   import; core's first law is that it touches nothing. The eleven constants arrive as `cfg`, a
+   `Protocol` the desk's config module satisfies by duck typing. `RET_COLS` and `REQUIRED` were
+   module-level lists derived from `MOMENTUM_BLEND`, so they became `ret_cols(cfg)` /
+   `required(cfg)`.
+2. **`load_scan` did not move.** It reads a CSV, which makes it a boundary, and boundaries stay at
+   the desk (docs/04 §2). `app/scoring.py` is now that boundary plus a thin binding — so every
+   existing `from .scoring import score, audit, load_scan, stop_from_vol` still works.
+
+**Verified byte-identical, not asserted.** The pre-move file was checked out of git and run
+alongside the moved one over the whole M12 corpus: `DataFrame.equals` on every cell of both scans,
+for `score()` **and** `audit()`. All true. That comparison cannot survive the move, so its durable
+form is `tests/fixtures/scoring_golden.json` + `tests/test_scoring_moved_to_core.py` — a digest of
+the scored frame and its top ten, which answers the question that matters afterwards: *has the
+strategy's output changed since?*
+
+**pandas is now in core, and docs/02 says "pandas only at boundaries".** This is not a boundary.
+A Polars port is the principled answer and it is **a rewrite with its own rounding**, against an
+acceptance criterion of byte-identical output. Recorded as a deviation to revisit deliberately.
+`packages/core` now depends on pandas transitively through this module alone.
+
+### M15.2 — The desk's code met a type checker for the first time
+The desk has no ruff or mypy gate; core has both, with `strict = true`. Moving two modules in
+produced **27 ruff errors and 13 mypy errors**, none of which were defects — all of it was
+idiomatic pandas meeting strict stubs, plus lines longer than a limit the desk never had.
+
+Fixed properly rather than suppressed: `dict` type arguments, a narrower `Mapping[str, float]` for
+`plan_cost`'s orders, `Collection[str]` on the config Protocol (which removed two `isin` errors),
+an explicit annotation on the one running total that starts as a Series and is then combined with
+`np.where` arrays, and four wrapped lines.
+
+**One configuration exception, in the project's own idiom.** `PLR2004` (magic value in comparison)
+is disabled for `score.py` via `per-file-ignores`, beside the two exceptions already there. Its
+thresholds — RSI over 82, volatility over 0.55, extension over 25% — **are** the strategy, and they
+are specified that way in the desk's `SKILL.md`. Lifting each to a named constant would rewrite the
+one file whose whole point is that it did not change, and would move the numbers a step further
+from the spec that defines them. Not a `# noqa`, not a `# type: ignore` — a stated, reviewable
+line in `pyproject.toml`.
+
+### M15.3 — `costs.py` moved unchanged; two tests learned to follow the code
+Already pure — no config, no I/O — so it moved as-is. Two tests scanned `app/costs.py` **by path**
+and one read the module `__doc__`; all three now resolve through the module object, so the next
+move will not break them either.
+
+The move initially rewrote the docstring, which **destroyed the documented cost breakdown a test
+sums** — the Rs 8,583.95 table and the note about the Rs 7,695.87 subset that once mislabelled it.
+Restored verbatim with the move note appended. Worth recording: a docstring can be load-bearing.
+
+### M15.4 — The regime name collision is closed, and enforced
+`baskfy_core.regime` → `baskfy_core.instrument_regime` (docs/03 §3c). One labels **an instrument**
+bull/bear/neutral from a Wasserstein distance and decides nothing; the desk's overlay is a
+**portfolio** R1–R4 tier that decides how much money is deployed. Confusing them is not a naming
+quibble.
+
+`packages/core/tests/test_regime_names_do_not_collide.py` enforces it by AST — no module may import
+the ambiguous name, and no module may reason about both concepts at once.
+
+### M15.5 — What remains of M15
+Not done, and not started: **`rebalance.py` → core `basket.py`** (17 config constants plus a
+`data/sectors.csv` read that must lift to a caller-supplied mapping) and **`core/regime.py` +
+`regime_alloc.py` → core `exposure/`** (1,598 lines, already pure by design, with the requirement
+that regime replay stay byte-identical to the persisted `regime_evaluations` rows).
+
+Core's purity gates cover the moved modules automatically — `test_no_escape_hatches` scans
+`src/baskfy_core`, and `network_guard` blocks sockets suite-wide — so M15 step 5 is satisfied for
+what has moved and will be for what follows.
+
+**Suites at the end of this commit:** decile **1434 passed, 794 skipped**; desk **1205 passed, 17
+skipped**; `ruff check` and `ruff format --check` clean; `mypy` clean across 256 files.

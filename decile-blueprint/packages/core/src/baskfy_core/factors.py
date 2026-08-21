@@ -47,6 +47,7 @@ from baskfy_core.circuits import (
     circuit_hit_expr,
     circuit_method_expr,
 )
+from baskfy_core.instrument_regime import RegimeConfig, classify_regimes
 from baskfy_core.momentum import (
     DEFAULT_SKIP_MONTH_CONFIG,
     SKIP_1M_BARS,
@@ -55,7 +56,6 @@ from baskfy_core.momentum import (
     skip_month_return_expr,
 )
 from baskfy_core.precision import apply_storage_precision
-from baskfy_core.regime import RegimeConfig, classify_regimes
 from baskfy_core.windows import (
     HIGH_1Y_BARS,
     MA_LENGTHS,
@@ -269,8 +269,14 @@ def _with_window_factors(
         if not window.spans_full_window:
             # The calendar does not reach the offset, so this is not an N-month window — it is
             # whatever history happened to exist, and docs/05 §Notation forbids computing on it.
-            for name in (f"ret_{key}", f"vol_{key}", f"sharpe_{key}", f"rsi_{key}",
-                         f"pos_days_{key}", f"circuits_{key}"):
+            for name in (
+                f"ret_{key}",
+                f"vol_{key}",
+                f"sharpe_{key}",
+                f"rsi_{key}",
+                f"pos_days_{key}",
+                f"circuits_{key}",
+            ):
                 expressions.append(pl.lit(None, dtype=pl.Float64).alias(name))
             continue
 

@@ -6,10 +6,26 @@ achieve — and the answer is "less than you would hope".
 """
 from __future__ import annotations
 
+import inspect
+import pathlib
+
 import pytest
 
 from app import config as C
 from app import costs
+
+
+
+def _core_source() -> str:
+    """The cost model's real source, wherever it lives.
+
+    It moved to `baskfy_core.costs` at M15 (P3.3) and `app.costs` is now a re-export, so a test
+    that scans the source has to follow the code rather than a path. Resolved through the module
+    object so the next move does not break it either.
+    """
+    import baskfy_core.costs as _c
+
+    return pathlib.Path(inspect.getsourcefile(_c)).read_text()
 
 
 def test_the_model_reproduces_the_live_session_within_ten_percent():
@@ -66,7 +82,7 @@ def test_the_cost_ceiling_rejects_a_small_sell_and_accepts_a_large_one():
 
 def test_every_rate_is_a_named_constant():
     """A rate buried in an expression cannot be reviewed when it changes."""
-    src = open("app/costs.py").read()
+    src = _core_source()
     for name in ("STT_DELIVERY", "STAMP_DUTY_BUY", "DP_CHARGE_PER_SELL",
                  "EXCHANGE_TXN_NSE", "GST"):
         assert f"{name} =" in src
@@ -96,7 +112,10 @@ def test_the_documented_breakdown_sums_to_the_documented_total():
     justified against a number that was never the bill."""
     import re
 
-    from app import costs as CO
+    # The docstring carries the breakdown, and the module moved to core at M15 (P3.3), so
+    # read it from where the code lives rather than from the re-export that replaced it.
+    import baskfy_core.costs as CO
+
     doc = CO.__doc__ or ""
     nums = {}
     for line in doc.splitlines():

@@ -1,4 +1,12 @@
-"""Wasserstein regime classifier — **INFERRED design** (docs/05 §15).
+"""Wasserstein regime classifier, PER INSTRUMENT — **INFERRED design** (docs/05 §15).
+
+RENAMED FROM ``regime`` AT M15 (P3.4), and the rename is the point. The desk carries a *different*
+thing under the same word: ``baskfy_core.exposure`` (the desk's ``app/core/regime.py``) is a
+PORTFOLIO-level R1-R4 overlay that decides how much money is deployed. This module labels ONE
+INSTRUMENT bull, bear or neutral, and is a display factor on the factsheet.
+
+docs/03 §3c: "Keep both. Rename at merge time. Never let one import the other's name."
+``packages/core/tests/test_regime_names_do_not_collide.py`` enforces the second half.
 
 docs/01 §5 observed the label on the instrument page: "Market Quality -> Wasserstein Regime: BULL".
 docs/05 §15 specifies it:

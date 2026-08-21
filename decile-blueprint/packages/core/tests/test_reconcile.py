@@ -13,7 +13,7 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from decile_core.reconcile import (
+from baskfy_core.reconcile import (
     ALL_CHECKS,
     WINDOW_LENGTHS,
     CheckResult,
@@ -31,7 +31,7 @@ from decile_core.reconcile import (
     skip_month_evidence,
     total_disagreements,
 )
-from decile_core.reference_export import read_export
+from baskfy_core.reference_export import read_export
 
 
 @pytest.fixture(scope="module")

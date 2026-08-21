@@ -1,6 +1,6 @@
 "use client";
 
-import type { RebalanceNameOut } from "@decile/api-client";
+import type { RebalanceNameOut } from "@baskfy/api-client";
 import { Check, Copy, Download } from "lucide-react";
 import { useState } from "react";
 

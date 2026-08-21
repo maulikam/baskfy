@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { MeOut } from "@decile/api-client";
+import type { MeOut } from "@baskfy/api-client";
 
 import { apiOrigin } from "@/lib/api/config";
 import { auth } from "@/lib/auth";

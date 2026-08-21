@@ -27,10 +27,10 @@ import { Pool } from "pg";
 let pool: Pool | null = null;
 
 function connection(): Pool {
-  const connectionString = process.env.DECILE_DATABASE_URL_PG ?? process.env.DATABASE_URL;
+  const connectionString = process.env.BASKFY_DATABASE_URL_PG ?? process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error(
-      "DECILE_DATABASE_URL_PG is not set; it is the SQLAlchemy URL with the +asyncpg driver removed",
+      "BASKFY_DATABASE_URL_PG is not set; it is the SQLAlchemy URL with the +asyncpg driver removed",
     );
   }
   pool ??= new Pool({ connectionString, max: 4 });
@@ -69,7 +69,7 @@ function newPublicId(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function decileAdapter(): Adapter {
+export function baskfyAdapter(): Adapter {
   return {
     async createUser(user) {
       const { rows } = await connection().query<AppUserRow>(

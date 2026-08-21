@@ -12,10 +12,10 @@ import socket
 import pytest
 from network_guard import NetworkAccessBlocked, is_loopback
 
-from decile_providers.errors import ProviderUnavailable
-from decile_providers.fixtures import FixtureProvider
-from decile_providers.nse import NSEProvider
-from decile_providers.settings import ProviderSettings
+from baskfy_providers.errors import ProviderUnavailable
+from baskfy_providers.fixtures import FixtureProvider
+from baskfy_providers.nse import NSEProvider
+from baskfy_providers.settings import ProviderSettings
 
 
 class TestTheBlockIsArmed:

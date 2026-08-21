@@ -1,8 +1,8 @@
 """The web app's market-health selector matches the twelve universes that carry breadth.
 
-docs/01 §6 lists the selector's twelve slugs by name. `decile_core.universes` marks which of the
+docs/01 §6 lists the selector's twelve slugs by name. `baskfy_core.universes` marks which of the
 fourteen selectable universes those are (``Universe.market_health``), and
-`decile_api.routers.market_data` refuses a request for one of the other two.
+`baskfy_api.routers.market_data` refuses a request for one of the other two.
 
 docs/07 §Metadata publishes `/meta/universes`, but it publishes all fourteen and says nothing
 about which have a breadth series — so the browser cannot derive the selector from it, and
@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from decile_core.universes import MARKET_HEALTH_SLUGS, UNIVERSE_BY_SLUG
+from baskfy_core.universes import MARKET_HEALTH_SLUGS, UNIVERSE_BY_SLUG
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 UNIVERSES_TS = REPO_ROOT / "apps" / "web" / "src" / "lib" / "market" / "universes.ts"

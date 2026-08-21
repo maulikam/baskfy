@@ -1,6 +1,6 @@
 "use client";
 
-import type { FactorOut } from "@decile/api-client";
+import type { FactorOut } from "@baskfy/api-client";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
  *      (Absolute / Sharpe / RSI / Beta-adjusted / Skip-month / Other)."
  *
  * It is 64 options, not 62: docs/01 §3 is headed "62 ranking factors" and enumerates 64, and
- * `decile_core.factor_registry` implements all 64 with the discrepancy written up. Either way the
+ * `baskfy_core.factor_registry` implements all 64 with the discrepancy written up. Either way the
  * point stands — a native `<select>` with that many entries is unusable, and the family grouping
  * is what makes it navigable.
  *

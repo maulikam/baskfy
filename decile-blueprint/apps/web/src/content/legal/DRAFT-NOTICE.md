@@ -21,8 +21,8 @@ than no terms page, because it invites a customer to argue that nothing was agre
    in, because none of them is known to this repository. A tax invoice without a real GSTIN is not
    a tax invoice.
 2. **The GST rate and the SAC code.** 18% and SAC 998439 are defaults taken from the general rate
-   for information-technology services. They are settings (`DECILE_GST_RATE_PERCENT`,
-   `DECILE_GST_SAC_CODE`) and every issued invoice records what it was raised at, so a correction
+   for information-technology services. They are settings (`BASKFY_GST_RATE_PERCENT`,
+   `BASKFY_GST_SAC_CODE`) and every issued invoice records what it was raised at, so a correction
    cannot rewrite history — but nobody qualified has confirmed either.
 3. **Whether the prices are GST-inclusive.** They are, in this build: the advertised figure is
    charged and the tax is back-computed. The alternative reading of docs/01 §1 is that ₹500 is the

@@ -9,11 +9,11 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "decile",
-    "decile-api",
-    "decile-core",
-    "decile-providers",
-    "decile-worker",
+    "baskfy",
+    "baskfy-api",
+    "baskfy-core",
+    "baskfy-providers",
+    "baskfy-worker",
 ]
 
 [[package]]
@@ -477,14 +477,14 @@ wheels = [
 ]
 
 [[package]]
-name = "decile"
+name = "baskfy"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "decile-api" },
-    { name = "decile-core" },
-    { name = "decile-providers" },
-    { name = "decile-worker" },
+    { name = "baskfy-api" },
+    { name = "baskfy-core" },
+    { name = "baskfy-providers" },
+    { name = "baskfy-worker" },
 ]
 
 [package.dev-dependencies]
@@ -505,10 +505,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "decile-api", editable = "services/api" },
-    { name = "decile-core", editable = "packages/core" },
-    { name = "decile-providers", editable = "packages/providers" },
-    { name = "decile-worker", editable = "services/worker" },
+    { name = "baskfy-api", editable = "services/api" },
+    { name = "baskfy-core", editable = "packages/core" },
+    { name = "baskfy-providers", editable = "packages/providers" },
+    { name = "baskfy-worker", editable = "services/worker" },
 ]
 
 [package.metadata.requires-dev]
@@ -528,7 +528,7 @@ dev = [
 ]
 
 [[package]]
-name = "decile-api"
+name = "baskfy-api"
 version = "0.1.0"
 source = { editable = "services/api" }
 dependencies = [
@@ -536,8 +536,8 @@ dependencies = [
     { name = "argon2-cffi" },
     { name = "asyncpg" },
     { name = "celery", extra = ["redis"] },
-    { name = "decile-core" },
-    { name = "decile-providers" },
+    { name = "baskfy-core" },
+    { name = "baskfy-providers" },
     { name = "email-validator" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -561,8 +561,8 @@ requires-dist = [
     { name = "argon2-cffi", specifier = ">=23.1" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "celery", extras = ["redis"], specifier = ">=5.4" },
-    { name = "decile-core", editable = "packages/core" },
-    { name = "decile-providers", editable = "packages/providers" },
+    { name = "baskfy-core", editable = "packages/core" },
+    { name = "baskfy-providers", editable = "packages/providers" },
     { name = "email-validator", specifier = ">=2.2" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
@@ -581,7 +581,7 @@ requires-dist = [
 ]
 
 [[package]]
-name = "decile-core"
+name = "baskfy-core"
 version = "0.1.0"
 source = { editable = "packages/core" }
 dependencies = [
@@ -600,13 +600,13 @@ requires-dist = [
 ]
 
 [[package]]
-name = "decile-providers"
+name = "baskfy-providers"
 version = "0.1.0"
 source = { editable = "packages/providers" }
 dependencies = [
     { name = "boto3" },
     { name = "cryptography" },
-    { name = "decile-core" },
+    { name = "baskfy-core" },
     { name = "httpx" },
     { name = "kiteconnect" },
     { name = "pydantic-settings" },
@@ -617,7 +617,7 @@ dependencies = [
 requires-dist = [
     { name = "boto3", specifier = ">=1.35" },
     { name = "cryptography", specifier = ">=43.0" },
-    { name = "decile-core", editable = "packages/core" },
+    { name = "baskfy-core", editable = "packages/core" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "kiteconnect", specifier = ">=5.0" },
     { name = "pydantic-settings", specifier = ">=2.6" },
@@ -625,14 +625,14 @@ requires-dist = [
 ]
 
 [[package]]
-name = "decile-worker"
+name = "baskfy-worker"
 version = "0.1.0"
 source = { editable = "services/worker" }
 dependencies = [
     { name = "celery", extra = ["redis"] },
-    { name = "decile-api" },
-    { name = "decile-core" },
-    { name = "decile-providers" },
+    { name = "baskfy-api" },
+    { name = "baskfy-core" },
+    { name = "baskfy-providers" },
     { name = "flower" },
     { name = "opentelemetry-instrumentation-celery" },
 ]
@@ -640,9 +640,9 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "celery", extras = ["redis"], specifier = ">=5.4" },
-    { name = "decile-api", editable = "services/api" },
-    { name = "decile-core", editable = "packages/core" },
-    { name = "decile-providers", editable = "packages/providers" },
+    { name = "baskfy-api", editable = "services/api" },
+    { name = "baskfy-core", editable = "packages/core" },
+    { name = "baskfy-providers", editable = "packages/providers" },
     { name = "flower", specifier = ">=2.0" },
     { name = "opentelemetry-instrumentation-celery", specifier = ">=0.49b0" },
 ]

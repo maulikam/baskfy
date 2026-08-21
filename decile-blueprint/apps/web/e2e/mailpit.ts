@@ -8,7 +8,7 @@ import type { APIRequestContext } from "@playwright/test";
  * mailpit's own UI, which is what makes the register → verify → login flow testable end to end
  * without stubbing the one part most likely to be wrong.
  */
-const MAILPIT_URL = process.env.DECILE_MAILPIT_URL ?? "http://127.0.0.1:8025";
+const MAILPIT_URL = process.env.BASKFY_MAILPIT_URL ?? "http://127.0.0.1:8025";
 
 interface Summary {
   ID: string;

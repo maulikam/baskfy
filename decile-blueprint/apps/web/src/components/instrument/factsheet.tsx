@@ -1,4 +1,4 @@
-import type { FactsheetOut } from "@decile/api-client";
+import type { FactsheetOut } from "@baskfy/api-client";
 
 import { CellList } from "@/components/instrument/cell-list";
 import { CorporateActionsTable } from "@/components/instrument/corporate-actions";

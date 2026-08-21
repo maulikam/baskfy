@@ -13,12 +13,12 @@
 # irreversible mistake available here is restoring last week over production.
 #
 # Usage:
-#   infra/backup/restore.sh --dump .backups/decile-20260821T140000Z.dump \
-#                           --target postgresql://decile:decile@localhost:5433/decile_restore
+#   infra/backup/restore.sh --dump .backups/baskfy-20260821T140000Z.dump \
+#                           --target postgresql://baskfy:baskfy@localhost:5433/baskfy_restore
 #   infra/backup/restore.sh --dump ... --target ... --force     # allows a non-scratch name
 #
 # Environment:
-#   DECILE_ADMIN_DATABASE_URL   a URL on the same server pointing at `postgres`, used to issue the
+#   BASKFY_ADMIN_DATABASE_URL   a URL on the same server pointing at `postgres`, used to issue the
 #                               DROP/CREATE. Derived from --target if unset.
 
 set -euo pipefail
@@ -75,7 +75,7 @@ else
   echo "restore: WARNING — no .sha256 beside the dump; integrity unverified" >&2
 fi
 
-ADMIN_URL="${DECILE_ADMIN_DATABASE_URL:-${TARGET%/*}/postgres}"
+ADMIN_URL="${BASKFY_ADMIN_DATABASE_URL:-${TARGET%/*}/postgres}"
 
 echo "restore: recreating ${DBNAME}"
 # Terminate first: `DROP DATABASE` fails while anything is connected, and in an incident the thing
@@ -120,4 +120,4 @@ fi
 psql --dbname="${TARGET}" -v ON_ERROR_STOP=1 -c "ANALYZE;" >/dev/null
 
 echo "restore: done. Now run the integrity assertions:"
-echo "  DECILE_DATABASE_URL='${TARGET/postgresql:/postgresql+asyncpg:}' uv run python -m decile_api.integrity"
+echo "  BASKFY_DATABASE_URL='${TARGET/postgresql:/postgresql+asyncpg:}' uv run python -m baskfy_api.integrity"

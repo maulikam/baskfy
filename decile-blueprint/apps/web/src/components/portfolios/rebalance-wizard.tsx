@@ -1,6 +1,6 @@
 "use client";
 
-import type { PortfolioOut, RebalanceOut } from "@decile/api-client";
+import type { PortfolioOut, RebalanceOut } from "@baskfy/api-client";
 import { History, Play } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -36,7 +36,7 @@ import {
  * inputs, then renders the three columns in the reference product's order.
  *
  * Nothing here decides anything. `top_n` and `hold_buffer` go to the server, and the three lists
- * come back computed — the rule lives in `decile_core.rebalance` and has exactly one
+ * come back computed — the rule lives in `baskfy_core.rebalance` and has exactly one
  * implementation.
  */
 

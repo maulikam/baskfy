@@ -1,6 +1,6 @@
 "use client";
 
-import type { BacktestConfigIn, ScreenOut } from "@decile/api-client";
+import type { BacktestConfigIn, ScreenOut } from "@baskfy/api-client";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -115,7 +115,7 @@ export function ConfigForm({
       benchmark,
       risk_overlay: { enabled: overlay, rule: "index_above_200dma" },
       // Both are docs/10 §Config keys the form does not expose. `reinvest` is the only dividend
-      // policy this service can serve (see `DividendPolicy` in `decile_core.backtest`), and the
+      // policy this service can serve (see `DividendPolicy` in `baskfy_core.backtest`), and the
       // risk-free rate has no T-bill series behind it, so offering either as a control would be
       // offering a choice that is not there. Sent explicitly rather than left to the server's
       // default, so the stored config says what the run actually used.

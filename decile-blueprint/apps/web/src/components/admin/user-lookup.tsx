@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { AdminUserDetailOut, AdminUserOut } from "@decile/api-client";
+import type { AdminUserDetailOut, AdminUserOut } from "@baskfy/api-client";
 
 import {
   clearEntitlementOverride,
@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
  * something is wrong, and the next thing they need is the ability to fix it.
  *
  * What the panel shows is the account's **effective** entitlements — plan plus overrides, resolved
- * by `decile_api.entitlements.entitlements_for`, which is the same call every gated endpoint
+ * by `baskfy_api.entitlements.entitlements_for`, which is the same call every gated endpoint
  * makes. So this page cannot disagree with enforcement, which is the failure an admin surface
  * makes most easily and most expensively.
  *

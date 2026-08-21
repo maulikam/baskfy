@@ -72,7 +72,7 @@ async function runLighthouse(
   theme: "light" | "dark",
   category: Category,
 ): Promise<LighthouseReport> {
-  const userDataDir = await mkdtemp(join(tmpdir(), "decile-lh-"));
+  const userDataDir = await mkdtemp(join(tmpdir(), "baskfy-lh-"));
   const browser = await chromium.launchPersistentContext(userDataDir, {
     headless: true,
     colorScheme: theme,

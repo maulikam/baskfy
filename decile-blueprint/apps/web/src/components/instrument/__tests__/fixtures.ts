@@ -1,4 +1,4 @@
-import type { FactsheetOut } from "@decile/api-client";
+import type { FactsheetOut } from "@baskfy/api-client";
 
 /**
  * Factsheet payloads for the render tests.

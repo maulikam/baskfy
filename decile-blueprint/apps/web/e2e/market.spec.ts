@@ -7,7 +7,7 @@ import { expect, test, type CDPSession } from "@playwright/test";
  * criterion, and `listings pagination is stable` is a browser-side companion to the API's cursor
  * walk in `services/api/tests/test_api_market_data.py`.
  *
- * The seeded dataset (`decile_api.seed e2e`) carries 117 indices — docs/01 §7's "~145" minus the
+ * The seeded dataset (`baskfy_api.seed e2e`) carries 117 indices — docs/01 §7's "~145" minus the
  * names we would have had to invent; see `docs/11a` §1.
  */
 

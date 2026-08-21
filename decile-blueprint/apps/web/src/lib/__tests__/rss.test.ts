@@ -52,7 +52,7 @@ describe("the feed document", () => {
   it("has one item per post, each with a permalink guid", () => {
     expect(feed.match(/<item>/g)?.length).toBe(POSTS.length);
     for (const post of POSTS) {
-      expect(feed).toContain(`<guid isPermaLink="true">https://decile.in/blog/${post.slug}</guid>`);
+      expect(feed).toContain(`<guid isPermaLink="true">https://baskfy.com/blog/${post.slug}</guid>`);
     }
   });
 

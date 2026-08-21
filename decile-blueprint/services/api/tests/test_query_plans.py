@@ -30,8 +30,8 @@ from screener_helpers import AS_OF, requires_db
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.market_data import SPARKLINE_WINDOW, _sparklines
-from decile_api.query_plans import (
+from baskfy_api.market_data import SPARKLINE_WINDOW, _sparklines
+from baskfy_api.query_plans import (
     GUARDED_RELATIONS,
     explain,
     hot_queries,
@@ -75,7 +75,7 @@ class TestPlanRegression:
                 *(f"  {regression}" for regression in found),
                 "",
                 "If the change is deliberate, re-record with:",
-                "  uv run python -m decile_api.query_plans --write",
+                "  uv run python -m baskfy_api.query_plans --write",
                 "and say in the commit message why the index is no longer worth it.",
             ]
         )
@@ -86,7 +86,7 @@ class TestPlanRegression:
         missing = unrecorded(load_baseline(), observed)
         assert not missing, (
             f"{list(missing)} have no recorded plan. Run "
-            "`uv run python -m decile_api.query_plans --write`."
+            "`uv run python -m baskfy_api.query_plans --write`."
         )
 
     async def test_the_baseline_has_no_stale_entries(self, screener_session: AsyncSession) -> None:

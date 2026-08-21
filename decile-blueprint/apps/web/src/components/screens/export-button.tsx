@@ -1,6 +1,6 @@
 "use client";
 
-import { isProblem } from "@decile/api-client";
+import { isProblem } from "@baskfy/api-client";
 import { Download, Loader2 } from "lucide-react";
 import { useState } from "react";
 

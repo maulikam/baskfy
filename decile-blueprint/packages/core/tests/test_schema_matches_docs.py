@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import Float, Numeric
 
-from decile_core.models import Base
+from baskfy_core.models import Base
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -46,7 +46,7 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "market_health_daily": ("index_id", "date"),
     # Public API, screen alerts and outbound webhooks — not in docs/04's DDL. Prompt 20 builds
     # three features the data model predates; each table is argued for in docs/DECISIONS.md §20
-    # and on `decile_core.models.integrations`.
+    # and on `baskfy_core.models.integrations`.
     "api_key": ("id",),
     "api_key_usage_daily": ("api_key_id", "date"),
     "screen_alert": ("id",),
@@ -75,16 +75,16 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # Billing additions — not in docs/04's DDL either. docs/11 §Security requires webhook
     # deduplication by event id and PROMPTS.md Prompt 13 requires gapless invoice numbers;
     # neither is possible with `plan`/`subscription`/`payment` alone. See
-    # `decile_core.models.billing` and docs/DECISIONS.md.
+    # `baskfy_core.models.billing` and docs/DECISIONS.md.
     "webhook_event": ("id",),
     "invoice_counter": ("series",),
     # Prompt 14 §4: "persist each computed rebalance so a user can see what they were told and
     # when". docs/04 defines `portfolio` and `portfolio_holding` and stops there. See
-    # `decile_core.models.accounts.PortfolioRebalance` and docs/DECISIONS.md §14.
+    # `baskfy_core.models.accounts.PortfolioRebalance` and docs/DECISIONS.md §14.
     "portfolio_rebalance": ("id",),
     # Prompt 17 §4: "/admin (staff-only): ... entitlement override, and a reprocess-instrument
     # action." docs/09 §Observability puts the admin surface behind "staff auth" and docs/04
-    # defines neither the grant nor the audit trail. See `decile_core.models.admin` and
+    # defines neither the grant nor the audit trail. See `baskfy_core.models.admin` and
     # docs/DECISIONS.md §17.
     "entitlement_override": ("id",),
     "admin_action": ("id",),

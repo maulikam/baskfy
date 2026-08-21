@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState, useTransition } from "react";
-import type { PipelineRunDetailOut } from "@decile/api-client";
+import type { PipelineRunDetailOut } from "@baskfy/api-client";
 
 import { rerunPipeline, type AdminActionResult } from "@/app/actions/admin";
 import { Button } from "@/components/ui/button";

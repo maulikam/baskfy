@@ -319,7 +319,7 @@
       "type": "object"
     }
   },
-  "$id": "https://decile.in/schemas/screen-definition.json",
+  "$id": "https://baskfy.com/schemas/screen-definition.json",
   "additionalProperties": false,
   "description": "The persisted screen configuration.\n\nTwo definitions that mean the same thing produce the same :meth:`canonical_json`, and\ntherefore the same :meth:`definition_hash` — which is what makes the Redis cache key\n(docs/06 §Caching) and ``screen_run.definition_hash`` trustworthy.",
   "properties": {

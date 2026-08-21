@@ -5,7 +5,7 @@ import { LayoutGrid, Rows3, Search } from "lucide-react";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { useDeferredValue, useMemo } from "react";
 
-import type { IndexRowOut } from "@decile/api-client";
+import type { IndexRowOut } from "@baskfy/api-client";
 
 import { DataTable } from "@/components/data/data-table";
 import { Sparkline } from "@/components/data/sparkline";

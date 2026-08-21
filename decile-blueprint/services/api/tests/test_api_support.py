@@ -18,8 +18,8 @@ from api_helpers import PROBLEM_MEDIA_TYPE, api_settings, running_app, url
 from screener_helpers import requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.email import EmailNotSent, Mailer, Message
-from decile_api.schemas import SUPPORT_TOPICS
+from baskfy_api.email import EmailNotSent, Mailer, Message
+from baskfy_api.schemas import SUPPORT_TOPICS
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 
@@ -119,7 +119,7 @@ class TestValidation:
         response, box = await post_support(
             screener_session, seeded_url, dict(GOOD) | {field: value}
         )
-        # 400 `invalid-screen-definition`, not 422: `decile_api.app` renders *every*
+        # 400 `invalid-screen-definition`, not 422: `baskfy_api.app` renders *every*
         # `RequestValidationError` through docs/07's one validation problem type, whatever the
         # endpoint. The name reads oddly on a contact form and the shape is the documented one.
         assert response.status_code == 400

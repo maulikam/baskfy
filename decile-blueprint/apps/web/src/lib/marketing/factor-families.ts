@@ -1,5 +1,5 @@
 /**
- * The six factor families, as `decile_core.factor_registry.FactorFamily` enumerates them and
+ * The six factor families, as `baskfy_core.factor_registry.FactorFamily` enumerates them and
  * docs/01 §3 groups them.
  *
  * **This is a second copy, and it is deliberate.** `GET /meta/factors` publishes every factor with

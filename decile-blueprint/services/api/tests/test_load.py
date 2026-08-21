@@ -37,9 +37,9 @@ from benchmarks.load_screens import (
 from screener_helpers import requires_db, seeded_database
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from decile_api.app import create_app
-from decile_api.db import get_session
-from decile_core.seed_data import EXAMPLE_SCREENS
+from baskfy_api.app import create_app
+from baskfy_api.db import get_session
+from baskfy_core.seed_data import EXAMPLE_SCREENS
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, pytest.mark.benchmark, requires_db]
 
@@ -126,7 +126,7 @@ class TestFiftyConcurrentScreenRuns:
         """Fifty concurrent callers against a pool of ten must queue, not fail.
 
         ``pool_timeout`` refuses a request that has waited too long for a connection
-        (``decile_api.db``). Under the offered load the queueing is real; what must not happen is
+        (``baskfy_api.db``). Under the offered load the queueing is real; what must not happen is
         a ``TimeoutError`` surfacing as a 500, which is the failure this catches.
         """
         result = await drive(

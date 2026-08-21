@@ -1,6 +1,6 @@
 "use client";
 
-import type { BacktestOut } from "@decile/api-client";
+import type { BacktestOut } from "@baskfy/api-client";
 
 import {
   METRIC_ROWS,

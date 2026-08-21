@@ -13,9 +13,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 const SYMBOL = "CUPID";
 
-/** The seeded account (`decile_api.seed e2e`) — the screens surface needs one. */
+/** The seeded account (`baskfy_api.seed e2e`) — the screens surface needs one. */
 const EMAIL = "e2e@example.com";
-/** `decile_api.seed.E2E_PASSWORD` — a published constant for a throwaway database. */
+/** `baskfy_api.seed.E2E_PASSWORD` — a published constant for a throwaway database. */
 const E2E_PASSWORD = "e2e-suite-password";
 
 async function signIn(page: Page): Promise<void> {

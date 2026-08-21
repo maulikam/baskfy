@@ -2,7 +2,7 @@
 
 No broker and no database: what is asserted here is the *wiring*. The dispatch itself is exercised
 against a real database in ``services/api/tests/test_api_alerts.py``, and the delivery in
-``services/api/tests/test_api_webhooks.py``, because both live in ``decile_api`` — the worker
+``services/api/tests/test_api_webhooks.py``, because both live in ``baskfy_api`` — the worker
 depends on it and not the other way round.
 """
 
@@ -10,12 +10,12 @@ from __future__ import annotations
 
 from celery.schedules import crontab
 
-from decile_worker.celery_app import BEAT_SCHEDULE, QUEUE_DEFAULT, TASK_ROUTES, build_celery
-from decile_worker.settings import WorkerSettings
-from decile_worker.tasks import alerts as task_module
+from baskfy_worker.celery_app import BEAT_SCHEDULE, QUEUE_DEFAULT, TASK_ROUTES, build_celery
+from baskfy_worker.settings import WorkerSettings
+from baskfy_worker.tasks import alerts as task_module
 
-ALERT_TASK = "decile.alerts.dispatch"
-SWEEP_TASK = "decile.alerts.sweep_webhooks"
+ALERT_TASK = "baskfy.alerts.dispatch"
+SWEEP_TASK = "baskfy.alerts.sweep_webhooks"
 
 
 def settings() -> WorkerSettings:
@@ -25,7 +25,7 @@ def settings() -> WorkerSettings:
 class TestRouting:
     def test_alert_tasks_route_to_the_default_queue(self) -> None:
         """Short and latency-sensitive: an alert must never queue behind a backfill chunk."""
-        assert TASK_ROUTES["decile.alerts.*"] == {"queue": QUEUE_DEFAULT}
+        assert TASK_ROUTES["baskfy.alerts.*"] == {"queue": QUEUE_DEFAULT}
 
     def test_both_tasks_are_registered(self) -> None:
         app = build_celery(settings())

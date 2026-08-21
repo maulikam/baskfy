@@ -16,11 +16,11 @@ import pytest
 import screener_helpers
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api import api_keys as service
-from decile_core.api_keys import Scope
-from decile_core.models import Screen
-from decile_core.public_api import PUBLIC_API_PREFIX, PUBLIC_COLUMNS, RAW_BAR_FIELDS
-from decile_core.seed_data import EXAMPLE_SCREENS
+from baskfy_api import api_keys as service
+from baskfy_core.api_keys import Scope
+from baskfy_core.models import Screen
+from baskfy_core.public_api import PUBLIC_API_PREFIX, PUBLIC_COLUMNS, RAW_BAR_FIELDS
+from baskfy_core.seed_data import EXAMPLE_SCREENS
 
 pytestmark = [screener_helpers.requires_db, pytest.mark.db, pytest.mark.redis]
 

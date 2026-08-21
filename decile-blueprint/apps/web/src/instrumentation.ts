@@ -35,17 +35,17 @@ export async function register(): Promise<void> {
 
   Sentry.init({
     dsn,
-    environment: process.env.DECILE_ENVIRONMENT ?? "local",
-    release: process.env.DECILE_RELEASE || undefined,
+    environment: process.env.BASKFY_ENVIRONMENT ?? "local",
+    release: process.env.BASKFY_RELEASE || undefined,
     // docs/11 §Security keeps a PII inventory (email, name, payment metadata). An exception report
     // is the easiest place for one of them to escape, so this is set explicitly rather than left
     // to the SDK's default.
     sendDefaultPii: false,
     // Traces go to Tempo (docs/02). Two tracers sampling the same request independently produce
     // two disagreeing pictures of it; the API attaches the OTel trace id to its own Sentry events
-    // (`decile_api.sentry`), which is what joins the two systems.
+    // (`baskfy_api.sentry`), which is what joins the two systems.
     tracesSampleRate: 0,
-    // The API's structured logs are redacted at the formatter (`decile_api.logging`). This is the
+    // The API's structured logs are redacted at the formatter (`baskfy_api.logging`). This is the
     // web app's equivalent: a last pass over anything credential-shaped before it leaves.
     beforeSend(event) {
       if (event.request?.headers) {

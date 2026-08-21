@@ -6,7 +6,7 @@ meaningful if the artefacts actually track the Pydantic model, so this asserts t
 
 If either fails, regenerate:
     make schema
-    uv run python -m decile_core.screen_definition_corpus \
+    uv run python -m baskfy_core.screen_definition_corpus \
         > tests/fixtures/screen-definition-corpus.json
 """
 
@@ -18,10 +18,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from decile_core.screen_definition import ScreenDefinition
-from decile_core.screen_definition_corpus import CASES
-from decile_core.screen_definition_corpus import render as render_corpus
-from decile_core.screen_definition_schema import render as render_schema
+from baskfy_core.screen_definition import ScreenDefinition
+from baskfy_core.screen_definition_corpus import CASES
+from baskfy_core.screen_definition_corpus import render as render_corpus
+from baskfy_core.screen_definition_schema import render as render_schema
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCHEMA_PATH = REPO_ROOT / "packages" / "api-client" / "src" / "screen-definition.schema.json"

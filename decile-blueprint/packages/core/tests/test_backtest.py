@@ -31,7 +31,7 @@ import polars as pl
 import pytest
 from benchmarks.budgets import record
 
-from decile_core.backtest import (
+from baskfy_core.backtest import (
     BacktestConfig,
     BacktestConfigError,
     BacktestData,
@@ -56,7 +56,7 @@ from decile_core.backtest import (
     run_fragility,
     shift_schedule,
 )
-from decile_core.backtest_metrics import (
+from baskfy_core.backtest_metrics import (
     compute_metrics,
     downsample_curve,
     drawdown_series,
@@ -454,7 +454,7 @@ def test_the_book_is_never_overdrawn() -> None:
 
 
 def test_the_hold_buffer_reduces_turnover() -> None:
-    """docs/01 §8, quoted by `decile_core.rebalance`: the buffer "materially reduces turnover".
+    """docs/01 §8, quoted by `baskfy_core.rebalance`: the buffer "materially reduces turnover".
 
     Measured in **traded notional**, not in fills. A buffered book holds more names (up to
     ``top_n + hold_buffer``), so equal-weighting it produces *more* small adjustments while

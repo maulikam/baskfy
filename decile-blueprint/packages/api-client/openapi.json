@@ -818,7 +818,7 @@
       },
       "BacktestCreate": {
         "additionalProperties": false,
-        "description": "docs/07: `POST /backtests { config }`.\n\n``config`` is validated against :class:`decile_core.backtest.BacktestConfig`, which mirrors\ndocs/10 §Config key for key and forbids unknown keys — the same contract\n``ScreenDefinition`` has. It is typed as ``BacktestConfig`` so the generated TypeScript\nclient carries every field rather than ``unknown``.",
+        "description": "docs/07: `POST /backtests { config }`.\n\n``config`` is validated against :class:`baskfy_core.backtest.BacktestConfig`, which mirrors\ndocs/10 §Config key for key and forbids unknown keys — the same contract\n``ScreenDefinition`` has. It is typed as ``BacktestConfig`` so the generated TypeScript\nclient carries every field rather than ``unknown``.",
         "properties": {
           "config": {
             "$ref": "#/components/schemas/BacktestConfig-Input"
@@ -1921,7 +1921,7 @@
         "type": "object"
       },
       "DividendPolicy": {
-        "description": "docs/10 §7: ``dividends: \"reinvest\" | \"cash\" | \"ignore\"``.\n\nThere is a wrinkle the document does not know about, and it decides the default.\n\ndocs/09's adjustment algorithm — which this repository implements in\n:mod:`decile_core.adjustments` — folds **cash dividends** into ``adj_factor`` alongside splits\nand bonuses: \"Cash dividend D -> (P_cum - D) / P_cum\". So ``ohlcv_daily.close``, the adjusted\nseries docs/10 §6 marks the book to, is already a *total-return* series. Crediting the\ndividend as cash on top of it would count it twice.\n\nHence:\n\n``reinvest``\n    Mark to the adjusted series as-is. Back-adjustment **is** reinvestment at the ex-date\n    price, so this is exact and it is the default.\n``cash``\n    Mark to a dividend-stripped price series and credit the dividend to cash on the ex-date.\n    Needs ``price_open``/``price_close`` columns and a dividend schedule in the panel; without\n    them the run is refused rather than silently served as ``reinvest``.\n``ignore``\n    Mark to the dividend-stripped price series and credit nothing — a pure price return.\n    Same data requirement.",
+        "description": "docs/10 §7: ``dividends: \"reinvest\" | \"cash\" | \"ignore\"``.\n\nThere is a wrinkle the document does not know about, and it decides the default.\n\ndocs/09's adjustment algorithm — which this repository implements in\n:mod:`baskfy_core.adjustments` — folds **cash dividends** into ``adj_factor`` alongside splits\nand bonuses: \"Cash dividend D -> (P_cum - D) / P_cum\". So ``ohlcv_daily.close``, the adjusted\nseries docs/10 §6 marks the book to, is already a *total-return* series. Crediting the\ndividend as cash on top of it would count it twice.\n\nHence:\n\n``reinvest``\n    Mark to the adjusted series as-is. Back-adjustment **is** reinvestment at the ex-date\n    price, so this is exact and it is the default.\n``cash``\n    Mark to a dividend-stripped price series and credit the dividend to cash on the ex-date.\n    Needs ``price_open``/``price_close`` columns and a dividend schedule in the panel; without\n    them the run is refused rather than silently served as ``reinvest``.\n``ignore``\n    Mark to the dividend-stripped price series and credit nothing — a pure price return.\n    Same data requirement.",
         "enum": [
           "reinvest",
           "cash",
@@ -8366,7 +8366,7 @@
     },
     "/api/v1/admin/providers": {
       "get": {
-        "description": "``providers doctor``, rendered. Makes no network call — see ``decile_api.admin``.",
+        "description": "``providers doctor``, rendered. Makes no network call — see ``baskfy_api.admin``.",
         "operationId": "getProviderHealth",
         "responses": {
           "200": {
@@ -13827,7 +13827,7 @@
     },
     "/api/v1/keys/{public_id}/rotate": {
       "post": {
-        "description": "Issue a replacement and revoke the original immediately — see ``decile_api.api_keys``.",
+        "description": "Issue a replacement and revoke the original immediately — see ``baskfy_api.api_keys``.",
         "operationId": "rotateApiKey",
         "parameters": [
           {
@@ -15416,7 +15416,7 @@
     },
     "/api/v1/meta/factors": {
       "get": {
-        "description": "docs/07: \"factor registry (key, label, family, unit, higher_is_better)\".\n\nAll 64 of them. docs/01 §3 is headed \"62 ranking factors\" and enumerates 64; see the note in\n``decile_core.factor_registry``.",
+        "description": "docs/07: \"factor registry (key, label, family, unit, higher_is_better)\".\n\nAll 64 of them. docs/01 §3 is headed \"62 ranking factors\" and enumerates 64; see the note in\n``baskfy_core.factor_registry``.",
         "operationId": "getFactors",
         "responses": {
           "200": {
@@ -15782,7 +15782,7 @@
     },
     "/api/v1/meta/universes": {
       "get": {
-        "description": "docs/07: \"index_def rows where is_universe\" — the fourteen of docs/01 §2.1, in UI order.\n\nServed from ``decile_core.universes`` rather than from ``index_def``: the ids are load-bearing\n(they are ``factor_daily.universe_mask`` bit positions), the seeder writes the table *from*\nthis tuple, and a dashboard-only index must never appear in the screener's dropdown.",
+        "description": "docs/07: \"index_def rows where is_universe\" — the fourteen of docs/01 §2.1, in UI order.\n\nServed from ``baskfy_core.universes`` rather than from ``index_def``: the ids are load-bearing\n(they are ``factor_daily.universe_mask`` bit positions), the seeder writes the table *from*\nthis tuple, and a dashboard-only index must never appear in the screener's dropdown.",
         "operationId": "getUniverses",
         "responses": {
           "200": {

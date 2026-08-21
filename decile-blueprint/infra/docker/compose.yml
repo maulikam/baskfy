@@ -3,32 +3,32 @@
 # NOTE ON THE POSTGRES IMAGE: docs/02-tech-stack-adr.md locks "PostgreSQL 16 + TimescaleDB".
 # The stock `postgres:16` image does not ship the TimescaleDB extension, so we use the official
 # TimescaleDB image built on PostgreSQL 16. It is still PostgreSQL 16.
-name: decile
+name: baskfy
 
 services:
   postgres:
     image: timescale/timescaledb:2.17.2-pg16
-    container_name: decile-postgres
+    container_name: baskfy-postgres
     environment:
-      POSTGRES_USER: decile
-      POSTGRES_PASSWORD: decile
-      POSTGRES_DB: decile
+      POSTGRES_USER: baskfy
+      POSTGRES_PASSWORD: baskfy
+      POSTGRES_DB: baskfy
     ports:
-      - "${DECILE_POSTGRES_PORT:-5433}:5432"
+      - "${BASKFY_POSTGRES_PORT:-5433}:5432"
     volumes:
-      - decile-pgdata:/var/lib/postgresql/data
+      - baskfy-pgdata:/var/lib/postgresql/data
       - ./initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U decile -d decile"]
+      test: ["CMD-SHELL", "pg_isready -U baskfy -d baskfy"]
       interval: 5s
       timeout: 5s
       retries: 20
 
   redis:
     image: redis:7-alpine
-    container_name: decile-redis
+    container_name: baskfy-redis
     ports:
-      - "${DECILE_REDIS_PORT:-6380}:6379"
+      - "${BASKFY_REDIS_PORT:-6380}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -39,14 +39,14 @@ services:
   #
   # Mailpit accepts SMTP on 1025 and serves everything it caught at http://localhost:8025, so a
   # developer can read the sign-in code they were just sent instead of grepping a log. Nothing
-  # leaves the machine: point DECILE_EMAIL_TRANSPORT at `smtp` and the production Resend path is
+  # leaves the machine: point BASKFY_EMAIL_TRANSPORT at `smtp` and the production Resend path is
   # never exercised locally, which is the point.
   mailpit:
     image: axllent/mailpit:v1.21
-    container_name: decile-mailpit
+    container_name: baskfy-mailpit
     ports:
-      - "${DECILE_SMTP_PORT:-1025}:1025"
-      - "${DECILE_MAILPIT_UI_PORT:-8025}:8025"
+      - "${BASKFY_SMTP_PORT:-1025}:1025"
+      - "${BASKFY_MAILPIT_UI_PORT:-8025}:8025"
     environment:
       MP_MAX_MESSAGES: "500"
       MP_SMTP_AUTH_ACCEPT_ANY: "true"
@@ -71,13 +71,13 @@ services:
   # validates; both load the same `alerts.yml`.
   prometheus:
     image: prom/prometheus:v3.1.0
-    container_name: decile-prometheus
+    container_name: baskfy-prometheus
     profiles: ["observability"]
     ports:
-      - "${DECILE_PROMETHEUS_PORT:-9090}:9090"
+      - "${BASKFY_PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ../prometheus:/etc/prometheus:ro
-      - decile-prometheus-data:/prometheus
+      - baskfy-prometheus-data:/prometheus
     command:
       # `prometheus.local.yml`, not `prometheus.yml`: the API and the worker run on the host
       # (`make api`, `make worker`), so the targets differ. Both load the same `alerts.yml`.
@@ -89,11 +89,11 @@ services:
 
   grafana:
     image: grafana/grafana:11.5.1
-    container_name: decile-grafana
+    container_name: baskfy-grafana
     profiles: ["observability"]
     depends_on: [prometheus]
     ports:
-      - "${DECILE_GRAFANA_PORT:-3001}:3000"
+      - "${BASKFY_GRAFANA_PORT:-3001}:3000"
     environment:
       # Local only. There is no auth story for a laptop dashboard and inventing one would be
       # a password nobody remembers rather than a security boundary.
@@ -101,12 +101,12 @@ services:
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
-      - ../grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/decile.yml:ro
-      - ../grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/decile.yml:ro
-      - ../grafana/dashboards:/etc/grafana/provisioning/dashboards/decile:ro
-      - decile-grafana-data:/var/lib/grafana
+      - ../grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/baskfy.yml:ro
+      - ../grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/baskfy.yml:ro
+      - ../grafana/dashboards:/etc/grafana/provisioning/dashboards/baskfy:ro
+      - baskfy-grafana-data:/var/lib/grafana
 
 volumes:
-  decile-pgdata:
-  decile-prometheus-data:
-  decile-grafana-data:
+  baskfy-pgdata:
+  baskfy-prometheus-data:
+  baskfy-grafana-data:

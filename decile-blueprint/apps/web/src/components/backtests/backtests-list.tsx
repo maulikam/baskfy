@@ -1,6 +1,6 @@
 "use client";
 
-import type { BacktestSummaryOut, ScreenOut } from "@decile/api-client";
+import type { BacktestSummaryOut, ScreenOut } from "@baskfy/api-client";
 import { Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

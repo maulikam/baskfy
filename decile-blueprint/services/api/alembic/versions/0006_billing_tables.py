@@ -13,7 +13,7 @@ Two tables and eleven columns, none of which are in docs/04's DDL:
                              Rule 46 of the CGST Rules requires on the face of the document.
 
 Also a CHECK on `payment.status`, which docs/04 leaves unconstrained. The vocabulary is Razorpay's
-(`decile_core.models.accounts.PAYMENT_STATUSES`).
+(`baskfy_core.models.accounts.PAYMENT_STATUSES`).
 
 Recorded in docs/DECISIONS.md.
 

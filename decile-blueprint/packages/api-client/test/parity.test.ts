@@ -27,7 +27,7 @@
  *    above/below-MA contradiction, the factor-three ordering rule.
  *
  * Regenerate the Python-side inputs with `make schema` and
- * `uv run python -m decile_core.screen_definition_corpus`.
+ * `uv run python -m baskfy_core.screen_definition_corpus`.
  */
 
 import { readFileSync } from "node:fs";

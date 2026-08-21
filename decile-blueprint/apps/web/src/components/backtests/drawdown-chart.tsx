@@ -1,6 +1,6 @@
 "use client";
 
-import type { DrawdownPointOut } from "@decile/api-client";
+import type { DrawdownPointOut } from "@baskfy/api-client";
 import { scaleLinear } from "@visx/scale";
 import { AreaClosed } from "@visx/shape";
 import { useId, useMemo } from "react";

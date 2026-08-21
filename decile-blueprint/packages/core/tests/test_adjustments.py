@@ -18,7 +18,7 @@ from decimal import Decimal
 import polars as pl
 import pytest
 
-from decile_core.adjustments import (
+from baskfy_core.adjustments import (
     AdjustmentOutcome,
     CorporateActionInput,
     adjust_bars,

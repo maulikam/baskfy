@@ -1,5 +1,5 @@
 import { Download } from "lucide-react";
-import type { InvoiceOut } from "@decile/api-client";
+import type { InvoiceOut } from "@baskfy/api-client";
 
 import { apiOrigin } from "@/lib/api/config";
 import { formatTradeDate } from "@/lib/format";

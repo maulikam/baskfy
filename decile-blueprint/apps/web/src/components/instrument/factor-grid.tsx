@@ -1,4 +1,4 @@
-import type { CellOut, IndexMembershipOut } from "@decile/api-client";
+import type { CellOut, IndexMembershipOut } from "@baskfy/api-client";
 
 import { MetricGrid, type MetricRow } from "@/components/data/metric-grid";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";

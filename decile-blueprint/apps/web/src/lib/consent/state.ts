@@ -25,7 +25,7 @@
  * on `analytics`, and `src/lib/__tests__/consent.test.ts` is where that promise is asserted.
  */
 
-export const CONSENT_COOKIE = "decile_consent";
+export const CONSENT_COOKIE = "baskfy_consent";
 
 /** A year. Long enough not to nag, short enough that consent is renewed rather than assumed. */
 export const CONSENT_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;

@@ -22,14 +22,14 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.razorpay import (
+from baskfy_api.razorpay import (
     EVENT_ID_HEADER,
     SIGNATURE_HEADER,
     RazorpayGateway,
     expected_signature,
 )
-from decile_api.settings import Settings
-from decile_core.models import AppUser, Subscription
+from baskfy_api.settings import Settings
+from baskfy_core.models import AppUser, Subscription
 
 WEBHOOK_SECRET: Final = "webhook-secret-for-tests"
 KEY_ID: Final = "rzp_test_decile"
@@ -139,8 +139,8 @@ def payment_captured_event(
                     "order_id": order_id,
                     "method": "upi",
                     "notes": {
-                        "decile_user_public_id": user_public_id,
-                        "decile_plan_code": plan_code,
+                        "baskfy_user_public_id": user_public_id,
+                        "baskfy_plan_code": plan_code,
                     },
                 }
             }

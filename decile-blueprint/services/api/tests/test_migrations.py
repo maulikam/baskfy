@@ -15,10 +15,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from decile_core.models import Base
-from decile_core.universes import UNIVERSES
+from baskfy_core.models import Base
+from baskfy_core.universes import UNIVERSES
 
-ENV_VAR = "DECILE_TEST_DATABASE_URL"
+ENV_VAR = "BASKFY_TEST_DATABASE_URL"
 
 pytestmark = [
     pytest.mark.db,
@@ -49,7 +49,7 @@ def _alembic(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["uv", "run", "alembic", *args],
         cwd=API_DIR,
-        env={**_clean_env(), "DECILE_DATABASE_URL": url},
+        env={**_clean_env(), "BASKFY_DATABASE_URL": url},
         capture_output=True,
         text=True,
         check=True,
@@ -57,7 +57,7 @@ def _alembic(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def _clean_env() -> dict[str, str]:
-    return {k: v for k, v in os.environ.items() if k != "DECILE_DATABASE_URL"}
+    return {k: v for k, v in os.environ.items() if k != "BASKFY_DATABASE_URL"}
 
 
 @pytest.mark.asyncio

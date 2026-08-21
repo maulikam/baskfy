@@ -5,7 +5,7 @@ import type {
   ListingsPage,
   MarketHealthHistoryOut,
   MarketHealthOut,
-} from "@decile/api-client";
+} from "@baskfy/api-client";
 
 import { apiOrigin } from "@/lib/api/config";
 

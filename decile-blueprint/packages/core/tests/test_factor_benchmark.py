@@ -9,7 +9,7 @@ pass a threshold docs/11 does not state — it is to produce the number, and to 
 
 What it measures
 ----------------
-``decile_core.factors.compute_factors`` over a production-sized panel: docs/02 §"Why Postgres"
+``baskfy_core.factors.compute_factors`` over a production-sized panel: docs/02 §"Why Postgres"
 sizes the market at "~2,300 NSE instruments", and the twelve-month windows need two years of
 history behind the as-of date, so the input is ~2,300 x ~500 bars — 1.15M rows, which is the shape
 the real step hands the engine.
@@ -40,8 +40,8 @@ import polars as pl
 import pytest
 from benchmarks.budgets import record
 
-from decile_core.factors import compute_factors
-from decile_core.trading_calendar import load_seed_holidays
+from baskfy_core.factors import compute_factors
+from baskfy_core.trading_calendar import load_seed_holidays
 
 pytestmark = pytest.mark.benchmark
 
@@ -61,7 +61,7 @@ AS_OF: Final = dt.date(2026, 8, 18)
 def _trading_days(count: int, end: dt.date) -> list[dt.date]:
     """``count`` weekdays ending at ``end``, holidays removed.
 
-    The calendar shape matters to :func:`decile_core.windows.resolve_windows`, which resolves the
+    The calendar shape matters to :func:`baskfy_core.windows.resolve_windows`, which resolves the
     twelve-month window by counting backwards through it — a naive "every day" calendar would make
     the windows a third too long and the benchmark would measure a different computation.
     """
@@ -139,7 +139,7 @@ class TestNightlyFactorComputation:
             elapsed,
             unit="s",
             method=(
-                f"one call to decile_core.factors.compute_factors over "
+                f"one call to baskfy_core.factors.compute_factors over "
                 f"{INSTRUMENTS} instruments x {HISTORY_DAYS} bars"
             ),
             dataset=(

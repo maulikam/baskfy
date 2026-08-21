@@ -1,7 +1,7 @@
 """API keys, screen alerts and outbound webhooks (Prompt 20).
 
 Six tables, none of them in docs/04. The reasoning per table is in
-``decile_core.models.integrations`` and the decision is recorded in ``docs/DECISIONS.md`` §20.
+``baskfy_core.models.integrations`` and the decision is recorded in ``docs/DECISIONS.md`` §20.
 
 * ``api_key`` / ``api_key_usage_daily`` — Prompt 20 §1. Keys are hashed at rest; the clear-text
   ``prefix`` is what the lookup indexes on and what the UI shows.
@@ -9,7 +9,7 @@ Six tables, none of them in docs/04. The reasoning per table is in
   ``(alert_id, as_of)`` unique constraint is what makes a re-run of a night's dispatch send
   nothing (CLAUDE.md house rule 7).
 * ``webhook_endpoint`` / ``webhook_delivery`` — Prompt 20 §4. No signing secret is stored; it is
-  derived from ``(public_id, secret_version)`` — see ``decile_api.webhooks``.
+  derived from ``(public_id, secret_version)`` — see ``baskfy_api.webhooks``.
 
 Nothing here is destructive. The downgrade drops exactly the six tables it created, returning the
 schema to 0009.

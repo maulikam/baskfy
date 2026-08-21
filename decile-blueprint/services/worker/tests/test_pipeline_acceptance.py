@@ -20,21 +20,21 @@ from helpers import PRIOR_DATE, TRADE_DATE, add_bar, make_instrument, requires_d
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from decile_core.models import CorporateAction, IngestCursor, OhlcvDaily, PipelineRun
-from decile_providers.records import DAILY_BARS_SCHEMA, InstrumentRecord, conform
-from decile_worker.backfill import (
+from baskfy_core.models import CorporateAction, IngestCursor, OhlcvDaily, PipelineRun
+from baskfy_providers.records import DAILY_BARS_SCHEMA, InstrumentRecord, conform
+from baskfy_worker.backfill import (
     STATUS_DONE,
     STATUS_PENDING,
     count_done,
     run_backfill,
 )
-from decile_worker.deps import PipelineDependencies
-from decile_worker.orchestrator import run_nightly_pipeline
-from decile_worker.steps import PipelineStep, RunStatus
-from decile_worker.tasks.adjustments import reprocess_instrument
-from decile_worker.tasks.publish import current_data_version
-from decile_worker.tasks.quality import NOMINAL_SIZES
-from decile_worker.window import DateWindow
+from baskfy_worker.deps import PipelineDependencies
+from baskfy_worker.orchestrator import run_nightly_pipeline
+from baskfy_worker.steps import PipelineStep, RunStatus
+from baskfy_worker.tasks.adjustments import reprocess_instrument
+from baskfy_worker.tasks.publish import current_data_version
+from baskfy_worker.tasks.quality import NOMINAL_SIZES
+from baskfy_worker.window import DateWindow
 
 pytestmark = [pytest.mark.db, requires_db]
 

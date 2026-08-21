@@ -26,9 +26,9 @@ from api_helpers import (
 from screener_helpers import AS_OF, DATA_VERSION, export_symbols_in_file_order, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_core.reference_export import EXPORT_COLUMNS
-from decile_core.screener import DEFAULT_RESULT_COLUMNS, IDENTITY_COLUMNS
-from decile_core.seed_data import EXAMPLE_SCREENS
+from baskfy_core.reference_export import EXPORT_COLUMNS
+from baskfy_core.screener import DEFAULT_RESULT_COLUMNS, IDENTITY_COLUMNS
+from baskfy_core.seed_data import EXAMPLE_SCREENS
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 

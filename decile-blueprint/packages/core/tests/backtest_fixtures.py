@@ -27,7 +27,7 @@ from typing import Final
 import numpy as np
 import polars as pl
 
-from decile_core.backtest import BacktestData, PricePanel
+from baskfy_core.backtest import BacktestData, PricePanel
 
 #: Trading days used to rank on trailing momentum. Roughly a year of NSE weekdays.
 MOMENTUM_WINDOW: Final = 250
@@ -122,7 +122,7 @@ class SyntheticMarket:
             if np.isnan(base) or base <= 0:
                 continue
             scored.append((float(self.closes[row, column] / base - 1.0), instrument_id, column))
-        # Tie-break on instrument id, exactly as `decile_core.screener` does, so a tie cannot
+        # Tie-break on instrument id, exactly as `baskfy_core.screener` does, so a tie cannot
         # give two runs different ranks.
         scored.sort(key=lambda item: (-item[0], item[1]))
         return pl.DataFrame(

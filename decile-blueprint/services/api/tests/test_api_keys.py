@@ -17,10 +17,10 @@ import screener_helpers
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api import api_keys as service
-from decile_core.api_keys import KEY_TOKEN_MARKER, MAX_KEYS_PER_ACCOUNT, Scope
-from decile_core.models import ApiKey, ApiKeyUsageDaily
-from decile_core.public_api import PUBLIC_API_PREFIX
+from baskfy_api import api_keys as service
+from baskfy_core.api_keys import KEY_TOKEN_MARKER, MAX_KEYS_PER_ACCOUNT, Scope
+from baskfy_core.models import ApiKey, ApiKeyUsageDaily
+from baskfy_core.public_api import PUBLIC_API_PREFIX
 
 pytestmark = [screener_helpers.requires_db, pytest.mark.db, pytest.mark.redis]
 

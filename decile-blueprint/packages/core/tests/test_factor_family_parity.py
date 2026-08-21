@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from decile_core.factor_registry import FactorFamily, by_family
+from baskfy_core.factor_registry import FactorFamily, by_family
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FAMILIES_TS = REPO_ROOT / "apps" / "web" / "src" / "lib" / "marketing" / "factor-families.ts"

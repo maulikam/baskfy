@@ -9,9 +9,9 @@ import pytest
 from api_helpers import assert_problem, errors_of, url
 from screener_helpers import AS_OF, DATA_VERSION, requires_db
 
-from decile_api.screener import DATA_START_DATE
-from decile_core.factor_registry import COLUMN_PICKER_KEYS, FACTORS, SORT_FACTOR_KEYS
-from decile_core.universes import UNIVERSES
+from baskfy_api.screener import DATA_START_DATE
+from baskfy_core.factor_registry import COLUMN_PICKER_KEYS, FACTORS, SORT_FACTOR_KEYS
+from baskfy_core.universes import UNIVERSES
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ScreenDefinition, ScreenOut } from "@decile/api-client";
+import type { ScreenDefinition, ScreenOut } from "@baskfy/api-client";
 import { Copy, Play, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

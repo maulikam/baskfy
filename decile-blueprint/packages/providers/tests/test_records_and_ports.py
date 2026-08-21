@@ -16,17 +16,17 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from decile_providers.fixtures import FixtureProvider
-from decile_providers.kite import KiteProvider
-from decile_providers.nse import NSEProvider
-from decile_providers.ports import (
+from baskfy_providers.fixtures import FixtureProvider
+from baskfy_providers.kite import KiteProvider
+from baskfy_providers.nse import NSEProvider
+from baskfy_providers.ports import (
     BARS_CAPABILITIES,
     REFERENCE_CAPABILITIES,
     BarsProvider,
     Capability,
     ReferenceProvider,
 )
-from decile_providers.records import (
+from baskfy_providers.records import (
     BHAVCOPY_SCHEMA,
     DAILY_BARS_SCHEMA,
     CorporateAction,
@@ -36,7 +36,7 @@ from decile_providers.records import (
     conform,
     empty_frame,
 )
-from decile_providers.settings import ProviderSettings
+from baskfy_providers.settings import ProviderSettings
 
 
 class TestProtocolConformance:

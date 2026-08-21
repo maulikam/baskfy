@@ -16,13 +16,13 @@ const API_URL = `http://127.0.0.1:${API_PORT}`;
 /**
  * A database of its own, seeded from the docs/13 reference export.
  *
- * Separate from `DECILE_TEST_DATABASE_URL` (which the Python suite truncates and re-migrates
+ * Separate from `BASKFY_TEST_DATABASE_URL` (which the Python suite truncates and re-migrates
  * between modules) so that a `pytest` run and a `playwright` run cannot pull the ground out from
  * under each other.
  */
-const DB = "postgresql+asyncpg://decile:decile@localhost:5433/decile_e2e";
-const DB_PG = "postgresql://decile:decile@localhost:5433/decile_e2e";
-const REDIS = process.env.DECILE_REDIS_URL ?? "redis://localhost:6380/0";
+const DB = "postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_e2e";
+const DB_PG = "postgresql://baskfy:baskfy@localhost:5433/baskfy_e2e";
+const REDIS = process.env.BASKFY_REDIS_URL ?? "redis://localhost:6380/0";
 
 /** Shared between the two servers: the API verifies what the web app mints (docs/07 §header). */
 const JWT_SECRET = "playwright-placeholder-secret-abcdefgh";
@@ -53,44 +53,44 @@ export default defineConfig({
         `cd ${REPO_ROOT}services/api`,
         "uv run alembic upgrade head",
         `cd ${REPO_ROOT}`,
-        "uv run python -m decile_api.seed e2e",
-        `uv run uvicorn decile_api.app:get_app --factory --port ${API_PORT}`,
+        "uv run python -m baskfy_api.seed e2e",
+        `uv run uvicorn baskfy_api.app:get_app --factory --port ${API_PORT}`,
       ].join(" && "),
       url: `${API_URL}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 300_000,
       env: {
-        DECILE_DATABASE_URL: DB,
-        DECILE_REDIS_URL: REDIS,
-        DECILE_JWT_SECRET: JWT_SECRET,
-        DECILE_ENVIRONMENT: "test",
-        DECILE_LOG_JSON: "false",
-        DECILE_LOG_LEVEL: "WARNING",
+        BASKFY_DATABASE_URL: DB,
+        BASKFY_REDIS_URL: REDIS,
+        BASKFY_JWT_SECRET: JWT_SECRET,
+        BASKFY_ENVIRONMENT: "test",
+        BASKFY_LOG_JSON: "false",
+        BASKFY_LOG_LEVEL: "WARNING",
         // docs/07 caps anonymous traffic at 10/min. A browser suite makes far more than that from
         // one address, and the limiter is asserted in the Python suite instead.
-        DECILE_RATE_LIMIT_ANONYMOUS_PER_MINUTE: "100000",
-        DECILE_RATE_LIMIT_AUTHENTICATED_PER_MINUTE: "100000",
+        BASKFY_RATE_LIMIT_ANONYMOUS_PER_MINUTE: "100000",
+        BASKFY_RATE_LIMIT_AUTHENTICATED_PER_MINUTE: "100000",
         // The browser calls the API directly (docs/03 §"Request path"), so its origin has to be
         // allowed or every preflight fails. `127.0.0.1` and `localhost` are different origins to
         // a browser, and Playwright uses the first.
-        DECILE_CORS_ORIGINS: JSON.stringify([BASE_URL, `http://localhost:${PORT}`]),
+        BASKFY_CORS_ORIGINS: JSON.stringify([BASE_URL, `http://localhost:${PORT}`]),
         // Prompt 12. The suite drives plain HTTP, so a `Secure` refresh cookie would never come
         // back; the links in verification and reset emails have to point at *this* web server;
         // and Argon2id at production cost would put ~20 MiB and a few hundred milliseconds on
         // every sign-in in the suite.
-        DECILE_COOKIE_SECURE: "false",
-        DECILE_WEB_ORIGIN: BASE_URL,
-        DECILE_ARGON2_TIME_COST: "1",
-        DECILE_ARGON2_MEMORY_KIB: "8",
-        DECILE_ARGON2_PARALLELISM: "1",
+        BASKFY_COOKIE_SECURE: "false",
+        BASKFY_WEB_ORIGIN: BASE_URL,
+        BASKFY_ARGON2_TIME_COST: "1",
+        BASKFY_ARGON2_MEMORY_KIB: "8",
+        BASKFY_ARGON2_PARALLELISM: "1",
         // Delivery to mailpit (Prompt 12 §3), which `make up` starts. The suite reads the code it
         // was sent out of mailpit's HTTP API, exactly as a developer reads it in the browser.
-        DECILE_EMAIL_TRANSPORT: "smtp",
-        DECILE_SMTP_HOST: "127.0.0.1",
-        DECILE_SMTP_PORT: process.env.DECILE_SMTP_PORT ?? "1025",
+        BASKFY_EMAIL_TRANSPORT: "smtp",
+        BASKFY_SMTP_HOST: "127.0.0.1",
+        BASKFY_SMTP_PORT: process.env.BASKFY_SMTP_PORT ?? "1025",
         // docs/11 §Security caps auth endpoints tightly; the suite makes far more from one
         // address, and `test_api_auth.py` asserts the limiter with the real numbers.
-        DECILE_RATE_LIMIT_AUTH_PER_MINUTE: "100000",
+        BASKFY_RATE_LIMIT_AUTH_PER_MINUTE: "100000",
       },
     },
     {
@@ -99,9 +99,9 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 300_000,
       env: {
-        DECILE_JWT_SECRET: JWT_SECRET,
+        BASKFY_JWT_SECRET: JWT_SECRET,
         AUTH_SECRET: JWT_SECRET,
-        DECILE_DATABASE_URL_PG: DB_PG,
+        BASKFY_DATABASE_URL_PG: DB_PG,
         NEXT_PUBLIC_API_URL: `${API_URL}/api/v1`,
         // Prompt 12 replaced the stub credential check with the real `/auth/*` endpoints, so
         // there is nothing left to opt into: the browser suite registers and signs in for real

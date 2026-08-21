@@ -1,4 +1,4 @@
-import type { ProviderHealthOut } from "@decile/api-client";
+import type { ProviderHealthOut } from "@baskfy/api-client";
 
 import { cn } from "@/lib/utils";
 

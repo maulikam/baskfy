@@ -1,6 +1,6 @@
 /**
  * ScreenDefinition — the TypeScript mirror of
- * packages/core/src/decile_core/screen_definition.py.
+ * packages/core/src/baskfy_core/screen_definition.py.
  *
  * Shape: docs/04-data-model.md §Screens. Semantics: docs/06-screener-semantics.md §"Step 4".
  *
@@ -23,7 +23,7 @@ export const MAX_CUSTOM_FILTERS = 3;
 /** docs/01 §2.9 */
 export const SERIES_VALUES = ["EQ", "BE"] as const;
 
-/** docs/01 §2.1 — the 14 selectable universes. Mirrors decile_core.universes.UNIVERSE_SLUGS. */
+/** docs/01 §2.1 — the 14 selectable universes. Mirrors baskfy_core.universes.UNIVERSE_SLUGS. */
 export const UNIVERSE_SLUGS = [
   "nifty-50",
   "nifty-next-50",

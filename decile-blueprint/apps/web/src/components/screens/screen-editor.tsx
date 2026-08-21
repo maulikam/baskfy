@@ -1,6 +1,6 @@
 "use client";
 
-import type { ScreenOut, StatusOut } from "@decile/api-client";
+import type { ScreenOut, StatusOut } from "@baskfy/api-client";
 import { CalendarClock, Loader2, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

@@ -1,4 +1,4 @@
-import type { FactorOut } from "@decile/api-client";
+import type { FactorOut } from "@baskfy/api-client";
 
 /**
  * Deterministic fixtures for the kitchen sink.

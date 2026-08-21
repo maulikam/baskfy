@@ -12,7 +12,7 @@
 # contacting real infrastructure. So it takes a backup *here* — of a freshly migrated and seeded
 # database — with the same `infra/backup/pg_backup.sh` production runs, restores it with the same
 # `infra/backup/restore.sh` an operator would use in an incident, and asserts the result with
-# `decile_api.integrity`.
+# `baskfy_api.integrity`.
 #
 # That exercises: the dump command and its flags, the digest, the size floor, the DROP/CREATE
 # guard, the Timescale pre/post-restore dance, and every integrity assertion. It does NOT exercise:
@@ -35,7 +35,7 @@ on:
   pull_request:
     paths:
       - "infra/backup/**"
-      - "services/api/src/decile_api/integrity.py"
+      - "services/api/src/baskfy_api/integrity.py"
       - ".github/workflows/restore-drill.yml"
 
 jobs:
@@ -47,18 +47,18 @@ jobs:
         # drill on a database without it would restore hypertables as plain tables and pass.
         image: timescale/timescaledb:2.17.2-pg16
         env:
-          POSTGRES_USER: decile
-          POSTGRES_PASSWORD: decile
-          POSTGRES_DB: decile_drill_source
+          POSTGRES_USER: baskfy
+          POSTGRES_PASSWORD: baskfy
+          POSTGRES_DB: baskfy_drill_source
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U decile" --health-interval 5s
+          --health-cmd "pg_isready -U baskfy" --health-interval 5s
           --health-timeout 5s --health-retries 20
     env:
-      PGPASSWORD: decile
-      SOURCE_URL: postgresql+asyncpg://decile:decile@localhost:5432/decile_drill_source
-      TARGET_URL: postgresql://decile:decile@localhost:5432/decile_drill_restore
-      DECILE_BACKUP_DIR: ${{ github.workspace }}/.backups
+      PGPASSWORD: baskfy
+      SOURCE_URL: postgresql+asyncpg://baskfy:baskfy@localhost:5432/baskfy_drill_source
+      TARGET_URL: postgresql://baskfy:baskfy@localhost:5432/baskfy_drill_restore
+      BASKFY_BACKUP_DIR: ${{ github.workspace }}/.backups
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -78,49 +78,49 @@ jobs:
           pg_dump --version
 
       - name: Enable TimescaleDB on the source database
-        run: psql -h localhost -U decile -d decile_drill_source -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
+        run: psql -h localhost -U baskfy -d baskfy_drill_source -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
 
       - name: Migrate and seed the source database
         run: |
           cd services/api && uv run alembic upgrade head
         env:
-          DECILE_DATABASE_URL: ${{ env.SOURCE_URL }}
+          BASKFY_DATABASE_URL: ${{ env.SOURCE_URL }}
 
       - name: Seed reference data
-        run: uv run python -m decile_api.seed all
+        run: uv run python -m baskfy_api.seed all
         env:
-          DECILE_DATABASE_URL: ${{ env.SOURCE_URL }}
+          BASKFY_DATABASE_URL: ${{ env.SOURCE_URL }}
 
       # Assert the SOURCE first. If the source fails its own integrity checks the drill would
       # report a bad restore when what it actually found was a bad seed, and the operator would
       # spend the morning debugging the wrong half.
       - name: Integrity of the source database (control)
-        run: uv run python -m decile_api.integrity --database-url "$SOURCE_URL"
+        run: uv run python -m baskfy_api.integrity --database-url "$SOURCE_URL"
 
       - name: Take a backup
         run: infra/backup/pg_backup.sh --no-upload
         env:
-          DECILE_BACKUP_DATABASE_URL: postgresql://decile:decile@localhost:5432/decile_drill_source
+          BASKFY_BACKUP_DATABASE_URL: postgresql://baskfy:baskfy@localhost:5432/baskfy_drill_source
 
       - name: Restore it into a scratch database
         run: |
-          DUMP="$(cat "$DECILE_BACKUP_DIR/LATEST")"
+          DUMP="$(cat "$BASKFY_BACKUP_DIR/LATEST")"
           echo "restoring $DUMP"
           infra/backup/restore.sh --dump "$DUMP" --target "$TARGET_URL"
         env:
-          DECILE_ADMIN_DATABASE_URL: postgresql://decile:decile@localhost:5432/postgres
+          BASKFY_ADMIN_DATABASE_URL: postgresql://baskfy:baskfy@localhost:5432/postgres
 
       # THE ASSERTION. Everything above is setup; this is the drill.
       - name: Data-integrity assertions on the restored database
         run: |
-          uv run python -m decile_api.integrity \
-            --database-url "postgresql+asyncpg://decile:decile@localhost:5432/decile_drill_restore"
+          uv run python -m baskfy_api.integrity \
+            --database-url "postgresql+asyncpg://baskfy:baskfy@localhost:5432/baskfy_drill_restore"
 
       - name: Machine-readable report
         if: always()
         run: |
-          uv run python -m decile_api.integrity --json \
-            --database-url "postgresql+asyncpg://decile:decile@localhost:5432/decile_drill_restore" \
+          uv run python -m baskfy_api.integrity --json \
+            --database-url "postgresql+asyncpg://baskfy:baskfy@localhost:5432/baskfy_drill_restore" \
             > integrity.json || true
           {
             echo '## Restore drill'

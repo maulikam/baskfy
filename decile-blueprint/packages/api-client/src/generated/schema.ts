@@ -136,7 +136,7 @@ export interface paths {
         };
         /**
          * Provider health
-         * @description ``providers doctor``, rendered. Makes no network call — see ``decile_api.admin``.
+         * @description ``providers doctor``, rendered. Makes no network call — see ``baskfy_api.admin``.
          */
         get: operations["getProviderHealth"];
         put?: never;
@@ -943,7 +943,7 @@ export interface paths {
         put?: never;
         /**
          * Rotate an API key
-         * @description Issue a replacement and revoke the original immediately — see ``decile_api.api_keys``.
+         * @description Issue a replacement and revoke the original immediately — see ``baskfy_api.api_keys``.
          */
         post: operations["rotateApiKey"];
         delete?: never;
@@ -1166,7 +1166,7 @@ export interface paths {
          * @description docs/07: "factor registry (key, label, family, unit, higher_is_better)".
          *
          *     All 64 of them. docs/01 §3 is headed "62 ranking factors" and enumerates 64; see the note in
-         *     ``decile_core.factor_registry``.
+         *     ``baskfy_core.factor_registry``.
          */
         get: operations["getFactors"];
         put?: never;
@@ -1232,7 +1232,7 @@ export interface paths {
          * The selectable universes
          * @description docs/07: "index_def rows where is_universe" — the fourteen of docs/01 §2.1, in UI order.
          *
-         *     Served from ``decile_core.universes`` rather than from ``index_def``: the ids are load-bearing
+         *     Served from ``baskfy_core.universes`` rather than from ``index_def``: the ids are load-bearing
          *     (they are ``factor_daily.universe_mask`` bit positions), the seeder writes the table *from*
          *     this tuple, and a dashboard-only index must never appear in the screener's dropdown.
          */
@@ -2105,7 +2105,7 @@ export interface components {
          * BacktestCreate
          * @description docs/07: `POST /backtests { config }`.
          *
-         *     ``config`` is validated against :class:`decile_core.backtest.BacktestConfig`, which mirrors
+         *     ``config`` is validated against :class:`baskfy_core.backtest.BacktestConfig`, which mirrors
          *     docs/10 §Config key for key and forbids unknown keys — the same contract
          *     ``ScreenDefinition`` has. It is typed as ``BacktestConfig`` so the generated TypeScript
          *     client carries every field rather than ``unknown``.
@@ -2573,7 +2573,7 @@ export interface components {
          *     There is a wrinkle the document does not know about, and it decides the default.
          *
          *     docs/09's adjustment algorithm — which this repository implements in
-         *     :mod:`decile_core.adjustments` — folds **cash dividends** into ``adj_factor`` alongside splits
+         *     :mod:`baskfy_core.adjustments` — folds **cash dividends** into ``adj_factor`` alongside splits
          *     and bonuses: "Cash dividend D -> (P_cum - D) / P_cum". So ``ohlcv_daily.close``, the adjusted
          *     series docs/10 §6 marks the book to, is already a *total-return* series. Crediting the
          *     dividend as cash on top of it would count it twice.

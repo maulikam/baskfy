@@ -36,13 +36,13 @@ import pytest
 from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
-from decile_core.blends import BLEND_SHAPES, SHARPE_ONLY_SHAPES, blend_expr, blend_sql
-from decile_core.factors import (
+from baskfy_core.blends import BLEND_SHAPES, SHARPE_ONLY_SHAPES, blend_expr, blend_sql
+from baskfy_core.factors import (
     DEFAULT_FACTOR_CONFIG,
     FactorConfig,
     compute_factors_unrounded,
 )
-from decile_core.windows import WINDOW_MONTHS
+from baskfy_core.windows import WINDOW_MONTHS
 
 AS_OF: Final = dt.date(2026, 8, 18)
 

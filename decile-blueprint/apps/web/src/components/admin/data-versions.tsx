@@ -1,4 +1,4 @@
-import type { DataVersionOut } from "@decile/api-client";
+import type { DataVersionOut } from "@baskfy/api-client";
 
 import { formatDateTimeIST } from "@/lib/format";
 

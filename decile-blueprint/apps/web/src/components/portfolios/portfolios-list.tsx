@@ -1,6 +1,6 @@
 "use client";
 
-import type { PortfolioSummaryOut } from "@decile/api-client";
+import type { PortfolioSummaryOut } from "@baskfy/api-client";
 import { Plus, Scale, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

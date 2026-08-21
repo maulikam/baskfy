@@ -9,7 +9,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from decile_core.screen_definition import (
+from baskfy_core.screen_definition import (
     AWAY_FROM_HIGH_IGNORE,
     CIRCUITS_IGNORE_ABOVE,
     IGNORE_ABOVE_BETA_IGNORE,
@@ -17,8 +17,8 @@ from decile_core.screen_definition import (
     POSITIVE_DAYS_IGNORE,
     ScreenDefinition,
 )
-from decile_core.screen_definition_corpus import CASES, Case
-from decile_core.universes import UNIVERSE_SLUGS
+from baskfy_core.screen_definition_corpus import CASES, Case
+from baskfy_core.universes import UNIVERSE_SLUGS
 
 #: docs/04 §Screens prints this object as the definition shape. Reproduced verbatim.
 DOCS_04_EXAMPLE: dict[str, object] = {
@@ -67,7 +67,7 @@ def test_round_trip_reproduces_every_documented_key() -> None:
 
 
 def test_universe_slug_literal_matches_registry() -> None:
-    """The inline Literal and decile_core.universes must never drift apart."""
+    """The inline Literal and baskfy_core.universes must never drift apart."""
     literal = typing.get_args(ScreenDefinition.model_fields["index"].annotation)
     assert literal == UNIVERSE_SLUGS
 

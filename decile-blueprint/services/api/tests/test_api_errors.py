@@ -28,14 +28,14 @@ from screener_helpers import requires_db
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.app import create_app
-from decile_api.auth import encode_token
-from decile_api.db import get_session
-from decile_api.logging import REQUEST_ID_HEADER
-from decile_api.problems import ProblemType
-from decile_api.ratelimit import KEY_PREFIX
-from decile_core.models import PipelineRun
-from decile_core.seed_data import EXAMPLE_SCREENS
+from baskfy_api.app import create_app
+from baskfy_api.auth import encode_token
+from baskfy_api.db import get_session
+from baskfy_api.logging import REQUEST_ID_HEADER
+from baskfy_api.problems import ProblemType
+from baskfy_api.ratelimit import KEY_PREFIX
+from baskfy_core.models import PipelineRun
+from baskfy_core.seed_data import EXAMPLE_SCREENS
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 
@@ -213,7 +213,7 @@ class TestPipelineDegraded:
 async def _flush_rate_limits() -> None:
     """Buckets outlive a test; a leftover one would make the next assertion count from the wrong
     place."""
-    client: Redis = Redis.from_url(os.environ.get("DECILE_REDIS_URL", "redis://localhost:6380/0"))
+    client: Redis = Redis.from_url(os.environ.get("BASKFY_REDIS_URL", "redis://localhost:6380/0"))
     keys = [key async for key in client.scan_iter(match=f"{KEY_PREFIX}*")]
     if keys:
         await client.delete(*keys)

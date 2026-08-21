@@ -1,4 +1,4 @@
-import type { ImportReportOut, RebalanceNameOut } from "@decile/api-client";
+import type { ImportReportOut, RebalanceNameOut } from "@baskfy/api-client";
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -119,7 +119,7 @@ describe("the clipboard and CSV payloads", () => {
   });
 
   it("names the file after the list and the date it was computed for", () => {
-    expect(filenameFor("exits", "2026-08-18")).toBe("decile-exits-2026-08-18.csv");
+    expect(filenameFor("exits", "2026-08-18")).toBe("baskfy-exits-2026-08-18.csv");
   });
 });
 

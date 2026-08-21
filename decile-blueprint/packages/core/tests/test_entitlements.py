@@ -14,7 +14,7 @@ from decimal import Decimal
 
 import pytest
 
-from decile_core.entitlements import (
+from baskfy_core.entitlements import (
     ANONYMOUS,
     FREE_TIER,
     MAX_SCREENS_KEY,
@@ -25,7 +25,7 @@ from decile_core.entitlements import (
     Feature,
     FeatureNotEntitled,
 )
-from decile_core.seed_data import ALL_PLANS, FREE_PLAN, PAID_PLAN_CODES, PLANS, PlanSeed
+from baskfy_core.seed_data import ALL_PLANS, FREE_PLAN, PAID_PLAN_CODES, PLANS, PlanSeed
 
 #: docs/07 §Entitlements, the payload's members verbatim and in its order.
 DOCUMENTED_KEYS = (

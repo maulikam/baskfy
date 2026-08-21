@@ -21,8 +21,8 @@ from screener_helpers import requires_db
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.app import create_app
-from decile_core.models import (
+from baskfy_api.app import create_app
+from baskfy_core.models import (
     AdminAction,
     AppUser,
     EntitlementOverride,
@@ -213,7 +213,7 @@ class TestTheReRunButton:
     async def test_it_publishes_the_nightly_task_and_writes_an_audit_row(
         self, screener_session: AsyncSession
     ) -> None:
-        """It enqueues; it does not run the chain inside a request (see `decile_api.admin`)."""
+        """It enqueues; it does not run the chain inside a request (see `baskfy_api.admin`)."""
         headers = await _staff(screener_session)
         queue = _RecordingQueue()
         settings = api_settings(str(screener_session.bind.engine.url))
@@ -224,8 +224,8 @@ class TestTheReRunButton:
             )
 
         assert response.status_code == 202
-        assert response.json()["task"] == "decile.pipeline.nightly"
-        assert queue.sent == [("decile.pipeline.nightly", [TRADE_DATE.isoformat()])]
+        assert response.json()["task"] == "baskfy.pipeline.nightly"
+        assert queue.sent == [("baskfy.pipeline.nightly", [TRADE_DATE.isoformat()])]
 
         action = (
             await screener_session.execute(
@@ -234,7 +234,7 @@ class TestTheReRunButton:
         ).scalar_one()
         assert action.target == TRADE_DATE.isoformat()
         assert action.detail is not None
-        assert action.detail["task"] == "decile.pipeline.nightly"
+        assert action.detail["task"] == "baskfy.pipeline.nightly"
 
     async def test_reprocess_refuses_an_unknown_symbol(
         self, screener_session: AsyncSession
@@ -269,7 +269,7 @@ class TestTheReRunButton:
         assert response.status_code == 202, response.text
         assert response.json()["target"] == instrument_symbol
         name, args = queue.sent[0]
-        assert name == "decile.compute.reprocess_instrument"
+        assert name == "baskfy.compute.reprocess_instrument"
         assert isinstance(args[0], int)
 
 

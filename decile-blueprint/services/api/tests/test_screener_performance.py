@@ -28,11 +28,11 @@ from sqlalchemy import create_mock_engine, text
 from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from decile_api.screener import execute_screen
-from decile_core.screen_definition import ExtraFactor, ScreenDefinition
-from decile_core.screener import build_screen_query
-from decile_core.seed_data import EXAMPLE_SCREENS
-from decile_core.universes import UNIVERSE_BY_SLUG
+from baskfy_api.screener import execute_screen
+from baskfy_core.screen_definition import ExtraFactor, ScreenDefinition
+from baskfy_core.screener import build_screen_query
+from baskfy_core.seed_data import EXAMPLE_SCREENS
+from baskfy_core.universes import UNIVERSE_BY_SLUG
 
 pytestmark = [pytest.mark.db, requires_db]
 
@@ -51,7 +51,7 @@ COLD_BUDGET_MS = 300.0
 DATE_MARKETCAP_INDEX = "ix_factor_daily_date_marketcap_cr"
 
 #: Rendering-only PostgreSQL dialect. ``create_mock_engine`` is the typed way to get one; the
-#: dialect classes have untyped constructors (see ``decile_core.screener``).
+#: dialect classes have untyped constructors (see ``baskfy_core.screener``).
 PG_DIALECT: Dialect = create_mock_engine("postgresql+asyncpg://", lambda *args: None).dialect
 
 TOTAL_MARKET = UNIVERSE_BY_SLUG["nifty-total-market"].index_id
@@ -186,6 +186,6 @@ class TestThePlan:
         assert "Seq Scan on index_member_daily" not in plan, plan
         assert "ix_index_member_daily_date_index_id" in plan, plan
 
-    async def test_decile_bucketing_stays_index_driven(self, perf_session: AsyncSession) -> None:
+    async def test_baskfy_bucketing_stays_index_driven(self, perf_session: AsyncSession) -> None:
         plan = await _explain(perf_session, full_universe_screen(apply_filters_on="decile_1"))
         assert "Seq Scan on factor_daily" not in plan, plan

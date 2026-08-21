@@ -15,12 +15,12 @@ from collections.abc import Mapping
 import api_helpers
 import pytest
 
-from decile_api import public_docs
-from decile_api.app import create_app
-from decile_api.settings import Settings
-from decile_core.public_api import PUBLIC_API_PREFIX, PUBLIC_API_VERSION
+from baskfy_api import public_docs
+from baskfy_api.app import create_app
+from baskfy_api.settings import Settings
+from baskfy_core.public_api import PUBLIC_API_PREFIX, PUBLIC_API_VERSION
 
-BASE_URL = "https://api.decile.in"
+BASE_URL = "https://api.baskfy.com"
 
 #: The three Prompt 20 §5 names, spelled as Redoc's ``lang`` values.
 EXPECTED_LANGS = ["curl", "Python", "JavaScript"]

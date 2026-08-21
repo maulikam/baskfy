@@ -14,7 +14,7 @@ from decimal import Decimal
 
 import pytest
 
-from decile_core.rebalance import (
+from baskfy_core.rebalance import (
     Action,
     ExitReason,
     HeldName,

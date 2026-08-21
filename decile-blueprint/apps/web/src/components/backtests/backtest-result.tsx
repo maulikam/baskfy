@@ -1,6 +1,6 @@
 "use client";
 
-import type { BacktestOut } from "@decile/api-client";
+import type { BacktestOut } from "@baskfy/api-client";
 import { Download } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";

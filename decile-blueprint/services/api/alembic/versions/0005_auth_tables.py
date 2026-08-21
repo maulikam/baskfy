@@ -2,7 +2,7 @@
 
 Six tables and one column, none of which are in docs/04. Each is required by a numbered line of
 docs/11 §Security or §"Compliance & legal (India)" that cannot be met without it — the reasoning
-is on each model in `decile_core.models.auth` and collected in `docs/04c-auth-tables-addendum.md`.
+is on each model in `baskfy_core.models.auth` and collected in `docs/04c-auth-tables-addendum.md`.
 
     auth_verification_token   Auth.js v5's adapter contract (docs/02 locks Auth.js).
     auth_token                OTP / email verification / password reset codes, stored hashed.

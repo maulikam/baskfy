@@ -1,4 +1,4 @@
-import type { ColumnOut } from "@decile/api-client";
+import type { ColumnOut } from "@baskfy/api-client";
 
 /**
  * The column picker's families — docs/08 §"Columns editor": "34 toggles in the reference's order,

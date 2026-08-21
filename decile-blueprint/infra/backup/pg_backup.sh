@@ -28,34 +28,34 @@
 #
 # Usage:
 #   infra/backup/pg_backup.sh                       # uses the environment below
-#   DECILE_BACKUP_DIR=/tmp/x infra/backup/pg_backup.sh --no-upload
+#   BASKFY_BACKUP_DIR=/tmp/x infra/backup/pg_backup.sh --no-upload
 #
 # Environment:
-#   DECILE_BACKUP_DATABASE_URL  libpq URL to dump. Falls back to DECILE_DATABASE_URL with the
+#   BASKFY_BACKUP_DATABASE_URL  libpq URL to dump. Falls back to BASKFY_DATABASE_URL with the
 #                               SQLAlchemy `+asyncpg` driver marker stripped.
-#   DECILE_BACKUP_DIR           where dumps are written (default ./.backups)
-#   DECILE_BACKUP_S3_BUCKET     R2/S3 bucket. Empty means local-only, which is what CI uses.
-#   DECILE_BACKUP_S3_PREFIX     key prefix (default "pg")
-#   DECILE_S3_ENDPOINT_URL      R2 endpoint. Empty means AWS S3.
-#   DECILE_BACKUP_RETENTION_DAYS  local dumps older than this are deleted (default 7)
+#   BASKFY_BACKUP_DIR           where dumps are written (default ./.backups)
+#   BASKFY_BACKUP_S3_BUCKET     R2/S3 bucket. Empty means local-only, which is what CI uses.
+#   BASKFY_BACKUP_S3_PREFIX     key prefix (default "pg")
+#   BASKFY_S3_ENDPOINT_URL      R2 endpoint. Empty means AWS S3.
+#   BASKFY_BACKUP_RETENTION_DAYS  local dumps older than this are deleted (default 7)
 
 set -euo pipefail
 
 UPLOAD=1
 [[ "${1:-}" == "--no-upload" ]] && UPLOAD=0
 
-BACKUP_DIR="${DECILE_BACKUP_DIR:-.backups}"
-S3_BUCKET="${DECILE_BACKUP_S3_BUCKET:-}"
-S3_PREFIX="${DECILE_BACKUP_S3_PREFIX:-pg}"
-RETENTION_DAYS="${DECILE_BACKUP_RETENTION_DAYS:-7}"
+BACKUP_DIR="${BASKFY_BACKUP_DIR:-.backups}"
+S3_BUCKET="${BASKFY_BACKUP_S3_BUCKET:-}"
+S3_PREFIX="${BASKFY_BACKUP_S3_PREFIX:-pg}"
+RETENTION_DAYS="${BASKFY_BACKUP_RETENTION_DAYS:-7}"
 
 # SQLAlchemy URLs carry a driver marker (`postgresql+asyncpg://`) that libpq does not understand.
 # One `sed` rather than a second environment variable nobody remembers to set.
-DB_URL="${DECILE_BACKUP_DATABASE_URL:-${DECILE_DATABASE_URL:-}}"
+DB_URL="${BASKFY_BACKUP_DATABASE_URL:-${BASKFY_DATABASE_URL:-}}"
 DB_URL="${DB_URL/postgresql+asyncpg:/postgresql:}"
 DB_URL="${DB_URL/postgresql+psycopg:/postgresql:}"
 if [[ -z "${DB_URL}" ]]; then
-  echo "pg_backup: set DECILE_BACKUP_DATABASE_URL or DECILE_DATABASE_URL" >&2
+  echo "pg_backup: set BASKFY_BACKUP_DATABASE_URL or BASKFY_DATABASE_URL" >&2
   exit 2
 fi
 
@@ -63,7 +63,7 @@ fi
 # any jurisdiction that observes DST — India does not, but the box it runs on may not be in India.
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "${BACKUP_DIR}"
-DUMP="${BACKUP_DIR}/decile-${STAMP}.dump"
+DUMP="${BACKUP_DIR}/baskfy-${STAMP}.dump"
 
 echo "pg_backup: dumping to ${DUMP}"
 # --no-owner / --no-privileges: a restore into a scratch database (the drill) has different roles,
@@ -96,8 +96,8 @@ fi
 
 if [[ "${UPLOAD}" -eq 1 && -n "${S3_BUCKET}" ]]; then
   ENDPOINT_ARG=()
-  [[ -n "${DECILE_S3_ENDPOINT_URL:-}" ]] && ENDPOINT_ARG=(--endpoint-url "${DECILE_S3_ENDPOINT_URL}")
-  KEY="${S3_PREFIX}/decile-${STAMP}.dump"
+  [[ -n "${BASKFY_S3_ENDPOINT_URL:-}" ]] && ENDPOINT_ARG=(--endpoint-url "${BASKFY_S3_ENDPOINT_URL}")
+  KEY="${S3_PREFIX}/baskfy-${STAMP}.dump"
   echo "pg_backup: uploading to s3://${S3_BUCKET}/${KEY}"
   aws "${ENDPOINT_ARG[@]}" s3 cp "${DUMP}" "s3://${S3_BUCKET}/${KEY}"
   aws "${ENDPOINT_ARG[@]}" s3 cp "${DUMP}.sha256" "s3://${S3_BUCKET}/${KEY}.sha256"
@@ -112,6 +112,6 @@ fi
 
 # Local pruning only. Object-store retention is a lifecycle rule on the bucket, because a script
 # that deletes remote backups is a script that can delete every remote backup.
-find "${BACKUP_DIR}" -name 'decile-*.dump*' -mtime "+${RETENTION_DAYS}" -delete 2>/dev/null || true
+find "${BACKUP_DIR}" -name 'baskfy-*.dump*' -mtime "+${RETENTION_DAYS}" -delete 2>/dev/null || true
 
 echo "pg_backup: done"

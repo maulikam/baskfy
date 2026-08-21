@@ -12,16 +12,16 @@ import datetime as dt
 import pytest
 from stubs import StubProvider
 
-from decile_providers.circuit import CircuitBreaker, CircuitState
-from decile_providers.composite import CompositeProvider
-from decile_providers.errors import (
+from baskfy_providers.circuit import CircuitBreaker, CircuitState
+from baskfy_providers.composite import CompositeProvider
+from baskfy_providers.errors import (
     CapabilityNotAvailable,
     CircuitOpen,
     CredentialsMissing,
     ProviderUnavailable,
     UpstreamUnavailable,
 )
-from decile_providers.ports import (
+from baskfy_providers.ports import (
     BARS_CAPABILITIES,
     REFERENCE_CAPABILITIES,
     Capability,

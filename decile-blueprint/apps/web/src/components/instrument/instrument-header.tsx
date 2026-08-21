@@ -1,4 +1,4 @@
-import type { IndexMembershipOut, InstrumentHeaderOut } from "@decile/api-client";
+import type { IndexMembershipOut, InstrumentHeaderOut } from "@baskfy/api-client";
 
 import { Badge } from "@/components/ui/badge";
 import { formatTradeDate } from "@/lib/format";

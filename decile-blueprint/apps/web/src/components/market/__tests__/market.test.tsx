@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import type { MarketHealthPointOut } from "@decile/api-client";
+import type { MarketHealthPointOut } from "@baskfy/api-client";
 
 import { BreadthGauge } from "@/components/market/breadth-gauge";
 import { BreadthHistory } from "@/components/market/breadth-history";
@@ -98,7 +98,7 @@ describe("breadth history", () => {
 
 describe("the universe selector", () => {
   it("offers docs/01 §6's twelve, in its order", () => {
-    // The Python side asserts this against `decile_core.universes`; this is the shape check the
+    // The Python side asserts this against `baskfy_core.universes`; this is the shape check the
     // page depends on.
     expect(HEALTH_UNIVERSES).toHaveLength(12);
     expect(HEALTH_UNIVERSES[0]?.slug).toBe("nifty-allcap");

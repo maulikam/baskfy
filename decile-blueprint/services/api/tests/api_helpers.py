@@ -17,19 +17,19 @@ from unittest import mock
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.app import create_app
-from decile_api.auth import encode_token
-from decile_api.db import get_session
-from decile_api.routers import public as public_router
-from decile_api.settings import Settings
-from decile_core.models import AppUser, Subscription
-from decile_core.public_api import DATA_REDISTRIBUTION_REVIEW as REVIEW
-from decile_core.public_api import DataRedistributionReview
-from decile_core.seed_data import PLANS
+from baskfy_api.app import create_app
+from baskfy_api.auth import encode_token
+from baskfy_api.db import get_session
+from baskfy_api.routers import public as public_router
+from baskfy_api.settings import Settings
+from baskfy_core.models import AppUser, Subscription
+from baskfy_core.public_api import DATA_REDISTRIBUTION_REVIEW as REVIEW
+from baskfy_core.public_api import DataRedistributionReview
+from baskfy_core.seed_data import PLANS
 
 #: 32 bytes, because RFC 7518 §3.2 requires an HS256 key at least as long as the hash output and
 #: PyJWT warns when it is not. The value is arbitrary; the length is not.
-TEST_JWT_SECRET: Final = "decile-test-secret-0123456789abc"
+TEST_JWT_SECRET: Final = "baskfy-test-secret-0123456789abc"
 
 #: docs/07: "Base: `/api/v1`".
 PREFIX: Final = "/api/v1"
@@ -60,7 +60,7 @@ def api_settings(database_url: str, **overrides: object) -> Settings:
         # The suite drives HTTP, not HTTPS, so a Secure cookie would never come back.
         cookie_secure=False,
         rate_limit_auth_per_minute=100_000,
-        redis_url=os.environ.get("DECILE_REDIS_URL", "redis://localhost:6380/0"),
+        redis_url=os.environ.get("BASKFY_REDIS_URL", "redis://localhost:6380/0"),
         environment="test",
         jwt_secret=TEST_JWT_SECRET,
         rate_limit_anonymous_per_minute=100_000,
@@ -98,7 +98,7 @@ async def running_app(
             # Razorpay attaches one driven by an `httpx.MockTransport`.
             app.state.razorpay = razorpay
         if task_queue is not None:
-            # Prompt 15: `POST /backtests` publishes `decile.backtest.run` to the broker. A
+            # Prompt 15: `POST /backtests` publishes `baskfy.backtest.run` to the broker. A
             # contract test asserts *that it was published*, not that Celery can publish, so it
             # swaps in a recorder — otherwise every run would leave a message in the developer's
             # Redis that no worker ever consumes.

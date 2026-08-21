@@ -6,7 +6,7 @@
 
 The point of an oracle is that it shares no code with the thing it checks. So this module:
 
-* imports nothing from :mod:`decile_core` except the *constants* that are part of docs/05's
+* imports nothing from :mod:`baskfy_core` except the *constants* that are part of docs/05's
   statement of the problem (window lengths, band tolerances) — never an expression, never a
   helper, never a Polars call;
 * loops in Python, one instrument at a time, one bar at a time where the formula is a recursion.
@@ -14,7 +14,7 @@ The point of an oracle is that it shares no code with the thing it checks. So th
   NumPy RSI matrix, the rolling-moment beta) is deliberately *not* made here. If the two agree,
   those optimisations preserved the arithmetic;
 * transcribes each formula from docs/05 in the document's own notation, section by section, rather
-  than from :mod:`decile_core.factors`.
+  than from :mod:`baskfy_core.factors`.
 
 docs/02 locks "Polars (primary) + NumPy; pandas only at boundaries". A test oracle is a boundary
 in the only sense that matters here: nothing in ``packages/core/src`` imports it, and it never
@@ -26,7 +26,7 @@ WHAT IS NOT ORACLED, AND WHY
 ``regime`` (docs/05 §15) is an INFERRED *design* rather than a formula — docs/05 §15 specifies a
 procedure ("take two reference distributions from that instrument's own history") whose
 discretisation is a choice this repository made, not a number the document fixes. Transcribing
-:mod:`decile_core.regime` into pandas would produce a copy, not an oracle, so it is left out and
+:mod:`baskfy_core.regime` into pandas would produce a copy, not an oracle, so it is left out and
 said so here rather than counted as covered.
 """
 
@@ -40,9 +40,9 @@ from typing import Final
 import numpy as np
 import pandas as pd
 
-from decile_core.circuits import DEFAULT_BAND_TOLERANCE, DEFAULT_BANDS, DEFAULT_TICK
-from decile_core.momentum import LOOKBACK_BARS, SKIP_1M_BARS, SKIP_2M_BARS
-from decile_core.windows import (
+from baskfy_core.circuits import DEFAULT_BAND_TOLERANCE, DEFAULT_BANDS, DEFAULT_TICK
+from baskfy_core.momentum import LOOKBACK_BARS, SKIP_1M_BARS, SKIP_2M_BARS
+from baskfy_core.windows import (
     HIGH_1Y_BARS,
     MA_LENGTHS,
     MEDIAN_VOL_BARS,
@@ -114,7 +114,7 @@ def _wilder_rsi_at(closes: list[float], index: int, period: int) -> float | None
 
 
 def _circuit_hits(frame: pd.DataFrame) -> list[bool]:
-    """docs/05 §12, transcribed clause by clause. INFERRED — see decile_core.circuits."""
+    """docs/05 §12, transcribed clause by clause. INFERRED — see baskfy_core.circuits."""
     hits: list[bool] = []
     close_raw = frame["close_raw"].tolist()
     high = frame["high"].tolist()

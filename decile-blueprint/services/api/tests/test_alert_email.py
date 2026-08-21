@@ -23,15 +23,15 @@ from typing import Final
 
 import pytest
 
-from decile_api.email import templates
-from decile_core.screen_diff import ScreenDiff, diff_runs, rows_from_results
+from baskfy_api.email import templates
+from baskfy_core.screen_diff import ScreenDiff, diff_runs, rows_from_results
 
 FIXTURES: Final = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "alerts"
 
 SCREEN_URL: Final = "http://localhost:3000/screens/exmpl0000001"
 MANAGE_URL: Final = "http://localhost:3000/alerts"
 #: A fixed token, so the snapshot does not depend on a signing secret. The real link is
-#: ``decile_api.alerts.unsubscribe_url``, asserted separately in ``test_api_alerts.py``.
+#: ``baskfy_api.alerts.unsubscribe_url``, asserted separately in ``test_api_alerts.py``.
 UNSUBSCRIBE_URL: Final = (
     "http://localhost:3000/alerts/unsubscribe?token=0123456789abcdef0123456789abcdef"
 )

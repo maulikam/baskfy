@@ -16,17 +16,17 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from decile_core.reference_export import to_rows
-from decile_providers.errors import ProviderUnavailable, UnexpectedPayload
-from decile_providers.fixture_builder import (
+from baskfy_core.reference_export import to_rows
+from baskfy_providers.errors import ProviderUnavailable, UnexpectedPayload
+from baskfy_providers.fixture_builder import (
     FIXTURE_AS_OF,
     FIXTURE_INSTRUMENT_COUNT,
     FIXTURE_YEARS,
     build,
 )
-from decile_providers.fixtures import FixtureProvider
-from decile_providers.ports import BARS_CAPABILITIES, REFERENCE_CAPABILITIES
-from decile_providers.records import BHAVCOPY_SCHEMA, DAILY_BARS_SCHEMA
+from baskfy_providers.fixtures import FixtureProvider
+from baskfy_providers.ports import BARS_CAPABILITIES, REFERENCE_CAPABILITIES
+from baskfy_providers.records import BHAVCOPY_SCHEMA, DAILY_BARS_SCHEMA
 
 WIDE_WINDOW_START = dt.date(2000, 1, 1)
 
@@ -198,7 +198,7 @@ class TestBarIntegrity:
         assert len(set(dates)) == len(dates)
 
     def test_there_are_no_weekend_bars(self, fixture_provider: FixtureProvider) -> None:
-        """The fixture is built on decile_core.trading_calendar, so weekends must be absent."""
+        """The fixture is built on baskfy_core.trading_calendar, so weekends must be absent."""
         frame = fixture_provider.daily_bars_for_symbol("CUPID", WIDE_WINDOW_START, FIXTURE_AS_OF)
         weekend = [
             d for d in frame["date"].to_list() if isinstance(d, dt.date) and d.weekday() >= 5

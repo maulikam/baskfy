@@ -24,11 +24,11 @@ from screener_helpers import requires_db
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.auth import encode_token
-from decile_api.csrf import CSRF_COOKIE, CSRF_HEADER, REFRESH_COOKIE
-from decile_api.email import Mailer
-from decile_api.email.templates import Message
-from decile_core.models import AppUser, AuthLockout, AuthToken, ConsentRecord, RefreshToken
+from baskfy_api.auth import encode_token
+from baskfy_api.csrf import CSRF_COOKIE, CSRF_HEADER, REFRESH_COOKIE
+from baskfy_api.email import Mailer
+from baskfy_api.email.templates import Message
+from baskfy_core.models import AppUser, AuthLockout, AuthToken, ConsentRecord, RefreshToken
 
 pytestmark = [
     pytest.mark.db,

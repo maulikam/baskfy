@@ -14,14 +14,14 @@ up:            ## Start postgres + redis + mailpit and wait for health
 down:          ## Stop the local stack (keeps volumes)
 	$(COMPOSE) down
 
-migrate:       ## Apply all Alembic migrations to DECILE_DATABASE_URL
+migrate:       ## Apply all Alembic migrations to BASKFY_DATABASE_URL
 	cd services/api && $(UV) alembic upgrade head
 
 downgrade:     ## Roll every migration back to base
 	cd services/api && $(UV) alembic downgrade base
 
 seed:          ## Seed reference data (exchange, universes, plans, example screens, trading days)
-	$(UV) python -m decile_api.seed all
+	$(UV) python -m baskfy_api.seed all
 
 test:          ## Run the Python and TypeScript test suites
 	$(UV) pytest
@@ -33,18 +33,18 @@ test-db:       ## Run only the tests that need a live database
 # --- Prompt 19: coverage gates, reconciliation, mutation testing ------------
 
 coverage:      ## Per-package coverage gate (docs: core >= 90%, api >= 80%). Needs `make up`.
-	@test -n "$$DECILE_TEST_DATABASE_URL" || { \
-	  echo "DECILE_TEST_DATABASE_URL is unset — the db-marked tests would skip and the gate"; \
+	@test -n "$$BASKFY_TEST_DATABASE_URL" || { \
+	  echo "BASKFY_TEST_DATABASE_URL is unset — the db-marked tests would skip and the gate"; \
 	  echo "would measure something other than what CI measures. Start the stack and export it:"; \
-	  echo "  export DECILE_TEST_DATABASE_URL=postgresql+asyncpg://decile:decile@localhost:5433/decile_test"; \
+	  echo "  export BASKFY_TEST_DATABASE_URL=postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_test"; \
 	  exit 2; }
 	$(UV) pytest --cov --cov-report=term-missing --cov-report=json:coverage.json
 	$(UV) python -m tools.coverage_gate --report coverage.json
 
 reconcile:     ## Reconcile our formulas against the reference export; rewrites reconciliation/REPORT.md
-	$(UV) python -m decile_worker.reconcile_cli --write reconciliation/REPORT.md
+	$(UV) python -m baskfy_worker.reconcile_cli --write reconciliation/REPORT.md
 
-mutants:       ## Mutation-test decile_core.factors and .screener (Prompt 19 §6)
+mutants:       ## Mutation-test baskfy_core.factors and .screener (Prompt 19 §6)
 	$(UV) python -m tools.mutation --workers $(or $(WORKERS),4)
 
 lint:          ## ruff check + format check + mypy strict + TS lint/typecheck (every package)
@@ -61,35 +61,35 @@ typecheck:     ## mypy only
 	$(UV) mypy
 
 mailpit:       ## Open the local inbox (Prompt 12 §3) — everything the API sent, in a browser
-	@echo "http://localhost:$${DECILE_MAILPIT_UI_PORT:-8025}"
+	@echo "http://localhost:$${BASKFY_MAILPIT_UI_PORT:-8025}"
 
 doctor:        ## Report what each provider can currently serve
-	$(UV) python -m decile_providers.cli doctor
+	$(UV) python -m baskfy_providers.cli doctor
 
 fixtures:      ## Regenerate tests/fixtures/providers from the docs/13 reference export
-	$(UV) python -m decile_providers.fixture_builder
+	$(UV) python -m baskfy_providers.fixture_builder
 
 schema:        ## Regenerate the ScreenDefinition JSON Schema consumed by packages/api-client
-	$(UV) python -m decile_core.screen_definition_schema > packages/api-client/src/screen-definition.schema.json
+	$(UV) python -m baskfy_core.screen_definition_schema > packages/api-client/src/screen-definition.schema.json
 
 openapi:       ## Emit packages/api-client/openapi.json from the FastAPI app (docs/07)
-	$(UV) python -m decile_api.openapi
+	$(UV) python -m baskfy_api.openapi
 
 client:        ## Regenerate the TypeScript client from openapi.json
 	$(MAKE) openapi
-	pnpm --filter @decile/api-client run generate
+	pnpm --filter @baskfy/api-client run generate
 
 api:           ## Run the FastAPI service on :8000 with reload
-	$(UV) uvicorn decile_api.app:get_app --factory --reload --port 8000
+	$(UV) uvicorn baskfy_api.app:get_app --factory --reload --port 8000
 
 web:           ## Run the Next.js dev server on :3000
-	pnpm --filter @decile/web run dev
+	pnpm --filter @baskfy/web run dev
 
 web-build:     ## Production build of the web app
-	pnpm --filter @decile/web run build
+	pnpm --filter @baskfy/web run build
 
 e2e:           ## Playwright acceptance checks (builds and starts the app itself)
-	pnpm --filter @decile/web run e2e
+	pnpm --filter @baskfy/web run e2e
 
 bench:         ## Measure every docs/11 performance budget and write benchmarks/AS-MEASURED.md
 	$(UV) pytest -m benchmark
@@ -99,7 +99,7 @@ loadtest:      ## 50 concurrent screen runs against a running API: make loadtest
 	$(UV) python -m benchmarks.load_screens --base-url $(or $(URL),http://localhost:8000)
 
 plans:         ## EXPLAIN ANALYZE every hot query; add WRITE=1 to re-record the CI baseline
-	$(UV) python -m decile_api.query_plans $(if $(WRITE),--write,)
+	$(UV) python -m baskfy_api.query_plans $(if $(WRITE),--write,)
 
 bundle:        ## Client-JS budget for the screens route (needs `make web-build` first)
 	cd apps/web && node scripts/bundle-budget.mjs --check
@@ -113,36 +113,36 @@ backup:        ## pg_dump the local database into .backups/ (no upload)
 	infra/backup/pg_backup.sh --no-upload
 
 restore:       ## Restore a dump into a scratch database: make restore DUMP=.backups/x.dump
-	infra/backup/restore.sh --dump $(DUMP) --target $(or $(TARGET),postgresql://decile:decile@localhost:5433/decile_restore)
+	infra/backup/restore.sh --dump $(DUMP) --target $(or $(TARGET),postgresql://baskfy:baskfy@localhost:5433/baskfy_restore)
 
 integrity:     ## Assert a database could serve the app: make integrity URL=postgresql+asyncpg://...
-	$(UV) python -m decile_api.integrity $(if $(URL),--database-url $(URL),)
+	$(UV) python -m baskfy_api.integrity $(if $(URL),--database-url $(URL),)
 
 drill:         ## The monthly restore drill, end to end, against the local stack (docs/11 §Reliability)
 	$(MAKE) backup
-	infra/backup/restore.sh --dump "$$(cat .backups/LATEST)" --target postgresql://decile:decile@localhost:5433/decile_restore
-	$(UV) python -m decile_api.integrity --database-url postgresql+asyncpg://decile:decile@localhost:5433/decile_restore
+	infra/backup/restore.sh --dump "$$(cat .backups/LATEST)" --target postgresql://baskfy:baskfy@localhost:5433/baskfy_restore
+	$(UV) python -m baskfy_api.integrity --database-url postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_restore
 
 worker:        ## Run a Celery worker across all queues
-	$(UV) celery -A decile_worker.celery_app:app worker -Q ingest,compute,backtest,default -l info
+	$(UV) celery -A baskfy_worker.celery_app:app worker -Q ingest,compute,backtest,default -l info
 
 beat:          ## Run Celery Beat (docs/09 §Schedule, IST)
-	$(UV) celery -A decile_worker.celery_app:app beat -l info
+	$(UV) celery -A baskfy_worker.celery_app:app beat -l info
 
 flower:        ## Inspect queues and tasks (docs/02)
-	$(UV) celery -A decile_worker.celery_app:app flower
+	$(UV) celery -A baskfy_worker.celery_app:app flower
 
 pipeline:      ## Run the nightly pipeline for one date: make pipeline DATE=2026-08-18
-	$(UV) python -m decile_worker.pipeline_cli --date $(DATE)
+	$(UV) python -m baskfy_worker.pipeline_cli --date $(DATE)
 
 backfill:      ## Resumable bar backfill: make backfill FROM=2011-01-01 TO=2026-08-18
-	$(UV) python -m decile_worker.backfill --from $(FROM) --to $(TO) --resume
+	$(UV) python -m baskfy_worker.backfill --from $(FROM) --to $(TO) --resume
 
 refdata:       ## Reference-data backfill: make refdata FROM=2018-01-01 TO=2026-08-18
-	$(UV) python -m decile_worker.reference_backfill --from $(FROM) --to $(TO)
+	$(UV) python -m baskfy_worker.reference_backfill --from $(FROM) --to $(TO)
 
 bhavcopy:      ## Bar backfill from the NSE bhavcopy (no Kite needed): make bhavcopy FROM=2024-01-01 TO=2026-08-18
-	$(UV) python -m decile_worker.bhavcopy_backfill --from $(FROM) --to $(TO)
+	$(UV) python -m baskfy_worker.bhavcopy_backfill --from $(FROM) --to $(TO)
 
 explain:       ## Audit one factor: make explain SYMBOL=CUPID DATE=2026-08-18 FACTOR=sharpe_12m
-	$(UV) python -m decile_worker.factors_cli explain --symbol $(SYMBOL) --date $(DATE) --factor $(FACTOR)
+	$(UV) python -m baskfy_worker.factors_cli explain --symbol $(SYMBOL) --date $(DATE) --factor $(FACTOR)

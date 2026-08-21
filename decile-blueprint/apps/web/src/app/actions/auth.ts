@@ -26,7 +26,7 @@ export interface FormResult {
 
 const GENERIC_FAILURE = "Those details did not match an account.";
 
-/** Mirrors `decile_api.security.MIN_PASSWORD_LENGTH`, so the form says so before the round trip. */
+/** Mirrors `baskfy_api.security.MIN_PASSWORD_LENGTH`, so the form says so before the round trip. */
 const MIN_PASSWORD_LENGTH = 8;
 
 /** Where a sign-in with no `?next=` lands. */

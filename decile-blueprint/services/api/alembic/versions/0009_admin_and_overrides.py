@@ -1,7 +1,7 @@
 """The staff surface (Prompt 17 deliverable 4).
 
 Three additions to docs/04, each because a numbered Prompt 17 deliverable needs storage the
-bundle does not define. The reasoning is in ``decile_core.models.admin`` and the decision is
+bundle does not define. The reasoning is in ``baskfy_core.models.admin`` and the decision is
 recorded in ``docs/DECISIONS.md`` §17.
 
 1. ``app_user.is_staff`` — docs/09 §Observability puts ``/admin/pipeline`` "behind staff auth"

@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { FactsheetOut, InstrumentHistoryOut } from "@decile/api-client";
+import type { FactsheetOut, InstrumentHistoryOut } from "@baskfy/api-client";
 
 import { apiOrigin } from "@/lib/api/config";
 

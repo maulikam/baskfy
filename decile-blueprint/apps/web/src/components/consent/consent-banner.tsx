@@ -58,7 +58,7 @@ export function ConsentBanner() {
      * `SameSite=Lax` and no `Secure` flag in development, because a `Secure` cookie is never
      * stored over plain HTTP and the banner would then reappear on every page. This cookie is
      * read by JavaScript by design — it gates client-side tags — so it is deliberately not
-     * `httpOnly`, unlike every cookie in `decile_api.csrf`.
+     * `httpOnly`, unlike every cookie in `baskfy_api.csrf`.
      */
     const secure = window.location.protocol === "https:" ? "; Secure" : "";
     document.cookie =

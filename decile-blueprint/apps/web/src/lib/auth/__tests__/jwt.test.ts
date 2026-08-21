@@ -17,7 +17,7 @@ import {
 } from "@/lib/auth/jwt";
 
 /**
- * The token this app mints has to satisfy `decile_api.auth.decode_token`, which is deliberately
+ * The token this app mints has to satisfy `baskfy_api.auth.decode_token`, which is deliberately
  * strict (docs/07a §11):
  *
  *   * one algorithm, HS256, with no negotiation;
@@ -29,7 +29,7 @@ import {
  * they are the cheapest place to catch a drift that would otherwise surface as a 401 on every
  * authenticated request.
  */
-const SECRET = "decile-test-secret-0123456789abc";
+const SECRET = "baskfy-test-secret-0123456789abc";
 
 describe("the access token", () => {
   it("is HS256", async () => {
@@ -74,19 +74,19 @@ describe("the access token", () => {
     expect(barePayload.aud).toBeUndefined();
 
     const scoped = await mintAccessToken(
-      { subject: "abc", issuer: "decile-web", audience: "decile-api" },
+      { subject: "abc", issuer: "baskfy-web", audience: "baskfy-api" },
       SECRET,
     );
     const { payload } = await jwtVerify(scoped.token, new TextEncoder().encode(SECRET), {
-      issuer: "decile-web",
-      audience: "decile-api",
+      issuer: "baskfy-web",
+      audience: "baskfy-api",
     });
-    expect(payload.iss).toBe("decile-web");
+    expect(payload.iss).toBe("baskfy-web");
   });
 
   it("refuses to sign with no secret at all", async () => {
     await expect(mintAccessToken({ subject: "abc" }, undefined)).rejects.toThrow(
-      /DECILE_JWT_SECRET is not set/,
+      /BASKFY_JWT_SECRET is not set/,
     );
   });
 

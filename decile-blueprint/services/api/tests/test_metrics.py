@@ -22,9 +22,9 @@ import yaml
 from prometheus_client import generate_latest
 from starlette.requests import Request
 
-from decile_api import metrics
-from decile_api.app import CELERY_QUEUES
-from decile_worker.celery_app import QUEUES
+from baskfy_api import metrics
+from baskfy_api.app import CELERY_QUEUES
+from baskfy_worker.celery_app import QUEUES
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[3]
 ALERTS_FILE: Final = REPO_ROOT / "infra" / "prometheus" / "alerts.yml"
@@ -79,8 +79,8 @@ def _metric_names() -> set[str]:
     """Every family name in the exposition, plus the histogram/counter suffixes Prometheus adds.
 
     A `Histogram` publishes `_bucket`, `_sum` and `_count`; a `Counter` publishes `_total`. An
-    alert rule referencing `decile_http_requests_total` is referencing a real series even though
-    the *family* is named `decile_http_requests`, so the suffixed forms have to be in the set or
+    alert rule referencing `baskfy_http_requests_total` is referencing a real series even though
+    the *family* is named `baskfy_http_requests`, so the suffixed forms have to be in the set or
     the parity test below would reject every correct rule.
     """
     names: set[str] = set()
@@ -149,13 +149,13 @@ class TestTheExposition:
         _touch_every_metric()
         names = _metric_names()
         for required in (
-            "decile_pipeline_step_duration_seconds",  # pipeline step durations
-            "decile_provider_calls_total",  # provider error rates
-            "decile_pipeline_gate_passed",  # gate pass/fail
-            "decile_publish_latency_seconds",  # publish latency
-            "decile_http_request_duration_seconds",  # API latency by route
-            "decile_screen_cache_events_total",  # cache hit rate
-            "decile_queue_depth",  # queue depth
+            "baskfy_pipeline_step_duration_seconds",  # pipeline step durations
+            "baskfy_provider_calls_total",  # provider error rates
+            "baskfy_pipeline_gate_passed",  # gate pass/fail
+            "baskfy_publish_latency_seconds",  # publish latency
+            "baskfy_http_request_duration_seconds",  # API latency by route
+            "baskfy_screen_cache_events_total",  # cache hit rate
+            "baskfy_queue_depth",  # queue depth
         ):
             assert required in names, f"{required} is not published"
 
@@ -165,7 +165,7 @@ class TestTheExposition:
             metrics.RUN_STATUS.labels(status).set(1 if status == "failed" else 0)
         exposition = _exposition()
         for status in ("running", "succeeded", "failed", "aborted"):
-            assert f'decile_pipeline_run_status{{status="{status}"}}' in exposition
+            assert f'baskfy_pipeline_run_status{{status="{status}"}}' in exposition
 
 
 @pytest.fixture(scope="module")
@@ -189,7 +189,7 @@ class TestTheAlertRules:
     def test_every_alert_rule_names_a_metric_we_publish(self, rules: str) -> None:
         """The test this file exists for.
 
-        A rule watching `decile_pipeline_steps_total` — a plausible name we do not emit — would
+        A rule watching `baskfy_pipeline_steps_total` — a plausible name we do not emit — would
         never fire, and nothing else in the system would ever say so.
 
         The file is **parsed**, not grepped: the comments in it name plenty of metrics, and a
@@ -223,7 +223,7 @@ class TestTheGrafanaDashboards:
             document = json.loads(path.read_text(encoding="utf-8"))
             assert document["panels"], f"{path.name} has no panels"
             uids.add(document["uid"])
-        assert uids == {"decile-pipeline", "decile-service"}
+        assert uids == {"baskfy-pipeline", "baskfy-service"}
 
     def test_every_panel_queries_a_metric_we_publish(self) -> None:
         """Same failure mode as an alert rule, one step further from anyone noticing."""
@@ -242,10 +242,10 @@ class TestTheGrafanaDashboards:
 
 
 def test_the_api_and_the_worker_agree_on_the_queue_names() -> None:
-    """``decile_api.app.CELERY_QUEUES`` duplicates ``decile_worker.celery_app.QUEUES``.
+    """``baskfy_api.app.CELERY_QUEUES`` duplicates ``baskfy_worker.celery_app.QUEUES``.
 
-    It has to: ``decile-worker`` depends on ``decile-api``, so the import cannot go the other way
-    (the same reason ``decile_api.queue`` publishes by task name). This is the link that keeps the
+    It has to: ``baskfy-worker`` depends on ``baskfy-api``, so the import cannot go the other way
+    (the same reason ``baskfy_api.queue`` publishes by task name). This is the link that keeps the
     copy honest — without it, a fifth queue would silently never be scraped.
     """
     assert CELERY_QUEUES == QUEUES

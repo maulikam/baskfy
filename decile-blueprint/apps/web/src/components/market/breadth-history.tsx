@@ -5,7 +5,7 @@ import { scaleLinear } from "@visx/scale";
 import { LinePath } from "@visx/shape";
 import { useId, useMemo } from "react";
 
-import type { MarketHealthPointOut } from "@decile/api-client";
+import type { MarketHealthPointOut } from "@baskfy/api-client";
 
 import { formatNumber, formatTradeDate } from "@/lib/format";
 

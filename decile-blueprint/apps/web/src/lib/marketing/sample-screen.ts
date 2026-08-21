@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { ScreenRunResponse, ScreenRunRowOut } from "@decile/api-client";
+import type { ScreenRunResponse, ScreenRunRowOut } from "@baskfy/api-client";
 
 import { apiOrigin } from "@/lib/api/config";
 import { PUBLISHED_DATA_TAG } from "@/lib/market/fetch";
@@ -10,7 +10,7 @@ import { PUBLISHED_DATA_TAG } from "@/lib/market/fetch";
  *
  * **It is a real screen run, not a screenshot.** The definition below is the one docs/13 captured —
  * NIFTY TOTAL MARKET, ranked by the 12/6/3/1-month average Sharpe return, with a ₹1 crore median
- * traded-value floor — which is also seeded as the first example screen (`decile_core.seed_data`,
+ * traded-value floor — which is also seeded as the first example screen (`baskfy_core.seed_data`,
  * `exmpl0000001`). Someone who signs up sees the same numbers under the same name, which is the
  * point of showing them at all.
  *

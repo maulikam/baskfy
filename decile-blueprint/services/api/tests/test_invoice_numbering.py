@@ -4,7 +4,7 @@
 
 This is the one acceptance criterion that cannot be asserted through the shared-session HTTP
 fixture: it is *about* two transactions racing, so each caller needs its own connection and its
-own commit. The tests below therefore drive `decile_api.invoices` directly against the seeded
+own commit. The tests below therefore drive `baskfy_api.invoices` directly against the seeded
 database, with real concurrent sessions.
 
 What "gapless" means here, precisely
@@ -33,7 +33,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from decile_api.invoices import (
+from baskfy_api.invoices import (
     BillingPeriod,
     InvoiceRequest,
     allocate_invoice_number,
@@ -41,9 +41,9 @@ from decile_api.invoices import (
     issue_invoice,
     today_ist,
 )
-from decile_api.settings import Settings
-from decile_core.models import AppUser, InvoiceCounter, Payment, Plan
-from decile_providers.archive import LocalRawArchive
+from baskfy_api.settings import Settings
+from baskfy_core.models import AppUser, InvoiceCounter, Payment, Plan
+from baskfy_providers.archive import LocalRawArchive
 
 pytestmark = [pytest.mark.db, requires_db]
 

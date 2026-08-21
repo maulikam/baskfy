@@ -29,7 +29,7 @@ from api_helpers import url
 from benchmarks.budgets import record
 from screener_helpers import requires_db
 
-from decile_core.seed_data import EXAMPLE_SCREENS
+from baskfy_core.seed_data import EXAMPLE_SCREENS
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, pytest.mark.benchmark, requires_db]
 

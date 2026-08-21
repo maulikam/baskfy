@@ -1,4 +1,4 @@
-import type { BacktestOut } from "@decile/api-client";
+import type { BacktestOut } from "@baskfy/api-client";
 
 import { formatNumber, formatPercent } from "@/lib/format";
 
@@ -11,7 +11,7 @@ import { formatNumber, formatPercent } from "@/lib/format";
  *      distribution, alpha/beta vs benchmark, tracking error, information ratio."
  *
  * The API stores that block verbatim as `backtest.metrics` (a JSON object produced by
- * `decile_core.backtest_metrics.Metrics.as_dict`), so the page reads it by key rather than
+ * `baskfy_core.backtest_metrics.Metrics.as_dict`), so the page reads it by key rather than
  * through twenty-eight typed optional fields. Every key docs/10 names appears in `METRIC_ROWS`
  * below, which is what `metrics.test.ts` asserts — a metric quietly dropped from the table is a
  * metric the user was promised and does not get.

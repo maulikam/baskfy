@@ -10,7 +10,7 @@ import { serverApi } from "@/lib/api/server";
  * the client component's, because a queued run has to update itself.
  *
  * `DATA_START` is docs/01 §2.13's promise ("historical data is available from 1 Nov 2024"), which
- * `decile_api.screener.DATA_START_DATE` enforces as a `422 no-trading-day`. The form uses it as
+ * `baskfy_api.screener.DATA_START_DATE` enforces as a `422 no-trading-day`. The form uses it as
  * the earliest selectable date so a user cannot ask for a window the service will refuse.
  */
 export const metadata: Metadata = {

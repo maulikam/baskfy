@@ -4,7 +4,7 @@ These run against a real PostgreSQL + TimescaleDB, because most of what Prompt 3
 is about database state: idempotent upserts, a checksum that does not move, a ``data_version``
 that does not advance, a cursor that survives a kill. A fake would only prove the fake behaves.
 
-Skips cleanly when ``DECILE_TEST_DATABASE_URL`` is unset, exactly like the Prompt 1 suite.
+Skips cleanly when ``BASKFY_TEST_DATABASE_URL`` is unset, exactly like the Prompt 1 suite.
 Shared helpers live in ``helpers.py`` so test modules can import them.
 """
 
@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from decile_api.seed import seed_reference, seed_trading_days
+from baskfy_api.seed import seed_reference, seed_trading_days
 
 API_DIR = Path(__file__).resolve().parents[2] / "api"
 
@@ -59,8 +59,8 @@ def migrated_url() -> Iterator[str]:
         ["uv", "run", "alembic", "upgrade", "head"],
         cwd=API_DIR,
         env={
-            **{k: v for k, v in os.environ.items() if k != "DECILE_DATABASE_URL"},
-            "DECILE_DATABASE_URL": url,
+            **{k: v for k, v in os.environ.items() if k != "BASKFY_DATABASE_URL"},
+            "BASKFY_DATABASE_URL": url,
         },
         capture_output=True,
         text=True,

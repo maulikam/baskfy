@@ -12,7 +12,7 @@ import datetime as dt
 
 from celery.schedules import crontab
 
-from decile_worker.celery_app import (
+from baskfy_worker.celery_app import (
     BEAT_SCHEDULE,
     IST_NAME,
     QUEUE_BACKTEST,
@@ -23,7 +23,7 @@ from decile_worker.celery_app import (
     TASK_ROUTES,
     build_celery,
 )
-from decile_worker.settings import WorkerSettings
+from baskfy_worker.settings import WorkerSettings
 
 
 def settings(
@@ -52,13 +52,13 @@ class TestQueues:
         assert build_celery(settings()).conf.task_default_queue == QUEUE_DEFAULT
 
     def test_ingest_work_is_routed_away_from_everything_else(self) -> None:
-        assert TASK_ROUTES["decile.ingest.*"]["queue"] == QUEUE_INGEST
+        assert TASK_ROUTES["baskfy.comgest.*"]["queue"] == QUEUE_INGEST
 
     def test_compute_and_backtest_have_their_own_queues(self) -> None:
         """docs/03 §"Scaling plan" step 4 moves backtest fan-out to its own pool; the queue is
         already there, so that becomes a deployment change rather than a code change."""
-        assert TASK_ROUTES["decile.compute.*"]["queue"] == QUEUE_COMPUTE
-        assert TASK_ROUTES["decile.backtest.*"]["queue"] == QUEUE_BACKTEST
+        assert TASK_ROUTES["baskfy.compute.*"]["queue"] == QUEUE_COMPUTE
+        assert TASK_ROUTES["baskfy.backtest.*"]["queue"] == QUEUE_BACKTEST
 
 
 class TestBroker:
@@ -130,10 +130,10 @@ class TestSchedule:
 class TestRegisteredTasks:
     def test_the_pipeline_tasks_are_registered(self) -> None:
         app = build_celery(settings())
-        names = {name for name in app.tasks if name.startswith("decile.")}
-        assert "decile.pipeline.nightly" in names
-        assert "decile.compute.reprocess_instrument" in names
-        assert "decile.pipeline.integrity_audit" in names
+        names = {name for name in app.tasks if name.startswith("baskfy.")}
+        assert "baskfy.pipeline.nightly" in names
+        assert "baskfy.compute.reprocess_instrument" in names
+        assert "baskfy.pipeline.integrity_audit" in names
 
     def test_the_backtest_task_is_registered_and_routed_to_its_own_queue(self) -> None:
         """PROMPTS.md Prompt 15 §4: "Celery task on the `backtest` queue".
@@ -143,8 +143,8 @@ class TestRegisteredTasks:
         nightly publish.
         """
         app = build_celery(settings())
-        assert "decile.backtest.run" in app.tasks
-        assert TASK_ROUTES["decile.backtest.*"]["queue"] == QUEUE_BACKTEST
+        assert "baskfy.backtest.run" in app.tasks
+        assert TASK_ROUTES["baskfy.backtest.*"]["queue"] == QUEUE_BACKTEST
 
     def test_results_expire(self) -> None:
         """Result rows for a nightly job are useful for a week, not forever."""

@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
  *     "Sentinel values are explained inline exactly as the reference does ('Keep value as 100 if
  *      you want to ignore…'), and the field renders visually 'off' when at its sentinel."
  *
- * docs/01 §2.4-§2.10 and `decile_core.screen_definition` fix the four sentinels:
+ * docs/01 §2.4-§2.10 and `baskfy_core.screen_definition` fix the four sentinels:
  *
  *     away_from_high.ath / .one_year   100   = ignore
  *     positive_days.m*                   0   = ignore

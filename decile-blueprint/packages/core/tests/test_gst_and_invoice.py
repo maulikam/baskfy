@@ -16,16 +16,16 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from decile_core.gst import (
+from baskfy_core.gst import (
     DEFAULT_GST_RATE,
     GstSplit,
     financial_year,
     money,
     split_inclusive,
 )
-from decile_core.invoice import InvoiceDocument, Party, render_invoice_pdf
-from decile_core.pdf import Page, render_pdf, text_width
-from decile_core.seed_data import PLANS, PlanSeed
+from baskfy_core.invoice import InvoiceDocument, Party, render_invoice_pdf
+from baskfy_core.pdf import Page, render_pdf, text_width
+from baskfy_core.seed_data import PLANS, PlanSeed
 
 
 class TestSplittingATaxInclusivePrice:

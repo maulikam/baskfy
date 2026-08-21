@@ -1,6 +1,6 @@
 "use client";
 
-import type { ScreenAlertOut } from "@decile/api-client";
+import type { ScreenAlertOut } from "@baskfy/api-client";
 import { useState, useTransition } from "react";
 
 import {

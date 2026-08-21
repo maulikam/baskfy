@@ -10,8 +10,8 @@ import datetime as dt
 
 import polars as pl
 
-from decile_providers.ports import Capability, ProviderHealth
-from decile_providers.records import (
+from baskfy_providers.ports import Capability, ProviderHealth
+from baskfy_providers.records import (
     DAILY_BARS_SCHEMA,
     CorporateAction,
     IndexSnapshot,

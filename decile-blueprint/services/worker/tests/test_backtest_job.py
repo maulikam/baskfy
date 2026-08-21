@@ -26,8 +26,8 @@ from helpers import requires_db
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.backtests import artefact_key, build_payload, new_public_id
-from decile_core.backtest import (
+from baskfy_api.backtests import artefact_key, build_payload, new_public_id
+from baskfy_core.backtest import (
     BacktestConfig,
     BacktestDataError,
     LookAheadError,
@@ -38,7 +38,7 @@ from decile_core.backtest import (
     TradeReason,
     rebalance_dates,
 )
-from decile_core.models import (
+from baskfy_core.models import (
     AppUser,
     Backtest,
     FactorDaily,
@@ -47,12 +47,12 @@ from decile_core.models import (
     OhlcvDaily,
     Screen,
 )
-from decile_core.screen_definition import ScreenDefinition
-from decile_core.seed_data import NSE_EXCHANGE_ID
-from decile_core.universes import UNIVERSE_BY_SLUG
-from decile_providers.archive import LocalRawArchive
-from decile_worker.backtest import execute_backtest, load_backtest_data, trading_calendar
-from decile_worker.tasks.backtests import BacktestNotRunnable, run_backtest_job
+from baskfy_core.screen_definition import ScreenDefinition
+from baskfy_core.seed_data import NSE_EXCHANGE_ID
+from baskfy_core.universes import UNIVERSE_BY_SLUG
+from baskfy_providers.archive import LocalRawArchive
+from baskfy_worker.backtest import execute_backtest, load_backtest_data, trading_calendar
+from baskfy_worker.tasks.backtests import BacktestNotRunnable, run_backtest_job
 
 pytestmark = [requires_db, pytest.mark.db]
 
@@ -199,7 +199,7 @@ async def test_the_panel_is_restricted_to_names_the_screen_could_select(
     session: AsyncSession,
 ) -> None:
     """A name the book can never hold needs no price. See the module docstring in
-    ``decile_worker.backtest``."""
+    ``baskfy_worker.backtest``."""
     await _seed_market(session)
     loaded = await load_backtest_data(session, _config(), _definition(), with_offsets=False)
     assert 0 < loaded.instruments <= NAMES

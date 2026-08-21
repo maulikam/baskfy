@@ -6,7 +6,7 @@
  *      · Ma 200 · Ma 100 · Ma 50 · Ma 20 · Volume day · Volume 1y avg · Volume 9m avg · Volume 6m
  *      avg · Volume 3m avg · Volume 1m avg · Volume week average."
  *
- * It mirrors `decile_core.factor_registry.CUSTOM_FILTER_OPERANDS`, which is what the API validates
+ * It mirrors `baskfy_core.factor_registry.CUSTOM_FILTER_OPERANDS`, which is what the API validates
  * against — a key not on that list is a `400 invalid-screen-definition` before any SQL is built
  * (docs/06 §"The factor registry"). Duplicated here rather than fetched because there is no
  * `/meta/custom-filter-operands` endpoint; `coverage.test.ts` asserts the two lists agree in

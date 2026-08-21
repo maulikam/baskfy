@@ -15,11 +15,11 @@ from helpers import PRIOR_DATE, TRADE_DATE, add_bar, make_instrument, requires_d
 from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_core.models import CorporateAction, IndexMemberDaily, IndexSnapshotDaily, OhlcvDaily
-from decile_worker.settings import WorkerSettings
-from decile_worker.steps import StepOutcome
-from decile_worker.tasks.factors import run_compute_factors
-from decile_worker.tasks.quality import (
+from baskfy_core.models import CorporateAction, IndexMemberDaily, IndexSnapshotDaily, OhlcvDaily
+from baskfy_worker.settings import WorkerSettings
+from baskfy_worker.steps import StepOutcome
+from baskfy_worker.tasks.factors import run_compute_factors
+from baskfy_worker.tasks.quality import (
     CHECKS,
     CheckStatus,
     GateContext,

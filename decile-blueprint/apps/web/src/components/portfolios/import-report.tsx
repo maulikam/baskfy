@@ -1,6 +1,6 @@
 "use client";
 
-import type { ImportReportOut, ImportRowOut } from "@decile/api-client";
+import type { ImportReportOut, ImportRowOut } from "@baskfy/api-client";
 import { AlertTriangle, CheckCircle2, HelpCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";

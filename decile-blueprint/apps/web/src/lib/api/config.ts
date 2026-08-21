@@ -5,7 +5,7 @@
  * so it is stripped here: `createDecileClient` takes an origin and the generated paths supply the
  * rest. Doing it in one place stops `/api/v1/api/v1/...` from ever being a bug anyone has to find.
  */
-import { API_PREFIX } from "@decile/api-client";
+import { API_PREFIX } from "@baskfy/api-client";
 
 const FALLBACK_ORIGIN = "http://localhost:8000";
 

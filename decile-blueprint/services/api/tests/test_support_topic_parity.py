@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from decile_api.schemas import SUPPORT_TOPICS
+from baskfy_api.schemas import SUPPORT_TOPICS
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TOPICS_TS = REPO_ROOT / "apps" / "web" / "src" / "lib" / "marketing" / "support-topics.ts"

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ScreenRunResponse } from "@decile/api-client";
+import type { ScreenRunResponse } from "@baskfy/api-client";
 import { useMemo, useState } from "react";
 
 import { DataTable, type Density } from "@/components/data/data-table";

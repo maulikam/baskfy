@@ -53,7 +53,7 @@ function recordMeasurement(key: string, value: number, unit: string, method: str
   writeFileSync(
     join(dir, `${key}.json`),
     `${JSON.stringify(
-      { key, value, unit, method, dataset: "the e2e database (decile_e2e), production build" },
+      { key, value, unit, method, dataset: "the e2e database (baskfy_e2e), production build" },
       null,
       2,
     )}\n`,

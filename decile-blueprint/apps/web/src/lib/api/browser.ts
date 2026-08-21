@@ -1,6 +1,6 @@
 "use client";
 
-import { createDecileClient, type DecileClient } from "@decile/api-client";
+import { createDecileClient, type DecileClient } from "@baskfy/api-client";
 
 import { apiOrigin } from "@/lib/api/config";
 

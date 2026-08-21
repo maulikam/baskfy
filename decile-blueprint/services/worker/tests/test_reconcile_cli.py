@@ -1,4 +1,4 @@
-"""``python -m decile_worker.reconcile_cli`` — Prompt 19 §4's report, as a command.
+"""``python -m baskfy_worker.reconcile_cli`` — Prompt 19 §4's report, as a command.
 
 The checks themselves are tested in ``packages/core/tests/test_reconcile.py``. This file covers
 the command: its exit code, its two output formats, symbol filtering, the committed report
@@ -16,10 +16,10 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from decile_core.factors import compute_factors
-from decile_core.reconcile import reconcile
-from decile_core.reference_export import EXPORT_COLUMNS, read_export
-from decile_worker.reconcile_cli import main, recompute_against_bars, render
+from baskfy_core.factors import compute_factors
+from baskfy_core.reconcile import reconcile
+from baskfy_core.reference_export import EXPORT_COLUMNS, read_export
+from baskfy_worker.reconcile_cli import main, recompute_against_bars, render
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 # `packages/core/tests` is a test-support tree, not an installed package; the cross-validation

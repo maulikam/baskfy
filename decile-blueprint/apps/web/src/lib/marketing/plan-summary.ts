@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { PlanListOut } from "@decile/api-client";
+import type { PlanListOut } from "@baskfy/api-client";
 
 import { apiOrigin } from "@/lib/api/config";
 import { billingCadence, formatPrice } from "@/lib/billing/format";

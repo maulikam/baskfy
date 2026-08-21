@@ -11,7 +11,7 @@ import { TriangleAlert } from "lucide-react";
  *      product says this and it is both ethically right and legally necessary."
  *
  * Neither string is written here. Both come from `GET /backtests/{id}` — the assumptions from
- * `decile_api.backtests.assumptions`, which reads the run's own configuration, and the disclaimer
+ * `baskfy_api.backtests.assumptions`, which reads the run's own configuration, and the disclaimer
  * from the server's constant. A page that composed its own sentences could describe a cost model
  * the run did not use, which is exactly the failure this panel exists to prevent.
  */

@@ -6,7 +6,7 @@
 
 docs/13 §5 step 6 asks for the same thing and adds quoting and line endings to the list. Every
 assertion below is made against the *file*, not against the prose: where docs/13 §1's description
-and the committed artefact disagree about column order, `decile_core.reference_export` already
+and the committed artefact disagree about column order, `baskfy_core.reference_export` already
 records that the file is the binding one (its three flag groups are 13 + 13 + 13 with the `etf`
 columns appended, not 14 + 14 + 14).
 """
@@ -23,7 +23,7 @@ import pytest
 from screener_helpers import AS_OF, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.csv_export import (
+from baskfy_api.csv_export import (
     BOM,
     LINE_ENDING,
     export_row,
@@ -33,8 +33,8 @@ from decile_api.csv_export import (
     quote,
     stream_screen_csv,
 )
-from decile_core.reference_export import EXPORT_COLUMNS, default_fixture_path
-from decile_core.seed_data import EXAMPLE_SCREENS
+from baskfy_core.reference_export import EXPORT_COLUMNS, default_fixture_path
+from baskfy_core.seed_data import EXAMPLE_SCREENS
 
 INVESTING_001 = EXAMPLE_SCREENS[0].definition
 

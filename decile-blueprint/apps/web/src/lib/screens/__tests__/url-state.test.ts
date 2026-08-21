@@ -1,4 +1,4 @@
-import type { ScreenDefinition } from "@decile/api-client";
+import type { ScreenDefinition } from "@baskfy/api-client";
 import { describe, expect, it } from "vitest";
 
 import { defaultDefinition } from "@/lib/screens/defaults";

@@ -9,7 +9,7 @@ import {
   SERIES_VALUES,
   type FactorOut,
   type ScreenDefinition,
-} from "@decile/api-client";
+} from "@baskfy/api-client";
 import { Plus, Trash2 } from "lucide-react";
 
 import { FactorCombobox } from "@/components/data/factor-combobox";

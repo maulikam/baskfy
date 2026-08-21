@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import type { FactsheetOut } from "@decile/api-client";
+import type { FactsheetOut } from "@baskfy/api-client";
 
 import { formatTradeDate } from "@/lib/format";
 import { SITE_NAME, SITE_URL } from "@/lib/site";

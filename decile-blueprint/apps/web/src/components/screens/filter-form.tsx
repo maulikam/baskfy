@@ -1,6 +1,6 @@
 "use client";
 
-import type { FactorOut, ScreenDefinition, UniverseOut } from "@decile/api-client";
+import type { FactorOut, ScreenDefinition, UniverseOut } from "@baskfy/api-client";
 import { RotateCcw } from "lucide-react";
 import { useState } from "react";
 

@@ -15,13 +15,13 @@ from pathlib import Path
 
 import pytest
 
-from decile_providers.archive import (
+from baskfy_providers.archive import (
     LocalRawArchive,
     S3RawArchive,
     archive_key,
     fetch_and_archive,
 )
-from decile_providers.errors import ArchiveError, CredentialsMissing
+from baskfy_providers.errors import ArchiveError, CredentialsMissing
 
 ON = dt.date(2026, 8, 18)
 
@@ -116,21 +116,21 @@ class _Body:
 
 class TestS3Archive:
     def test_round_trip(self) -> None:
-        archive = S3RawArchive(FakeS3(), "decile-raw")
+        archive = S3RawArchive(FakeS3(), "baskfy-raw")
         uri = archive.put(archive_key("bhavcopy", ON), b"payload")
-        assert uri == "s3://decile-raw/nse/bhavcopy/2026-08-18.csv"
+        assert uri == "s3://baskfy-raw/nse/bhavcopy/2026-08-18.csv"
         assert archive.get(archive_key("bhavcopy", ON)) == b"payload"
 
     def test_a_checksum_is_recorded(self) -> None:
         """Cheap corruption detection: what came back should be what went in."""
         client = FakeS3()
-        archive = S3RawArchive(client, "decile-raw")
+        archive = S3RawArchive(client, "baskfy-raw")
         key = archive_key("listings", ON)
         archive.put(key, b"payload")
         assert "sha256" in client.metadata[key]
 
     def test_a_failed_put_raises_archive_error(self) -> None:
-        archive = S3RawArchive(FakeS3(fail_on_put=True), "decile-raw")
+        archive = S3RawArchive(FakeS3(fail_on_put=True), "baskfy-raw")
         with pytest.raises(ArchiveError, match="could not archive"):
             archive.put(archive_key("bhavcopy", ON), b"payload")
 
@@ -197,6 +197,6 @@ class TestArchiveThenParse:
     def test_a_failed_archive_aborts_the_parse(self) -> None:
         """The tempting shortcut — carry on with the bytes in memory — is the one docs/09
         forbids, because it produces a number nobody can re-derive."""
-        archive = S3RawArchive(FakeS3(fail_on_put=True), "decile-raw")
+        archive = S3RawArchive(FakeS3(fail_on_put=True), "baskfy-raw")
         with pytest.raises(ArchiveError):
             fetch_and_archive(archive, archive_key("bhavcopy", ON), lambda: b"payload")

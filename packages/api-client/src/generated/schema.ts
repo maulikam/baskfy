@@ -683,6 +683,172 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List portfolios */
+        get: operations["listPortfolios"];
+        put?: never;
+        /**
+         * Create a portfolio
+         * @description docs/07: `POST /portfolios { name, holdings:[{symbol, quantity?, avg_price?}] }`.
+         */
+        post: operations["createPortfolio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolios/import-csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a portfolio from a CSV file
+         * @description docs/07: "multipart; returns parse report + unmatched symbols".
+         *
+         *     ``portfolio_id`` replaces the holdings of an existing portfolio; without it a new one is
+         *     created, named from ``name`` or from the uploaded file.
+         */
+        post: operations["importCsv"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolios/sample-csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download the sample portfolio CSV
+         * @description docs/01 §8: "(sample CSV provided)"; docs/08: "with a downloadable sample".
+         *
+         *     Declared before ``/{portfolio_id}`` so the literal path wins the route match. Anonymous on
+         *     purpose — a file that shows the expected format is useful before anyone signs in.
+         */
+        get: operations["sampleCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolios/{portfolio_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one portfolio */
+        get: operations["getPortfolio"];
+        put?: never;
+        post?: never;
+        /** Delete a portfolio */
+        delete: operations["deletePortfolio"];
+        options?: never;
+        head?: never;
+        /** Rename a portfolio */
+        patch: operations["renamePortfolio"];
+        trace?: never;
+    };
+    "/api/v1/portfolios/{portfolio_id}/holdings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a portfolio's holdings
+         * @description docs/07: `PUT /portfolios/{id}/holdings`.
+         */
+        put: operations["putHoldings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolios/{portfolio_id}/rebalance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compute a rebalance against a screen
+         * @description docs/07 §"Portfolios & rebalance", and Prompt 14 §2's rank-buffer rule.
+         */
+        post: operations["rebalance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolios/{portfolio_id}/rebalances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Past rebalances of a portfolio
+         * @description Prompt 14 §4: "so a user can see what they were told and when".
+         */
+        get: operations["listRebalances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolios/{portfolio_id}/rebalances/{rebalance_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One past rebalance, exactly as it was served
+         * @description The stored payload, verbatim. Nothing is recomputed — that is the point of the record.
+         */
+        get: operations["getRebalance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/screens": {
         parameters: {
             query?: never;
@@ -873,6 +1039,12 @@ export interface components {
             status: "accepted";
         };
         /**
+         * Action
+         * @description What the plan says to do with a name that is in the target portfolio.
+         * @enum {string}
+         */
+        Action: "enter" | "hold";
+        /**
          * AwayFromHighFilter
          * @description "Within X% of high". ``100`` means ignore (docs/01 §2.4).
          */
@@ -887,6 +1059,28 @@ export interface components {
              * @default 100
              */
             one_year: number;
+        };
+        /** Body_importCsv */
+        Body_importCsv: {
+            /**
+             * File
+             * @description A CSV with at least a symbol column
+             */
+            file: string;
+        };
+        /**
+         * CandidateOut
+         * @description One instrument an ambiguous symbol could mean.
+         */
+        CandidateOut: {
+            /** Instrument Id */
+            instrument_id: number;
+            /** Name */
+            name: string;
+            /** Series */
+            series?: string | null;
+            /** Symbol */
+            symbol: string;
         };
         /**
          * CellOut
@@ -1118,6 +1312,15 @@ export interface components {
             screener: boolean;
         };
         /**
+         * ExitReason
+         * @description Why a held name is on the exit list.
+         *
+         *     PROMPTS.md Prompt 14's first acceptance criterion requires "a delisted holding (exit with
+         *     reason)", so every exit carries one rather than only the interesting case.
+         * @enum {string}
+         */
+        ExitReason: "rank_outside_buffer" | "not_in_screen" | "delisted";
+        /**
          * ExtraFactor
          * @description Factor two / factor three of the combined ranking (docs/01 §2.12).
          */
@@ -1225,6 +1428,102 @@ export interface components {
             date: string;
             /** Value */
             value?: string | number | null;
+        };
+        /**
+         * HoldingIn
+         * @description docs/07: `POST /portfolios { name, holdings:[{symbol, quantity?, avg_price?}] }`.
+         */
+        HoldingIn: {
+            /** Avg Price */
+            avg_price?: number | string | null;
+            /** Quantity */
+            quantity?: number | string | null;
+            /** Symbol */
+            symbol: string;
+        };
+        /** HoldingOut */
+        HoldingOut: {
+            /**
+             * Added On
+             * Format: date
+             */
+            added_on: string;
+            /** Avg Price */
+            avg_price?: string | null;
+            /** Delisted On */
+            delisted_on?: string | null;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Name */
+            name: string;
+            /** Quantity */
+            quantity?: string | null;
+            /** Symbol */
+            symbol: string;
+        };
+        /**
+         * HoldingsIn
+         * @description docs/07: `PUT /portfolios/{id}/holdings`. A replacement, not a merge.
+         */
+        HoldingsIn: {
+            /** Holdings */
+            holdings: components["schemas"]["HoldingIn"][];
+        };
+        /**
+         * ImportReportOut
+         * @description Prompt 14 §1: "a parse report listing matched, ambiguous and unmatched symbols rather than
+         *     silently dropping rows".
+         */
+        ImportReportOut: {
+            /** Ambiguous */
+            ambiguous: number;
+            /** Ignored Columns */
+            ignored_columns: string[];
+            /** Imported */
+            imported: number;
+            /** Matched */
+            matched: number;
+            /** Rows */
+            rows: components["schemas"]["ImportRowOut"][];
+            /** Skipped */
+            skipped: number;
+            /** Skipped Rows */
+            skipped_rows: components["schemas"]["SkippedRowOut"][];
+            /** Total Lines */
+            total_lines: number;
+            /** Unmatched */
+            unmatched: number;
+        };
+        /**
+         * ImportRowOut
+         * @description What one line of the upload became — Prompt 14 §1's "parse report".
+         */
+        ImportRowOut: {
+            /** Avg Price */
+            avg_price?: string | null;
+            /** Candidates */
+            candidates: components["schemas"]["CandidateOut"][];
+            /** Instrument Id */
+            instrument_id?: number | null;
+            /** Issues */
+            issues: components["schemas"]["RowIssue"][];
+            /** Line */
+            line: number;
+            /**
+             * Matched Via Alias
+             * @default false
+             */
+            matched_via_alias: boolean;
+            /** Name */
+            name?: string | null;
+            /** Quantity */
+            quantity?: string | null;
+            /** Raw Symbol */
+            raw_symbol: string;
+            reason?: components["schemas"]["UnmatchedReason"] | null;
+            status: components["schemas"]["MatchStatus"];
+            /** Symbol */
+            symbol: string;
         };
         /** IndexDashboardOut */
         IndexDashboardOut: {
@@ -1516,6 +1815,12 @@ export interface components {
             regime_distance_bull?: number | null;
         };
         /**
+         * MatchStatus
+         * @description The three buckets Prompt 14 §1 requires the parse report to list.
+         * @enum {string}
+         */
+        MatchStatus: "matched" | "ambiguous" | "unmatched";
+        /**
          * MeOut
          * @description docs/07: `GET /me` -> "profile + entitlements".
          */
@@ -1717,6 +2022,67 @@ export interface components {
             /** Tagline */
             tagline: string;
         };
+        /** PortfolioCreate */
+        PortfolioCreate: {
+            /** Holdings */
+            holdings?: components["schemas"]["HoldingIn"][];
+            /** Name */
+            name: string;
+        };
+        /** PortfolioListOut */
+        PortfolioListOut: {
+            /** Data */
+            data: components["schemas"]["PortfolioSummaryOut"][];
+        };
+        /** PortfolioOut */
+        PortfolioOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Holdings */
+            holdings: components["schemas"]["HoldingOut"][];
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /**
+         * PortfolioRename
+         * @description `PATCH /portfolios/{id}` — an addition; docs/07 lists no rename.
+         *
+         *     See docs/DECISIONS.md §14.
+         */
+        PortfolioRename: {
+            /** Name */
+            name: string;
+        };
+        /** PortfolioSummaryOut */
+        PortfolioSummaryOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Holdings Count */
+            holdings_count: number;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /**
+         * PortfolioWriteOut
+         * @description A create, an import or a holdings replacement: the portfolio, and what became of the input.
+         *
+         *     The report is present on every write, including one with no unresolved symbols, so a client
+         *     never has to branch on whether it exists.
+         */
+        PortfolioWriteOut: {
+            portfolio: components["schemas"]["PortfolioOut"];
+            report: components["schemas"]["ImportReportOut"];
+        };
         /**
          * PositiveDaysFilter
          * @description Minimum % of trading days that closed up. ``0`` means ignore (docs/01 §2.5).
@@ -1829,6 +2195,133 @@ export interface components {
             result_count: number;
         };
         /**
+         * RebalanceHistoryPage
+         * @description docs/07 §Conventions: `{ "data": [...], "next_cursor": "…" }`.
+         */
+        RebalanceHistoryPage: {
+            /** Data */
+            data: components["schemas"]["RebalanceSummaryOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * RebalanceIn
+         * @description docs/07: `{ "screen_public_id": "...", "top_n": 20, "hold_buffer": 10, "as_of": null }`.
+         */
+        RebalanceIn: {
+            /** As Of */
+            as_of?: string | null;
+            /** Data Version */
+            data_version?: number | null;
+            /** Hold Buffer */
+            hold_buffer: number;
+            /** Screen Public Id */
+            screen_public_id: string;
+            /** Top N */
+            top_n: number;
+        };
+        /**
+         * RebalanceNameOut
+         * @description A name on one of docs/07's three lists.
+         *
+         *     `rank` is null for a holding the screen did not return at all; `reason` is set on exits only.
+         */
+        RebalanceNameOut: {
+            /** Instrument Id */
+            instrument_id: number;
+            /** Name */
+            name: string;
+            /** Rank */
+            rank?: number | null;
+            reason?: components["schemas"]["ExitReason"] | null;
+            /** Symbol */
+            symbol: string;
+        };
+        /**
+         * RebalanceOut
+         * @description The payload as served: the stored record, plus the two columns the row itself carries.
+         */
+        RebalanceOut: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Data Version */
+            data_version: number;
+            /** Delisted Count */
+            delisted_count: number;
+            /** Entries */
+            entries: components["schemas"]["RebalanceNameOut"][];
+            /** Exits */
+            exits: components["schemas"]["RebalanceNameOut"][];
+            /** Hold Buffer */
+            hold_buffer: number;
+            /** Holdings Count */
+            holdings_count: number;
+            /** Holds */
+            holds: components["schemas"]["RebalanceNameOut"][];
+            /** Id */
+            id: number;
+            /** Inside Wrh */
+            inside_wrh: components["schemas"]["RebalanceNameOut"][];
+            /** Requested As Of */
+            requested_as_of?: string | null;
+            screen: components["schemas"]["RebalanceScreenOut"];
+            /** Screen Result Count */
+            screen_result_count: number;
+            /** Target Weights */
+            target_weights: components["schemas"]["TargetWeightOut"][];
+            /** Top N */
+            top_n: number;
+        };
+        /** RebalanceScreenOut */
+        RebalanceScreenOut: {
+            /** Name */
+            name: string;
+            /** Public Id */
+            public_id: string;
+        };
+        /**
+         * RebalanceSummaryOut
+         * @description One row of the history list — Prompt 14 §4.
+         */
+        RebalanceSummaryOut: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Data Version */
+            data_version?: number | null;
+            /** Entries */
+            entries: number;
+            /** Exits */
+            exits: number;
+            /** Hold Buffer */
+            hold_buffer: number;
+            /** Id */
+            id: number;
+            /** Inside Wrh */
+            inside_wrh: number;
+            /** Screen Name */
+            screen_name?: string | null;
+            /** Screen Public Id */
+            screen_public_id?: string | null;
+            /** Top N */
+            top_n: number;
+        };
+        /**
          * RegisterIn
          * @description docs/07: `POST /auth/register`.
          *
@@ -1871,6 +2364,12 @@ export interface components {
             /** Token */
             token: string;
         };
+        /**
+         * RowIssue
+         * @description Something the parser corrected or could not read, on a row it *did* keep.
+         * @enum {string}
+         */
+        RowIssue: "unreadable_quantity" | "unreadable_avg_price" | "suffix_stripped";
         /**
          * RunRequest
          * @description docs/07: `{ "as_of": "2026-08-19" | null, "override_definition": {…} | null }`.
@@ -2144,6 +2643,26 @@ export interface components {
              */
             token_type: string;
         };
+        /**
+         * SkipReason
+         * @description Why a line of the file produced no holding.
+         * @enum {string}
+         */
+        SkipReason: "blank" | "no_symbol" | "duplicate" | "truncated";
+        /**
+         * SkippedRowOut
+         * @description A line that produced no holding — blank, duplicated, or with no symbol cell.
+         */
+        SkippedRowOut: {
+            /** Line */
+            line: number;
+            /**
+             * Raw
+             * @default
+             */
+            raw: string;
+            reason: components["schemas"]["SkipReason"];
+        };
         /** SortingFactorOut */
         SortingFactorOut: {
             /** Key */
@@ -2168,6 +2687,23 @@ export interface components {
             /** Degraded */
             degraded: boolean;
             last_pipeline_run: components["schemas"]["PipelineRunOut"] | null;
+        };
+        /**
+         * TargetWeightOut
+         * @description A fraction of the portfolio, not a percentage (docs/06a §10's convention).
+         */
+        TargetWeightOut: {
+            action: components["schemas"]["Action"];
+            /** Instrument Id */
+            instrument_id: number;
+            /** Name */
+            name: string;
+            /** Rank */
+            rank: number;
+            /** Symbol */
+            symbol: string;
+            /** Weight */
+            weight: string;
         };
         /**
          * TopRiskFilter
@@ -2219,6 +2755,12 @@ export interface components {
             /** Sort Order */
             sort_order: number;
         };
+        /**
+         * UnmatchedReason
+         * @description Why a parsed symbol did not become a holding.
+         * @enum {string}
+         */
+        UnmatchedReason: "unknown_symbol" | "bse_code" | "invalid";
         /** UpdateMeIn */
         UpdateMeIn: {
             /** Name */
@@ -5602,6 +6144,1158 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanListOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    listPortfolios: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioListOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    createPortfolio: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortfolioCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioWriteOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    importCsv: {
+        parameters: {
+            query?: {
+                name?: string | null;
+                portfolio_id?: number | null;
+            };
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_importCsv"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioWriteOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    sampleCsv: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getPortfolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portfolio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    deletePortfolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portfolio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    renamePortfolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portfolio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortfolioRename"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    putHoldings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portfolio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HoldingsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioWriteOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    rebalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portfolio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RebalanceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebalanceOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    listRebalances: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                portfolio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebalanceHistoryPage"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getRebalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portfolio_id: number;
+                rebalance_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebalanceOut"];
                 };
             };
             /** @description Invalid screen definition */

@@ -92,6 +92,14 @@ database, a network or a disk belongs in `services/` or `packages/providers`.
 | Plan card, checkout button, invoice table | `apps/web/src/components/billing/` |
 | Plan and invoice reads, price formatting | `apps/web/src/lib/billing/` |
 | **Every Prompt 13 decision taken under ambiguity** | `docs/DECISIONS.md` §13 |
+| **The rank-buffer rebalance rule (pure)** | `packages/core/src/decile_core/rebalance.py` |
+| Portfolio CSV parser + the sample file (pure) | `packages/core/src/decile_core/portfolio_csv.py` |
+| Symbol resolution, holdings, rebalance execution | `services/api/src/decile_api/portfolios.py` |
+| `/portfolios`, `/import-csv`, `/rebalance`, history | `services/api/src/decile_api/routers/portfolios.py` |
+| Rebalance history table (not in `docs/04`) | `decile_core.models.accounts.PortfolioRebalance` |
+| The wizard, the three columns, the parse report | `apps/web/src/components/portfolios/` |
+| Portfolio reads, clipboard and CSV payloads | `apps/web/src/lib/portfolios/` |
+| **Every Prompt 14 decision taken under ambiguity** | `docs/DECISIONS.md` §14 |
 | Auth tables not in `docs/04` | `docs/04c-auth-tables-addendum.md` |
 | HTTP rate limiting (docs/07 §Conventions) | `services/api/src/decile_api/ratelimit.py` |
 | Streaming CSV export | `services/api/src/decile_api/csv_export.py` |
@@ -210,6 +218,18 @@ make e2e         Playwright acceptance checks (builds and starts the app itself)
   until a form exists.
 - **`payment.status` never becomes `refunded`.** `refund.*` events are acknowledged and ignored.
   `docs/07` has no refund endpoint and `docs/11` names a Refund Policy page that is not written.
+- **The rebalance tracker stores quantities and does nothing with them.** `quantity` and
+  `avg_price` are imported, stored and echoed back; no weight, exposure or P&L is derived from
+  them, because `docs/01` §8's tracker is a symbol diff. Target weights are equal-weight, which
+  `docs/07` does not specify (`docs/DECISIONS.md` §14.1).
+- **A BSE scrip code in an uploaded CSV is reported, never resolved.** We hold NSE instruments and
+  have no BSE-code mapping; `532540` comes back `unmatched` with reason `bse_code`
+  (`docs/DECISIONS.md` §14.4). The same goes for a symbol that names more than one listing — it
+  is `ambiguous` with its candidates, and nothing is imported for it.
+- **No holdings editor exists.** Holdings are set by CSV upload or by `PUT /portfolios/{id}/holdings`;
+  there is no add-a-row form. `docs/08` §"Rebalance tracker" describes the wizard and asks for none.
+- **The rebalance tracker has no Playwright coverage.** The rule, the parser, the endpoints and the
+  React components are all tested, but no browser test walks the wizard end to end.
 - **Backtests are now a paid entitlement, and nothing enforces it.** Prompt 13 §6 lists them among
   the gated features and the `/me` payload says so, but `/backtests` does not exist until
   Prompt 15. Wire `entitlements.require(Feature.BACKTESTS)` into it when it lands.

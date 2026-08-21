@@ -25,8 +25,8 @@ REPO_ROOT: Final = Path(__file__).resolve().parents[3]
 GENERATED_TS: Final = REPO_ROOT / "packages" / "api-client" / "src" / "generated" / "schema.ts"
 
 #: docs/07 §Metadata, §Screens, §Instruments and §"Market data surfaces" — the surface Prompts 7,
-#: 10 and 11 are responsible for, verbatim. Portfolios, backtests and billing are later prompts,
-#: and a route with no implementation would be a documented lie.
+#: 10 and 11 are responsible for, verbatim, plus billing (Prompt 13) and portfolios (Prompt 14).
+#: Backtests are Prompt 15's, and a route with no implementation would be a documented lie.
 EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/meta/factors": {"get"},
     "/meta/columns": {"get"},
@@ -71,6 +71,18 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # `{invoice_number:path}` because the number contains slashes (`DCL/2026-27/000001`); FastAPI
     # renders the converter into the OpenAPI path template.
     "/invoices/{invoice_number}/pdf": {"get"},
+    # docs/07 §"Portfolios & rebalance" (Prompt 14). The four paths docs/07 does not list —
+    # `sample-csv`, the rename/delete pair on `{portfolio_id}`, and the two `rebalances` reads —
+    # are Prompt 14 deliverables 1, 3 and 4; each is argued for in
+    # `decile_api.routers.portfolios` and recorded in docs/DECISIONS.md §14.
+    "/portfolios": {"get", "post"},
+    "/portfolios/import-csv": {"post"},
+    "/portfolios/sample-csv": {"get"},
+    "/portfolios/{portfolio_id}": {"get", "patch", "delete"},
+    "/portfolios/{portfolio_id}/holdings": {"put"},
+    "/portfolios/{portfolio_id}/rebalance": {"post"},
+    "/portfolios/{portfolio_id}/rebalances": {"get"},
+    "/portfolios/{portfolio_id}/rebalances/{rebalance_id}": {"get"},
 }
 
 

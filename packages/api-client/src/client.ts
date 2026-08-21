@@ -82,6 +82,28 @@ export type CheckoutSessionOut = Schemas["CheckoutSessionOut"];
 export type InvoiceOut = Schemas["InvoiceOut"];
 export type InvoicePage = Schemas["InvoicePage"];
 
+/** docs/07 §"Portfolios & rebalance" — the tracker (Prompt 14). */
+export type PortfolioOut = Schemas["PortfolioOut"];
+export type PortfolioSummaryOut = Schemas["PortfolioSummaryOut"];
+export type PortfolioListOut = Schemas["PortfolioListOut"];
+export type PortfolioWriteOut = Schemas["PortfolioWriteOut"];
+export type PortfolioCreate = Schemas["PortfolioCreate"];
+export type HoldingIn = Schemas["HoldingIn"];
+export type HoldingOut = Schemas["HoldingOut"];
+export type HoldingsIn = Schemas["HoldingsIn"];
+export type ImportReportOut = Schemas["ImportReportOut"];
+export type ImportRowOut = Schemas["ImportRowOut"];
+export type SkippedRowOut = Schemas["SkippedRowOut"];
+export type CandidateOut = Schemas["CandidateOut"];
+export type MatchStatus = Schemas["MatchStatus"];
+export type RebalanceIn = Schemas["RebalanceIn"];
+export type RebalanceOut = Schemas["RebalanceOut"];
+export type RebalanceNameOut = Schemas["RebalanceNameOut"];
+export type TargetWeightOut = Schemas["TargetWeightOut"];
+export type RebalanceSummaryOut = Schemas["RebalanceSummaryOut"];
+export type RebalanceHistoryPage = Schemas["RebalanceHistoryPage"];
+export type ExitReason = Schemas["ExitReason"];
+
 /** docs/07: "Base: `/api/v1`". */
 export const API_PREFIX = "/api/v1";
 

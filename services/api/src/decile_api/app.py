@@ -53,7 +53,15 @@ from decile_api.problems import (
     pipeline_degraded,
 )
 from decile_api.ratelimit import RateLimiter, enforce_rate_limit
-from decile_api.routers import auth, billing, instruments, market_data, meta, screens
+from decile_api.routers import (
+    auth,
+    billing,
+    instruments,
+    market_data,
+    meta,
+    portfolios,
+    screens,
+)
 from decile_api.schemas import HealthOut, ProblemOut
 from decile_api.screener import AsOfOutOfRange, NoPublishedData
 from decile_api.settings import API_PREFIX, Settings, get_settings
@@ -319,6 +327,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     versioned.include_router(market_data.router)
     versioned.include_router(auth.router)
     versioned.include_router(billing.router)
+    versioned.include_router(portfolios.router)
     app.include_router(versioned)
 
     @app.get("/health", response_model=HealthOut, tags=["ops"], include_in_schema=False)

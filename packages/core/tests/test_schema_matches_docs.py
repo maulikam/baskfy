@@ -69,6 +69,10 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # `decile_core.models.billing` and docs/DECISIONS.md.
     "webhook_event": ("id",),
     "invoice_counter": ("series",),
+    # Prompt 14 §4: "persist each computed rebalance so a user can see what they were told and
+    # when". docs/04 defines `portfolio` and `portfolio_holding` and stops there. See
+    # `decile_core.models.accounts.PortfolioRebalance` and docs/DECISIONS.md §14.
+    "portfolio_rebalance": ("id",),
 }
 
 #: docs/04 opening paragraph: "Money in numeric, never float."
@@ -134,14 +138,14 @@ def test_every_added_table_has_an_addendum() -> None:
 
 
 def test_billing_tables_are_recorded_in_decisions() -> None:
-    """The Prompt 13 additions are written down too, in docs/DECISIONS.md.
+    """The Prompt 13 and Prompt 14 additions are written down too, in docs/DECISIONS.md.
 
     Same rule as the addendum test above: a table nobody wrote down is a table nobody maintains.
-    These two are recorded in DECISIONS.md rather than a `04x` addendum because the overnight
-    build was permitted to append there and nowhere else under docs/.
+    These are recorded in DECISIONS.md rather than a `04x` addendum because the overnight build
+    was permitted to append there and nowhere else under docs/.
     """
     decisions = (REPO_ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
-    for table in ("webhook_event", "invoice_counter"):
+    for table in ("webhook_event", "invoice_counter", "portfolio_rebalance"):
         assert table in decisions, f"{table} is not described in docs/DECISIONS.md"
 
 

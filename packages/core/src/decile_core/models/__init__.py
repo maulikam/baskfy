@@ -14,6 +14,7 @@ from decile_core.models.accounts import (
     Plan,
     Portfolio,
     PortfolioHolding,
+    PortfolioRebalance,
     Subscription,
 )
 from decile_core.models.auth import (
@@ -82,6 +83,7 @@ __all__ = [
     "Plan",
     "Portfolio",
     "PortfolioHolding",
+    "PortfolioRebalance",
     "RefreshToken",
     "Screen",
     "ScreenRun",

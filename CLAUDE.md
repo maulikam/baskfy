@@ -110,10 +110,49 @@ hit; add vocabulary to the script's `ALLOWED` list with a reason, and record it 
 - **`kite-momentum-rebalancer/data/uploads/*.csv` is the regression corpus.** Read-only. It is
   the answer key the whole merge is graded against (docs/README, "the one thing").
 - **`frozen/strangle/` (after M6) is untouched** — no refactors, no deletions, no lint fixes.
-- **Never weaken a test to make a module pass.** If an acceptance criterion looks wrong, stop,
-  write the case in `docs/DECISIONS-MERGE.md`, and ask.
+- **Never weaken a test to make a module pass.** If an acceptance criterion looks wrong, settle
+  it under the Autonomy charter below: decide by the precedence order, record it in
+  `docs/DECISIONS-MERGE.md`, continue.
 - Network calls go through the existing rate-limited providers only (Kite ~3 req/s historical;
   NSE with its cookie/header discipline). No scraping around them.
+
+## Autonomy charter (Maulik's standing instruction, 22 Aug 2026)
+
+Run long. Questions to Maulik are the exception, not the rhythm. When a stop-and-ask would have
+happened, **decide, record, continue**:
+
+1. Choose the option you would have recommended to him.
+2. Write it into `docs/DECISIONS-MERGE.md` as that module's entry, tagged **`⚠ UNREVIEWED`** —
+   the context, the choice taken, the rejected alternatives and why, and how to reverse it. He
+   reviews the file asynchronously; prefer the choice that stays cheap to reverse.
+3. Note it on the status page and keep going — module after module, without pausing to
+   summarize between them. If the session's context runs long, write enough state into
+   `docs/00-merge-status.md` for a fresh session to resume losslessly, then continue.
+
+**Precedence when rules conflict** (highest wins):
+
+1. The safety rails above — no discretion.
+2. The two laws, the seven non-negotiables, the nine house rules.
+3. The module's stated **Goal**.
+4. Design intent in `docs/03`–`06`.
+5. The literal wording of an acceptance criterion — **lowest**: a criterion is a proxy for its
+   Goal, and when it over-reaches (M2 proved it), scope the criterion, record why, continue.
+
+**Ties break toward:** the reversible option · preserving public contracts and saved data · the
+stricter security boundary when nothing in force changes (M4 proved it) · names that keep their
+meaning · what the two codebases' own culture would do.
+
+**The only things that still stop work — and none stops the whole run while independent modules
+remain:**
+
+- Something only Maulik's hands can supply (credentials, a login/2FA, money, anything outside
+  this repo) → append it to **`NEEDS-MAULIK.md`** at the root (what is needed, why, what it
+  blocks, what was done meanwhile) and keep working on everything not dependent on it.
+- Destroying or risking unrebuildable data with no verified backup path — never autonomous.
+- Placing a live order — never, full stop.
+- Phase-4+ scope — not in this run (D3 is unanswered).
+- A red-gate parity delta that survives exhausted investigation → finish every module that does
+  not depend on the failed numbers, then end the run with a full written report.
 
 ## Conventions
 

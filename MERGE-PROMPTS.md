@@ -16,20 +16,26 @@ claude
 
 Paste this one message and let it run:
 
-> Read CLAUDE.md, then docs/README.md, then MERGE-PROMPTS.md in full. Execute the modules
-> M0→M21 strictly in order. One commit per module, message "M<N>: green — <summary>". Do not
-> proceed past unmet acceptance criteria. Stop and ask me only at the points marked HUMAN GATE,
-> and at any red gate. Keep docs/00-merge-status.md updated as you go. Begin with M0.
+> Read CLAUDE.md in full — including the Autonomy charter — then docs/README.md, then
+> MERGE-PROMPTS.md in full. Execute the modules M0→M21 in order under the charter: decide,
+> record ⚠ UNREVIEWED in docs/DECISIONS-MERGE.md, continue — do not stop to ask me questions.
+> One commit per module, message "M<N>: green — <summary>". Anything only I can supply goes in
+> NEEDS-MAULIK.md while you keep working on everything independent of it (rule 11). Keep
+> docs/00-merge-status.md updated as you go. Run until M21 or until nothing can proceed
+> without me. Begin with the first module not marked done.
 
 To resume in a later session, paste:
 
-> Read CLAUDE.md, MERGE-PROMPTS.md and docs/00-merge-status.md, then continue from the first
-> module that is not marked done.
+> Read CLAUDE.md (with its Autonomy charter), MERGE-PROMPTS.md, docs/00-merge-status.md, and
+> NEEDS-MAULIK.md if it exists. Apply the pre-answered decisions section, then continue
+> autonomously from the first module not marked done, through M21.
 
-Expect three pauses that need you: **M9** (Kite credentials + the daily login token), **M12**
-(the parity gate — you review the delta tables), **M18** (go/no-go on the real database
-cutover). Everything else should run without you. Budget: M0–M8 is a long evening of agent
-work; M9–M12 depends on the backfill and what parity finds; M13–M21 is the structural week(s).
+**This is an autonomous run.** The only interruptions are items queued in `NEEDS-MAULIK.md`
+(credentials, the daily Kite login, anything outside the repo) — and the run keeps working
+around them (rule 11) rather than waiting. Review happens asynchronously: `DECISIONS-MERGE.md`
+holds every judgement call tagged `⚠ UNREVIEWED`; overturn any of them later and the run
+re-does that piece. Budget: M0–M8 is a long evening of agent work; M9–M12 depends on the
+backfill and what parity finds; M13–M21 is the structural week(s).
 
 ## Rules (binding for the whole run)
 
@@ -40,17 +46,46 @@ work; M9–M12 depends on the backfill and what parity finds; M13–M21 is the s
 3. **`DRY_RUN=true` everywhere an agent sets up anything.** No live orders, ever, from this
    script.
 4. **Anything touching `data/portfolio.db` follows CLAUDE.md's backup rail first.**
-5. **Never weaken, skip, or fudge a test to get to green.** A criterion that seems wrong →
-   `docs/DECISIONS-MERGE.md`, stop, ask.
-6. **HUMAN GATE protocol:** stop, print exactly what is needed and why, wait. Do not work ahead
-   past a gate.
-7. **RED GATE protocol (M11/M12):** if parity fails with unexplained deltas, stop the run
-   entirely. Write up every delta. Do not open M13.
+5. **Never weaken, skip, or fudge a test to get to green.** A criterion that seems wrong is
+   settled under CLAUDE.md's Autonomy charter: decide by the precedence order (the criterion's
+   literal wording is the lowest authority — it is a proxy for the module's Goal), record it
+   in `docs/DECISIONS-MERGE.md` tagged `⚠ UNREVIEWED`, continue.
+6. **EXTERNAL DEPENDENCY protocol (replaces the old HUMAN GATE):** when something only Maulik
+   can supply (credentials, a login/2FA, money, anything outside this repo), append the exact
+   ask to `NEEDS-MAULIK.md` at the root — what is needed, why, what it blocks — and keep
+   working on every module that does not depend on it (rule 11). Never sit idle waiting.
+7. **RED GATE protocol (M11/M12):** a parity failure is a bug to root-cause, not a reason to
+   wait. Investigate spec-first — the overnight run's §21.7 window finding is the model:
+   hand-edit the doc that is wrong, record it, then make the engine change — fix, re-run.
+   M13 opens only on empty delta tables. Only a delta that survives exhausted investigation
+   ends the run, and even then: first finish every module independent of the failed numbers
+   (rule 11), then write the full findings as the end-of-run report.
 8. The strangle subsystem is out of scope beyond M6's freeze. `docs/` 01–08 are the record —
    extend, don't rewrite.
 9. Secrets: never echoed, never committed. `data/`, `.env` stay untracked.
 10. Every module ends by updating `docs/00-merge-status.md` (one line per module: done/blocked +
     date + anything a future session must know).
+11. **Blocked-gate reordering:** if M8/M9 are blocked on network or credentials, or M11/M12 on
+    an unresolved delta, continue with M15, M16, M17, M19, M20 and M18's script-building —
+    they depend only on the code and the uploads corpus, not on pipeline data. M13/M14's
+    default-flip still requires M12 green. Return to a blocked module the moment its
+    dependency clears; record every reorder on the status page.
+12. **Pre-answered decisions** (next section) are applied, never re-asked. Anything else that
+    would have been a question follows the charter: choose what you would have recommended,
+    record it `⚠ UNREVIEWED`, continue.
+
+## Decisions already taken — apply, do not re-ask
+
+- **M2 (settled and done):** the scoped namespace check stands — `tools/check-namespace.sh`
+  with its `ALLOWED` vocabulary list is the acceptance, per CLAUDE.md's namespace rule.
+- **M4 risk ceilings (Maulik's answer, 22 Aug 2026): lock all four.** Move
+  `RISK_POSITION_HEADROOM`, `RISK_GROSS_MULTIPLE`, `RISK_MAX_DAILY_LOSS_PCT`,
+  `RISK_MAX_ORDERS_PER_DAY` to `LOCKED_KEYS`; drop their Specs and the "Risk limits" UI group;
+  changes go through `.env` + restart. Compensate the lost audit row: log the four effective
+  `RISK_*` values at web-service startup so ceiling changes stay visible in journalctl. Record
+  as the M4 entry in `DECISIONS-MERGE.md` with the empirical basis (no `RISK_*` override was
+  ever stored, so nothing in force changes), and note on the status page that this reaches the
+  live desk on its next **deliberate** git pull — non-trading hours only.
 
 ## Map to the plan
 
@@ -209,14 +244,17 @@ outside every gate; collectors acknowledged as ops.
 dated verified note. NSE quirks (rate limiting, cookie dances) documented, not worked around
 with scraping hacks.
 
-## M9 — Kite credentials and the first real backfill (P1.2) — HUMAN GATE
+## M9 — Kite credentials and the first real backfill (P1.2) — EXTERNAL DEPENDENCY
 
 **Goal:** `ohlcv_daily` holds 2011→today for the equity universe.
 
-1. **HUMAN GATE:** ask Maulik for the Kite Connect app credentials to use for pipeline data
-   (reusing the desk's app from its `.env` is acceptable for Phase 1 — note in
-   DECISIONS-MERGE that system-vs-user credential split happens before any multi-tenant work),
-   and have him complete the daily login to mint an access token. Never echo the values.
+1. **EXTERNAL DEPENDENCY, checked before queueing:** reusing the desk's Kite app from its
+   `.env` is acceptable for Phase 1 (note in DECISIONS-MERGE that the system-vs-user credential
+   split happens before any multi-tenant work). First test whether a valid access token already
+   exists via the desk's own token path (`data/.kite_token.json`, refreshed by Maulik's daily
+   login) — if it works, proceed without waiting. Only if no valid token exists, queue the
+   exact ask (one daily Kite login) in `NEEDS-MAULIK.md`, continue per rule 11, and run this
+   module the moment a token appears. Never echo the values.
 2. Refresh instruments; run the backfill `FROM=2011-01-01` through the existing resumable,
    chunked (≤2,000-day), rate-limited path. Expect roughly an evening (docs/07 §4b); it must
    survive interruption and resume via `ingest_cursor`.
@@ -250,7 +288,7 @@ reproduces; the calendar fix is data, not code edits.
 **Acceptance:** the parity test **runs and is green** (or every deviation is explained in
 writing); the skip-month question has a committed answer.
 
-## M12 — Desk parity: the merge's real acceptance test (P1.7–P1.10) — RED GATE + HUMAN REVIEW
+## M12 — Desk parity: the merge's real acceptance test (P1.7–P1.10) — RED GATE, self-judged
 
 **This is the gate the entire merge stands on (docs/README, docs/03 §5c).**
 
@@ -263,11 +301,15 @@ writing); the skip-month question has a committed answer.
    for the date both cover; agreement or a written reason (P1.9).
 4. Commit `reconciliation/DESK-PARITY.md` in the style of the existing `REPORT.md`: date, data
    version, every delta and its explanation (P1.10).
-5. **HUMAN GATE:** show Maulik the delta tables and DESK-PARITY.md. He opens M13, not the agent.
+5. **Self-judged gate (autonomy charter):** if every top-25 delta table is empty, record it in
+   DESK-PARITY.md and open M13 yourself. If any is not, apply rule 7 — root-cause spec-first
+   (§21.7 is the model), fix, re-run — and open M13 only on empty tables. Either way the
+   tables stay in DESK-PARITY.md for Maulik's asynchronous review.
 
-**Acceptance:** empty top-25 delta tables across all dates (or every moved name explained and
-accepted by Maulik). **If not: full stop.** The fallback posture is docs/05's: "Decile is a
-second opinion, not the source" — a different, smaller plan.
+**Acceptance:** empty top-25 delta tables across all dates. A delta that survives exhausted
+investigation ends the run per rule 7 — with everything independent of it finished first, and
+the fallback posture written up: docs/05's "Decile is a second opinion, not the source" — a
+different, smaller plan.
 
 ## M13 — MomentumScan: the CSV cord is cut (P2.2, P2.3, P2.4)
 
@@ -339,7 +381,7 @@ plaintext token write remains (grep proves it); desk still authenticates.
 **Acceptance:** one basket-construction code path; adapter keeps `/portfolios` working;
 Playwright attempt recorded either way.
 
-## M18 — The database migration, built and drilled (P3.9) — HUMAN GATE for the real run
+## M18 — The database migration, built and drilled (P3.9) — autonomous, with preconditions
 
 1. Write the one-way SQLite → Postgres migration: per-table row counts + checksums asserted,
    NAV series recomputed and compared to the SQLite-derived series, restore drill proving the
@@ -347,12 +389,18 @@ Playwright attempt recorded either way.
 2. **Run it against a COPY** of `data/portfolio.db` into the local Postgres. All assertions
    green. The desk's read paths run against the migrated copy in a test configuration
    (the 13 Jinja pages render — P3.11's first half).
-3. **HUMAN GATE:** present the assertion report to Maulik. The real cutover (desk configured to
-   Postgres as primary, SQLite archived forever) happens only on his explicit go, on a
-   non-trading evening, with the M0 safety copy refreshed first.
+3. **Autonomous cutover — only when every precondition holds:** (a) all assertions green on the
+   copy and the recomputed NAV series identical; (b) a fresh verified backup
+   (`scripts/backup.py` says `ok`) plus a refreshed dated safety copy outside the repo;
+   (c) the SQLite file archived read-only with a documented **one-command rollback** (point the
+   desk back at SQLite) actually exercised once; (d) NSE is closed and the next session is at
+   least 8 hours away (IST). If any precondition cannot be met, queue the cutover in
+   `NEEDS-MAULIK.md` with the assertion report attached and continue. Either way, write the
+   full report to `reconciliation/DB-MIGRATION.md` for asynchronous review.
 
 **Acceptance:** migration script + assertions green on the copy; drill documented; real cutover
-awaiting/complete per Maulik's word; SQLite file archived (never deleted) either way.
+complete under the preconditions, or queued with its report; SQLite file archived (never
+deleted) either way.
 
 ## M19 — Schedules to Celery, desk on the merged backend (P3.10, P3.11)
 
@@ -390,7 +438,8 @@ alert rules that exist evaluate over the new metrics.
    - where everything is observed (ops pages, metrics, logs);
    - what is deliberately NOT running (Phase 4+, public API, strangle) and why.
 3. Update `docs/00-merge-status.md` to its final state; tag `v0.1.0-merged`.
-4. Only now may `../_baskfy_subtree_tmp/` be deleted — ask Maulik first.
+4. `../_baskfy_subtree_tmp/` is never deleted by an agent — list it in `NEEDS-MAULIK.md` as
+   safe for Maulik to delete once he has skimmed the final status page.
 
 **Acceptance:** one command sequence in RUN-AND-TEST.md takes a fresh checkout to a running,
 testable Baskfy; every suite green; status page final; tag pushed nowhere (local tag — remotes

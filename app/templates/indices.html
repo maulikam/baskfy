@@ -1,0 +1,555 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Indices{% endblock %}
+
+{% block heading %}Indices{% endblock %}
+{% block heading_aside %}
+  {% if v.stale %}
+    <span class="sc-badge sc-badge--warn">NSE unreachable — showing last good board</span>
+  {% elif v.fetched_at %}
+    <span class="sc-badge sc-badge--mute">NSE {{ v.fetched_at }}</span>
+  {% endif %}
+  <a class="sc-btn sc-btn--ghost sc-btn--sm" href="/indices">Refresh</a>
+{% endblock %}
+
+{% block content %}
+
+{% if not v.rows %}
+  <div class="sc-note sc-note--bad">
+    <span><b>No index data.</b> NSE's board could not be reached and nothing is cached yet.
+      {% if v.error %}<span class="text-ink-3">({{ v.error }})</span>{% endif %}
+      This page reads NSE's public market data directly; nothing else on the desk depends on it.</span>
+  </div>
+{% else %}
+
+{# ---- the selected index, with every block the board publishes for it ---------------- #}
+<section class="sc-card mb-4" id="hero-card">
+  <div class="sc-card__h">
+    <h2 id="hero-name">{{ v.selected.name if v.selected else '—' }}</h2>
+    <div class="flex items-center gap-2">
+      <span class="sc-badge sc-badge--mute" id="hero-family"></span>
+      <button class="sc-btn sc-btn--secondary sc-btn--sm" id="hero-stocks" type="button">
+        Show constituents
+      </button>
+    </div>
+  </div>
+  <div class="sc-card__b">
+    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+
+      <div>
+        <div class="flex flex-wrap items-end gap-x-4 gap-y-1">
+          <div class="text-[38px] font-bold leading-none tracking-tight text-ink num" id="hero-last">—</div>
+          <div class="pb-1 flex items-baseline gap-2">
+            <span class="num text-[15px]" id="hero-chg">—</span>
+            <span class="sc-badge" id="hero-pct">—</span>
+          </div>
+        </div>
+
+        <div class="mt-5 space-y-4">
+          <div>
+            <div class="sc-metric__k mb-1.5 flex justify-between">
+              <span>Day range</span><span class="text-ink-3 num" id="hero-daypos"></span>
+            </div>
+            <div class="idx-track"><div class="idx-mark" id="hero-daymark"></div></div>
+            <div class="mt-1 flex justify-between text-[12px] text-ink-3 num">
+              <span id="hero-daylo">—</span><span id="hero-dayhi">—</span>
+            </div>
+          </div>
+          <div>
+            <div class="sc-metric__k mb-1.5 flex justify-between">
+              <span>52-week range</span><span class="text-ink-3 num" id="hero-yearpos"></span>
+            </div>
+            <div class="idx-track"><div class="idx-mark" id="hero-yearmark"></div></div>
+            <div class="mt-1 flex justify-between text-[12px] text-ink-3 num">
+              <span id="hero-yearlo">—</span><span id="hero-yearhi">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="sc-metrics">
+          <div><div class="sc-metric__k">1-year return</div>
+               <div class="sc-metric__v" id="hero-r1y">—</div></div>
+          <div><div class="sc-metric__k">30-day return</div>
+               <div class="sc-metric__v" id="hero-r30">—</div></div>
+          <div><div class="sc-metric__k">Constituents up today</div>
+               <div class="sc-metric__v" id="hero-adv">—</div>
+               <div class="sc-metric__s" id="hero-advs">counted by NSE</div></div>
+          <div><div class="sc-metric__k">P/E</div>
+               <div class="sc-metric__v num" id="hero-pe">—</div></div>
+          <div><div class="sc-metric__k">P/B</div>
+               <div class="sc-metric__v num" id="hero-pb">—</div></div>
+          <div><div class="sc-metric__k">Dividend yield</div>
+               <div class="sc-metric__v num" id="hero-dy">—</div></div>
+        </div>
+
+        <div class="mt-5">
+          <div class="sc-metric__k mb-1.5">Advance / decline</div>
+          <div class="flex h-2.5 gap-0.5" id="hero-adbar"></div>
+          <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-ink-2" id="hero-adkey"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{# ---- breadth of the selected index, measured over the scan ------------------------- #}
+<section class="sc-card mb-4" id="breadth-card">
+  <div class="sc-card__h">
+    <h2>Breadth inside <span id="breadth-index">this index</span></h2>
+    <span class="sc-badge sc-badge--mute" id="breadth-cover">—</span>
+  </div>
+  <div class="sc-card__b">
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" id="breadth-grid">
+      <p class="text-[13px] text-ink-3">Loading…</p>
+    </div>
+    <p class="mt-4 text-[12px] leading-relaxed text-ink-3" id="breadth-note"></p>
+  </div>
+</section>
+
+{# ---- the board -------------------------------------------------------------------- #}
+<section class="sc-card">
+  <div class="sc-card__h">
+    <h2>All indices</h2>
+    <span class="text-[12px] text-ink-3 num" id="board-count"></span>
+  </div>
+
+  <div class="flex flex-wrap items-center gap-2 border-b border-line px-5 py-3">
+    <input id="q" type="search" placeholder="Filter indices…" aria-label="Filter indices by name"
+           class="w-full max-w-[260px] rounded-lg border border-line-2 bg-paper px-3 py-1.5 text-[13px] text-ink placeholder:text-ink-3">
+    <div class="flex flex-wrap gap-1.5" id="fams" role="group" aria-label="Index family">
+      {% for f in v.families %}
+        <button type="button" data-fam="{{ f }}" aria-pressed="{{ 'true' if f == 'All' else 'false' }}"
+                class="fam-btn rounded-lg border border-line-2 bg-paper px-2.5 py-1 text-[12px] font-medium text-ink-2">{{ f }}</button>
+      {% endfor %}
+    </div>
+    <span class="ml-auto text-[12px] text-ink-3">
+      {% if v.scan.count %}
+        Screen: <b class="text-ink-2 num">{{ v.scan.count }}</b> names{% if v.scan.as_of %}, {{ v.scan.as_of }}{% endif %}
+      {% else %}
+        <span class="sc-badge sc-badge--warn">No scan uploaded — per-stock scores unavailable</span>
+      {% endif %}
+    </span>
+  </div>
+
+  <div class="sc-tablewrap">
+    <table class="sc-table" aria-label="NSE index board">
+      <thead><tr>
+        <th data-k="name">Index</th>
+        <th class="r" data-k="last">Last</th>
+        <th class="r" data-k="change">Chg</th>
+        <th class="r" data-k="pct">% Chg</th>
+        <th class="r" data-k="adv_pct">Up</th>
+        <th class="r" data-k="ret_30d">30D</th>
+        <th class="r" data-k="ret_1y">1Y</th>
+        <th class="r" data-k="year_pos">52w pos</th>
+        <th class="r" data-k="pe">P/E</th>
+        <th class="r" data-k="dy">Div yld</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <p class="hidden px-5 py-10 text-center text-[13px] text-ink-3" id="empty">No index matches that filter.</p>
+</section>
+
+<p class="mt-4 text-[12px] leading-relaxed text-ink-3">
+  Index levels, P/E, P/B, dividend yield and the advance/decline counts come from NSE's
+  public board. Constituent lists come from NSE's index archive and are cached for a month —
+  they change at a semi-annual review, and NSE blocks a client that asks too often, so a
+  list is fetched only when you open it. Per-stock prices come from Kite and need a live
+  broker session; scores come from the desk's own latest scan, which covers the screened
+  universe rather than the whole market.
+</p>
+{% endif %}
+{% endblock %}
+
+{% block head %}
+<style>
+  /* Range tracks and the expanded constituent panel — the only shapes on this page the
+     shared stylesheet has no component for. Everything else is a stock sc- class. */
+  .idx-track { position: relative; height: 6px; border-radius: 3px;
+               background: var(--color-wash-2); }
+  .idx-mark  { position: absolute; top: -3px; width: 3px; height: 12px; border-radius: 2px;
+               background: var(--color-ink); transform: translateX(-1.5px); left: 50%; }
+  .idx-meter { position: relative; height: 8px; border-radius: 4px;
+               background: var(--color-wash-2); }
+  .idx-meter > i { position: absolute; inset: 0 auto 0 0; border-radius: 4px;
+                   background: var(--color-brand); display: block; }
+  .idx-meter > s { position: absolute; top: -4px; bottom: -4px; left: 50%; width: 1px;
+                   background: var(--color-ink-3); opacity: .55; }
+  tr.idx-row { cursor: pointer; }
+  tr.idx-row[aria-selected="true"] td { background: var(--color-brand-wash); }
+  tr.idx-sub > td { background: var(--color-wash); padding: 0 !important; }
+  .idx-sub-in { padding: 14px 16px 18px; }
+  .idx-chip { display: inline-block; border: 1px solid var(--color-line-2); border-radius: 4px;
+              padding: 0 5px; font-size: 10.5px; font-weight: 600; color: var(--color-ink-3);
+              text-transform: uppercase; letter-spacing: .05em; vertical-align: 1px; }
+  .idx-caret { display: inline-block; transition: transform .15s; }
+  [aria-expanded="true"] .idx-caret { transform: rotate(90deg); }
+  @media (prefers-reduced-motion: reduce) { .idx-caret { transition: none; } }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const ROWS = {{ v.rows | tojson }};
+  const SELECTED = {{ (v.selected.name if v.selected else "") | tojson }};
+
+  const inr = new Intl.NumberFormat("en-IN", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const n2 = v => (v === null || v === undefined) ? "—" : inr.format(v);
+  const sgn = v => (v === null || v === undefined) ? "—"
+        : (v > 0 ? "+" : v < 0 ? "−" : "") + inr.format(Math.abs(v));
+  const dir = v => (v === null || v === undefined) ? "" : v > 0 ? "sc-up" : v < 0 ? "sc-down" : "";
+  const badge = v => (v === null || v === undefined) ? "sc-badge--mute"
+        : v > 0 ? "sc-badge--ok" : v < 0 ? "sc-badge--bad" : "sc-badge--mute";
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c =>
+        ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  const el = id => document.getElementById(id);
+
+  let fam = "All", q = "", sortK = "pct", sortDir = -1;
+  let selected = ROWS.find(r => r.name === SELECTED) || ROWS[0];
+
+  // ---- hero ---------------------------------------------------------------
+  function paintHero(r) {
+    if (!r) return;
+    selected = r;
+    el("hero-name").textContent = r.name;
+    el("hero-family").textContent = r.family;
+    el("hero-last").textContent = n2(r.last);
+    const chg = el("hero-chg");
+    chg.textContent = sgn(r.change);
+    chg.className = "num text-[15px] " + dir(r.pct);
+    const pct = el("hero-pct");
+    pct.textContent = r.pct === null ? "—" : sgn(r.pct) + "%";
+    pct.className = "sc-badge " + badge(r.pct);
+
+    range("day", r.low, r.high, r.last, r.range_pos);
+    range("year", r.year_low, r.year_high, r.last, r.year_pos);
+
+    setRet("hero-r1y", r.ret_1y);
+    setRet("hero-r30", r.ret_30d);
+    el("hero-pe").textContent = n2(r.pe);
+    el("hero-pb").textContent = n2(r.pb);
+    el("hero-dy").textContent = r.dy === null ? "—" : n2(r.dy) + "%";
+
+    const adv = el("hero-adv");
+    adv.textContent = r.adv_pct === null ? "—" : r.adv_pct + "%";
+    adv.className = "sc-metric__v " + (r.adv_pct === null ? "" : r.adv_pct >= 50 ? "sc-up" : "sc-down");
+    el("hero-advs").textContent = r.members
+      ? r.advances + " of " + r.members + ", counted by NSE" : "NSE publishes no count for this index";
+    adBar(r);
+    // A volatility, leveraged, inverse or bond index has no basket to open.
+    el("hero-stocks").style.display = r.drillable ? "" : "none";
+    loadBreadth(r.name);
+    document.querySelectorAll("tr.idx-row").forEach(tr =>
+      tr.setAttribute("aria-selected", String(tr.dataset.name === r.name)));
+    const u = new URL(location.href);
+    u.searchParams.set("index", r.name);
+    history.replaceState(null, "", u);
+  }
+
+  function setRet(id, v) {
+    const e = el(id);
+    e.textContent = v === null || v === undefined ? "—" : sgn(v) + "%";
+    e.className = "sc-metric__v " + dir(v);
+  }
+
+  function range(kind, lo, hi, last, pos) {
+    el("hero-" + kind + "lo").textContent = n2(lo);
+    el("hero-" + kind + "hi").textContent = n2(hi);
+    const mark = el("hero-" + kind + "mark");
+    if (pos === null || pos === undefined) {
+      mark.style.display = "none";
+      el("hero-" + kind + "pos").textContent = "not published";
+    } else {
+      mark.style.display = "";
+      mark.style.left = pos + "%";
+      el("hero-" + kind + "pos").textContent = Math.round(pos) + "% of range";
+    }
+  }
+
+  function adBar(r) {
+    const bar = el("hero-adbar"), key = el("hero-adkey");
+    if (!r.members) {
+      bar.innerHTML = "";
+      key.innerHTML = '<span class="text-ink-3">NSE publishes no advance/decline for this index.</span>';
+      return;
+    }
+    const seg = [["up", r.advances, "Advancing"], ["flat", r.unchanged, "Unchanged"],
+                 ["down", r.declines, "Declining"]];
+    const col = {up: "var(--color-up)", flat: "var(--color-ink-3)", down: "var(--color-down)"};
+    bar.innerHTML = seg.map(([k, v]) =>
+      `<span style="flex:${v || 0};background:${col[k]};border-radius:2px"></span>`).join("");
+    key.innerHTML = seg.map(([k, v, label]) =>
+      `<span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;background:${col[k]}"></i>` +
+      `${label} <b class="num text-ink">${v ?? 0}</b></span>`).join("");
+  }
+
+  // ---- breadth of the selected index, over the scanned subset --------------
+  // The cache holds the PROMISE, not the result, so two clicks on the same index while the
+  // first fetch is still in flight share one request. Combined with the debounce below,
+  // clicking down the board cannot turn into a burst at NSE's archive — which bans a
+  // client that bursts, and the ban costs every index at once.
+  const breadthCache = new Map();
+  let breadthTimer = null, breadthWanted = null;
+
+  function loadBreadth(name) {
+    breadthWanted = name;
+    el("breadth-index").textContent = name;
+    el("breadth-grid").innerHTML = '<p class="text-[13px] text-ink-3">Loading…</p>';
+    el("breadth-cover").textContent = "…";
+    el("breadth-note").textContent = "";
+    clearTimeout(breadthTimer);
+    breadthTimer = setTimeout(() => {
+      // Only the index still selected when the pause ended gets fetched.
+      if (breadthWanted === name) paintBreadth(name);
+    }, 250);
+  }
+
+  async function paintBreadth(name) {
+    el("breadth-index").textContent = name;
+    const grid = el("breadth-grid"), cover = el("breadth-cover"), note = el("breadth-note");
+    if (!selectedIsDrillable(name)) {
+      grid.innerHTML = '<p class="text-[13px] text-ink-3">This index has no constituent list — ' +
+        'a volatility, leveraged, inverse or bond index is computed from a formula, not a basket.</p>';
+      cover.textContent = "n/a"; note.textContent = "";
+      return;
+    }
+    grid.innerHTML = '<p class="text-[13px] text-ink-3">Loading constituents…</p>';
+    cover.textContent = "…"; note.textContent = "";
+    const d = await fetchConstituents(name);
+    if (breadthWanted !== name) return;          // selection moved on while we waited
+    if (!d || d.error && !d.rows.length) {
+      grid.innerHTML = `<p class="text-[13px] text-ink-3">Constituents unavailable. ${esc(d ? d.error : "")}</p>`;
+      cover.textContent = "—";
+      return;
+    }
+    const b = d.breadth || {n: 0};
+    cover.textContent = b.n + " of " + d.count + " scored";
+    if (!b.n) {
+      grid.innerHTML = '<p class="text-[13px] text-ink-3">None of this index’s ' + d.count +
+        ' constituents are in the current scan, so there is nothing to measure breadth over.</p>';
+      note.textContent = "Breadth here is computed from the desk’s own scan, not from the whole market.";
+      return;
+    }
+    const meters = [
+      ["Above 200 DMA", b.above_200dma, "Long-term trend participation."],
+      ["Above 50 DMA", b.above_50dma, "Medium-term trend."],
+      ["Within 10% of ATH", b.near_ath, "How much of the index is near its record."],
+      ["1Y return > 0%", b.positive_1y, "Positive over a full year."],
+    ];
+    grid.innerHTML = meters.map(([k, v, s]) => `
+      <div>
+        <div class="sc-metric__k">${k}</div>
+        <div class="sc-metric__v num ${v >= 50 ? "sc-up" : v < 30 ? "sc-down" : ""}">${v}%</div>
+        <div class="idx-meter mt-2"><i style="width:${v}%"></i><s></s></div>
+        <div class="mt-1.5 flex justify-between text-[11px] text-ink-3 num">
+          <span>0</span><span>${v >= 50 ? "+" : "−"}${Math.abs(Math.round(v - 50))} vs 50</span><span>100</span>
+        </div>
+        <div class="sc-metric__s">${s}</div>
+      </div>`).join("");
+    note.textContent = "Measured across the " + b.n + " of this index’s " + d.count +
+      " constituents that appear in the current scan. A constituent the scan does not cover " +
+      "is unknown, not below — it is left out of the denominator rather than counted as failing, " +
+      "so a thin overlap makes these percentages noisy rather than wrong.";
+  }
+
+  function selectedIsDrillable(name) {
+    const r = ROWS.find(x => x.name === name);
+    return r ? r.drillable : false;
+  }
+
+  function fetchConstituents(name) {
+    if (breadthCache.has(name)) return breadthCache.get(name);
+    const p = fetch("/indices/constituents?index=" + encodeURIComponent(name))
+      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .catch(e => {
+        // A failure must not be cached, or one blip makes the index permanently blank.
+        breadthCache.delete(name);
+        return {rows: [], count: 0, error: String(e), breadth: {n: 0}};
+      });
+    breadthCache.set(name, p);
+    return p;
+  }
+
+  // ---- board table --------------------------------------------------------
+  function visible() {
+    let v = ROWS.filter(r => (fam === "All" || r.family === fam) &&
+                             (!q || r.name.toLowerCase().includes(q)));
+    v.sort((a, b) => {
+      if (sortK === "name") return sortDir * a.name.localeCompare(b.name);
+      const x = a[sortK], y = b[sortK];
+      if (x === null && y === null) return 0;
+      if (x === null) return 1;
+      if (y === null) return -1;
+      return sortDir * (x - y);
+    });
+    return v;
+  }
+
+  function render() {
+    const v = visible();
+    el("board-count").textContent = v.length + " of " + ROWS.length;
+    el("empty").classList.toggle("hidden", v.length > 0);
+    el("rows").innerHTML = v.map(r => `
+      <tr class="idx-row" data-name="${esc(r.name)}" aria-selected="${r.name === selected.name}"
+          ${r.drillable ? 'tabindex="0" role="button" aria-expanded="false"' : ""}>
+        <td class="sym">
+          <span class="idx-caret ${r.drillable ? "" : "invisible"}" aria-hidden="true">›</span>
+          <span class="idx-chip">${r.family}</span> ${esc(r.name)}</td>
+        <td class="r num">${n2(r.last)}</td>
+        <td class="r num ${dir(r.pct)}">${sgn(r.change)}</td>
+        <td class="r num ${dir(r.pct)}">${r.pct === null ? "—" : sgn(r.pct) + "%"}</td>
+        <td class="r num ${r.adv_pct === null ? "" : r.adv_pct >= 50 ? "sc-up" : "sc-down"}">${r.adv_pct === null ? "—" : r.adv_pct + "%"}</td>
+        <td class="r num ${dir(r.ret_30d)}">${r.ret_30d === null ? "—" : sgn(r.ret_30d) + "%"}</td>
+        <td class="r num ${dir(r.ret_1y)}">${r.ret_1y === null ? "—" : sgn(r.ret_1y) + "%"}</td>
+        <td class="r num">${r.year_pos === null ? "—" : Math.round(r.year_pos) + "%"}</td>
+        <td class="r num">${n2(r.pe)}</td>
+        <td class="r num">${r.dy === null ? "—" : n2(r.dy)}</td>
+      </tr>`).join("");
+    document.querySelectorAll("thead th[data-k]").forEach(th => {
+      th.setAttribute("aria-sort", th.dataset.k === sortK
+        ? (sortDir === 1 ? "ascending" : "descending") : "none");
+    });
+  }
+
+  // ---- the constituent panel ---------------------------------------------
+  async function toggleDrill(tr, force) {
+    if (tr.getAttribute("aria-expanded") === null) return;   // not drillable
+    const open = tr.getAttribute("aria-expanded") === "true";
+    if (open && force !== "open") {
+      tr.setAttribute("aria-expanded", "false");
+      if (tr.nextElementSibling?.classList.contains("idx-sub")) tr.nextElementSibling.remove();
+      return;
+    }
+    if (open) return;
+    tr.setAttribute("aria-expanded", "true");
+    const sub = document.createElement("tr");
+    sub.className = "idx-sub";
+    sub.innerHTML = '<td colspan="10"><div class="idx-sub-in text-[13px] text-ink-3">' +
+                    'Loading constituents…</div></td>';
+    tr.after(sub);
+    const d = await fetchConstituents(tr.dataset.name);
+    // The row may have been collapsed, re-rendered by a sort, or filtered away while the
+    // fetch was in flight; writing into a detached node would throw.
+    if (sub.isConnected) sub.querySelector("td").innerHTML = `<div class="idx-sub-in">${panel(d)}</div>`;
+  }
+
+  function panel(d) {
+    if (!d.rows.length) {
+      return `<p class="text-[13px] text-ink-3"><b class="text-ink-2">No constituent list.</b> ${esc(d.error || "")}
+        ${d.error && d.error.includes("403")
+          ? " NSE rate-limits its archive; the desk backs off for an hour rather than risk a longer block."
+          : ""}</p>`;
+    }
+    const warn = [];
+    if (d.quote_error) warn.push("Live prices unavailable (no broker session) — price columns are blank.");
+    else if (!d.rows.some(r => r.last !== null)) warn.push("Kite returned no quotes — log in on the Desk page for live prices.");
+    if (d.stale) warn.push("Cached list; NSE could not be reached to refresh it.");
+
+    return `
+      <div class="mb-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <b class="text-[13px] text-ink">${esc(d.index)}</b>
+        <span class="text-[12px] text-ink-3 num">${d.count} constituents</span>
+        <span class="sc-badge ${d.scored_count ? "sc-badge--ok" : "sc-badge--mute"}">${d.scored_count} in the scan</span>
+        ${d.fetched_at ? `<span class="text-[11px] text-ink-3">list ${esc(d.fetched_at)}</span>` : ""}
+      </div>
+      ${warn.length ? `<p class="mb-2.5 text-[12px] text-warn">${warn.map(esc).join(" ")}</p>` : ""}
+      <div class="sc-tablewrap">
+        <table class="sc-table">
+          <thead><tr>
+            <th>Stock</th><th>Industry</th>
+            <th class="r">Score</th><th class="r">LTP</th><th class="r">% Chg</th>
+            <th class="r">RSI</th><th class="r">3M</th><th class="r">1Y</th>
+            <th class="r">From ATH</th><th class="r">Trend</th>
+          </tr></thead>
+          <tbody>${d.rows.map(stockRow).join("")}</tbody>
+        </table>
+      </div>
+      <p class="mt-2.5 text-[11px] leading-relaxed text-ink-3">
+        Sorted by the desk’s Momentum Quality Score, highest first; names the scan does not
+        cover fall to the bottom with a blank score rather than a zero. Score, RSI, returns,
+        distance from all-time high and the moving-average flags all come from the latest
+        uploaded scan — they are as of that scan’s date, not intraday.
+      </p>`;
+  }
+
+  function stockRow(r) {
+    const trend = [
+      r.above_50dma === null ? "" : `<span class="sc-badge ${r.above_50dma ? "sc-badge--ok" : "sc-badge--mute"}">50</span>`,
+      r.above_200dma === null ? "" : `<span class="sc-badge ${r.above_200dma ? "sc-badge--ok" : "sc-badge--mute"}">200</span>`,
+    ].filter(Boolean).join(" ");
+    return `<tr>
+      <td class="sym">${esc(r.symbol)}
+        ${r.reject ? `<span class="sc-badge sc-badge--warn" title="Rejected by the screen">${esc(r.reject)}</span>` : ""}
+        <div class="text-[11px] font-normal text-ink-3">${esc(r.company)}</div></td>
+      <td class="text-ink-3">${esc(r.industry) || "—"}</td>
+      <td class="r num ${r.score === null ? "" : r.score >= 60 ? "sc-up" : ""}">${r.score === null ? "—" : r.score.toFixed(1)}</td>
+      <td class="r num">${n2(r.last)}</td>
+      <td class="r num ${dir(r.pct)}">${r.pct === null ? "—" : sgn(r.pct) + "%"}</td>
+      <td class="r num">${r.rsi === null ? "—" : r.rsi.toFixed(0)}</td>
+      <td class="r num ${dir(r.ret_3m)}">${r.ret_3m === null ? "—" : sgn(r.ret_3m) + "%"}</td>
+      <td class="r num ${dir(r.ret_1y)}">${r.ret_1y === null ? "—" : sgn(r.ret_1y) + "%"}</td>
+      <td class="r num">${r.away_ath === null ? "—" : sgn(r.away_ath) + "%"}</td>
+      <td class="r">${trend || "—"}</td>
+    </tr>`;
+  }
+
+  // ---- wiring -------------------------------------------------------------
+  // One gesture does both jobs: the row you click becomes the index shown at the top AND
+  // opens its constituent list underneath. Splitting them into two controls meant the
+  // "show me the stocks" affordance sat off the right edge of the table on a laptop.
+  function activate(tr) {
+    if (!tr) return;
+    paintHero(ROWS.find(r => r.name === tr.dataset.name));
+    toggleDrill(tr);
+  }
+
+  el("rows").addEventListener("click", e => activate(e.target.closest("tr.idx-row")));
+  el("rows").addEventListener("keydown", e => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const tr = e.target.closest("tr.idx-row");
+    if (tr) { e.preventDefault(); activate(tr); }
+  });
+
+  el("q").addEventListener("input", e => { q = e.target.value.trim().toLowerCase(); render(); });
+
+  el("fams").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    fam = b.dataset.fam;
+    document.querySelectorAll(".fam-btn").forEach(x => {
+      const on = x === b;
+      x.setAttribute("aria-pressed", String(on));
+      x.className = "fam-btn rounded-lg border px-2.5 py-1 text-[12px] font-medium " +
+        (on ? "border-brand bg-brand text-white" : "border-line-2 bg-paper text-ink-2");
+    });
+    render();
+  });
+
+  document.querySelectorAll("thead th[data-k]").forEach(th => {
+    th.style.cursor = "pointer";
+    th.tabIndex = 0;
+    const go = () => {
+      const k = th.dataset.k;
+      if (sortK === k) sortDir *= -1; else { sortK = k; sortDir = k === "name" ? 1 : -1; }
+      render();
+    };
+    th.addEventListener("click", go);
+    th.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); }
+    });
+  });
+
+  el("hero-stocks").addEventListener("click", () => {
+    const tr = document.querySelector(`tr.idx-row[data-name="${CSS.escape(selected.name)}"]`);
+    if (!tr) return;
+    toggleDrill(tr, "open");
+    tr.scrollIntoView({behavior: "smooth", block: "center"});
+  });
+
+  render();
+  paintHero(selected);
+})();
+</script>
+{% endblock %}

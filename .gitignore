@@ -17,6 +17,9 @@ data/portfolio.db
 data/portfolio.db-wal
 data/portfolio.db-shm
 data/.instruments_*.json
+# NSE's index board and constituent lists — a cache of public data, refetched on demand.
+# Committing it would also freeze a market snapshot into the repo.
+data/.nse_*.json
 data/outputs/
 data/uploads/*.csv
 !data/uploads/.gitkeep

@@ -653,6 +653,40 @@ async def stops_arm(plan_id: str = Form(...), confirm: str = Form(...)):
     return RedirectResponse(f"/stops?armed={msg}", status_code=303)
 
 
+# --- index board (read-only) -------------------------------------------------------------
+# The market side of the screener: every NSE index, and what the desk's own scan thinks of
+# the names inside one. Read-only in the strongest sense — it reads NSE's public data and
+# Kite quotes, and has no path to an order. Failures degrade to a stale or empty panel
+# rather than a 500, because this page is also where you look when something else is down.
+@app.get("/indices", response_class=HTMLResponse)
+def indices_page(request: Request, index: str = ""):
+    from .analytics import index_view as _iv
+    return templates.TemplateResponse(request, "indices.html", {"v": _iv.build(index)})
+
+
+@app.get("/indices/data")
+def indices_data(index: str = ""):
+    from .analytics import index_view as _iv
+    return JSONResponse(_iv.build(index))
+
+
+@app.get("/indices/constituents")
+def indices_constituents(index: str):
+    """Who is in this index, with a live quote and the screen's score for each name.
+
+    The Kite client is built best-effort: an expired token (which is every morning, since
+    Kite issues no refresh) must cost the price columns, not the panel.
+    """
+    from .analytics import index_view as _iv
+    k = None
+    try:
+        k = kite()
+    except Exception as e:                                       # noqa: BLE001
+        logging.getLogger("main").info(
+            "indices/constituents without a broker session: %s", e)
+    return JSONResponse(_iv.drilldown(index, k))
+
+
 # --- regime overlay (read-only) --------------------------------------------------------
 # Both routes read PRECOMPUTED rows from SQLite. No Kite calls, no signal recomputation,
 # no writes: a status page must never be able to change the state it reports.

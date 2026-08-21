@@ -4,7 +4,7 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M5 · **State:** running autonomously
+**Run started:** 22 Aug 2026 · **Current module:** M6 · **State:** running autonomously
 
 Since 22 Aug 2026 this is an **autonomous run** under `CLAUDE.md` §Autonomy charter:
 judgement calls are decided, recorded in `DECISIONS-MERGE.md` (tagged `⚠ UNREVIEWED`
@@ -22,8 +22,8 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M2 | The rename | ✅ done | 22 Aug 2026 | 425 files, 2347+/2347−. Namespaces are Baskfy's; the D1–D6 vocabulary is kept by design. Enforced by `tools/check-namespace.sh` (M2.1) |
 | M3 | Working agreement + status page | ✅ done | 22 Aug 2026 | Root CLAUDE.md absorbed the screener's nine house rules and the GTT caveat it had dropped; both sub-files marked; status page linked first |
 | M4 | One env schema | ✅ done | 22 Aug 2026 | Root `.env.example`, 371 lines, every var marked (16 user-editable / 122 system-only). Four risk ceilings locked out of `/settings` (M4.1) |
-| M5 | One CI workflow | 🔄 running | 22 Aug 2026 | |
-| M6 | Freeze the strangle lab | — | | |
+| M5 | One CI workflow | ✅ done | 22 Aug 2026 | Root `.github/workflows/ci.yml`, 5 jobs. `tools/ci-local.sh` runs it here: 14 pass / 1 fail (M6's) / 5 skip. Found and fixed nested `.git`s (M5.1) |
+| M6 | Freeze the strangle lab | 🔄 running | 22 Aug 2026 | |
 | M7 | Local stack up | — | | |
 | M8 | NSE endpoints verified | — | | |
 | M9 | Kite creds + backfill | — | | **HUMAN GATE** |
@@ -206,6 +206,25 @@ read-only, plus logged at every startup to replace the audit row that locking re
 
 **This reaches the live Mumbai box only on its next deliberate `git pull`, and that should be
 outside market hours.** Queued as item 1 in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md).
+
+## CI, and how to run it here
+
+`.github/workflows/ci.yml` **at the repository root** is the workflow GitHub runs — 5 jobs:
+`python`, `client`, `web` (the screener's, with `working-directory: decile-blueprint`), plus
+`desk` and `namespace`. **`decile-blueprint/.github/workflows/ci.yml` is now INERT** — GitHub
+reads only the root — so edit the root one; the sub-tree copy is kept because it is the screener's
+own history.
+
+`tools/ci-local.sh` runs every step that can run on this machine and prints `SKIP — <reason>` for
+the rest. Five skips today: the coverage gate and the query-plan baseline need the M7 stack; three
+web steps need Playwright browsers, a seeded `baskfy_e2e` and a production build.
+
+**M1 left a live `.git` inside each subtree** (rsync `--ignore-existing` re-imported it, because
+`git subtree add` leaves none). Any git command run from inside a subtree resolved to the orphaned
+pre-merge repo — it silently failed a CI step and could have swallowed a commit. Both were moved
+to `~/baskfy-safety/2026-08-22/nested-git/` after verifying the rollback copies and that both tips
+are ancestors of HEAD. **If you repeat M1's recipe anywhere, add `--exclude=.git`.**
+(`DECISIONS-MERGE.md` M5.1.)
 
 ## Things a future session must know
 

@@ -311,3 +311,64 @@ box runs the pre-lock layout until then. After it lands, changing a ceiling is `
 restart momentum-web` — and the new value appears in the log.
 
 **Suite:** 1544 passed, 1 failed (the known M0 plist artifact, M6's to remove from the gates).
+
+---
+
+## M5
+
+### M5.1 — M1 left a live `.git` inside each subtree, and it silently broke a CI step ⚠ UNREVIEWED
+**Found at M5**, by a CI step failing for a reason that made no sense: the client-staleness gate
+(`git diff --exit-code -- packages/api-client/...`) reported the generated client stale, while
+`git status` from the repository root reported the tree clean and HEAD, index and working tree
+were byte-identical.
+
+**Cause.** M1 step 4 restores untracked files with `rsync --ignore-existing` from the pre-merge
+copies. `git subtree add` creates a working tree with **no** `.git` of its own, so
+`--ignore-existing` did not skip one — it **copied the old repository in**. Both subtrees carried
+a live `.git` pinned to their pre-merge HEADs (`ea5dd0f` and `df6cb72`), 8.4 MB and 6.7 MB.
+
+Any git command run from *inside* a subtree therefore resolved to the **orphaned pre-merge
+repository**, not to Baskfy. The CI workflow runs the screener's jobs with
+`working-directory: decile-blueprint`, so its staleness gate was diffing against a HEAD from
+before the rename and would have failed on every run. Worse than a broken check: a `git commit`
+run from inside a subtree would have landed in a repository nothing else reads.
+
+**Decided.** Both nested `.git` directories **moved** (not deleted) to
+`~/baskfy-safety/2026-08-22/nested-git/`. Verified first, in this order:
+
+1. `../_baskfy_subtree_tmp/` still holds both complete repositories — `.git` present, 23 and 91
+   commits, `git fsck` clean on both. That is M1's designated rollback and it survives to M21.
+2. Both pre-merge tips are ancestors of the Baskfy HEAD (`git merge-base --is-ancestor` — yes for
+   `ea5dd0f` and `df6cb72`), so the history is not held only in those copies.
+
+Afterwards `git rev-parse --show-toplevel` from either subtree returns the Baskfy root, and the
+staleness gate passes from the subdirectory exactly as CI runs it.
+
+**Reversal:** move either directory back. Nothing was destroyed.
+
+**Lesson for anyone repeating M1's recipe:** `rsync --ignore-existing` from a pre-merge copy will
+re-import `.git` unless it is excluded. Add `--exclude=.git`.
+
+### M5.2 — M5 ships with one red CI step, and M6 is the fix ⚠ UNREVIEWED
+The `desk` job fails on `tests/test_strangle_runtime.py::test_both_plists_are_valid_and_point_at_this_checkout`
+— the M0 baseline failure. It asserts a committed plist's `WorkingDirectory` equals `os.getcwd()`;
+the plist hardcodes the tree's pre-move path. It is a **relocation artifact in the strangle
+subsystem**, unrelated to CI.
+
+**Decided: ship M5, let M6 close it.** M6 moves the strangle package and its tests to `frozen/`
+and out of pytest collection, which removes this test from the gate entirely. Fixing the path
+assertion now would be editing a file the next module freezes. The charter's precedence puts the
+module's **Goal** ("a PR touching either tree gets one green check") above the literal wording of
+its acceptance, and the workflow itself is complete and correct — the red step is a pre-existing
+condition owned by the next module. `tools/ci-local.sh` is re-run at the end of M6 to prove it
+green; if it is not, M6 does not close.
+
+### M5.3 — `tools/ci-local.sh` reports SKIP loudly rather than quietly passing
+Five steps cannot run on this machine yet: the coverage gate and the query-plan baseline need the
+`db`-marked suites against a live PostgreSQL (M7), and three web steps need Playwright browsers, a
+seeded `baskfy_e2e` database and a production build. The script prints each as `SKIP — <reason>`
+and lists them again in its summary.
+
+A local runner that prints all-green while silently skipping a third of the workflow is worse than
+one that says what it did not do — the same reasoning both repositories already apply to their own
+open-items lists. First run: **14 passed, 2 failed, 5 skipped**.

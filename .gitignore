@@ -1,0 +1,7 @@
+# Root ignores only. Each sub-tree keeps governing its own — decile-blueprint/.gitignore
+# and kite-momentum-rebalancer/.gitignore are authoritative for their trees, and between
+# them they are what keeps .env, data/portfolio.db and data/uploads/ out of history.
+.DS_Store
+_to_delete/
+*.tar.gz
+baskfy-safety/

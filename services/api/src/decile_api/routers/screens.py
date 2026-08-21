@@ -153,6 +153,15 @@ def _check_custom_columns(columns: Sequence[str], entitlements: Entitlements) ->
         entitlements.require(Feature.CUSTOM_COLUMNS)
 
 
+def _check_universe(definition: ScreenDefinition, entitlements: Entitlements) -> None:
+    """Prompt 13 §5: the optional ₹0 tier is "a ₹0 free tier with a **limited universe**".
+
+    A no-op for every plan that is not restricted — `Entitlements.universes` is None then — so
+    this costs a set membership test on the paid path and exists only because the flag can be on.
+    """
+    entitlements.require_universe(definition.index)
+
+
 def _check_historical(resolution: AsOfResolution, entitlements: Entitlements) -> None:
     """docs/01 §2.13's "Historical Ranks" — running the screen as of a past date."""
     if resolution.requested is not None and resolution.as_of != resolution.latest_published:
@@ -428,6 +437,7 @@ async def preview_screen(
     data_version = await _check_data_version(session, body.data_version)
     columns = _validated_columns(body.columns) if body.columns is not None else []
     _check_custom_columns(columns, entitlements)
+    _check_universe(body.definition, entitlements)
     resolution = await resolve_as_of(session, body.as_of or body.definition.historical_date)
     _check_historical(resolution, entitlements)
 
@@ -463,6 +473,7 @@ async def run_saved_screen(  # noqa: PLR0913, PLR0917 - FastAPI injects one para
     definition = payload.override_definition or ScreenDefinition.model_validate(screen.definition)
     columns = list(screen.columns)
     _check_custom_columns(columns, entitlements)
+    _check_universe(definition, entitlements)
 
     requested = payload.as_of or definition.historical_date
     resolution = await resolve_as_of(session, requested)
@@ -492,6 +503,7 @@ async def export_screen_csv(
     entitlements.require(Feature.EXPORT_CSV)
     screen = await _load_visible(session, public_id, principal)
     definition = ScreenDefinition.model_validate(screen.definition)
+    _check_universe(definition, entitlements)
     resolution = await resolve_as_of(session, as_of or definition.historical_date)
     _check_historical(resolution, entitlements)
     columns = list(screen.columns)

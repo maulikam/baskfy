@@ -69,6 +69,17 @@ def is_auth_path(path: str) -> bool:
     return AUTH_PATH_PREFIX in path
 
 
+#: docs/07's tiers are about *callers*: 60/min authenticated, 10/min anonymous. A payment gateway
+#: is neither. Razorpay retries a failed delivery, so metering it at the anonymous rate would drop
+#: events and lose payments; leaving it unmetered would remove a control. Its own bucket, wide
+#: enough not to bite and narrow enough to notice (`rate_limit_webhook_per_minute`).
+WEBHOOK_PATH_PREFIX: Final = "/webhooks/"
+
+
+def is_webhook_path(path: str) -> bool:
+    return WEBHOOK_PATH_PREFIX in path
+
+
 def bucket_key(principal: Principal, client_ip: str | None) -> str:
     """Per user when we know one, per IP when we do not (docs/11: "per IP and per user").
 
@@ -112,9 +123,13 @@ class RateLimiter:
         *,
         now: float | None = None,
         auth_endpoint: bool = False,
+        webhook: bool = False,
     ) -> Decision:
-        """One bucket per caller, or the tighter per-IP auth bucket on ``/auth/*``."""
-        if auth_endpoint:
+        """One bucket per caller, or a path-specific one on ``/auth/*`` and ``/webhooks/*``."""
+        if webhook:
+            limit = self._settings.rate_limit_webhook_per_minute
+            key = f"{KEY_PREFIX}webhook:{client_ip or 'unknown'}"
+        elif auth_endpoint:
             limit = self._settings.rate_limit_auth_per_minute
             key = auth_bucket_key(client_ip)
         else:
@@ -145,9 +160,16 @@ class RateLimiter:
         )
 
     async def enforce(
-        self, principal: Principal, client_ip: str | None, *, auth_endpoint: bool = False
+        self,
+        principal: Principal,
+        client_ip: str | None,
+        *,
+        auth_endpoint: bool = False,
+        webhook: bool = False,
     ) -> Decision:
-        decision = await self.check(principal, client_ip, auth_endpoint=auth_endpoint)
+        decision = await self.check(
+            principal, client_ip, auth_endpoint=auth_endpoint, webhook=webhook
+        )
         if not decision.allowed:
             raise rate_limited(decision.retry_after_seconds, decision.limit_per_minute)
         return decision
@@ -165,4 +187,10 @@ async def enforce_rate_limit(request: Request, principal: PrincipalDep) -> None:
     if limiter is None:
         return
     client_ip = request.client.host if request.client is not None else None
-    await limiter.enforce(principal, client_ip, auth_endpoint=is_auth_path(request.url.path))
+    path = request.url.path
+    await limiter.enforce(
+        principal,
+        client_ip,
+        auth_endpoint=is_auth_path(path),
+        webhook=is_webhook_path(path),
+    )

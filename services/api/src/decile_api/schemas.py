@@ -658,3 +658,116 @@ HealthState = Literal["ok", "degraded"]
 class HealthOut(_Out):
     status: HealthState
     environment: str
+
+
+# ---------------------------------------------------------------------------
+# Plans, checkout and invoices — docs/07 §"Account & billing" (Prompt 13)
+# ---------------------------------------------------------------------------
+
+
+class PlanFeatureOut(_Out):
+    """One line of "what you get", as the plan row records it.
+
+    ``entitlement`` is ``None`` for the two docs/01 §1 features this service cannot enforce —
+    community Slack and the AMAs — so the UI can render them without pretending they are gated.
+    """
+
+    label: str
+    entitlement: str | None = None
+
+
+class PlanOut(_Out):
+    """docs/07: `GET /plans`. Everything `/pricing` renders comes from here.
+
+    PROMPTS.md Prompt 13 acceptance criterion 4: "No price or entitlement is hard-coded in the web
+    app; all read from the API." So the price, the label, the tagline, the feature list, the
+    Dec-2026 price and the Forever disclosure are all fields, not copy in a component.
+    """
+
+    code: str
+    label: str
+    tagline: str
+    #: A string, not a float: docs/04 stores `numeric` and CLAUDE.md house rule 9 keeps it exact
+    #: all the way to the browser.
+    price_inr: Decimal
+    currency: Literal["INR"] = "INR"
+    #: `month` | `year` | None. None is the one-time "Forever" purchase.
+    interval: Literal["month", "year"] | None = None
+    features: list[PlanFeatureOut]
+    entitlements: EntitlementsOut
+    #: docs/01 §1: "rising to ₹899 / ₹5,999 / ₹19,999 in Dec 2026".
+    price_from_dec_2026: Decimal | None = None
+    #: docs/11 §Legal: the Forever plan states, at the point of sale, what "forever" means.
+    disclosure: str | None = None
+
+
+class PlanListOut(_Out):
+    """The catalogue plus everything the checkout page is legally required to show."""
+
+    data: list[PlanOut]
+    #: docs/11 §Compliance: the disclaimer bullets shown before a purchase.
+    disclaimers: list[str]
+    #: Prompt 13 §5's feature flag, so the UI knows whether a ₹0 tier exists at all.
+    free_tier_enabled: bool
+
+
+class CheckoutSessionIn(_In):
+    """docs/07: `POST /checkout/session { plan_code }`."""
+
+    plan_code: str = Field(min_length=1, max_length=32)
+
+
+class CheckoutSessionOut(_Out):
+    """docs/07: "-> Razorpay order/subscription payload".
+
+    Exactly what Razorpay's browser widget needs, and nothing that identifies another account.
+    `key_id` is the *publishable* key; the secret never leaves the service.
+    """
+
+    plan_code: str
+    kind: Literal["order", "subscription"]
+    amount_inr: Decimal
+    currency: Literal["INR"] = "INR"
+    key_id: str
+    order_id: str | None = None
+    subscription_id: str | None = None
+    disclosure: str | None = None
+
+
+class WebhookAck(_Out):
+    """What Razorpay is told. Deliberately uninformative: a delivery is acknowledged or retried,
+    and telling an unauthenticated caller which account an event touched would be a leak."""
+
+    status: Literal["processed", "ignored", "failed"]
+
+
+class InvoiceOut(_Out):
+    """One row of `GET /invoices` — docs/07 §"Account & billing".
+
+    Every amount is a string-exact `Decimal`, and the tax is broken out per head because that is
+    what the customer's own accountant needs (docs/11 §Compliance).
+    """
+
+    invoice_number: str
+    invoice_date: dt.date
+    plan_code: str | None = None
+    amount_inr: Decimal
+    taxable_inr: Decimal | None = None
+    cgst_inr: Decimal | None = None
+    sgst_inr: Decimal | None = None
+    igst_inr: Decimal | None = None
+    gst_inr: Decimal | None = None
+    gst_rate: Decimal | None = None
+    place_of_supply: str | None = None
+    sac_code: str | None = None
+    status: str
+    #: Where the PDF is, relative to the API. Never a presigned bucket URL — see
+    #: `decile_api.invoices`.
+    pdf_url: str
+
+
+class InvoicePage(_Out):
+    """docs/07 §Conventions: `{ "data": [...], "next_cursor": "…" }`."""
+
+    data: list[InvoiceOut]
+    next_cursor: str | None = None

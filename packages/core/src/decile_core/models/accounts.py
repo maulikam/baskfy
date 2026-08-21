@@ -12,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    Numeric,
     PrimaryKeyConstraint,
     SmallInteger,
     String,
@@ -35,6 +36,9 @@ SUBSCRIPTION_STATUSES: tuple[str, ...] = ("active", "past_due", "cancelled", "ex
 BACKTEST_STATUSES: tuple[str, ...] = ("queued", "running", "done", "failed")
 PIPELINE_STATUSES: tuple[str, ...] = ("running", "succeeded", "failed", "aborted")
 PLAN_INTERVALS: tuple[str, ...] = ("month", "year")
+#: docs/04 does not enumerate ``payment.status``. Razorpay's own vocabulary for a payment, minus
+#: the states we never persist (``authorized`` is transient; we record a charge once captured).
+PAYMENT_STATUSES: tuple[str, ...] = ("created", "captured", "failed", "refunded")
 
 
 class AppUser(Base):
@@ -88,7 +92,26 @@ class Subscription(Base):
 
 
 class Payment(Base):
+    """One charge, and the tax invoice raised for it — docs/04, plus the GST columns docs/11 needs.
+
+    docs/04 gives this table ``gst_inr`` and nothing else about tax. docs/11 §"Compliance & legal
+    (India)" requires "GST-compliant invoices with GSTIN, HSN/SAC, place of supply", and Rule 46
+    of the CGST Rules requires the taxable value and each tax head to appear on the document.
+    Those figures are **stored**, not recomputed at render time: an invoice is a document of
+    record, and one whose numbers move when a rate setting changes is not one. The added columns
+    are listed in ``docs/DECISIONS.md`` (Prompt 13) alongside ``decile_core.models.billing``.
+
+    ``amount_inr`` is the gross the customer was charged, so
+    ``taxable_inr + cgst_inr + sgst_inr + igst_inr == amount_inr`` exactly (docs/01 §1's prices
+    are tax-inclusive — see ``decile_core.gst``).
+    """
+
     __tablename__ = "payment"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('created', 'captured', 'failed', 'refunded')", name="payment_status"
+        ),
+    )
 
     id: Mapped[BigIntPk]
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id"), nullable=False)
@@ -100,6 +123,24 @@ class Payment(Base):
     invoice_number: Mapped[str | None] = mapped_column(String, unique=True)
     invoice_pdf_key: Mapped[str | None] = mapped_column(String)
     created_at: Mapped[CreatedAt]
+
+    # --- not in docs/04; required by docs/11 §Compliance (see the class docstring) ---------
+    #: The order the charge belongs to, for reconciliation against the gateway.
+    razorpay_order_id: Mapped[str | None] = mapped_column(String)
+    #: Rule 46(a): the date of issue. Distinct from ``created_at``, which is a timestamp in UTC.
+    invoice_date: Mapped[dt.date | None] = mapped_column(Date)
+    taxable_inr: Mapped[Decimal | None] = mapped_column(INR)
+    cgst_inr: Mapped[Decimal | None] = mapped_column(INR)
+    sgst_inr: Mapped[Decimal | None] = mapped_column(INR)
+    igst_inr: Mapped[Decimal | None] = mapped_column(INR)
+    #: The rate applied, stored so a later rate change cannot rewrite an issued invoice.
+    gst_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    #: docs/11: "place of supply", spelled as the return expects it: ``Karnataka (29)``.
+    place_of_supply: Mapped[str | None] = mapped_column(String)
+    #: docs/11: "GSTIN" — the *recipient's*, when they are registered. The supplier's is a setting.
+    customer_gstin: Mapped[str | None] = mapped_column(String)
+    #: docs/11: "HSN/SAC". A service, so SAC.
+    sac_code: Mapped[str | None] = mapped_column(String)
 
 
 class Portfolio(Base):

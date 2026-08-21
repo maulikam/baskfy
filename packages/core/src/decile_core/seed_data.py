@@ -10,6 +10,14 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Final
 
+from decile_core.entitlements import (
+    ENTITLEMENTS_KEY,
+    INCLUDED_FEATURE_LABELS,
+    Entitlements,
+    Feature,
+)
+from decile_core.entitlements import FREE_TIER as FREE_TIER_ENTITLEMENTS
+from decile_core.entitlements import PAID as PAID_ENTITLEMENTS
 from decile_core.models.base import JsonObject
 from decile_core.screen_definition import (
     CustomFilter,
@@ -37,13 +45,19 @@ class PlanSeed:
     price_inr: Decimal
     interval: str | None
     features: JsonObject
+    #: What the pricing page calls it. docs/01 §1 names the three plans and nothing else.
+    label: str = ""
+    #: One line under the name on `/pricing`. Served by `GET /plans`, never written in the web
+    #: app — PROMPTS.md Prompt 13 acceptance criterion 4.
+    tagline: str = ""
+    #: Hidden from `GET /plans` unless a feature flag turns it on (Prompt 13 §5's optional ₹0
+    #: tier). Seeded unconditionally so the row exists to be pointed at when the flag flips.
+    flagged: bool = False
 
 
-#: docs/01 §1: "Monthly ₹500 · Yearly ₹3,999 · Forever ₹14,999 (rising to ₹899 / ₹5,999 /
-#: ₹19,999 in Dec 2026)." The current prices are seeded; the Dec-2026 prices are recorded in
-#: ``features.price_from_dec_2026`` rather than as separate rows, because docs/04's ``plan.code``
-#: is unique and the increase is a repricing of the same three plans.
-#: Gated features are docs/01 §1: "export, custom columns, historical ranks, community Slack, AMAs".
+#: docs/01 §1: "Gated features: export, custom columns, historical ranks, community Slack, AMAs".
+#: Kept as a plain list of names on every plan row for the pricing page's "what you get" copy; the
+#: *enforceable* half of it is `entitlements`, which is what `decile_api.entitlements` reads.
 GATED_FEATURES: Final[tuple[str, ...]] = (
     "csv_export",
     "custom_columns",
@@ -52,20 +66,101 @@ GATED_FEATURES: Final[tuple[str, ...]] = (
     "ama_access",
 )
 
+#: docs/11 §"Compliance & legal (India)": "**'Forever' plan** must state, at the point of sale,
+#: that it means the lifetime of the service." PROMPTS.md Prompt 13 §5 quotes the reference
+#: product's own words — "the lifetime of the website" — so both sentences are here: the
+#: reference's clarification, then what it means for us. docs/DECISIONS.md.
+FOREVER_DISCLOSURE: Final = (
+    "Forever means the lifetime of the website. If Decile stops operating, the plan stops with "
+    "it — there is no refund of the unused remainder and no transfer to another service."
+)
+
+#: docs/11 §Compliance requires a disclaimer at checkout and forbids advice language anywhere.
+#: docs/01 §1: 'Explicit "not a SEBI registered advisor" disclaimer.' Served by `GET /plans` so
+#: `/pricing` renders the same words the API holds rather than a copy in a component.
+PRE_PURCHASE_DISCLAIMERS: Final[tuple[str, ...]] = (
+    "Decile is not a SEBI-registered investment adviser. Nothing here is investment advice, a "
+    "recommendation to buy or sell, or a target price.",
+    "Decile is a screening and analytics tool. Every number on it is derived from historical "
+    "exchange data and can be wrong, stale, or both.",
+    "Past performance — including anything a backtest shows — does not indicate future returns.",
+    "Prices are in Indian rupees and include GST at the prevailing rate. A GST invoice is issued "
+    "for every payment and is available under Invoices.",
+    "Subscriptions renew automatically until cancelled. Cancel any time; access continues to the "
+    "end of the period already paid for.",
+)
+
+
+def _included(key: str | None, entitlements: Entitlements) -> bool:
+    """Is this advertised line true of this plan?
+
+    ``None`` marks the two docs/01 §1 features this service cannot enforce — community Slack and
+    the AMAs. They come with a *paid* plan, so they follow whether the plan is paid at all rather
+    than an entitlement key that does not exist.
+    """
+    if key is None:
+        return Feature.EXPORT_CSV in entitlements.granted
+    return Feature(key) in entitlements.granted
+
+
+def _label(label: str, key: str | None, entitlements: Entitlements) -> str:
+    """The screener line has to say *which* universes when a plan is restricted to some."""
+    if key == Feature.SCREENER.value and entitlements.universes is not None:
+        names = ", ".join(sorted(entitlements.universes))
+        return f"The screener, limited to {names}"
+    return label
+
+
+def _plan_features(
+    entitlements: Entitlements,
+    *,
+    price_from_dec_2026: str | None = None,
+    disclosure: str | None = None,
+) -> JsonObject:
+    """One shape for every plan row, so `GET /plans` never has to special-case one."""
+    features: JsonObject = {
+        # The enforceable half. `decile_api.entitlements` reads exactly this block.
+        ENTITLEMENTS_KEY: entitlements.to_plan_features(),
+        # The advertised half, for the pricing page. Two of these are not API surfaces.
+        "gated": list(GATED_FEATURES),
+        "includes": [
+            {"label": _label(label, key, entitlements), "entitlement": key}
+            for label, key in INCLUDED_FEATURE_LABELS
+            if _included(key, entitlements)
+        ],
+    }
+    if price_from_dec_2026 is not None:
+        features["price_from_dec_2026"] = price_from_dec_2026
+    if disclosure is not None:
+        features["disclosure"] = disclosure
+    return features
+
+
+#: docs/01 §1: "Monthly ₹500 · Yearly ₹3,999 · Forever ₹14,999 (rising to ₹899 / ₹5,999 /
+#: ₹19,999 in Dec 2026)." The current prices are seeded; the Dec-2026 prices are recorded in
+#: ``features.price_from_dec_2026`` rather than as separate rows, because docs/04's ``plan.code``
+#: is unique and the increase is a repricing of the same three plans.
+#:
+#: The fourth row is PROMPTS.md Prompt 13 §5's optional ₹0 tier. It is seeded but hidden: only
+#: ``DECILE_FREE_TIER_ENABLED`` puts it in front of anyone.
 PLANS: Final[tuple[PlanSeed, ...]] = (
     PlanSeed(
         id=1,
         code="monthly",
         price_inr=Decimal("500.00"),
         interval="month",
-        features={"gated": list(GATED_FEATURES), "price_from_dec_2026": "899.00"},
+        label="Monthly",
+        tagline="Everything, billed every month. Cancel any time.",
+        features=_plan_features(PAID_ENTITLEMENTS, price_from_dec_2026="899.00"),
     ),
     PlanSeed(
         id=2,
         code="yearly",
         price_inr=Decimal("3999.00"),
         interval="year",
-        features={"gated": list(GATED_FEATURES), "price_from_dec_2026": "5999.00"},
+        label="Yearly",
+        tagline="The same thing, billed once a year.",
+        features=_plan_features(PAID_ENTITLEMENTS, price_from_dec_2026="5999.00"),
     ),
     PlanSeed(
         id=3,
@@ -73,14 +168,39 @@ PLANS: Final[tuple[PlanSeed, ...]] = (
         price_inr=Decimal("14999.00"),
         # NULL interval = the one-time purchase (docs/02: "one-time for Forever").
         interval=None,
-        features={
-            "gated": list(GATED_FEATURES),
-            "price_from_dec_2026": "19999.00",
+        label="Forever",
+        tagline="Pay once. No renewal.",
+        features=_plan_features(
+            PAID_ENTITLEMENTS,
+            price_from_dec_2026="19999.00",
             # docs/11 §Legal: must be stated at the point of sale.
-            "disclosure": "Forever means the lifetime of the service.",
-        },
+            disclosure=FOREVER_DISCLOSURE,
+        ),
     ),
 )
+
+#: PROMPTS.md Prompt 13 §5: "A ₹0 free tier with a limited universe is **optional** — implement it
+#: behind a feature flag." So it is not one of docs/01 §1's three plans and is deliberately not a
+#: member of :data:`PLANS`. The row is seeded regardless — a plan row nobody is shown costs
+#: nothing, and creating it lazily when the flag flips would mean a migration at runtime — but
+#: ``GET /plans`` hides it and ``POST /checkout/session`` refuses it while
+#: ``DECILE_FREE_TIER_ENABLED`` is false.
+FREE_PLAN: Final = PlanSeed(
+    id=4,
+    code="free",
+    price_inr=Decimal("0.00"),
+    interval=None,
+    label="Free",
+    tagline="The screener on NIFTY 50, and nothing to export.",
+    flagged=True,
+    features=_plan_features(FREE_TIER_ENTITLEMENTS),
+)
+
+#: Everything ``seed_plans`` writes: docs/01 §1's three, plus the flagged ₹0 row.
+ALL_PLANS: Final[tuple[PlanSeed, ...]] = (*PLANS, FREE_PLAN)
+
+#: The three docs/01 §1 names, in the order the pricing page shows them.
+PAID_PLAN_CODES: Final[tuple[str, ...]] = tuple(plan.code for plan in PLANS)
 
 
 @dataclass(frozen=True, slots=True)

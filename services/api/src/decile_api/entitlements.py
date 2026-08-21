@@ -1,120 +1,136 @@
-"""The entitlement service (Prompt 7 deliverable 3 — the stub half).
+"""The entitlement service — docs/07 §Entitlements (Prompt 13 deliverable 3).
 
-    "For now, everyone is entitled to everything except export/custom columns/historical ranks,
-     which check a stub entitlement service (replaced in Prompt 13)."
+    "A single EntitlementService used by BOTH the API dependency and the web UI (via /me), so the
+     UI only reflects server truth. Replace the stub from Prompt 7." — PROMPTS.md Prompt 13 §3.
 
-docs/07 §Entitlements fixes the wire shape:
+This module **is** that service. It answers one question — what may this caller do — from one
+place: the ``plan.features`` row of the plan behind their active subscription. Nothing else in
+the service decides an entitlement, and the web app decides none at all: it renders what ``GET
+/me`` returns (Prompt 13 acceptance criterion 4).
 
-```json
-{ "entitlements": { "screener": true, "export_csv": true, "custom_columns": true,
-                    "historical_ranks": true, "backtests": true, "api_access": false,
-                    "max_screens": 50 } }
-```
+What replaced the stub
+----------------------
+Prompt 7 hard-coded "an active subscription grants the three gated features". That is now read
+from the plan row, so a plan an operator edits changes what it grants without a deploy, and the
+₹0 tier can grant a *different* set (Prompt 13 §5's "limited universe") rather than a subset of
+one. Two behaviours changed as a result, both deliberate:
 
-and the rule: "Enforcement is server-side on every gated endpoint; the UI only *reflects*
-entitlements."
+* **Backtests are now paid.** The stub granted them to everyone; Prompt 13 §6 lists them among
+  the features gating applies to. No endpoint enforces it yet — Prompt 15 builds ``/backtests``
+  — so today this shows up only in the ``/me`` payload.
+* **An unpaid account's ``max_screens`` is 5, not 50.** docs/07's example payload shows 50 for a
+  subscriber and the bundle gives no free-tier number; see ``decile_core.entitlements``.
 
-What the stub actually decides
-------------------------------
-The three gated features are granted to a caller with an **active subscription**, and to nobody
-else. That is the shape Prompt 13 will implement for real against Razorpay, so the call sites do
-not have to change when it does — only this file. Anonymous callers are never entitled, which is
-what makes the 402 path testable today.
-
-docs/01 §1 lists five paid features: "export, custom columns, historical ranks, community Slack,
-AMAs". The last two are not API surfaces, so they appear in ``seed_data.GATED_FEATURES`` and not
-here.
+The shape of the answer is docs/07's, exactly seven keys. ``Feature`` and ``Entitlements`` are
+defined in ``decile_core.entitlements`` so the seed data, this service and ``GET /plans`` share
+one definition; only the database lookup is here, because ``packages/core`` does no I/O.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import StrEnum
+import datetime as dt
 from typing import Annotated, Final
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.auth import Principal, PrincipalDep
+from decile_api.auth import Principal, PrincipalDep, settings_for
 from decile_api.db import SessionDep
-from decile_api.problems import payment_required
-from decile_core.models import Subscription
-
-
-class Feature(StrEnum):
-    """The keys docs/07 §Entitlements returns, in the document's order."""
-
-    SCREENER = "screener"
-    EXPORT_CSV = "export_csv"
-    CUSTOM_COLUMNS = "custom_columns"
-    HISTORICAL_RANKS = "historical_ranks"
-    BACKTESTS = "backtests"
-    API_ACCESS = "api_access"
-
-
-#: Prompt 7: "everyone is entitled to everything except export/custom columns/historical ranks".
-GATED: Final[frozenset[Feature]] = frozenset(
-    {Feature.EXPORT_CSV, Feature.CUSTOM_COLUMNS, Feature.HISTORICAL_RANKS}
+from decile_api.settings import Settings, get_settings
+from decile_core.entitlements import (
+    ANONYMOUS,
+    FREE_TIER,
+    REGISTERED,
+    Entitlements,
+    Feature,
+    FeatureNotEntitled,
 )
+from decile_core.models import Plan, Subscription
+from decile_core.seed_data import FREE_PLAN
 
-#: docs/07's own example payload shows ``"api_access": false``, which is also the only honest
-#: answer while the public API does not exist — Prompt 20 builds it. Read literally, Prompt 7's
-#: "everyone is entitled to everything except [the three]" would make this true; docs/07 is the
-#: source of truth and the safer of the two readings. Noted in docs/07a §4.
-API_ACCESS_AVAILABLE: Final = False
+__all__ = [
+    "ANONYMOUS",
+    "Entitlements",
+    "EntitlementsDep",
+    "Feature",
+    "FeatureNotEntitled",
+    "current_entitlements",
+    "entitlements_for",
+    "resolve_active_grant",
+]
 
-#: docs/07's example. Not present in ``seed_data.PLANS[*].features``, so it is a constant here
-#: until Prompt 13 puts a per-plan number on the plan row.
-DEFAULT_MAX_SCREENS: Final = 50
-
-
-@dataclass(frozen=True, slots=True)
-class Entitlements:
-    """What one caller may do. Rendered into ``GET /me`` by Prompt 12."""
-
-    granted: frozenset[Feature]
-    max_screens: int = DEFAULT_MAX_SCREENS
-
-    def allows(self, feature: Feature) -> bool:
-        return feature in self.granted
-
-    def require(self, feature: Feature) -> None:
-        """docs/07: a missing entitlement is a 402 carrying ``upgrade_url``."""
-        if not self.allows(feature):
-            raise payment_required(feature.value)
-
-    def as_dict(self) -> dict[str, object]:
-        payload: dict[str, object] = {feature.value: self.allows(feature) for feature in Feature}
-        payload["max_screens"] = self.max_screens
-        return payload
+#: The subscription statuses that entitle. docs/04 lists four; only one of them is paying.
+#: ``past_due`` deliberately does not entitle — a card that stopped working is the moment the
+#: gated features stop, which is what Prompt 13's second acceptance criterion asserts.
+ENTITLING_STATUSES: Final[frozenset[str]] = frozenset({"active"})
 
 
-async def _has_active_subscription(session: AsyncSession, user_id: int) -> bool:
-    found = (
+async def resolve_active_grant(
+    session: AsyncSession, user_id: int, *, now: dt.datetime | None = None
+) -> tuple[Subscription, Plan] | None:
+    """The subscription that is paying for this account right now, with its plan.
+
+    ``current_period_end`` in the past is treated as expired even if the status column still says
+    ``active``: the row is only as fresh as the last webhook, and an entitlement that outlives the
+    period because a ``subscription.expired`` event was never delivered is a free subscription.
+    A NULL ``current_period_end`` never expires, which is what the one-time "Forever" plan is.
+    """
+    moment = now or dt.datetime.now(tz=dt.UTC)
+    rows = (
         await session.execute(
-            select(Subscription.id)
-            .where(Subscription.user_id == user_id, Subscription.status == "active")
-            .limit(1)
+            select(Subscription, Plan)
+            .join(Plan, Plan.id == Subscription.plan_id)
+            .where(
+                Subscription.user_id == user_id,
+                Subscription.status.in_(ENTITLING_STATUSES),
+            )
+            .order_by(Subscription.started_at.desc(), Subscription.id.desc())
         )
-    ).scalar_one_or_none()
-    return found is not None
+    ).all()
+    for subscription, plan in rows:
+        if subscription.current_period_end is None or subscription.current_period_end > moment:
+            return subscription, plan
+    return None
 
 
-async def entitlements_for(session: AsyncSession, principal: Principal) -> Entitlements:
-    """The stub Prompt 13 replaces."""
-    granted: set[Feature] = {Feature.SCREENER, Feature.BACKTESTS}
-    if API_ACCESS_AVAILABLE:
-        granted.add(Feature.API_ACCESS)
+def _baseline(settings: Settings) -> Entitlements:
+    """What a signed-in account with no paying subscription gets.
 
-    if principal.user_id is not None and await _has_active_subscription(session, principal.user_id):
-        granted |= GATED
+    With the ₹0 tier flag off that is :data:`REGISTERED` — the screener, five saved screens, and
+    none of the gated features. With it on, the account is on the ``free`` plan, which is the same
+    thing restricted to one universe (Prompt 13 §5).
+    """
+    if not settings.free_tier_enabled:
+        return REGISTERED
+    return Entitlements.from_plan_features(FREE_PLAN.features)
 
-    return Entitlements(granted=frozenset(granted))
+
+async def entitlements_for(
+    session: AsyncSession, principal: Principal, *, settings: Settings | None = None
+) -> Entitlements:
+    """The one resolution path. Every gated endpoint and ``GET /me`` go through it."""
+    resolved = settings or get_settings()
+    if principal.user_id is None:
+        return ANONYMOUS
+
+    grant = await resolve_active_grant(session, principal.user_id)
+    if grant is None:
+        return _baseline(resolved)
+
+    _, plan = grant
+    return Entitlements.from_plan_features(plan.features)
 
 
-async def current_entitlements(session: SessionDep, principal: PrincipalDep) -> Entitlements:
-    return await entitlements_for(session, principal)
+async def current_entitlements(
+    request: Request, session: SessionDep, principal: PrincipalDep
+) -> Entitlements:
+    """The FastAPI dependency. Reads *this application's* settings, not the process-wide cache,
+    so a test app built with the ₹0 tier enabled resolves differently from one built without."""
+    return await entitlements_for(session, principal, settings=settings_for(request))
 
 
 EntitlementsDep = Annotated[Entitlements, Depends(current_entitlements)]
+
+#: Re-exported for the ₹0 tier's tests, which need the shape without a database.
+FREE_TIER_ENTITLEMENTS: Final = FREE_TIER

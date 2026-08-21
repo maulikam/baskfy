@@ -26,6 +26,9 @@ const PAGES = [
   { path: "/dashboard", name: "indices dashboard" },
   { path: "/market-health", name: "market health" },
   { path: "/listings", name: "listings" },
+  // Prompt 13's checkout surface. Public, and the one page where a colour-only affordance would
+  // stand between someone and paying.
+  { path: "/pricing", name: "pricing" },
 ] as const;
 
 const THEMES = ["light", "dark"] as const;

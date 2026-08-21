@@ -1,0 +1,240 @@
+# CI — one green check for a pull request touching either tree (MERGE-PROMPTS.md M5).
+#
+# GitHub reads workflows from the REPOSITORY ROOT only, so this is the file that runs.
+# `decile-blueprint/.github/workflows/ci.yml` still exists — it is the screener's own history
+# and M2 excluded nothing there — but since M1 made this a subtree it is INERT. Do not edit it
+# expecting CI to change; edit this one. The jobs below are that file's, with a
+# `working-directory` so they run inside the sub-tree, plus two jobs it could not have had:
+# the desk's suite, and the namespace check M2 settled on.
+#
+# Locally: `tools/ci-local.sh` runs every step of this workflow that does not need GitHub's
+# service containers, and says plainly which ones it skipped and why.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  BASKFY_TEST_DATABASE_URL: postgresql+asyncpg://baskfy:baskfy@localhost:5432/baskfy_test
+  BASKFY_REDIS_URL: redis://localhost:6379/0
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: decile-blueprint
+    services:
+      postgres:
+        # docs/02 locks "PostgreSQL 16 + TimescaleDB"; the stock postgres image has no extension.
+        image: timescale/timescaledb:2.17.2-pg16
+        env:
+          POSTGRES_USER: baskfy
+          POSTGRES_PASSWORD: baskfy
+          POSTGRES_DB: baskfy_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U baskfy" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: Lint and type-check
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy
+      # Prompt 19 §1: ">= 90% on packages/core, >= 80% on services/api. Fail CI below those
+      # thresholds." Coverage is measured on the same run that asserts behaviour, so the numbers
+      # cannot come from a second, differently-configured invocation. The gate itself is
+      # `tools/coverage_gate.py`, which is per package — a single --cov-fail-under would let
+      # baskfy_core slide while baskfy_worker climbed.
+      - name: Tests, with per-package coverage gates
+        run: |
+          uv run pytest --cov --cov-report=term-missing --cov-report=json:coverage.json
+          uv run python -m tools.coverage_gate --report coverage.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.json
+      # Prompt 19 §4's first acceptance criterion: "The reconciliation report runs clean or every
+      # deviation has a written, committed explanation." The command exits non-zero on any
+      # disagreement over its derived tolerances.
+      - name: Reconciliation report against the reference export
+        run: uv run python -m baskfy_worker.reconcile_cli
+      # Prompt 16 deliverable 2: "a CI check that fails if any hot query's plan changes to a
+      # sequential scan on the seeded dataset". Run separately from the suite above so the log
+      # says *this* is what broke — a plan regression and a failed assertion read very
+      # differently to whoever is looking at a red build.
+      - name: Hot-query plans have not regressed
+        run: uv run pytest -q services/api/tests/test_query_plans.py
+      # Prompt 16 acceptance criterion 1: every docs/11 budget measured, and the numbers written
+      # down. `--check` fails on a missed budget *and* on an unmeasured one, so a benchmark that
+      # silently stopped running is not mistaken for a passing one.
+      - name: Performance budgets (docs/11)
+        run: |
+          uv run pytest -m benchmark
+          uv run python -m benchmarks.report --check --gate python
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: as-measured
+          path: benchmarks/AS-MEASURED.md
+      # Prompt 17 deliverables 2 and 3. `services/api/tests/test_metrics.py` already asserts that
+      # every rule names a metric we publish; this asserts that Prometheus itself would load the
+      # file — a PromQL typo parses as valid YAML and fails only at evaluation time, in
+      # production, silently.
+      - name: Prometheus rules and config are loadable
+        run: |
+          docker run --rm --entrypoint promtool \
+            -v "$PWD/infra/prometheus:/rules:ro" prom/prometheus:v3.1.0 \
+            check config /rules/prometheus.yml
+
+  client:
+    # docs/07 §"OpenAPI -> TypeScript": "Hand-written request types are a CI failure."
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: decile-blueprint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: uv sync --frozen
+      - run: pnpm install --frozen-lockfile
+      - name: openapi.json is current
+        run: uv run python -m baskfy_api.openapi --check
+      - name: Generated client is current
+        run: pnpm --filter @baskfy/api-client run generate
+      - name: Fail if the checked-in client is stale
+        run: git diff --exit-code -- packages/api-client/src/generated packages/api-client/openapi.json
+      - name: Type-check and test the client
+        run: |
+          pnpm --filter @baskfy/api-client run lint
+          pnpm --filter @baskfy/api-client run test
+
+  web:
+    # Prompt 8's acceptance criteria (Lighthouse accessibility, the 4,000-row scroll trace, the
+    # keyboard walkthrough, the layout-shift budget) and Prompt 9's (the screens walk-through, the
+    # sentinel behaviour, the URL round-trip). They need a real browser, a production build, and —
+    # since Prompt 9 — a running API with a seeded database, which `playwright.config.ts` starts
+    # itself.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: decile-blueprint
+    services:
+      postgres:
+        image: timescale/timescaledb:2.17.2-pg16
+        env:
+          POSTGRES_USER: baskfy
+          POSTGRES_PASSWORD: baskfy
+          POSTGRES_DB: baskfy
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U baskfy" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6380:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: uv sync --frozen
+      - run: pnpm install --frozen-lockfile
+      # `openapi.json` is the client's input and the client is the web app's contract, so the
+      # spec is emitted before anything is type-checked against it.
+      - run: uv run python -m baskfy_api.openapi
+      - run: pnpm --filter @baskfy/api-client run generate
+      - name: Lint and type-check
+        run: pnpm --filter @baskfy/web run lint
+      - name: Unit tests
+        run: pnpm --filter @baskfy/web run test
+      - name: Install Playwright browsers
+        run: pnpm --filter @baskfy/web exec playwright install --with-deps chromium
+      - name: Create the browser suite's database
+        run: |
+          PGPASSWORD=baskfy psql -h localhost -p 5433 -U baskfy -d postgres \
+            -c "CREATE DATABASE baskfy_e2e;"
+      - name: Acceptance checks
+        # `playwright.config.ts` migrates and seeds `baskfy_e2e`, starts the API on :8100 and the
+        # web app on :3100, and tears both down.
+        run: pnpm --filter @baskfy/web run e2e
+        env:
+          BASKFY_JWT_SECRET: ci-placeholder-secret-0123456789abcdef
+          AUTH_SECRET: ci-placeholder-secret-0123456789abcdef
+          BASKFY_REDIS_URL: redis://localhost:6380/0
+      # Prompt 16 deliverable 5: "a bundle-size CI budget". After the acceptance checks, because
+      # `playwright.config.ts` runs `next build` itself and reads `.next/app-build-manifest.json`
+      # — measuring the very bytes the browser suite was just served, with no second build.
+      # `if: always()` so a failing Playwright assertion does not hide a blown budget.
+      - name: "Client-JS budget (docs/11: screens route < 250 KB gzip)"
+        if: always()
+        run: pnpm --filter @baskfy/web run bundle-budget
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+
+  desk:
+    # The execution desk. No database service: it carries its own SQLite and its suite runs
+    # entirely offline. DRY_RUN is forced true — CI must never be one environment variable away
+    # from a live order path, whatever a checked-in .env might say (CLAUDE.md safety rails).
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kite-momentum-rebalancer
+    env:
+      DRY_RUN: "true"
+      OPTIONS_ENABLED: "false"
+      INTRADAY_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned dependencies
+        # requirements.txt is pinned deliberately: an unpinned Starlette once landed mid-session
+        # and 500'd the webview. See the comment at the top of that file.
+        run: pip install -r requirements.txt
+      - name: Tests
+        run: python -m pytest
+
+  namespace:
+    # The M2 rename, enforced. `decile` is domain vocabulary as well as a former brand, so the
+    # check is token-scoped with a named exception list rather than a bare grep — the reasoning
+    # is in the script's own header and in docs/DECISIONS-MERGE.md M2.1.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No namespace token survived the rename
+        run: tools/check-namespace.sh

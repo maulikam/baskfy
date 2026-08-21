@@ -547,3 +547,43 @@ could not reach it) — including the Kite, Razorpay, Resend, JWT and token-encr
 repointed at `baskfy`; no value was printed, logged or copied into this repository. A `0600` copy
 of the original is at `~/baskfy-safety/2026-08-22/env/`, outside the tree. The file itself is
 `0600` and untracked.
+
+---
+
+## M8
+
+### M8.1 — Four of the fourteen universes had a 404 for a constituent file, and it would have been silent ⚠ UNREVIEWED
+`_file_token` built every constituent filename as `ind_{slug-without-hyphens}list.csv`. Correct for
+seven published universes; **404 for four** — `nifty-total-market`, `nifty-large-mid-250`,
+`nifty-microcap-250`, `nifty-mid-small-400`.
+
+**Why this mattered more than a broken URL.** `factor_daily.universe_mask` is a bit per universe,
+set from membership. Four universes that never populate do not raise — they make screens over those
+universes **return nothing**, which reads as "no stocks matched your filters" rather than as a
+fault. Four of the fourteen selectable universes in `docs/01` §2.1 would have been quietly dead.
+
+**Decided.** `_CONSTITUENT_FILE_OVERRIDES` — an explicit slug → filename table, each entry
+confirmed 200 against the live archive on 22 Aug 2026. Not a cleverer rule: NSE is inconsistent in
+two independent ways (underscore before `list` or not; "largemid**cap**" and "midsmall**cap**"
+where the slug says "large-mid" and "mid-small"), and a rule that happened to cover today's eleven
+would break on the twelfth. Adding a universe now means checking the archive.
+
+**After the fix: 11 fetched, 3 derived by rule, 0 failures**, and every fetched count matches the
+index's published size — 50/50/100/200/500/752/250/150/250/252/400. That correspondence is the
+strongest available evidence that the right file was read, and it is why the note records counts
+rather than just "OK".
+
+### M8.2 — The rest of the NSE surface was right first time
+`listings` (2,553 rows), `bhavcopy` (3,649 rows for 2026-08-21, 13 columns), `index_snapshots`
+(164 indices, NIFTY 50 at 24252.0 with PE/PB/yield) and `corporate_actions` (20 typed actions) all
+returned and parsed on the first live call, against URL shapes written from documentation and never
+before fetched. Recorded because the screener's own `CLAUDE.md` flagged all five as unverified and
+the honest outcome is that four fifths of the guesswork was right.
+
+Verification is repeatable: `tools/verify-nse.py`, which drives `NSEProvider` itself rather than
+reimplementing its fetch, so the cookie priming, throttle, retry and circuit breaker are all under
+test. The dated note is `decile-blueprint/reconciliation/NSE-ENDPOINTS.md`.
+
+**Candidate filenames were probed with a handful of spaced `curl` requests** to discover the four
+real names. That is discovery, not ingestion — no data was taken through it, and every actual fetch
+went through the rate-limited provider, as the safety rails require.

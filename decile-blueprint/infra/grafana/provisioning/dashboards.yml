@@ -1,0 +1,19 @@
+# Grafana dashboard provisioning — PROMPTS.md Prompt 17 deliverable 2.
+#
+# Mount `infra/grafana/dashboards` at the path below and Grafana loads both dashboards at startup.
+# `allowUiUpdates: false` on purpose: a dashboard edited in the browser and not committed is a
+# dashboard that disappears on the next deploy, and the panels here are the ones the alert rules
+# in `infra/prometheus/alerts.yml` were written against.
+apiVersion: 1
+
+providers:
+  - name: decile
+    orgId: 1
+    folder: Decile
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/decile
+      foldersFromFilesStructure: false

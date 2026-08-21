@@ -1,0 +1,26 @@
+Investing 001
+
+2026-08-18 → 2026-08-19
+
+Entries (2)
+  #3    BSE           BSE LIMITED
+  #4    ZOMATO        ZOMATO LIMITED
+
+Exits (1)
+  #2    TITAN         TITAN COMPANY LIMITED
+
+Rank changes (3)
+    +3  #2    KAYNES        KAYNES TECHNOLOGY INDIA LIMITED (was #5)
+    -2  #5    TRENT         TRENT LIMITED (was #3)
+    -2  #6    PERSISTENT    PERSISTENT SYSTEMS LIMITED (was #4)
+
+1 name held its rank.
+
+View the screen: http://localhost:3000/screens/exmpl0000001
+Stop this alert: http://localhost:3000/alerts/unsubscribe?token=0123456789abcdef0123456789abcdef
+
+Manage your alerts: http://localhost:3000/alerts
+
+--
+You are receiving this because you subscribed a Decile screen to alerts. Every alert carries its own link to stop it.
+Decile is not a SEBI-registered investment adviser. Everything here is factual analysis of published market data, not investment advice.

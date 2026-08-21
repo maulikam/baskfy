@@ -1,0 +1,162 @@
+"""Storage precision (Prompt 5 deliverable 7).
+
+    "Storage precision exactly as docs/13 §4: round at WRITE time (prices/returns/sharpe/
+     away-from-high/positive-days 2 dp, RSI 4 dp, volatility and beta 10 dp with volatility
+     stored as a decimal FRACTION not a percentage, marketcap integer ₹ crore, volumes bigint
+     rupees)."
+
+docs/13 §4: "The reference product rounds **at write time**, not at render time. Do the same for
+the columns above so exports and UI agree byte-for-byte, but keep full precision for volatility
+and beta because they feed divisions."
+
+Rounding at write time is what makes the CSV export, the API response and the screen table agree.
+Round at render and three surfaces each round independently — from a value that was never itself
+rounded — and they disagree in the last digit, which is exactly the kind of discrepancy that
+destroys trust in a numbers product.
+
+Half-up, not banker's rounding: the reference product's values are consistent with half-up, and
+Python's default (half-even) would differ on exact halves. Over 271 rows x 93 columns that is a
+handful of cells, all of them avoidable.
+"""
+
+from __future__ import annotations
+
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Final
+
+import polars as pl
+
+#: docs/13 §4, column family -> decimal places.
+PRICE_DP: Final = 2
+PERCENT_DP: Final = 2
+RSI_DP: Final = 4
+RATIO_DP: Final = 10
+
+_EXPONENTS: Final[dict[int, Decimal]] = {
+    0: Decimal(1),
+    2: Decimal("0.01"),
+    4: Decimal("0.0001"),
+    10: Decimal("0.0000000001"),
+}
+
+#: Which precision each ``factor_daily`` column is written at. The engine rounds by looking a
+#: column up here, so adding a column without deciding its precision is impossible.
+COLUMN_PRECISION: Final[dict[str, int]] = {
+    # Prices, moving averages, highs — 2 dp.
+    "close": PRICE_DP,
+    "close_raw": PRICE_DP,
+    "ma_20": PRICE_DP,
+    "ma_50": PRICE_DP,
+    "ma_100": PRICE_DP,
+    "ma_200": PRICE_DP,
+    "high_1y": PRICE_DP,
+    "high_ath": PRICE_DP,
+    # Returns, sharpe returns, away-from-high, positive days — 2 dp.
+    **{f"ret_{k}m": PERCENT_DP for k in (1, 3, 6, 9, 12)},
+    "ret_12m_minus_1m": PERCENT_DP,
+    "ret_12m_minus_2m": PERCENT_DP,
+    **{f"sharpe_{k}m": PERCENT_DP for k in (1, 3, 6, 9, 12)},
+    "away_high_1y": PERCENT_DP,
+    "away_high_ath": PERCENT_DP,
+    **{f"pos_days_{k}m": PERCENT_DP for k in (1, 3, 6, 9, 12)},
+    # RSI — 4 dp.
+    **{f"rsi_{k}m": RSI_DP for k in (1, 3, 6, 9, 12)},
+    # Volatility (a decimal FRACTION) and beta — 10 dp, because they feed divisions.
+    **{f"vol_{k}m": RATIO_DP for k in (1, 3, 6, 9, 12)},
+    "beta_12m": RATIO_DP,
+    # P/E keeps NSE's own 4 dp (docs/04 numeric(14,4)).
+    "pe": RSI_DP,
+}
+
+#: Columns stored as whole numbers: marketcap in ₹ crore, turnover and volumes in ₹.
+INTEGER_COLUMNS: Final[frozenset[str]] = frozenset(
+    {
+        "marketcap_cr",
+        "vol_day_val",
+        "vol_avg_1w",
+        "vol_avg_1m",
+        "vol_avg_3m",
+        "vol_avg_6m",
+        "vol_avg_9m",
+        "vol_avg_12m",
+        "median_vol_12m",
+        "circuits_1m",
+        "circuits_3m",
+        "circuits_6m",
+        "circuits_9m",
+        "circuits_12m",
+    }
+)
+
+
+def quantise(value: object, places: int) -> Decimal | None:
+    """Round one value half-up to ``places`` decimals. ``None`` passes through."""
+    if value is None:
+        return None
+    try:
+        exponent = _EXPONENTS[places]
+    except KeyError as exc:
+        raise ValueError(f"unsupported precision {places}; expected {sorted(_EXPONENTS)}") from exc
+    try:
+        candidate = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+    if not candidate.is_finite():
+        # A division by a zero volatility or a zero beta produces inf/nan. docs/05 §3 and §7 both
+        # say the answer there is NULL, and a NULL is what the schema stores.
+        return None
+    return candidate.quantize(exponent, rounding=ROUND_HALF_UP)
+
+
+def round_expr(column: str, places: int) -> pl.Expr:
+    """Round a float column half-up at write time, as a Polars expression."""
+    scale = pl.lit(10.0**places)
+    value = pl.col(column)
+    return (
+        pl.when(value.is_null() | value.is_infinite() | value.is_nan())
+        .then(None)
+        .otherwise((value.abs() * scale + 0.5).floor() / scale * value.sign())
+        .alias(column)
+    )
+
+
+def integer_expr(column: str) -> pl.Expr:
+    """Round to a whole number half-up, for the ₹ and ₹-crore columns."""
+    value = pl.col(column)
+    return (
+        pl.when(value.is_null() | value.is_infinite() | value.is_nan())
+        .then(None)
+        .otherwise((value.abs() + 0.5).floor() * value.sign())
+        .cast(pl.Int64)
+        .alias(column)
+    )
+
+
+def apply_storage_precision(frame: pl.DataFrame) -> pl.DataFrame:
+    """Round every recognised column to its documented precision.
+
+    Columns not in the table are left alone — they are keys, labels or masks, none of which is a
+    measurement. A *numeric* column that is missing from the table is a bug, and
+    :func:`unpriced_numeric_columns` is what the tests use to catch one.
+    """
+    expressions = [
+        round_expr(name, places)
+        for name, places in COLUMN_PRECISION.items()
+        if name in frame.columns and frame.schema[name] in (pl.Float64, pl.Float32)
+    ]
+    expressions += [
+        integer_expr(name)
+        for name in INTEGER_COLUMNS
+        if name in frame.columns and frame.schema[name] in (pl.Float64, pl.Float32)
+    ]
+    return frame.with_columns(expressions) if expressions else frame
+
+
+def unpriced_numeric_columns(frame: pl.DataFrame) -> list[str]:
+    """Float columns with no documented storage precision — always a bug."""
+    known = set(COLUMN_PRECISION) | INTEGER_COLUMNS
+    return sorted(
+        name
+        for name, dtype in frame.schema.items()
+        if dtype in (pl.Float64, pl.Float32) and name not in known
+    )

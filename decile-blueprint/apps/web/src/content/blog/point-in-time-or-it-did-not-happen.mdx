@@ -1,0 +1,44 @@
+The most expensive mistake in a backtest is not a wrong formula. It is a right formula reading a
+number that did not exist yet.
+
+## The two look-ahead traps in Indian equities
+
+**Index membership.** Run a screen on NIFTY 500 as of March 2019 using today's constituent list
+and you have quietly selected for survivorship: the names that got promoted into the index, and
+none of the ones that fell out. The correct universe is the one that existed on the date, which
+means storing membership per day rather than per index.
+
+**Restatements and adjustments.** A corporate action announced in June changes the adjusted price
+history back to the listing date. A factor recomputed today over a historical window is therefore
+not the factor that was computable on that date. This one is less discussed and just as real.
+
+## What we do about the first
+
+Index membership is stored one row per index, per instrument, per day. A screen run as of a past
+date joins against that date's rows. There is no fallback to "today's members" and no code path
+that would silently produce one.
+
+Membership before 2018 had to be reconstructed from what the exchange published, and reconstructed
+rows are labelled as such. Every backtest that touches that period says so in its assumptions
+panel — not because it invalidates the result, but because a reader is entitled to know which part
+of the input was rebuilt rather than recorded.
+
+## What we do about the second
+
+Less. Factors are recomputed nightly over the current adjusted series, so a historical factor row
+reflects the corporate actions known today. Fixing this properly means bitemporal factor storage —
+a row per (as-of date, known-as-of date) — which multiplies the table and is not built.
+
+The practical impact is small for momentum over liquid names and is not zero, and pretending
+otherwise would be exactly the kind of claim this product exists not to make.
+
+## The guard, in code
+
+The backtest engine does not trust its own authors. Its reader takes the simulated date as a bound
+and physically cannot return a row dated after it; asking for one raises rather than returning an
+empty frame, because an empty frame is a result and a raise is a bug report. Six correctness tests
+run against a synthetic market built so that a look-ahead bug produces an obviously impossible
+equity curve.
+
+That is the difference between a property the code has and a property somebody remembered to
+maintain.

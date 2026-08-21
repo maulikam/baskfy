@@ -1,0 +1,112 @@
+# Local development stack for Decile.
+#
+# NOTE ON THE POSTGRES IMAGE: docs/02-tech-stack-adr.md locks "PostgreSQL 16 + TimescaleDB".
+# The stock `postgres:16` image does not ship the TimescaleDB extension, so we use the official
+# TimescaleDB image built on PostgreSQL 16. It is still PostgreSQL 16.
+name: decile
+
+services:
+  postgres:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: decile-postgres
+    environment:
+      POSTGRES_USER: decile
+      POSTGRES_PASSWORD: decile
+      POSTGRES_DB: decile
+    ports:
+      - "${DECILE_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - decile-pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U decile -d decile"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: decile-redis
+    ports:
+      - "${DECILE_REDIS_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Prompt 12 §3: "Transactional email via Resend with **local delivery to mailpit**".
+  #
+  # Mailpit accepts SMTP on 1025 and serves everything it caught at http://localhost:8025, so a
+  # developer can read the sign-in code they were just sent instead of grepping a log. Nothing
+  # leaves the machine: point DECILE_EMAIL_TRANSPORT at `smtp` and the production Resend path is
+  # never exercised locally, which is the point.
+  mailpit:
+    image: axllent/mailpit:v1.21
+    container_name: decile-mailpit
+    ports:
+      - "${DECILE_SMTP_PORT:-1025}:1025"
+      - "${DECILE_MAILPIT_UI_PORT:-8025}:8025"
+    environment:
+      MP_MAX_MESSAGES: "500"
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Prompt 17 deliverable 2. Started only with `--profile observability`, because a laptop
+  # running `make up` for the test suite does not want three more containers — and, more to the
+  # point, because `/metrics` and the alert rules are asserted by
+  # `services/api/tests/test_metrics.py` without any of this running. The stack is here so that
+  # "does the dashboard actually render" can be answered locally rather than in staging.
+  #
+  #   docker compose -f infra/docker/compose.yml --profile observability up -d
+  #
+  # NOTE: the API and the worker are NOT in this compose file — they run on the host (`make api`,
+  # `make worker`), so Prometheus is pointed at `prometheus.local.yml`, whose targets are
+  # `host.docker.internal`. `prometheus.yml` keeps the deployment targets and is the file CI
+  # validates; both load the same `alerts.yml`.
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: decile-prometheus
+    profiles: ["observability"]
+    ports:
+      - "${DECILE_PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ../prometheus:/etc/prometheus:ro
+      - decile-prometheus-data:/prometheus
+    command:
+      # `prometheus.local.yml`, not `prometheus.yml`: the API and the worker run on the host
+      # (`make api`, `make worker`), so the targets differ. Both load the same `alerts.yml`.
+      - --config.file=/etc/prometheus/prometheus.local.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: decile-grafana
+    profiles: ["observability"]
+    depends_on: [prometheus]
+    ports:
+      - "${DECILE_GRAFANA_PORT:-3001}:3000"
+    environment:
+      # Local only. There is no auth story for a laptop dashboard and inventing one would be
+      # a password nobody remembers rather than a security boundary.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ../grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/decile.yml:ro
+      - ../grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/decile.yml:ro
+      - ../grafana/dashboards:/etc/grafana/provisioning/dashboards/decile:ro
+      - decile-grafana-data:/var/lib/grafana
+
+volumes:
+  decile-pgdata:
+  decile-prometheus-data:
+  decile-grafana-data:

@@ -1,0 +1,49 @@
+{
+  "_comment": [
+    "Two consecutive screen_run rows for one screen, as PROMPTS.md Prompt 20's second acceptance",
+    "criterion needs them: 'given two consecutive screen_run fixtures, the email content matches",
+    "an expected snapshot exactly'.",
+    "",
+    "`results` is docs/04's shape for the column: [{rank, instrument_id, factor_value}], with the",
+    "factor value stored as a string (docs/07a §6). The symbols are real NSE names taken from the",
+    "docs/13 reference export; the ranks and values are constructed so that the diff exercises",
+    "every branch of the email — two entries, one exit, a climb, a fall, and names that held.",
+    "",
+    "Nothing regenerates this file. Editing it changes the committed snapshots beside it, which is",
+    "the point: the email's wording is a contract, not an implementation detail."
+  ],
+  "screen": {
+    "public_id": "exmpl0000001",
+    "name": "Investing 001"
+  },
+  "instruments": {
+    "101": { "symbol": "CUPID", "name": "CUPID LIMITED" },
+    "102": { "symbol": "KAYNES", "name": "KAYNES TECHNOLOGY INDIA LIMITED" },
+    "103": { "symbol": "TITAN", "name": "TITAN COMPANY LIMITED" },
+    "104": { "symbol": "TRENT", "name": "TRENT LIMITED" },
+    "105": { "symbol": "ZOMATO", "name": "ZOMATO LIMITED" },
+    "106": { "symbol": "PERSISTENT", "name": "PERSISTENT SYSTEMS LIMITED" },
+    "107": { "symbol": "BSE", "name": "BSE LIMITED" }
+  },
+  "previous": {
+    "as_of": "2026-08-18",
+    "results": [
+      { "rank": 1, "instrument_id": 101, "factor_value": "5.19" },
+      { "rank": 2, "instrument_id": 103, "factor_value": "4.80" },
+      { "rank": 3, "instrument_id": 104, "factor_value": "4.55" },
+      { "rank": 4, "instrument_id": 106, "factor_value": "4.10" },
+      { "rank": 5, "instrument_id": 102, "factor_value": "3.90" }
+    ]
+  },
+  "current": {
+    "as_of": "2026-08-19",
+    "results": [
+      { "rank": 1, "instrument_id": 101, "factor_value": "5.31" },
+      { "rank": 2, "instrument_id": 102, "factor_value": "5.02" },
+      { "rank": 3, "instrument_id": 107, "factor_value": "4.71" },
+      { "rank": 4, "instrument_id": 105, "factor_value": "4.44" },
+      { "rank": 5, "instrument_id": 104, "factor_value": "4.20" },
+      { "rank": 6, "instrument_id": 106, "factor_value": "3.88" }
+    ]
+  }
+}

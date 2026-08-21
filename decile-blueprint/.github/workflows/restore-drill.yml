@@ -1,0 +1,136 @@
+# The monthly restore drill — PROMPTS.md Prompt 17 deliverable 6.
+#
+#   "Automated backups with a monthly restore-drill CI job that provisions a scratch database from
+#    the latest backup and runs a data-integrity assertion."
+#
+# docs/11 §Reliability: "restore drill monthly — **an untested backup is not a backup**."
+#
+# WHAT THIS DRILL DOES AND DOES NOT PROVE
+# ----------------------------------------
+# The prompt says "from the latest backup", meaning the real nightly dump in R2. This job does not
+# read it, and cannot: CI has no R2 credentials and the overnight build was forbidden from
+# contacting real infrastructure. So it takes a backup *here* — of a freshly migrated and seeded
+# database — with the same `infra/backup/pg_backup.sh` production runs, restores it with the same
+# `infra/backup/restore.sh` an operator would use in an incident, and asserts the result with
+# `decile_api.integrity`.
+#
+# That exercises: the dump command and its flags, the digest, the size floor, the DROP/CREATE
+# guard, the Timescale pre/post-restore dance, and every integrity assertion. It does NOT exercise:
+# that the object in R2 is readable, that the R2 credentials still work, or that a *fifteen-year*
+# database restores in an acceptable time. Those need a deployment.
+#
+# `docs/runbooks/restore-from-backup.md` §"The drill" says the same thing in prose, and
+# `docs/DECISIONS.md` §17.13 records the decision.
+name: restore-drill
+
+on:
+  schedule:
+    # 02:00 UTC on the 1st = 07:30 IST, before the trading day and well after the nightly chain.
+    - cron: "0 2 1 * *"
+  # So the drill can be rehearsed without waiting a month — which is the first thing anyone will
+  # want to do, and a drill you cannot rehearse is a drill nobody trusts.
+  workflow_dispatch: {}
+  # Any change to the backup or restore machinery re-runs it. A restore script that only runs
+  # monthly is a restore script that is broken for up to a month.
+  pull_request:
+    paths:
+      - "infra/backup/**"
+      - "services/api/src/decile_api/integrity.py"
+      - ".github/workflows/restore-drill.yml"
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # docs/02 locks "PostgreSQL 16 + TimescaleDB". The stock image has no extension, and a
+        # drill on a database without it would restore hypertables as plain tables and pass.
+        image: timescale/timescaledb:2.17.2-pg16
+        env:
+          POSTGRES_USER: decile
+          POSTGRES_PASSWORD: decile
+          POSTGRES_DB: decile_drill_source
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U decile" --health-interval 5s
+          --health-timeout 5s --health-retries 20
+    env:
+      PGPASSWORD: decile
+      SOURCE_URL: postgresql+asyncpg://decile:decile@localhost:5432/decile_drill_source
+      TARGET_URL: postgresql://decile:decile@localhost:5432/decile_drill_restore
+      DECILE_BACKUP_DIR: ${{ github.workspace }}/.backups
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+
+      # The client tools must match the server major version: pg_restore refuses a dump from a
+      # newer server, and Ubuntu's default client is older than 16.
+      - name: Install PostgreSQL 16 client tools
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+          sudo sh -c 'echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          pg_dump --version
+
+      - name: Enable TimescaleDB on the source database
+        run: psql -h localhost -U decile -d decile_drill_source -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
+
+      - name: Migrate and seed the source database
+        run: |
+          cd services/api && uv run alembic upgrade head
+        env:
+          DECILE_DATABASE_URL: ${{ env.SOURCE_URL }}
+
+      - name: Seed reference data
+        run: uv run python -m decile_api.seed all
+        env:
+          DECILE_DATABASE_URL: ${{ env.SOURCE_URL }}
+
+      # Assert the SOURCE first. If the source fails its own integrity checks the drill would
+      # report a bad restore when what it actually found was a bad seed, and the operator would
+      # spend the morning debugging the wrong half.
+      - name: Integrity of the source database (control)
+        run: uv run python -m decile_api.integrity --database-url "$SOURCE_URL"
+
+      - name: Take a backup
+        run: infra/backup/pg_backup.sh --no-upload
+        env:
+          DECILE_BACKUP_DATABASE_URL: postgresql://decile:decile@localhost:5432/decile_drill_source
+
+      - name: Restore it into a scratch database
+        run: |
+          DUMP="$(cat "$DECILE_BACKUP_DIR/LATEST")"
+          echo "restoring $DUMP"
+          infra/backup/restore.sh --dump "$DUMP" --target "$TARGET_URL"
+        env:
+          DECILE_ADMIN_DATABASE_URL: postgresql://decile:decile@localhost:5432/postgres
+
+      # THE ASSERTION. Everything above is setup; this is the drill.
+      - name: Data-integrity assertions on the restored database
+        run: |
+          uv run python -m decile_api.integrity \
+            --database-url "postgresql+asyncpg://decile:decile@localhost:5432/decile_drill_restore"
+
+      - name: Machine-readable report
+        if: always()
+        run: |
+          uv run python -m decile_api.integrity --json \
+            --database-url "postgresql+asyncpg://decile:decile@localhost:5432/decile_drill_restore" \
+            > integrity.json || true
+          {
+            echo '## Restore drill'
+            echo '```json'
+            cat integrity.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: restore-drill-report
+          path: integrity.json

@@ -1,0 +1,36 @@
+# Local scrape configuration — the one `infra/docker/compose.yml`'s `observability` profile uses.
+#
+# Identical to `prometheus.yml` except for the targets: `make api` and `make worker` run on the
+# **host**, not in the compose network, so the container reaches them through
+# `host.docker.internal` (the compose service declares the `host-gateway` extra host).
+#
+# `prometheus.yml` keeps the deployment targets (`api:8000`, `worker:9101`) and is the file CI
+# validates with `promtool check config`. Both load `alerts.yml`, which is the part that matters
+# and is the part that is asserted by `services/api/tests/test_metrics.py`.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+  external_labels:
+    environment: local
+
+rule_files:
+  - alerts.yml
+
+# No Alertmanager locally. An alert that fires here is visible in Prometheus' own Alerts tab,
+# which is what you want when checking that a rule works; routing is a deployment concern.
+
+scrape_configs:
+  - job_name: decile-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+
+  - job_name: decile-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:9101"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

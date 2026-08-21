@@ -1,0 +1,20 @@
+packages:
+  - "apps/*"
+  - "packages/api-client"
+
+# Packages whose postinstall must run. pnpm 11 blocks build scripts by default.
+allowBuilds:
+  # esbuild (a vitest dependency) places its platform binary.
+  esbuild: true
+  # sharp is Next.js's image optimiser; without its postinstall `next build` falls back to a
+  # slower JS codec and warns on every image.
+  sharp: true
+  # Tailwind v4's Rust engine ships a platform binary.
+  "@tailwindcss/oxide": true
+  # eslint's native module resolver.
+  "unrs-resolver": true
+  # NO. `@sentry/cli`'s postinstall downloads a platform binary used for uploading source
+  # maps at build time. We do not use `withSentryConfig` — Sentry is initialised server-side
+  # only, from `apps/web/src/instrumentation.ts` (docs/DECISIONS.md §17.12) — so nothing ever
+  # invokes the CLI, and a network download during `pnpm install` in CI buys nothing.
+  "@sentry/cli": false

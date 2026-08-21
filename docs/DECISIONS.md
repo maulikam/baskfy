@@ -463,3 +463,192 @@ estimates") and **does not exist yet**.
   dataset".** The seeded database is a single trading day of *results* (`docs/13`'s export); it
   has no price history, so no fifteen-year backtest can run against it. See the module docstring
   in `packages/core/tests/backtest_fixtures.py`.
+
+---
+
+## Prompt 16 — Performance, caching, and load hardening (2026-08-21)
+
+Every judgement call taken while implementing Prompt 16 under the overnight working agreement.
+
+### 16.1 The "as measured" column is in `benchmarks/AS-MEASURED.md`, not in `docs/11`
+
+Prompt 16's first acceptance criterion asks for the measured numbers "written into docs/11 as an
+'as measured' column". The overnight rules forbid editing anything under `docs/` except appending
+to this file. The table is therefore rendered to `benchmarks/AS-MEASURED.md` by
+`python -m benchmarks.report`, in the same row order and with docs/11's own wording in the Surface
+and Target columns, ready to be pasted in. **This is an unmet acceptance criterion in the letter
+and a met one in substance; somebody has to paste it.**
+
+The rendered table carries a "Measured against" column docs/11 does not ask for. It is the honest
+half: "4 ms" against docs/13's 271-row single-date export and "4 ms" in production are not the
+same claim, and a number without its dataset invites the confusion.
+
+### 16.2 `market_health_daily` and `index_snapshot_daily` became hypertables
+
+docs/03 §"Scaling plan" step 3 asks for "Timescale continuous aggregates for market-health and
+index history" and Prompt 16 §4 asks for them to be built. A continuous aggregate can only be
+defined over a hypertable, and docs/04 declares both of these as plain tables. Migration 0008
+converts them, on the same one-year chunk interval every other hypertable uses; `date` is already
+the second column of both primary keys, which is what makes the conversion legal.
+
+This is a **deviation from docs/04's DDL**, taken because docs/03 asks for something docs/04 does
+not anticipate rather than because a plain table was inadequate.
+`services/api/tests/test_migrations.py` asserts an exact set of hypertables and now names five
+instead of three, split into `DOCUMENTED_HYPERTABLES` and `SCALING_HYPERTABLES` so the reason is
+readable at the assertion. Reversing it is one migration.
+
+The aggregates (`market_health_monthly`, `index_snapshot_monthly`) bucket monthly, exclude the
+current bucket (`end_offset => 1 day`, for the same reason docs/06 §step 1 refuses a half-written
+day), and are refreshed by a Timescale policy. **Nothing reads them yet.** docs/03 says the
+scaling plan is followed "only when measured", and at one seeded date there is nothing to measure;
+`test_timescale.py` asserts they agree with their source tables so that whoever wires them up
+inherits a verified aggregate rather than an unverified one.
+
+### 16.3 No pytest-benchmark, no k6, no Locust
+
+Prompt 16 §1 suggests "pytest-benchmark + k6 or Locust". docs/02 §"The decision in one table"
+locks "pytest + hypothesis" for the Python suite and CLAUDE.md house rule 1 requires a reason
+before a dependency outside it.
+
+* **pytest-benchmark**: Prompt 7 already hand-rolled the p95 harness these budgets need
+  (`test_api_benchmark.percentile`). The library's calibration machinery targets microbenchmarks,
+  not a request that talks to PostgreSQL and Redis, and a docs/11 budget is a threshold rather
+  than a distribution — its statistics would not be what is asserted.
+* **k6**: a Go binary. Nothing in this repository can install one.
+* **Locust**: a gevent runtime and a web UI to do what `asyncio.gather` does in thirty lines
+  against `httpx`, which the suite already depends on.
+
+The load driver is `benchmarks/load_screens.py`, used from a pytest test over an ASGI transport
+(so CI needs no server) and from `make loadtest` over real HTTP (so the number can include the
+socket). Both are labelled in the report.
+
+### 16.4 `ix_factor_daily_date` dropped; the composite rebuilt with `INCLUDE (instrument_id)`
+
+CLAUDE.md's open items assigned this to Prompt 16: "`ix_factor_daily_date_marketcap_cr` is dead
+weight today ... Prompt 16 should drop one or rebuild the other with `INCLUDE (instrument_id)`."
+Migration 0008 does both. `(date)` is a strict prefix of `(date, marketcap_cr)`, so nothing the
+narrow index served is lost; the nightly `compute_factors` step writes one index instead of two;
+and docs/06 §step 3's decile bucketing can now read `(instrument_id, marketcap_cr)` for one date
+index-only.
+
+Consequence worth noting: **Prompt 6's fifth acceptance criterion now holds as written.** It asked
+this suite to "assert with EXPLAIN that it uses the (date, marketcap_cr) index", which had been
+impossible while the narrow index shadowed it;
+`test_screener_performance.py::TestThePlan` now asserts it directly rather than accepting either
+index.
+
+### 16.5 Two indexes added, both found by an `enable_seqscan = off` probe
+
+* `ix_index_member_daily_date_instrument_id` — the factsheet asks "which indices is *this*
+  instrument in today" (docs/10a §4), the opposite direction from the screener's "who is in this
+  index", and neither the primary key nor `(date, index_id)` puts `instrument_id` in a usable
+  position.
+* `ix_instrument_listings_page` — an expression index on
+  `(coalesce(listed_on, DATE '0001-01-01') DESC, symbol ASC) WHERE is_active IS TRUE`, which is
+  the listings register's exact sort key. Before it, the planner chose a sequential scan *even
+  with sequential scans disabled*, which means no index applied at any table size.
+
+The predicate is spelled `is_active IS TRUE` rather than `is_active` because the handler writes
+`Instrument.is_active.is_(True)` and PostgreSQL's partial-index prover does not derive one form
+from the other. A partial index whose predicate does not match to the letter is an index nothing
+will ever use.
+
+### 16.6 The plan gate is a change detector, not a ban on sequential scans
+
+Prompt 16 §2 asks for "a CI check that fails if any hot query's plan **changes to** a sequential
+scan on the seeded dataset". On 271 rows PostgreSQL is right to scan sequentially, so a blanket
+ban would either fail permanently or have to be enforced with `enable_seqscan = off` — which
+measures a plan production never runs. `services/api/tests/query_plan_baseline.json` records each
+guarded relation's scan node; a relation that *was* index-scanned and is now sequentially scanned
+fails, and a hot query with no baseline entry fails until it is recorded deliberately.
+
+Beside it, `TestIndexAvailability` runs every hot query with `enable_seqscan = off`: a relation
+still read sequentially there has no applicable index at any size. That is the assertion that
+found `ix_instrument_listings_page`.
+
+The limitation is stated in the module rather than left to be discovered: a plan captured against
+271 rows says little about the plan against the ~8.5M docs/04 projects. What the gate catches is a
+*lost* index, which is otherwise invisible until the table is big.
+
+### 16.7 ETags are `W/"v{data_version}-{sha256(body)}"`
+
+docs/06 §"Determinism guarantee" ties an answer to its `data_version`, so the version is the
+strongest part of the validator we can offer — but one version covers every instrument, every
+universe and every query string, so the digest says which answer within it. A publish changes the
+first half for every route at once, which is what makes "revalidate on `data_version`" true at the
+HTTP layer as well as in the Next data cache (`docs/11a` §6).
+
+Weak, not strong: we control the body handed to the transport, not the encoding a proxy applies.
+`private` and `Vary: Authorization` on every one, because these payloads are entitlement-filtered
+and a shared cache must never hand one user's answer to another. Scope is the published analytics
+reads only (`decile_api.http_cache.CACHEABLE_PREFIXES`) — never the CSV export, which is a
+`StreamingResponse` whose whole point is that it is not buffered.
+
+`Cache-Control: private, max-age=0, must-revalidate, stale-while-revalidate=60`. `must-revalidate`
+because a screener that silently serves last week is worse than one that errors.
+
+### 16.8 A per-process single-flight, not a distributed lock
+
+The 50-concurrent load test failed its own criterion on a cold cache: p95 503 ms against 400 ms,
+zero errors — fifty simultaneous misses on one key, each issuing the same statement.
+`decile_api.screener.SingleFlight` collapses concurrent misses per process; the measured p95 is
+now 304 ms with the same cold start.
+
+**Per process, deliberately.** A cross-process lock means a Redis `SET NX` with a lease, a fencing
+token and a story for what happens when the leader dies holding it. With one uvicorn worker per
+core (docs/11 §"Cost envelope" sizes the box at 8 vCPU) the stampede falls from N callers to 8 —
+a query per core, not a query per request. It is not a distributed lock and must not be relied on
+as one. docs/06 §Caching's post-publish warm-up remains the more important half of the fix.
+
+### 16.9 The dashboard's sparkline query is now date-bounded
+
+`_sparklines` kept the newest 30 levels per index with a window function over *every* snapshot row
+ever written. The cost of one dashboard page therefore grew with the age of the service rather
+than with the size of the answer. It now floors at `as_of - SPARKLINE_WINDOW` (90 days, roughly
+double the 42–46 calendar days that 30 NSE trading days span), which bounds the scan to the chunks
+that can contain the answer. The margin is deliberate: a short window would silently shorten
+sparklines after a holiday run.
+
+### 16.10 Connection pool sizing
+
+`pool_size=10`, `max_overflow=10`, `pool_timeout=5 s`, `pool_recycle=1800 s`, `pool_pre_ping` kept.
+Sized for one uvicorn worker per core on the box docs/11 §"Cost envelope" names: 8 × 20 at
+absolute peak, 8 × 10 in the steady state. Beyond roughly the server's core count, more concurrent
+statements do not finish sooner — they finish together, later, all past budget — so the queueing
+belongs in the application, where `pool_timeout` can refuse cleanly, rather than in the database,
+where nothing can. The arithmetic is in `decile_api.db.create_engine`'s docstring.
+
+**No pgbouncer.** docs/02 locks no connection proxy and none is needed at this size. If one is
+introduced it must run in *transaction* pooling mode with `DECILE_DB_STATEMENT_CACHE_SIZE=0`;
+asyncpg's prepared-statement cache is per server connection and transaction pooling breaks that
+assumption. The setting exists so that is one environment variable rather than a code change.
+
+### 16.11 Charts are dynamically imported; `Sparkline` is not
+
+`EquityChart`, `DrawdownChart` and `BreadthHistory` load through `next/dynamic` with `ssr: false`
+(a chart sizes itself against the viewport, so an SSR pass followed by a hydration re-render is a
+layout shift, and docs/08 budgets CLS at < 0.1). `/backtests/[id]` fell from 172 kB to 158 kB of
+first-load JS and `/market-health` from 133 kB to 119 kB.
+
+`Sparkline` stays static: it renders once per *row* in the dashboard table and once per metric
+card on the factsheet, and a dynamic import per row trades one shared chunk for hundreds of
+loading states. docs/11's budget is about the route, not about every component on it.
+
+`apps/web/src/components/market/breadth-history-lazy.tsx` exists because `/market-health` is a
+Server Component and `ssr: false` is not available there.
+
+### 16.12 What is **not** done
+
+* **The "as measured" column is not in `docs/11`** (§16.1). It is generated and committed at
+  `benchmarks/AS-MEASURED.md`.
+* **The nightly pipeline end-to-end budget (< 45 min) is not measured.** Nine of docs/03's ten
+  steps are network fetches and the suite is network-blocked; the tenth is measured on a synthetic
+  panel with no database on either side of it. The row reads "not measured" in the table rather
+  than being quietly dropped.
+* **Nothing reads the continuous aggregates** (§16.2).
+* **Every server-side benchmark is in-process over an ASGI transport** — no socket, no uvicorn
+  worker pool, one event loop. They are floors. `make loadtest` against a running server is the
+  closer measurement and has not been run against a deployment.
+* **The dashboard and factsheet budgets are measured on 271 instruments and 117 indices**, not the
+  ~2,300 and ~145 the documents describe. Only the CSV export builds a synthetic universe to reach
+  the size docs/11 states.

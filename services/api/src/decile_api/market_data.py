@@ -41,6 +41,12 @@ from decile_core.universes import UNIVERSE_BY_SLUG, Universe
 #: docs/08 §Dashboard: "a sparkline per index (30-day)".
 SPARKLINE_DAYS: Final = 30
 
+#: How far back to look for those thirty *trading* days. Thirty trading days is 42-46 calendar
+#: days on the NSE calendar; ninety is roughly double that, which absorbs a Diwali-length holiday
+#: run and a pipeline that missed a week without ever shortening a sparkline. It exists to bound
+#: the scan, not to define the series — :data:`SPARKLINE_DAYS` still does that.
+SPARKLINE_WINDOW: Final = dt.timedelta(days=SPARKLINE_DAYS * 3)
+
 #: How far back to look for the newest snapshot on or before the as-of date. A dashboard that
 #: silently showed a six-week-old level would be worse than one that showed nothing, so the search
 #: is bounded and the date it found is always reported.
@@ -244,7 +250,15 @@ async def _sparklines(session: AsyncSession, as_of: dt.date) -> dict[int, tuple[
             )
             .label("recency"),
         )
-        .where(IndexSnapshotDaily.date <= as_of, IndexSnapshotDaily.level.is_not(None))
+        .where(
+            IndexSnapshotDaily.date <= as_of,
+            # Prompt 16 deliverable 2. Without a floor this window function sorts *every*
+            # snapshot row ever written — 145 indices x 15 years — to keep the newest 30 per
+            # index, and the cost grows with the archive rather than with the answer. The floor
+            # bounds it to the chunks that can contain the answer.
+            IndexSnapshotDaily.date >= as_of - SPARKLINE_WINDOW,
+            IndexSnapshotDaily.level.is_not(None),
+        )
         .subquery()
     )
     rows = (
@@ -382,6 +396,25 @@ async def listings(session: AsyncSession, query: ListingQuery) -> ListingPage:
     — which is Prompt 11's third acceptance criterion, and not a theoretical concern: NSE lists
     dozens of instruments on the same day.
     """
+    statement = listings_statement(query)
+    rows = (await session.execute(statement)).scalars().all()
+    page = list(rows[: query.limit])
+    has_more = len(rows) > query.limit
+    return ListingPage(
+        rows=page,
+        next_cursor=(
+            encode_cursor(page[-1].listed_on, page[-1].symbol) if has_more and page else None
+        ),
+    )
+
+
+def listings_statement(query: ListingQuery) -> Select[tuple[Instrument]]:
+    """The register's statement, on its own so ``EXPLAIN`` can be run against the real thing.
+
+    Prompt 16 deliverable 2 asks for ``EXPLAIN ANALYZE`` on "every hot query"; a plan taken from a
+    hand-written approximation would tune a statement we do not issue. ``decile_api.query_plans``
+    calls this.
+    """
     sort_date = func.coalesce(Instrument.listed_on, NO_LISTING_DATE)
     statement: Select[tuple[Instrument]] = select(Instrument).where(Instrument.is_active.is_(True))
 
@@ -407,23 +440,8 @@ async def listings(session: AsyncSession, query: ListingQuery) -> ListingPage:
             )
         )
 
-    rows = (
-        (
-            await session.execute(
-                statement.order_by(sort_date.desc(), Instrument.symbol.asc()).limit(query.limit + 1)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    page = list(rows[: query.limit])
-    has_more = len(rows) > query.limit
-    return ListingPage(
-        rows=page,
-        next_cursor=(
-            encode_cursor(page[-1].listed_on, page[-1].symbol) if has_more and page else None
-        ),
-    )
+    # `+ 1` so the caller learns whether another page exists without a second COUNT.
+    return statement.order_by(sort_date.desc(), Instrument.symbol.asc()).limit(query.limit + 1)
 
 
 async def listing_series(session: AsyncSession) -> list[str]:

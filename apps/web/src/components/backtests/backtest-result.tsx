@@ -5,9 +5,9 @@ import { Download } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
+import dynamic from "next/dynamic";
+
 import { AssumptionsPanel } from "@/components/backtests/assumptions-panel";
-import { DrawdownChart } from "@/components/backtests/drawdown-chart";
-import { EquityChart } from "@/components/backtests/equity-chart";
 import { FragilityPanel } from "@/components/backtests/fragility-panel";
 import { HoldingsPanel } from "@/components/backtests/holdings-panel";
 import { MetricsTable } from "@/components/backtests/metrics-table";
@@ -25,6 +25,26 @@ import {
   useHoldings,
   useTrades,
 } from "@/lib/backtests/queries";
+
+/*
+ * The two charts are the only visx on this route (docs/02 locks visx for charts), and this page
+ * spends most of its life showing a *progress* panel: a queued or running backtest has no curve
+ * to draw, and a failed one never will. Loading the charting code with the rest of the page would
+ * put it in the first-load budget for every one of those states. Prompt 16 deliverable 5 —
+ * "dynamic import of charts"; `apps/web/scripts/bundle-budget.mjs` is what keeps it honest.
+ *
+ * `ssr: false` because a chart measures itself against the viewport; server-rendering one and
+ * re-rendering it on hydration is a layout shift, which docs/08 budgets at CLS < 0.1.
+ */
+const EquityChart = dynamic(
+  () => import("@/components/backtests/equity-chart").then((m) => m.EquityChart),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full" /> },
+);
+
+const DrawdownChart = dynamic(
+  () => import("@/components/backtests/drawdown-chart").then((m) => m.DrawdownChart),
+  { ssr: false, loading: () => <Skeleton className="h-48 w-full" /> },
+);
 
 /**
  * `/backtests/[id]` — docs/08 §Backtests:

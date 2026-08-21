@@ -3,7 +3,7 @@ COMPOSE := docker compose -f infra/docker/compose.yml
 UV      := uv run
 
 .DEFAULT_GOAL := help
-.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain
+.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -73,6 +73,19 @@ web-build:     ## Production build of the web app
 
 e2e:           ## Playwright acceptance checks (builds and starts the app itself)
 	pnpm --filter @decile/web run e2e
+
+bench:         ## Measure every docs/11 performance budget and write benchmarks/AS-MEASURED.md
+	$(UV) pytest -m benchmark
+	$(UV) python -m benchmarks.report --check
+
+loadtest:      ## 50 concurrent screen runs against a running API: make loadtest URL=http://localhost:8000
+	$(UV) python -m benchmarks.load_screens --base-url $(or $(URL),http://localhost:8000)
+
+plans:         ## EXPLAIN ANALYZE every hot query; add WRITE=1 to re-record the CI baseline
+	$(UV) python -m decile_api.query_plans $(if $(WRITE),--write,)
+
+bundle:        ## Client-JS budget for the screens route (needs `make web-build` first)
+	cd apps/web && node scripts/bundle-budget.mjs --check
 
 worker:        ## Run a Celery worker across all queues
 	$(UV) celery -A decile_worker.celery_app:app worker -Q ingest,compute,backtest,default -l info

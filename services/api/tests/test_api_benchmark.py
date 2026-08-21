@@ -26,6 +26,7 @@ import time
 import httpx
 import pytest
 from api_helpers import url
+from benchmarks.budgets import record
 from screener_helpers import requires_db
 
 from decile_core.seed_data import EXAMPLE_SCREENS
@@ -74,6 +75,14 @@ class TestScreenRunLatency:
             f"warm p95 {p95:.1f} ms exceeds the {WARM_BUDGET_MS:.0f} ms budget "
             f"(median {statistics.median(samples):.1f} ms, max {max(samples):.1f} ms)"
         )
+        # Prompt 16 acceptance criterion 1: the number, not just the verdict.
+        record(
+            "screen_run_warm",
+            p95,
+            unit="ms",
+            method=f"p95 of {SAMPLES} in-process ASGI requests, all cache hits",
+            dataset="the seeded dataset (docs/13's 271-row export)",
+        )
 
     async def test_cold_p95_is_within_budget(self, api: httpx.AsyncClient) -> None:
         """Every sample recomputes: the cache is bypassed by asking for a fresh definition.
@@ -99,4 +108,11 @@ class TestScreenRunLatency:
         assert p95 < COLD_BUDGET_MS, (
             f"cold p95 {p95:.1f} ms exceeds the {COLD_BUDGET_MS:.0f} ms budget "
             f"(median {statistics.median(samples):.1f} ms)"
+        )
+        record(
+            "screen_run_cold",
+            p95,
+            unit="ms",
+            method=f"p95 of {SAMPLES} in-process ASGI requests, every one a cache miss",
+            dataset="the seeded dataset (docs/13's 271-row export)",
         )

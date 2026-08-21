@@ -8,7 +8,9 @@ and that publish leaves the namespace purged and re-warmed.
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
+from collections.abc import Awaitable
 from decimal import Decimal
 
 import pytest
@@ -22,11 +24,14 @@ from screener_helpers import (
     ttl_of,
 )
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from decile_api.screener import (
     SCREEN_CACHE_FALLBACK_TTL_SECONDS,
+    SCREEN_FLIGHT,
     WARM_CACHE_SCREEN_LIMIT,
+    ScreenRunResult,
+    SingleFlight,
     current_data_version,
     purge_screen_cache,
     run_screen,
@@ -300,3 +305,86 @@ class TestPublishIntegration:
         result = await run_publish(screener_session, outcome, run, None)
         assert result.data_version == DATA_VERSION + 1
         assert result.screens_warmed == 0
+
+
+class TestSingleFlight:
+    """One query per key per process, however many callers miss at once (Prompt 16).
+
+    The stampede this prevents is measurable: ``services/api/tests/test_load.py`` drives fifty
+    concurrent runs of one definition against a cold cache, and without the collapse its p95 was
+    503 ms against a 400 ms criterion.
+    """
+
+    def test_the_first_caller_leads_and_the_second_follows(self) -> None:
+        flight = SingleFlight()
+        leading, event = flight.claim("screen:abc")
+        assert leading
+        following, same = flight.claim("screen:abc")
+        assert not following
+        assert same is event, "a follower must wait on the leader's own event"
+
+    def test_different_keys_do_not_block_each_other(self) -> None:
+        """Two different screens are two different queries; collapsing them would be a bug."""
+        flight = SingleFlight()
+        leading_a, _ = flight.claim("screen:a")
+        leading_b, _ = flight.claim("screen:b")
+        assert leading_a and leading_b
+
+    def test_release_wakes_followers_and_frees_the_key(self) -> None:
+        flight = SingleFlight()
+        _, event = flight.claim("screen:abc")
+        assert flight.in_flight() == 1
+        flight.release("screen:abc", event)
+        assert event.is_set()
+        assert flight.in_flight() == 0
+        # And the next caller leads afresh rather than waiting on a finished event.
+        leading, _ = flight.claim("screen:abc")
+        assert leading
+
+    async def test_concurrent_misses_issue_one_query(
+        self, seeded_url: str, screen_cache: Redis
+    ) -> None:
+        """The behaviour, not the bookkeeping: ten simultaneous misses, one execution.
+
+        Counted by wrapping the cache's ``set``: the leader is the only caller that reaches it,
+        because every follower returns the leader's payload from the cache.
+
+        Ten *separate* sessions off a real pool, not the module's shared one — asyncpg refuses two
+        concurrent operations on one connection, and a test that accidentally serialised them
+        would prove nothing about a stampede.
+        """
+        definition = ScreenDefinition.model_validate(
+            {**INVESTING_001.model_dump(mode="json"), "ignore_above_beta": 71}
+        )
+        writes = 0
+        real_set = screen_cache.set
+
+        class CountingCache:
+            """Delegates to the real client and counts writes. Matches ``ScreenCache``."""
+
+            def get(self, key: str, /) -> Awaitable[object]:
+                return screen_cache.get(key)
+
+            def set(self, key: str, value: str, ex: int | None = None, /) -> Awaitable[object]:
+                nonlocal writes
+                writes += 1
+                return real_set(key, value, ex)
+
+        cache = CountingCache()
+        engine = create_async_engine(seeded_url, pool_size=10, max_overflow=5)
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+
+        async def one() -> ScreenRunResult:
+            async with maker() as session:
+                return await run_screen(session, definition, cache=cache)
+
+        try:
+            results = await asyncio.gather(*(one() for _ in range(10)))
+        finally:
+            await engine.dispose()
+
+        assert writes == 1, f"{writes} cache writes means {writes} queries ran, not one"
+        payloads = {result.payload for result in results}
+        assert len(payloads) == 1, "every caller must get byte-identical bytes (docs/06)"
+        assert sum(1 for result in results if not result.cache_hit) == 1
+        assert SCREEN_FLIGHT.in_flight() == 0, "the leader must always release its key"

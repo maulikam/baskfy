@@ -168,6 +168,34 @@ class Settings(BaseSettings):
     #: Turned off in tests that are not about rate limiting, and in `local` by choice.
     rate_limit_enabled: bool = True
 
+    # --- Connection pooling (Prompt 16 deliverable 6) ------------------------
+    #: SQLAlchemy's ``QueuePool`` in front of asyncpg. docs/11 §"Cost envelope" sizes the box at
+    #: 8 vCPU / 32 GB and docs/03 §"Scaling plan" step 1 says "vertical: bigger box" before
+    #: anything else, so the pool is sized against one API process on that box rather than
+    #: against a fleet. See ``decile_api.db`` for the arithmetic.
+    db_pool_size: int = Field(default=10, gt=0)
+    db_max_overflow: int = Field(default=10, ge=0)
+    #: Seconds a request waits for a connection before it is refused. Shorter than the screen-run
+    #: budget in docs/11 (800 ms cold) times a small factor: a request that has already queued
+    #: this long has missed its budget, and holding it open only deepens the queue.
+    db_pool_timeout_seconds: float = Field(default=5.0, gt=0)
+    #: Recycle a connection after this long. Below any sensible proxy or firewall idle timeout,
+    #: so the pool never hands out a socket the other end has already dropped.
+    db_pool_recycle_seconds: int = Field(default=1800, gt=0)
+    #: asyncpg prepares every statement server-side and caches the handle per connection. Behind
+    #: pgbouncer in *transaction* pooling mode that cache is wrong — the next transaction may land
+    #: on a different server connection — so a deployment that puts pgbouncer in front must set
+    #: this to 0. Direct connections keep it, because the screen query is the same statement every
+    #: time and re-planning it per request is pure waste.
+    db_statement_cache_size: int = Field(default=100, ge=0)
+
+    # --- HTTP caching (Prompt 16 deliverable 3) ------------------------------
+    #: ``stale-while-revalidate`` on the published analytics reads. One minute: long enough that a
+    #: burst of RSC renders is served from the Next data cache while one of them revalidates,
+    #: short enough that a publish is visible within a minute even if `POST /api/revalidate`
+    #: never arrives (``docs/11a`` §6).
+    http_stale_while_revalidate_seconds: int = Field(default=60, ge=0)
+
     # --- Observability (docs/02 §Observability) ------------------------------
     otel_enabled: bool = False
     otel_service_name: str = "decile-api"

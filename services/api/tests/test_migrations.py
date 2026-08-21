@@ -30,8 +30,18 @@ pytestmark = [
 
 API_DIR = Path(__file__).resolve().parents[1]
 
-#: Prompt 1 deliverable 2 names these three explicitly.
-HYPERTABLES = ("ohlcv_daily", "factor_daily", "index_member_daily")
+#: docs/04 issues `create_hypertable` for exactly these three, and Prompt 1 deliverable 2 names
+#: them explicitly.
+DOCUMENTED_HYPERTABLES = ("ohlcv_daily", "factor_daily", "index_member_daily")
+
+#: Converted by migration 0008 (Prompt 16 deliverable 4). docs/03 §"Scaling plan" step 3 requires
+#: "Timescale continuous aggregates for market-health and index history", and a continuous
+#: aggregate can only be defined over a hypertable — so these two are hypertables because docs/03
+#: asks for something docs/04's DDL does not anticipate, not because a plain table was inadequate.
+#: docs/DECISIONS.md §16.2.
+SCALING_HYPERTABLES = ("market_health_daily", "index_snapshot_daily")
+
+HYPERTABLES = DOCUMENTED_HYPERTABLES + SCALING_HYPERTABLES
 
 
 def _alembic(*args: str) -> subprocess.CompletedProcess[str]:

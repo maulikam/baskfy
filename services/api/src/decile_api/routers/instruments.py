@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from decile_api.db import SessionDep
+from decile_api.http_cache import snapshot_headers
 from decile_api.instruments import (
     InstrumentNotFound,
     build_factsheet,
@@ -51,7 +52,9 @@ router = APIRouter(prefix="/instruments", tags=["instruments"])
 JSON_MEDIA_TYPE: Final = "application/json"
 
 
-def _json(model: BaseModel) -> Response:
+def _json(
+    model: BaseModel, *, as_of: dt.date | None = None, data_version: int | None = None
+) -> Response:
     """Serialise with the screener's canonical encoder rather than Pydantic's.
 
     CLAUDE.md house rule 8 — "round at write time … the API, the UI and the CSV export can never
@@ -63,6 +66,9 @@ def _json(model: BaseModel) -> Response:
     return Response(
         content=canonical_json(model.model_dump(mode="python", by_alias=True)),
         media_type=JSON_MEDIA_TYPE,
+        # Prompt 16 deliverable 3: the ETag `decile_api.http_cache` attaches is derived from
+        # `data_version`, and it reads it from this header.
+        headers=snapshot_headers(as_of, data_version),
     )
 
 
@@ -123,7 +129,11 @@ async def factsheet(
         sheet = await build_factsheet(session, symbol, resolution.as_of, data_version)
     except InstrumentNotFound as exc:
         raise not_found("instrument", symbol) from exc
-    return _json(FactsheetOut.model_validate(sheet, from_attributes=True))
+    return _json(
+        FactsheetOut.model_validate(sheet, from_attributes=True),
+        as_of=resolution.as_of,
+        data_version=data_version,
+    )
 
 
 @router.get("/{symbol}/history", response_model=InstrumentHistoryOut, summary="One field's series")
@@ -190,7 +200,9 @@ async def history(
             to=end,
             points=[HistoryPointOut(date=row[0], value=row[1]) for row in rows],
             **{"from": start},
-        )
+        ),
+        as_of=end,
+        data_version=await current_data_version(session),
     )
 
 

@@ -24,6 +24,7 @@ from fastapi import APIRouter, Query, Response
 from pydantic import BaseModel
 
 from decile_api.db import SessionDep
+from decile_api.http_cache import snapshot_headers
 from decile_api.market_data import (
     InvalidCursor,
     ListingQuery,
@@ -66,7 +67,9 @@ HEALTH_UNIVERSES: Final[frozenset[str]] = frozenset(MARKET_HEALTH_SLUGS)
 MAX_HISTORY_SPAN: Final = dt.timedelta(days=5 * 366)
 
 
-def _json(model: BaseModel) -> Response:
+def _json(
+    model: BaseModel, *, as_of: dt.date | None = None, data_version: int | None = None
+) -> Response:
     """The canonical encoder, for the same reason `/screens/{id}/run` uses it.
 
     Pydantic renders `Decimal` through `float`, which turns a stored `57.7000` into `57.7`.
@@ -75,6 +78,9 @@ def _json(model: BaseModel) -> Response:
     return Response(
         content=canonical_json(model.model_dump(mode="python", by_alias=True)),
         media_type=JSON_MEDIA_TYPE,
+        # Prompt 16 deliverable 3: the ETag `decile_api.http_cache` attaches is derived from
+        # `data_version`, and it reads it from this header.
+        headers=snapshot_headers(as_of, data_version),
     )
 
 
@@ -124,7 +130,9 @@ async def get_index_dashboard(
                 )
                 for row in board.rows
             ],
-        )
+        ),
+        as_of=board.as_of,
+        data_version=data_version,
     )
 
 
@@ -150,7 +158,9 @@ async def get_market_health(
             ],
             constituent_count=health.constituent_count,
             data_available_from=health.data_available_from,
-        )
+        ),
+        as_of=health.as_of,
+        data_version=data_version,
     )
 
 
@@ -202,7 +212,9 @@ async def get_market_health_history(
                 for point in points
             ],
             **{"from": start},
-        )
+        ),
+        as_of=end,
+        data_version=await current_data_version(session),
     )
 
 
@@ -249,5 +261,6 @@ async def get_listings(  # noqa: PLR0913, PLR0917 - FastAPI injects one paramete
                 for row in page.rows
             ],
             next_cursor=page.next_cursor,
-        )
+        ),
+        data_version=await current_data_version(session),
     )

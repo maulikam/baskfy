@@ -49,6 +49,24 @@ jobs:
           uv run mypy
       - name: Tests
         run: uv run pytest
+      # Prompt 16 deliverable 2: "a CI check that fails if any hot query's plan changes to a
+      # sequential scan on the seeded dataset". Run separately from the suite above so the log
+      # says *this* is what broke — a plan regression and a failed assertion read very
+      # differently to whoever is looking at a red build.
+      - name: Hot-query plans have not regressed
+        run: uv run pytest -q services/api/tests/test_query_plans.py
+      # Prompt 16 acceptance criterion 1: every docs/11 budget measured, and the numbers written
+      # down. `--check` fails on a missed budget *and* on an unmeasured one, so a benchmark that
+      # silently stopped running is not mistaken for a passing one.
+      - name: Performance budgets (docs/11)
+        run: |
+          uv run pytest -m benchmark
+          uv run python -m benchmarks.report --check --gate python
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: as-measured
+          path: benchmarks/AS-MEASURED.md
 
   client:
     # docs/07 §"OpenAPI -> TypeScript": "Hand-written request types are a CI failure."
@@ -134,6 +152,13 @@ jobs:
           DECILE_JWT_SECRET: ci-placeholder-secret-0123456789abcdef
           AUTH_SECRET: ci-placeholder-secret-0123456789abcdef
           DECILE_REDIS_URL: redis://localhost:6380/0
+      # Prompt 16 deliverable 5: "a bundle-size CI budget". After the acceptance checks, because
+      # `playwright.config.ts` runs `next build` itself and reads `.next/app-build-manifest.json`
+      # — measuring the very bytes the browser suite was just served, with no second build.
+      # `if: always()` so a failing Playwright assertion does not hide a blown budget.
+      - name: Client-JS budget (docs/11: screens route < 250 KB gzip)
+        if: always()
+        run: pnpm --filter @decile/web run bundle-budget
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

@@ -1,0 +1,559 @@
+"""``/backtests/*`` over HTTP — docs/07 §Backtests (Prompt 15 deliverable 5).
+
+The simulation itself is proven twice already: ``packages/core/tests/test_backtest.py`` runs
+docs/10's six correctness tests against the engine, and ``services/worker/tests/test_backtest.py``
+runs the whole job against PostgreSQL. This suite is about the *contract*: who may call these
+routes, what a queued run answers with, how the artefacts paginate, whether a signed link expires,
+and what the event stream sends first.
+
+So the ``done`` backtest these tests read is **constructed**, not simulated — a small
+:class:`~decile_core.backtest.BacktestResult` built by hand and put through the same
+``build_payload``/``artefact_bytes`` the worker uses. Running a fifteen-year simulation to check
+that pagination works would test the engine for the third time and the router for the first.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import json
+from collections.abc import AsyncIterator, Sequence
+from decimal import Decimal
+from pathlib import Path
+from typing import Final
+
+import api_helpers
+import httpx
+import pytest
+import pytest_asyncio
+import screener_helpers
+from api_helpers import bearer, make_user, running_app, url
+from screener_helpers import requires_db
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from decile_api.backtests import (
+    ARTEFACTS,
+    artefact_bytes,
+    artefact_key,
+    build_payload,
+    new_public_id,
+    sign_download,
+)
+from decile_api.settings import Settings
+from decile_core.backtest import (
+    BacktestConfig,
+    BacktestResult,
+    HoldingSnapshot,
+    SelectionSpec,
+    Trade,
+    TradeReason,
+    TradeSide,
+)
+from decile_core.models import Backtest, Screen
+from decile_providers.archive import LocalRawArchive
+
+pytestmark = [requires_db, pytest.mark.db]
+
+START: Final = dt.date(2025, 1, 1)
+END: Final = dt.date(2025, 3, 31)
+
+
+class RecordingQueue:
+    """Stands in for the Celery producer. Records what would have been published."""
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, list[object]]] = []
+
+    def send_task(self, name: str, args: Sequence[object]) -> object:
+        self.sent.append((name, list(args)))
+        return None
+
+
+@pytest_asyncio.fixture
+async def session(screener_session: AsyncSession) -> AsyncIterator[AsyncSession]:
+    yield screener_session
+
+
+def _settings(archive_dir: Path) -> Settings:
+    """The usual test settings, with the artefact store pointed at the test's own directory.
+
+    ``invoice_local_dir`` is the directory ``build_invoice_archive`` falls back to when no bucket
+    is configured, and backtests share that store — one abstraction over R2-or-a-directory, not
+    two (see ``decile_api.backtests``).
+    """
+    return api_helpers.api_settings(
+        screener_helpers.database_url(), invoice_local_dir=str(archive_dir)
+    )
+
+
+def _config(**overrides: object) -> BacktestConfig:
+    base: dict[str, object] = {
+        "start": START,
+        "end": END,
+        "initial_capital": Decimal(1_000_000),
+        "selection": SelectionSpec(top_n=5, hold_buffer=2),
+    }
+    base.update(overrides)
+    return BacktestConfig.model_validate(base)
+
+
+async def _screen(session: AsyncSession, user_id: int) -> Screen:
+    screen = Screen(
+        public_id=new_public_id()[:12],
+        user_id=user_id,
+        name="Backtest screen",
+        definition={"index": "nifty-500", "sort_by": "ret_12m"},
+        columns=[],
+    )
+    session.add(screen)
+    await session.flush()
+    return screen
+
+
+def _result(config: BacktestConfig) -> BacktestResult:
+    """A three-day run with two fills. Enough to exercise every artefact writer."""
+    days = (dt.date(2025, 1, 1), dt.date(2025, 1, 2), dt.date(2025, 1, 3))
+    equity = (Decimal("1000000.00"), Decimal("1010000.00"), Decimal("1005000.00"))
+    trades = (
+        Trade(
+            date=days[1],
+            instrument_id=1,
+            symbol="ACME",
+            side=TradeSide.BUY,
+            quantity=100,
+            price=Decimal("500.0000"),
+            notional=Decimal("50000.00"),
+            cost=Decimal("140.00"),
+            reason=TradeReason.ENTER,
+        ),
+        Trade(
+            date=days[2],
+            instrument_id=1,
+            symbol="ACME",
+            side=TradeSide.SELL,
+            quantity=100,
+            price=Decimal("510.0000"),
+            notional=Decimal("51000.00"),
+            cost=Decimal("142.80"),
+            reason=TradeReason.EXIT,
+            realised_pnl=Decimal("717.20"),
+        ),
+    )
+    holdings = (
+        HoldingSnapshot(
+            rebalance_date=days[0],
+            executed_on=days[1],
+            instrument_id=1,
+            symbol="ACME",
+            name="ACME LIMITED",
+            rank=1,
+            target_weight=Decimal("1.000000"),
+            quantity=100,
+            price=Decimal("500.0000"),
+            value=Decimal("50000.00"),
+            actual_weight=Decimal("0.049505"),
+        ),
+    )
+    return BacktestResult(
+        config=config,
+        dates=days,
+        equity=equity,
+        cash=(Decimal("1000000.00"), Decimal("960000.00"), Decimal("1005000.00")),
+        invested=(Decimal(0), Decimal("50000.00"), Decimal(0)),
+        benchmark=(Decimal("100"), Decimal("101"), Decimal("100.5")),
+        trades=trades,
+        holdings=holdings,
+        delistings=(),
+        total_costs=Decimal("282.80"),
+        dividends_credited=Decimal(0),
+        rebalance_dates=(days[0],),
+        data_version=screener_helpers.DATA_VERSION,
+    )
+
+
+async def _completed(
+    session: AsyncSession, user_id: int, archive_dir: Path, *, config: BacktestConfig | None = None
+) -> Backtest:
+    """A ``done`` row, with its three artefacts written where the app will look for them."""
+    resolved = config or _config()
+    public_id = new_public_id()
+    result = _result(resolved)
+    stored = build_payload(public_id, resolved, result, None)
+    archive = LocalRawArchive(archive_dir)
+    for artefact, payload in artefact_bytes(result).items():
+        archive.put(artefact_key(public_id, artefact), payload, content_type="text/csv")
+    row = Backtest(
+        public_id=public_id,
+        user_id=user_id,
+        screen_id=None,
+        config=json.loads(resolved.model_dump_json()),
+        status="done",
+        metrics=stored.metrics,
+        equity_curve=stored.equity_curve,
+        trades_key=stored.trades_key,
+        finished_at=dt.datetime(2026, 8, 20, 12, tzinfo=dt.UTC),
+    )
+    session.add(row)
+    await session.flush()
+    return row
+
+
+# ---------------------------------------------------------------------------
+# POST /backtests
+# ---------------------------------------------------------------------------
+
+
+async def test_backtests_are_entitlement_gated(session: AsyncSession, tmp_path: Path) -> None:
+    """docs/07 §Entitlements lists ``backtests``; CLAUDE.md has carried "nothing enforces it"
+    since Prompt 13. This is the test that makes that note obsolete."""
+    _, public_id = await make_user(session, "unpaid.backtest@example.com", subscribed=False)
+    async with running_app(_settings(tmp_path), session, task_queue=RecordingQueue()) as client:
+        response = await client.post(
+            url("/backtests"),
+            json={"config": json.loads(_config().model_dump_json())},
+            headers=bearer(public_id),
+        )
+    assert response.status_code == 402
+    body = response.json()
+    assert body["type"] == "payment-required"
+    assert body["upgrade_url"] == "/pricing"
+
+
+async def test_a_paid_account_queues_a_run(session: AsyncSession, tmp_path: Path) -> None:
+    """docs/07: `POST /backtests { config } → 202 { public_id, status:"queued" }`."""
+    user_id, public_id = await make_user(session, "paid.backtest@example.com", subscribed=True)
+    screen = await _screen(session, user_id)
+    queue = RecordingQueue()
+    config = _config(screen_public_id=screen.public_id)
+    async with running_app(_settings(tmp_path), session, task_queue=queue) as client:
+        response = await client.post(
+            url("/backtests"),
+            json={"config": json.loads(config.model_dump_json())},
+            headers=bearer(public_id),
+        )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["status"] == "queued"
+    assert body["events_url"].endswith(f"/backtests/{body['public_id']}/events")
+
+    row = (
+        await session.execute(select(Backtest).where(Backtest.public_id == body["public_id"]))
+    ).scalar_one()
+    assert row.user_id == user_id
+    assert row.screen_id == screen.id
+    assert queue.sent == [("decile.backtest.run", [body["public_id"], True])]
+
+
+async def test_a_second_concurrent_run_is_refused(session: AsyncSession, tmp_path: Path) -> None:
+    """PROMPTS.md Prompt 15 §4: "a per-user concurrency cap of 1"."""
+    user_id, public_id = await make_user(session, "busy.backtest@example.com", subscribed=True)
+    screen = await _screen(session, user_id)
+    config = _config(screen_public_id=screen.public_id)
+    payload = {"config": json.loads(config.model_dump_json())}
+    async with running_app(_settings(tmp_path), session, task_queue=RecordingQueue()) as client:
+        first = await client.post(url("/backtests"), json=payload, headers=bearer(public_id))
+        second = await client.post(url("/backtests"), json=payload, headers=bearer(public_id))
+
+    assert first.status_code == 202
+    assert second.status_code == 429
+    assert second.headers["Retry-After"]
+    assert "already have a backtest running" in second.json()["detail"]
+
+
+async def test_a_config_with_neither_screen_nor_definition_is_rejected(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """docs/10 §Config: "screen_public_id … or an inline definition". One of them is required."""
+    _, public_id = await make_user(session, "noscreen.backtest@example.com", subscribed=True)
+    async with running_app(_settings(tmp_path), session, task_queue=RecordingQueue()) as client:
+        response = await client.post(
+            url("/backtests"),
+            json={"config": json.loads(_config().model_dump_json())},
+            headers=bearer(public_id),
+        )
+    assert response.status_code == 400
+    assert response.json()["type"] == "invalid-screen-definition"
+
+
+async def test_an_unknown_config_key_is_rejected(session: AsyncSession, tmp_path: Path) -> None:
+    """The same ``extra="forbid"`` contract docs/07 §Screens gives a screen definition."""
+    _, public_id = await make_user(session, "extra.backtest@example.com", subscribed=True)
+    async with running_app(_settings(tmp_path), session, task_queue=RecordingQueue()) as client:
+        response = await client.post(
+            url("/backtests"),
+            json={"config": {"start": "2015-01-01", "end": "2016-01-01", "leverage": 3}},
+            headers=bearer(public_id),
+        )
+    assert response.status_code == 400
+    fields = [str(error["field"]) for error in api_helpers.errors_of(response.json())]
+    assert any("leverage" in field for field in fields)
+
+
+async def test_a_stale_data_version_is_a_conflict(session: AsyncSession, tmp_path: Path) -> None:
+    """docs/07 §"Error catalogue": 409 `stale-data-version`."""
+    user_id, public_id = await make_user(session, "stale.backtest@example.com", subscribed=True)
+    screen = await _screen(session, user_id)
+    async with running_app(_settings(tmp_path), session, task_queue=RecordingQueue()) as client:
+        response = await client.post(
+            url("/backtests"),
+            json={
+                "config": json.loads(_config(screen_public_id=screen.public_id).model_dump_json()),
+                "data_version": 999_999,
+            },
+            headers=bearer(public_id),
+        )
+    assert response.status_code == 409
+    assert response.json()["type"] == "stale-data-version"
+
+
+async def test_an_idempotency_key_replays(session: AsyncSession, tmp_path: Path) -> None:
+    """docs/07 §Conventions: "`Idempotency-Key` header honoured on all POSTs that create
+    resources". Without it a retried queue request costs a second fifteen-year simulation."""
+    user_id, public_id = await make_user(session, "idem.backtest@example.com", subscribed=True)
+    screen = await _screen(session, user_id)
+    payload = {"config": json.loads(_config(screen_public_id=screen.public_id).model_dump_json())}
+    headers = {**bearer(public_id), "Idempotency-Key": "backtest-retry-1"}
+    async with running_app(_settings(tmp_path), session, task_queue=RecordingQueue()) as client:
+        first = await client.post(url("/backtests"), json=payload, headers=headers)
+        second = await client.post(url("/backtests"), json=payload, headers=headers)
+
+    assert first.status_code == 202
+    assert second.status_code == 202
+    assert first.json()["public_id"] == second.json()["public_id"]
+    count = len(
+        (await session.execute(select(Backtest).where(Backtest.user_id == user_id))).scalars().all()
+    )
+    assert count == 1
+
+
+# ---------------------------------------------------------------------------
+# Reads
+# ---------------------------------------------------------------------------
+
+
+async def test_list_and_detail(session: AsyncSession, tmp_path: Path) -> None:
+    """docs/07: `GET /backtests/{id}` → "status + metrics + equity curve"."""
+    user_id, public_id = await make_user(session, "read.backtest@example.com", subscribed=True)
+    row = await _completed(session, user_id, tmp_path)
+    async with running_app(_settings(tmp_path), session) as client:
+        listing = await client.get(url("/backtests"), headers=bearer(public_id))
+        detail = await client.get(url(f"/backtests/{row.public_id}"), headers=bearer(public_id))
+
+    assert listing.status_code == 200
+    assert [item["public_id"] for item in listing.json()["data"]] == [row.public_id]
+    assert listing.json()["data"][0]["total_return"] is not None
+
+    body = detail.json()
+    assert detail.status_code == 200
+    assert body["status"] == "done"
+    assert body["metrics"]["total_return"] is not None
+    assert body["metrics_hash"]
+    assert body["equity_curve"], "docs/07 asks the detail payload for the equity curve"
+    assert body["drawdown"]
+    assert body["monthly_returns"]
+    # docs/10 §"honesty features": the disclaimer and the assumptions come from the server.
+    assert body["disclaimer"] == "Past backtest results do not predict future results."
+    assert any("NEXT trading day" in line for line in body["assumptions"])
+    assert any("reconstructed" in line.lower() for line in body["assumptions"])
+
+
+async def test_somebody_elses_backtest_is_a_404(session: AsyncSession, tmp_path: Path) -> None:
+    """The rule screens already follow: a 403 confirms the id exists."""
+    owner_id, _ = await make_user(session, "owner.backtest@example.com", subscribed=True)
+    _, stranger = await make_user(session, "stranger.backtest@example.com", subscribed=True)
+    row = await _completed(session, owner_id, tmp_path)
+    async with running_app(_settings(tmp_path), session) as client:
+        response = await client.get(url(f"/backtests/{row.public_id}"), headers=bearer(stranger))
+    assert response.status_code == 404
+
+
+async def test_delete(session: AsyncSession, tmp_path: Path) -> None:
+    user_id, public_id = await make_user(session, "del.backtest@example.com", subscribed=True)
+    row = await _completed(session, user_id, tmp_path)
+    async with running_app(_settings(tmp_path), session) as client:
+        response = await client.delete(
+            url(f"/backtests/{row.public_id}"), headers=bearer(public_id)
+        )
+        after = await client.get(url(f"/backtests/{row.public_id}"), headers=bearer(public_id))
+    assert response.status_code == 204
+    assert after.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Artefacts
+# ---------------------------------------------------------------------------
+
+
+async def test_trades_paginate(session: AsyncSession, tmp_path: Path) -> None:
+    """docs/07: `GET /backtests/{id}/trades?cursor=` → "paginated fills"."""
+    user_id, public_id = await make_user(session, "trades.backtest@example.com", subscribed=True)
+    row = await _completed(session, user_id, tmp_path)
+    async with running_app(_settings(tmp_path), session) as client:
+        first = await client.get(
+            url(f"/backtests/{row.public_id}/trades"),
+            params={"limit": 1},
+            headers=bearer(public_id),
+        )
+        assert first.status_code == 200
+        cursor = first.json()["next_cursor"]
+        second = await client.get(
+            url(f"/backtests/{row.public_id}/trades"),
+            params={"limit": 1, "cursor": cursor},
+            headers=bearer(public_id),
+        )
+
+    assert [item["side"] for item in first.json()["data"]] == ["buy"]
+    assert first.json()["data"][0]["reason"] == "enter"
+    assert first.json()["data"][0]["realised_pnl"] is None
+    assert cursor == "1"
+    assert [item["side"] for item in second.json()["data"]] == ["sell"]
+    assert second.json()["data"][0]["realised_pnl"] == "717.20"
+    assert second.json()["next_cursor"] is None
+
+
+async def test_holdings_filter_by_rebalance_date(session: AsyncSession, tmp_path: Path) -> None:
+    """docs/08 §Backtests: the results page shows "per-period holdings"."""
+    user_id, public_id = await make_user(session, "hold.backtest@example.com", subscribed=True)
+    row = await _completed(session, user_id, tmp_path)
+    async with running_app(_settings(tmp_path), session) as client:
+        matching = await client.get(
+            url(f"/backtests/{row.public_id}/holdings"),
+            params={"rebalance_date": "2025-01-01"},
+            headers=bearer(public_id),
+        )
+        missing = await client.get(
+            url(f"/backtests/{row.public_id}/holdings"),
+            params={"rebalance_date": "2025-02-01"},
+            headers=bearer(public_id),
+        )
+    assert [item["symbol"] for item in matching.json()["data"]] == ["ACME"]
+    assert missing.json()["data"] == []
+
+
+async def test_artefacts_of_a_queued_run_do_not_exist_yet(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    user_id, public_id = await make_user(session, "queued.backtest@example.com", subscribed=True)
+    row = Backtest(
+        public_id=new_public_id(),
+        user_id=user_id,
+        config=json.loads(_config().model_dump_json()),
+        status="queued",
+    )
+    session.add(row)
+    await session.flush()
+    async with running_app(_settings(tmp_path), session) as client:
+        response = await client.get(
+            url(f"/backtests/{row.public_id}/trades"), headers=bearer(public_id)
+        )
+    assert response.status_code == 404
+    assert "queued" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("artefact", ARTEFACTS)
+async def test_export_returns_a_signed_link_that_downloads(
+    session: AsyncSession, tmp_path: Path, artefact: str
+) -> None:
+    """docs/07: `GET /backtests/{id}/export` → "CSV/Parquet signed URL"."""
+    user_id, public_id = await make_user(
+        session, f"export{artefact}.backtest@example.com", subscribed=True
+    )
+    row = await _completed(session, user_id, tmp_path)
+    async with running_app(_settings(tmp_path), session) as client:
+        link = await client.get(
+            url(f"/backtests/{row.public_id}/export"),
+            params={"artefact": artefact},
+            headers=bearer(public_id),
+        )
+        assert link.status_code == 200
+        body = link.json()
+        # The signed link carries no bearer token — that is the point of a signed URL.
+        download = await client.get(body["url"])
+
+    assert body["artefact"] == artefact
+    assert body["format"] == "csv"
+    assert download.status_code == 200
+    assert download.headers["content-type"].startswith("text/csv")
+    assert "attachment" in download.headers["content-disposition"]
+    assert download.text.splitlines()[0].startswith(("date,", "rebalance_date,"))
+
+
+async def test_a_forged_download_token_is_refused(session: AsyncSession, tmp_path: Path) -> None:
+    user_id, public_id = await make_user(session, "forge.backtest@example.com", subscribed=True)
+    row = await _completed(session, user_id, tmp_path)
+    async with running_app(_settings(tmp_path), session) as client:
+        link = await client.get(
+            url(f"/backtests/{row.public_id}/export"), headers=bearer(public_id)
+        )
+        tampered = link.json()["url"].replace("token=", "token=x")
+        response = await client.get(tampered)
+    assert response.status_code == 404
+
+
+async def test_an_expired_download_token_is_refused(session: AsyncSession, tmp_path: Path) -> None:
+    user_id, public_id = await make_user(session, "expired.backtest@example.com", subscribed=True)
+    row = await _completed(session, user_id, tmp_path)
+    settings = _settings(tmp_path)
+    assert isinstance(settings, object)
+    stale = sign_download(
+        api_helpers.api_settings(screener_helpers.database_url(), invoice_local_dir=str(tmp_path)),
+        row.public_id,
+        "trades",
+        now=dt.datetime(2020, 1, 1, tzinfo=dt.UTC),
+    )
+    async with running_app(settings, session) as client:
+        response = await client.get(
+            url(f"/backtests/{row.public_id}/download/trades"),
+            params={"expires": stale.expires, "token": stale.token},
+        )
+        del public_id
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# SSE (Prompt 15 §4)
+# ---------------------------------------------------------------------------
+
+
+async def test_the_event_stream_opens_with_the_current_state(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """A client that connects to a finished run gets its state and a close, not a hung socket."""
+    user_id, public_id = await make_user(session, "sse.backtest@example.com", subscribed=True)
+    row = await _completed(session, user_id, tmp_path)
+    async with (
+        running_app(_settings(tmp_path), session) as client,
+        client.stream(
+            "GET", url(f"/backtests/{row.public_id}/events"), headers=bearer(public_id)
+        ) as response,
+    ):
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        body = "".join([chunk async for chunk in response.aiter_text()])
+
+    assert "event: progress" in body
+    assert "event: end" in body
+    frames = [
+        json.loads(line[len("data: ") :]) for line in body.splitlines() if line.startswith("data: ")
+    ]
+    assert frames[-1]["status"] == "done"
+    assert frames[-1]["percent"] == 100
+
+
+async def test_the_event_stream_is_entitlement_gated(session: AsyncSession, tmp_path: Path) -> None:
+    user_id, _ = await make_user(session, "sseowner.backtest@example.com", subscribed=True)
+    _, unpaid = await make_user(session, "ssefree.backtest@example.com", subscribed=False)
+    row = await _completed(session, user_id, tmp_path)
+    async with running_app(_settings(tmp_path), session) as client:
+        response = await client.get(
+            url(f"/backtests/{row.public_id}/events"), headers=bearer(unpaid)
+        )
+    assert response.status_code == 402
+
+
+async def test_anonymous_callers_are_refused(session: AsyncSession, tmp_path: Path) -> None:
+    """docs/07 §"Error catalogue": 401 `unauthenticated`."""
+    async with running_app(_settings(tmp_path), session) as client:
+        response: httpx.Response = await client.get(url("/backtests"))
+    assert response.status_code == 401

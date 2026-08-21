@@ -83,6 +83,17 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/portfolios/{portfolio_id}/rebalance": {"post"},
     "/portfolios/{portfolio_id}/rebalances": {"get"},
     "/portfolios/{portfolio_id}/rebalances/{rebalance_id}": {"get"},
+    # docs/07 §Backtests (Prompt 15). The four paths docs/07 does not list — the collection read,
+    # `holdings`, the SSE stream and the download the signed `export` link redeems against — are
+    # Prompt 15 deliverables 4, 5 and 6; each is argued for in `decile_api.routers.backtests` and
+    # recorded in docs/DECISIONS.md §15.
+    "/backtests": {"get", "post"},
+    "/backtests/{public_id}": {"get", "delete"},
+    "/backtests/{public_id}/trades": {"get"},
+    "/backtests/{public_id}/holdings": {"get"},
+    "/backtests/{public_id}/export": {"get"},
+    "/backtests/{public_id}/download/{artefact}": {"get"},
+    "/backtests/{public_id}/events": {"get"},
 }
 
 

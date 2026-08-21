@@ -50,6 +50,11 @@ dependencies = [
     # alternative is hand-rolling RFC 7578 boundary parsing, which is not a thing to hand-roll.
     # Flagged in docs/DECISIONS.md §14.
     "python-multipart>=0.0.20",
+    # docs/02 §"The decision in one table" already locks "Jobs — Celery + Celery Beat"; what is
+    # new in Prompt 15 is that the API is a *producer*. `POST /backtests` publishes
+    # `decile.backtest.run` to the broker by name, because `decile-worker` depends on
+    # `decile-api` and the import cannot go the other way. See `decile_api.queue`.
+    "celery[redis]>=5.4",
 ]
 
 [build-system]

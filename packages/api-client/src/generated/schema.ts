@@ -193,6 +193,164 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/backtests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List your backtests */
+        get: operations["listBacktests"];
+        put?: never;
+        /**
+         * Queue a backtest
+         * @description docs/07: `POST /backtests { config } → 202 { public_id, status:"queued" }`.
+         */
+        post: operations["createBacktest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backtests/{public_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One backtest
+         * @description docs/07: "status + metrics + equity curve".
+         */
+        get: operations["getBacktest"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a backtest
+         * @description docs/07: `DELETE /backtests/{id}`.
+         *
+         *     The R2 artefacts are **not** deleted here. They are keyed by ``public_id``, which is never
+         *     reissued, so nothing can read them once the row is gone; and deleting them inside the request
+         *     would make a delete depend on an object store being reachable. A sweeper belongs with the
+         *     other retention jobs (docs/04 §"Retention & size estimates"), and does not exist yet —
+         *     ``docs/DECISIONS.md`` §15.
+         */
+        delete: operations["deleteBacktest"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backtests/{public_id}/download/{artefact}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Redeem a signed download link
+         * @description Deliberately **unauthenticated**: the signature is the credential.
+         *
+         *     That is what makes the link usable from a download manager or a spreadsheet's "open from
+         *     URL", which is the whole reason docs/07 asks for a signed URL rather than an authenticated
+         *     stream. It carries no bearer token, expires in fifteen minutes, and names exactly one object.
+         */
+        get: operations["downloadArtefact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backtests/{public_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Progress events (Server-Sent Events)
+         * @description PROMPTS.md Prompt 15 §4: "progress events streamed to the client over SSE".
+         */
+        get: operations["backtestEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backtests/{public_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A signed download link
+         * @description docs/07: `GET /backtests/{id}/export` → "CSV/Parquet signed URL".
+         *
+         *     CSV, not Parquet: docs/07 offers either, ``docs/02`` locks no Parquet writer for the API, and
+         *     a trade log is a table a user opens in a spreadsheet. ``docs/DECISIONS.md`` §15.
+         */
+        get: operations["exportBacktest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backtests/{public_id}/holdings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Per-rebalance holdings
+         * @description docs/08 §Backtests: the results page shows "per-period holdings".
+         */
+        get: operations["getHoldings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backtests/{public_id}/trades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The trade log
+         * @description docs/07: `GET /backtests/{id}/trades?cursor=` → "paginated fills".
+         */
+        get: operations["getTrades"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/checkout/session": {
         parameters: {
             query?: never;
@@ -1060,6 +1218,346 @@ export interface components {
              */
             one_year: number;
         };
+        /**
+         * BacktestAcceptedOut
+         * @description docs/07: `→ 202 { public_id, status:"queued" }`.
+         */
+        BacktestAcceptedOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Events Url */
+            events_url: string;
+            /** Public Id */
+            public_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed";
+        };
+        /**
+         * BacktestConfig
+         * @description docs/10 §Config, key for key, plus the two the document mentions only in prose.
+         *
+         *     ``dividends`` appears in §"Execution model" step 7 rather than in the config block, and
+         *     ``risk_free_rate`` is required by §Outputs ("Sharpe (rf from a configurable T-bill series)")
+         *     with no table to read a series out of — ``docs/04`` has no T-bill anywhere. A flat annual rate
+         *     is the only thing this service can actually serve today; it is configuration rather than a
+         *     constant so it stops being a lie the moment a series exists. See ``docs/DECISIONS.md`` §15.
+         */
+        "BacktestConfig-Input": {
+            /**
+             * Benchmark
+             * @default nifty-500
+             */
+            benchmark: string;
+            /** @default hold_cash */
+            cash_policy: components["schemas"]["CashPolicy"];
+            /**
+             * @default {
+             *       "brokerage_bps": "3",
+             *       "impact_model": "fixed",
+             *       "slippage_bps": "15",
+             *       "stt_bps": "10"
+             *     }
+             */
+            costs: components["schemas"]["CostSpec-Input"];
+            /** @default reinvest */
+            dividends: components["schemas"]["DividendPolicy"];
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /**
+             * Initial Capital
+             * @default 1000000
+             */
+            initial_capital: number | string;
+            /**
+             * @default {
+             *       "max_weight": "0.10",
+             *       "min_weight": "0.01"
+             *     }
+             */
+            position_limits: components["schemas"]["PositionLimits-Input"];
+            /**
+             * @default {
+             *       "day": "last_trading_day",
+             *       "frequency": "monthly"
+             *     }
+             */
+            rebalance: components["schemas"]["RebalanceSpec"];
+            /**
+             * Risk Free Rate
+             * @default 0
+             */
+            risk_free_rate: number | string;
+            /**
+             * @default {
+             *       "enabled": false,
+             *       "rule": "index_above_200dma"
+             *     }
+             */
+            risk_overlay: components["schemas"]["RiskOverlay"];
+            /** Screen Definition */
+            screen_definition?: {
+                [key: string]: unknown;
+            } | null;
+            /** Screen Public Id */
+            screen_public_id?: string | null;
+            /**
+             * @default {
+             *       "hold_buffer": 10,
+             *       "top_n": 20
+             *     }
+             */
+            selection: components["schemas"]["SelectionSpec"];
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /** @default equal */
+            weighting: components["schemas"]["Weighting"];
+        };
+        /**
+         * BacktestConfig
+         * @description docs/10 §Config, key for key, plus the two the document mentions only in prose.
+         *
+         *     ``dividends`` appears in §"Execution model" step 7 rather than in the config block, and
+         *     ``risk_free_rate`` is required by §Outputs ("Sharpe (rf from a configurable T-bill series)")
+         *     with no table to read a series out of — ``docs/04`` has no T-bill anywhere. A flat annual rate
+         *     is the only thing this service can actually serve today; it is configuration rather than a
+         *     constant so it stops being a lie the moment a series exists. See ``docs/DECISIONS.md`` §15.
+         */
+        "BacktestConfig-Output": {
+            /**
+             * Benchmark
+             * @default nifty-500
+             */
+            benchmark: string;
+            /** @default hold_cash */
+            cash_policy: components["schemas"]["CashPolicy"];
+            /**
+             * @default {
+             *       "brokerage_bps": "3",
+             *       "impact_model": "fixed",
+             *       "slippage_bps": "15",
+             *       "stt_bps": "10"
+             *     }
+             */
+            costs: components["schemas"]["CostSpec-Output"];
+            /** @default reinvest */
+            dividends: components["schemas"]["DividendPolicy"];
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /**
+             * Initial Capital
+             * @default 1000000
+             */
+            initial_capital: string;
+            /**
+             * @default {
+             *       "max_weight": "0.10",
+             *       "min_weight": "0.01"
+             *     }
+             */
+            position_limits: components["schemas"]["PositionLimits-Output"];
+            /**
+             * @default {
+             *       "day": "last_trading_day",
+             *       "frequency": "monthly"
+             *     }
+             */
+            rebalance: components["schemas"]["RebalanceSpec"];
+            /**
+             * Risk Free Rate
+             * @default 0
+             */
+            risk_free_rate: string;
+            /**
+             * @default {
+             *       "enabled": false,
+             *       "rule": "index_above_200dma"
+             *     }
+             */
+            risk_overlay: components["schemas"]["RiskOverlay"];
+            /** Screen Definition */
+            screen_definition?: {
+                [key: string]: unknown;
+            } | null;
+            /** Screen Public Id */
+            screen_public_id?: string | null;
+            /**
+             * @default {
+             *       "hold_buffer": 10,
+             *       "top_n": 20
+             *     }
+             */
+            selection: components["schemas"]["SelectionSpec"];
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /** @default equal */
+            weighting: components["schemas"]["Weighting"];
+        };
+        /**
+         * BacktestCreate
+         * @description docs/07: `POST /backtests { config }`.
+         *
+         *     ``config`` is validated against :class:`decile_core.backtest.BacktestConfig`, which mirrors
+         *     docs/10 §Config key for key and forbids unknown keys — the same contract
+         *     ``ScreenDefinition`` has. It is typed as ``BacktestConfig`` so the generated TypeScript
+         *     client carries every field rather than ``unknown``.
+         */
+        BacktestCreate: {
+            config: components["schemas"]["BacktestConfig-Input"];
+            /** Data Version */
+            data_version?: number | null;
+            /**
+             * Fragility
+             * @default true
+             */
+            fragility: boolean;
+        };
+        /**
+         * BacktestHoldingOut
+         * @description docs/10 §Artefacts: "per-rebalance holdings with weights".
+         */
+        BacktestHoldingOut: {
+            /** Actual Weight */
+            actual_weight: string;
+            /**
+             * Executed On
+             * Format: date
+             */
+            executed_on: string;
+            /** Name */
+            name: string;
+            /** Price */
+            price: string;
+            /** Quantity */
+            quantity: number;
+            /** Rank */
+            rank?: number | null;
+            /**
+             * Rebalance Date
+             * Format: date
+             */
+            rebalance_date: string;
+            /** Symbol */
+            symbol: string;
+            /** Target Weight */
+            target_weight: string;
+            /** Value */
+            value: string;
+        };
+        /** BacktestListOut */
+        BacktestListOut: {
+            /** Data */
+            data: components["schemas"]["BacktestSummaryOut"][];
+        };
+        /**
+         * BacktestOut
+         * @description docs/07: `GET /backtests/{id}` → "status + metrics + equity curve".
+         */
+        BacktestOut: {
+            /** Assumptions */
+            assumptions?: string[];
+            config: components["schemas"]["BacktestConfig-Output"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Data Version */
+            data_version?: number | null;
+            /** Disclaimer */
+            disclaimer: string;
+            /** Drawdown */
+            drawdown?: components["schemas"]["DrawdownPointOut"][];
+            /** Equity Curve */
+            equity_curve?: components["schemas"]["EquityPointOut"][];
+            /** Error */
+            error?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Fragility */
+            fragility?: components["schemas"]["FragilityRunOut"][];
+            metrics?: components["schemas"]["JsonValue"];
+            /** Metrics Hash */
+            metrics_hash?: string | null;
+            /** Monthly Returns */
+            monthly_returns?: components["schemas"]["MonthlyReturnOut"][];
+            /** Public Id */
+            public_id: string;
+            /** Screen Name */
+            screen_name?: string | null;
+            /** Screen Public Id */
+            screen_public_id?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed";
+        };
+        /**
+         * BacktestSummaryOut
+         * @description One row of the list. Not in docs/07 — see `docs/DECISIONS.md` §15.
+         */
+        BacktestSummaryOut: {
+            /** Cagr */
+            cagr?: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Error */
+            error?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Max Drawdown */
+            max_drawdown?: number | null;
+            /** Public Id */
+            public_id: string;
+            /** Rebalance Frequency */
+            rebalance_frequency: string;
+            /** Screen Name */
+            screen_name?: string | null;
+            /** Screen Public Id */
+            screen_public_id?: string | null;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed";
+            /** Top N */
+            top_n: number;
+            /** Total Return */
+            total_return?: number | null;
+            /** Weighting */
+            weighting: string;
+        };
         /** Body_importCsv */
         Body_importCsv: {
             /**
@@ -1082,6 +1580,15 @@ export interface components {
             /** Symbol */
             symbol: string;
         };
+        /**
+         * CashPolicy
+         * @description docs/10: ``hold_cash | benchmark``.
+         *
+         *     ``benchmark`` means uninvested cash earns the benchmark's daily return — the honest reading of
+         *     "the money you did not deploy tracked the index".
+         * @enum {string}
+         */
+        CashPolicy: "hold_cash" | "benchmark";
         /**
          * CellOut
          * @description One number with the context that makes it mean something.
@@ -1225,6 +1732,62 @@ export interface components {
             symbol: string;
         };
         /**
+         * CostSpec
+         * @description docs/10: brokerage 3 bps, STT 10 bps, slippage 15 bps, ``impact_model: "fixed"``.
+         *
+         *     All three are charged on **both** sides of a trade. In India STT is levied on the buy and the
+         *     sell leg of a delivery trade, brokerage is per order, and slippage is a property of crossing
+         *     the spread in either direction — so "costs on traded notional" is charged on traded notional,
+         *     whichever way it was traded.
+         */
+        "CostSpec-Input": {
+            /**
+             * Brokerage Bps
+             * @default 3
+             */
+            brokerage_bps: number | string;
+            /** @default fixed */
+            impact_model: components["schemas"]["ImpactModel"];
+            /**
+             * Slippage Bps
+             * @default 15
+             */
+            slippage_bps: number | string;
+            /**
+             * Stt Bps
+             * @default 10
+             */
+            stt_bps: number | string;
+        };
+        /**
+         * CostSpec
+         * @description docs/10: brokerage 3 bps, STT 10 bps, slippage 15 bps, ``impact_model: "fixed"``.
+         *
+         *     All three are charged on **both** sides of a trade. In India STT is levied on the buy and the
+         *     sell leg of a delivery trade, brokerage is per order, and slippage is a property of crossing
+         *     the spread in either direction — so "costs on traded notional" is charged on traded notional,
+         *     whichever way it was traded.
+         */
+        "CostSpec-Output": {
+            /**
+             * Brokerage Bps
+             * @default 3
+             */
+            brokerage_bps: string;
+            /** @default fixed */
+            impact_model: components["schemas"]["ImpactModel"];
+            /**
+             * Slippage Bps
+             * @default 15
+             */
+            slippage_bps: string;
+            /**
+             * Stt Bps
+             * @default 10
+             */
+            stt_bps: string;
+        };
+        /**
          * CustomFilter
          * @description A field-to-field comparison, e.g. ``ma_50 >= ma_200`` (docs/01 §2.14).
          */
@@ -1292,6 +1855,43 @@ export interface components {
             status: "scheduled" | "cancelled";
         };
         /**
+         * DividendPolicy
+         * @description docs/10 §7: ``dividends: "reinvest" | "cash" | "ignore"``.
+         *
+         *     There is a wrinkle the document does not know about, and it decides the default.
+         *
+         *     docs/09's adjustment algorithm — which this repository implements in
+         *     :mod:`decile_core.adjustments` — folds **cash dividends** into ``adj_factor`` alongside splits
+         *     and bonuses: "Cash dividend D -> (P_cum - D) / P_cum". So ``ohlcv_daily.close``, the adjusted
+         *     series docs/10 §6 marks the book to, is already a *total-return* series. Crediting the
+         *     dividend as cash on top of it would count it twice.
+         *
+         *     Hence:
+         *
+         *     ``reinvest``
+         *         Mark to the adjusted series as-is. Back-adjustment **is** reinvestment at the ex-date
+         *         price, so this is exact and it is the default.
+         *     ``cash``
+         *         Mark to a dividend-stripped price series and credit the dividend to cash on the ex-date.
+         *         Needs ``price_open``/``price_close`` columns and a dividend schedule in the panel; without
+         *         them the run is refused rather than silently served as ``reinvest``.
+         *     ``ignore``
+         *         Mark to the dividend-stripped price series and credit nothing — a pure price return.
+         *         Same data requirement.
+         * @enum {string}
+         */
+        DividendPolicy: "reinvest" | "cash" | "ignore";
+        /** DrawdownPointOut */
+        DrawdownPointOut: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Drawdown */
+            drawdown: number;
+        };
+        /**
          * EntitlementsOut
          * @description docs/07 §Entitlements, field for field.
          */
@@ -1312,6 +1912,21 @@ export interface components {
             screener: boolean;
         };
         /**
+         * EquityPointOut
+         * @description One point of the downsampled curve docs/10 keeps in Postgres.
+         */
+        EquityPointOut: {
+            /** Benchmark */
+            benchmark?: string | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Equity */
+            equity: string;
+        };
+        /**
          * ExitReason
          * @description Why a held name is on the exit list.
          *
@@ -1320,6 +1935,29 @@ export interface components {
          * @enum {string}
          */
         ExitReason: "rank_outside_buffer" | "not_in_screen" | "delisted";
+        /**
+         * ExportLinkOut
+         * @description docs/07: `GET /backtests/{id}/export` → "CSV/Parquet signed URL".
+         */
+        ExportLinkOut: {
+            /**
+             * Artefact
+             * @enum {string}
+             */
+            artefact: "trades" | "holdings" | "equity";
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Format
+             * @constant
+             */
+            format: "csv";
+            /** Url */
+            url: string;
+        };
         /**
          * ExtraFactor
          * @description Factor two / factor three of the combined ranking (docs/01 §2.12).
@@ -1408,6 +2046,26 @@ export interface components {
             email: string;
         };
         /**
+         * FragilityRunOut
+         * @description docs/10 §"honesty features": one of the five runs in the fragility readout.
+         */
+        FragilityRunOut: {
+            /** Cagr */
+            cagr?: number | null;
+            /** Description */
+            description: string;
+            /** Final Equity */
+            final_equity: string;
+            /** Label */
+            label: string;
+            /** Max Drawdown */
+            max_drawdown?: number | null;
+            /** Total Return */
+            total_return?: number | null;
+            /** Trades */
+            trades: number;
+        };
+        /**
          * GaugeOut
          * @description One of docs/01 §6's four breadth gauges.
          */
@@ -1461,6 +2119,13 @@ export interface components {
             /** Symbol */
             symbol: string;
         };
+        /** HoldingPage */
+        HoldingPage: {
+            /** Data */
+            data: components["schemas"]["BacktestHoldingOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /**
          * HoldingsIn
          * @description docs/07: `PUT /portfolios/{id}/holdings`. A replacement, not a merge.
@@ -1469,6 +2134,12 @@ export interface components {
             /** Holdings */
             holdings: components["schemas"]["HoldingIn"][];
         };
+        /**
+         * ImpactModel
+         * @description docs/10 §Config: ``"impact_model": "fixed"``. Only the one the document names.
+         * @enum {string}
+         */
+        ImpactModel: "fixed";
         /**
          * ImportReportOut
          * @description Prompt 14 §1: "a parse report listing matched, ambiguous and unmatched symbols rather than
@@ -1865,6 +2536,16 @@ export interface components {
             value?: string | number | null;
         };
         /**
+         * MonthlyReturnOut
+         * @description One cell of docs/10 §Artefacts' "monthly return heatmap".
+         */
+        MonthlyReturnOut: {
+            /** Month */
+            month: string;
+            /** Return */
+            return: number;
+        };
+        /**
          * MovingAverageFilter
          * @description Eight independent switches, AND-combined (docs/01 §2.3).
          */
@@ -2084,6 +2765,38 @@ export interface components {
             report: components["schemas"]["ImportReportOut"];
         };
         /**
+         * PositionLimits
+         * @description docs/10: ``{"max_weight": 0.10, "min_weight": 0.01}``.
+         */
+        "PositionLimits-Input": {
+            /**
+             * Max Weight
+             * @default 0.10
+             */
+            max_weight: number | string;
+            /**
+             * Min Weight
+             * @default 0.01
+             */
+            min_weight: number | string;
+        };
+        /**
+         * PositionLimits
+         * @description docs/10: ``{"max_weight": 0.10, "min_weight": 0.01}``.
+         */
+        "PositionLimits-Output": {
+            /**
+             * Max Weight
+             * @default 0.10
+             */
+            max_weight: string;
+            /**
+             * Min Weight
+             * @default 0.01
+             */
+            min_weight: string;
+        };
+        /**
          * PositiveDaysFilter
          * @description Minimum % of trading days that closed up. ``0`` means ignore (docs/01 §2.5).
          */
@@ -2195,6 +2908,19 @@ export interface components {
             result_count: number;
         };
         /**
+         * RebalanceDay
+         * @description docs/10 names ``last_trading_day``. ``first_trading_day`` is the only other coherent
+         *     reading of "day" for a calendar period, and costs nothing to support.
+         * @enum {string}
+         */
+        RebalanceDay: "last_trading_day" | "first_trading_day";
+        /**
+         * RebalanceFrequency
+         * @description docs/10: ``weekly|fortnightly|monthly|quarterly``.
+         * @enum {string}
+         */
+        RebalanceFrequency: "weekly" | "fortnightly" | "monthly" | "quarterly";
+        /**
          * RebalanceHistoryPage
          * @description docs/07 §Conventions: `{ "data": [...], "next_cursor": "…" }`.
          */
@@ -2287,6 +3013,13 @@ export interface components {
             /** Public Id */
             public_id: string;
         };
+        /** RebalanceSpec */
+        RebalanceSpec: {
+            /** @default last_trading_day */
+            day: components["schemas"]["RebalanceDay"];
+            /** @default monthly */
+            frequency: components["schemas"]["RebalanceFrequency"];
+        };
         /**
          * RebalanceSummaryOut
          * @description One row of the history list — Prompt 14 §4.
@@ -2364,6 +3097,25 @@ export interface components {
             /** Token */
             token: string;
         };
+        /**
+         * RiskOverlay
+         * @description docs/10: ``{"enabled": false, "rule": "index_above_200dma"}``.
+         */
+        RiskOverlay: {
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /** @default index_above_200dma */
+            rule: components["schemas"]["RiskRule"];
+        };
+        /**
+         * RiskRule
+         * @description docs/10 §Config: ``"rule": "index_above_200dma"``.
+         * @enum {string}
+         */
+        RiskRule: "index_above_200dma";
         /**
          * RowIssue
          * @description Something the parser corrected or could not read, on a row it *did* keep.
@@ -2614,6 +3366,22 @@ export interface components {
             name?: string | null;
         };
         /**
+         * SelectionSpec
+         * @description docs/10: ``{"top_n": 20, "hold_buffer": 10}``; "0 = strict top-N".
+         */
+        SelectionSpec: {
+            /**
+             * Hold Buffer
+             * @default 10
+             */
+            hold_buffer: number;
+            /**
+             * Top N
+             * @default 20
+             */
+            top_n: number;
+        };
+        /**
          * SessionOut
          * @description What a successful authentication returns.
          *
@@ -2722,6 +3490,49 @@ export interface components {
             enabled: boolean;
         };
         /**
+         * TradeOut
+         * @description docs/10 §Artefacts: "date, symbol, side, qty, price, cost, reason".
+         */
+        TradeOut: {
+            /** Cost */
+            cost: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Notional */
+            notional: string;
+            /** Price */
+            price: string;
+            /** Quantity */
+            quantity: number;
+            /** Realised Pnl */
+            realised_pnl?: string | null;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "enter" | "exit" | "rebalance" | "delist";
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "buy" | "sell";
+            /** Symbol */
+            symbol: string;
+        };
+        /**
+         * TradePage
+         * @description docs/07: `GET /backtests/{id}/trades?cursor=` → "paginated fills".
+         */
+        TradePage: {
+            /** Data */
+            data: components["schemas"]["TradeOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
          * TradingDaysOut
          * @description docs/07: "list of trading dates (for the historical date picker)".
          */
@@ -2793,6 +3604,12 @@ export interface components {
              */
             status: "processed" | "ignored" | "failed";
         };
+        /**
+         * Weighting
+         * @description docs/10: ``equal | inverse_volatility | rank | marketcap``.
+         * @enum {string}
+         */
+        Weighting: "equal" | "inverse_volatility" | "rank" | "marketcap";
     };
     responses: never;
     parameters: never;
@@ -3652,6 +4469,946 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    listBacktests: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacktestListOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    createBacktest: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BacktestCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacktestAcceptedOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getBacktest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacktestOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    deleteBacktest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    downloadArtefact: {
+        parameters: {
+            query: {
+                expires: number;
+                token: string;
+            };
+            header?: never;
+            path: {
+                public_id: string;
+                artefact: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    backtestEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    exportBacktest: {
+        parameters: {
+            query?: {
+                artefact?: string;
+            };
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportLinkOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getHoldings: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+                rebalance_date?: string | null;
+            };
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HoldingPage"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getTrades: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TradePage"];
                 };
             };
             /** @description Invalid screen definition */

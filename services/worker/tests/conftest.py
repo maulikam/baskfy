@@ -83,7 +83,13 @@ async def clean_db(engine: AsyncEngine) -> AsyncIterator[None]:
     """Truncate everything the pipeline touches, then seed the reference rows it needs."""
     async with engine.begin() as connection:
         await connection.execute(text(f"TRUNCATE {PIPELINE_TABLES} RESTART IDENTITY CASCADE"))
-        # Row-level, so it cannot deadlock with a reader elsewhere in the suite.
+        # Row-level, so it cannot deadlock with a reader elsewhere in the suite. The two
+        # dependent tables go first: Prompt 15's backtest suite leaves a `screen` and a
+        # `backtest` row behind, and both carry a NOT NULL `user_id` that would make the account
+        # delete a foreign-key violation.
+        owned = "SELECT id FROM app_user WHERE email LIKE '%@example.com'"
+        await connection.execute(text(f"DELETE FROM backtest WHERE user_id IN ({owned})"))
+        await connection.execute(text(f"DELETE FROM screen WHERE user_id IN ({owned})"))
         await connection.execute(text("DELETE FROM app_user WHERE email LIKE '%@example.com'"))
     maker = async_sessionmaker(engine)
     async with maker() as seeding, seeding.begin():

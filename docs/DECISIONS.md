@@ -841,3 +841,273 @@ measures that. If it becomes a problem the fix is to carry `is_staff` on the Aut
 rather than to drop the link, and the cost of that is staleness: a staff bit revoked mid-session
 would keep rendering the link until the session refreshed. The API decides again on every
 `/admin/*` request either way.
+
+---
+
+## Prompt 18 — Content, marketing, and legal pages (2026-08-21)
+
+Every choice below was made under ambiguity — the specification is silent, or two parts of it
+pull in different directions. Each records what was chosen and what it costs.
+
+### 18.1 MDX is a new dependency, and `docs/02` does not name one
+
+`docs/02-tech-stack-adr.md` locks the stack and says nothing about a content layer. It mentions
+the blog exactly once, as a reason to keep SSR: *"Loses SSR/SEO for the public pages (pricing,
+blog, instrument pages are exactly the kind of long-tail SEO surface that acquires users…)"*.
+
+PROMPTS.md Prompt 18 §2 asks for "`/blog` with MDX posts and RSS", which names the format. Four
+packages were added — `@next/mdx`, `@mdx-js/loader`, `@mdx-js/react`, `@types/mdx` — pinned to the
+Next 15 line. They are **build-time only**: MDX compiles to React server components, so the client
+bundle is unchanged and the 250 KB screens-route budget (Prompt 16) is untouched.
+
+No remark or rehype plugins are configured. A plugin chain is another thing that can break a build,
+and neither three posts nor four legal documents need one.
+
+**RSS took no dependency.** `apps/web/src/app/(marketing)/blog/rss.xml/route.ts` writes RSS 2.0 by
+hand — nine elements, `force-static`, RFC 822 dates anchored at midnight IST rather than UTC so a
+post is not dated to the previous day for half the world.
+
+### 18.2 Static generation and the strict CSP cannot both hold on the same route
+
+This is the hardest trade in the module and it is a genuine conflict inside `docs/`.
+
+* `docs/08` §Routes: "`/` | marketing landing (SSG)" and "`/pricing`, `/faq`, `/about`,
+  `/blog/*`, legal | SSG".
+* `docs/11` §Security: "Strict CSP (`default-src 'self'`)".
+* PROMPTS.md Prompt 18, acceptance criterion 1: "All pages are statically generated…"
+
+Prompt 12 implemented the strict CSP as a **per-request nonce** generated in `src/middleware.ts`.
+A nonce cannot appear in a statically prerendered page: the HTML is one cached file served to
+everybody, so the nonce in this request's header would not match the one baked into the file — and
+under `strict-dynamic` that blocks the page's own bootstrap, not merely one inline script. Next
+also inlines its RSC flight payload as `<script>self.__next_f.push(…)</script>`, which is
+content-dependent and therefore cannot be hashed either.
+
+The two are mutually exclusive per route. **The resolution is two policies, chosen by path:**
+
+| Routes | `script-src` |
+|---|---|
+| `/`, `/faq`, `/about`, `/support`, `/blog/*`, `/december-2026-update`, the four legal pages | `'self' 'unsafe-inline'` |
+| everything else | `'self' 'nonce-…' 'strict-dynamic'` |
+
+Every other directive is identical — `default-src 'self'`, `object-src 'none'`, `base-uri 'self'`,
+`form-action 'self'`, `frame-ancestors 'none'`, the same `connect-src`.
+
+**Why this is acceptable on exactly those routes.** They render no session, accept no
+user-generated content into the DOM, and read nothing from the request. There is no injection
+source for `'unsafe-inline'` to amplify. The authenticated surface — where an injection would
+actually be worth something — is unchanged.
+
+**What it costs.** If a marketing page ever renders untrusted input (a comment form, a
+search-term echo), the relaxation becomes a real XSS amplifier and this decision must be revisited.
+`isStaticPublicPath` in `apps/web/src/lib/marketing/routes.ts` is the one list that decides, and
+`src/lib/__tests__/marketing-content.test.ts` asserts what is and is not in it.
+
+**A consequential refactor.** `apps/web/src/app/layout.tsx` used to read `headers()` for the nonce.
+A `headers()` call in the *root* layout opts every route in the app into dynamic rendering, which
+made the criterion unsatisfiable no matter what the middleware did. The nonce is now read by
+`(app)/layout.tsx` and `(auth)/layout.tsx` — both already dynamic because they read the session
+cookie — and `<Providers>` moved down with it. The root layout now reads nothing per request.
+
+### 18.3 "All pages" is read as "all pages Prompt 18 delivers", not literally all pages
+
+Taken literally, criterion 1 would require `/dashboard`, `/screens`, `/portfolios` and every
+account page to be statically generated. They cannot be: they render one caller's data.
+`docs/08` §Routes marks them "RSC", not SSG, and doing it would be a data-leak bug rather than an
+optimisation.
+
+The criterion is therefore read against `docs/08`'s own SSG row. **`/pricing` is the one page in
+that row that is still dynamic**, and deliberately: Prompt 13 built it to render the caller's
+current plan and entitlement state, which needs the session. Its prices already come from
+`GET /plans`. Making it static would mean either dropping "you are on this plan" or moving it to
+the client, and neither is worth a Lighthouse point.
+
+`apps/web/e2e/static-generation.spec.ts` asserts the split against `.next/prerender-manifest.json`
+— including, as a positive assertion, that `/pricing` and the three data routes are *not* static,
+so a future change that makes one of them static is deliberate rather than silent.
+
+### 18.4 The FAQ's question set is reconstructed, not observed
+
+Prompt 18 §2 asks for "`/faq` with **the reference product's question set** answered for our
+product". `docs/01` §1 records that the reference product has a `/faq` route and captures nothing
+that is on it. Nothing else in the bundle does either.
+
+Inventing twenty questions and attributing them to the reference product would be putting words in
+a competitor's mouth in our own repository. Instead every question in
+`apps/web/src/lib/marketing/faq.ts` is derived from something `docs/01` observed **directly** — the
+universe list (§2.1), the sentinel conventions (§2.4–§2.6), the multi-factor ranking algorithm
+quoted verbatim from the site's own documentation (§2.12), "historical data is available from
+1 Nov 2024" (§2.13), the gated feature list and the SEBI disclaimer (§1) — plus the questions this
+build's own open items make unavoidable.
+
+Three answers say a thing does not work: the empty P/E column, the history start date, and the
+zero risk-free rate in backtest Sharpe. A test asserts all three are still mentioned.
+
+### 18.5 `POST /support` is a new endpoint `docs/07` does not describe
+
+Prompt 18 §2 asks for "`/support` with a contact form". A form needs a destination, and a form with
+no destination is a lie told in HTML.
+
+`docs/07` defines no such endpoint. The alternatives were a `mailto:` link (not a form), a Next
+server action calling a mail provider directly (puts the API key in the web app, which `docs/11`
+§Security puts in the platform's secret store behind the service that already holds it), or a new
+API endpoint. The endpoint won.
+
+* Unauthenticated, because someone who cannot sign in is exactly the person who most needs support.
+* **Not an open relay:** there is no recipient parameter. The message can only go to
+  `DECILE_SUPPORT_EMAIL`, and the *subject* carries only a value from a closed `Literal` set,
+  because a subject line is a header and free text there is an injection surface. A test submits a
+  name containing `\r\nBcc:` and asserts the subject is clean.
+* **Stores nothing.** `docs/04` has no support-ticket table and adding one would be a migration in
+  a content module. The consequence is that a failed delivery loses the message — so, unlike the
+  auth endpoints (which swallow send failures to avoid becoming a membership oracle), this one
+  answers **500** rather than claiming a send that did not happen.
+* Metered by the existing anonymous limiter (10/min per address, `docs/07` §Conventions). No
+  separate bucket.
+
+A validation failure answers **400 `invalid-screen-definition`**, not 422, because
+`decile_api.app` renders every `RequestValidationError` through docs/07's one validation problem
+type whatever the endpoint. The name reads oddly on a contact form; the shape is the documented
+one, and changing the handler for one endpoint would be worse.
+
+`Message` gained a `reply_to` field so the operator's copy replies to the sender rather than to the
+no-reply address. Exactly one template sets it.
+
+### 18.6 The banned-phrase lint is negation-aware, because a literal list cannot pass
+
+Prompt 18's third acceptance criterion names four phrases: *"guaranteed returns", "buy now",
+"recommendation", "advice"*. Two of the four appear in copy `docs/11` **requires** us to publish —
+the `<Disclaimer/>` sentence is "…not investment **advice**, and no output is a
+**recommendation** to buy or sell any security."
+
+A substring ban would fail on the disclaimer itself, and the only way to keep it green would be to
+exempt the very files the rule exists to police. So `src/lib/__tests__/copy-lint.test.ts` splits
+the list in two:
+
+* **Always banned**, negation or not: "guaranteed return", "assured return", "sure shot",
+  "multibagger", "buy now", "we recommend", "will outperform", "beat the market", and nine more.
+  There is no sentence containing these that this product should publish.
+* **Negation-only**: "advice", "adviser", "advisory", "recommendation", "target price". Each
+  occurrence must sit in a sentence containing a negator.
+
+Two carve-outs, both narrow and both tested:
+
+1. **A pointer to a registered adviser.** "Consider taking advice from a SEBI-registered investment
+   adviser" is the opposite of a claim, and is the sentence a regulator would want. The clause must
+   contain "SEBI-registered", which cannot describe us, because we are not.
+2. **A question.** The FAQ's own heading is "Is this investment advice?", answered "No." The
+   sentence must *end* in a question mark; the always-banned list ignores this carve-out entirely,
+   so "Want guaranteed returns?" is still a failure.
+
+Negation is scoped to the **sentence**, not to a character window. The disclaimer's §1 reads
+"…is **not** registered … not as an investment **adviser** under the SEBI (Investment Advisers)
+Regulations, 2013, not as a research analyst…", where the governing "not" is a hundred characters
+and a line break from the third occurrence. No fixed window is both wide enough for that and
+narrow enough to mean anything.
+
+Two tests assert the lint *would* fail — one on an un-negated claim, one on a question-mark
+exemption that should not apply — so a green run is not vacuous.
+
+### 18.7 The scanned surface is the content routes, not the whole app
+
+The copy lint scans `(marketing)`, `src/content`, `components/marketing`, `components/consent`,
+`lib/marketing` and the disclaimer component. **Not** the screener's form labels, the API error
+catalogue, or the admin surface: those are operational vocabulary, and a false positive from an
+error string would make the useful part of the test noise. Widening the list is one line.
+
+### 18.8 The landing page shows a real screen run, and shows nothing when it cannot
+
+Prompt 18 §1 asks for "a live sample screen preview". It is a real `POST /screens/preview` of the
+definition `docs/13` captured — the same one seeded as example screen `exmpl0000001` — revalidated
+hourly and invalidated by `POST /api/revalidate` at the nightly publish. Preview rather than
+`{id}/run` because a marketing page that wrote a `screen_run` audit row on every revalidation would
+be filling an audit table with traffic.
+
+**When the API does not answer, the slot says so.** The alternative — rendering the committed
+271-row reference export as canned rows — would put real-looking, months-stale numbers on a
+marketing page with nothing on screen to say they were not live. `docs/14` §Tone: credibility
+"comes from showing its work".
+
+### 18.9 The December 2026 announcement takes its price table as a prop
+
+`docs/01` §1 records the reference product's `/december-2026-update` as a "Roadmap / pricing-change
+announcement page", and Prompt 18 §2 asks for "an announcement page pattern like" it.
+
+The prose is MDX. The **price table is not**: Prompt 13's fourth acceptance criterion ("No price or
+entitlement is hard-coded in the web app; all read from the API") applies to an announcement
+*about* prices at least as strongly as to the checkout page. MDX compiles to a component that takes
+props, so the document contains `{props.priceTable}` and the route renders the table from
+`GET /plans` (`price_inr` and `price_from_dec_2026`). An operator who reprices a plan and forgets
+this page finds it already correct.
+
+The pattern, stated so the next one is a copy: a dated MDX document at a **permanent,
+self-describing URL** with a route of its own; the app shell's `AnnouncementBanner` points at it;
+and it is never edited retroactively — corrections are appended and dated.
+
+### 18.10 The legal drafts carry their warning in the source and never on the page
+
+Prompt 18 §3: "Mark them clearly as DRAFTS REQUIRING LEGAL REVIEW at the top of each file in the
+repo, **not on the rendered page**."
+
+The marker is an MDX comment (`{/* … */}`), which compiles to nothing.
+`src/lib/__tests__/legal-drafts.test.ts` asserts **both** halves — that every document opens with
+it, and that no document renders it. The second is the one worth testing: a "DRAFT" watermark on a
+live terms page is worse than no terms page, because it invites a customer to argue that nothing
+was agreed.
+
+A further test asserts every draft still contains `[BRACKETED]` placeholders. A legal document that
+invented a GSTIN or a registered address would be worse than one that admits it does not know them,
+because the invented one reads as authoritative.
+`apps/web/src/content/legal/DRAFT-NOTICE.md` lists the eight decisions a reviewer must make; the
+test counts them, so deleting one fails.
+
+### 18.11 The consent banner defaults to essential-only, and the "analytics" category is empty
+
+Prompt 18 §5. `apps/web/src/lib/consent/state.ts` treats *no stored choice* and *an unparseable
+choice* identically: essential-only. A corrupt cookie must never decay into a permissive record.
+
+The banner offers "Essential only" and "Allow all". Dismissing it without choosing leaves
+essential-only. There is no pre-ticked box and no implied consent, which is what the DPDP Act's
+"free, specific, informed and unambiguous" means in practice.
+
+**The `analytics` category presently gates nothing**, because this product ships no analytics tag.
+The banner says so rather than offering a toggle that controls nothing. If one is ever added it is
+gated on that flag.
+
+The banner is `position: fixed` and renders `null` until hydration, so it costs no layout shift —
+Prompt 8's CLS criterion is measured across the whole app and a banner in the document flow would
+break it everywhere at once. It uses `useSyncExternalStore` (via `useIsMounted`) rather than
+`useState` + `useEffect`, which `react-hooks/set-state-in-effect` rejects.
+
+### 18.12 What is not done, and what a human must decide
+
+* **No lawyer has read any of the four legal drafts.** They are drafts written by engineers from
+  `docs/11` and Prompt 18 §3. `DRAFT-NOTICE.md` §1–§8 is the list of what must be settled — the
+  supplier's legal identity and GSTIN, the GST rate and SAC code, whether prices are GST-inclusive,
+  the Forever plan's consumer-law treatment, the refund terms, the data-licensing paragraphs, the
+  DPDP specifics, and the governing-law venue.
+* **No grievance officer and no Data Protection Officer has been appointed.** Both are
+  `[BRACKETED]` in the privacy policy, and the Consumer Protection (E-Commerce) Rules, 2020 require
+  the first before taking payments.
+* **The server-log retention period is `[RETENTION PERIOD — NOT YET SET]`.** Nothing in the
+  codebase expires a log line.
+* **The support form has never delivered a real email.** The suite drives a recording transport and
+  the local stack points at mailpit. The Resend path is the same one the auth emails use and has
+  the same standing: written from the documented API, never exercised against the live service.
+* **No page has been checked by anything other than Lighthouse and axe.** The copy lint catches
+  banned phrases; it cannot catch a claim phrased in words nobody thought to ban.
+
+### 18.13 The landing page does not prefetch the instrument links in its sample table
+
+Found by measurement, not by review. `/instruments/[symbol]` renders dynamically and calls the
+API; Next prefetches every `<Link>` that enters the viewport, so the landing page's eight sample
+rows fired eight server renders and eight API round-trips the moment it painted — on the one page
+whose Lighthouse performance score is an acceptance criterion, for links most visitors never click.
+
+The symptom was variance rather than a number: five standalone runs scored 96, 97, 97, 97, 99, and
+one run at the end of a saturated ten-minute suite scored **94** and failed. With
+`prefetch={false}` on those eight links, five consecutive runs score **97, 97, 97, 97, 97**. They
+still prefetch on hover, which is when a visitor has shown they might click.
+
+Nothing else on the page changed, and no other `<Link>` in the app was touched: inside the
+application, prefetching a factsheet is the behaviour that makes the table feel instant.

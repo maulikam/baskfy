@@ -1370,6 +1370,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/support": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a support message
+         * @description Deliver the form to the configured support address, and a copy to the sender.
+         *
+         *     Unauthenticated on purpose: someone who cannot sign in is precisely the person who most needs
+         *     to reach support. The global anonymous rate limit (docs/07 §Conventions, 10/min per address)
+         *     is what keeps that from being a flood, and the message can only ever be addressed to *our*
+         *     inbox — there is no recipient parameter, so this is not an open relay.
+         */
+        post: operations["sendSupportMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/webhooks/razorpay": {
         parameters: {
             query?: never;
@@ -3876,6 +3901,30 @@ export interface components {
             /** Degraded */
             degraded: boolean;
             last_pipeline_run: components["schemas"]["PipelineRunOut"] | null;
+        };
+        /**
+         * SupportMessageIn
+         * @description docs/07 does not describe this endpoint; PROMPTS.md Prompt 18 §2 asks for the form that
+         *     posts to it, and a form with no destination is a lie told in HTML.
+         *     ``docs/DECISIONS.md`` §18.5 records the addition.
+         *
+         *     Bounds on every field, because every field is anonymous input that ends up in an email.
+         */
+        SupportMessageIn: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Message */
+            message: string;
+            /** Name */
+            name: string;
+            /**
+             * Topic
+             * @enum {string}
+             */
+            topic: "A number looks wrong" | "Billing or invoices" | "My account" | "A feature request" | "Something else";
         };
         /**
          * TargetWeightOut
@@ -11673,6 +11722,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScreenRunPage"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    sendSupportMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportMessageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptedOut"];
                 };
             };
             /** @description Invalid screen definition */

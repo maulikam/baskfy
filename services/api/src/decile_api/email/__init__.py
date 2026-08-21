@@ -9,7 +9,7 @@ from decile_api.email.sender import (
     Transport,
     build_transport,
 )
-from decile_api.email.templates import Message
+from decile_api.email.templates import Message, SupportSubmission
 
 __all__ = [
     "ConsoleTransport",
@@ -18,6 +18,7 @@ __all__ = [
     "Message",
     "ResendTransport",
     "SmtpTransport",
+    "SupportSubmission",
     "Transport",
     "build_transport",
 ]

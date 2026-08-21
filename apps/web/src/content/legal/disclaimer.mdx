@@ -1,0 +1,100 @@
+{/*
+================================================================================================
+DRAFT REQUIRING LEGAL REVIEW — NOT REVIEWED BY A LAWYER.
+
+Written by engineers from PROMPTS.md Prompt 18 §3 and docs/11 §"Compliance & legal (India)":
+"Not a SEBI-registered investment adviser. A <Disclaimer/> component on every analytics surface,
+in the footer, and on checkout. No buy/sell recommendations, no target prices, no 'advice'
+language anywhere in copy."
+
+The one-sentence version rendered by the <Disclaimer/> component is the operative text and is
+asserted verbatim by tests. THIS PAGE MUST NOT CONTRADICT IT.
+Read src/content/legal/DRAFT-NOTICE.md before publishing.
+================================================================================================
+*/}
+
+The short version appears on every page of this Service:
+
+> Decile is not a SEBI-registered investment adviser. Everything here is factual analysis of
+> published market data, not investment advice, and no output is a recommendation to buy or sell
+> any security.
+
+This page is the long version.
+
+## 1. We are not registered with SEBI
+
+[SUPPLIER LEGAL NAME] is not registered with the Securities and Exchange Board of India as an
+investment adviser under the SEBI (Investment Advisers) Regulations, 2013, as a research analyst
+under the SEBI (Research Analysts) Regulations, 2014, as a portfolio manager, or in any other
+capacity. We hold no SEBI registration number because we have none.
+
+We do not provide investment advice, personalised or otherwise. We do not publish research
+reports, target prices, price forecasts, buy/sell/hold calls, model portfolios, or any opinion on
+whether any security is worth owning.
+
+## 2. What a ranking is, and what it is not
+
+Decile computes stated formulas over end-of-day market data and sorts the results. A name at the
+top of a screen has, on that date, scored higher on that formula than the names below it. That is
+the entire content of the statement.
+
+It is **not** a statement that the security is a good investment, that its price will rise, that
+the ranking will persist, that the screen is a portfolio, or that the top of it is a sensible place
+to put money. Historical momentum is a measurement of the past, and the past does not oblige the
+future to resemble it.
+
+## 3. Backtests
+
+Any simulated performance shown in this Service is hypothetical. It was not achieved by anyone,
+with real money, at those prices.
+
+Our backtests are computed point-in-time — the engine cannot read data dated after the simulated
+date — and every run states the transaction costs, slippage assumptions and rebalancing rule it
+used. They still share every limitation that hypothetical results have: they include no tax, no
+market impact beyond the modelled slippage, no liquidity constraint on the size you would actually
+trade, and no account of the decisions a human would have made on the bad days.
+
+**Past performance is not indicative of future results, and simulated past performance is not even
+past performance.**
+
+## 4. The data can be wrong
+
+We take care and we publish our formulas so you can check them. We do not warrant that any value
+is accurate, complete or current.
+
+Specifically, and stated here rather than left to be discovered:
+
+- The price-to-earnings column and its filter are empty for every instrument, because nothing in
+  the pipeline fetches fundamentals.
+- Published factor history begins on 1 November 2024. There is less history than a long-horizon
+  study needs.
+- Index membership before 2018 is reconstructed from published sources rather than recorded, and
+  is labelled as reconstructed within the Service.
+- Rights issues are not price-adjusted, because the adjustment needs a subscription price the
+  exchange notice usually omits. Rather than guess, those series are left unadjusted and the
+  action is reported.
+- Backtest Sharpe and Sortino figures use a flat risk-free rate defaulting to zero, so they are
+  excess-over-zero figures rather than what a performance report would call Sharpe.
+
+If you find a figure that disagrees with the exchange, tell us through the
+[support page](/support). We treat it as a defect.
+
+## 5. You are responsible for your own decisions
+
+Nothing here is tailored to you. We do not know your objectives, your circumstances, your tax
+position or your risk tolerance, and we do not ask. Before acting on anything you find here,
+consider taking advice from a SEBI-registered investment adviser who does know those things.
+
+Any transaction you enter into is yours. Any loss you incur is yours.
+
+## 6. No relationship is created
+
+Using this Service does not make us your adviser, your broker, your fiduciary or your agent, and
+creates no duty of care beyond what the [Terms & Conditions](/terms-conditions) set out.
+
+## 7. Third-party data and links
+
+Market data originates from the National Stock Exchange of India and from Zerodha Kite. Index
+names and marks belong to their owners; their use here identifies the index and implies no
+endorsement, sponsorship or affiliation. We are not affiliated with NSE, with Zerodha, or with any
+issuer whose securities appear in the Service.

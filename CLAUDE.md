@@ -140,6 +140,17 @@ database, a network or a disk belongs in `services/` or `packages/providers`.
 | The restore drill's data-integrity assertions | `services/api/src/decile_api/integrity.py` |
 | The monthly restore drill | `.github/workflows/restore-drill.yml` |
 | **Every Prompt 17 decision taken under ambiguity** | `docs/DECISIONS.md` §17 |
+| **The public route table (footer, sitemap, static-CSP predicate)** | `apps/web/src/lib/marketing/routes.ts` |
+| Landing page, FAQ, about, support, blog, announcement | `apps/web/src/app/(marketing)/` |
+| The public header and footer | `apps/web/src/components/marketing/` |
+| Blog posts and the announcement, as MDX | `apps/web/src/content/blog/` |
+| **The four legal drafts, and the review checklist** | `apps/web/src/content/legal/` |
+| FAQ question set, post registry, factor families | `apps/web/src/lib/marketing/` |
+| Cookie consent: the record, the default, the banner | `apps/web/src/lib/consent/state.ts`, `apps/web/src/components/consent/` |
+| The banned-phrase copy lint | `apps/web/src/lib/__tests__/copy-lint.test.ts` |
+| The disclaimer sweep and the static-generation check | `apps/web/e2e/{disclaimer-sweep,static-generation}.spec.ts` |
+| The contact form's endpoint | `services/api/src/decile_api/routers/support.py` |
+| **Every Prompt 18 decision taken under ambiguity** | `docs/DECISIONS.md` §18 |
 | Auth tables not in `docs/04` | `docs/04c-auth-tables-addendum.md` |
 | HTTP rate limiting (docs/07 §Conventions) | `services/api/src/decile_api/ratelimit.py` |
 | Streaming CSV export | `services/api/src/decile_api/csv_export.py` |
@@ -251,6 +262,49 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
 `make test-db` needs `DECILE_TEST_DATABASE_URL`. Without it those tests skip rather than fail.
 
 ## Open items carried forward
+
+- **NO LAWYER HAS READ THE FOUR LEGAL DRAFTS.** `apps/web/src/content/legal/*.mdx` are drafts
+  written by engineers from `docs/11` §Compliance and Prompt 18 §3. Each opens with a
+  `DRAFT REQUIRING LEGAL REVIEW` marker in an MDX comment, asserted by
+  `apps/web/src/lib/__tests__/legal-drafts.test.ts` — which also asserts the marker never reaches
+  the rendered page. `apps/web/src/content/legal/DRAFT-NOTICE.md` lists the **eight** decisions a
+  reviewer must make before the first real charge. Nothing here is launch-ready
+  (`docs/DECISIONS.md` §18.10, §18.12).
+- **No grievance officer and no Data Protection Officer exists.** Both are `[BRACKETED]` in the
+  privacy policy and the terms. The Consumer Protection (E-Commerce) Rules, 2020 want the first
+  before payments are taken; the DPDP Act wants a contact for the second.
+- **The statically generated public routes get a different CSP.** `script-src 'self'
+  'unsafe-inline'` on `/`, `/faq`, `/about`, `/support`, `/blog/*`, `/december-2026-update` and the
+  four legal pages; the nonce policy everywhere else. A nonce cannot appear in a prerendered file,
+  so SSG (`docs/08` §Routes) and the nonce CSP (`docs/11` §Security) are mutually exclusive per
+  route. **If a marketing page ever renders untrusted input, revisit this**
+  (`docs/DECISIONS.md` §18.2). The one list that decides is
+  `apps/web/src/lib/marketing/routes.ts`'s `isStaticPublicPath`.
+- **The root layout no longer reads `headers()`.** The CSP nonce moved into `(app)/layout.tsx` and
+  `(auth)/layout.tsx`, and `<Providers>` moved with it, because a `headers()` call in the root
+  layout makes every route in the app dynamic.
+- **`/pricing` is the one page in `docs/08`'s SSG row that is still dynamic**, because Prompt 13
+  built it to render the caller's current plan. `apps/web/e2e/static-generation.spec.ts` asserts
+  that positively, so making it static later is a deliberate change (`docs/DECISIONS.md` §18.3).
+- **The FAQ's question set is reconstructed, not observed.** `docs/01` §1 records that the
+  reference product has a `/faq` and captures nothing on it, so every question is derived from
+  something `docs/01` observed directly (`docs/DECISIONS.md` §18.4).
+- **`POST /support` is not in `docs/07`.** It emails and stores nothing — no ticket table, so a
+  failed delivery loses the message and the endpoint answers 500 rather than claiming a send. It
+  is not an open relay: no recipient parameter, and the subject carries only a closed-set value
+  (`docs/DECISIONS.md` §18.5). **It has never delivered a real email.**
+- **The copy lint is negation-aware and scoped to the content routes.** "advice" and
+  "recommendation" appear in the disclaimer `docs/11` mandates, so a substring ban is impossible;
+  each occurrence must sit in a negated sentence, a sentence naming a SEBI-registered adviser, or a
+  question (`docs/DECISIONS.md` §18.6). It does not scan the screener, the error catalogue or the
+  admin surface (§18.7).
+- **The landing page's sample screen renders nothing when the API is down**, rather than falling
+  back to the committed reference export — stale numbers with no label are worse than an empty slot
+  (`docs/DECISIONS.md` §18.8).
+- **The consent banner's `analytics` category gates nothing**, because no analytics tag ships. The
+  toggle exists so that adding one is a gated change rather than a silent one (§18.11).
+- **Server-log retention is `[RETENTION PERIOD — NOT YET SET]` in the privacy policy.** Nothing in
+  the codebase expires a log line.
 
 - **NO RUNBOOK HAS BEEN EXECUTED AGAINST STAGING.** Prompt 17's third acceptance criterion —
   "every runbook has been executed once against staging and updated with real output" — is **not

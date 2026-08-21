@@ -68,6 +68,7 @@ from decile_api.routers import (
     meta,
     portfolios,
     screens,
+    support,
 )
 from decile_api.schemas import HealthOut, ProblemOut
 from decile_api.screener import AsOfOutOfRange, NoPublishedData
@@ -396,6 +397,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     versioned.include_router(billing.router)
     versioned.include_router(portfolios.router)
     versioned.include_router(backtests.router)
+    # PROMPTS.md Prompt 18 §2's contact form. Not in docs/07 (`docs/DECISIONS.md` §18.5).
+    versioned.include_router(support.router)
     # docs/09 §Observability: "`pipeline_run_step` is the operator UI; expose it at
     # `/admin/pipeline` behind staff auth." Every route on it depends on `require_staff`.
     versioned.include_router(admin.router)

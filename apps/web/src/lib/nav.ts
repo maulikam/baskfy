@@ -87,9 +87,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
   {
     label: "Help",
     items: [
-      { href: "/faq", label: "FAQ", icon: "circle-help", status: "planned", arrivesIn: "Prompt 18" },
-      { href: "/blog", label: "Blog", icon: "newspaper", status: "planned", arrivesIn: "Prompt 18" },
-      { href: "/support", label: "Support", icon: "life-buoy", status: "planned", arrivesIn: "Prompt 18" },
+      { href: "/faq", label: "FAQ", icon: "circle-help", status: "ready" },
+      { href: "/blog", label: "Blog", icon: "newspaper", status: "ready" },
+      { href: "/support", label: "Support", icon: "life-buoy", status: "ready" },
     ],
   },
 ] as const;

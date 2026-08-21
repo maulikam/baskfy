@@ -1,0 +1,46 @@
+Before writing a single factor, we took a 271-row CSV export from an existing momentum screener
+and tried to reproduce every number in it. Not to copy it — to find out whether our reading of the
+formulas was right, and to find out where the published definitions were ambiguous.
+
+## What reproduced exactly
+
+Most of it. The absolute returns, the RSI levels, the volatilities and the betas all fall out of
+the stated definitions once two things are pinned down: that the windows are calendar windows
+rather than bar counts, and that volatility is reported as a decimal fraction rather than as a
+percentage. The export itself settled the second question, since two of our own documents
+disagreed about it.
+
+The blend factors — the averages of two to five window returns — reproduce exactly when the sum is
+taken in decimal arithmetic. Taken in floating point, 48 rank inversions become 53. That is not a
+formula disagreement; it is a reminder that a ranking built on rounded inputs is sensitive to how
+you add them up.
+
+## What did not
+
+**Row order, to within a rounding granularity.** The export carries values rounded to two decimal
+places, and the product that produced it ranked on the unrounded ones. 114 of the 271 positions
+differ from the file — every one of them inside that granularity. This is not reproducible in
+principle from the file alone, and the export's own documentation says so.
+
+**One error figure.** The maximum Sharpe disagreement re-derives as 0.01 rather than the 0.0051
+recorded when the file was first analysed. The error distribution has nothing at all between 0.00
+and 0.01, which is the signature of re-deriving from already-rounded inputs rather than of a wrong
+formula.
+
+## What the exercise actually bought
+
+Two inferred definitions, flagged as inferred: the skip-month construction and the circuit-hit
+detection rule. Neither is stated anywhere public, both were reconstructed to fit the observed
+values, and both are labelled in our own specification as reconstructions rather than as facts.
+
+It also bought a permanent test. The export is committed, and the parity check that reproduces
+every numeric column of all 271 rows is written and runs the moment a real price history is
+available to run it against. Until then it skips with its reason attached rather than passing
+vacuously — a green test that checks nothing is worse than a red one.
+
+## The uncomfortable part
+
+Reproducing someone else's output is a good way to calibrate and a terrible way to validate. If
+their formula is wrong and ours agrees with it, the agreement tells you nothing. Everything here
+was cross-checked against the stated definition first and against the export second, in that
+order, and where the two conflicted the definition won.

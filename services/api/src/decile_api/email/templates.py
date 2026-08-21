@@ -44,6 +44,14 @@ class Message:
     subject: str
     text: str
     html: str
+    #: Overrides the deployment-wide ``email_reply_to`` for this message only.
+    #:
+    #: Exactly one template needs it: the support form (Prompt 18 §2), where replying to the mail
+    #: has to reach the visitor who sent it rather than the no-reply address every other message
+    #: goes out under. It is a *field on the message* rather than an argument to ``deliver`` so
+    #: that the template — which is the only thing that knows whether a reply makes sense —
+    #: decides, and so no caller can attach one by accident.
+    reply_to: str | None = None
 
 
 def _document(heading: str, paragraphs: list[str], footer: str = FOOTER_TEXT) -> str:
@@ -197,6 +205,78 @@ def account_deletion_scheduled(to: str, days: int) -> Message:
     return Message(
         to=to,
         subject=f"Your {PRODUCT_NAME} account will be deleted in {days} days",
+        text=_plain(heading, body),
+        html=_document(heading, [html.escape(paragraph) for paragraph in body]),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class SupportSubmission:
+    """One filled-in contact form, as the template needs it.
+
+    A record rather than five keyword arguments: the fields travel together everywhere, and
+    ``ruff``'s ``PLR0913`` is right that a six-argument template is a signature nobody will read
+    correctly at the call site.
+    """
+
+    topic: str
+    from_name: str
+    from_email: str
+    body_text: str
+    #: ``None`` when the sender was not signed in, which is most of the time.
+    account_public_id: str | None
+
+
+def support_request(to: str, submission: SupportSubmission) -> Message:
+    """A message from the `/support` contact form (Prompt 18 §2), addressed to *us*.
+
+    The only template in this module whose recipient is the operator rather than the customer,
+    which changes two things.
+
+    **The footer is wrong for it.** :data:`FOOTER_TEXT` explains why *you* received this, and the
+    reason here is "someone filled in the contact form", not "someone used your address".
+
+    **Every field is untrusted.** The name, the address and the body are typed by an anonymous
+    visitor. They are escaped for the HTML part exactly like everything else, and the *subject*
+    carries only the topic — one of a closed set the endpoint validates — so a newline in a
+    submitted name cannot inject a header. ``Reply-To`` is set by the caller, not here, for the
+    same reason.
+    """
+    heading = f"Support: {submission.topic}"
+    identity = f"{submission.from_name} <{submission.from_email}>"
+    attribution = (
+        f"Signed in as account {submission.account_public_id}."
+        if submission.account_public_id
+        else "Not signed in when this was sent."
+    )
+    paragraphs = [
+        f"From: {identity}",
+        attribution,
+        submission.body_text,
+    ]
+    footer = "Sent by the Decile support form. Reply to this message to answer the sender."
+    return Message(
+        to=to,
+        subject=f"[{PRODUCT_NAME} support] {submission.topic}",
+        text=_plain(heading, paragraphs, footer),
+        html=_document(heading, [html.escape(paragraph) for paragraph in paragraphs], footer),
+        # Answering the mail answers the person. `from_email` is a validated `EmailStr`, so it
+        # cannot carry the CR/LF that would make this a header injection.
+        reply_to=submission.from_email,
+    )
+
+
+def support_receipt(to: str, *, topic: str) -> Message:
+    """The copy that goes back to the sender, so a form submission is not a black hole."""
+    heading = "We have your message"
+    body = [
+        f"Thanks — your message about “{topic}” reached us and someone will read it.",
+        "Replies come from a real address, so you can answer them directly.",
+        "This is a copy for your records; you do not need to do anything.",
+    ]
+    return Message(
+        to=to,
+        subject=f"We have your {PRODUCT_NAME} support message",
         text=_plain(heading, body),
         html=_document(heading, [html.escape(paragraph) for paragraph in body]),
     )

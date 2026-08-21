@@ -6134,6 +6134,49 @@
         "title": "StatusOut",
         "type": "object"
       },
+      "SupportMessageIn": {
+        "additionalProperties": false,
+        "description": "docs/07 does not describe this endpoint; PROMPTS.md Prompt 18 §2 asks for the form that\nposts to it, and a form with no destination is a lie told in HTML.\n``docs/DECISIONS.md`` §18.5 records the addition.\n\nBounds on every field, because every field is anonymous input that ends up in an email.",
+        "properties": {
+          "email": {
+            "format": "email",
+            "maxLength": 254,
+            "title": "Email",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 4000,
+            "minLength": 20,
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "topic": {
+            "enum": [
+              "A number looks wrong",
+              "Billing or invoices",
+              "My account",
+              "A feature request",
+              "Something else"
+            ],
+            "title": "Topic",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "topic",
+          "message"
+        ],
+        "title": "SupportMessageIn",
+        "type": "object"
+      },
       "TargetWeightOut": {
         "additionalProperties": false,
         "description": "A fraction of the portfolio, not a percentage (docs/06a §10's convention).",
@@ -16080,6 +16123,128 @@
         "summary": "Past runs of a screen",
         "tags": [
           "screens"
+        ]
+      }
+    },
+    "/api/v1/support": {
+      "post": {
+        "description": "Deliver the form to the configured support address, and a copy to the sender.\n\nUnauthenticated on purpose: someone who cannot sign in is precisely the person who most needs\nto reach support. The global anonymous rate limit (docs/07 §Conventions, 10/min per address)\nis what keeps that from being a flood, and the message can only ever be addressed to *our*\ninbox — there is no recipient parameter, so this is not an open relay.",
+        "operationId": "sendSupportMessage",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportMessageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Send a support message",
+        "tags": [
+          "support"
         ]
       }
     },

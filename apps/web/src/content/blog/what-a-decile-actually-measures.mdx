@@ -1,0 +1,51 @@
+Momentum screening has one honest claim and a great many dishonest ones. The honest claim is
+arithmetic: over a stated window, on a stated price series, these names moved further than those
+names. Everything past that is inference, and this post is about the arithmetic.
+
+## The window is a calendar window, not a bar count
+
+A one-year return in Decile is the change from the adjusted close on the last trading day on or
+before the same date one calendar year earlier. Not 252 bars back. Not 250. The distinction
+matters more than it sounds: an instrument that was suspended for three weeks has fewer bars in
+its year than one that traded every session, and counting bars would quietly compare a 12-month
+move against an 11-month one.
+
+The consequence is that the number of trading days inside each window varies by instrument and by
+date. On the reference date this build was verified against, the five windows resolve to 22, 64,
+121, 185 and 247 trading days.
+
+## The price series is adjusted, and the price column is not
+
+Every factor reads an adjusted close: splits, bonuses and cash dividends folded into a single
+multiplicative factor, so a 1:10 split is not a 90% drawdown and a dividend is not a gap down. The
+price you see in the price column, and the price the CMP filter compares against, is the exchange
+print — because that is the number on your broker's screen and a filter that disagreed with it
+would be useless.
+
+Both are stored. Neither is derived on the fly.
+
+## Sharpe here is not the Sharpe in a textbook
+
+The Sharpe return factors divide the window's return by the realised volatility of daily log
+returns over that same window, annualised. There is no risk-free rate in it. That is a deliberate
+simplification of a ranking key, not an oversight, and it is worth being explicit about because
+the same word means something stricter in a performance-attribution context.
+
+The practical effect is that these are *ratios for sorting*, and comparing one across two
+different windows is comparing two different quantities.
+
+## A null is not a zero
+
+An instrument that lacks a full window has no value for that factor. It is null, and a null
+satisfies no predicate — so a stock listed four months ago is excluded by any one-year filter
+rather than ranked last with a zero. It is absent from the ranking, not at the bottom of it.
+
+This is the single most common source of "why is this stock missing", and it is almost always the
+right answer.
+
+## What none of this tells you
+
+Nothing here is a view. A ranking says where a name sits on one measurement on one date. It does
+not say the measurement will persist, that the ranking is a portfolio, or that the top of it is a
+good place to be. Decile is not a SEBI-registered investment adviser and publishes no advice; what
+it publishes is the arithmetic, in enough detail that you can disagree with it precisely.

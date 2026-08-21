@@ -141,5 +141,8 @@ backfill:      ## Resumable bar backfill: make backfill FROM=2011-01-01 TO=2026-
 refdata:       ## Reference-data backfill: make refdata FROM=2018-01-01 TO=2026-08-18
 	$(UV) python -m decile_worker.reference_backfill --from $(FROM) --to $(TO)
 
+bhavcopy:      ## Bar backfill from the NSE bhavcopy (no Kite needed): make bhavcopy FROM=2024-01-01 TO=2026-08-18
+	$(UV) python -m decile_worker.bhavcopy_backfill --from $(FROM) --to $(TO)
+
 explain:       ## Audit one factor: make explain SYMBOL=CUPID DATE=2026-08-18 FACTOR=sharpe_12m
 	$(UV) python -m decile_worker.factors_cli explain --symbol $(SYMBOL) --date $(DATE) --factor $(FACTOR)

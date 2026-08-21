@@ -49,6 +49,17 @@ from decile_worker.steps import StepOutcome
 
 UPSERT_CHUNK: int = 2000
 
+#: PostgreSQL's wire protocol caps one statement at 32,767 bound parameters.
+#:
+#: `factor_daily` is wide — around seventy columns — so a chunk sized in *rows* is sized in the
+#: wrong unit: 2,000 rows is fine for the 40-instrument fixture and impossible for the ~2,400
+#: instruments a real NSE day carries (2,000 x 70 = 140,000 parameters). The first real backfill
+#: hit exactly that: "the number of query arguments cannot exceed 32767".
+#:
+#: So the row count is derived from the payload's own width at call time rather than guessed,
+#: which keeps it correct if a factor is ever added to the registry.
+MAX_BIND_PARAMS: int = 32_767
+
 #: A step payload is for diagnosis, not for a full dump; report enough to act on.
 MAX_REPORTED_MISMATCHES: int = 20
 
@@ -104,8 +115,9 @@ async def run_compute_factors(
         values.append(payload)
 
     written = 0
-    for offset in range(0, len(values), UPSERT_CHUNK):
-        chunk = values[offset : offset + UPSERT_CHUNK]
+    rows_per_statement = min(UPSERT_CHUNK, max(1, MAX_BIND_PARAMS // max(1, len(values[0]))))
+    for offset in range(0, len(values), rows_per_statement):
+        chunk = values[offset : offset + rows_per_statement]
         stmt = insert(FactorDaily).values(chunk)
         await session.execute(
             stmt.on_conflict_do_update(

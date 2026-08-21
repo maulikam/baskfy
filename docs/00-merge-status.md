@@ -4,7 +4,7 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M10 · **State:** running autonomously
+**Run started:** 22 Aug 2026 · **Current module:** M11 · **State:** running autonomously
 
 Since 22 Aug 2026 this is an **autonomous run** under `CLAUDE.md` §Autonomy charter:
 judgement calls are decided, recorded in `DECISIONS-MERGE.md` (tagged `⚠ UNREVIEWED`
@@ -27,8 +27,8 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M7 | Local stack up | ✅ done | 22 Aug 2026 | `baskfy` stack up, **backfill restored (1,138,300 bars)**, API + worker healthy. `make seed` was overwriting 25,256 real bars — guarded (M7.1) |
 | M8 | NSE endpoints verified | ✅ done | 22 Aug 2026 | All 5 capabilities live-verified; **4 universes were 404ing** and are fixed (M8.1). `reconciliation/NSE-ENDPOINTS.md` |
 | M9 | Kite creds + backfill | ⚠️ partial | 22 Aug 2026 | Bars current to 2026-08-21 (**1,145,922**) via bhavcopy. **Depth before 2024 needs a Kite login** — queued, not blocking (M9.1) |
-| M10 | Calendar + corporate actions | 🔄 running | 22 Aug 2026 | |
-| M11 | 271-row parity test | — | | **RED GATE** |
+| M10 | Calendar + corporate actions | ⚠️ partial | 22 Aug 2026 | Calendar observed; **3 of 5 windows exact** (was 0). §21.9 look-ahead **fixed and proven**. 3M/6M off by one → M11 (M10.1) |
+| M11 | 271-row parity test | 🔄 running | 22 Aug 2026 | **RED GATE**, self-judged |
 | M12 | Desk parity | — | | **RED GATE + HUMAN REVIEW** |
 | M13 | MomentumScan — CSV cord cut | — | | |
 | M14 | Breadth + shadow harness | — | | |
@@ -289,6 +289,25 @@ living in a package named after an options strategy (`DECISIONS-MERGE.md` M6.2).
 `deploy/systemd/strangle-collect@.{service,timer}`, and `data/outputs/strangle_*` (the
 observation series, which is not rebuildable). **The live box runs the pre-freeze layout until
 its next deliberate deploy, at which point those units will name paths that have moved.**
+
+## The `db`-marked suites now run (and did not before)
+
+792 tests were skipped at the M0 baseline and had **never been executed**. With the stack up they
+run. One shared fixture bug was failing most of them: `DROP SCHEMA public CASCADE` does not reset a
+TimescaleDB database, because chunks and materialisations live in `_timescaledb_internal` and
+survive it, keeping foreign keys that point at dropped tables. The reset now drops the extension
+too (`f93f690`, `DECISIONS-MERGE.md` DB.1).
+
+To run them:
+
+```bash
+export BASKFY_TEST_DATABASE_URL="postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_test"
+export BASKFY_REDIS_URL="redis://localhost:6380/0"
+uv run pytest -m db
+```
+
+`uv run` does **not** load `.env`, so exporting these is required — without them every db test
+skips with a message that reads like the stack is down.
 
 ## Things a future session must know
 

@@ -540,6 +540,9 @@ async def _me_payload(session: AsyncSession, user: AppUser, entitlements: Entitl
         plan_code=plan_code,
         subscription_status=subscription.status if subscription is not None else None,
         entitlements=EntitlementsOut.model_validate(granted),
+        # Prompt 17 deliverable 4: the web app renders the /admin link from this, the same way
+        # it renders every gate from `entitlements` — server truth, never a client guess.
+        is_staff=user.is_staff,
         deletion_scheduled_for=pending.purge_after if pending is not None else None,
     )
 

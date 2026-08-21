@@ -19,10 +19,13 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Final
 
+from opentelemetry.trace import Span
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from decile_api.metrics import observe_step
+from decile_api.telemetry import get_tracer
 from decile_core.models import JsonObject, PipelineRun, PipelineRunStep
 
 
@@ -112,6 +115,19 @@ async def open_run(session: AsyncSession, trade_date: dt.date) -> PipelineRun:
     return run
 
 
+async def adopt_run(session: AsyncSession, run_id: int) -> PipelineRun:
+    """Load a run row that another session already committed (``decile_worker.ops.begin_run``).
+
+    Raises rather than silently opening a new one: being handed an id that is not there means the
+    caller and this transaction disagree about which run is happening, and inventing a second row
+    would hide that from the operator reading ``/admin/pipeline``.
+    """
+    run = await session.get(PipelineRun, run_id)
+    if run is None:
+        raise LookupError(f"pipeline_run {run_id} does not exist")
+    return run
+
+
 async def close_run(
     session: AsyncSession, run: PipelineRun, status: RunStatus, data_version: int | None = None
 ) -> None:
@@ -124,9 +140,9 @@ async def close_run(
 
 @asynccontextmanager
 async def record_step(
-    session: AsyncSession, run_id: int, step: PipelineStep
+    session: AsyncSession, run_id: int, step: PipelineStep, trade_date: dt.date | None = None
 ) -> AsyncIterator[StepOutcome]:
-    """Time a step and persist exactly one ``pipeline_run_step`` row for it.
+    """Time a step, persist exactly one ``pipeline_run_step`` row for it, and trace it.
 
     Upserted on ``(run_id, step)`` so re-running a step inside the same run replaces its record
     rather than appending a second, contradictory one.
@@ -134,41 +150,68 @@ async def record_step(
     A raised exception is recorded with its type, message and traceback, and then re-raised — the
     house rule is no silently swallowed exceptions, and a step that failed must look failed to the
     orchestrator as well as to the operator.
+
+    Prompt 17 deliverables 1 and 2 hang off exactly this point. One OpenTelemetry span per step,
+    carrying ``decile.trade_date``, ``decile.rows_in`` and ``decile.rows_out`` — the three
+    attributes PROMPTS.md names — and one histogram observation. Doing it here rather than in each
+    of the ten steps is what makes it impossible for a step to be untraced: a step that does not
+    go through ``record_step`` writes no ``pipeline_run_step`` row either, and would already be
+    broken for reasons docs/03 cares about more.
     """
     outcome = StepOutcome()
     started = time.monotonic()
     await _upsert_step(
         session, run_id, step, status=StepStatus.RUNNING, outcome=outcome, duration_ms=0, error=None
     )
-    try:
-        yield outcome
-    except Exception as exc:
+    with get_tracer().start_as_current_span(f"pipeline.{step.value}") as span:
+        span.set_attribute("decile.pipeline_step", step.value)
+        span.set_attribute("decile.pipeline_run_id", run_id)
+        if trade_date is not None:
+            span.set_attribute("decile.trade_date", trade_date.isoformat())
+        try:
+            yield outcome
+        except Exception as exc:
+            duration_ms = int((time.monotonic() - started) * 1000)
+            _annotate(span, outcome, StepStatus.FAILED)
+            observe_step(
+                step=step.value, status=StepStatus.FAILED.value, duration_seconds=duration_ms / 1000
+            )
+            await _upsert_step(
+                session,
+                run_id,
+                step,
+                status=StepStatus.FAILED,
+                outcome=outcome,
+                duration_ms=duration_ms,
+                error={
+                    "type": type(exc).__name__,
+                    "message": str(exc),
+                    "traceback": traceback.format_exc(limit=20),
+                    **outcome.detail,
+                },
+            )
+            raise
         duration_ms = int((time.monotonic() - started) * 1000)
+        _annotate(span, outcome, outcome.status)
+        observe_step(
+            step=step.value, status=outcome.status.value, duration_seconds=duration_ms / 1000
+        )
         await _upsert_step(
             session,
             run_id,
             step,
-            status=StepStatus.FAILED,
+            status=outcome.status,
             outcome=outcome,
             duration_ms=duration_ms,
-            error={
-                "type": type(exc).__name__,
-                "message": str(exc),
-                "traceback": traceback.format_exc(limit=20),
-                **outcome.detail,
-            },
+            error=dict(outcome.detail) or None,
         )
-        raise
-    duration_ms = int((time.monotonic() - started) * 1000)
-    await _upsert_step(
-        session,
-        run_id,
-        step,
-        status=outcome.status,
-        outcome=outcome,
-        duration_ms=duration_ms,
-        error=dict(outcome.detail) or None,
-    )
+
+
+def _annotate(span: Span, outcome: StepOutcome, status: StepStatus) -> None:
+    """The row counts, once the step body has had its say about them."""
+    span.set_attribute("decile.rows_in", outcome.rows_in)
+    span.set_attribute("decile.rows_out", outcome.rows_out)
+    span.set_attribute("decile.step_status", status.value)
 
 
 async def _upsert_step(  # noqa: PLR0913 - one parameter per persisted column

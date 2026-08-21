@@ -15,6 +15,8 @@ build/
 .env
 .secrets/
 .archive/
+# Local pg_dump output (infra/backup/pg_backup.sh). Never committed: it is the database.
+.backups/
 .env.*
 !.env.example
 .DS_Store

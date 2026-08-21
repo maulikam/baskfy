@@ -20,8 +20,10 @@ in middleware would decode the bearer token twice, in two places, from two code 
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from hmac import compare_digest
 
 from fastapi import APIRouter, Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -30,9 +32,10 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from decile_api import invoices
+from decile_api import invoices, metrics
 from decile_api.db import create_engine, session_factory
 from decile_api.email import Mailer, build_transport
 from decile_api.http_cache import register_http_cache
@@ -56,6 +59,7 @@ from decile_api.problems import (
 from decile_api.queue import build_task_queue
 from decile_api.ratelimit import RateLimiter, enforce_rate_limit
 from decile_api.routers import (
+    admin,
     auth,
     backtests,
     billing,
@@ -67,14 +71,27 @@ from decile_api.routers import (
 )
 from decile_api.schemas import HealthOut, ProblemOut
 from decile_api.screener import AsOfOutOfRange, NoPublishedData
+from decile_api.sentry import configure_sentry
 from decile_api.settings import API_PREFIX, Settings, get_settings
-from decile_api.telemetry import annotate_current_span, configure_telemetry
+from decile_api.telemetry import annotate_current_span, configure_telemetry, current_trace_id
 from decile_core.entitlements import FeatureNotEntitled
 from decile_core.screener import ScreenQueryError
 
 log = logging.getLogger(__name__)
 
 PROBLEM_SCHEMA_REF = "#/components/schemas/ProblemOut"
+
+#: Echoed on every response when a trace is active, so an operator can jump from a response
+#: (or a screenshot of one) straight to the trace in Tempo. W3C names the *inbound* header
+#: `traceparent`; this is a response header and carries the id alone, which is what a human
+#: pastes into a search box.
+TRACE_ID_HEADER = "X-Trace-Id"
+
+#: The queues whose depth `/metrics` publishes. Duplicated from
+#: `decile_worker.celery_app.QUEUES` rather than imported: `decile-worker` depends on
+#: `decile-api`, so the import cannot go the other way (the same reason `decile_api.queue`
+#: publishes by task name). `services/api/tests/test_metrics.py` asserts the two agree.
+CELERY_QUEUES: tuple[str, ...] = ("ingest", "compute", "backtest", "default")
 
 #: Statuses at or above this are ours to explain, so they are logged at ERROR.
 SERVER_ERROR_FLOOR = 500
@@ -114,7 +131,7 @@ class DecileAPI(FastAPI):
 
 
 def _problem_response(problem: Problem, request: Request) -> JSONResponse:
-    annotate_current_span(**{"decile.problem_type": problem.type.value})
+    annotate_current_span({"decile.problem_type": problem.type.value})
     headers = dict(problem.headers)
     request_id = request_id_var.get()
     if request_id is not None:
@@ -233,19 +250,41 @@ def register_middleware(app: FastAPI, settings: Settings) -> None:
     async def _request_context(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        """Give every request an id, put it on every log line, and echo it back.
+        """Give every request an id, time it, put both on every log line, and echo the id back.
 
         An inbound ``X-Request-Id`` is honoured so a trace started at the edge (or by the Next.js
         server component making the call) keeps one id end to end.
+
+        The timing is Prompt 17 deliverable 2's "API latency by route". It is measured here rather
+        than in a second middleware because the two want the same ``perf_counter`` pair and the
+        same ``finally`` — and because a metrics middleware registered separately would sit either
+        inside or outside this one, and would then disagree with it about what a request cost.
+        The status is recorded even when the handler raised: an exception that becomes a 500 is
+        exactly the request an error-rate alert exists for.
         """
         request_id = request.headers.get(REQUEST_ID_HEADER) or new_request_id()
         token = request_id_var.set(request_id)
-        annotate_current_span(**{"decile.request_id": request_id})
+        annotate_current_span({"decile.request_id": request_id})
+        started = time.perf_counter()
+        status = SERVER_ERROR_FLOOR
         try:
             response = await call_next(request)
+            status = response.status_code
         finally:
             request_id_var.reset(token)
+            if settings.metrics_enabled:
+                metrics.observe_request(
+                    method=request.method,
+                    route=metrics.route_label(request),
+                    status=status,
+                    duration_seconds=time.perf_counter() - started,
+                )
         response.headers[REQUEST_ID_HEADER] = request_id
+        trace_id = current_trace_id()
+        if trace_id is not None:
+            # docs/02 sends traces to Tempo and logs to Loki. Echoing the trace id lets a support
+            # conversation ("here is the id from the error page") reach the trace, not just the log.
+            response.headers[TRACE_ID_HEADER] = trace_id
         return response
 
     app.add_middleware(
@@ -253,8 +292,22 @@ def register_middleware(app: FastAPI, settings: Settings) -> None:
         allow_origins=list(settings.cors_origins),
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", REQUEST_ID_HEADER, "Idempotency-Key"],
-        expose_headers=[REQUEST_ID_HEADER, "X-Decile-As-Of", "X-Decile-Data-Version"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            REQUEST_ID_HEADER,
+            "Idempotency-Key",
+            # W3C trace context, set by `@decile/api-client` so a browser call joins the
+            # trace the page render started (Prompt 17 deliverable 1).
+            "traceparent",
+            "tracestate",
+        ],
+        expose_headers=[
+            REQUEST_ID_HEADER,
+            TRACE_ID_HEADER,
+            "X-Decile-As-Of",
+            "X-Decile-Data-Version",
+        ],
     )
 
 
@@ -315,6 +368,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     resolved = settings or get_settings()
     resolved.require_configured()
     configure_logging(level=resolved.log_level, json_output=resolved.log_json)
+    # Before the app object exists, so an exception raised while wiring it is still reported.
+    configure_sentry(resolved, service=resolved.otel_service_name)
 
     app = DecileAPI(
         title=TITLE,
@@ -341,6 +396,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     versioned.include_router(billing.router)
     versioned.include_router(portfolios.router)
     versioned.include_router(backtests.router)
+    # docs/09 §Observability: "`pipeline_run_step` is the operator UI; expose it at
+    # `/admin/pipeline` behind staff auth." Every route on it depends on `require_staff`.
+    versioned.include_router(admin.router)
     app.include_router(versioned)
 
     @app.get("/health", response_model=HealthOut, tags=["ops"], include_in_schema=False)
@@ -351,6 +409,40 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         the load balancer at the exact moment it would have recovered on its own.
         """
         return HealthOut(status="ok", environment=resolved.environment)
+
+    @app.get("/metrics", tags=["ops"], include_in_schema=False)
+    async def prometheus_metrics(request: Request) -> Response:
+        """The Prometheus scrape target (Prompt 17 deliverable 2).
+
+        Outside ``/api/v1`` on purpose: it is not part of docs/07's public surface, it carries no
+        rate limit (a scrape every fifteen seconds would eat the anonymous bucket in a minute),
+        and it is not in the OpenAPI document, so it never reaches the generated client.
+
+        It refreshes the database-derived gauges first — see ``decile_api.metrics`` for why the
+        pipeline's numbers are read from ``pipeline_run_step`` rather than held in this process.
+        A database that is briefly unreachable degrades the scrape to the process counters rather
+        than failing it: a monitoring endpoint that goes down with its dependencies is the one
+        thing that must not.
+        """
+        if not resolved.metrics_enabled:
+            raise StarletteHTTPException(status_code=404)
+        if resolved.metrics_token:
+            presented = request.headers.get("Authorization", "")
+            if not compare_digest(presented, f"Bearer {resolved.metrics_token}"):
+                raise StarletteHTTPException(status_code=401)
+
+        factory = getattr(app.state, "session_factory", None)
+        if factory is not None:
+            try:
+                async with factory() as session:
+                    await metrics.refresh_pipeline_metrics(session)
+            except SQLAlchemyError as exc:
+                log.warning("pipeline metrics unavailable", extra={"error": str(exc)})
+        cache = getattr(app.state, "cache", None)
+        if cache is not None:
+            await metrics.refresh_queue_depth(cache, CELERY_QUEUES)
+
+        return Response(content=metrics.render(), media_type=metrics.CONTENT_TYPE)
 
     return app
 

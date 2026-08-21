@@ -612,6 +612,10 @@ class MeOut(_Out):
     plan_code: str | None = None
     subscription_status: str | None = None
     entitlements: EntitlementsOut
+    #: `app_user.is_staff`. Part of the *profile* half of docs/07's "profile + entitlements", not of
+    #: the entitlements block — docs/07 fixes that at seven keys. The web app reads it to decide
+    #: whether to show the `/admin` link; the API decides again on every `/admin/*` request.
+    is_staff: bool = False
     #: Set while an erasure is pending, so the UI can offer to cancel it (Prompt 12 §5).
     deletion_scheduled_for: dt.datetime | None = None
 
@@ -1168,3 +1172,144 @@ class ExportLinkOut(_Out):
     format: Literal["csv"]
     url: str
     expires_at: dt.datetime
+
+
+# ---------------------------------------------------------------------------
+# Admin (PROMPTS.md Prompt 17 deliverable 4)
+# ---------------------------------------------------------------------------
+#
+# These are in the OpenAPI document and therefore in the generated TypeScript client, exactly like
+# every other endpoint. docs/07 does not describe `/admin/*` — docs/09 §Observability does, in one
+# line — but a staff surface typed by hand would be the one place in the codebase where docs/02
+# rule 5 ("typed end to end ... no hand-written fetch types") did not hold, and the admin pages
+# are server components that call the same client every other page calls.
+
+
+class PipelineStepOut(_Out):
+    """One row of `pipeline_run_step`.
+
+    docs/03: "status, duration, row counts and an error payload".
+    """
+
+    step: str
+    status: str
+    rows_in: int | None = None
+    rows_out: int | None = None
+    duration_ms: int | None = None
+    #: The step's `error` JSONB. Carries the failure on a failed step and the step's own notes
+    #: on a successful one — what makes a six-month-old number explicable (`decile_worker.steps`).
+    detail: dict[str, object] | None = None
+
+
+class PipelineRunDetailOut(_Out):
+    id: int
+    trade_date: dt.date
+    status: str
+    started_at: dt.datetime
+    finished_at: dt.datetime | None = None
+    data_version: int | None = None
+    #: docs/09 §Observability: "publish latency (EOD close → data live)". NULL for a run that never
+    #: published, because there is no "data live" moment to measure to.
+    publish_latency_seconds: float | None = None
+    steps: list[PipelineStepOut]
+
+
+class PipelineRunListOut(_Out):
+    data: list[PipelineRunDetailOut]
+
+
+class DataVersionOut(_Out):
+    data_version: int
+    trade_date: dt.date
+    published_at: dt.datetime | None = None
+    publish_latency_seconds: float | None = None
+
+
+class DataVersionListOut(_Out):
+    data: list[DataVersionOut]
+    #: What `/meta/status` would answer right now — the top of the list, named so the page does not
+    #: have to infer "current" from an ordering.
+    current: int
+
+
+class ProviderHealthOut(_Out):
+    """One line of `providers doctor` (Prompt 2 deliverable 6), over HTTP."""
+
+    name: str
+    available: bool
+    detail: str = ""
+    serves_now: list[str]
+    can_serve: list[str]
+
+
+class ProviderHealthListOut(_Out):
+    data: list[ProviderHealthOut]
+
+
+class AdminUserOut(_Out):
+    public_id: str
+    email: str
+    name: str | None = None
+    created_at: dt.datetime
+    email_verified: bool
+    is_staff: bool
+    #: Set while a DPDP erasure is pending (Prompt 12 §5). Shown rather than hidden: "where did
+    #: their account go" is the question that brings someone to this page.
+    deleted_at: dt.datetime | None = None
+
+
+class AdminUserListOut(_Out):
+    data: list[AdminUserOut]
+
+
+class EntitlementOverrideOut(_Out):
+    feature: str
+    effect: Literal["grant", "revoke"]
+    value: int | None = None
+    reason: str
+    granted_by: str | None = None
+    expires_at: dt.datetime | None = None
+    created_at: dt.datetime
+    active: bool
+
+
+class AdminUserDetailOut(_Out):
+    user: AdminUserOut
+    plan_code: str | None = None
+    subscription_status: str | None = None
+    screen_count: int
+    #: The **effective** entitlements — plan plus overrides — resolved through the same call every
+    #: gated endpoint makes, so this page cannot disagree with enforcement.
+    entitlements: EntitlementsOut
+    overrides: list[EntitlementOverrideOut]
+
+
+class EntitlementOverrideIn(_In):
+    feature: str
+    effect: Literal["grant", "revoke"]
+    #: Required when `feature` is `max_screens`; ignored otherwise.
+    value: int | None = Field(default=None, ge=0)
+    #: NOT optional. An override with no stated reason is the row `admin_action` exists to prevent.
+    reason: str = Field(min_length=3, max_length=500)
+    expires_at: dt.datetime | None = None
+
+
+class AdminActionOut(_Out):
+    action: str
+    target: str
+    actor: str | None = None
+    detail: dict[str, object] | None = None
+    created_at: dt.datetime
+
+
+class AdminActionListOut(_Out):
+    data: list[AdminActionOut]
+
+
+class TaskAcceptedOut(_Out):
+    """What the two enqueueing actions answer: 202 and the id of the message they published."""
+
+    task: str
+    task_id: str
+    target: str
+    detail: str

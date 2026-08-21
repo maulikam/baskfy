@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -18,6 +19,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import CITEXT, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -58,6 +60,13 @@ class AppUser(Base):
     #: immediately; `account_deletion.purge_after` is when the rows actually go. NOT in docs/04 —
     #: see `docs/04c`. Deleting on the spot would be irreversible on a misclick.
     deleted_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    #: docs/09 §Observability: `/admin/pipeline` is "behind staff auth", and nothing in the bundle
+    #: says what makes an account staff. This is that answer — a server fact, set by hand or by a
+    #: migration, never by a self-service form. NOT in docs/04; see `decile_core.models.admin`
+    #: and `docs/DECISIONS.md` §17.
+    is_staff: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false"), default=False
+    )
 
 
 class Plan(Base):

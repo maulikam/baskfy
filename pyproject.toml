@@ -33,6 +33,8 @@ dev = [
     "types-requests>=2.32",
     # docs/07 acceptance criteria: "Contract tests for every endpoint using httpx".
     "httpx>=0.28",
+    "pyyaml>=6.0",
+    "types-pyyaml>=6.0",
 ]
 
 # ---------------------------------------------------------------------------
@@ -105,6 +107,25 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["celery.*", "kombu.*"]
 ignore_missing_imports = true
+
+# `opentelemetry-instrumentation-celery` ships no `py.typed` either, so `CeleryInstrumentor()` is
+# an untyped call. It is invoked in exactly two places — `decile_api.telemetry.configure_telemetry`
+# and `decile_worker.telemetry.install_worker_observability` — and both are one line that installs
+# a library patch and returns nothing. The alternative is a `# type: ignore`, which CLAUDE.md
+# house rule 3 forbids outright.
+[[tool.mypy.overrides]]
+module = ["opentelemetry.instrumentation.celery.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["decile_api.telemetry", "decile_worker.telemetry"]
+disallow_untyped_calls = false
+
+# `celery.signals.worker_process_init.connect` is an untyped decorator, exactly like
+# `@shared_task` above and for the same reason.
+[[tool.mypy.overrides]]
+module = ["decile_worker.celery_app"]
+disallow_untyped_decorators = false
 
 [[tool.mypy.overrides]]
 module = ["decile_worker.tasks.celery_tasks"]

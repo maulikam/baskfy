@@ -115,3 +115,27 @@ export function formatTradeDate(iso: string | null | undefined): string {
     timeZone: "UTC",
   }).format(parsed);
 }
+
+/**
+ * "19 Aug 2026, 20:07 IST" — a timestamp an operator can compare against a wall clock.
+ *
+ * **IST, not the browser's zone.** Every schedule in docs/09 and the 20:15 SLO in docs/11 are IST
+ * wall-clock times tied to the NSE session; rendering a publish time in the reader's local zone
+ * would make "was this late?" a mental arithmetic problem. The zone is named in the output so
+ * nobody has to guess which one it is. Used by the admin surface (Prompt 17 §4).
+ */
+export function formatDateTimeIST(iso: string | null | undefined): string {
+  if (!iso) return EMPTY_CELL;
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return EMPTY_CELL;
+  const rendered = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Kolkata",
+  }).format(parsed);
+  return `${rendered} IST`;
+}

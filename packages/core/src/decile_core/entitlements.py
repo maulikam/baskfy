@@ -55,6 +55,8 @@ __all__ = [
     "Entitlements",
     "Feature",
     "FeatureNotEntitled",
+    "Override",
+    "apply_overrides",
 ]
 
 
@@ -179,6 +181,55 @@ class Entitlements:
             else None
         )
         return cls(granted=frozenset(granted), max_screens=max_screens, universes=universes)
+
+
+@dataclass(frozen=True, slots=True)
+class Override:
+    """One staff grant or revocation, as :class:`Entitlements` needs to see it.
+
+    A plain value object rather than the ORM row (``decile_core.models.admin.EntitlementOverride``)
+    because this module does no I/O and must stay loadable without a database. The API maps rows
+    to these; the seed data and the tests build them directly.
+    """
+
+    feature: str
+    grant: bool
+    #: Only meaningful when ``feature`` is :data:`MAX_SCREENS_KEY`.
+    value: int | None = None
+
+
+def apply_overrides(base: Entitlements, overrides: Iterable[Override]) -> Entitlements:
+    """Layer staff overrides on top of a plan-derived entitlement set.
+
+    Prompt 17 deliverable 4 asks for an "entitlement override" on the admin surface. It is applied
+    **here**, in the same module every other entitlement decision goes through, rather than at the
+    endpoints — docs/07's rule is "Enforcement is server-side on every gated endpoint", and an
+    override the enforcement path cannot see is not an override.
+
+    A ``max_screens`` override with no value is ignored rather than treated as zero: the honest
+    reading of "override max_screens, unspecified" is that nobody said what to, and locking an
+    account out of its own saved screens is not the safe default.
+    """
+    granted = set(base.granted)
+    max_screens = base.max_screens
+    for override in overrides:
+        if override.feature == MAX_SCREENS_KEY:
+            if override.grant and override.value is not None:
+                max_screens = override.value
+            continue
+        try:
+            feature = Feature(override.feature)
+        except ValueError:
+            # A row naming a feature this build does not have. Ignored, for the same reason
+            # `from_plan_features` ignores an unknown key: a typo must not grant anything.
+            continue
+        if override.grant:
+            granted.add(feature)
+        else:
+            granted.discard(feature)
+    return Entitlements(
+        granted=frozenset(granted), max_screens=max_screens, universes=base.universes
+    )
 
 
 def _english_list(items: Iterable[str]) -> str:

@@ -1,0 +1,179 @@
+# Prometheus alerting rules — PROMPTS.md Prompt 17 deliverable 3.
+#
+#   "Alerting rules: pipeline failure, Kite token expiry, gate failure, publish later than
+#    20:15 IST, error rate > 1%, queue backlog."
+#
+# Every metric referenced here is defined in `services/api/src/decile_api/metrics.py`, and
+# `services/api/tests/test_metrics.py::test_every_alert_rule_names_a_metric_we_publish` asserts
+# that — a rule that watches a metric nobody emits is a rule that will never fire, and it looks
+# exactly like a rule that is not firing because everything is fine.
+#
+# Four of the six are ALSO raised in-process by `decile_worker.alerts`, at the moment the code
+# learns the fact, so they carry the run id and the failing assertion rather than a threshold
+# crossing. They are duplicated here because a worker that is itself down must not take the alert
+# about it down as well. Deduplicate in Alertmanager on `alertname` + `trade_date`; both sources
+# use the names in `decile_worker.alerts.AlertName`.
+#
+# `runbook_url` is a repo-relative path, not a URL. There is no docs site yet; the file is what
+# whoever is paged actually opens.
+
+groups:
+  - name: decile-recording
+    interval: 30s
+    rules:
+      # docs/11 §Reliability budgets 99.5% availability, which is the same statement as an error
+      # rate below 0.5%. PROMPTS.md asks to alert above 1%. Recorded rather than inlined so the
+      # Grafana panel and the alert read the same expression.
+      - record: decile:http_error_rate:ratio5m
+        expr: |
+          sum(rate(decile_http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(decile_http_requests_total[5m])), 0.001)
+
+      # docs/06 §Caching exists to make the warm path cheap; the hit rate is how you know it does.
+      - record: decile:screen_cache_hit_rate:ratio5m
+        expr: |
+          sum(rate(decile_screen_cache_events_total{result="hit"}[5m]))
+          /
+          clamp_min(sum(rate(decile_screen_cache_events_total[5m])), 0.001)
+
+      - record: decile:provider_error_rate:ratio15m
+        expr: |
+          sum by (provider) (rate(decile_provider_calls_total{outcome!="ok"}[15m]))
+          /
+          clamp_min(sum by (provider) (rate(decile_provider_calls_total[15m])), 0.001)
+
+      # docs/11 §"Performance budgets": screen run p95 < 150 ms warm, < 800 ms cold. One series,
+      # because a scrape cannot tell the two apart — the cold path is the tail of this histogram.
+      - record: decile:screen_run_latency:p95_5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (
+              rate(decile_http_request_duration_seconds_bucket{route=~".*/screens/.*run.*"}[5m])
+            )
+          )
+
+  - name: decile-pipeline
+    interval: 60s
+    rules:
+      - alert: pipeline_failed
+        # The gauge publishes a 0 for every status the last run is *not* in, so this resolves on
+        # its own once a later run succeeds. A metric that only appeared on failure would leave an
+        # alert firing forever.
+        expr: decile_pipeline_run_status{status="failed"} == 1
+        for: 5m
+        labels: {severity: critical, service: decile}
+        annotations:
+          summary: "The most recent nightly pipeline run failed."
+          description: >-
+            docs/03: a failed run does not bump data_version, so the site is serving the previous
+            snapshot. Find the failing step in /admin/pipeline.
+          runbook_url: docs/runbooks/pipeline-failed.md
+
+      - alert: data_quality_gate_failed
+        expr: decile_pipeline_gate_passed == 0
+        for: 5m
+        labels: {severity: critical, service: decile}
+        annotations:
+          summary: "The data-quality gate failed; today's data was not published."
+          description: >-
+            docs/03 step 9 is a hard gate. Read the failing assertions in the step payload before
+            deciding whether the previous data_version can keep serving.
+          runbook_url: docs/runbooks/bad-data-published.md
+
+      - alert: pipeline_abandoned
+        # A run still `running` well past docs/11's 45-minute end-to-end budget. This is the shape
+        # a worker killed mid-pipeline leaves behind; `decile.ops.reap_abandoned_runs` also fails
+        # it and alerts in-process, and this is the backstop for a worker fleet that is entirely
+        # down and therefore cannot run the reaper either.
+        expr: decile_pipeline_running_age_seconds > 5400
+        for: 10m
+        labels: {severity: critical, service: decile}
+        annotations:
+          summary: "A pipeline run has been in 'running' for over 90 minutes."
+          description: >-
+            docs/11 budgets the whole chain at 45 minutes. The worker that owned this run has
+            almost certainly died; its transaction rolled back, so no step rows survive for the
+            steps that had completed.
+          runbook_url: docs/runbooks/pipeline-failed.md
+
+      - alert: publish_late
+        # docs/11 §Reliability: "data published by 20:15 IST on >=95% of trading days."
+        # 15:30 IST close to 20:15 IST is 4h45m = 17100s. Alerting on the *age* of the last
+        # publish rather than on a wall-clock time keeps the rule timezone-free: over a weekend
+        # the age grows past this and the `hour()` guard is what keeps it quiet.
+        expr: |
+          decile_last_publish_age_seconds > 17100
+          and on() (hour() >= 14 and hour() < 20)
+          and on() (day_of_week() > 0 and day_of_week() < 6)
+        for: 10m
+        labels: {severity: critical, service: decile}
+        annotations:
+          summary: "Nothing has published since the last trading day's 20:15 IST deadline."
+          description: >-
+            docs/11 §Reliability SLO. `decile.ops.check_publish_deadline` raises the same alert
+            from the worker at 20:15 IST with the trade date attached; this fires when the worker
+            fleet is down and cannot.
+          runbook_url: docs/runbooks/pipeline-failed.md
+
+  - name: decile-service
+    interval: 30s
+    rules:
+      - alert: api_error_rate_high
+        # PROMPTS.md §3: "error rate > 1%". docs/11's 99.5% availability SLO is the tighter number;
+        # 1% is the paging threshold, and the SLO is what the burn-rate dashboard tracks.
+        expr: decile:http_error_rate:ratio5m > 0.01
+        for: 5m
+        labels: {severity: critical, service: decile}
+        annotations:
+          summary: "More than 1% of API responses are 5xx over the last five minutes."
+          runbook_url: docs/runbooks/pipeline-failed.md
+
+      - alert: queue_backlog
+        # Matches DECILE_QUEUE_BACKLOG_THRESHOLD's default. `decile.ops.check_queue_backlog`
+        # raises the same alert from the worker with the queue named.
+        expr: decile_queue_depth > 100
+        for: 10m
+        labels: {severity: warning, service: decile}
+        annotations:
+          summary: "Celery queue {{ $labels.queue }} has more than 100 messages waiting."
+          description: >-
+            docs/02 gives each workload its own queue so one cannot starve another. A backlog on
+            `ingest` is usually a rate-limited or down provider; on `backtest` it is usually
+            demand, and docs/03 §"Scaling plan" step 4 is the answer.
+          runbook_url: docs/runbooks/pipeline-failed.md
+
+      - alert: kite_token_expiring
+        # docs/09 calls token expiry "the #1 pipeline failure". There is no Prometheus-visible
+        # signal for the token's own expiry — it is computed from the stored issue time by
+        # `decile.ops.check_kite_token`, which raises the alert directly. What *is* visible is the
+        # provider giving up, which is the same incident found late.
+        expr: decile:provider_error_rate:ratio15m{provider="kite"} > 0.5
+        for: 10m
+        labels: {severity: critical, service: decile}
+        annotations:
+          summary: "Over half of Kite calls are failing; the access token has probably expired."
+          runbook_url: docs/runbooks/kite-token-expired.md
+
+      - alert: screen_run_over_budget
+        # docs/11 §"Performance budgets": cold screen run p95 < 800 ms. Not one of PROMPTS.md §3's
+        # six; included because the budget is a number docs/11 states and an SLO nobody watches is
+        # a wish.
+        expr: decile:screen_run_latency:p95_5m > 0.8
+        for: 15m
+        labels: {severity: warning, service: decile}
+        annotations:
+          summary: "Screen-run p95 is above the 800 ms cold budget in docs/11."
+          runbook_url: docs/runbooks/pipeline-failed.md
+
+      - alert: decile_target_down
+        expr: up{job=~"decile-.*"} == 0
+        for: 5m
+        labels: {severity: critical, service: decile}
+        annotations:
+          summary: "Prometheus cannot scrape {{ $labels.job }} ({{ $labels.instance }})."
+          description: >-
+            Every alert above is evaluated over metrics from this target. While it is down, the
+            absence of an alert means nothing.
+          runbook_url: docs/runbooks/pipeline-failed.md

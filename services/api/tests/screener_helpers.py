@@ -32,7 +32,13 @@ from decile_api.seed import (
     seed_reference_fixture,
     seed_trading_days,
 )
-from decile_core.models import FactorDaily, IndexMemberDaily, Instrument, PipelineRun
+from decile_core.models import (
+    FactorDaily,
+    IndexMemberDaily,
+    Instrument,
+    PipelineRun,
+    PipelineRunStep,
+)
 from decile_core.reference_export import to_rows
 from decile_core.seed_data import NSE_EXCHANGE_ID
 
@@ -113,15 +119,36 @@ async def publish_run(session: AsyncSession, trade_date: dt.date, data_version: 
 
     Without one, ``resolve_as_of`` refuses to serve any date at all, which is the correct
     behaviour and exactly why the fixture has to write one.
+
+    **Not** ``decile_api.seed.seed_published_run``, and the difference matters: the seeder is
+    idempotent and returns without inserting when a run already exists for the date (re-running
+    `make seed` must not pile up runs), whereas the cache-invalidation tests exist precisely to
+    publish a *second* version for the same date. Same shape, different contract.
+
+    The ``publish`` step row is written for the same reason the seeder writes one: docs/03 says
+    "every step writes a row in `pipeline_run_step`", and `decile_api.integrity`'s
+    ``published_runs_have_steps`` assertion would otherwise fire on the fixture rather than on a
+    bad backup.
     """
     now = dt.datetime(2026, 8, 18, 14, 0, tzinfo=dt.UTC)
+    run = PipelineRun(
+        trade_date=trade_date,
+        status="succeeded",
+        started_at=now,
+        finished_at=now,
+        data_version=data_version,
+    )
+    session.add(run)
+    await session.flush()
     session.add(
-        PipelineRun(
-            trade_date=trade_date,
+        PipelineRunStep(
+            run_id=run.id,
+            step="publish",
             status="succeeded",
-            started_at=now,
-            finished_at=now,
-            data_version=data_version,
+            rows_in=1,
+            rows_out=1,
+            duration_ms=0,
+            error={"seeded": True, "data_version": data_version},
         )
     )
     await session.flush()

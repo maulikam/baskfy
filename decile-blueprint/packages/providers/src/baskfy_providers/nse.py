@@ -201,7 +201,7 @@ class NSEProvider:
         payload = self._archived(
             f"{KIND_CONSTITUENTS}/{index_slug}",
             on,
-            f"{self._settings.nse_archive_url}/content/indices/ind_{_file_token(index_slug)}list.csv",
+            f"{self._settings.nse_archive_url}/content/indices/{_constituent_file(index_slug)}",
         )
         frame = _read_csv(payload, context=f"{index_slug} constituents")
         context = f"{index_slug} constituents"
@@ -507,8 +507,36 @@ def _date(value: object) -> dt.date | None:
     return None
 
 
+#: Constituent files whose name is NOT ``ind_{slug-without-hyphens}list.csv``.
+#:
+#: Verified against the live archive on 2026-08-22 (M8). NSE is inconsistent in two ways and
+#: neither is derivable from the slug: some names take an underscore before ``list`` and some do
+#: not, and two indices use a longer word than the slug does ("largemidcap" for
+#: ``nifty-large-mid-250``, "midsmallcap" for ``nifty-mid-small-400``). Every entry below was a
+#: 404 under the old rule, and every one was confirmed 200 with the name given here.
+_CONSTITUENT_FILE_OVERRIDES: Final[Mapping[str, str]] = {
+    "nifty-total-market": "ind_niftytotalmarket_list.csv",
+    "nifty-large-mid-250": "ind_niftylargemidcap250list.csv",
+    "nifty-microcap-250": "ind_niftymicrocap250_list.csv",
+    "nifty-mid-small-400": "ind_niftymidsmallcap400list.csv",
+}
+
+
+def _constituent_file(index_slug: str) -> str:
+    """The constituent CSV's filename for an index slug.
+
+    The rule covers seven of the eleven published universes; the rest are in
+    :data:`_CONSTITUENT_FILE_OVERRIDES`, named rather than guessed. Adding a universe means
+    checking the real archive, not extending the rule and hoping.
+    """
+    override = _CONSTITUENT_FILE_OVERRIDES.get(index_slug)
+    if override is not None:
+        return override
+    return f"ind_{_file_token(index_slug)}list.csv"
+
+
 def _file_token(index_slug: str) -> str:
-    """NSE names its constituent files ``ind_nifty50list.csv`` and similar."""
+    """NSE names most of its constituent files ``ind_nifty50list.csv`` and similar."""
     return index_slug.replace("-", "")
 
 

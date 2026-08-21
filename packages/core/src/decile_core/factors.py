@@ -149,10 +149,38 @@ def compute_factors(
     benchmark: pl.DataFrame | None = None,
     config: FactorConfig = DEFAULT_FACTOR_CONFIG,
 ) -> FactorResult:
-    """Compute every factor in docs/05 for one as-of date.
+    """Compute every factor in docs/05 for one as-of date, rounded for storage.
 
     ``bars`` is the long history for every instrument being computed — not just the as-of day.
     ``benchmark`` is the NIFTY 50 level series (``date``, ``close``) for beta (docs/05 §6).
+
+    Rounding happens here because CLAUDE.md house rule 8 requires it at write time: the API, the
+    UI and the CSV export all read the stored row, so a value rounded three times independently
+    would disagree in the last digit on three surfaces. :func:`compute_factors_unrounded` is the
+    same computation without that final step, and has exactly one caller.
+    """
+    return FactorResult(
+        apply_storage_precision(
+            compute_factors_unrounded(bars, as_of, trading_days, benchmark, config).frame
+        ),
+        resolve_windows(as_of, trading_days, config.window_months),
+    )
+
+
+def compute_factors_unrounded(
+    bars: pl.DataFrame,
+    as_of: dt.date,
+    trading_days: list[dt.date] | tuple[dt.date, ...],
+    benchmark: pl.DataFrame | None = None,
+    config: FactorConfig = DEFAULT_FACTOR_CONFIG,
+) -> FactorResult:
+    """:func:`compute_factors` without docs/13 §4's storage rounding. **Never write this.**
+
+    It exists for Prompt 19 §3's cross-validation harness, which compares this engine against an
+    independent pandas oracle "to 4 decimal places" — a comparison that is meaningless against a
+    frame already rounded to 2 dp. ``packages/core/tests/test_factor_crossvalidation.py`` asserts
+    that no file under any ``src/`` tree calls it, so a write path cannot quietly adopt it and
+    break the CSV/API/UI tie that house rule 8 exists to protect.
     """
     _require_columns(bars)
     windows = resolve_windows(as_of, trading_days, config.window_months)
@@ -169,7 +197,6 @@ def compute_factors(
 
     at_as_of = frame.filter(pl.col("date") == as_of)
     at_as_of = _null_short_windows(at_as_of, windows)
-    at_as_of = apply_storage_precision(at_as_of)
     return FactorResult(at_as_of, windows)
 
 

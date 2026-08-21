@@ -3,7 +3,7 @@ COMPOSE := docker compose -f infra/docker/compose.yml
 UV      := uv run
 
 .DEFAULT_GOAL := help
-.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics
+.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -29,6 +29,23 @@ test:          ## Run the Python and TypeScript test suites
 
 test-db:       ## Run only the tests that need a live database
 	$(UV) pytest -m db
+
+# --- Prompt 19: coverage gates, reconciliation, mutation testing ------------
+
+coverage:      ## Per-package coverage gate (docs: core >= 90%, api >= 80%). Needs `make up`.
+	@test -n "$$DECILE_TEST_DATABASE_URL" || { \
+	  echo "DECILE_TEST_DATABASE_URL is unset — the db-marked tests would skip and the gate"; \
+	  echo "would measure something other than what CI measures. Start the stack and export it:"; \
+	  echo "  export DECILE_TEST_DATABASE_URL=postgresql+asyncpg://decile:decile@localhost:5433/decile_test"; \
+	  exit 2; }
+	$(UV) pytest --cov --cov-report=term-missing --cov-report=json:coverage.json
+	$(UV) python -m tools.coverage_gate --report coverage.json
+
+reconcile:     ## Reconcile our formulas against the reference export; rewrites reconciliation/REPORT.md
+	$(UV) python -m decile_worker.reconcile_cli --write reconciliation/REPORT.md
+
+mutants:       ## Mutation-test decile_core.factors and .screener (Prompt 19 §6)
+	$(UV) python -m tools.mutation --workers $(or $(WORKERS),4)
 
 lint:          ## ruff check + format check + mypy strict + TS lint/typecheck (every package)
 	$(UV) ruff check .

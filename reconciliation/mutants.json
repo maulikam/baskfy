@@ -1,0 +1,1912 @@
+[
+  {
+    "after": "253",
+    "before": "252",
+    "file": "factors.py",
+    "identifier": "factors.py:71:31:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 71,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1.00000000005",
+    "before": "5e-11",
+    "file": "factors.py",
+    "identifier": "factors.py:81:33:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 81,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1.1",
+    "before": "0.1",
+    "file": "factors.py",
+    "identifier": "factors.py:86:34:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 86,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "factors.py",
+    "identifier": "factors.py:114:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 114,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "factors.py",
+    "identifier": "factors.py:114:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 114,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "factors.py",
+    "identifier": "factors.py:128:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 128,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "factors.py",
+    "identifier": "factors.py:128:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 128,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "factors.py",
+    "identifier": "factors.py:198:28:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 198,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "factors.py",
+    "identifier": "factors.py:214:33:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 214,
+    "operator": "comparison"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "factors.py",
+    "identifier": "factors.py:218:8:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 218,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "factors.py",
+    "identifier": "factors.py:218:8:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 218,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "factors.py",
+    "identifier": "factors.py:224:34:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 224,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:231:73:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 231,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "factors.py",
+    "identifier": "factors.py:231:52:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 231,
+    "operator": "comparison"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "factors.py",
+    "identifier": "factors.py:233:19:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 233,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:235:73:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 235,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "factors.py",
+    "identifier": "factors.py:235:52:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 235,
+    "operator": "comparison"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "factors.py",
+    "identifier": "factors.py:250:37:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 250,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:252:50:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 252,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "factors.py",
+    "identifier": "factors.py:252:38:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 252,
+    "operator": "comparison"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "factors.py",
+    "identifier": "factors.py:254:19:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 254,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "factors.py",
+    "identifier": "factors.py:254:48:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 254,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "factors.py",
+    "identifier": "factors.py:254:19:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 254,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:272:46:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 272,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "factors.py",
+    "identifier": "factors.py:272:38:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 272,
+    "operator": "comparison"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "factors.py",
+    "identifier": "factors.py:274:24:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 274,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "factors.py",
+    "identifier": "factors.py:274:49:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 274,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "factors.py",
+    "identifier": "factors.py:274:24:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 274,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "101",
+    "before": "100",
+    "file": "factors.py",
+    "identifier": "factors.py:274:54:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 274,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "factors.py",
+    "identifier": "factors.py:274:23:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 274,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "factors.py",
+    "identifier": "factors.py:281:83:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 281,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "factors.py",
+    "identifier": "factors.py:281:13:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 281,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:290:42:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 290,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "factors.py",
+    "identifier": "factors.py:290:17:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_properties.py",
+    "line": 290,
+    "operator": "comparison"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "factors.py",
+    "identifier": "factors.py:290:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 290,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "101",
+    "before": "100",
+    "file": "factors.py",
+    "identifier": "factors.py:294:18:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 294,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "factors.py",
+    "identifier": "factors.py:290:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 290,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "factors.py",
+    "identifier": "factors.py:318:19:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 318,
+    "operator": "comparison"
+  },
+  {
+    "after": "101",
+    "before": "100",
+    "file": "factors.py",
+    "identifier": "factors.py:322:78:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 322,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "factors.py",
+    "identifier": "factors.py:322:51:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 322,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "factors.py",
+    "identifier": "factors.py:322:23:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 322,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:351:62:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 351,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "factors.py",
+    "identifier": "factors.py:351:46:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 351,
+    "operator": "comparison"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "factors.py",
+    "identifier": "factors.py:353:24:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 353,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "factors.py",
+    "identifier": "factors.py:353:57:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 353,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "factors.py",
+    "identifier": "factors.py:353:24:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 353,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "101",
+    "before": "100",
+    "file": "factors.py",
+    "identifier": "factors.py:353:62:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 353,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "factors.py",
+    "identifier": "factors.py:353:23:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 353,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:405:23:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 405,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "factors.py",
+    "identifier": "factors.py:405:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 405,
+    "operator": "comparison"
+  },
+  {
+    "after": "Eq",
+    "before": "NotEq",
+    "file": "factors.py",
+    "identifier": "factors.py:410:43:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 410,
+    "operator": "comparison"
+  },
+  {
+    "after": "3",
+    "before": "2",
+    "file": "factors.py",
+    "identifier": "factors.py:413:20:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 413,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "factors.py",
+    "identifier": "factors.py:413:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 413,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:417:35:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 417,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:418:31:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 418,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "factors.py",
+    "identifier": "factors.py:418:21:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 418,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0.0",
+    "file": "factors.py",
+    "identifier": "factors.py:418:43:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 418,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:419:32:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 419,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "factors.py",
+    "identifier": "factors.py:419:22:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 419,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0.0",
+    "file": "factors.py",
+    "identifier": "factors.py:419:45:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 419,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "factors.py",
+    "identifier": "factors.py:425:40:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 425,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "factors.py",
+    "identifier": "factors.py:443:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 443,
+    "operator": "comparison"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "factors.py",
+    "identifier": "factors.py:443:34:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 443,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "factors.py",
+    "identifier": "factors.py:443:25:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 443,
+    "operator": "comparison"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "factors.py",
+    "identifier": "factors.py:443:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 443,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:447:51:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 447,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:448:52:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 448,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "factors.py",
+    "identifier": "factors.py:449:17:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 449,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "factors.py",
+    "identifier": "factors.py:449:8:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 449,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "factors.py",
+    "identifier": "factors.py:452:22:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 452,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "factors.py",
+    "identifier": "factors.py:452:13:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 452,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "factors.py",
+    "identifier": "factors.py:452:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 452,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "2.0",
+    "before": "1.0",
+    "file": "factors.py",
+    "identifier": "factors.py:453:16:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 453,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "factors.py",
+    "identifier": "factors.py:453:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 453,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "factors.py",
+    "identifier": "factors.py:455:19:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 455,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "factors.py",
+    "identifier": "factors.py:455:38:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 455,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "factors.py",
+    "identifier": "factors.py:455:19:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 455,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "factors.py",
+    "identifier": "factors.py:456:19:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 456,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "factors.py",
+    "identifier": "factors.py:456:38:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 456,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "factors.py",
+    "identifier": "factors.py:456:19:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 456,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "101.0",
+    "before": "100.0",
+    "file": "factors.py",
+    "identifier": "factors.py:465:14:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 465,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "101.0",
+    "before": "100.0",
+    "file": "factors.py",
+    "identifier": "factors.py:465:22:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 465,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2.0",
+    "before": "1.0",
+    "file": "factors.py",
+    "identifier": "factors.py:465:31:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 465,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "factors.py",
+    "identifier": "factors.py:465:31:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 465,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "factors.py",
+    "identifier": "factors.py:465:22:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_crossvalidation.py",
+    "line": 465,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "factors.py",
+    "identifier": "factors.py:465:14:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 465,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:466:32:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_properties.py",
+    "line": 466,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "factors.py",
+    "identifier": "factors.py:466:20:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 466,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:466:56:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 466,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "factors.py",
+    "identifier": "factors.py:466:44:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 466,
+    "operator": "comparison"
+  },
+  {
+    "after": "51.0",
+    "before": "50.0",
+    "file": "factors.py",
+    "identifier": "factors.py:466:59:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_properties.py",
+    "line": 466,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "101.0",
+    "before": "100.0",
+    "file": "factors.py",
+    "identifier": "factors.py:466:65:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 466,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:481:48:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 481,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "factors.py",
+    "identifier": "factors.py:481:28:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 481,
+    "operator": "comparison"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "factors.py",
+    "identifier": "factors.py:481:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_edge_guards.py",
+    "line": 481,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "factors.py",
+    "identifier": "factors.py:488:65:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 488,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "factors.py",
+    "identifier": "factors.py:488:13:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 488,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "factors.py",
+    "identifier": "factors.py:488:70:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 488,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "factors.py",
+    "identifier": "factors.py:488:13:arithmetic",
+    "killed": false,
+    "killed_by": null,
+    "line": 488,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "factors.py",
+    "identifier": "factors.py:500:60:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 500,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "3",
+    "before": "2",
+    "file": "factors.py",
+    "identifier": "factors.py:515:31:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 515,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "factors.py",
+    "identifier": "factors.py:521:43:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 521,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "factors.py",
+    "identifier": "factors.py:521:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 521,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "3",
+    "before": "2",
+    "file": "factors.py",
+    "identifier": "factors.py:522:67:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 522,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "factors.py",
+    "identifier": "factors.py:522:15:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 522,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "factors.py",
+    "identifier": "factors.py:524:50:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 524,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "factors.py",
+    "identifier": "factors.py:524:38:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factor_properties.py",
+    "line": 524,
+    "operator": "comparison"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "factors.py",
+    "identifier": "factors.py:526:19:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_factors_golden.py",
+    "line": 526,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "51",
+    "before": "50",
+    "file": "screener.py",
+    "identifier": "screener.py:77:57:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 77,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "101",
+    "before": "100",
+    "file": "screener.py",
+    "identifier": "screener.py:77:72:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 77,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "4001",
+    "before": "4000",
+    "file": "screener.py",
+    "identifier": "screener.py:98:25:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 98,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "201",
+    "before": "200",
+    "file": "screener.py",
+    "identifier": "screener.py:110:39:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 110,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "101",
+    "before": "100",
+    "file": "screener.py",
+    "identifier": "screener.py:110:44:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 110,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "51",
+    "before": "50",
+    "file": "screener.py",
+    "identifier": "screener.py:110:49:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 110,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "21",
+    "before": "20",
+    "file": "screener.py",
+    "identifier": "screener.py:110:53:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 110,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "13",
+    "before": "12",
+    "file": "screener.py",
+    "identifier": "screener.py:111:51:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 111,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "10",
+    "before": "9",
+    "file": "screener.py",
+    "identifier": "screener.py:111:61:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 111,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "7",
+    "before": "6",
+    "file": "screener.py",
+    "identifier": "screener.py:111:70:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 111,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "4",
+    "before": "3",
+    "file": "screener.py",
+    "identifier": "screener.py:111:79:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 111,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "screener.py",
+    "identifier": "screener.py:111:88:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 111,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "screener.py",
+    "identifier": "screener.py:172:11:boolean_operator",
+    "killed": false,
+    "killed_by": null,
+    "line": 172,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "screener.py",
+    "identifier": "screener.py:174:71:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 174,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "screener.py",
+    "identifier": "screener.py:175:11:not_removal",
+    "killed": false,
+    "killed_by": null,
+    "line": 175,
+    "operator": "not_removal"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "screener.py",
+    "identifier": "screener.py:210:18:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 210,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "screener.py",
+    "identifier": "screener.py:210:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 210,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "screener.py",
+    "identifier": "screener.py:220:18:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 220,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "screener.py",
+    "identifier": "screener.py:220:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 220,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "Gt",
+    "before": "GtE",
+    "file": "screener.py",
+    "identifier": "screener.py:258:23:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 258,
+    "operator": "comparison"
+  },
+  {
+    "after": "Gt",
+    "before": "GtE",
+    "file": "screener.py",
+    "identifier": "screener.py:261:23:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 261,
+    "operator": "comparison"
+  },
+  {
+    "after": "Gt",
+    "before": "GtE",
+    "file": "screener.py",
+    "identifier": "screener.py:264:23:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 264,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "screener.py",
+    "identifier": "screener.py:266:23:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 266,
+    "operator": "comparison"
+  },
+  {
+    "after": "Gt",
+    "before": "GtE",
+    "file": "screener.py",
+    "identifier": "screener.py:274:27:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 274,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "screener.py",
+    "identifier": "screener.py:276:27:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 276,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "screener.py",
+    "identifier": "screener.py:282:23:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 282,
+    "operator": "comparison"
+  },
+  {
+    "after": "Gt",
+    "before": "GtE",
+    "file": "screener.py",
+    "identifier": "screener.py:285:23:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 285,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "screener.py",
+    "identifier": "screener.py:287:23:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 287,
+    "operator": "comparison"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "screener.py",
+    "identifier": "screener.py:297:7:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 297,
+    "operator": "not_removal"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "screener.py",
+    "identifier": "screener.py:302:27:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 302,
+    "operator": "comparison"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "screener.py",
+    "identifier": "screener.py:304:27:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 304,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "screener.py",
+    "identifier": "screener.py:316:23:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 316,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "screener.py",
+    "identifier": "screener.py:318:23:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 318,
+    "operator": "comparison"
+  },
+  {
+    "after": "Gt",
+    "before": "GtE",
+    "file": "screener.py",
+    "identifier": "screener.py:323:23:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 323,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "screener.py",
+    "identifier": "screener.py:328:23:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 328,
+    "operator": "comparison"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "screener.py",
+    "identifier": "screener.py:338:71:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 338,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "screener.py",
+    "identifier": "screener.py:339:11:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 339,
+    "operator": "not_removal"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:343:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 343,
+    "operator": "comparison"
+  },
+  {
+    "after": "Gt",
+    "before": "GtE",
+    "file": "screener.py",
+    "identifier": "screener.py:344:27:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 344,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:345:13:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 345,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "screener.py",
+    "identifier": "screener.py:346:27:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 346,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:348:27:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 348,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "screener.py",
+    "identifier": "screener.py:381:66:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 381,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:381:23:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 381,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "screener.py",
+    "identifier": "screener.py:383:72:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 383,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:383:23:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 383,
+    "operator": "comparison"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "screener.py",
+    "identifier": "screener.py:402:88:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 402,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:432:37:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 432,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:434:15:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 434,
+    "operator": "comparison"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "screener.py",
+    "identifier": "screener.py:437:7:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 437,
+    "operator": "not_removal"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "screener.py",
+    "identifier": "screener.py:442:8:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 442,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "screener.py",
+    "identifier": "screener.py:444:13:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 444,
+    "operator": "comparison"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "screener.py",
+    "identifier": "screener.py:449:18:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 449,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "screener.py",
+    "identifier": "screener.py:449:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 449,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:478:12:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 478,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:479:12:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 479,
+    "operator": "comparison"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "screener.py",
+    "identifier": "screener.py:497:22:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 497,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "5",
+    "before": "4",
+    "file": "screener.py",
+    "identifier": "screener.py:497:25:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 497,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "screener.py",
+    "identifier": "screener.py:499:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 499,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "screener.py",
+    "identifier": "screener.py:500:40:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 500,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "screener.py",
+    "identifier": "screener.py:502:32:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 502,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "screener.py",
+    "identifier": "screener.py:502:25:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 502,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:504:40:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 504,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "screener.py",
+    "identifier": "screener.py:513:35:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 513,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "screener.py",
+    "identifier": "screener.py:517:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 517,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "screener.py",
+    "identifier": "screener.py:517:16:arithmetic",
+    "killed": false,
+    "killed_by": null,
+    "line": 517,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:559:15:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 559,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:561:15:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 561,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:569:45:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 569,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "screener.py",
+    "identifier": "screener.py:580:31:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 580,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "screener.py",
+    "identifier": "screener.py:639:9:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 639,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "screener.py",
+    "identifier": "screener.py:642:50:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 642,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "screener.py",
+    "identifier": "screener.py:650:57:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 650,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "screener.py",
+    "identifier": "screener.py:671:7:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 671,
+    "operator": "not_removal"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:674:19:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_screener.py",
+    "line": 674,
+    "operator": "comparison"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "screener.py",
+    "identifier": "screener.py:682:18:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 682,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "screener.py",
+    "identifier": "screener.py:682:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 682,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "screener.py",
+    "identifier": "screener.py:708:22:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 708,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "screener.py",
+    "identifier": "screener.py:697:18:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 697,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "screener.py",
+    "identifier": "screener.py:697:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 697,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:784:36:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 784,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:786:17:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 786,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "screener.py",
+    "identifier": "screener.py:786:68:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 786,
+    "operator": "comparison"
+  }
+]

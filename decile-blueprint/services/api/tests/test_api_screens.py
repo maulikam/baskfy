@@ -8,7 +8,7 @@ from api_helpers import assert_problem, bearer, errors_of, make_user, url
 from screener_helpers import requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_core.seed_data import EXAMPLE_SCREENS
+from baskfy_core.seed_data import EXAMPLE_SCREENS
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 

@@ -1,0 +1,253 @@
+{
+  "uid": "baskfy-service",
+  "title": "Decile \u2014 API and cache",
+  "tags": [
+    "baskfy",
+    "api"
+  ],
+  "timezone": "Asia/Kolkata",
+  "editable": false,
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "description": "PROMPTS.md Prompt 17 \u00a72: 'API latency by route, cache hit rate'. The threshold lines are docs/11 \u00a7'Performance budgets', not round numbers.",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Request rate by route",
+      "description": "Route *template*, never the resolved path \u2014 see `baskfy_api.metrics`.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (route) (rate(baskfy_http_requests_total[5m]))",
+          "legendFormat": "{{route}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "5xx rate",
+      "description": "PROMPTS.md \u00a73: 'error rate > 1%'. docs/11 \u00a7Reliability: 99.5% monthly.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "baskfy:http_error_rate:ratio5m",
+          "legendFormat": "error rate",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "0.01",
+          "legendFormat": "1% paging threshold",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        },
+        {
+          "refId": "C",
+          "expr": "0.005",
+          "legendFormat": "docs/11 99.5% availability SLO",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Latency p95 by route",
+      "description": "docs/11 budgets: screen run 150 ms warm / 800 ms cold, dashboard 500 ms, factsheet 300 ms TTFB, CSV export 2 s. Measured numbers: benchmarks/AS-MEASURED.md.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(baskfy_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{route}} p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Screen run p95 vs budget",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "baskfy:screen_run_latency:p95_5m",
+          "legendFormat": "p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "0.8",
+          "legendFormat": "docs/11 cold budget",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        },
+        {
+          "refId": "C",
+          "expr": "0.15",
+          "legendFormat": "docs/11 warm budget",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Screen cache hit rate",
+      "description": "docs/06 \u00a7Caching. Expected to fall to zero for one interval after each publish \u2014 step 10 purges the namespace and then warms the top screens.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "baskfy:screen_cache_hit_rate:ratio5m",
+          "legendFormat": "hit rate",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Cache events",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (result) (rate(baskfy_screen_cache_events_total[5m]))",
+          "legendFormat": "{{result}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      }
+    }
+  ]
+}

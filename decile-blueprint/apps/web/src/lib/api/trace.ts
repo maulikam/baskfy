@@ -14,7 +14,7 @@ import { trace } from "@opentelemetry/api";
  * So the header is built by hand. It is nine lines and it is the whole of the hop:
  * `FastAPIInstrumentor` on the other side extracts `traceparent` and parents its span under this
  * one, and the API's own `traceparent` then reaches the worker through the Celery message
- * (`decile_api.telemetry`).
+ * (`baskfy_api.telemetry`).
  *
  * Returns `undefined` when nothing is tracing, which is the normal case on a laptop and in the
  * test suite — the client then simply omits the header.

@@ -1,0 +1,433 @@
+{
+  "uid": "baskfy-pipeline",
+  "title": "Decile \u2014 nightly pipeline",
+  "tags": [
+    "baskfy",
+    "pipeline"
+  ],
+  "timezone": "Asia/Kolkata",
+  "editable": false,
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "description": "docs/09 \u00a7Observability: 'Metrics: task duration p50/p95, provider error rate, gate pass rate, publish latency (EOD close -> data live).' Timezone is IST because every time in docs/09's schedule is an IST wall-clock time tied to the NSE session.",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Publish latency (15:30 IST close \u2192 data live)",
+      "description": "docs/11 \u00a7Reliability: 'data published by 20:15 IST on >=95% of trading days.' The close is 15:30 IST, so the SLO line is 4h45m = 17100s. See DECISIONS \u00a717.10.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "baskfy_publish_latency_seconds",
+          "legendFormat": "latency",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "17100",
+          "legendFormat": "20:15 IST SLO",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Current data_version",
+      "description": "docs/03 step 10. Flat across a night means nothing published.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "baskfy_data_version",
+          "legendFormat": "data_version",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Last run status",
+      "description": "One series per status, so a resolved failure reads as 0 rather than absent.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "baskfy_pipeline_run_status{status=\"succeeded\"}",
+          "legendFormat": "succeeded",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "baskfy_pipeline_run_status{status=\"failed\"}",
+          "legendFormat": "failed",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        },
+        {
+          "refId": "C",
+          "expr": "baskfy_pipeline_run_status{status=\"running\"}",
+          "legendFormat": "running",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        },
+        {
+          "refId": "D",
+          "expr": "baskfy_pipeline_run_status{status=\"aborted\"}",
+          "legendFormat": "aborted (non-trading day)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "bargauge",
+      "title": "Step durations \u2014 last run",
+      "description": "Read from pipeline_run_step at scrape time, not held in the scraped process \u2014 see DECISIONS \u00a717.9. docs/11 budgets the whole chain at 45 minutes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "baskfy_pipeline_last_step_duration_seconds",
+          "legendFormat": "{{step}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Step duration p95 (worker histogram)",
+      "description": "docs/09 \u00a7Observability: 'task duration p50/p95'. Recorded by the worker.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, step) (rate(baskfy_pipeline_step_duration_seconds_bucket[1h])))",
+          "legendFormat": "{{step}} p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.50, sum by (le, step) (rate(baskfy_pipeline_step_duration_seconds_bucket[1h])))",
+          "legendFormat": "{{step}} p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "bargauge",
+      "title": "rows_out \u2014 last run",
+      "description": "docs/03: every step records rows_in/rows_out. A compute_factors that suddenly writes 40 rows instead of 2,300 is the gate's assertion 4, seen early.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "baskfy_pipeline_last_step_rows_out",
+          "legendFormat": "{{step}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Data-quality gate",
+      "description": "docs/03 step 9 is a hard gate: a 0 here means data_version did not move.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "baskfy_pipeline_gate_passed",
+          "legendFormat": "gate passed (1) / failed (0)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Oldest run still 'running'",
+      "description": "A worker killed mid-pipeline leaves exactly this behind. Past 90 minutes `baskfy.ops.reap_abandoned_runs` fails the run and alerts (DECISIONS \u00a717.5-17.6).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "baskfy_pipeline_running_age_seconds",
+          "legendFormat": "age",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "5400",
+          "legendFormat": "abandoned threshold",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Provider error rate",
+      "description": "docs/09 \u00a7Observability: 'provider error rate'. Kite above 50% for ten minutes is almost always an expired access token \u2014 docs/09 calls it 'the #1 pipeline failure'.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "baskfy:provider_error_rate:ratio15m",
+          "legendFormat": "{{provider}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Celery queue depth",
+      "description": "docs/02 gives each workload its own queue so one cannot starve another. Read by LLEN on the Redis broker, which is transport-specific (DECISIONS \u00a717.14).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "baskfy_queue_depth",
+          "legendFormat": "{{queue}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "100",
+          "legendFormat": "backlog threshold",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Alerts raised",
+      "description": "Every alert `baskfy_worker.alerts.dispatch` sent, by rule name.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "baskfy-prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (alert) (increase(baskfy_alerts_total[1h]))",
+          "legendFormat": "{{alert}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "baskfy-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    }
+  ]
+}

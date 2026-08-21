@@ -17,9 +17,9 @@ import { expect, test, type Page } from "@playwright/test";
 const EXPECTED_COUNT = 87;
 const EXPECTED_FIRST_SYMBOL = "WELCORP";
 
-/** The seeded account (`decile_api.seed e2e`). Subscribed, because the export is gated. */
+/** The seeded account (`baskfy_api.seed e2e`). Subscribed, because the export is gated. */
 const EMAIL = "e2e@example.com";
-/** `decile_api.seed.E2E_PASSWORD` — a published constant for a throwaway database. */
+/** `baskfy_api.seed.E2E_PASSWORD` — a published constant for a throwaway database. */
 const E2E_PASSWORD = "e2e-suite-password";
 
 async function signIn(page: Page): Promise<void> {

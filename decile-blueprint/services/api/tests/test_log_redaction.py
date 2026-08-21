@@ -24,8 +24,8 @@ import pytest
 from api_helpers import assert_problem, url
 from screener_helpers import requires_db
 
-from decile_api.csrf import CSRF_COOKIE, CSRF_HEADER, REFRESH_COOKIE
-from decile_api.logging import REDACTED, JsonFormatter, RedactingFilter, redact_text
+from baskfy_api.csrf import CSRF_COOKIE, CSRF_HEADER, REFRESH_COOKIE
+from baskfy_api.logging import REDACTED, JsonFormatter, RedactingFilter, redact_text
 
 EMAIL: Final = "logged@example.com"
 PASSWORD: Final = "a-very-distinctive-password-9271"
@@ -159,7 +159,7 @@ class TestTheEndpointsInPractice:
             url("/auth/register"),
             json={"email": EMAIL, "password": PASSWORD, "accept_terms": True},
         )
-        with caplog.at_level(logging.INFO, logger="decile_api.auth_service"):
+        with caplog.at_level(logging.INFO, logger="baskfy_api.auth_service"):
             await api.post(url("/auth/request-otp"), json={"email": EMAIL})
 
         rendered = "\n".join(JsonFormatter().format(record) for record in caplog.records)

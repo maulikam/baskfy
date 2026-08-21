@@ -181,7 +181,7 @@ test.describe("the account lifecycle", () => {
     const download = page.waitForEvent("download");
     await page.getByTestId("export-my-data").click();
     const file = await download;
-    expect(file.suggestedFilename()).toBe("decile-account-export.json");
+    expect(file.suggestedFilename()).toBe("baskfy-account-export.json");
   });
 });
 

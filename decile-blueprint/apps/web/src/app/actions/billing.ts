@@ -1,6 +1,6 @@
 "use server";
 
-import type { CheckoutSessionOut } from "@decile/api-client";
+import type { CheckoutSessionOut } from "@baskfy/api-client";
 
 import { apiOrigin } from "@/lib/api/config";
 import { auth } from "@/lib/auth";

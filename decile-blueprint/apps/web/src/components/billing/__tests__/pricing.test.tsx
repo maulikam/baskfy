@@ -12,7 +12,7 @@ vi.mock("@/app/actions/billing", () => ({
   startCheckout: () => Promise.resolve({ ok: false, message: "not exercised here" }),
 }));
 
-import type { InvoiceOut, PlanOut } from "@decile/api-client";
+import type { InvoiceOut, PlanOut } from "@baskfy/api-client";
 
 import { InvoiceTable } from "@/components/billing/invoice-table";
 import { PlanCard } from "@/components/billing/plan-card";

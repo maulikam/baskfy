@@ -16,7 +16,7 @@ import { expect, test, type Page } from "@playwright/test";
  * circuit filter silently applied.
  */
 const EMAIL = "e2e@example.com";
-/** `decile_api.seed.E2E_PASSWORD` — a published constant for a throwaway database. */
+/** `baskfy_api.seed.E2E_PASSWORD` — a published constant for a throwaway database. */
 const E2E_PASSWORD = "e2e-suite-password";
 
 async function signIn(page: Page): Promise<void> {

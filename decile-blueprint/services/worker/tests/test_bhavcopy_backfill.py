@@ -13,7 +13,7 @@ from decimal import Decimal
 
 import polars as pl
 
-from decile_worker.bhavcopy_backfill import (
+from baskfy_worker.bhavcopy_backfill import (
     BAR_SOURCE,
     EQUITY_SERIES,
     BhavcopyBackfillReport,

@@ -1,4 +1,4 @@
-import type { MarketQualityOut } from "@decile/api-client";
+import type { MarketQualityOut } from "@baskfy/api-client";
 
 import { MetricGrid } from "@/components/data/metric-grid";
 import { Badge } from "@/components/ui/badge";

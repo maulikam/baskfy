@@ -11,12 +11,12 @@ import pytest
 import redis
 from cryptography.fernet import Fernet
 
-from decile_providers.archive import LocalRawArchive
-from decile_providers.fixtures import FixtureProvider
-from decile_providers.ratelimit import RedisLike
-from decile_providers.settings import ProviderSettings
+from baskfy_providers.archive import LocalRawArchive
+from baskfy_providers.fixtures import FixtureProvider
+from baskfy_providers.ratelimit import RedisLike
+from baskfy_providers.settings import ProviderSettings
 
-REDIS_ENV_VAR: Final = "DECILE_REDIS_URL"
+REDIS_ENV_VAR: Final = "BASKFY_REDIS_URL"
 DEFAULT_REDIS_URL: Final = "redis://localhost:6380/0"
 
 

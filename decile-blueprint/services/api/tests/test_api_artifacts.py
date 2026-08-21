@@ -17,9 +17,9 @@ from typing import Final
 
 import pytest
 
-from decile_api.openapi import default_output, render
-from decile_api.problems import STATUS_FOR
-from decile_api.settings import API_PREFIX
+from baskfy_api.openapi import default_output, render
+from baskfy_api.problems import STATUS_FOR
+from baskfy_api.settings import API_PREFIX
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[3]
 GENERATED_TS: Final = REPO_ROOT / "packages" / "api-client" / "src" / "generated" / "schema.ts"
@@ -74,7 +74,7 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # docs/07 §"Portfolios & rebalance" (Prompt 14). The four paths docs/07 does not list —
     # `sample-csv`, the rename/delete pair on `{portfolio_id}`, and the two `rebalances` reads —
     # are Prompt 14 deliverables 1, 3 and 4; each is argued for in
-    # `decile_api.routers.portfolios` and recorded in docs/DECISIONS.md §14.
+    # `baskfy_api.routers.portfolios` and recorded in docs/DECISIONS.md §14.
     "/portfolios": {"get", "post"},
     "/portfolios/import-csv": {"post"},
     "/portfolios/sample-csv": {"get"},
@@ -85,7 +85,7 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/portfolios/{portfolio_id}/rebalances/{rebalance_id}": {"get"},
     # docs/07 §Backtests (Prompt 15). The four paths docs/07 does not list — the collection read,
     # `holdings`, the SSE stream and the download the signed `export` link redeems against — are
-    # Prompt 15 deliverables 4, 5 and 6; each is argued for in `decile_api.routers.backtests` and
+    # Prompt 15 deliverables 4, 5 and 6; each is argued for in `baskfy_api.routers.backtests` and
     # recorded in docs/DECISIONS.md §15.
     "/backtests": {"get", "post"},
     "/backtests/{public_id}": {"get", "delete"},
@@ -110,7 +110,7 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/admin/users/{public_id}/entitlements/{feature}": {"delete"},
     # Prompt 18 deliverable 2's contact form. docs/07 does not describe it either; a form has to
     # post somewhere and the mail credential belongs behind the service that already holds it
-    # (`decile_api.routers.support`, `docs/DECISIONS.md` §18.5).
+    # (`baskfy_api.routers.support`, `docs/DECISIONS.md` §18.5).
     "/support": {"post"},
     "/admin/actions": {"get"},
     # Prompt 20. docs/07 mentions `X-API-Key` in its header section and describes no endpoint that

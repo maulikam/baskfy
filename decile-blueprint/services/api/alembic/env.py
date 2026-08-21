@@ -1,4 +1,4 @@
-"""Alembic environment — async engine, metadata from decile_core.models."""
+"""Alembic environment — async engine, metadata from baskfy_core.models."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from alembic import context
 from sqlalchemy import Connection, pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from decile_api.settings import get_settings
-from decile_core.models import Base
+from baskfy_api.settings import get_settings
+from baskfy_core.models import Base
 
 config = context.config
 target_metadata = Base.metadata

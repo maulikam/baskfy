@@ -7,7 +7,7 @@
 ``ohlcv_daily`` at ~8.5M rows "compressed after 90 days, ~10x", and the thing that could go wrong
 is not the policy's existence — it is that compressing a chunk changes what a query over it
 returns, or that a segment-by column was chosen that makes the per-instrument reads the backtest
-loader does (``decile_worker.backtest``) fall off a cliff. So a chunk is actually compressed here
+loader does (``baskfy_worker.backtest``) fall off a cliff. So a chunk is actually compressed here
 and the rows are read back through the same predicate the loader uses.
 
 The continuous aggregates are asserted against their own source: a materialised monthly average
@@ -72,7 +72,7 @@ class TestCompressionPolicy:
         """docs/04: `timescaledb.compress_segmentby='instrument_id'`.
 
         Not cosmetic: the backtest's panel loader reads one instrument's whole history
-        (``decile_worker.backtest``), and a compressed chunk that is not segmented by
+        (``baskfy_worker.backtest``), and a compressed chunk that is not segmented by
         ``instrument_id`` has to decompress every batch in the chunk to answer that.
         """
         segment_by = (

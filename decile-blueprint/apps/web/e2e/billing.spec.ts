@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test";
  * the source. This proves the other half: that the prices which appear on the page are the ones
  * the API served, by reading `GET /plans` in the same browser and comparing.
  *
- * The seeded catalogue is `decile_core.seed_data.PLANS` — docs/01 §1's three plans.
+ * The seeded catalogue is `baskfy_core.seed_data.PLANS` — docs/01 §1's three plans.
  */
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8100/api/v1";

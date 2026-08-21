@@ -1,4 +1,4 @@
-import type { CheckoutSessionOut } from "@decile/api-client";
+import type { CheckoutSessionOut } from "@baskfy/api-client";
 
 /**
  * Razorpay's browser widget, typed rather than reached for through `any`.

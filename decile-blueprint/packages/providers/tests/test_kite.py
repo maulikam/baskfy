@@ -17,7 +17,7 @@ import polars as pl
 import pytest
 from kiteconnect import exceptions as kite_exceptions
 
-from decile_providers.errors import (
+from baskfy_providers.errors import (
     AccessTokenExpired,
     CredentialsMissing,
     ProviderUnavailable,
@@ -26,17 +26,17 @@ from decile_providers.errors import (
     UnexpectedPayload,
     UpstreamUnavailable,
 )
-from decile_providers.kite import DEFAULT_MAX_DAYS_PER_REQUEST, KiteProvider, KiteRuntime
-from decile_providers.ports import BARS_CAPABILITIES, Capability
-from decile_providers.records import DAILY_BARS_SCHEMA
-from decile_providers.retry import RetryHooks, RetryPolicy
-from decile_providers.settings import ProviderSettings
-from decile_providers.tokens import IST, AccessTokenStore
+from baskfy_providers.kite import DEFAULT_MAX_DAYS_PER_REQUEST, KiteProvider, KiteRuntime
+from baskfy_providers.ports import BARS_CAPABILITIES, Capability
+from baskfy_providers.records import DAILY_BARS_SCHEMA
+from baskfy_providers.retry import RetryHooks, RetryPolicy
+from baskfy_providers.settings import ProviderSettings
+from baskfy_providers.tokens import IST, AccessTokenStore
 
 #: This morning, in IST — not a pinned date.
 #:
 #: `AccessToken.is_expired` compares calendar dates in IST, because "Kite invalidates access
-#: tokens at the start of the next trading day" (`decile_providers.tokens`). A literal date here
+#: tokens at the start of the next trading day" (`baskfy_providers.tokens`). A literal date here
 #: therefore stops meaning "fresh" the moment the clock passes midnight IST, and every test that
 #: relies on a fresh token starts failing for a reason that has nothing to do with the code. The
 #: relative offsets below (`- 1 day`, `- 2 days`) are what these tests are actually about.
@@ -162,7 +162,7 @@ class TestHealth:
     def test_unconfigured_is_unavailable_not_an_exception(self, settings: ProviderSettings) -> None:
         health = KiteProvider(settings).check()
         assert health.available is False
-        assert "DECILE_KITE_API_KEY" in health.detail
+        assert "BASKFY_KITE_API_KEY" in health.detail
 
     def test_missing_token_is_reported(self, configured_settings: ProviderSettings) -> None:
         health = KiteProvider(configured_settings).check()

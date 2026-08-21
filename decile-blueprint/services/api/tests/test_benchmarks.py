@@ -43,9 +43,9 @@ from screener_helpers import requires_db, seeded_database, synthetic_universe_sq
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from decile_core.screener import MAX_RESULT_ROWS
-from decile_core.seed_data import EXAMPLE_SCREENS
-from decile_core.universes import UNIVERSE_BY_SLUG
+from baskfy_core.screener import MAX_RESULT_ROWS
+from baskfy_core.seed_data import EXAMPLE_SCREENS
+from baskfy_core.universes import UNIVERSE_BY_SLUG
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, pytest.mark.benchmark, requires_db]
 

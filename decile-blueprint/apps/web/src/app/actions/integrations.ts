@@ -156,7 +156,7 @@ export async function deleteAlert(publicId: string): Promise<ActionResult> {
 
 /**
  * The one-click unsubscribe target. **Unauthenticated on purpose** — see
- * `decile_api.routers.alerts`: the link is followed by a mail client, a link scanner, or a person
+ * `baskfy_api.routers.alerts`: the link is followed by a mail client, a link scanner, or a person
  * who is not signed in, and requiring a session would make it useless to all three.
  */
 export async function unsubscribeFromAlert(token: string): Promise<ActionResult> {

@@ -26,7 +26,7 @@ from screener_helpers import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from decile_api.screener import (
+from baskfy_api.screener import (
     SCREEN_CACHE_FALLBACK_TTL_SECONDS,
     SCREEN_FLIGHT,
     WARM_CACHE_SCREEN_LIMIT,
@@ -38,13 +38,13 @@ from decile_api.screener import (
     top_screen_definitions,
     warm_screen_cache,
 )
-from decile_core.models import PipelineRun, Screen, ScreenRun
-from decile_core.screen_definition import ScreenDefinition
-from decile_core.screener import cache_key
-from decile_core.seed_data import EXAMPLE_SCREENS
-from decile_core.universes import UNIVERSE_BY_SLUG
-from decile_worker.steps import StepOutcome
-from decile_worker.tasks.publish import SCREEN_CACHE_PREFIX, run_publish
+from baskfy_core.models import PipelineRun, Screen, ScreenRun
+from baskfy_core.screen_definition import ScreenDefinition
+from baskfy_core.screener import cache_key
+from baskfy_core.seed_data import EXAMPLE_SCREENS
+from baskfy_core.universes import UNIVERSE_BY_SLUG
+from baskfy_worker.steps import StepOutcome
+from baskfy_worker.tasks.publish import SCREEN_CACHE_PREFIX, run_publish
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 

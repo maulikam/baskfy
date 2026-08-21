@@ -34,8 +34,8 @@ import numpy as np
 import polars as pl
 import pytest
 
-from decile_core.blends import blend_expr, blend_sql
-from decile_core.factor_registry import (
+from baskfy_core.blends import blend_expr, blend_sql
+from baskfy_core.factor_registry import (
     BACKTEST_SIGNAL_KEYS,
     COLUMN_PICKER_KEYS,
     CUSTOM_FILTER_OPERANDS,
@@ -49,15 +49,15 @@ from decile_core.factor_registry import (
     get,
     sql_for,
 )
-from decile_core.factors import compute_factors
-from decile_core.precision import (
+from baskfy_core.factors import compute_factors
+from baskfy_core.precision import (
     COLUMN_PRECISION,
     apply_storage_precision,
     quantise,
     unpriced_numeric_columns,
 )
-from decile_core.reference_export import read_export
-from decile_core.windows import (
+from baskfy_core.reference_export import read_export
+from baskfy_core.windows import (
     EXPECTED_WINDOW_LENGTHS_2026_08_18,
     resolve_window,
     window_lengths,

@@ -24,10 +24,10 @@ from screener_helpers import AS_OF, add_factor_row, add_instrument, requires_db
 from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_core.models import CorporateAction, IndexMemberDaily, Instrument, OhlcvDaily
-from decile_core.pros_cons import RULES
-from decile_core.universes import UNIVERSE_BY_SLUG
-from decile_providers.fixtures import FixtureProvider
+from baskfy_core.models import CorporateAction, IndexMemberDaily, Instrument, OhlcvDaily
+from baskfy_core.pros_cons import RULES
+from baskfy_core.universes import UNIVERSE_BY_SLUG
+from baskfy_providers.fixtures import FixtureProvider
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 

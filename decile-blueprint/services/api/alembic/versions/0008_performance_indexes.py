@@ -60,7 +60,7 @@ down_revision: str | None = "0007_portfolio_rebalance"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-#: ``decile_api.market_data.NO_LISTING_DATE`` — the sentinel an instrument with no listing date
+#: ``baskfy_api.market_data.NO_LISTING_DATE`` — the sentinel an instrument with no listing date
 #: sorts under. Repeated here as a literal because a migration must not import application code
 #: that may change under it.
 NO_LISTING_DATE = "0001-01-01"

@@ -8,7 +8,7 @@ import type {
   ScreenRunResponse,
   TradingDaysOut,
   UniverseOut,
-} from "@decile/api-client";
+} from "@baskfy/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { browserApi } from "@/lib/api/browser";

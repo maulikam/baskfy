@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ScreenDefinitionSchema } from "@decile/api-client";
+import { ScreenDefinitionSchema } from "@baskfy/api-client";
 
 import { COVERED_FIELDS, FILTER_GROUPS, ALWAYS_VISIBLE_FIELDS } from "@/lib/screens/groups";
 import { CUSTOM_FILTER_OPERAND_KEYS } from "@/lib/screens/operands";
@@ -11,7 +11,7 @@ import { CUSTOM_FILTER_OPERAND_KEYS } from "@/lib/screens/operands";
  *     "No filter in docs/01 §2 is missing from the UI (write a test that reads the
  *      ScreenDefinition schema and asserts a form control exists for every field)."
  *
- * The schema is read from the Zod mirror in `@decile/api-client`, which
+ * The schema is read from the Zod mirror in `@baskfy/api-client`, which
  * `packages/api-client/test/parity.test.ts` already pins against the generated JSON Schema — so
  * "the schema" here is the same object the API validates against, not a second copy of it. A field
  * added to `ScreenDefinition` and forgotten in the form fails this test at once.
@@ -127,7 +127,7 @@ describe("the custom-filter operand list", () => {
     /*
      * The authoritative comparison is on the Python side:
      * `packages/core/tests/test_operand_parity.py` reads this very file and asserts it equals
-     * `decile_core.factor_registry.CUSTOM_FILTER_OPERANDS`, which is what the API validates
+     * `baskfy_core.factor_registry.CUSTOM_FILTER_OPERANDS`, which is what the API validates
      * against (docs/06 §"The factor registry"). There is no `/meta/` endpoint publishing that
      * list — docs/07 §Metadata enumerates five and this is not one of them — so the parity test
      * is the link, and this checks the shape docs/01 §2.14 describes.

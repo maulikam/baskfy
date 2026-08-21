@@ -1,6 +1,6 @@
 "use client";
 
-import type { TradeOut } from "@decile/api-client";
+import type { TradeOut } from "@baskfy/api-client";
 
 import { EmptyState } from "@/components/data/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";

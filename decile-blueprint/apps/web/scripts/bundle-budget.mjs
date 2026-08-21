@@ -53,7 +53,7 @@ const BUDGETS = [
 function loadManifest() {
   if (!existsSync(MANIFEST)) {
     console.error(
-      `${MANIFEST} does not exist. Run \`pnpm --filter @decile/web run build\` first.`,
+      `${MANIFEST} does not exist. Run \`pnpm --filter @baskfy/web run build\` first.`,
     );
     process.exit(2);
   }

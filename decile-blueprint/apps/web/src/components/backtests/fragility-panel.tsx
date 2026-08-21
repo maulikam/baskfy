@@ -1,6 +1,6 @@
 "use client";
 
-import type { FragilityRunOut } from "@decile/api-client";
+import type { FragilityRunOut } from "@baskfy/api-client";
 
 import { UNKNOWN } from "@/lib/backtests/metrics";
 import { formatPercent } from "@/lib/format";

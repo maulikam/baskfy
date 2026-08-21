@@ -1,4 +1,4 @@
-import type { CellOut } from "@decile/api-client";
+import type { CellOut } from "@baskfy/api-client";
 
 import { display } from "@/lib/instrument/present";
 import { cn } from "@/lib/utils";

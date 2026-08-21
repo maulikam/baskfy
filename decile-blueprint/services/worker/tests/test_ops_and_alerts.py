@@ -6,7 +6,7 @@ record and an alert**" — is asserted here, twice and at two levels:
 * :class:`TestAKilledWorker` spawns a real ``python`` subprocess that opens a run and starts the
   chain, ``SIGKILL``s it, and then asserts on what the database was left holding. Nothing is
   mocked: the process dies the way a worker dies. It needs a live database, so it skips without
-  ``DECILE_TEST_DATABASE_URL``.
+  ``BASKFY_TEST_DATABASE_URL``.
 * :class:`TestTheReaper` asserts the same thing at the transaction level, which is fast, runs
   everywhere, and is what will actually catch a regression in the reaper's SQL.
 
@@ -32,16 +32,16 @@ from helpers import TRADE_DATE, requires_db
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from decile_api.email import Mailer, Message
-from decile_api.metrics import ALERTS, REGISTRY
-from decile_api.settings import Settings
-from decile_core.models import PipelineRun
-from decile_worker import ops
-from decile_worker.alerts import Alert, AlertName, Severity, dispatch, webhook_payload
-from decile_worker.celery_app import BEAT_SCHEDULE, QUEUES, TASK_ROUTES
-from decile_worker.orchestrator import PipelineOutcome
-from decile_worker.steps import PipelineStep, RunStatus
-from decile_worker.tasks.quality import CheckResult, CheckStatus, GateReport
+from baskfy_api.email import Mailer, Message
+from baskfy_api.metrics import ALERTS, REGISTRY
+from baskfy_api.settings import Settings
+from baskfy_core.models import PipelineRun
+from baskfy_worker import ops
+from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch, webhook_payload
+from baskfy_worker.celery_app import BEAT_SCHEDULE, QUEUES, TASK_ROUTES
+from baskfy_worker.orchestrator import PipelineOutcome
+from baskfy_worker.steps import PipelineStep, RunStatus
+from baskfy_worker.tasks.quality import CheckResult, CheckStatus, GateReport
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[3]
 
@@ -78,11 +78,11 @@ class TestDispatch:
             runbook="docs/runbooks/pipeline-failed.md",
         )
         before = REGISTRY.get_sample_value(
-            "decile_alerts_total", {"alert": "pipeline_failed", "severity": "critical"}
+            "baskfy_alerts_total", {"alert": "pipeline_failed", "severity": "critical"}
         )
         payload = await dispatch(alert, _settings())
         after = REGISTRY.get_sample_value(
-            "decile_alerts_total", {"alert": "pipeline_failed", "severity": "critical"}
+            "baskfy_alerts_total", {"alert": "pipeline_failed", "severity": "critical"}
         )
 
         assert _delivered(payload) == ["log"]
@@ -250,7 +250,7 @@ class TestKiteTokenCheck:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Local development runs on fixtures and has no Kite credentials at all."""
-        from decile_providers import settings as provider_settings  # noqa: PLC0415
+        from baskfy_providers import settings as provider_settings  # noqa: PLC0415
 
         monkeypatch.setattr(
             provider_settings,
@@ -267,8 +267,8 @@ class TestKiteTokenCheck:
         """docs/09 calls this "the #1 pipeline failure"."""
         from cryptography.fernet import Fernet  # noqa: PLC0415
 
-        from decile_providers import settings as provider_settings  # noqa: PLC0415
-        from decile_providers.tokens import AccessTokenStore  # noqa: PLC0415
+        from baskfy_providers import settings as provider_settings  # noqa: PLC0415
+        from baskfy_providers.tokens import AccessTokenStore  # noqa: PLC0415
 
         key = Fernet.generate_key().decode()
         path = tmp_path / "kite-token.enc"
@@ -295,8 +295,8 @@ class TestKiteTokenCheck:
         """A token replaced at 18:00 IST costs nothing; one replaced at 21:00 costs a night."""
         from cryptography.fernet import Fernet  # noqa: PLC0415
 
-        from decile_providers import settings as provider_settings  # noqa: PLC0415
-        from decile_providers.tokens import AccessTokenStore  # noqa: PLC0415
+        from baskfy_providers import settings as provider_settings  # noqa: PLC0415
+        from baskfy_providers.tokens import AccessTokenStore  # noqa: PLC0415
 
         key = Fernet.generate_key().decode()
         path = tmp_path / "kite-token.enc"
@@ -352,10 +352,10 @@ class TestTheBeatSchedule:
     @pytest.mark.parametrize(
         "task",
         [
-            "decile.ops.reap_abandoned_runs",
-            "decile.ops.check_publish_deadline",
-            "decile.ops.check_kite_token",
-            "decile.ops.check_queue_backlog",
+            "baskfy.ops.reap_abandoned_runs",
+            "baskfy.ops.check_publish_deadline",
+            "baskfy.ops.check_kite_token",
+            "baskfy.ops.check_queue_backlog",
         ],
     )
     def test_every_ops_check_is_scheduled(self, task: str) -> None:
@@ -374,7 +374,7 @@ class TestTheBeatSchedule:
         """docs/02: `default` is "orchestration, publishing, alerts ... short and
         latency-sensitive". An alert queued behind a two-hour backfill chunk is an alert nobody
         gets."""
-        assert TASK_ROUTES["decile.ops.*"]["queue"] == "default"
+        assert TASK_ROUTES["baskfy.ops.*"]["queue"] == "default"
 
 
 # ---------------------------------------------------------------------------
@@ -500,15 +500,15 @@ class TestThePublishDeadline:
 
 
 #: The script the killed-worker test runs. It opens a durable run row exactly the way
-#: ``decile.pipeline.nightly`` does, prints the id so the parent knows what to look for, and then
+#: ``baskfy.pipeline.nightly`` does, prints the id so the parent knows what to look for, and then
 #: sits inside a transaction that has already written step rows — which is the state a worker is
 #: in when it is killed halfway through docs/03's chain.
 _VICTIM = textwrap.dedent(
     """
     import asyncio, datetime as dt, sys
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-    from decile_worker import ops
-    from decile_worker.steps import PipelineStep, record_step
+    from baskfy_worker import ops
+    from baskfy_worker.steps import PipelineStep, record_step
 
     URL, TRADE_DATE = sys.argv[1], dt.date.fromisoformat(sys.argv[2])
 
@@ -594,7 +594,7 @@ class TestAKilledWorker:
                 assert run.data_version is None
 
                 # 3. The step rows did NOT survive — the chain's transaction rolled back. That is
-                #    `decile_worker.orchestrator`'s documented shape, and it is why a run stuck in
+                #    `baskfy_worker.orchestrator`'s documented shape, and it is why a run stuck in
                 #    `running` with no steps is diagnostic of a killed worker
                 #    (docs/runbooks/pipeline-failed.md §3).
                 steps = (
@@ -635,7 +635,7 @@ def test_the_alert_counter_is_registered() -> None:
     ALERTS.labels("pipeline_failed", "critical")
     assert (
         REGISTRY.get_sample_value(
-            "decile_alerts_total", {"alert": "pipeline_failed", "severity": "critical"}
+            "baskfy_alerts_total", {"alert": "pipeline_failed", "severity": "critical"}
         )
         is not None
     )

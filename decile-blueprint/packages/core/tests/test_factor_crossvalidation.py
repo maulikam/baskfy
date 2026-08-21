@@ -39,10 +39,10 @@ from factor_corpus import (
 )
 from factor_oracle import blend_pandas, compute_factors_pandas, to_float_or_none
 
-from decile_core.blends import BLEND_SHAPES, SHARPE_ONLY_SHAPES, blend_expr, shape_suffix
-from decile_core.factors import compute_factors, compute_factors_unrounded
-from decile_core.precision import apply_storage_precision
-from decile_core.windows import VOL_AVG_BARS, WINDOW_MONTHS, window_lengths
+from baskfy_core.blends import BLEND_SHAPES, SHARPE_ONLY_SHAPES, blend_expr, shape_suffix
+from baskfy_core.factors import compute_factors, compute_factors_unrounded
+from baskfy_core.precision import apply_storage_precision
+from baskfy_core.windows import VOL_AVG_BARS, WINDOW_MONTHS, window_lengths
 
 #: Prompt 19 §3's tolerance, applied to every factor whose unit is a percent, a ratio or a count.
 ABSOLUTE_TOLERANCE: Final = 1e-4

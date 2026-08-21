@@ -2,16 +2,16 @@
 #
 # Two targets, because there are two runtimes that hold metrics:
 #
-#   decile-api      the FastAPI process. Serves `/metrics` outside `/api/v1` (see
-#                   `decile_api.app.prometheus_metrics` for why). Carries the request histogram,
+#   baskfy-api      the FastAPI process. Serves `/metrics` outside `/api/v1` (see
+#                   `baskfy_api.app.prometheus_metrics` for why). Carries the request histogram,
 #                   the cache hit rate, the queue depths, and the database-derived pipeline gauges.
-#   decile-worker   each Celery worker process, on its own port (DECILE_WORKER_METRICS_PORT,
+#   baskfy-worker   each Celery worker process, on its own port (BASKFY_WORKER_METRICS_PORT,
 #                   default 9101). Carries the pipeline step *histogram* and the provider counters.
 #
 # The Next.js app is deliberately NOT a target. It holds no metrics of its own: every number a page
 # renders comes from the API, and instrumenting the render would count the same request twice.
 #
-# `/metrics` is unauthenticated unless DECILE_METRICS_TOKEN is set. docs/11 §Security's threat model
+# `/metrics` is unauthenticated unless BASKFY_METRICS_TOKEN is set. docs/11 §Security's threat model
 # is the public internet; this file assumes Prometheus and the application share a private network
 # (docs/02 §Runtime: "Docker Compose on a single Hetzner CCX"). If they do not, set the token and
 # uncomment the `authorization` block below.
@@ -32,15 +32,15 @@ alerting:
         - targets: ["alertmanager:9093"]
 
 scrape_configs:
-  - job_name: decile-api
+  - job_name: baskfy-api
     metrics_path: /metrics
     static_configs:
       - targets: ["api:8000"]
     # authorization:
     #   type: Bearer
-    #   credentials_file: /etc/prometheus/decile-metrics-token
+    #   credentials_file: /etc/prometheus/baskfy-metrics-token
 
-  - job_name: decile-worker
+  - job_name: baskfy-worker
     metrics_path: /metrics
     static_configs:
       - targets: ["worker:9101"]

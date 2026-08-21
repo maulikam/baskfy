@@ -1,6 +1,6 @@
 "use client";
 
-import type { ProblemOut } from "@decile/api-client";
+import type { ProblemOut } from "@baskfy/api-client";
 import { TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";

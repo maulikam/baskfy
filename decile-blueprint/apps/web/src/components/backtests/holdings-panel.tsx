@@ -1,6 +1,6 @@
 "use client";
 
-import type { BacktestHoldingOut } from "@decile/api-client";
+import type { BacktestHoldingOut } from "@baskfy/api-client";
 import { useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/data/empty-state";

@@ -15,18 +15,18 @@ from decimal import Decimal
 
 import pytest
 
-from decile_providers.archive import LocalRawArchive, archive_key
-from decile_providers.errors import ProviderUnavailable, UnexpectedPayload, UpstreamUnavailable
-from decile_providers.nse import (
+from baskfy_providers.archive import LocalRawArchive, archive_key
+from baskfy_providers.errors import ProviderUnavailable, UnexpectedPayload, UpstreamUnavailable
+from baskfy_providers.nse import (
     KIND_BHAVCOPY,
     NSEProvider,
     NSERuntime,
     parse_corporate_action_purpose,
 )
-from decile_providers.ports import REFERENCE_CAPABILITIES, Capability
-from decile_providers.records import BHAVCOPY_SCHEMA
-from decile_providers.retry import RetryPolicy
-from decile_providers.settings import ProviderSettings
+from baskfy_providers.ports import REFERENCE_CAPABILITIES, Capability
+from baskfy_providers.records import BHAVCOPY_SCHEMA
+from baskfy_providers.retry import RetryPolicy
+from baskfy_providers.settings import ProviderSettings
 
 ON = dt.date(2026, 8, 18)
 

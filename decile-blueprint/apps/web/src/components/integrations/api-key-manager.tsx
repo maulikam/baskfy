@@ -1,6 +1,6 @@
 "use client";
 
-import type { ApiKeyOut } from "@decile/api-client";
+import type { ApiKeyOut } from "@baskfy/api-client";
 import { useState, useTransition } from "react";
 
 import {
@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
  *
  * **The secret is shown exactly once**, in the panel below the form, and nothing on this page ever
  * fetches it again — the API cannot return it a second time, because it stores a SHA-256 digest
- * and not the value (`decile_api.api_keys`). The panel therefore says so in as many words rather
+ * and not the value (`baskfy_api.api_keys`). The panel therefore says so in as many words rather
  * than letting a user assume they can come back for it.
  *
  * Revocation is immediate and the copy says that too: Prompt 20's first acceptance criterion is

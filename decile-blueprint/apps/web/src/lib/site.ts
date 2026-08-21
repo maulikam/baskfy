@@ -1,8 +1,8 @@
 /** Site-wide constants — docs/14 §"The name" and §"Positioning line". */
 export const SITE_NAME = "Decile";
 
-/** docs/14: "`decile.in` (primary)". */
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://decile.in";
+/** docs/14: "`baskfy.com` (primary)". */
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://baskfy.com";
 
 /** docs/14 §"Positioning line", verbatim. */
 export const SITE_TAGLINE =

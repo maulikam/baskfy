@@ -5,8 +5,8 @@ what were they measured against?**
 
 ```
 make up                                     # postgres + redis
-export DECILE_TEST_DATABASE_URL=postgresql+asyncpg://decile:decile@localhost:5433/decile_test
-export DECILE_REDIS_URL=redis://localhost:6380/0
+export BASKFY_TEST_DATABASE_URL=postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_test
+export BASKFY_REDIS_URL=redis://localhost:6380/0
 
 make bench                                  # every server-side budget -> AS-MEASURED.md
 make web-build && make bundle               # the client-JS budget

@@ -8,7 +8,7 @@ import type {
   ExportLinkOut,
   HoldingPage,
   TradePage,
-} from "@decile/api-client";
+} from "@baskfy/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { accessToken, browserApi } from "@/lib/api/browser";

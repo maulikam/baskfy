@@ -7,10 +7,10 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from decile_core.reference_export import EXPORT_COLUMNS
-from decile_core.screen_definition import ScreenDefinition
-from decile_core.seed_data import EXAMPLE_SCREENS, PLANS, index_def_rows
-from decile_core.universes import (
+from baskfy_core.reference_export import EXPORT_COLUMNS
+from baskfy_core.screen_definition import ScreenDefinition
+from baskfy_core.seed_data import EXAMPLE_SCREENS, PLANS, index_def_rows
+from baskfy_core.universes import (
     CONTAINMENT_IDENTITIES,
     FIRST_NON_UNIVERSE_INDEX_ID,
     MARKET_HEALTH_SLUGS,

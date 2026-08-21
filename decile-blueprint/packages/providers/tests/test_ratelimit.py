@@ -19,8 +19,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from decile_providers.errors import RateLimited
-from decile_providers.ratelimit import RedisLike, RedisTokenBucket, TokenBucketConfig
+from baskfy_providers.errors import RateLimited
+from baskfy_providers.ratelimit import RedisLike, RedisTokenBucket, TokenBucketConfig
 
 pytestmark = pytest.mark.redis
 
@@ -31,7 +31,7 @@ KITE_RATE: float = 3.0
 @pytest.fixture
 def bucket_key(request: pytest.FixtureRequest) -> str:
     """A key per test, so a leftover bucket cannot make a later test pass or fail spuriously."""
-    return f"decile:test:ratelimit:{request.node.name}"
+    return f"baskfy:test:ratelimit:{request.node.name}"
 
 
 def make_bucket(

@@ -43,10 +43,10 @@ with it, say so out loud rather than deviating quietly.
 ```
 apps/web/                 Next.js 15                                    (Prompt 8)
 services/api/             FastAPI + alembic/ + tests/                   (Prompt 7)
-services/worker/          decile_worker — Celery, Beat, the ten nightly steps
-packages/core/            decile_core — domain, factors, screener. NO I/O.
-packages/providers/       decile_providers — Kite / NSE / composite / fixtures
-packages/api-client/      @decile/api-client — Zod contracts, generated TS client
+services/worker/          baskfy_worker — Celery, Beat, the ten nightly steps
+packages/core/            baskfy_core — domain, factors, screener. NO I/O.
+packages/providers/       baskfy_providers — Kite / NSE / composite / fixtures
+packages/api-client/      @baskfy/api-client — Zod contracts, generated TS client
 infra/docker/             compose.yml, initdb/
 tests/fixtures/           the reference CSV export and shared corpora
 docs/                     the specification
@@ -59,90 +59,90 @@ database, a network or a disk belongs in `services/` or `packages/providers`.
 
 | Looking for | It is in |
 |---|---|
-| Every table's model | `packages/core/src/decile_core/models/` |
-| Storage precision decisions | `packages/core/src/decile_core/models/base.py` |
-| The 14 universes and their mask bits | `packages/core/src/decile_core/universes.py` |
-| `ScreenDefinition` (Pydantic) | `packages/core/src/decile_core/screen_definition.py` |
-| **The screener query builder (pure)** | `packages/core/src/decile_core/screener.py` |
-| Screen execution, as-of resolution, cache | `services/api/src/decile_api/screener.py` |
+| Every table's model | `packages/core/src/baskfy_core/models/` |
+| Storage precision decisions | `packages/core/src/baskfy_core/models/base.py` |
+| The 14 universes and their mask bits | `packages/core/src/baskfy_core/universes.py` |
+| `ScreenDefinition` (Pydantic) | `packages/core/src/baskfy_core/screen_definition.py` |
+| **The screener query builder (pure)** | `packages/core/src/baskfy_core/screener.py` |
+| Screen execution, as-of resolution, cache | `services/api/src/baskfy_api/screener.py` |
 | Screener deviations from `docs/06` | `docs/06a-screener-implementation-notes.md` |
-| FastAPI app, middleware, error handlers | `services/api/src/decile_api/app.py` |
-| Endpoints (`/meta/*`, `/screens/*`, `/instruments/*`, `/indices/*`, …) | `services/api/src/decile_api/routers/` |
-| Factsheet assembly, percentiles, medians | `services/api/src/decile_api/instruments.py` |
-| Dashboard, breadth and listings queries | `services/api/src/decile_api/market_data.py` |
-| RFC 9457 problem catalogue | `services/api/src/decile_api/problems.py` |
-| JWT verification, entitlement stub | `services/api/src/decile_api/{auth,entitlements}.py` |
-| **Argon2id, OTP, opaque tokens** | `services/api/src/decile_api/security.py` |
-| Login, rotation, lockout, erasure | `services/api/src/decile_api/auth_service.py` |
-| Double-submit CSRF + the auth cookies | `services/api/src/decile_api/csrf.py` |
-| Email templates and transports | `services/api/src/decile_api/email/` |
-| Log redaction (no secret ever printed) | `services/api/src/decile_api/logging.py` |
+| FastAPI app, middleware, error handlers | `services/api/src/baskfy_api/app.py` |
+| Endpoints (`/meta/*`, `/screens/*`, `/instruments/*`, `/indices/*`, …) | `services/api/src/baskfy_api/routers/` |
+| Factsheet assembly, percentiles, medians | `services/api/src/baskfy_api/instruments.py` |
+| Dashboard, breadth and listings queries | `services/api/src/baskfy_api/market_data.py` |
+| RFC 9457 problem catalogue | `services/api/src/baskfy_api/problems.py` |
+| JWT verification, entitlement stub | `services/api/src/baskfy_api/{auth,entitlements}.py` |
+| **Argon2id, OTP, opaque tokens** | `services/api/src/baskfy_api/security.py` |
+| Login, rotation, lockout, erasure | `services/api/src/baskfy_api/auth_service.py` |
+| Double-submit CSRF + the auth cookies | `services/api/src/baskfy_api/csrf.py` |
+| Email templates and transports | `services/api/src/baskfy_api/email/` |
+| Log redaction (no secret ever printed) | `services/api/src/baskfy_api/logging.py` |
 | Auth deviations from `docs/07`/`docs/11` | `docs/12a-auth-implementation-notes.md` |
-| **The entitlement service (one place, server truth)** | `services/api/src/decile_api/entitlements.py` |
-| Entitlement shape, tiers, `plan.features` parsing | `packages/core/src/decile_core/entitlements.py` |
-| Razorpay client + every signature check | `services/api/src/decile_api/razorpay.py` |
-| Checkout, webhook, subscription lifecycle | `services/api/src/decile_api/billing.py` |
-| Invoice numbering, GST wiring, R2 storage | `services/api/src/decile_api/invoices.py` |
-| GST arithmetic (pure) | `packages/core/src/decile_core/gst.py` |
-| The tax invoice, as a document (pure) | `packages/core/src/decile_core/invoice.py` |
-| The minimal PDF writer (pure, no dependency) | `packages/core/src/decile_core/pdf.py` |
-| `/plans`, `/checkout/session`, `/webhooks/razorpay`, `/invoices` | `services/api/src/decile_api/routers/billing.py` |
-| Billing tables not in `docs/04` | `packages/core/src/decile_core/models/billing.py` |
+| **The entitlement service (one place, server truth)** | `services/api/src/baskfy_api/entitlements.py` |
+| Entitlement shape, tiers, `plan.features` parsing | `packages/core/src/baskfy_core/entitlements.py` |
+| Razorpay client + every signature check | `services/api/src/baskfy_api/razorpay.py` |
+| Checkout, webhook, subscription lifecycle | `services/api/src/baskfy_api/billing.py` |
+| Invoice numbering, GST wiring, R2 storage | `services/api/src/baskfy_api/invoices.py` |
+| GST arithmetic (pure) | `packages/core/src/baskfy_core/gst.py` |
+| The tax invoice, as a document (pure) | `packages/core/src/baskfy_core/invoice.py` |
+| The minimal PDF writer (pure, no dependency) | `packages/core/src/baskfy_core/pdf.py` |
+| `/plans`, `/checkout/session`, `/webhooks/razorpay`, `/invoices` | `services/api/src/baskfy_api/routers/billing.py` |
+| Billing tables not in `docs/04` | `packages/core/src/baskfy_core/models/billing.py` |
 | `/pricing` and `/invoices` pages | `apps/web/src/app/(app)/{pricing,invoices}/` |
 | Plan card, checkout button, invoice table | `apps/web/src/components/billing/` |
 | Plan and invoice reads, price formatting | `apps/web/src/lib/billing/` |
 | **Every Prompt 13 decision taken under ambiguity** | `docs/DECISIONS.md` §13 |
-| **The rank-buffer rebalance rule (pure)** | `packages/core/src/decile_core/rebalance.py` |
-| Portfolio CSV parser + the sample file (pure) | `packages/core/src/decile_core/portfolio_csv.py` |
-| Symbol resolution, holdings, rebalance execution | `services/api/src/decile_api/portfolios.py` |
-| `/portfolios`, `/import-csv`, `/rebalance`, history | `services/api/src/decile_api/routers/portfolios.py` |
-| Rebalance history table (not in `docs/04`) | `decile_core.models.accounts.PortfolioRebalance` |
+| **The rank-buffer rebalance rule (pure)** | `packages/core/src/baskfy_core/rebalance.py` |
+| Portfolio CSV parser + the sample file (pure) | `packages/core/src/baskfy_core/portfolio_csv.py` |
+| Symbol resolution, holdings, rebalance execution | `services/api/src/baskfy_api/portfolios.py` |
+| `/portfolios`, `/import-csv`, `/rebalance`, history | `services/api/src/baskfy_api/routers/portfolios.py` |
+| Rebalance history table (not in `docs/04`) | `baskfy_core.models.accounts.PortfolioRebalance` |
 | The wizard, the three columns, the parse report | `apps/web/src/components/portfolios/` |
 | Portfolio reads, clipboard and CSV payloads | `apps/web/src/lib/portfolios/` |
 | **Every Prompt 14 decision taken under ambiguity** | `docs/DECISIONS.md` §14 |
-| **The backtest engine (pure, point-in-time)** | `packages/core/src/decile_core/backtest.py` |
-| The look-ahead guard (`PointInTimeReader`) | `packages/core/src/decile_core/backtest.py` |
-| Backtest metrics and artefacts (pure) | `packages/core/src/decile_core/backtest_metrics.py` |
+| **The backtest engine (pure, point-in-time)** | `packages/core/src/baskfy_core/backtest.py` |
+| The look-ahead guard (`PointInTimeReader`) | `packages/core/src/baskfy_core/backtest.py` |
+| Backtest metrics and artefacts (pure) | `packages/core/src/baskfy_core/backtest_metrics.py` |
 | The synthetic market the six correctness tests run on | `packages/core/tests/backtest_fixtures.py` |
-| Panel loading, screen-per-rebalance-date, fragility | `services/worker/src/decile_worker/backtest.py` |
-| The backtest job (claim, simulate, store, publish) | `services/worker/src/decile_worker/tasks/backtests.py` |
-| Concurrency caps, artefact keys, signed links, payload | `services/api/src/decile_api/backtests.py` |
-| `/backtests`, `/trades`, `/holdings`, `/export`, SSE | `services/api/src/decile_api/routers/backtests.py` |
-| Enqueuing to Celery from the API | `services/api/src/decile_api/queue.py` |
+| Panel loading, screen-per-rebalance-date, fragility | `services/worker/src/baskfy_worker/backtest.py` |
+| The backtest job (claim, simulate, store, publish) | `services/worker/src/baskfy_worker/tasks/backtests.py` |
+| Concurrency caps, artefact keys, signed links, payload | `services/api/src/baskfy_api/backtests.py` |
+| `/backtests`, `/trades`, `/holdings`, `/export`, SSE | `services/api/src/baskfy_api/routers/backtests.py` |
+| Enqueuing to Celery from the API | `services/api/src/baskfy_api/queue.py` |
 | Config form, progress, results, fragility, assumptions | `apps/web/src/components/backtests/` |
 | Backtest reads, the SSE reader, metric labels | `apps/web/src/lib/backtests/` |
 | **Every Prompt 15 decision taken under ambiguity** | `docs/DECISIONS.md` §15 |
 | **The docs/11 budget table, and what each was measured on** | `benchmarks/AS-MEASURED.md` |
 | Budgets as data + the measurement recorder | `benchmarks/budgets.py` |
 | The concurrent load driver (50 screen runs) | `benchmarks/load_screens.py` |
-| ETags, `stale-while-revalidate`, the 304 path | `services/api/src/decile_api/http_cache.py` |
-| The single-flight that collapses a cache stampede | `decile_api.screener.SingleFlight` |
-| Hot queries, `EXPLAIN ANALYZE`, the plan gate | `services/api/src/decile_api/query_plans.py` |
+| ETags, `stale-while-revalidate`, the 304 path | `services/api/src/baskfy_api/http_cache.py` |
+| The single-flight that collapses a cache stampede | `baskfy_api.screener.SingleFlight` |
+| Hot queries, `EXPLAIN ANALYZE`, the plan gate | `services/api/src/baskfy_api/query_plans.py` |
 | The committed plan baseline CI regresses against | `services/api/tests/query_plan_baseline.json` |
-| Connection-pool sizing and the pgbouncer note | `services/api/src/decile_api/db.py` |
+| Connection-pool sizing and the pgbouncer note | `services/api/src/baskfy_api/db.py` |
 | Indexes + the two continuous aggregates | `services/api/alembic/versions/0008_performance_indexes.py` |
 | Client-JS budget (250 KB gzip, screens route) | `apps/web/scripts/bundle-budget.mjs` |
 | **Every Prompt 16 decision taken under ambiguity** | `docs/DECISIONS.md` §16 |
 | **The five runbooks (start here at 3am)** | `docs/runbooks/` |
-| OpenTelemetry: tracer, attribute vocabulary, `traceparent` | `services/api/src/decile_api/telemetry.py` |
-| Sentry, for all three Python runtimes | `services/api/src/decile_api/sentry.py` |
-| Every Prometheus metric, and the DB-derived gauges | `services/api/src/decile_api/metrics.py` |
-| Worker tracing, Sentry, `/metrics` port, retry hooks | `services/worker/src/decile_worker/telemetry.py` |
-| The six alert rules this codebase raises itself | `services/worker/src/decile_worker/alerts.py` |
-| Stale-run reaper, publish SLO, token and queue checks | `services/worker/src/decile_worker/ops.py` |
+| OpenTelemetry: tracer, attribute vocabulary, `traceparent` | `services/api/src/baskfy_api/telemetry.py` |
+| Sentry, for all three Python runtimes | `services/api/src/baskfy_api/sentry.py` |
+| Every Prometheus metric, and the DB-derived gauges | `services/api/src/baskfy_api/metrics.py` |
+| Worker tracing, Sentry, `/metrics` port, retry hooks | `services/worker/src/baskfy_worker/telemetry.py` |
+| The six alert rules this codebase raises itself | `services/worker/src/baskfy_worker/alerts.py` |
+| Stale-run reaper, publish SLO, token and queue checks | `services/worker/src/baskfy_worker/ops.py` |
 | Alert rules Prometheus evaluates + scrape config | `infra/prometheus/` |
 | Grafana dashboards and provisioning | `infra/grafana/` |
-| `/admin/*` queries and the two enqueueing actions | `services/api/src/decile_api/admin.py` |
-| `/admin/*` routes (every one staff-gated) | `services/api/src/decile_api/routers/admin.py` |
-| Staff flag, entitlement override, admin audit log | `packages/core/src/decile_core/models/admin.py` |
+| `/admin/*` queries and the two enqueueing actions | `services/api/src/baskfy_api/admin.py` |
+| `/admin/*` routes (every one staff-gated) | `services/api/src/baskfy_api/routers/admin.py` |
+| Staff flag, entitlement override, admin audit log | `packages/core/src/baskfy_core/models/admin.py` |
 | The admin pages | `apps/web/src/app/(app)/admin/` |
 | `pg_dump`, restore, WAL archiving | `infra/backup/` |
-| The restore drill's data-integrity assertions | `services/api/src/decile_api/integrity.py` |
+| The restore drill's data-integrity assertions | `services/api/src/baskfy_api/integrity.py` |
 | The monthly restore drill | `.github/workflows/restore-drill.yml` |
 | **Every Prompt 17 decision taken under ambiguity** | `docs/DECISIONS.md` §17 |
 | **The per-package coverage gate (core >= 90%, api >= 80%)** | `tools/coverage_gate.py` |
-| The reconciliation checks against the reference export (pure) | `packages/core/src/decile_core/reconcile.py` |
-| `make reconcile`, and the committed report | `services/worker/src/decile_worker/reconcile_cli.py`, `reconciliation/REPORT.md` |
+| The reconciliation checks against the reference export (pure) | `packages/core/src/baskfy_core/reconcile.py` |
+| `make reconcile`, and the committed report | `services/worker/src/baskfy_worker/reconcile_cli.py`, `reconciliation/REPORT.md` |
 | The naive pandas oracle, and the 25-instrument corpus | `packages/core/tests/factor_oracle.py`, `factor_corpus.py` |
 | Hypothesis properties for the factor engine | `packages/core/tests/test_factor_properties.py` |
 | Mutation testing, and its committed survivor report | `tools/mutation.py`, `reconciliation/MUTANTS.md` |
@@ -157,25 +157,25 @@ database, a network or a disk belongs in `services/` or `packages/providers`.
 | Cookie consent: the record, the default, the banner | `apps/web/src/lib/consent/state.ts`, `apps/web/src/components/consent/` |
 | The banned-phrase copy lint | `apps/web/src/lib/__tests__/copy-lint.test.ts` |
 | The disclaimer sweep and the static-generation check | `apps/web/e2e/{disclaimer-sweep,static-generation}.spec.ts` |
-| The contact form's endpoint | `services/api/src/decile_api/routers/support.py` |
+| The contact form's endpoint | `services/api/src/baskfy_api/routers/support.py` |
 | **Every Prompt 18 decision taken under ambiguity** | `docs/DECISIONS.md` §18 |
-| **The public-API compliance gate (docs/11 §Compliance, as a constant)** | `packages/core/src/decile_core/public_api.py` |
-| The public read API, and the two locks on it | `services/api/src/decile_api/routers/public.py` |
-| The interactive reference + the curl/Python/TS samples | `services/api/src/decile_api/public_docs.py` |
-| API keys: minting, verification, rotation, usage | `services/api/src/decile_api/api_keys.py` |
-| Key shape, scopes (all reads), the `dk_` format | `packages/core/src/decile_core/api_keys.py` |
-| **The screen diff behind every alert email (pure)** | `packages/core/src/decile_core/screen_diff.py` |
-| Alert subscriptions, dispatch, unsubscribe | `services/api/src/decile_api/alerts.py` |
-| The alert email, and its committed snapshot | `decile_api.email.templates.screen_alert`, `tests/fixtures/alerts/` |
-| Webhook signing, retry and backoff | `services/api/src/decile_api/webhooks.py` |
-| The nightly alert dispatch + the webhook sweeper | `services/worker/src/decile_worker/tasks/alerts.py` |
-| `/keys`, `/alerts`, `/webhook-endpoints`, `/admin/public-api` | `services/api/src/decile_api/routers/` |
+| **The public-API compliance gate (docs/11 §Compliance, as a constant)** | `packages/core/src/baskfy_core/public_api.py` |
+| The public read API, and the two locks on it | `services/api/src/baskfy_api/routers/public.py` |
+| The interactive reference + the curl/Python/TS samples | `services/api/src/baskfy_api/public_docs.py` |
+| API keys: minting, verification, rotation, usage | `services/api/src/baskfy_api/api_keys.py` |
+| Key shape, scopes (all reads), the `dk_` format | `packages/core/src/baskfy_core/api_keys.py` |
+| **The screen diff behind every alert email (pure)** | `packages/core/src/baskfy_core/screen_diff.py` |
+| Alert subscriptions, dispatch, unsubscribe | `services/api/src/baskfy_api/alerts.py` |
+| The alert email, and its committed snapshot | `baskfy_api.email.templates.screen_alert`, `tests/fixtures/alerts/` |
+| Webhook signing, retry and backoff | `services/api/src/baskfy_api/webhooks.py` |
+| The nightly alert dispatch + the webhook sweeper | `services/worker/src/baskfy_worker/tasks/alerts.py` |
+| `/keys`, `/alerts`, `/webhook-endpoints`, `/admin/public-api` | `services/api/src/baskfy_api/routers/` |
 | The key, alert and gate pages | `apps/web/src/app/(app)/{api-keys,alerts,admin/public-api}/` |
 | **Every Prompt 20 decision taken under ambiguity** | `docs/DECISIONS.md` §20 |
 | Auth tables not in `docs/04` | `docs/04c-auth-tables-addendum.md` |
-| HTTP rate limiting (docs/07 §Conventions) | `services/api/src/decile_api/ratelimit.py` |
-| Streaming CSV export | `services/api/src/decile_api/csv_export.py` |
-| `openapi.json` emitter | `services/api/src/decile_api/openapi.py` |
+| HTTP rate limiting (docs/07 §Conventions) | `services/api/src/baskfy_api/ratelimit.py` |
+| Streaming CSV export | `services/api/src/baskfy_api/csv_export.py` |
+| `openapi.json` emitter | `services/api/src/baskfy_api/openapi.py` |
 | Generated TS client (never hand-edit) | `packages/api-client/src/generated/schema.ts` |
 | API deviations from `docs/07` | `docs/07a-api-implementation-notes.md` |
 | **Design tokens (Tailwind v4 has no config file)** | `apps/web/src/app/globals.css` |
@@ -193,7 +193,7 @@ database, a network or a disk belongs in `services/` or `packages/providers`.
 | Screens list, editor, columns editor | `apps/web/src/app/(app)/screens/` |
 | Filter form, results panel, peek drawer | `apps/web/src/components/screens/` |
 | Filter groups, URL state, active counts | `apps/web/src/lib/screens/` |
-| The 93-column reference CSV export | `services/api/src/decile_api/csv_export.py` |
+| The 93-column reference CSV export | `services/api/src/baskfy_api/csv_export.py` |
 | Screens-UI deviations from `docs/08`/`docs/01` §2 | `docs/09a-screens-ui-implementation-notes.md` |
 | Instrument page, OG image, JSON-LD | `apps/web/src/app/(app)/instruments/[symbol]/` |
 | Factsheet blocks (docs/01 §5) | `apps/web/src/components/instrument/` |
@@ -203,40 +203,40 @@ database, a network or a disk belongs in `services/` or `packages/providers`.
 | Gauges, breadth chart, dashboard table | `apps/web/src/components/market/` |
 | Market-surface deviations from `docs/01` §6-7 | `docs/11a-market-surfaces-notes.md` |
 | `ScreenDefinition` (Zod mirror) | `packages/api-client/src/screen-definition.ts` |
-| The trading calendar | `packages/core/src/decile_core/trading_calendar.py` |
-| Reference CSV reader | `packages/core/src/decile_core/reference_export.py` |
-| Seed rows (plans, screens, universes) | `packages/core/src/decile_core/seed_data.py` |
-| Seed CLI (touches the DB) | `services/api/src/decile_api/seed.py` |
+| The trading calendar | `packages/core/src/baskfy_core/trading_calendar.py` |
+| Reference CSV reader | `packages/core/src/baskfy_core/reference_export.py` |
+| Seed rows (plans, screens, universes) | `packages/core/src/baskfy_core/seed_data.py` |
+| Seed CLI (touches the DB) | `services/api/src/baskfy_api/seed.py` |
 | Migrations | `services/api/alembic/versions/` |
-| Provider ports and records | `packages/providers/src/decile_providers/{ports,records}.py` |
-| Kite / NSE / composite / fixtures | `packages/providers/src/decile_providers/{kite,nse,composite,fixtures}.py` |
-| Rate limiter, retry, circuit breaker | `packages/providers/src/decile_providers/{ratelimit,retry,circuit}.py` |
-| Encrypted Kite token | `packages/providers/src/decile_providers/tokens.py` |
-| Raw-file archive (docs/09) | `packages/providers/src/decile_providers/archive.py` |
+| Provider ports and records | `packages/providers/src/baskfy_providers/{ports,records}.py` |
+| Kite / NSE / composite / fixtures | `packages/providers/src/baskfy_providers/{kite,nse,composite,fixtures}.py` |
+| Rate limiter, retry, circuit breaker | `packages/providers/src/baskfy_providers/{ratelimit,retry,circuit}.py` |
+| Encrypted Kite token | `packages/providers/src/baskfy_providers/tokens.py` |
+| Raw-file archive (docs/09) | `packages/providers/src/baskfy_providers/archive.py` |
 | Provider fixtures + provenance | `tests/fixtures/providers/` |
 | The suite-wide network block | `network_guard.py` |
-| Celery app, queues, Beat schedule | `services/worker/src/decile_worker/celery_app.py` |
-| The ten nightly steps | `services/worker/src/decile_worker/tasks/` |
-| Pipeline orchestrator | `services/worker/src/decile_worker/orchestrator.py` |
-| The 8 quality-gate assertions | `services/worker/src/decile_worker/tasks/quality.py` |
-| Adjustment maths (pure) | `packages/core/src/decile_core/adjustments.py` |
-| **The factor engine (pure)** | `packages/core/src/decile_core/factors.py` |
-| Calendar-offset windows | `packages/core/src/decile_core/windows.py` |
-| The 64-factor registry | `packages/core/src/decile_core/factor_registry.py` |
-| Blend shapes + NULL rule | `packages/core/src/decile_core/blends.py` |
-| Storage precision (round at write) | `packages/core/src/decile_core/precision.py` |
-| INFERRED: circuits / skip-month | `packages/core/src/decile_core/{circuits,momentum}.py` |
-| Wasserstein regime | `packages/core/src/decile_core/regime.py` |
-| **Market-health breadth (pure query)** | `packages/core/src/decile_core/breadth.py` |
-| PROS/CONS rules | `packages/core/src/decile_core/pros_cons.py` |
-| Engine ↔ database wiring | `services/worker/src/decile_worker/engine.py` |
-| `factors explain` CLI | `services/worker/src/decile_worker/factors_cli.py` |
-| Trading-day guard + reconciliation | `services/worker/src/decile_worker/calendar.py` |
-| Resumable bar backfill | `services/worker/src/decile_worker/backfill.py` |
-| Reference-data backfill | `services/worker/src/decile_worker/reference_backfill.py` |
-| PIT membership + source tracking | `services/worker/src/decile_worker/tasks/membership.py` |
-| Index dashboard (~145) | `services/worker/src/decile_worker/tasks/snapshots.py` |
-| Listings register | `services/worker/src/decile_worker/tasks/listings.py` |
+| Celery app, queues, Beat schedule | `services/worker/src/baskfy_worker/celery_app.py` |
+| The ten nightly steps | `services/worker/src/baskfy_worker/tasks/` |
+| Pipeline orchestrator | `services/worker/src/baskfy_worker/orchestrator.py` |
+| The 8 quality-gate assertions | `services/worker/src/baskfy_worker/tasks/quality.py` |
+| Adjustment maths (pure) | `packages/core/src/baskfy_core/adjustments.py` |
+| **The factor engine (pure)** | `packages/core/src/baskfy_core/factors.py` |
+| Calendar-offset windows | `packages/core/src/baskfy_core/windows.py` |
+| The 64-factor registry | `packages/core/src/baskfy_core/factor_registry.py` |
+| Blend shapes + NULL rule | `packages/core/src/baskfy_core/blends.py` |
+| Storage precision (round at write) | `packages/core/src/baskfy_core/precision.py` |
+| INFERRED: circuits / skip-month | `packages/core/src/baskfy_core/{circuits,momentum}.py` |
+| Wasserstein regime | `packages/core/src/baskfy_core/regime.py` |
+| **Market-health breadth (pure query)** | `packages/core/src/baskfy_core/breadth.py` |
+| PROS/CONS rules | `packages/core/src/baskfy_core/pros_cons.py` |
+| Engine ↔ database wiring | `services/worker/src/baskfy_worker/engine.py` |
+| `factors explain` CLI | `services/worker/src/baskfy_worker/factors_cli.py` |
+| Trading-day guard + reconciliation | `services/worker/src/baskfy_worker/calendar.py` |
+| Resumable bar backfill | `services/worker/src/baskfy_worker/backfill.py` |
+| Reference-data backfill | `services/worker/src/baskfy_worker/reference_backfill.py` |
+| PIT membership + source tracking | `services/worker/src/baskfy_worker/tasks/membership.py` |
+| Index dashboard (~145) | `services/worker/src/baskfy_worker/tasks/snapshots.py` |
+| Listings register | `services/worker/src/baskfy_worker/tasks/listings.py` |
 
 ## Commands
 
@@ -275,20 +275,20 @@ make backup      pg_dump the local database into .backups/ (no upload)
 make restore     restore a dump into a scratch database: make restore DUMP=.backups/x.dump
 make integrity   assert a database could serve the app: make integrity URL=postgresql+asyncpg://...
 make drill       the monthly restore drill, end to end, against the local stack
-make coverage    per-package coverage gate (needs DECILE_TEST_DATABASE_URL and `make up`)
+make coverage    per-package coverage gate (needs BASKFY_TEST_DATABASE_URL and `make up`)
 make reconcile   reconcile our formulas against the reference export; rewrites reconciliation/REPORT.md
-make mutants     mutation-test decile_core.factors and .screener; writes reconciliation/MUTANTS.md
+make mutants     mutation-test baskfy_core.factors and .screener; writes reconciliation/MUTANTS.md
 ```
 
 The Prometheus + Grafana stack is behind a compose profile, so `make up` does not start it:
 `docker compose -f infra/docker/compose.yml --profile observability up -d`.
 
-`make test-db` needs `DECILE_TEST_DATABASE_URL`. Without it those tests skip rather than fail.
+`make test-db` needs `BASKFY_TEST_DATABASE_URL`. Without it those tests skip rather than fail.
 
 ## Open items carried forward
 
-- **THE PUBLIC API IS OFF, AND TWO THINGS HOLD IT SHUT.** `DECILE_PUBLIC_API_ENABLED` is false
-  everywhere, and `decile_core.public_api.DATA_REDISTRIBUTION_REVIEW.signed_off` is a **source
+- **THE PUBLIC API IS OFF, AND TWO THINGS HOLD IT SHUT.** `BASKFY_PUBLIC_API_ENABLED` is false
+  everywhere, and `baskfy_core.public_api.DATA_REDISTRIBUTION_REVIEW.signed_off` is a **source
   constant** that is `False` and must stay `False` until a lawyer has produced the written
   data-redistribution opinion docs/11 §Compliance requires. The router is not mounted while either
   is shut, so the routes are absent from `openapi.json` and from the generated client entirely.
@@ -311,12 +311,12 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
   usage dashboard all work today and meter nothing.
 - **No alert email has ever been delivered.** The dispatch, the diff, the digest grouping and the
   unsubscribe link are all tested against a real database and a recording transport; no Celery
-  worker has run `decile.alerts.dispatch` and no mail has left the machine. Same class of gap as
+  worker has run `baskfy.alerts.dispatch` and no mail has left the machine. Same class of gap as
   the Razorpay webhook and the API → broker → worker wire.
 - **No webhook has ever been POSTed to a real receiver.** Every delivery test drives an
   `httpx.MockTransport`.
 - **The alert dispatch runs a screen query per subscribed screen, every night.**
-  `decile_api.alerts.ensure_run` evaluates each subscribed screen for the published date because
+  `baskfy_api.alerts.ensure_run` evaluates each subscribed screen for the published date because
   the nightly publish records no `screen_run` row. Nothing bounds how many subscriptions that is
   (`docs/DECISIONS.md` §20.15).
 - **`api_key_usage_daily` is written on the request path** — one upsert per accepted public
@@ -434,7 +434,7 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
   `docs/runbooks/kite-token-expired.md` §3 says so and says it should be a command.
 
 - **The GST rate and the SAC code need a chartered accountant.** 18% and SAC 998439 are defaults,
-  not advice. Both are settings (`DECILE_GST_RATE_PERCENT`, `DECILE_GST_SAC_CODE`) and every
+  not advice. Both are settings (`BASKFY_GST_RATE_PERCENT`, `BASKFY_GST_SAC_CODE`) and every
   issued invoice stores what it was raised at, so changing them cannot rewrite history — but
   nothing has confirmed them (`docs/DECISIONS.md` §13.2). **Confirm before the first real charge.**
 - **The advertised prices are GST-inclusive.** `docs/01` §1 gives ₹500 / ₹3,999 / ₹14,999 with no
@@ -487,7 +487,7 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
   no history, so the loader raises "no adjusted bars exist for any name this screen selected".
   That is correct behaviour and it will look like a bug in staging.
 - **The API → broker → worker wire has never run.** `POST /backtests` publishes
-  `decile.backtest.run` by name and the worker binds and routes it; both halves are tested
+  `baskfy.backtest.run` by name and the worker binds and routes it; both halves are tested
   separately, but no test starts a Celery worker. Same class of gap as the Razorpay webhook.
 - **The backtest's `export` link is signed by us, not presigned by R2.** `docs/07` asks for a
   "signed URL"; the archive abstraction covers both a bucket and a directory, and a directory
@@ -499,12 +499,12 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
 - **The backtest surface has no Playwright coverage,** the same gap the rebalance tracker has.
 - **An unpaid account's `max_screens` is 5, and 5 is invented.** `docs/07`'s example payload shows
   50, which is the paid number; the bundle gives no free-tier figure
-  (`decile_core.entitlements.FREE_MAX_SCREENS`, `docs/DECISIONS.md` §13.12).
-- **The ₹0 tier exists but is off.** `DECILE_FREE_TIER_ENABLED` gates it, and the plan row is only
+  (`baskfy_core.entitlements.FREE_MAX_SCREENS`, `docs/DECISIONS.md` §13.12).
+- **The ₹0 tier exists but is off.** `BASKFY_FREE_TIER_ENABLED` gates it, and the plan row is only
   seeded while the flag is set — turning it on means re-running `make seed`. Its "limited
   universe" is NIFTY 50, which `docs/01` does not specify (`docs/DECISIONS.md` §13.14).
 - **The invoice PDF is written by hand, in Courier.** `docs/02` locks no PDF library, so
-  `decile_core.pdf` writes PDF 1.4 directly; Courier because its fixed 600/1000 em width makes
+  `baskfy_core.pdf` writes PDF 1.4 directly; Courier because its fixed 600/1000 em width makes
   right-aligned figures exact without transcribing a font-metrics table. A designed invoice is
   later, deliberate work (`docs/DECISIONS.md` §13.6).
 - **`docs/DECISIONS.md` §13 should become `docs/13b-billing-implementation-notes.md`.** The
@@ -553,7 +553,7 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
   adapter carries the user records and the OTP tokens (`docs/08a` §2).
 - **The auth stub is gone.** Prompt 12 built `/auth/*`, so `apps/web` posts to the real endpoints,
   Argon2id verification happens where the hash lives, and the browser suite registers and signs in
-  for real. `stub-endpoints.ts` and `DECILE_ALLOW_STUB_AUTH` were deleted (`docs/12a` §5).
+  for real. `stub-endpoints.ts` and `BASKFY_ALLOW_STUB_AUTH` were deleted (`docs/12a` §5).
 - **Six auth tables are additions to `docs/04`,** which defines only `app_user.password_hash`.
   Each is required by a numbered line of `docs/11` §Security or §Compliance
   (`docs/04c-auth-tables-addendum.md`).
@@ -595,8 +595,8 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
   the two in step. `apps/web/src/lib/market/universes.ts` duplicates the twelve market-health
   universes for the same reason, with `test_market_health_universe_parity.py` as its link.
 - **The browser suite needs `make up` and its own database.** `playwright.config.ts` migrates and
-  seeds `decile_e2e` and starts both servers; since Prompt 12 it also turns the Argon2id cost down
-  and points email at mailpit, and signs in with `decile_api.seed.E2E_PASSWORD` (`docs/09a` §5,
+  seeds `baskfy_e2e` and starts both servers; since Prompt 12 it also turns the Argon2id cost down
+  and points email at mailpit, and signs in with `baskfy_api.seed.E2E_PASSWORD` (`docs/09a` §5,
   `docs/12a` §12).
 - **Eight PROS fire for CUPID where `docs/01` §5 observed six.** `docs/05` §16 tables eight rules
   and says "ship at least" them; the six the reference product showed are the first six, asserted
@@ -620,7 +620,7 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
 - **The dashboard has no sector grouping, because `docs/04` has no sector column.** Deriving one
   by pattern-matching index names would be inventing a taxonomy and attributing it to NSE
   (`docs/11a` §2).
-- **The breadth arithmetic is `decile_core.breadth`, executed by both the worker and the seed.**
+- **The breadth arithmetic is `baskfy_core.breadth`, executed by both the worker and the seed.**
   A second copy in the seed would make the hand-computed acceptance test meaningless
   (`docs/11a` §7).
 - **`1Y Return > 0%` reads 100% on the seeded data** — `docs/13`'s export is a momentum screen's
@@ -667,7 +667,7 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
   column of all 271 export rows, which needs each instrument's adjusted daily closes for 248
   trading days. The bundle has no price history — `fixtures/` is one single-date snapshot of
   *results* — and the suite is network-blocked. `test_reference_parity.py` implements it in full
-  and **skips**, with the reason attached. Set `DECILE_PARITY_BARS` to a Parquet file of real
+  and **skips**, with the reason attached. Set `BASKFY_PARITY_BARS` to a Parquet file of real
   adjusted history and it runs. Everything the export *can* verify is verified and passing.
 - **One figure in `docs/13` §2 does not reproduce from the committed file.** Max sharpe error is
   0.01, not 0.0051. (The blend-inversion count *does* reproduce as 48 when the blend is summed in
@@ -687,7 +687,7 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
 - **Assertions 3 and 7 are constraint checks, not data checks.** The PK and NOT NULL already
   forbid what they assert; they exist to catch a migration that relaxes either.
 - **Rights issues are not adjusted.** TERP needs the subscription price, which NSE's free-text
-  purpose usually omits. `decile_core.adjustments` returns `INSUFFICIENT_DATA` and leaves the
+  purpose usually omits. `baskfy_core.adjustments` returns `INSUFFICIENT_DATA` and leaves the
   series alone rather than guessing; every such action is surfaced in the step payload.
 - **The ~145 dashboard indices are registered from data, not from a list.** The bundle names two
   of them (`docs/01` §7), so `refresh_index_snapshots` registers any index NSE publishes that we
@@ -696,7 +696,7 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
 - **Pre-2018 index membership is reconstructed, and marked as such.** `index_member_daily.source`
   distinguishes `nse_file` from `reconstructed` and `derived` (`docs/09` §Backfill,
   `docs/04b`). Prompt 15's backtests **state** it rather than excluding it: every backtest's
-  assumptions panel says so in as many words (`decile_api.backtests.assumptions`), which is what
+  assumptions panel says so in as many words (`baskfy_api.backtests.assumptions`), which is what
   `docs/10` §"honesty features" asks for. Nothing filters a run by `index_member_daily.source`.
 - **No pipeline step fetches fundamentals.** `docs/03`'s ten steps have no source for
   `fundamental_daily`, yet `factor_daily.marketcap_cr` and `.pe` are needed by the screener

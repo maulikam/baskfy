@@ -10,24 +10,24 @@ from helpers import PRIOR_DATE, TRADE_DATE, add_bar, make_instrument, requires_d
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from decile_core.models import (
+from baskfy_core.models import (
     FactorDaily,
     IndexMemberDaily,
     Instrument,
     MarketHealthDaily,
     PipelineRunStep,
 )
-from decile_core.universes import MARKET_HEALTH_SLUGS, UNIVERSE_BY_SLUG
-from decile_worker.calendar import (
+from baskfy_core.universes import MARKET_HEALTH_SLUGS, UNIVERSE_BY_SLUG
+from baskfy_worker.calendar import (
     NotATradingDay,
     classify,
     previous_trading_days,
     reconcile_calendar,
     require_trading_day,
 )
-from decile_worker.deps import PipelineDependencies
-from decile_worker.orchestrator import run_nightly_pipeline
-from decile_worker.steps import (
+from baskfy_worker.deps import PipelineDependencies
+from baskfy_worker.orchestrator import run_nightly_pipeline
+from baskfy_worker.steps import (
     NIGHTLY_CHAIN,
     HardFailure,
     PipelineStep,
@@ -37,14 +37,14 @@ from decile_worker.steps import (
     open_run,
     record_step,
 )
-from decile_worker.tasks.factors import (
+from baskfy_worker.tasks.factors import (
     assert_mask_matches_membership,
     run_compute_factors,
     universe_masks,
 )
-from decile_worker.tasks.instruments import active_instruments
-from decile_worker.tasks.market_health import run_compute_market_health
-from decile_worker.tasks.publish import current_data_version
+from baskfy_worker.tasks.instruments import active_instruments
+from baskfy_worker.tasks.market_health import run_compute_market_health
+from baskfy_worker.tasks.publish import current_data_version
 
 pytestmark = [pytest.mark.db, requires_db]
 

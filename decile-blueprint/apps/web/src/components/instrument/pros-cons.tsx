@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
  * docs/01 §5 block 3, rendered per docs/08: "**PROS/CONS** — green/red chips with icons,
  * generated from the rule table in `05 §16`."
  *
- * The rule table lives in `packages/core/src/decile_core/pros_cons.py` and reaches this component
+ * The rule table lives in `packages/core/src/baskfy_core/pros_cons.py` and reaches this component
  * as finished sentences in the payload — docs/05 §16: "Keep the rule table in one module so it
  * stays consistent between API and UI." Rewording anything here would break that.
  *

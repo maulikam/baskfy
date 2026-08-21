@@ -1,4 +1,4 @@
-import type { PipelineRunDetailOut, ProviderHealthOut } from "@decile/api-client";
+import type { PipelineRunDetailOut, ProviderHealthOut } from "@baskfy/api-client";
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 

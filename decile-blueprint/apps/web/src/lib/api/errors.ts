@@ -1,4 +1,4 @@
-import { isProblem, type ProblemOut } from "@decile/api-client";
+import { isProblem, type ProblemOut } from "@baskfy/api-client";
 
 /**
  * A thrown API failure that still carries its RFC 9457 problem document.

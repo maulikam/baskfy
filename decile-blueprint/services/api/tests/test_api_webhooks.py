@@ -19,12 +19,12 @@ from alert_helpers import settings_for as base_settings
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api import alerts as alert_service
-from decile_api import webhooks
-from decile_api.email import Mailer
-from decile_api.settings import Settings
-from decile_core.models import Screen, WebhookDelivery, WebhookEndpoint
-from decile_worker.tasks.alerts import run_webhook_sweep
+from baskfy_api import alerts as alert_service
+from baskfy_api import webhooks
+from baskfy_api.email import Mailer
+from baskfy_api.settings import Settings
+from baskfy_core.models import Screen, WebhookDelivery, WebhookEndpoint
+from baskfy_worker.tasks.alerts import run_webhook_sweep
 
 pytestmark = [screener_helpers.requires_db, pytest.mark.db, pytest.mark.redis]
 

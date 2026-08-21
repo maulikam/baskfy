@@ -12,7 +12,7 @@ These tests assert the *document*, not the code's convenience:
   later cannot slip into the public API by not being thought about;
 * the terms-of-use document names both lists, so a caller can see what is withheld.
 
-``decile_core.api_keys`` is asserted here too, because the property that matters about it — every
+``baskfy_core.api_keys`` is asserted here too, because the property that matters about it — every
 scope is a read — is a policy statement rather than a behaviour.
 """
 
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 
-from decile_core.api_keys import (
+from baskfy_core.api_keys import (
     DEFAULT_SCOPES,
     KEY_TOKEN_MARKER,
     InvalidKeyFormat,
@@ -30,8 +30,8 @@ from decile_core.api_keys import (
     parse_key,
     redact,
 )
-from decile_core.factor_registry import COLUMN_PICKER_KEYS, FactorUnit, columns
-from decile_core.public_api import (
+from baskfy_core.factor_registry import COLUMN_PICKER_KEYS, FactorUnit, columns
+from baskfy_core.public_api import (
     DATA_REDISTRIBUTION_REVIEW,
     PUBLIC_API_PREFIX,
     PUBLIC_API_VERSION,

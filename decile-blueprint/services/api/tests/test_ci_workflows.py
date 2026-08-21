@@ -88,12 +88,12 @@ class TestPromptNineteensGatesAreStillWired:
         assert "--cov-report=json" in ci_commands
 
     def test_the_reconciliation_report_runs(self, ci_commands: str) -> None:
-        assert "decile_worker.reconcile_cli" in ci_commands
+        assert "baskfy_worker.reconcile_cli" in ci_commands
 
     def test_the_earlier_prompts_gates_are_still_there(self, ci_commands: str) -> None:
         """Prompts 7, 16 and 17 each added one. This is the one place they can all be checked."""
         for expected in (
-            "decile_api.openapi",  # Prompt 7: the client-staleness gate
+            "baskfy_api.openapi",  # Prompt 7: the client-staleness gate
             "benchmarks.report",  # Prompt 16: the docs/11 budgets
             "test_query_plans.py",  # Prompt 16: the plan baseline
             "promtool",  # Prompt 17: the alert rules

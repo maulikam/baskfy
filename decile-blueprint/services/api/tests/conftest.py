@@ -1,6 +1,6 @@
 """Fixtures for the tests that need a live PostgreSQL + TimescaleDB.
 
-They are marked ``db`` and skip when ``DECILE_TEST_DATABASE_URL`` is unset, so the default
+They are marked ``db`` and skip when ``BASKFY_TEST_DATABASE_URL`` is unset, so the default
 ``make test`` stays runnable without Docker while ``make test-db`` exercises the real thing.
 """
 
@@ -19,9 +19,9 @@ from redis.exceptions import RedisError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
 
-from decile_api import idempotency
+from baskfy_api import idempotency
 
-ENV_VAR = "DECILE_TEST_DATABASE_URL"
+ENV_VAR = "BASKFY_TEST_DATABASE_URL"
 
 
 def database_url() -> str | None:
@@ -89,10 +89,10 @@ async def screen_cache() -> AsyncIterator[Redis]:
     The cache is process-external state: a key left behind by one test is a cache hit in the next,
     and the determinism assertions would then be comparing a stale payload with itself.
 
-    Async, because that is what ``decile_api.screener.ScreenCache`` is — see the note there.
+    Async, because that is what ``baskfy_api.screener.ScreenCache`` is — see the note there.
     """
     client: Redis = Redis.from_url(
-        os.environ.get("DECILE_REDIS_URL", "redis://localhost:6380/0"), decode_responses=True
+        os.environ.get("BASKFY_REDIS_URL", "redis://localhost:6380/0"), decode_responses=True
     )
     try:
         await client.ping()
@@ -120,7 +120,7 @@ async def clean_redis_namespaces() -> AsyncIterator[None]:
     does not — so without this a replayed ``Idempotency-Key`` from an earlier run would name a row
     that no longer exists, and a cached screen result would be served to a later assertion.
     """
-    client: Redis = Redis.from_url(os.environ.get("DECILE_REDIS_URL", "redis://localhost:6380/0"))
+    client: Redis = Redis.from_url(os.environ.get("BASKFY_REDIS_URL", "redis://localhost:6380/0"))
     try:
         await client.ping()
     except RedisError:  # pragma: no cover - guarded by the redis marker

@@ -10,7 +10,7 @@ import re
 
 import pytest
 
-from decile_api.security import (
+from baskfy_api.security import (
     MAX_PASSWORD_LENGTH,
     MIN_PASSWORD_LENGTH,
     WeakPassword,
@@ -23,7 +23,7 @@ from decile_api.security import (
     new_otp,
     verify_password,
 )
-from decile_api.settings import Settings
+from baskfy_api.settings import Settings
 
 PASSWORD = "a reasonable passphrase"
 

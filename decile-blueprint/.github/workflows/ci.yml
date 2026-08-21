@@ -12,8 +12,8 @@ on:
   pull_request:
 
 env:
-  DECILE_TEST_DATABASE_URL: postgresql+asyncpg://decile:decile@localhost:5432/decile_test
-  DECILE_REDIS_URL: redis://localhost:6379/0
+  BASKFY_TEST_DATABASE_URL: postgresql+asyncpg://baskfy:baskfy@localhost:5432/baskfy_test
+  BASKFY_REDIS_URL: redis://localhost:6379/0
 
 jobs:
   python:
@@ -23,12 +23,12 @@ jobs:
         # docs/02 locks "PostgreSQL 16 + TimescaleDB"; the stock postgres image has no extension.
         image: timescale/timescaledb:2.17.2-pg16
         env:
-          POSTGRES_USER: decile
-          POSTGRES_PASSWORD: decile
-          POSTGRES_DB: decile_test
+          POSTGRES_USER: baskfy
+          POSTGRES_PASSWORD: baskfy
+          POSTGRES_DB: baskfy_test
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U decile" --health-interval 5s
+          --health-cmd "pg_isready -U baskfy" --health-interval 5s
           --health-timeout 5s --health-retries 20
       redis:
         image: redis:7-alpine
@@ -51,7 +51,7 @@ jobs:
       # thresholds." Coverage is measured on the same run that asserts behaviour, so the numbers
       # cannot come from a second, differently-configured invocation. The gate itself is
       # `tools/coverage_gate.py`, which is per package — a single --cov-fail-under would let
-      # decile_core slide while decile_worker climbed.
+      # baskfy_core slide while baskfy_worker climbed.
       - name: Tests, with per-package coverage gates
         run: |
           uv run pytest --cov --cov-report=term-missing --cov-report=json:coverage.json
@@ -65,7 +65,7 @@ jobs:
       # deviation has a written, committed explanation." The command exits non-zero on any
       # disagreement over its derived tolerances.
       - name: Reconciliation report against the reference export
-        run: uv run python -m decile_worker.reconcile_cli
+        run: uv run python -m baskfy_worker.reconcile_cli
       # Prompt 16 deliverable 2: "a CI check that fails if any hot query's plan changes to a
       # sequential scan on the seeded dataset". Run separately from the suite above so the log
       # says *this* is what broke — a plan regression and a failed assertion read very
@@ -110,15 +110,15 @@ jobs:
       - run: uv sync --frozen
       - run: pnpm install --frozen-lockfile
       - name: openapi.json is current
-        run: uv run python -m decile_api.openapi --check
+        run: uv run python -m baskfy_api.openapi --check
       - name: Generated client is current
-        run: pnpm --filter @decile/api-client run generate
+        run: pnpm --filter @baskfy/api-client run generate
       - name: Fail if the checked-in client is stale
         run: git diff --exit-code -- packages/api-client/src/generated packages/api-client/openapi.json
       - name: Type-check and test the client
         run: |
-          pnpm --filter @decile/api-client run lint
-          pnpm --filter @decile/api-client run test
+          pnpm --filter @baskfy/api-client run lint
+          pnpm --filter @baskfy/api-client run test
 
   web:
     # Prompt 8's acceptance criteria (Lighthouse accessibility, the 4,000-row scroll trace, the
@@ -131,12 +131,12 @@ jobs:
       postgres:
         image: timescale/timescaledb:2.17.2-pg16
         env:
-          POSTGRES_USER: decile
-          POSTGRES_PASSWORD: decile
-          POSTGRES_DB: decile
+          POSTGRES_USER: baskfy
+          POSTGRES_PASSWORD: baskfy
+          POSTGRES_DB: baskfy
         ports: ["5433:5432"]
         options: >-
-          --health-cmd "pg_isready -U decile" --health-interval 5s
+          --health-cmd "pg_isready -U baskfy" --health-interval 5s
           --health-timeout 5s --health-retries 20
       redis:
         image: redis:7-alpine
@@ -158,33 +158,33 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # `openapi.json` is the client's input and the client is the web app's contract, so the
       # spec is emitted before anything is type-checked against it.
-      - run: uv run python -m decile_api.openapi
-      - run: pnpm --filter @decile/api-client run generate
+      - run: uv run python -m baskfy_api.openapi
+      - run: pnpm --filter @baskfy/api-client run generate
       - name: Lint and type-check
-        run: pnpm --filter @decile/web run lint
+        run: pnpm --filter @baskfy/web run lint
       - name: Unit tests
-        run: pnpm --filter @decile/web run test
+        run: pnpm --filter @baskfy/web run test
       - name: Install Playwright browsers
-        run: pnpm --filter @decile/web exec playwright install --with-deps chromium
+        run: pnpm --filter @baskfy/web exec playwright install --with-deps chromium
       - name: Create the browser suite's database
         run: |
-          PGPASSWORD=decile psql -h localhost -p 5433 -U decile -d postgres \
-            -c "CREATE DATABASE decile_e2e;"
+          PGPASSWORD=baskfy psql -h localhost -p 5433 -U baskfy -d postgres \
+            -c "CREATE DATABASE baskfy_e2e;"
       - name: Acceptance checks
-        # `playwright.config.ts` migrates and seeds `decile_e2e`, starts the API on :8100 and the
+        # `playwright.config.ts` migrates and seeds `baskfy_e2e`, starts the API on :8100 and the
         # web app on :3100, and tears both down.
-        run: pnpm --filter @decile/web run e2e
+        run: pnpm --filter @baskfy/web run e2e
         env:
-          DECILE_JWT_SECRET: ci-placeholder-secret-0123456789abcdef
+          BASKFY_JWT_SECRET: ci-placeholder-secret-0123456789abcdef
           AUTH_SECRET: ci-placeholder-secret-0123456789abcdef
-          DECILE_REDIS_URL: redis://localhost:6380/0
+          BASKFY_REDIS_URL: redis://localhost:6380/0
       # Prompt 16 deliverable 5: "a bundle-size CI budget". After the acceptance checks, because
       # `playwright.config.ts` runs `next build` itself and reads `.next/app-build-manifest.json`
       # — measuring the very bytes the browser suite was just served, with no second build.
       # `if: always()` so a failing Playwright assertion does not hide a blown budget.
       - name: "Client-JS budget (docs/11: screens route < 250 KB gzip)"
         if: always()
-        run: pnpm --filter @decile/web run bundle-budget
+        run: pnpm --filter @baskfy/web run bundle-budget
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

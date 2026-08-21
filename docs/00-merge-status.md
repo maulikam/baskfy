@@ -4,7 +4,7 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M2 · **State:** running
+**Run started:** 22 Aug 2026 · **Current module:** M3 · **State:** running
 
 ---
 
@@ -14,8 +14,8 @@ that culture continues here.
 |---|---|---|---|---|
 | M0 | Preflight, baselines, safety copy | ✅ done | 22 Aug 2026 | Baselines + verified safety copy recorded. Blocker resolved: decile's overnight work committed as `ea5dd0f` (M0.8) |
 | M1 | Umbrella repo (subtree) | ✅ done | 22 Aug 2026 | One repo at the root; 117 commits; both histories reachable from HEAD. `--follow` does not prove it — see M1.1 for the commands that do |
-| M2 | The rename | 🔄 running | 22 Aug 2026 | |
-| M3 | Working agreement + status page | — | | |
+| M2 | The rename | ✅ done | 22 Aug 2026 | 425 files, 2347+/2347−. Namespaces are Baskfy's; the D1–D6 vocabulary is kept by design. Enforced by `tools/check-namespace.sh` (M2.1) |
+| M3 | Working agreement + status page | 🔄 running | 22 Aug 2026 | |
 | M4 | One env schema | — | | |
 | M5 | One CI workflow | — | | |
 | M6 | Freeze the strangle lab | — | | |
@@ -150,6 +150,33 @@ git rev-list --count HEAD                    # 117
 git log --oneline df6cb72 -- app/main.py     # 29 commits of desk history
 git log --oneline ea5dd0f -- docs/DECISIONS.md   # 9 commits of decile history
 ```
+
+## ⚠️ Carry-forward for M7 — do not migrate an empty database
+
+`decile-postgres` holds the overnight backfill, and M2 renamed the database in **configuration
+only** — the live cluster was deliberately left alone:
+
+| | |
+|---|---|
+| `ohlcv_daily` | **1,138,300 rows**, 2,546 instruments, 2024-01-01 → 2026-08-18 |
+| `instrument` / `index_member_daily` / `trading_day` | 2,553 / 16,633 / 5,844 |
+| Verified dump | **`~/baskfy-safety/2026-08-22/pg/decile-preM2.dump`** (30 MB, custom format, 76 table-data entries, `pg_restore -l` verified) |
+
+**M7 must restore that dump into the new `baskfy` database rather than migrating an empty one.**
+`make up` under the renamed compose creates a *new* volume (`baskfy_baskfy-pgdata`); the 1.1M bars
+stay in the old `decile_decile-pgdata` — recoverable, but only if someone remembers they are there.
+That backfill is hours of NSE fetching and it is what M10–M12 are graded on.
+
+Note the range is 2024-01-01, **not** D5's 2011: `decile-blueprint/docs/DECISIONS.md` §21.2 records
+that the bhavcopy cannot reach `docs/09`'s fifteen years. Whether Kite is wanted for the deeper
+history is an open question for M9 (`DECISIONS-MERGE.md` M0.9).
+
+## The namespace rule, in code
+
+`tools/check-namespace.sh` is the check — the raw grep in M2's text over-reaches into vocabulary.
+It allows exactly `decile_1`…`decile_6` (the D1–D6 public API values), `DECILE_RANK_KEY` and
+`decile_bucket`, and excludes both trees' `docs/` plus the two documents that instruct the rename.
+Run it from the repository root; it exits non-zero and prints `file:line: token` on any violation.
 
 ## Things a future session must know
 

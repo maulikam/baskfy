@@ -10,7 +10,7 @@ import { unsubscribeFromAlert } from "@/app/actions/integrations";
  * page that asked the recipient to sign in first would be useless to exactly the people most
  * likely to use it, and one that asked them to confirm would fail the "one-click" part of what
  * the phrase means. The token is 128 unguessable bits scoped to one alert, and the endpoint
- * answers the same thing whether it matched or not (`decile_api.routers.alerts`).
+ * answers the same thing whether it matched or not (`baskfy_api.routers.alerts`).
  *
  * A mail client that prefetches links will therefore unsubscribe on prefetch. That is the
  * documented trade of one-click unsubscribe and is the behaviour RFC 8058 standardises for the

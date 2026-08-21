@@ -65,7 +65,7 @@ def render(measurements: dict[str, Measurement]) -> str:
     lines.append(
         "\nA row reading **not measured** means the harness named in the last column did not run "
         "or did not reach its assertion. Run `make bench` with `make up` running and "
-        "`DECILE_TEST_DATABASE_URL` exported.\n"
+        "`BASKFY_TEST_DATABASE_URL` exported.\n"
     )
     return "".join(lines)
 

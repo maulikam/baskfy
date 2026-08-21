@@ -2,8 +2,8 @@
 
 docs/01 §2.14 gives the screener three custom-filter slots whose operands "are drawn from the same
 list", and docs/06 §"The factor registry" makes the registry "the single source of truth for: ...
-the custom-filter operand list". `decile_core.factor_registry.CUSTOM_FILTER_OPERANDS` is that
-list, and `decile_core.screener` refuses anything outside it before a statement is built.
+the custom-filter operand list". `baskfy_core.factor_registry.CUSTOM_FILTER_OPERANDS` is that
+list, and `baskfy_core.screener` refuses anything outside it before a statement is built.
 
 docs/07 §Metadata enumerates five `/meta/*` endpoints and none of them publishes this list, so the
 browser cannot fetch it — `apps/web/src/lib/screens/operands.ts` carries its own copy. This test is
@@ -18,8 +18,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from decile_core.factor_registry import CUSTOM_FILTER_OPERANDS
-from decile_core.models import FactorDaily
+from baskfy_core.factor_registry import CUSTOM_FILTER_OPERANDS
+from baskfy_core.models import FactorDaily
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 OPERANDS_TS = REPO_ROOT / "apps" / "web" / "src" / "lib" / "screens" / "operands.ts"

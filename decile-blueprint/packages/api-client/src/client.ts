@@ -131,7 +131,7 @@ export type ExportLinkOut = Schemas["ExportLinkOut"];
 /**
  * The staff surface (Prompt 17). `docs/07` does not describe `/admin`; `docs/09` §Observability
  * does, in one line, and `docs/02` rule 5 ("typed end to end ... no hand-written fetch types")
- * applies to it like everything else. See `decile_api.routers.admin`.
+ * applies to it like everything else. See `baskfy_api.routers.admin`.
  */
 export type PipelineStepOut = Schemas["PipelineStepOut"];
 export type PipelineRunDetailOut = Schemas["PipelineRunDetailOut"];

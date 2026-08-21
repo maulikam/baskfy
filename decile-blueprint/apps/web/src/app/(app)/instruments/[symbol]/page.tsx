@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import type { FactsheetOut } from "@decile/api-client";
+import type { FactsheetOut } from "@baskfy/api-client";
 
 import { Factsheet } from "@/components/instrument/factsheet";
 import { FactsheetNotFound, fetchFactsheet, fetchHistory } from "@/lib/instrument/fetch";

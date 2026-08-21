@@ -1,4 +1,4 @@
-import type { CellOut } from "@decile/api-client";
+import type { CellOut } from "@baskfy/api-client";
 
 import { EMPTY_CELL, formatCrore, formatFraction, formatNumber, formatPercent } from "@/lib/format";
 

@@ -29,7 +29,7 @@ export async function GET(): Promise<NextResponse> {
   return new NextResponse(body, {
     headers: {
       "content-type": "application/json",
-      "content-disposition": 'attachment; filename="decile-account-export.json"',
+      "content-disposition": 'attachment; filename="baskfy-account-export.json"',
       // A personal-data export must never sit in a shared cache.
       "cache-control": "no-store, private",
     },

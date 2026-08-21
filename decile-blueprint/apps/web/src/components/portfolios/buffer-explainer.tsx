@@ -1,4 +1,4 @@
-import type { RebalanceOut } from "@decile/api-client";
+import type { RebalanceOut } from "@baskfy/api-client";
 
 /**
  * PROMPTS.md Prompt 14 §3: "plus an explanation of the buffer rule".

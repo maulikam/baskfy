@@ -10,9 +10,9 @@ from helpers import requires_db
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_core.models import AccountDeletion, AppUser, Payment
-from decile_worker.steps import StepOutcome
-from decile_worker.tasks.purge_accounts import run_purge_accounts
+from baskfy_core.models import AccountDeletion, AppUser, Payment
+from baskfy_worker.steps import StepOutcome
+from baskfy_worker.tasks.purge_accounts import run_purge_accounts
 
 pytestmark = [pytest.mark.db, requires_db]
 

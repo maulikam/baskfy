@@ -165,3 +165,81 @@ initial root commit plus two subtree merges, then the module's own bookkeeping c
 them would defeat the module's entire purpose. The `M<N>: green` message is carried by the
 bookkeeping commit; the structural commits keep git's own generated messages so their provenance
 stays legible.
+
+---
+
+## M2
+
+### M2.1 — "Zero occurrences of `decile_`" is unachievable, because `decile` is also the product's vocabulary
+**Ambiguity.** M2's acceptance reads: "zero occurrences of `decile_`, `DECILE_`, or `@decile/`
+outside `docs/` (`grep -rIl` proves it)". Taken literally it conflicts with **`CLAUDE.md` D1**,
+which decides the opposite: *"Decile's product vocabulary (D1 bucket, decile drift, Market Pulse,
+Replay, hold band) is kept."* A decile is a statistical bucket. The word is domain language in this
+product, not only a brand, and several identifiers use it that way.
+
+**What a blanket rule actually did.** The first pass applied `s/decile_/baskfy_/` and
+`s/DECILE_/BASKFY_/` and corrupted three things, each caught before commit:
+
+| Corruption | Why it is wrong |
+|---|---|
+| `DECILE_RANK_KEY` → `BASKFY_RANK_KEY` | A real code constant in `baskfy_core.universes` (`= "marketcap_cr"`), meaning *the key deciles are ranked by*. "The Baskfy rank key" means nothing. `docs/06` §71 defines it. |
+| `what-a-decile-actually-measures` → `what-a-baskfy-actually-measures` | A blog post **about deciles**. It broke the registry↔MDX mapping and failed 3 vitest cases — the only reason it was caught. |
+| `decile-blueprint/PROMPTS.md` rewritten | The historical build script that produced the screener. Rewriting it makes it describe a build that never happened. |
+
+**Decided.** The rename is **token-scoped, not prefix-scoped**. Renamed: the four package
+namespaces, every `DECILE_*` environment variable, `@decile/*`, every Prometheus metric and
+recording rule, Celery task and OTel attribute names, database/role/container/volume/compose-project
+names, distribution names, cookie and Razorpay note keys, and user-facing download filenames.
+**Kept, deliberately:**
+
+| Kept | Count outside `docs/` | Why |
+|---|---|---|
+| `decile_1` … `decile_6` | 67 | The D1–D6 bucket values of `apply_filters_on`. They are a **public API contract** — in `openapi.json`, the generated TS client, the JSON Schema, URL state and seed data. Renaming them changes every saved screen and every stored URL. `CLAUDE.md` D1 keeps this vocabulary. |
+| `DECILE_RANK_KEY` | 5 | The constant naming the key deciles are ranked by. Not an environment variable. |
+| `decile_bucket` / `screen_run_decile_bucket` | 2 | A query-plan name; `decile` is the statistic. |
+| `decile_core`/`_api`/`_worker`/`_providers`, `@decile/*` | 2 each | Only in `MERGE-PROMPTS.md` and `decile-blueprint/PROMPTS.md` — the two documents that *instruct* the rename. Rewriting them would make each read "rename `baskfy_core` → `baskfy_core`". |
+
+**Zero namespace tokens remain in code.** The criterion's stated Goal — "the namespaces become
+Baskfy's" — is met in full; only its `grep` proxy over-reaches into vocabulary and into the
+instructions describing the rename.
+
+**The scoped check that does prove it:**
+
+```
+git grep -I -o -h -E '(decile_[a-zA-Z0-9_]+|DECILE_[A-Z0-9_]+|@decile/[a-z-]+)' \
+  -- ':!docs/*' ':!*/docs/*' ':!MERGE-PROMPTS.md' ':!decile-blueprint/PROMPTS.md' \
+  | grep -vE '^(decile_[1-6]|decile_bucket|DECILE_RANK_KEY)$'
+# must print nothing
+```
+
+**Escalated to Maulik rather than self-approved**, because scoping an acceptance check is exactly
+what rule 5 forbids doing quietly.
+
+**SETTLED (Maulik, 22 Aug 2026).** The scoped check is accepted as M2's acceptance, on condition
+that the rule lives in code rather than in memory. It is now
+**[`tools/check-namespace.sh`](../tools/check-namespace.sh)** — the exception list above, with each
+entry's reason beside it, run as one command that exits non-zero on any surviving namespace token
+and prints `file:line: token` for each. It is verified to fail: planting `DECILE_FAKE_VAR` and
+`decile_fake_module` in a tracked file produces two violations and exit 1.
+
+**M21's final sweep runs this script, not the raw grep**, and M5 wires it into CI. Widening the
+pattern to silence a hit is forbidden in the script's own header; a genuinely new piece of
+vocabulary is added to `ALLOWED` *with* a reason and a matching entry here.
+
+### M2.2 — The rename does not touch the running database, and M7 must not start empty
+`decile-postgres` has been up since before this run on volume `decile_decile-pgdata`, and it holds
+the overnight backfill: **1,138,300 rows in `ohlcv_daily`** across 2,546 instruments,
+2024-01-01 → 2026-08-18, plus 2,553 instruments, 16,633 PIT membership rows and 5,844 trading days.
+(2024, not 2011 — consistent with `DECISIONS.md` §21.2: the bhavcopy cannot reach fifteen years.)
+
+M2 renames the database, role, container, volume and compose project **in configuration only**. The
+live cluster is deliberately untouched — half-renaming a running cluster mid-module is worse than
+leaving config and reality to be reconciled once, deliberately, by the module whose job that is.
+
+**A verified dump was taken first**: `~/baskfy-safety/2026-08-22/pg/decile-preM2.dump` (30 MB,
+custom format, 76 table-data entries, `pg_restore -l` verified).
+
+> **M7 MUST restore that dump into the new `baskfy` database rather than migrating an empty one.**
+> `make up` under the renamed compose creates a *new* volume; the 1.1M bars would be stranded in
+> the old one — recoverable, but only if someone remembers they are there. This note is that
+> reminder.

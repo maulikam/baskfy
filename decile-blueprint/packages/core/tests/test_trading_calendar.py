@@ -12,7 +12,7 @@ import datetime as dt
 
 import pytest
 
-from decile_core.trading_calendar import (
+from baskfy_core.trading_calendar import (
     EXPECTED_WINDOW_LENGTHS,
     build_calendar,
     default_calendar_range,

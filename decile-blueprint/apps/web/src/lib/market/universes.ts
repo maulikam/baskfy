@@ -8,7 +8,7 @@
  * The 14 selectable universes minus `nifty-fno` and `etf`, which are classifications rather than
  * size bands and carry no breadth row.
  *
- * Duplicated from `decile_core.universes` for the same reason
+ * Duplicated from `baskfy_core.universes` for the same reason
  * `apps/web/src/lib/screens/operands.ts` is: no `/meta/` endpoint publishes the market-health
  * subset, and `/meta/universes` publishes all fourteen without saying which have breadth.
  * `packages/core/tests/test_market_health_universe_parity.py` keeps the two in step.

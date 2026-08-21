@@ -12,7 +12,7 @@ from decimal import Decimal
 
 import pytest
 
-from decile_core.reference_export import (
+from baskfy_core.reference_export import (
     EXPORT_COLUMNS,
     FACTOR_COLUMN_MAP,
     UNMAPPED_EXPORT_COLUMNS,
@@ -20,7 +20,7 @@ from decile_core.reference_export import (
     read_export,
     to_rows,
 )
-from decile_core.universes import UNIVERSE_BY_SLUG
+from baskfy_core.universes import UNIVERSE_BY_SLUG
 
 
 @pytest.fixture(scope="module")
@@ -125,7 +125,7 @@ class TestIdentitiesFromDocs13:
         """docs/13 §3: every value is an integer multiple of 1/N for N = 22/64/121/185/247.
 
         This is the property that proved the windows are calendar offsets with a *shared* start
-        date, which is why decile_core.trading_calendar exists at all.
+        date, which is why baskfy_core.trading_calendar exists at all.
         """
         expected = {1: 22, 3: 64, 6: 121, 9: 185, 12: 247}
         for window, denominator in expected.items():

@@ -26,25 +26,25 @@ from screener_helpers import (
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.screener import (
+from baskfy_api.screener import (
     AsOfOutOfRange,
     NoPublishedData,
     execute_screen,
     resolve_as_of,
     run_screen,
 )
-from decile_core.factor_registry import FACTORS, SORT_FACTOR_KEYS
-from decile_core.models import FactorDaily, IndexMemberDaily, PipelineRun
-from decile_core.screen_definition import (
+from baskfy_core.factor_registry import FACTORS, SORT_FACTOR_KEYS
+from baskfy_core.models import FactorDaily, IndexMemberDaily, PipelineRun
+from baskfy_core.screen_definition import (
     ExtraFactor,
     PositiveDaysFilter,
     RangeFilter,
     ScreenDefinition,
     TopRiskFilter,
 )
-from decile_core.screener import ScreenQueryError, build_screen_query
-from decile_core.seed_data import EXAMPLE_SCREENS
-from decile_core.universes import (
+from baskfy_core.screener import ScreenQueryError, build_screen_query
+from baskfy_core.seed_data import EXAMPLE_SCREENS
+from baskfy_core.universes import (
     CONTAINMENT_IDENTITIES,
     UNION_IDENTITIES,
     UNIVERSE_BY_SLUG,
@@ -311,7 +311,7 @@ class TestBucketing:
             RANKED_ROWS + 1
         )
 
-    async def test_a_decile_keeps_the_largest_by_marketcap(
+    async def test_a_baskfy_keeps_the_largest_by_marketcap(
         self, screener_session: AsyncSession
     ) -> None:
         """Marketcap increases with the row index, so decile 1 of nine rows is the last one."""

@@ -36,7 +36,7 @@ from typing import Final
 
 import httpx
 
-from decile_core.seed_data import EXAMPLE_SCREENS
+from baskfy_core.seed_data import EXAMPLE_SCREENS
 
 #: The one status docs/07 uses for a successful analytics answer; anything else is a refusal.
 HTTP_OK: Final = 200

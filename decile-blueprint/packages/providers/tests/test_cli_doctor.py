@@ -14,10 +14,10 @@ import json
 import pytest
 from stubs import StubProvider
 
-from decile_providers.cli import EXIT_OK, EXIT_UNAVAILABLE, main, run_doctor
-from decile_providers.composite import CompositeProvider
-from decile_providers.ports import BARS_CAPABILITIES, REFERENCE_CAPABILITIES, Capability
-from decile_providers.settings import ProviderSettings
+from baskfy_providers.cli import EXIT_OK, EXIT_UNAVAILABLE, main, run_doctor
+from baskfy_providers.composite import CompositeProvider
+from baskfy_providers.ports import BARS_CAPABILITIES, REFERENCE_CAPABILITIES, Capability
+from baskfy_providers.settings import ProviderSettings
 
 
 class TestWithoutCredentials:
@@ -33,7 +33,7 @@ class TestWithoutCredentials:
     def test_kite_is_reported_unavailable_with_the_reason(self, settings: ProviderSettings) -> None:
         _, output = run_doctor(settings)
         assert "[DOWN] kite" in output
-        assert "DECILE_KITE_API_KEY is not set" in output
+        assert "BASKFY_KITE_API_KEY is not set" in output
 
     def test_it_prints_what_each_provider_can_currently_serve(
         self, settings: ProviderSettings
@@ -85,7 +85,7 @@ class TestWithoutCredentials:
         def explode(_settings: ProviderSettings | None = None) -> CompositeProvider:
             raise RuntimeError("configuration is broken")
 
-        monkeypatch.setattr("decile_providers.cli.build_provider_stack", explode)
+        monkeypatch.setattr("baskfy_providers.cli.build_provider_stack", explode)
         code, output = run_doctor(settings)
         assert code == EXIT_UNAVAILABLE
         assert "configuration is broken" in output
@@ -96,7 +96,7 @@ class TestWithoutCredentials:
         def explode(_settings: ProviderSettings | None = None) -> CompositeProvider:
             raise RuntimeError("configuration is broken")
 
-        monkeypatch.setattr("decile_providers.cli.build_provider_stack", explode)
+        monkeypatch.setattr("baskfy_providers.cli.build_provider_stack", explode)
         _, output = run_doctor(settings, as_json=True)
         assert "configuration is broken" in json.loads(output)["error"]
 

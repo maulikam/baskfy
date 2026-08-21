@@ -15,9 +15,9 @@ import { expect, test, type Page } from "@playwright/test";
  * the committed reference export, which is what the e2e database is seeded from.
  */
 
-/** The seeded account (`decile_api.seed e2e`). */
+/** The seeded account (`baskfy_api.seed e2e`). */
 const EMAIL = "e2e@example.com";
-/** `decile_api.seed.E2E_PASSWORD` — a published constant for a throwaway database. */
+/** `baskfy_api.seed.E2E_PASSWORD` — a published constant for a throwaway database. */
 const E2E_PASSWORD = "e2e-suite-password";
 
 /** Real NSE symbols in the seeded export, plus one BSE scrip code and one blank row. */

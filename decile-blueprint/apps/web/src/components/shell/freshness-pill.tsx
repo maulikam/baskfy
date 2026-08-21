@@ -1,6 +1,6 @@
 "use client";
 
-import type { StatusOut } from "@decile/api-client";
+import type { StatusOut } from "@baskfy/api-client";
 import { useQuery } from "@tanstack/react-query";
 import { CircleAlert, Database } from "lucide-react";
 

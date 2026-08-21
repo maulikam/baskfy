@@ -1,4 +1,4 @@
-"""``decile_core.screen_diff`` — the arithmetic behind Prompt 20 §3's alert email.
+"""``baskfy_core.screen_diff`` — the arithmetic behind Prompt 20 §3's alert email.
 
 These assert the *specification* of a diff, not what the implementation happens to produce:
 entries are names present now and not before, exits the reverse, and a rank change is reported in
@@ -15,7 +15,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from decile_core.screen_diff import (
+from baskfy_core.screen_diff import (
     RankedRow,
     diff_runs,
     rows_from_results,

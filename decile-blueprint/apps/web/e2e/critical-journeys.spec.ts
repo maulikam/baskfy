@@ -26,9 +26,9 @@ import { expect, test, type Page } from "@playwright/test";
  * this environment.
  */
 
-/** The seeded account (`decile_api.seed e2e`). Subscribed, so the gated surfaces are reachable. */
+/** The seeded account (`baskfy_api.seed e2e`). Subscribed, so the gated surfaces are reachable. */
 const EMAIL = "e2e@example.com";
-/** `decile_api.seed.E2E_PASSWORD` — a published constant for a throwaway database. */
+/** `baskfy_api.seed.E2E_PASSWORD` — a published constant for a throwaway database. */
 const E2E_PASSWORD = "e2e-suite-password";
 
 interface Journey {
@@ -165,7 +165,7 @@ test.describe("the ten critical user journeys", () => {
   /**
    * Journey 9. The only one with no Playwright coverage before Prompt 19.
    *
-   * WHAT THIS CAN AND CANNOT ASSERT. `POST /backtests` publishes `decile.backtest.run` to Celery
+   * WHAT THIS CAN AND CANNOT ASSERT. `POST /backtests` publishes `baskfy.backtest.run` to Celery
    * and the browser suite starts no worker, so the run stays `queued` and never produces an
    * equity curve. Even with a worker it would fail: `ohlcv_daily` in the seeded database holds a
    * single trading day of *results* and no price history, so the loader raises "no adjusted bars

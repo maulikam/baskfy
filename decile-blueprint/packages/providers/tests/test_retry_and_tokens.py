@@ -13,15 +13,15 @@ from pathlib import Path
 import pytest
 from cryptography.fernet import Fernet
 
-from decile_providers.errors import (
+from baskfy_providers.errors import (
     AccessTokenExpired,
     CredentialsMissing,
     RetryBudgetExhausted,
     UnexpectedPayload,
     UpstreamUnavailable,
 )
-from decile_providers.retry import RetryHooks, RetryPolicy, call_with_retry
-from decile_providers.tokens import IST, AccessToken, AccessTokenStore
+from baskfy_providers.retry import RetryHooks, RetryPolicy, call_with_retry
+from baskfy_providers.tokens import IST, AccessToken, AccessTokenStore
 
 ISSUED = dt.datetime(2026, 8, 20, 9, 15, tzinfo=IST)
 

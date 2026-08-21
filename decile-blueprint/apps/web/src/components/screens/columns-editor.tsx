@@ -1,6 +1,6 @@
 "use client";
 
-import type { ColumnOut, ScreenOut } from "@decile/api-client";
+import type { ColumnOut, ScreenOut } from "@baskfy/api-client";
 import { ArrowDown, ArrowUp, GripVertical, Loader2, Save, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
  *
  * It is thirty-six, not thirty-four — docs/01 §4 is headed "34 available columns" and then
  * enumerates thirty-six, the same arithmetic slip as the 62/64 factor count. The registry
- * implements every named key (`decile_core.factor_registry`), so the picker offers every one.
+ * implements every named key (`baskfy_core.factor_registry`), so the picker offers every one.
  *
  * **Reordering is keyboard-first.** HTML5 drag-and-drop is mouse-only: there is no keyboard event
  * that starts a drag, so a picker built on it alone is unusable for anyone who does not use a
@@ -37,7 +37,7 @@ export interface ColumnsEditorProps {
 }
 
 /**
- * The three columns the API always projects (`decile_core.screener.IDENTITY_COLUMNS`). They are
+ * The three columns the API always projects (`baskfy_core.screener.IDENTITY_COLUMNS`). They are
  * shown in the preview but are not toggles: a results table with no symbol is not a results table.
  */
 const ALWAYS_PRESENT = ["symbol", "name", "sorting_factor"] as const;

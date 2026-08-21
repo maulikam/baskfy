@@ -6,7 +6,7 @@ import { SignJWT } from "jose";
  *     "Auth: `Authorization: Bearer <JWT>` issued by the Next.js app (HS256, shared secret,
  *      15-min access + refresh)"
  *
- * The verifier is `decile_api.auth.decode_token`, and it is deliberately strict: one algorithm,
+ * The verifier is `baskfy_api.auth.decode_token`, and it is deliberately strict: one algorithm,
  * `sub`/`iat`/`exp` all required, and a token whose `exp - iat` exceeds the configured ceiling is
  * refused *even when correctly signed*. So the claims below are not a suggestion — a token that
  * differs from this shape is a 401, and `apps/web/src/lib/auth/__tests__/jwt.test.ts` pins them.
@@ -37,11 +37,11 @@ export interface MintedToken {
 
 export function assertSecret(secret: string | undefined): string {
   if (!secret) {
-    throw new Error("DECILE_JWT_SECRET is not set; the API would reject every token this app issues");
+    throw new Error("BASKFY_JWT_SECRET is not set; the API would reject every token this app issues");
   }
   if (new TextEncoder().encode(secret).length < MIN_SECRET_BYTES) {
     throw new Error(
-      `DECILE_JWT_SECRET is shorter than the ${MIN_SECRET_BYTES} bytes RFC 7518 §3.2 requires for HS256`,
+      `BASKFY_JWT_SECRET is shorter than the ${MIN_SECRET_BYTES} bytes RFC 7518 §3.2 requires for HS256`,
     );
   }
   return secret;

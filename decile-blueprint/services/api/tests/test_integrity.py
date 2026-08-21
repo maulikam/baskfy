@@ -1,6 +1,6 @@
 """The restore drill's assertions, and the `/metrics` endpoint (Prompt 17 deliverables 2 and 6).
 
-``decile_api.integrity`` is what turns "``pg_restore`` exited 0" into "this database could serve
+``baskfy_api.integrity`` is what turns "``pg_restore`` exited 0" into "this database could serve
 the application". It is asserted here against the *seeded* test database, which is the same shape
 the drill restores — and, more importantly, against deliberately broken states, because an
 integrity check that only ever sees a healthy database is a check nobody has watched fail.
@@ -14,8 +14,8 @@ from screener_helpers import requires_db
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api import metrics
-from decile_api.integrity import CheckStatus, run_integrity_checks
+from baskfy_api import metrics
+from baskfy_api.integrity import CheckStatus, run_integrity_checks
 
 pytestmark = [pytest.mark.db, requires_db]
 
@@ -26,7 +26,7 @@ MINIMAL = {"index": "nifty-total-market", "sort_by": "avg_sharpe_12_6_3_1", "ser
 def _cache_events(result: str) -> float:
     """The counter's current value, or 0 before it has ever been incremented."""
     return (
-        metrics.REGISTRY.get_sample_value("decile_screen_cache_events_total", {"result": result})
+        metrics.REGISTRY.get_sample_value("baskfy_screen_cache_events_total", {"result": result})
         or 0.0
     )
 
@@ -130,7 +130,7 @@ class TestTheIntegrityAssertions:
 
         A published run with no step rows is a run whose audit trail did not survive — which is
         exactly the shape of a restore that lost a table. The seeded fixture writes the `publish`
-        step for its own fabricated run (`decile_api.seed.seed_published_run`) precisely so this
+        step for its own fabricated run (`baskfy_api.seed.seed_published_run`) precisely so this
         assertion is not tripped by the seed rather than by a bad backup.
         """
         report = await run_integrity_checks(screener_session)
@@ -180,7 +180,7 @@ class TestTheMetricsEndpoint:
 
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/plain")
-        assert "decile_http_request_duration_seconds" in response.text
+        assert "baskfy_http_request_duration_seconds" in response.text
 
     async def test_it_is_outside_the_versioned_api(
         self, seeded_url: str, screener_session: AsyncSession
@@ -244,11 +244,11 @@ class TestTheMetricsEndpoint:
             response = await client.get("/metrics")
 
         # `screener_helpers` seeds exactly one published run, at version 1.
-        assert "decile_data_version 1.0" in response.text
-        assert 'decile_pipeline_run_status{status="succeeded"} 1.0' in response.text
-        assert 'decile_pipeline_run_status{status="failed"} 0.0' in response.text
-        # Its `publish` step is what `decile_api.seed.seed_published_run` writes.
-        assert 'decile_pipeline_last_step_duration_seconds{step="publish"}' in response.text
+        assert "baskfy_data_version 1.0" in response.text
+        assert 'baskfy_pipeline_run_status{status="succeeded"} 1.0' in response.text
+        assert 'baskfy_pipeline_run_status{status="failed"} 0.0' in response.text
+        # Its `publish` step is what `baskfy_api.seed.seed_published_run` writes.
+        assert 'baskfy_pipeline_last_step_duration_seconds{step="publish"}' in response.text
 
     @pytest.mark.redis
     async def test_a_screen_run_counts_a_miss_and_then_a_hit(

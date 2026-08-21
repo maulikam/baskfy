@@ -29,9 +29,9 @@ from screener_helpers import requires_db
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.logging import JsonFormatter, RedactingFilter
-from decile_core.models import AppUser, Payment, Plan, Screen, Subscription, WebhookEvent
-from decile_core.seed_data import EXAMPLE_SCREENS, PRE_PURCHASE_DISCLAIMERS
+from baskfy_api.logging import JsonFormatter, RedactingFilter
+from baskfy_core.models import AppUser, Payment, Plan, Screen, Subscription, WebhookEvent
+from baskfy_core.seed_data import EXAMPLE_SCREENS, PRE_PURCHASE_DISCLAIMERS
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 

@@ -15,13 +15,13 @@ from decimal import Decimal
 
 import pytest
 
-from decile_core.factor_registry import (
+from baskfy_core.factor_registry import (
     COLUMN_PICKER_KEYS,
     CUSTOM_FILTER_OPERANDS,
     FACTORS,
     SORT_FACTOR_KEYS,
 )
-from decile_core.screen_definition import (
+from baskfy_core.screen_definition import (
     AwayFromHighFilter,
     CircuitsFilter,
     CustomFilter,
@@ -33,7 +33,7 @@ from decile_core.screen_definition import (
     ScreenDefinition,
     TopRiskFilter,
 )
-from decile_core.screener import (
+from baskfy_core.screener import (
     BUCKET_FRACTIONS,
     BUCKET_ROW_LIMITS,
     DEFAULT_RESULT_COLUMNS,
@@ -48,8 +48,8 @@ from decile_core.screener import (
     resolve_columns,
     validate_definition,
 )
-from decile_core.seed_data import EXAMPLE_SCREENS
-from decile_core.universes import UNIVERSE_BY_SLUG, UNIVERSES
+from baskfy_core.seed_data import EXAMPLE_SCREENS
+from baskfy_core.universes import UNIVERSE_BY_SLUG, UNIVERSES
 
 AS_OF = dt.date(2026, 8, 18)
 
@@ -588,6 +588,6 @@ class TestValidation:
     def test_an_unknown_bucket_is_refused(self) -> None:
         # A bucket no ``Literal`` allows, so it has to be smuggled past the model to reach the
         # builder at all — which is the point: the builder does not trust its caller.
-        smuggled = base().model_copy(update={"apply_filters_on": "decile_9"})
+        smuggled = base().model_copy(update={"apply_filters_on": "baskfy_9"})
         with pytest.raises(ScreenQueryError, match="unknown bucket"):
             validate_definition(smuggled)

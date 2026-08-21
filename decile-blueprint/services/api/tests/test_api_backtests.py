@@ -7,7 +7,7 @@ routes, what a queued run answers with, how the artefacts paginate, whether a si
 and what the event stream sends first.
 
 So the ``done`` backtest these tests read is **constructed**, not simulated — a small
-:class:`~decile_core.backtest.BacktestResult` built by hand and put through the same
+:class:`~baskfy_core.backtest.BacktestResult` built by hand and put through the same
 ``build_payload``/``artefact_bytes`` the worker uses. Running a fifteen-year simulation to check
 that pagination works would test the engine for the third time and the router for the first.
 """
@@ -34,7 +34,7 @@ from screener_helpers import requires_db
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.backtests import (
+from baskfy_api.backtests import (
     ARTEFACTS,
     artefact_bytes,
     artefact_key,
@@ -45,9 +45,9 @@ from decile_api.backtests import (
     progress_key,
     sign_download,
 )
-from decile_api.routers.backtests import event_stream
-from decile_api.settings import Settings
-from decile_core.backtest import (
+from baskfy_api.routers.backtests import event_stream
+from baskfy_api.settings import Settings
+from baskfy_core.backtest import (
     BacktestConfig,
     BacktestResult,
     HoldingSnapshot,
@@ -56,8 +56,8 @@ from decile_core.backtest import (
     TradeReason,
     TradeSide,
 )
-from decile_core.models import Backtest, Screen
-from decile_providers.archive import LocalRawArchive
+from baskfy_core.models import Backtest, Screen
+from baskfy_providers.archive import LocalRawArchive
 
 pytestmark = [requires_db, pytest.mark.db]
 
@@ -86,7 +86,7 @@ def _settings(archive_dir: Path) -> Settings:
 
     ``invoice_local_dir`` is the directory ``build_invoice_archive`` falls back to when no bucket
     is configured, and backtests share that store — one abstraction over R2-or-a-directory, not
-    two (see ``decile_api.backtests``).
+    two (see ``baskfy_api.backtests``).
     """
     return api_helpers.api_settings(
         screener_helpers.database_url(), invoice_local_dir=str(archive_dir)
@@ -249,7 +249,7 @@ async def test_a_paid_account_queues_a_run(session: AsyncSession, tmp_path: Path
     ).scalar_one()
     assert row.user_id == user_id
     assert row.screen_id == screen.id
-    assert queue.sent == [("decile.backtest.run", [body["public_id"], True])]
+    assert queue.sent == [("baskfy.backtest.run", [body["public_id"], True])]
 
 
 async def test_a_second_concurrent_run_is_refused(session: AsyncSession, tmp_path: Path) -> None:

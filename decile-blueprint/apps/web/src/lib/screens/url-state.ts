@@ -1,4 +1,4 @@
-import { ScreenDefinitionSchema, type ScreenDefinition } from "@decile/api-client";
+import { ScreenDefinitionSchema, type ScreenDefinition } from "@baskfy/api-client";
 
 import { defaultDefinition } from "@/lib/screens/defaults";
 

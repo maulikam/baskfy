@@ -29,7 +29,7 @@ import { CONTENT_ROUTES, LEGAL_ROUTES } from "../src/lib/marketing/routes";
  */
 
 const EMAIL = "e2e@example.com";
-/** `decile_api.seed.E2E_PASSWORD` — a published constant for a throwaway database. */
+/** `baskfy_api.seed.E2E_PASSWORD` — a published constant for a throwaway database. */
 const E2E_PASSWORD = "e2e-suite-password";
 
 /** A symbol the seeded reference export contains; docs/13 works the whole spec through it. */

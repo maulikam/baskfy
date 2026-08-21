@@ -26,10 +26,10 @@ from api_helpers import assert_problem, url
 from screener_helpers import AS_OF, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_core.breadth import ATH_PROXIMITY_PCT
-from decile_core.models import Instrument
-from decile_core.reference_export import to_rows
-from decile_core.universes import MARKET_HEALTH_SLUGS, UNIVERSE_BY_SLUG
+from baskfy_core.breadth import ATH_PROXIMITY_PCT
+from baskfy_core.models import Instrument
+from baskfy_core.reference_export import to_rows
+from baskfy_core.universes import MARKET_HEALTH_SLUGS, UNIVERSE_BY_SLUG
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 
@@ -69,7 +69,7 @@ def hand_computed_breadth(slug: str) -> dict[str, Decimal | int | None]:
     """docs/01 §6's four gauges for one universe, computed here from the committed CSV.
 
     Deliberately naive: a list comprehension per gauge over the export's own rows, with no SQL,
-    no `decile_core.breadth`, and no rounding cleverness. If this agreed with the API because both
+    no `baskfy_core.breadth`, and no rounding cleverness. If this agreed with the API because both
     called the same function the check would be worthless — the point is that two independent
     readings of docs/01 §6 land on the same numbers.
 

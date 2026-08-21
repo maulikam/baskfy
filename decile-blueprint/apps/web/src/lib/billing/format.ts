@@ -1,4 +1,4 @@
-import type { PlanOut } from "@decile/api-client";
+import type { PlanOut } from "@baskfy/api-client";
 
 /**
  * Presentation of a plan, and nothing else.

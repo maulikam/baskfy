@@ -14,7 +14,7 @@ from decimal import Decimal
 
 import pytest
 
-from decile_core.portfolio_csv import (
+from baskfy_core.portfolio_csv import (
     SAMPLE_CSV,
     CsvParseError,
     RowIssue,

@@ -29,9 +29,9 @@ from alert_helpers import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api import alerts as service
-from decile_api.email import Mailer
-from decile_core.models import ScreenAlert, ScreenAlertDelivery
+from baskfy_api import alerts as service
+from baskfy_api.email import Mailer
+from baskfy_core.models import ScreenAlert, ScreenAlertDelivery
 
 pytestmark = [screener_helpers.requires_db, pytest.mark.db, pytest.mark.redis]
 

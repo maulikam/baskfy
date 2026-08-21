@@ -4,11 +4,11 @@ import {
   IGNORE_ABOVE_BETA_IGNORE,
   POSITIVE_DAYS_IGNORE,
   type ScreenDefinition,
-} from "@decile/api-client";
+} from "@baskfy/api-client";
 
 /**
  * The screen definition's defaults, and the predicates that decide whether a field is *doing*
- * anything — docs/01 §2.4–§2.10 and `decile_core.screen_definition`.
+ * anything — docs/01 §2.4–§2.10 and `baskfy_core.screen_definition`.
  *
  * The sentinels are the reason this file exists. The reference product encodes "this filter is
  * off" inside the value itself, so a naive reader applies a filter the user meant to disable, and

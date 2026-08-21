@@ -12,12 +12,12 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
-from decile_api.seed import (
+from baskfy_api.seed import (
     seed_reference,
     seed_reference_fixture,
     seed_trading_days,
 )
-from decile_core.models import (
+from baskfy_core.models import (
     FactorDaily,
     IndexDef,
     IndexMemberDaily,
@@ -26,10 +26,10 @@ from decile_core.models import (
     Screen,
     TradingDay,
 )
-from decile_core.screen_definition import ScreenDefinition
-from decile_core.universes import UNIVERSE_BY_SLUG
+from baskfy_core.screen_definition import ScreenDefinition
+from baskfy_core.universes import UNIVERSE_BY_SLUG
 
-ENV_VAR = "DECILE_TEST_DATABASE_URL"
+ENV_VAR = "BASKFY_TEST_DATABASE_URL"
 
 pytestmark = [
     pytest.mark.db,
@@ -48,8 +48,8 @@ def migrated(clean_database: object) -> None:
         ["uv", "run", "alembic", "upgrade", "head"],
         cwd=API_DIR,
         env={
-            **{k: v for k, v in os.environ.items() if k != "DECILE_DATABASE_URL"},
-            "DECILE_DATABASE_URL": os.environ[ENV_VAR],
+            **{k: v for k, v in os.environ.items() if k != "BASKFY_DATABASE_URL"},
+            "BASKFY_DATABASE_URL": os.environ[ENV_VAR],
         },
         capture_output=True,
         text=True,

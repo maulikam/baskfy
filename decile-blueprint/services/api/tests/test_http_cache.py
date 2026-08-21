@@ -18,7 +18,7 @@ from api_helpers import bearer, make_user, url
 from screener_helpers import AS_OF, DATA_VERSION, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.http_cache import (
+from baskfy_api.http_cache import (
     AS_OF_HEADER,
     DATA_VERSION_HEADER,
     cache_control,
@@ -27,8 +27,8 @@ from decile_api.http_cache import (
     is_cacheable_path,
     snapshot_headers,
 )
-from decile_api.settings import API_PREFIX
-from decile_core.seed_data import EXAMPLE_SCREENS
+from baskfy_api.settings import API_PREFIX
+from baskfy_core.seed_data import EXAMPLE_SCREENS
 
 
 class TestEtagConstruction:
@@ -218,7 +218,7 @@ class TestOverHttp:
     ) -> None:
         """Buffering it to hash it would defeat the point of streaming it.
 
-        docs/11 budgets a 4,000-row export at 2 s and `decile_api.csv_export` meets it by never
+        docs/11 budgets a 4,000-row export at 2 s and `baskfy_api.csv_export` meets it by never
         holding the file in memory. The export is entitlement-gated (docs/07 §"Error catalogue",
         402), so this drives it as a subscriber — an anonymous 402 would prove nothing about the
         streaming path.

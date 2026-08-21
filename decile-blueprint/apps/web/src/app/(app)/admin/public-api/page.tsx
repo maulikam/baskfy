@@ -12,7 +12,7 @@ import { serverApi } from "@/lib/api/server";
  * change. Putting a toggle here would make the second one a lie.
  *
  * Everything on the page is the server's own answer, including docs/11's sentence — it is read
- * from `decile_core.public_api.DATA_REDISTRIBUTION_REVIEW`, not retyped here, so a staff member
+ * from `baskfy_core.public_api.DATA_REDISTRIBUTION_REVIEW`, not retyped here, so a staff member
  * reading this is reading the requirement the code is actually enforcing.
  */
 export const metadata: Metadata = {
@@ -49,7 +49,7 @@ export default async function AdminPublicApiPage() {
           {data.serving ? "YES — the public tier is live" : "no"}
         </dd>
         <dt className="text-muted-foreground">
-          <code className="font-mono text-xs">DECILE_PUBLIC_API_ENABLED</code>
+          <code className="font-mono text-xs">BASKFY_PUBLIC_API_ENABLED</code>
         </dt>
         <dd>{data.flag_enabled ? "true" : "false"}</dd>
         <dt className="text-muted-foreground">Data-redistribution review</dt>

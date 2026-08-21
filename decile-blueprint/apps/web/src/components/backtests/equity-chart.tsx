@@ -1,6 +1,6 @@
 "use client";
 
-import type { EquityPointOut } from "@decile/api-client";
+import type { EquityPointOut } from "@baskfy/api-client";
 import { curveMonotoneX } from "@visx/curve";
 import { scaleLinear } from "@visx/scale";
 import { LinePath } from "@visx/shape";

@@ -1,6 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 
-import type { CorporateActionOut } from "@decile/api-client";
+import type { CorporateActionOut } from "@baskfy/api-client";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatTradeDate } from "@/lib/format";

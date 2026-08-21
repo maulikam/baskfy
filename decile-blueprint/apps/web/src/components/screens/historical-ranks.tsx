@@ -1,6 +1,6 @@
 "use client";
 
-import type { ScreenDefinition } from "@decile/api-client";
+import type { ScreenDefinition } from "@baskfy/api-client";
 
 import { Field, SwitchRow } from "@/components/screens/field";
 import { Select } from "@/components/ui/select";

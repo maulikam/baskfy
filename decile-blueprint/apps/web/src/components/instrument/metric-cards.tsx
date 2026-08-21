@@ -1,4 +1,4 @@
-import type { MetricCardOut } from "@decile/api-client";
+import type { MetricCardOut } from "@baskfy/api-client";
 
 import { Sparkline } from "@/components/data/sparkline";
 import { StatCard } from "@/components/data/stat-card";

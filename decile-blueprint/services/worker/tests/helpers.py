@@ -15,10 +15,10 @@ from typing import Final
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_core.models import Instrument, OhlcvDaily
-from decile_core.seed_data import NSE_EXCHANGE_ID
+from baskfy_core.models import Instrument, OhlcvDaily
+from baskfy_core.seed_data import NSE_EXCHANGE_ID
 
-ENV_VAR: Final = "DECILE_TEST_DATABASE_URL"
+ENV_VAR: Final = "BASKFY_TEST_DATABASE_URL"
 
 requires_db = pytest.mark.skipif(
     os.environ.get(ENV_VAR) is None,

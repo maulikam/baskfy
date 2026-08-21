@@ -1,4 +1,4 @@
-import type { RebalanceNameOut } from "@decile/api-client";
+import type { RebalanceNameOut } from "@baskfy/api-client";
 
 /**
  * Turning one of the three lists into something a user can paste into a broker or a spreadsheet —
@@ -56,7 +56,7 @@ export function downloadCsv(filename: string, text: string): void {
   URL.revokeObjectURL(url);
 }
 
-/** `decile-exits-2026-08-18.csv` — the list and the date it was computed for. */
+/** `baskfy-exits-2026-08-18.csv` — the list and the date it was computed for. */
 export function filenameFor(list: string, asOf: string): string {
-  return `decile-${list}-${asOf}.csv`;
+  return `baskfy-${list}-${asOf}.csv`;
 }

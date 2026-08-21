@@ -14,9 +14,9 @@ import api_helpers
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_api.email import EmailNotSent, Message
-from decile_api.settings import Settings
-from decile_core.models import Instrument, Screen, ScreenRun
+from baskfy_api.email import EmailNotSent, Message
+from baskfy_api.settings import Settings
+from baskfy_core.models import Instrument, Screen, ScreenRun
 
 #: Two consecutive trade dates inside the seeded reference export's range.
 PREVIOUS: Final = dt.date(2026, 8, 17)

@@ -30,7 +30,7 @@ a test to be loosened."
 
 WHAT A BAR SERIES ALONE DOES NOT BUY YOU
 -----------------------------------------
-This paragraph used to end "point ``DECILE_PARITY_BARS`` at a Parquet of real adjusted history and
+This paragraph used to end "point ``BASKFY_PARITY_BARS`` at a Parquet of real adjusted history and
 it runs", which was **false**, and nobody found out because a skipped test is never executed. Four
 of the mapped columns cannot be reproduced from adjusted bars at all:
 
@@ -68,32 +68,32 @@ from typing import Final
 import polars as pl
 import pytest
 
-from decile_core.blends import BLEND_SHAPES
-from decile_core.factors import compute_factors
-from decile_core.precision import quantise
-from decile_core.reference_export import (
+from baskfy_core.blends import BLEND_SHAPES
+from baskfy_core.factors import compute_factors
+from baskfy_core.precision import quantise
+from baskfy_core.reference_export import (
     EXPORT_COLUMNS,
     FACTOR_COLUMN_MAP,
     default_fixture_path,
     read_export,
 )
-from decile_core.universes import UNIVERSE_BY_SLUG
-from decile_core.windows import EXPECTED_WINDOW_LENGTHS_2026_08_18
+from baskfy_core.universes import UNIVERSE_BY_SLUG
+from baskfy_core.windows import EXPECTED_WINDOW_LENGTHS_2026_08_18
 
 AS_OF: Final = dt.date(2026, 8, 18)
 
 #: Where a caller can supply the real adjusted history that step 2 needs.
-BARS_ENV_VAR: Final = "DECILE_PARITY_BARS"
+BARS_ENV_VAR: Final = "BASKFY_PARITY_BARS"
 
 #: Where a caller can supply the NIFTY 50 level series docs/05 §6 measures beta against.
 #: ``compute_factors`` takes the benchmark as a *parameter*, not as a column on the bars, so
-#: without this every ``beta_12m`` is NULL by construction (``decile_core.factors._with_beta``).
-BENCHMARK_ENV_VAR: Final = "DECILE_PARITY_BENCHMARK"
+#: without this every ``beta_12m`` is NULL by construction (``baskfy_core.factors._with_beta``).
+BENCHMARK_ENV_VAR: Final = "BASKFY_PARITY_BENCHMARK"
 
 #: Set when the supplied bars begin at each symbol's listing date. ``high_ath`` is a ``cum_max``
-#: over whatever history it is given (``decile_core.factors`` §``_with_price_levels``), so on a
+#: over whatever history it is given (``baskfy_core.factors`` §``_with_price_levels``), so on a
 #: truncated series it is the window maximum wearing an all-time label — wrong, and quietly so.
-FULL_HISTORY_ENV_VAR: Final = "DECILE_PARITY_BARS_ARE_FULL_HISTORY"
+FULL_HISTORY_ENV_VAR: Final = "BASKFY_PARITY_BARS_ARE_FULL_HISTORY"
 
 #: The five window suffixes the export names, in the export's own order.
 WINDOW_SUFFIXES: Final = ("one_year", "nine_months", "six_months", "three_months", "one_month")
@@ -122,7 +122,7 @@ KNOWN_UNRECONCILED: Final[dict[str, str]] = {
 NEEDS_EXTRA_INPUT: Final[dict[str, str]] = {
     "marketcap": (
         "needs shares outstanding. `marketcap_cr` is an OPTIONAL INPUT to compute_factors "
-        "(decile_core.factors.OPTIONAL_COLUMNS), never a computed output, and no step in docs/03 "
+        "(baskfy_core.factors.OPTIONAL_COLUMNS), never a computed output, and no step in docs/03 "
         "fetches fundamentals — CLAUDE.md carries this as an open item. Put a `marketcap_cr` "
         f"column on the {BARS_ENV_VAR} frame and it is checked at full precision."
     ),
@@ -594,7 +594,7 @@ class TestStep6ExportShape:
     """ "Assert our CSV export reproduces this file's exact column names, order, quoting and BOM."
 
     The writer itself is Prompt 9's; what belongs here is the contract it has to meet, taken from
-    the file rather than from docs/13 §1's prose — which, as `decile_core.reference_export`
+    the file rather than from docs/13 §1's prose — which, as `baskfy_core.reference_export`
     records, describes the flag layout wrongly.
     """
 
@@ -627,7 +627,7 @@ def _load_real_bars() -> pl.DataFrame | None:
 
     ``close`` must be the adjusted series. A provider that returns the exchange print — Kite does,
     per docs/09: "Treat everything from Kite as raw" — has to go through
-    ``decile_core.adjustments`` first, or every path-dependent factor is measured across a split.
+    ``baskfy_core.adjustments`` first, or every path-dependent factor is measured across a split.
     """
     path = os.environ.get(BARS_ENV_VAR)
     if not path:

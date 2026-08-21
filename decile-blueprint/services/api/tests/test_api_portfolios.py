@@ -17,9 +17,9 @@ from api_helpers import assert_problem, bearer, make_user, url
 from screener_helpers import AS_OF, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from decile_core.models import Instrument, SymbolAlias
-from decile_core.portfolio_csv import SAMPLE_CSV
-from decile_core.seed_data import EXAMPLE_SCREENS, NSE_EXCHANGE_ID
+from baskfy_core.models import Instrument, SymbolAlias
+from baskfy_core.portfolio_csv import SAMPLE_CSV
+from baskfy_core.seed_data import EXAMPLE_SCREENS, NSE_EXCHANGE_ID
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 

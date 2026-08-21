@@ -17,14 +17,14 @@ from typing import Final
 import polars as pl
 import pytest
 
-from decile_core import universes
-from decile_core.factors import (
+from baskfy_core import universes
+from baskfy_core.factors import (
     TOP_RISK_FLAG_PERCENTILE,
     FactorConfig,
     FactorResult,
     compute_factors_unrounded,
 )
-from decile_core.windows import WINDOW_MONTHS
+from baskfy_core.windows import WINDOW_MONTHS
 
 AS_OF: Final = dt.date(2026, 8, 18)
 SHORT: Final = FactorConfig(window_months=(1,))
@@ -65,8 +65,8 @@ class TestTheTopRiskPercentileIsOneNumber:
     """Kills ``factors.py TOP_RISK_FLAG_PERCENTILE 0.1 -> 1.1``.
 
     docs/06 §Step 4 asks for it as "a named constant ... so it can be recalibrated against the
-    fixture". It is currently declared **twice** — in `decile_core.universes` and in
-    `decile_core.factors` — and the nightly flag step imports the `factors` one. Nothing before
+    fixture". It is currently declared **twice** — in `baskfy_core.universes` and in
+    `baskfy_core.factors` — and the nightly flag step imports the `factors` one. Nothing before
     this test noticed if they drifted apart, and a mutation of either was invisible to the whole
     of `packages/core`.
     """
@@ -74,7 +74,7 @@ class TestTheTopRiskPercentileIsOneNumber:
     def test_the_two_declarations_agree(self) -> None:
         assert TOP_RISK_FLAG_PERCENTILE == universes.TOP_RISK_FLAG_PERCENTILE
 
-    def test_it_is_the_top_decile_docs_06_specifies(self) -> None:
+    def test_it_is_the_top_baskfy_docs_06_specifies(self) -> None:
         assert TOP_RISK_FLAG_PERCENTILE == 0.10
 
 

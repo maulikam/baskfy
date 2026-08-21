@@ -1,7 +1,7 @@
 import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 
-import { decileAdapter } from "@/lib/auth/adapter";
+import { baskfyAdapter } from "@/lib/auth/adapter";
 import { ACCESS_TOKEN_TTL_SECONDS, mintAccessToken } from "@/lib/auth/jwt";
 import { requestOtp, verifyOtp, verifyPassword } from "@/lib/auth/api-auth";
 
@@ -19,7 +19,7 @@ import { requestOtp, verifyOtp, verifyPassword } from "@/lib/auth/api-auth";
  *
  * 2. **The access token is not the session cookie.** The cookie is Auth.js's own encrypted JWT;
  *    `session.accessToken` is a *separate* HS256 token minted for `services/api`, whose verifier
- *    (`decile_api.auth`) refuses anything longer-lived than fifteen minutes. It is re-minted
+ *    (`baskfy_api.auth`) refuses anything longer-lived than fifteen minutes. It is re-minted
  *    inside the `jwt` callback whenever it is within a minute of expiring, so a long session
  *    never carries a stale bearer token.
  *
@@ -57,11 +57,11 @@ interface DecileToken {
 const REFRESH_MARGIN_MS = 60_000;
 
 function secret(): string | undefined {
-  return process.env.DECILE_JWT_SECRET;
+  return process.env.BASKFY_JWT_SECRET;
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  adapter: decileAdapter(),
+  adapter: baskfyAdapter(),
   session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60 },
   trustHost: true,
   pages: { signIn: "/login", error: "/login" },
@@ -139,8 +139,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const minted = await mintAccessToken(
         {
           subject: publicId,
-          issuer: process.env.DECILE_JWT_ISSUER,
-          audience: process.env.DECILE_JWT_AUDIENCE,
+          issuer: process.env.BASKFY_JWT_ISSUER,
+          audience: process.env.BASKFY_JWT_AUDIENCE,
         },
         secret(),
       );

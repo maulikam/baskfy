@@ -6,14 +6,14 @@ Why this exists rather than ``--cov-fail-under``
 ------------------------------------------------
 ``pytest-cov``'s ``--cov-fail-under`` is a single number over everything measured. Prompt 19 asks
 for two different numbers over two different trees, and a combined figure hides exactly the case
-that matters: ``decile_core`` sliding from 92% to 84% while ``decile_worker`` climbs, leaving the
+that matters: ``baskfy_core`` sliding from 92% to 84% while ``baskfy_worker`` climbs, leaving the
 total flat. So the thresholds are per package, and the packages Prompt 19 does *not* gate are
 still reported — an ungated number that nobody can see is an ungated number that only falls.
 
 Why the gate needs a database
 -----------------------------
 ``services/api`` is 5,300 statements of endpoints, and most of them are exercised by tests marked
-``db``. Without ``DECILE_TEST_DATABASE_URL`` those skip, and ``decile_api`` measures far below
+``db``. Without ``BASKFY_TEST_DATABASE_URL`` those skip, and ``baskfy_api`` measures far below
 80% — not because the coverage is worse but because the suite did not run. The gate therefore
 refuses to pass on a run where the database tests skipped, rather than reporting a number that
 means something different from the one CI reports. ``make coverage`` and the CI job both provide
@@ -32,19 +32,19 @@ from typing import Final
 
 #: Prompt 19 §1's two thresholds, as percentages of statements-plus-branches.
 THRESHOLDS: Final[dict[str, float]] = {
-    "decile_core": 90.0,
-    "decile_api": 80.0,
+    "baskfy_core": 90.0,
+    "baskfy_api": 80.0,
 }
 
 #: Measured and printed, but not gated: Prompt 19 names only the two above. Listing them here
 #: rather than dropping them keeps the report honest about the whole codebase.
-UNGATED: Final[tuple[str, ...]] = ("decile_providers", "decile_worker")
+UNGATED: Final[tuple[str, ...]] = ("baskfy_providers", "baskfy_worker")
 
 DEFAULT_REPORT: Final = Path("coverage.json")
 
 #: The suite skips every ``db``-marked test without this, which silently removes most of
-#: ``decile_api`` from the measurement. See the module docstring.
-DATABASE_ENV_VAR: Final = "DECILE_TEST_DATABASE_URL"
+#: ``baskfy_api`` from the measurement. See the module docstring.
+DATABASE_ENV_VAR: Final = "BASKFY_TEST_DATABASE_URL"
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=(
             "report the numbers even though the db-marked tests skipped. Never use this to make "
-            "a build green: the resulting decile_api figure is not comparable with CI's."
+            "a build green: the resulting baskfy_api figure is not comparable with CI's."
         ),
     )
     args = parser.parse_args(argv)

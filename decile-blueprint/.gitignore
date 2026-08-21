@@ -26,6 +26,6 @@ build/
 # (benchmarks/AS-MEASURED.md) is committed; the raw samples are not — they are machine-specific.
 benchmarks/results/
 
-# Prompt 19's mutation harness: throwaway copies of decile_core, one per worker.
+# Prompt 19's mutation harness: throwaway copies of baskfy_core, one per worker.
 .mutants/
 coverage.json

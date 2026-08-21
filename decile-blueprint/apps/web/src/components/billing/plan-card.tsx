@@ -1,5 +1,5 @@
 import { Check } from "lucide-react";
-import type { PlanOut } from "@decile/api-client";
+import type { PlanOut } from "@baskfy/api-client";
 
 import { CheckoutButton } from "@/components/billing/checkout-button";
 import { Badge } from "@/components/ui/badge";

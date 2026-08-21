@@ -4,7 +4,7 @@
 
 So this scans the repository rather than trusting one default: the Pydantic setting, `.env.example`,
 `.env` if a developer has one, the compose files, the CI workflows, the Playwright config and the
-Makefile. Anything that mentions `DECILE_PUBLIC_API_ENABLED` must set it to a false value.
+Makefile. Anything that mentions `BASKFY_PUBLIC_API_ENABLED` must set it to a false value.
 
 It also asserts the *second* lock — that `create_app` does not mount the router when the
 data-redistribution review is outstanding, whatever the flag says. `docs/DECISIONS.md` §20.1.
@@ -19,16 +19,16 @@ from typing import Final
 import pytest
 from fastapi.routing import APIRoute
 
-from decile_api.app import create_app
-from decile_api.routers import public
-from decile_api.settings import Settings
-from decile_core.public_api import DATA_REDISTRIBUTION_REVIEW, PUBLIC_API_PREFIX
+from baskfy_api.app import create_app
+from baskfy_api.routers import public
+from baskfy_api.settings import Settings
+from baskfy_core.public_api import DATA_REDISTRIBUTION_REVIEW, PUBLIC_API_PREFIX
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[3]
 
 #: The exact variable. Matching a substring would also hit `NEXT_PUBLIC_API_URL`, which is the web
 #: app's pointer at `/api/v1` and has nothing to do with the public tier.
-FLAG: Final = "DECILE_PUBLIC_API_ENABLED"
+FLAG: Final = "BASKFY_PUBLIC_API_ENABLED"
 
 #: Anything a config file might spell "off" as.
 FALSE_VALUES: Final = frozenset({"false", "0", "no", "off", '"false"', "'false'"})

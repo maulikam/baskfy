@@ -18,7 +18,7 @@ from helpers import TRADE_DATE, add_bar, make_instrument, requires_db
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from decile_core.models import (
+from baskfy_core.models import (
     FactorDaily,
     IndexDef,
     IndexMemberDaily,
@@ -26,21 +26,21 @@ from decile_core.models import (
     Instrument,
     MarketHealthDaily,
 )
-from decile_core.universes import (
+from baskfy_core.universes import (
     FIRST_NON_UNIVERSE_INDEX_ID,
     MARKET_HEALTH_SLUGS,
     UNIVERSE_BY_SLUG,
     UNIVERSES,
     slugify_index,
 )
-from decile_providers.records import IndexSnapshot, ListingRecord
-from decile_worker.reference_backfill import backfill_reference_data, trading_days_in
-from decile_worker.steps import StepOutcome
-from decile_worker.tasks.listings import listed_count, listings_page, store_listings
-from decile_worker.tasks.market_health import (
+from baskfy_providers.records import IndexSnapshot, ListingRecord
+from baskfy_worker.reference_backfill import backfill_reference_data, trading_days_in
+from baskfy_worker.steps import StepOutcome
+from baskfy_worker.tasks.listings import listed_count, listings_page, store_listings
+from baskfy_worker.tasks.market_health import (
     run_compute_market_health,
 )
-from decile_worker.tasks.membership import (
+from baskfy_worker.tasks.membership import (
     SOURCE_DERIVED,
     SOURCE_NSE_FILE,
     SOURCE_RECONSTRUCTED,
@@ -48,13 +48,13 @@ from decile_worker.tasks.membership import (
     refresh_membership,
     resolve_universe,
 )
-from decile_worker.tasks.snapshots import (
+from baskfy_worker.tasks.snapshots import (
     dashboard_rows,
     index_count,
     run_refresh_index_snapshots,
     store_snapshots,
 )
-from decile_worker.window import DateWindow
+from baskfy_worker.window import DateWindow
 
 pytestmark = [pytest.mark.db, requires_db]
 
@@ -343,7 +343,7 @@ class TestCriterion2MarketHealthByHand:
     async def test_history_is_stored_per_date(self, session: AsyncSession) -> None:
         """Prompt 4 §3: "Store daily so history is queryable".
 
-        The *reader* is `decile_api.market_data.market_health_history`, asserted in
+        The *reader* is `baskfy_api.market_data.market_health_history`, asserted in
         `services/api/tests/test_api_market_data.py`; what this step owes it is a row per date.
         """
         await self._seed(session)

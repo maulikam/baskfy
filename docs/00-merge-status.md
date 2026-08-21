@@ -4,7 +4,7 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M11 · **State:** running autonomously
+**Run started:** 22 Aug 2026 · **Current module:** M15 (M11 red; M12–M14 blocked by rule 7) · **State:** running autonomously
 
 Since 22 Aug 2026 this is an **autonomous run** under `CLAUDE.md` §Autonomy charter:
 judgement calls are decided, recorded in `DECISIONS-MERGE.md` (tagged `⚠ UNREVIEWED`
@@ -28,11 +28,11 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M8 | NSE endpoints verified | ✅ done | 22 Aug 2026 | All 5 capabilities live-verified; **4 universes were 404ing** and are fixed (M8.1). `reconciliation/NSE-ENDPOINTS.md` |
 | M9 | Kite creds + backfill | ⚠️ partial | 22 Aug 2026 | Bars current to 2026-08-21 (**1,145,922**) via bhavcopy. **Depth before 2024 needs a Kite login** — queued, not blocking (M9.1) |
 | M10 | Calendar + corporate actions | ⚠️ partial | 22 Aug 2026 | Calendar observed; **3 of 5 windows exact** (was 0). §21.9 look-ahead **fixed and proven**. 3M/6M off by one → M11 (M10.1) |
-| M11 | 271-row parity test | 🔄 running | 22 Aug 2026 | **RED GATE**, self-judged |
-| M12 | Desk parity | — | | **RED GATE + HUMAN REVIEW** |
+| M11 | 271-row parity test | 🔴 **red** | 22 Aug 2026 | Test **runs** for the first time. Base fix landed (1M reproduces); **6,934/9,166 cells still fail** on window length. Needs a decision (M11.2) |
+| M12 | Desk parity | ⛔ blocked | | Rule 7: M13 opens only on empty deltas, and M12 inherits M11's numbers |
 | M13 | MomentumScan — CSV cord cut | — | | |
 | M14 | Breadth + shadow harness | — | | |
-| M15 | Desk brains → core | — | | |
+| M15 | Desk brains → core | 🔄 next | | Rule 11 — depends on code + the uploads corpus, not on M11's numbers |
 | M16 | Execution package + broker split | — | | |
 | M17 | Rank buffer demoted | — | | |
 | M18 | Database migration | — | | **HUMAN GATE** |

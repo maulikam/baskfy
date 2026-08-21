@@ -101,3 +101,26 @@ which has moved. Decide then between three options:
 Nothing breaks until you deploy, and the equity desk is unaffected by all three.
 
 **Blocks:** nothing.
+
+### 4. Corporate-action history — the single biggest blocker on the parity gates
+**Status:** open, **blocks M13** · **Raised:** M12, 22 Aug 2026
+
+`corporate_action` holds **four rows**. NSE's API serves only a recent window
+(`decile-blueprint/docs/DECISIONS.md` §21.8), so almost no split, bonus or dividend before the last
+few weeks is known to the system.
+
+**Consequence, measured:** **40 of the 271 symbols in the desk's own weekly scan — 14.8% — carry
+unadjusted price history.** `NESTLEIND` still shows its 10:1 split as a 90% one-day fall;
+`BAJFINANCE`, `ANGELONE`, `SHRIRAMFIN` and 36 others likewise. Every factor whose window crosses
+one of those dates is wrong for that name — which is how `SHILPAMED` went from #10 to #57 in the
+M12 comparison, and why its one-year return reads −21% where the desk was traded on +55%.
+
+**What is needed:** a corporate-actions source that serves *history*, not a recent window. The
+candidates are Kite (same login as item 3), NSE's archive under a different endpoint than the one
+the API exposes, or a paid vendor.
+
+**Why it matters more than it sounds:** the adjustment code is correct — it reproduces CUPID's
+split and both bonuses exactly — so this is purely missing input, and it is currently the dominant
+cause of both parity gates failing. It is more load-bearing than the window question M11 raised.
+
+**Blocks:** M13 (rule 7 opens it only on empty delta tables). Does not block M15–M20.

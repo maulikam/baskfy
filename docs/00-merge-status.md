@@ -29,7 +29,7 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M9 | Kite creds + backfill | ⚠️ partial | 22 Aug 2026 | Bars current to 2026-08-21 (**1,145,922**) via bhavcopy. **Depth before 2024 needs a Kite login** — queued, not blocking (M9.1) |
 | M10 | Calendar + corporate actions | ⚠️ partial | 22 Aug 2026 | Calendar observed; **3 of 5 windows exact** (was 0). §21.9 look-ahead **fixed and proven**. 3M/6M off by one → M11 (M10.1) |
 | M11 | 271-row parity test | 🔴 **red** | 22 Aug 2026 | Test **runs** for the first time. Base fix landed (1M reproduces); **6,934/9,166 cells still fail** on window length. Needs a decision (M11.2) |
-| M12 | Desk parity | ⛔ blocked | | Rule 7: M13 opens only on empty deltas, and M12 inherits M11's numbers |
+| M12 | Desk parity | 🔴 **red, informative** | 22 Aug 2026 | **23/25 top-25 shared.** Gap is **missing corporate actions (40/271 symbols)**, not the window. `reconciliation/DESK-PARITY.md` (M12.1) |
 | M13 | MomentumScan — CSV cord cut | — | | |
 | M14 | Breadth + shadow harness | — | | |
 | M15 | Desk brains → core | 🔄 next | | Rule 11 — depends on code + the uploads corpus, not on M11's numbers |

@@ -158,6 +158,55 @@ class Settings(BaseSettings):
     backtest_user_concurrency: int = Field(default=1, gt=0)
     backtest_global_concurrency: int = Field(default=8, gt=0)
 
+    # --- Public read API, API keys, alerts and webhooks (Prompt 20) ----------
+    #: PROMPTS.md Prompt 20 §2: "Gate the entire feature behind a flag that stays OFF until the
+    #: data-redistribution review in docs/11 is signed off." **This default is asserted by
+    #: ``services/api/tests/test_public_api.py`` and by a scan over every environment file in the
+    #: repository** — Prompt 20's third acceptance criterion. Turning it on is not sufficient on
+    #: its own: ``decile_core.public_api.DATA_REDISTRIBUTION_REVIEW`` is a source constant that a
+    #: human must edit, and the router refuses to mount while it says the review is outstanding.
+    public_api_enabled: bool = False
+    #: Where a caller of the public API is told to write. Appears in the terms-of-use document.
+    public_api_contact_email: str = "api@decile.in"
+    #: The base URL printed in the copy-paste examples on the interactive reference. A setting so
+    #: a staging deployment's examples point at staging rather than at production.
+    public_api_base_url: str = "http://localhost:8000"
+    #: Redoc is loaded from a CDN — see ``decile_api.routers.public``. Pinned by version, and a
+    #: setting so an air-gapped deployment can point it at a self-hosted copy.
+    redoc_script_url: str = "https://cdn.redoc.ly/redoc/v2.5.0/bundles/redoc.standalone.js"
+
+    #: Prompt 20 §1: "per-key rate limits". The ceiling an owner may set for one of their own
+    #: keys, so a key cannot be given a quota larger than the tier docs/07 fixes at 600/min.
+    api_key_max_rate_limit_per_minute: int = Field(default=600, gt=0)
+    #: How long a key lives when the caller does not say. ``None`` means "until revoked", which
+    #: is what an integration credential usually is; a default expiry that silently breaks a
+    #: production integration at 3am is worse than a key an operator has to remember to rotate.
+    api_key_default_ttl_days: int | None = None
+
+    #: PROMPTS.md Prompt 20 §3. The number of days of screen runs an alert will look back over
+    #: for its "previous" side. Beyond this the diff is against nothing and the alert is skipped
+    #: rather than reporting every constituent as an entry.
+    alert_lookback_days: int = Field(default=14, gt=0)
+    #: The smallest rank move an alert reports by default (``decile_core.screen_diff``).
+    alert_min_move: int = Field(default=1, gt=0)
+    #: How many entries/exits/movers one email lists before it says "and N more". An email with
+    #: four thousand rows in it is not an alert.
+    alert_max_rows: int = Field(default=25, gt=0)
+
+    #: Prompt 20 §4: "HMAC signing". The master secret every endpoint's signing key is derived
+    #: from — see ``decile_api.webhooks``. Empty falls back to ``jwt_secret``, which production
+    #: already requires; a deployment with neither cannot create a webhook at all.
+    webhook_signing_secret: str = ""
+    #: Seconds one delivery attempt may take.
+    webhook_timeout_seconds: float = Field(default=10.0, gt=0)
+    #: "retry with backoff". Attempts, and the base of the exponential schedule in seconds:
+    #: 30s, 2m, 8m, 32m, 2h8m — five attempts spanning about three hours.
+    webhook_max_attempts: int = Field(default=5, gt=0)
+    webhook_backoff_base_seconds: int = Field(default=30, gt=0)
+    webhook_backoff_factor: int = Field(default=4, gt=1)
+    #: Consecutive failed deliveries before an endpoint is switched off and its owner told.
+    webhook_failure_threshold: int = Field(default=20, gt=0)
+
     # --- Rate limits (docs/07 §Conventions) ----------------------------------
     rate_limit_anonymous_per_minute: int = Field(default=10, gt=0)
     rate_limit_authenticated_per_minute: int = Field(default=60, gt=0)

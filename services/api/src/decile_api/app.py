@@ -60,6 +60,8 @@ from decile_api.queue import build_task_queue
 from decile_api.ratelimit import RateLimiter, enforce_rate_limit
 from decile_api.routers import (
     admin,
+    alerts,
+    api_keys,
     auth,
     backtests,
     billing,
@@ -67,8 +69,10 @@ from decile_api.routers import (
     market_data,
     meta,
     portfolios,
+    public,
     screens,
     support,
+    webhook_endpoints,
 )
 from decile_api.schemas import HealthOut, ProblemOut
 from decile_api.screener import AsOfOutOfRange, NoPublishedData
@@ -402,7 +406,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # docs/09 §Observability: "`pipeline_run_step` is the operator UI; expose it at
     # `/admin/pipeline` behind staff auth." Every route on it depends on `require_staff`.
     versioned.include_router(admin.router)
+    # PROMPTS.md Prompt 20 §1, §3 and §4. Not in docs/07 — see each router's docstring.
+    versioned.include_router(api_keys.router)
+    versioned.include_router(alerts.router)
+    versioned.include_router(webhook_endpoints.router)
     app.include_router(versioned)
+
+    # PROMPTS.md Prompt 20 §2: "Gate the entire feature behind a flag that stays OFF until the
+    # data-redistribution review in docs/11 is signed off." The router is not *mounted* when the
+    # gate is shut, so there is no handler to reach, nothing in the OpenAPI document and nothing
+    # in the generated TypeScript client — a stronger statement than a dependency that answers
+    # 404. `decile_api.routers.public.is_enabled` is the one place both locks are read.
+    if public.is_enabled(resolved):  # pragma: no cover - False in every committed configuration
+        log.warning(
+            "public read API is ENABLED",
+            extra={"prefix": public.router.prefix},
+        )
+        app.include_router(public.router)
 
     @app.get("/health", response_model=HealthOut, tags=["ops"], include_in_schema=False)
     async def health() -> HealthOut:

@@ -51,6 +51,9 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # Prompt 17's operational checks. Short, frequent and latency-sensitive — an alert that
     # queues behind a two-hour backfill chunk is an alert nobody gets.
     "decile.ops.*": {"queue": QUEUE_DEFAULT},
+    # Prompt 20's screen alerts and webhook deliveries. Short, latency-sensitive and idempotent;
+    # the same queue the publish step runs on, and for the same reason.
+    "decile.alerts.*": {"queue": QUEUE_DEFAULT},
 }
 
 #: docs/09 §Schedule (IST), weekdays. Times are the doc's; the task names are docs/03's.
@@ -99,6 +102,25 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
     "queue-backlog": {
         "task": "decile.ops.check_queue_backlog",
         "schedule": crontab(minute="*/10"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    # --- Prompt 20 deliverables 3 and 4 -----------------------------------
+    "dispatch-screen-alerts": {
+        # PROMPTS.md Prompt 20 §3: "daily/weekly **after publish**". docs/11 §Reliability puts
+        # the publish deadline at 20:15 IST, so 20:30 gives the chain fifteen minutes of slack
+        # and still lands the email the same evening. A day that did not publish sends nothing —
+        # `resolve_runs` finds no `screen_run` for the date and every alert is skipped with a
+        # recorded reason.
+        "task": "decile.alerts.dispatch",
+        "schedule": crontab(hour=20, minute=30, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    "sweep-webhook-deliveries": {
+        # The backoff schedule is on the row, not in Celery's retry machinery — see the task.
+        # Every two minutes: fine enough that the first retry (30s) is not delayed much beyond
+        # its schedule, coarse enough to be a no-op query the rest of the time.
+        "task": "decile.alerts.sweep_webhooks",
+        "schedule": crontab(minute="*/2"),
         "options": {"queue": QUEUE_DEFAULT},
     },
 }

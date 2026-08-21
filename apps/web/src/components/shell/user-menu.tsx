@@ -1,6 +1,6 @@
 "use client";
 
-import { LogIn, LogOut, ShieldCheck, User } from "lucide-react";
+import { Bell, LogIn, LogOut, Plug, ShieldCheck, User } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,25 @@ export function UserMenu({ email, name, isStaff = false }: UserMenuProps) {
           <span className="block truncate">{email}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="my-1 h-px bg-border" />
+        {/*
+          Prompt 20 §1 and §3. Here rather than in `NAV_GROUPS` for exactly the reason the admin
+          link is: `src/lib/nav.ts` is pinned to docs/08's sidebar IA by a test, and docs/08's
+          Account group is Pricing, Invoices, Profile, Change Password — four items, no more.
+          Neither surface exists in the reference product, so adding them to the sidebar would be
+          this build editing the specification rather than following it.
+        */}
+        <DropdownMenuItem asChild>
+          <Link href="/alerts">
+            <Bell aria-hidden="true" className="size-4" />
+            Screen alerts
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/api-keys">
+            <Plug aria-hidden="true" className="size-4" />
+            API keys
+          </Link>
+        </DropdownMenuItem>
         {isStaff ? (
           <DropdownMenuItem asChild>
             <Link href="/admin">

@@ -1351,3 +1351,312 @@ class SupportMessageIn(_In):
     email: Email
     topic: SupportTopic
     message: Annotated[str, Field(min_length=20, max_length=4000)]
+
+
+# ---------------------------------------------------------------------------
+# API keys, screen alerts and webhooks — PROMPTS.md Prompt 20
+# ---------------------------------------------------------------------------
+
+
+class ApiKeyOut(_Out):
+    """One key, as its owner sees it. **Never carries the secret.**"""
+
+    public_id: str
+    name: str
+    #: ``dk_7f3a9c1b4d2e`` — the marker and the clear-text prefix, so two keys are tellable apart.
+    display: str
+    scopes: list[str]
+    #: ``None`` means the deployment's API-key tier (docs/07 §Conventions: 600/min).
+    rate_limit_per_minute: int | None
+    created_at: dt.datetime
+    last_used_at: dt.datetime | None
+    expires_at: dt.datetime | None
+    revoked_at: dt.datetime | None
+    revoked_reason: str | None
+    #: Requests and throttled requests over the dashboard window.
+    requests_30d: int
+    throttled_30d: int
+    active: bool
+
+
+class ApiKeyCreate(_In):
+    name: str = Field(min_length=1, max_length=120)
+    #: Omitted means every scope — and every scope is a read (`decile_core.api_keys`).
+    scopes: list[str] | None = None
+    rate_limit_per_minute: int | None = Field(default=None, ge=1)
+    expires_at: dt.datetime | None = None
+
+
+class ApiKeyIssuedOut(_Out):
+    """The one response that carries the plaintext. It is never retrievable again."""
+
+    key: ApiKeyOut
+    #: **Shown once.** Nothing stores this value; a lost key is rotated, not recovered.
+    secret: str
+
+
+class ApiKeyListOut(_Out):
+    keys: list[ApiKeyOut]
+    #: What the public API would refuse or allow right now, so the page can say so.
+    public_api_enabled: bool
+    data_redistribution_signed_off: bool
+
+
+class ApiKeyRevokeIn(_In):
+    reason: str = Field(default="revoked", max_length=200)
+
+
+class ApiKeyUsagePointOut(_Out):
+    date: dt.date
+    requests: int
+    throttled: int
+
+
+class ApiKeyUsageOut(_Out):
+    public_id: str
+    from_: dt.date = Field(alias="from")
+    to: dt.date
+    points: list[ApiKeyUsagePointOut]
+    total_requests: int
+    total_throttled: int
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+AlertFrequency = Literal["daily", "weekly"]
+
+
+class ScreenAlertOut(_Out):
+    public_id: str
+    screen_public_id: str
+    screen_name: str
+    frequency: AlertFrequency
+    #: 0 = Monday. ``None`` on a daily alert.
+    weekday: int | None
+    top_n: int | None
+    min_move: int
+    #: PROMPTS.md Prompt 20 §3's "digest preference": fold this screen into one combined email.
+    digest: bool
+    is_active: bool
+    last_sent_at: dt.datetime | None
+
+
+class ScreenAlertCreate(_In):
+    screen_public_id: str
+    frequency: AlertFrequency = "daily"
+    weekday: int | None = Field(default=None, ge=0, le=6)
+    top_n: int | None = Field(default=None, ge=1)
+    min_move: int | None = Field(default=None, ge=1)
+    digest: bool = False
+
+
+class ScreenAlertUpdate(_In):
+    frequency: AlertFrequency | None = None
+    weekday: int | None = Field(default=None, ge=0, le=6)
+    top_n: int | None = Field(default=None, ge=1)
+    min_move: int | None = Field(default=None, ge=1)
+    digest: bool | None = None
+    is_active: bool | None = None
+
+
+class ScreenAlertListOut(_Out):
+    alerts: list[ScreenAlertOut]
+
+
+class ScreenAlertDeliveryOut(_Out):
+    as_of: dt.date
+    previous_as_of: dt.date | None
+    status: Literal["sent", "skipped", "failed"]
+    entry_count: int
+    exit_count: int
+    change_count: int
+    detail: JsonValue | None
+
+
+class ScreenAlertDeliveryListOut(_Out):
+    deliveries: list[ScreenAlertDeliveryOut]
+
+
+class UnsubscribeIn(_In):
+    token: str = Field(min_length=8, max_length=128)
+
+
+class UnsubscribeOut(_Out):
+    #: True whether the alert was already off — one-click unsubscribe is idempotent.
+    unsubscribed: bool
+    screen_name: str | None
+
+
+WebhookEventName = Literal["screen.entries", "screen.exits"]
+
+
+#: The default event set: both of the two Prompt 20 §4 names. A factory rather than a mutable
+#: default, and typed, so the generated client sees the Literal rather than ``string``.
+def _default_webhook_events() -> list[WebhookEventName]:
+    return ["screen.entries", "screen.exits"]
+
+
+class WebhookEndpointOut(_Out):
+    public_id: str
+    screen_public_id: str
+    screen_name: str
+    url: str
+    events: list[WebhookEventName]
+    secret_version: int
+    is_active: bool
+    consecutive_failures: int
+    disabled_at: dt.datetime | None
+    disabled_reason: str | None
+    last_delivery_at: dt.datetime | None
+    created_at: dt.datetime
+
+
+class WebhookEndpointWithSecretOut(_Out):
+    """Creation and rotation echo the signing secret. It is derived, so this is reproducible."""
+
+    endpoint: WebhookEndpointOut
+    signing_secret: str
+
+
+class WebhookEndpointCreate(_In):
+    screen_public_id: str
+    url: str = Field(min_length=8, max_length=2000)
+    events: list[WebhookEventName] = Field(default_factory=_default_webhook_events)
+
+
+class WebhookEndpointUpdate(_In):
+    url: str | None = Field(default=None, min_length=8, max_length=2000)
+    events: list[WebhookEventName] | None = None
+    is_active: bool | None = None
+
+
+class WebhookEndpointListOut(_Out):
+    endpoints: list[WebhookEndpointOut]
+
+
+class WebhookDeliveryOut(_Out):
+    id: int
+    event: WebhookEventName
+    status: Literal["pending", "delivered", "failed"]
+    attempts: int
+    response_status: int | None
+    last_error: str | None
+    next_attempt_at: dt.datetime | None
+    created_at: dt.datetime
+    delivered_at: dt.datetime | None
+
+
+class WebhookDeliveryListOut(_Out):
+    deliveries: list[WebhookDeliveryOut]
+
+
+# ---------------------------------------------------------------------------
+# The public read API (Prompt 20 deliverable 2)
+# ---------------------------------------------------------------------------
+
+
+class PublicTermsOut(_Out):
+    """docs/11 §Compliance's constraint, machine-readable. See `decile_core.public_api`."""
+
+    version: str
+    product: str
+    api_version: str
+    summary: str
+    clauses: list[str]
+    permitted_use: list[str]
+    prohibited_use: list[str]
+    served_fields: list[str]
+    withheld_fields: list[str]
+    attribution_required: bool
+    attribution_text: str
+    redistribution_permitted: bool
+    caching_max_age_seconds: int
+    disclaimer: str
+    contact: str
+
+
+class PublicStatusOut(_Out):
+    as_of: dt.date
+    data_version: int
+    api_version: str
+    terms_version: str
+    scopes: list[str]
+    rate_limit_per_minute: int
+
+
+class PublicScreenRowOut(_Out):
+    """One row of a public screen result. Every member is a derived analytic; no price is served.
+
+    ``model_config`` allows extra members because the projection is the whitelist in
+    `decile_core.public_api.PUBLIC_COLUMNS`, which the registry decides — declaring thirty
+    optional fields here would duplicate it and let the two drift.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    rank: int
+    symbol: str
+    name: str
+
+
+class PublicScreenOut(_Out):
+    as_of: dt.date
+    data_version: int
+    screen: str
+    sorting_factor: str
+    columns: list[str]
+    result_count: int
+    rows: list[PublicScreenRowOut]
+    attribution: str
+    disclaimer: str
+    terms_url: str
+
+
+class PublicFactorsOut(_Out):
+    as_of: dt.date
+    data_version: int
+    symbol: str
+    name: str
+    factors: dict[str, JsonValue]
+    attribution: str
+    disclaimer: str
+    terms_url: str
+
+
+class PublicBreadthOut(_Out):
+    as_of: dt.date
+    data_version: int
+    universe: str
+    pct_above_200dma: Decimal | None
+    pct_above_50dma: Decimal | None
+    pct_within_10pct_ath: Decimal | None
+    pct_ret_1y_positive: Decimal | None
+    constituent_count: int | None
+    attribution: str
+    disclaimer: str
+    terms_url: str
+
+
+class PublicApiGateOut(_Out):
+    """The docs/11 §Compliance gate, as `/admin/public-api` renders it (Prompt 20 §2).
+
+    "make that dependency explicit in the code and the admin UI" — this is the admin UI's half.
+    Both locks are reported separately, because "the operator switched it off" and "the lawyer has
+    not signed it off" are different states and only the second is a blocker.
+    """
+
+    #: `DECILE_PUBLIC_API_ENABLED`. The operational switch.
+    flag_enabled: bool
+    #: `decile_core.public_api.DATA_REDISTRIBUTION_REVIEW.signed_off`. The compliance gate.
+    review_signed_off: bool
+    #: True only when both are open — i.e. the router is actually mounted.
+    serving: bool
+    #: docs/11's sentence, verbatim.
+    requirement: str
+    opinion_reference: str
+    signed_off_on: str
+    signed_off_by: str
+    api_version: str
+    prefix: str
+    served_fields: list[str]
+    withheld_fields: list[str]

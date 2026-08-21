@@ -4,7 +4,7 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M9 · **State:** running autonomously
+**Run started:** 22 Aug 2026 · **Current module:** M10 · **State:** running autonomously
 
 Since 22 Aug 2026 this is an **autonomous run** under `CLAUDE.md` §Autonomy charter:
 judgement calls are decided, recorded in `DECISIONS-MERGE.md` (tagged `⚠ UNREVIEWED`
@@ -26,8 +26,8 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M6 | Freeze the strangle lab | ✅ done | 22 Aug 2026 | 16 of 20 strangle modules + 12 test files + scripts + planners frozen. Desk suite **1202 passed, 17 skipped, 0 failed** — green for the first time |
 | M7 | Local stack up | ✅ done | 22 Aug 2026 | `baskfy` stack up, **backfill restored (1,138,300 bars)**, API + worker healthy. `make seed` was overwriting 25,256 real bars — guarded (M7.1) |
 | M8 | NSE endpoints verified | ✅ done | 22 Aug 2026 | All 5 capabilities live-verified; **4 universes were 404ing** and are fixed (M8.1). `reconciliation/NSE-ENDPOINTS.md` |
-| M9 | Kite creds + backfill | 🔄 running | 22 Aug 2026 | **EXTERNAL DEPENDENCY** — needs a Kite token |
-| M10 | Calendar + corporate actions | — | | |
+| M9 | Kite creds + backfill | ⚠️ partial | 22 Aug 2026 | Bars current to 2026-08-21 (**1,145,922**) via bhavcopy. **Depth before 2024 needs a Kite login** — queued, not blocking (M9.1) |
+| M10 | Calendar + corporate actions | 🔄 running | 22 Aug 2026 | |
 | M11 | 271-row parity test | — | | **RED GATE** |
 | M12 | Desk parity | — | | **RED GATE + HUMAN REVIEW** |
 | M13 | MomentumScan — CSV cord cut | — | | |

@@ -587,3 +587,36 @@ test. The dated note is `decile-blueprint/reconciliation/NSE-ENDPOINTS.md`.
 **Candidate filenames were probed with a handful of spaced `curl` requests** to discover the four
 real names. That is discovery, not ingestion — no data was taken through it, and every actual fetch
 went through the rate-limited provider, as the safety rails require.
+
+---
+
+## M9
+
+### M9.1 — Kite is unavailable, and the run continues anyway ⚠ UNREVIEWED
+The desk's token is three days old and Kite mints daily with no refresh, so it fails with
+`TokenException`. M9's own step 1 says to test it first and queue only if it does not work; it does
+not, so the ask is queued in `NEEDS-MAULIK.md` item 3 and **rule 11 applies — the run does not
+wait**.
+
+**What was done instead, without Kite.** The bhavcopy path extended the backfill through the
+current trading day: 3 sessions, 7,622 bars. `ohlcv_daily` now holds **1,145,922 bars,
+2024-01-01 → 2026-08-21**, across 2,553 instruments.
+
+**Why that is enough to keep going.** `DECISIONS.md` §21.2 measured the archive's floor — 2023-07-03
+is a 404, 2024-01-02 returns rows — so 2024 is not a choice, it is the source's limit, and D5's
+`FROM=2011-01-01` cannot be honoured from NSE at any price. But `docs/01` §2.13 sets the product's
+`DATA_START_DATE` to **2024-11-01**, and the factor windows the parity gates assert reach 247
+trading days ≈ one year. **The gates need a year; there are two and a half.** Kite buys depth for
+backtests, not the ability to run M10–M12.
+
+**Carried forward, not hidden:** the fifteen-year backtest stays unrunnable, and `high_all_time` /
+`away_from_high_all_time` are *wrong rather than missing* on a 2024-start series — a running maximum
+wearing an all-time label. `DECILE_PARITY_BARS_ARE_FULL_HISTORY` is deliberately **not** set, and
+M11 must treat those columns as unverifiable rather than comparing them.
+
+### M9.2 — 353 unmatched bhavcopy symbols are correct filtering, not a gap
+The gap-fill reported 353 symbols with no `instrument` row. The bhavcopy carries every series NSE
+prints — `SM` (SME, 362 rows), `ST` (trusts, 100), `GS`/`GB` (government securities, 103), `N0`
+(debt, 25) — while `instrument` holds only cash equities: EQ 2,291, BE 234, BZ 28. The unmatched
+are the series the product deliberately does not screen. Recorded so a future reader does not
+mistake it for missing data.

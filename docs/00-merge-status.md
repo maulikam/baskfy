@@ -4,7 +4,7 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M1 · **State:** running
+**Run started:** 22 Aug 2026 · **Current module:** M2 · **State:** running
 
 ---
 
@@ -13,8 +13,8 @@ that culture continues here.
 | # | Module | State | Date | Note |
 |---|---|---|---|---|
 | M0 | Preflight, baselines, safety copy | ✅ done | 22 Aug 2026 | Baselines + verified safety copy recorded. Blocker resolved: decile's overnight work committed as `ea5dd0f` (M0.8) |
-| M1 | Umbrella repo (subtree) | 🔄 running | 22 Aug 2026 | |
-| M2 | The rename | — | | |
+| M1 | Umbrella repo (subtree) | ✅ done | 22 Aug 2026 | One repo at the root; 117 commits; both histories reachable from HEAD. `--follow` does not prove it — see M1.1 for the commands that do |
+| M2 | The rename | 🔄 running | 22 Aug 2026 | |
 | M3 | Working agreement + status page | — | | |
 | M4 | One env schema | — | | |
 | M5 | One CI workflow | — | | |
@@ -136,6 +136,21 @@ the desk's was activating a *different checkout's* environment (`DECISIONS-MERGE
 
 ---
 
+## How to prove the histories survived (M1)
+
+`git log --follow -- <prefixed-path>` returns **0** and always will: `git subtree add` does not
+rewrite historical paths, so pre-merge commits still name `app/scoring.py`, not
+`kite-momentum-rebalancer/app/scoring.py`. Use these instead (`DECISIONS-MERGE.md` M1.1):
+
+```
+git merge-base --is-ancestor df6cb72 HEAD    # desk tip        -> yes
+git merge-base --is-ancestor ea5dd0f HEAD    # decile tip      -> yes
+git merge-base --is-ancestor 36d6ba1 HEAD    # decile's root   -> yes
+git rev-list --count HEAD                    # 117
+git log --oneline df6cb72 -- app/main.py     # 29 commits of desk history
+git log --oneline ea5dd0f -- docs/DECISIONS.md   # 9 commits of decile history
+```
+
 ## Things a future session must know
 
 1. **The desk's `.env` is LIVE** — `DRY_RUN=false`, commented "real orders". It is untracked
@@ -154,3 +169,10 @@ the desk's was activating a *different checkout's* environment (`DECISIONS-MERGE
    M1's initial root commit, which is what `MERGE-PROMPTS.md` M1 step 2 specifies.
 6. `decile-blueprint` HEAD moved from `eef67d1` to **`ea5dd0f`** during M0. The subtree in M1
    carries the later commit.
+7. **`../_baskfy_subtree_tmp/` is the rollback** and must survive until M21. It holds both
+   pre-merge repositories exactly as they were.
+8. `baskfy/` is a git repo **nested inside** the one at `~/Documents/projects` (which tracks
+   nothing here). Git commands run from inside `baskfy/` resolve to the new repo, as intended.
+9. M1 restored untracked state by `rsync --ignore-existing` from the rollback copy. Verified
+   afterwards: `portfolio.db` md5 `ae13b32fb9069e62327b02e712139bde` unchanged, integrity `ok`,
+   8198/9262/8/133 rows, the 6-CSV `data/uploads/` corpus intact, and **no `.env` in any commit**.

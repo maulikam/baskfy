@@ -123,3 +123,45 @@ speculatively before the data exists to state it precisely.
   order**, and neither has been done. Nothing before M10 should touch the factor engine.
 - §21.9's look-ahead in `apply_adjustments` is an open defect against decile's House Rule 5 and
   belongs to M10 (corporate actions over real history).
+
+---
+
+## M1
+
+### M1.1 — `git log --follow` cannot prove the subtree criterion, and the criterion's intent is met anyway
+**Ambiguity.** M1's acceptance reads: "`git log --follow -- kite-momentum-rebalancer/app/scoring.py`
+reaches pre-merge commits". It returns **0 commits**, and so does the decile equivalent.
+
+**Why, and it is not a failure of the merge.** `git subtree add` performs a *subtree merge*; it
+does not rewrite history. Commits made before the merge still record their original paths
+(`app/scoring.py`), not the prefixed ones (`kite-momentum-rebalancer/app/scoring.py`). `--follow`
+cannot bridge that across a merge commit, so it reports nothing. The example file is also a poor
+probe independently: `app/scoring.py` was touched in exactly **one** commit in the desk's whole
+history (the initial one), so even a working traversal would show a single line.
+
+**The intent — both histories preserved — is met, and provable four ways:**
+
+| Check | Result |
+|---|---|
+| `git merge-base --is-ancestor df6cb72 HEAD` (desk tip) | YES |
+| `git merge-base --is-ancestor ea5dd0f HEAD` (decile tip) | YES |
+| `git merge-base --is-ancestor 36d6ba1 HEAD` (decile **root** commit) | YES |
+| `git rev-list --count HEAD` | **117** commits |
+| Oldest reachable on each side | `738ad9b "Initial commit: momentum rebalancer with regime overlay"`, `36d6ba1 "spec: Decile build blueprint"` |
+| Per-file depth via each tip | desk `app/main.py` 29, `analytics/db.py` 12, `rebalance.py` 5; decile `docs/DECISIONS.md` 9, `Makefile` 5 |
+| Tracked file counts, root vs originals | decile 654 == 654, desk 192 == 192 |
+| Content identity | `scoring.py` and `factors.py` byte-identical to their pre-merge tips |
+
+**Decided.** Recorded, not "fixed". Making `--follow` work would require rewriting all 114
+sub-repo commits (`filter-repo` / `subtree split --rejoin`), which changes every SHA and destroys
+the correspondence with the two source repositories — a strictly worse outcome than a verification
+command that does not apply to the technique the script itself mandates. **The commands that do
+prove it are the table above**, and they belong in the status page for any future session.
+
+### M1.2 — M1 is three commits, and cannot be one
+`MERGE-PROMPTS.md` asks for one commit per module. `git subtree add` creates its own merge commit
+by construction — that *is* the history-preserving mechanism — so M1 necessarily produces the
+initial root commit plus two subtree merges, then the module's own bookkeeping commit. Squashing
+them would defeat the module's entire purpose. The `M<N>: green` message is carried by the
+bookkeeping commit; the structural commits keep git's own generated messages so their provenance
+stays legible.

@@ -29,6 +29,8 @@ from pydantic import ValidationError
 from sqlalchemy import Row, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from decile_api.metrics import observe_cache
+from decile_api.telemetry import annotate_current_span
 from decile_core.models import FactorDaily, PipelineRun, Screen, ScreenRun, TradingDay
 from decile_core.screen_definition import ScreenDefinition
 from decile_core.screener import (
@@ -363,17 +365,30 @@ async def run_screen(  # noqa: PLR0913 - the request, the projection and the cac
     resolution = await resolve_as_of(session, requested)
     data_version = await current_data_version(session)
     key = cache_key(definition, resolution.as_of, data_version, columns=columns)
+    # PROMPTS.md Prompt 17 §1 names the screen definition hash as a span attribute. It is
+    # `definition_hash()`, not the cache key's digest: the cache key also covers the projection
+    # (`docs/09a` §3), so two traces for the same screen with different columns would otherwise
+    # look like two different screens.
+    annotate_current_span(
+        {
+            "decile.screen_definition_hash": definition.definition_hash(),
+            "decile.as_of": resolution.as_of.isoformat(),
+            "decile.data_version": data_version,
+        }
+    )
 
     leading = False
     flight: asyncio.Event | None = None
     if cache is not None:
         cached = _cached_payload(await cache.get(key))
         if cached is not None:
-            return ScreenRunResult(
-                payload=cached,
-                resolution=resolution,
-                data_version=data_version,
-                cache_hit=True,
+            return _observed(
+                ScreenRunResult(
+                    payload=cached,
+                    resolution=resolution,
+                    data_version=data_version,
+                    cache_hit=True,
+                )
             )
         leading, flight = SCREEN_FLIGHT.claim(key)
         if not leading:
@@ -383,11 +398,15 @@ async def run_screen(  # noqa: PLR0913 - the request, the projection and the cac
                 await asyncio.wait_for(flight.wait(), SINGLE_FLIGHT_TIMEOUT_SECONDS)
             cached = _cached_payload(await cache.get(key))
             if cached is not None:
-                return ScreenRunResult(
-                    payload=cached,
-                    resolution=resolution,
-                    data_version=data_version,
-                    cache_hit=True,
+                # A follower that waited for the leader. Counted as a hit: it was served from the
+                # cache and issued no query, which is what the hit-rate metric is measuring.
+                return _observed(
+                    ScreenRunResult(
+                        payload=cached,
+                        resolution=resolution,
+                        data_version=data_version,
+                        cache_hit=True,
+                    )
                 )
 
     try:
@@ -405,13 +424,31 @@ async def run_screen(  # noqa: PLR0913 - the request, the projection and the cac
     finally:
         if leading and flight is not None:
             SCREEN_FLIGHT.release(key, flight)
-    return ScreenRunResult(
-        payload=payload,
-        resolution=resolution,
-        data_version=data_version,
-        cache_hit=False,
-        result=result,
+    return _observed(
+        ScreenRunResult(
+            payload=payload,
+            resolution=resolution,
+            data_version=data_version,
+            cache_hit=False,
+            result=result,
+        )
     )
+
+
+def _observed(result: ScreenRunResult) -> ScreenRunResult:
+    """Record the cache outcome and annotate the span, then hand the result straight back.
+
+    One function at every exit of :func:`run_screen` rather than a counter increment per branch:
+    there are three ways out and a missed one is a hit rate that silently lies.
+    """
+    observe_cache(hit=result.cache_hit)
+    annotate_current_span(
+        {
+            "decile.cache_hit": result.cache_hit,
+            "decile.rows_out": 0 if result.result is None else len(result.result.rows),
+        }
+    )
+    return result
 
 
 # ---------------------------------------------------------------------------

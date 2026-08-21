@@ -123,6 +123,23 @@ database, a network or a disk belongs in `services/` or `packages/providers`.
 | Indexes + the two continuous aggregates | `services/api/alembic/versions/0008_performance_indexes.py` |
 | Client-JS budget (250 KB gzip, screens route) | `apps/web/scripts/bundle-budget.mjs` |
 | **Every Prompt 16 decision taken under ambiguity** | `docs/DECISIONS.md` §16 |
+| **The five runbooks (start here at 3am)** | `docs/runbooks/` |
+| OpenTelemetry: tracer, attribute vocabulary, `traceparent` | `services/api/src/decile_api/telemetry.py` |
+| Sentry, for all three Python runtimes | `services/api/src/decile_api/sentry.py` |
+| Every Prometheus metric, and the DB-derived gauges | `services/api/src/decile_api/metrics.py` |
+| Worker tracing, Sentry, `/metrics` port, retry hooks | `services/worker/src/decile_worker/telemetry.py` |
+| The six alert rules this codebase raises itself | `services/worker/src/decile_worker/alerts.py` |
+| Stale-run reaper, publish SLO, token and queue checks | `services/worker/src/decile_worker/ops.py` |
+| Alert rules Prometheus evaluates + scrape config | `infra/prometheus/` |
+| Grafana dashboards and provisioning | `infra/grafana/` |
+| `/admin/*` queries and the two enqueueing actions | `services/api/src/decile_api/admin.py` |
+| `/admin/*` routes (every one staff-gated) | `services/api/src/decile_api/routers/admin.py` |
+| Staff flag, entitlement override, admin audit log | `packages/core/src/decile_core/models/admin.py` |
+| The admin pages | `apps/web/src/app/(app)/admin/` |
+| `pg_dump`, restore, WAL archiving | `infra/backup/` |
+| The restore drill's data-integrity assertions | `services/api/src/decile_api/integrity.py` |
+| The monthly restore drill | `.github/workflows/restore-drill.yml` |
+| **Every Prompt 17 decision taken under ambiguity** | `docs/DECISIONS.md` §17 |
 | Auth tables not in `docs/04` | `docs/04c-auth-tables-addendum.md` |
 | HTTP rate limiting (docs/07 §Conventions) | `services/api/src/decile_api/ratelimit.py` |
 | Streaming CSV export | `services/api/src/decile_api/csv_export.py` |
@@ -221,11 +238,59 @@ make bench       measure every docs/11 budget; writes benchmarks/AS-MEASURED.md
 make loadtest    50 concurrent screen runs against a live API: make loadtest URL=...
 make plans       EXPLAIN ANALYZE every hot query (WRITE=1 re-records the CI baseline)
 make bundle      client-JS budget for the screens route (needs make web-build first)
+make metrics     print the Prometheus exposition a scrape would see (needs make api)
+make backup      pg_dump the local database into .backups/ (no upload)
+make restore     restore a dump into a scratch database: make restore DUMP=.backups/x.dump
+make integrity   assert a database could serve the app: make integrity URL=postgresql+asyncpg://...
+make drill       the monthly restore drill, end to end, against the local stack
 ```
+
+The Prometheus + Grafana stack is behind a compose profile, so `make up` does not start it:
+`docker compose -f infra/docker/compose.yml --profile observability up -d`.
 
 `make test-db` needs `DECILE_TEST_DATABASE_URL`. Without it those tests skip rather than fail.
 
 ## Open items carried forward
+
+- **NO RUNBOOK HAS BEEN EXECUTED AGAINST STAGING.** Prompt 17's third acceptance criterion —
+  "every runbook has been executed once against staging and updated with real output" — is **not
+  met**. There is no staging environment in this repository. Each of the five carries a
+  `Verified against: NOT YET` line and `services/worker/tests/test_ops_and_alerts.py` asserts that the line
+  is there, so the day one is quietly marked verified without output to back it, the suite says so.
+- **Browser exceptions are not reported to Sentry.** `@sentry/nextjs` is initialised from
+  `apps/web/src/instrumentation.ts` only — no `withSentryConfig`, no `instrumentation-client.ts` —
+  so the client bundle is byte-identical to before Prompt 17 and the 250 KB screens-route budget
+  is unaffected. Server components, route handlers and server actions *are* covered
+  (`docs/DECISIONS.md` §17.12).
+- **The Grafana dashboards have never been rendered.** `infra/grafana/dashboards/*.json` is
+  asserted to be valid JSON whose every panel queries a metric we publish; no Grafana has loaded
+  them. The compose profile (`--profile observability`) exists so that can be checked locally.
+- **The alert rules have never fired.** `promtool check config` passes in CI, and a test asserts
+  every rule names a published metric and an existing runbook — but no Prometheus has evaluated
+  them against real data.
+- **The restore drill takes its own backup; it never reads R2.** CI has no bucket credentials, so
+  `.github/workflows/restore-drill.yml` dumps a freshly seeded database, restores it and asserts
+  it. That exercises everything except "the object in the bucket is readable"
+  (`docs/DECISIONS.md` §17.13). **No backup has ever been uploaded to or read from a real bucket,
+  and no WAL segment has ever been archived.**
+- **Point-in-time recovery is not possible today.** `infra/backup/wal-archive.conf` is written
+  from the PostgreSQL 16 documentation and has never run, and PITR needs a *physical* base backup
+  (`pg_basebackup`) that nothing here takes. The recovery point objective is last night's dump.
+- **The worker's `/metrics` is one port per process.** With a prefork pool only the first child to
+  bind serves and the rest are silent. `PROMETHEUS_MULTIPROC_DIR` is the supported answer and is
+  not configured.
+- **An abandoned run is detected by age, not by a heartbeat** — up to 105 minutes after the worker
+  died (90-minute stale window + a 15-minute sweep). The trade is argued in
+  `docs/DECISIONS.md` §17.6.
+- **Queue depth is read with `LLEN` on the queue name**, which is how Celery's *Redis* transport
+  stores a queue. A move to RabbitMQ gives a silent zero, not an error.
+- **`app_user.is_staff` is set by hand and by nothing else.** No form, no seed, deliberately.
+  `docs/runbooks/pipeline-failed.md` §"Making yourself staff" has the `UPDATE`. Do it before an
+  incident: a non-staff caller gets **404** from `/admin/*`, so "the admin page 404s" is what a
+  missing bit looks like (`docs/DECISIONS.md` §17.3).
+- **There is no `providers login` command,** so replacing an expired Kite token means pasting a
+  heredoc at 3am with a single-use token that expires in minutes.
+  `docs/runbooks/kite-token-expired.md` §3 says so and says it should be a command.
 
 - **The GST rate and the SAC code need a chartered accountant.** 18% and SAC 998439 are defaults,
   not advice. Both are settings (`DECILE_GST_RATE_PERCENT`, `DECILE_GST_SAC_CODE`) and every

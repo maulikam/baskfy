@@ -45,8 +45,10 @@ from decile_core.entitlements import (
     Entitlements,
     Feature,
     FeatureNotEntitled,
+    Override,
+    apply_overrides,
 )
-from decile_core.models import Plan, Subscription
+from decile_core.models import EntitlementOverride, Plan, Subscription
 from decile_core.seed_data import FREE_PLAN
 
 __all__ = [
@@ -55,6 +57,7 @@ __all__ = [
     "EntitlementsDep",
     "Feature",
     "FeatureNotEntitled",
+    "active_overrides",
     "current_entitlements",
     "entitlements_for",
     "resolve_active_grant",
@@ -106,20 +109,50 @@ def _baseline(settings: Settings) -> Entitlements:
     return Entitlements.from_plan_features(FREE_PLAN.features)
 
 
+async def active_overrides(
+    session: AsyncSession, user_id: int, *, now: dt.datetime | None = None
+) -> list[Override]:
+    """The staff overrides currently in force for one account (Prompt 17 deliverable 4).
+
+    Expiry is filtered in Python rather than in SQL so that ``expires_at IS NULL`` and
+    ``expires_at > now`` are one rule in one place — :meth:`EntitlementOverride.is_active` — which
+    the admin page also renders from. Two rows per account at the very most, so there is nothing
+    to gain from pushing it down.
+    """
+    moment = now or dt.datetime.now(tz=dt.UTC)
+    rows = (
+        await session.execute(
+            select(EntitlementOverride).where(EntitlementOverride.user_id == user_id)
+        )
+    ).scalars()
+    return [
+        Override(feature=row.feature, grant=row.effect == "grant", value=row.value)
+        for row in rows
+        if row.is_active(now=moment)
+    ]
+
+
 async def entitlements_for(
     session: AsyncSession, principal: Principal, *, settings: Settings | None = None
 ) -> Entitlements:
-    """The one resolution path. Every gated endpoint and ``GET /me`` go through it."""
+    """The one resolution path. Every gated endpoint and ``GET /me`` go through it.
+
+    Order matters: the plan decides the baseline, then staff overrides are layered on top
+    (Prompt 17 deliverable 4). A support grant that a nightly subscription sync could silently
+    undo would not be a grant.
+    """
     resolved = settings or get_settings()
     if principal.user_id is None:
+        # An anonymous caller has no account, so there is nothing an override could hang off.
         return ANONYMOUS
 
     grant = await resolve_active_grant(session, principal.user_id)
-    if grant is None:
-        return _baseline(resolved)
+    base = (
+        _baseline(resolved) if grant is None else Entitlements.from_plan_features(grant[1].features)
+    )
 
-    _, plan = grant
-    return Entitlements.from_plan_features(plan.features)
+    overrides = await active_overrides(session, principal.user_id)
+    return base if not overrides else apply_overrides(base, overrides)
 
 
 async def current_entitlements(

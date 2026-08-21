@@ -55,6 +55,17 @@ dependencies = [
     # `decile.backtest.run` to the broker by name, because `decile-worker` depends on
     # `decile-api` and the import cannot go the other way. See `decile_api.queue`.
     "celery[redis]>=5.4",
+    # docs/02 §Observability: "**Sentry** for errors". The `fastapi` extra pulls the ASGI
+    # integration, which is what attaches the request's method, route and headers to an event —
+    # the alternative is a stack trace with no idea which URL produced it. Off unless
+    # `DECILE_SENTRY_DSN` is set; see `decile_api.sentry`.
+    "sentry-sdk[fastapi]>=2.19",
+    # NOT NAMED IN docs/02, which locks "OpenTelemetry -> Grafana/Tempo/Loki" for traces and logs
+    # and names no metric backend. PROMPTS.md Prompt 17 §2 asks for "Prometheus metrics + Grafana
+    # dashboards" by name, and Grafana is already the locked dashboard surface. `prometheus-client`
+    # is the reference Python exposition library and was already in the lock file as a `flower`
+    # dependency; this makes the API's own use explicit. Recorded in docs/DECISIONS.md §17.
+    "prometheus-client>=0.21",
 ]
 
 [build-system]

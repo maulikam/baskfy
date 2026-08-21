@@ -3,7 +3,7 @@ COMPOSE := docker compose -f infra/docker/compose.yml
 UV      := uv run
 
 .DEFAULT_GOAL := help
-.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle
+.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -86,6 +86,25 @@ plans:         ## EXPLAIN ANALYZE every hot query; add WRITE=1 to re-record the 
 
 bundle:        ## Client-JS budget for the screens route (needs `make web-build` first)
 	cd apps/web && node scripts/bundle-budget.mjs --check
+
+# --- Prompt 17: observability, admin and operations -------------------------
+
+metrics:       ## Print the Prometheus exposition a scrape would see (needs `make api`)
+	@curl -sf http://localhost:8000/metrics || echo "no API on :8000 — run \`make api\`"
+
+backup:        ## pg_dump the local database into .backups/ (no upload)
+	infra/backup/pg_backup.sh --no-upload
+
+restore:       ## Restore a dump into a scratch database: make restore DUMP=.backups/x.dump
+	infra/backup/restore.sh --dump $(DUMP) --target $(or $(TARGET),postgresql://decile:decile@localhost:5433/decile_restore)
+
+integrity:     ## Assert a database could serve the app: make integrity URL=postgresql+asyncpg://...
+	$(UV) python -m decile_api.integrity $(if $(URL),--database-url $(URL),)
+
+drill:         ## The monthly restore drill, end to end, against the local stack (docs/11 §Reliability)
+	$(MAKE) backup
+	infra/backup/restore.sh --dump "$$(cat .backups/LATEST)" --target postgresql://decile:decile@localhost:5433/decile_restore
+	$(UV) python -m decile_api.integrity --database-url postgresql+asyncpg://decile:decile@localhost:5433/decile_restore
 
 worker:        ## Run a Celery worker across all queues
 	$(UV) celery -A decile_worker.celery_app:app worker -Q ingest,compute,backtest,default -l info

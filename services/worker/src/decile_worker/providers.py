@@ -15,6 +15,7 @@ from decile_providers.factory import build_provider_stack
 from decile_providers.settings import get_provider_settings
 from decile_worker.deps import PipelineDependencies
 from decile_worker.settings import get_worker_settings
+from decile_worker.telemetry import provider_retry_hooks
 
 
 def build_cache() -> Redis | None:
@@ -38,7 +39,10 @@ def build_cache() -> Redis | None:
 
 def build_pipeline_dependencies() -> PipelineDependencies:
     return PipelineDependencies(
-        provider=build_provider_stack(get_provider_settings()),
+        # `provider_retry_hooks()` is what makes docs/09 §Observability's "provider error rate"
+        # a number rather than a grep: every backoff increments
+        # `decile_provider_calls_total{outcome="retry"}` and logs the adapter that failed.
+        provider=build_provider_stack(get_provider_settings(), provider_retry_hooks()),
         cache=build_cache(),
         # docs/05's engine is Prompt 5. Until then compute_factors runs its skeleton and says so
         # in the step payload; see decile_worker.tasks.factors.

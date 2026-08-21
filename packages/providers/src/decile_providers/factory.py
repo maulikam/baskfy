@@ -20,6 +20,7 @@ from decile_providers.kite import KiteProvider, KiteRuntime
 from decile_providers.nse import NSEProvider, NSERuntime, build_http_client
 from decile_providers.ports import HealthReporting
 from decile_providers.ratelimit import RedisTokenBucket, TokenBucketConfig
+from decile_providers.retry import RetryHooks
 from decile_providers.settings import ProviderSettings, get_provider_settings
 
 #: Where the local archive lives when no S3 bucket is configured.
@@ -65,15 +66,19 @@ def build_archive(settings: ProviderSettings, *, local_root: Path | None = None)
     return LocalRawArchive(local_root or Path(LOCAL_ARCHIVE_DIRNAME))
 
 
-def build_kite_provider(settings: ProviderSettings) -> KiteProvider:
+def build_kite_provider(
+    settings: ProviderSettings, retry_hooks: RetryHooks | None = None
+) -> KiteProvider:
     limiter = build_rate_limiter(
         settings, "decile:ratelimit:kite", settings.kite_rate_limit_per_second
     )
-    return KiteProvider(settings, KiteRuntime(rate_limiter=limiter))
+    return KiteProvider(settings, KiteRuntime(rate_limiter=limiter, retry_hooks=retry_hooks))
 
 
 def build_nse_provider(
-    settings: ProviderSettings, archive: RawArchive | None = None
+    settings: ProviderSettings,
+    archive: RawArchive | None = None,
+    retry_hooks: RetryHooks | None = None,
 ) -> NSEProvider:
     limiter = build_rate_limiter(
         settings, "decile:ratelimit:nse", settings.nse_rate_limit_per_second
@@ -82,7 +87,7 @@ def build_nse_provider(
     return NSEProvider(
         settings,
         archive if archive is not None else build_archive(settings),
-        NSERuntime(client=client, rate_limiter=limiter),
+        NSERuntime(client=client, rate_limiter=limiter, retry_hooks=retry_hooks),
     )
 
 
@@ -101,17 +106,24 @@ def _default_fixture_dir() -> Path | None:
         return None
 
 
-def build_provider_stack(settings: ProviderSettings | None = None) -> CompositeProvider:
+def build_provider_stack(
+    settings: ProviderSettings | None = None, retry_hooks: RetryHooks | None = None
+) -> CompositeProvider:
     """The production wiring: Kite for bars, NSE for reference, fixtures last.
 
     Registration order is preference order (see CompositeProvider), so fixtures sit at the back
     and only serve what the real vendors could not — which in a configured production environment
     is nothing, and in local development is everything.
+
+    ``retry_hooks`` is Prompt 17's observation seam: the worker passes hooks that count every
+    backoff into ``decile_provider_calls_total`` (docs/09 §Observability: "provider error rate").
+    ``None`` leaves the default hooks, which observe nothing — which is what the test suite and
+    ``providers doctor`` want, neither of them having a metrics registry to write to.
     """
     resolved = settings or get_provider_settings()
     providers: list[HealthReporting] = [
-        build_kite_provider(resolved),
-        build_nse_provider(resolved),
+        build_kite_provider(resolved, retry_hooks),
+        build_nse_provider(resolved, retry_hooks=retry_hooks),
     ]
     fixtures = build_fixture_provider(resolved)
     if fixtures is not None:

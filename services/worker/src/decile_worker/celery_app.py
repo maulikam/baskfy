@@ -48,6 +48,9 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     "decile.compute.*": {"queue": QUEUE_COMPUTE},
     "decile.backtest.*": {"queue": QUEUE_BACKTEST},
     "decile.pipeline.*": {"queue": QUEUE_DEFAULT},
+    # Prompt 17's operational checks. Short, frequent and latency-sensitive — an alert that
+    # queues behind a two-hour backfill chunk is an alert nobody gets.
+    "decile.ops.*": {"queue": QUEUE_DEFAULT},
 }
 
 #: docs/09 §Schedule (IST), weekdays. Times are the doc's; the task names are docs/03's.
@@ -69,6 +72,34 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "task": "decile.pipeline.integrity_audit",
         "schedule": crontab(hour=2, minute=0, day_of_week="sat"),
         "options": {"queue": QUEUE_COMPUTE},
+    },
+    # --- Prompt 17 deliverable 3: the alerting rules this codebase evaluates itself ---
+    "reap-abandoned-pipeline-runs": {
+        # A run left in `running` is a worker that died. Every fifteen minutes, because the
+        # alternative — finding it the next evening — finds it after the market has opened on
+        # stale data. The sweep is one indexed query and is a no-op when nothing is stale.
+        "task": "decile.ops.reap_abandoned_runs",
+        "schedule": crontab(minute="*/15"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    "publish-deadline-slo": {
+        # docs/11 §Reliability: "data published by 20:15 IST on >=95% of trading days." Fired at
+        # the deadline itself; silent on a non-trading day and on a day that published.
+        "task": "decile.ops.check_publish_deadline",
+        "schedule": crontab(hour=20, minute=15, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    "kite-token-expiry": {
+        # docs/09: token expiry is "the #1 pipeline failure". Hourly, and it makes no network
+        # call — the expiry is computed from the stored issue time.
+        "task": "decile.ops.check_kite_token",
+        "schedule": crontab(minute=5),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    "queue-backlog": {
+        "task": "decile.ops.check_queue_backlog",
+        "schedule": crontab(minute="*/10"),
+        "options": {"queue": QUEUE_DEFAULT},
     },
 }
 
@@ -102,7 +133,28 @@ def build_celery(settings: WorkerSettings | None = None) -> Celery:
     # orchestrator.
     app.conf.include = ["decile_worker.tasks.celery_tasks"]
     app.autodiscover_tasks(["decile_worker.tasks"], related_name="celery_tasks", force=True)
+    _install_observability_signals()
     return app
+
+
+def _install_observability_signals() -> None:
+    """Wire tracing, Sentry and the metrics endpoint into the worker's process lifecycle.
+
+    ``worker_process_init`` rather than module scope: Celery's prefork pool forks *after* this
+    module is imported, so anything built here would be inherited by every child — one batch span
+    queue and one metrics socket shared across processes that each think they own it. See
+    ``decile_worker.telemetry``.
+
+    Registered from ``build_celery`` rather than at import so that importing this module to read
+    ``BEAT_SCHEDULE`` (which the tests do) installs no signal handlers.
+    """
+    from celery.signals import worker_process_init  # noqa: PLC0415
+
+    @worker_process_init.connect(weak=False)
+    def _init(**_kwargs: object) -> None:
+        from decile_worker.telemetry import install_worker_observability  # noqa: PLC0415
+
+        install_worker_observability()
 
 
 app = build_celery()

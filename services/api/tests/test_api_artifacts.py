@@ -94,6 +94,21 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/backtests/{public_id}/export": {"get"},
     "/backtests/{public_id}/download/{artefact}": {"get"},
     "/backtests/{public_id}/events": {"get"},
+    # Prompt 17 deliverable 4. docs/07 does not describe `/admin`; docs/09 §Observability does,
+    # in one line: "`pipeline_run_step` is the operator UI; expose it at `/admin/pipeline` behind
+    # staff auth." Listed here for the same reason every other path is — a route that is served
+    # and not written down is a surface nobody agreed to. Every one of them is staff-gated.
+    "/admin/pipeline/runs": {"get"},
+    "/admin/pipeline/runs/{run_id}": {"get"},
+    "/admin/pipeline/runs/{trade_date}/rerun": {"post"},
+    "/admin/instruments/{symbol}/reprocess": {"post"},
+    "/admin/data-versions": {"get"},
+    "/admin/providers": {"get"},
+    "/admin/users": {"get"},
+    "/admin/users/{public_id}": {"get"},
+    "/admin/users/{public_id}/entitlements": {"put"},
+    "/admin/users/{public_id}/entitlements/{feature}": {"delete"},
+    "/admin/actions": {"get"},
 }
 
 

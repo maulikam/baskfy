@@ -204,6 +204,45 @@ class Settings(BaseSettings):
     #: JSON lines in every environment but `local`, where a human is reading them.
     log_json: bool = True
 
+    #: docs/02 §Observability: "Sentry for errors". Empty means the SDK is never initialised at
+    #: all — see `decile_api.sentry` for why that is the honest default rather than a no-op init.
+    sentry_dsn: str = ""
+    #: Fraction of *error* events sent. 1.0 because an exception this service raises is rare and
+    #: sampling them away is how a rare bug stays invisible; the knob exists for an incident where
+    #: one endpoint is throwing thousands a minute.
+    sentry_sample_rate: float = Field(default=1.0, ge=0.0, le=1.0)
+    #: The build this process is running, e.g. a git sha. Tags Sentry events and OTel resources so
+    #: "when did this start" has an answer. Set by the deploy; empty on a laptop.
+    release: str = ""
+
+    #: PROMPTS.md Prompt 17 §2. `/metrics` is unauthenticated by design and must therefore not be
+    #: exposed publicly — it is a private-network scrape target (see `docs/runbooks/`). Off in
+    #: `local` costs nothing; on everywhere a Prometheus exists.
+    metrics_enabled: bool = True
+    #: When set, `/metrics` requires `Authorization: Bearer <this>`. A shared secret rather than a
+    #: JWT because Prometheus has no account and cannot refresh one. Empty = no check, which is
+    #: correct behind a private network and wrong on the public internet.
+    metrics_token: str = ""
+
+    # --- Alerting (Prompt 17 deliverable 3) ----------------------------------
+    #: Where operational alerts are emailed. Empty means alerts are logged (and sent to Sentry if
+    #: it is configured) but nobody is woken up.
+    ops_alert_email: str = ""
+    #: An optional generic webhook (Alertmanager, Slack's incoming webhook, whatever the operator
+    #: has). Posted as JSON. Empty disables it.
+    ops_alert_webhook_url: str = ""
+    #: docs/11 §Reliability: "data published by 20:15 IST on >=95% of trading days." The deadline
+    #: the publish-late alert fires on, as an IST wall-clock time in `HH:MM`.
+    publish_deadline_ist: str = "20:15"
+    #: A run still `running` this long after it started is treated as abandoned — the shape a
+    #: worker killed mid-pipeline leaves behind. Above the 45-minute end-to-end budget in docs/11
+    #: with room for a slow night, so a healthy long run is never reaped.
+    pipeline_stale_after_minutes: int = Field(default=90, gt=0)
+    #: Queue depth that counts as a backlog worth an alert.
+    queue_backlog_threshold: int = Field(default=100, gt=0)
+    #: How long before a Kite access token expires the warning fires, in hours.
+    kite_token_warning_hours: int = Field(default=6, gt=0)
+
     # --- CORS ----------------------------------------------------------------
     cors_origins: tuple[str, ...] = ("http://localhost:3000",)
 

@@ -128,6 +128,27 @@ export type MonthlyReturnOut = Schemas["MonthlyReturnOut"];
 export type FragilityRunOut = Schemas["FragilityRunOut"];
 export type ExportLinkOut = Schemas["ExportLinkOut"];
 
+/**
+ * The staff surface (Prompt 17). `docs/07` does not describe `/admin`; `docs/09` §Observability
+ * does, in one line, and `docs/02` rule 5 ("typed end to end ... no hand-written fetch types")
+ * applies to it like everything else. See `decile_api.routers.admin`.
+ */
+export type PipelineStepOut = Schemas["PipelineStepOut"];
+export type PipelineRunDetailOut = Schemas["PipelineRunDetailOut"];
+export type PipelineRunListOut = Schemas["PipelineRunListOut"];
+export type DataVersionOut = Schemas["DataVersionOut"];
+export type DataVersionListOut = Schemas["DataVersionListOut"];
+export type ProviderHealthOut = Schemas["ProviderHealthOut"];
+export type ProviderHealthListOut = Schemas["ProviderHealthListOut"];
+export type AdminUserOut = Schemas["AdminUserOut"];
+export type AdminUserListOut = Schemas["AdminUserListOut"];
+export type AdminUserDetailOut = Schemas["AdminUserDetailOut"];
+export type EntitlementOverrideOut = Schemas["EntitlementOverrideOut"];
+export type EntitlementOverrideIn = Schemas["EntitlementOverrideIn"];
+export type AdminActionOut = Schemas["AdminActionOut"];
+export type AdminActionListOut = Schemas["AdminActionListOut"];
+export type TaskAcceptedOut = Schemas["TaskAcceptedOut"];
+
 /** docs/07: "Base: `/api/v1`". */
 export const API_PREFIX = "/api/v1";
 
@@ -138,6 +159,19 @@ export interface DecileClientOptions {
   getAccessToken?: () => string | undefined | Promise<string | undefined>;
   /** Injectable transport. Matches `openapi-fetch`'s own signature, which takes a `Request`. */
   fetch?: (request: Request) => Promise<Response>;
+  /**
+   * W3C trace context for the web → API hop (PROMPTS.md Prompt 17 §1: "OpenTelemetry traces
+   * across web → API → worker → database").
+   *
+   * Returns a `traceparent` value, or `undefined` when nothing is being traced. The API's
+   * `FastAPIInstrumentor` extracts it, so a screen run appears as a child of the page render
+   * rather than as an unrelated root span.
+   *
+   * A function rather than a value: a client is created per request (`apps/web/src/lib/api/server`)
+   * but the *span* changes within one, and a captured header would attribute every later call to
+   * whichever span happened to be active at construction.
+   */
+  getTraceparent?: () => string | undefined;
 }
 
 export type DecileClient = ReturnType<typeof createDecileClient>;
@@ -162,6 +196,19 @@ export function createDecileClient(options: DecileClientOptions) {
         const token = await readToken();
         if (token) {
           request.headers.set("Authorization", `Bearer ${token}`);
+        }
+        return request;
+      },
+    });
+  }
+
+  if (options.getTraceparent) {
+    const readTrace = options.getTraceparent;
+    client.use({
+      onRequest({ request }) {
+        const traceparent = readTrace();
+        if (traceparent) {
+          request.headers.set("traceparent", traceparent);
         }
         return request;
       },

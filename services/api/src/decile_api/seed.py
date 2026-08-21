@@ -46,6 +46,7 @@ from decile_core.models import (
     MarketHealthDaily,
     OhlcvDaily,
     PipelineRun,
+    PipelineRunStep,
     Plan,
     Screen,
     Subscription,
@@ -565,12 +566,19 @@ async def seed_e2e_account(session: AsyncSession) -> int:
     return 1
 
 
-async def seed_published_run(session: AsyncSession, trade_date: dt.date) -> int:
+async def seed_published_run(
+    session: AsyncSession, trade_date: dt.date, data_version: int = 1
+) -> int:
     """A published `pipeline_run`, without which `resolve_as_of` refuses to serve any date.
 
     docs/06 §step 1 defines the as-of as the latest date belonging to a *published* run, and the
     reference fixture seeds `factor_daily` directly — so the run row has to be written too, or the
     API answers 503 for every request (docs/07a §8).
+
+    ``data_version`` is a parameter rather than a constant because the cache-invalidation tests
+    need to publish a *second* version for the same date (docs/06 §Caching keys every entry on it);
+    they used to do that through a second, hand-written copy of this function, and the two drifted
+    the moment this one started writing the step row docs/03 requires.
     """
     existing = (
         await session.execute(select(PipelineRun.id).where(PipelineRun.trade_date == trade_date))
@@ -578,13 +586,37 @@ async def seed_published_run(session: AsyncSession, trade_date: dt.date) -> int:
     if existing is not None:
         return 0
     now = dt.datetime(trade_date.year, trade_date.month, trade_date.day, 14, 0, tzinfo=dt.UTC)
+    run = PipelineRun(
+        trade_date=trade_date,
+        status="succeeded",
+        started_at=now,
+        finished_at=now,
+        data_version=data_version,
+    )
+    session.add(run)
+    await session.flush()
+    # docs/03: "Every step writes a row in `pipeline_run_step`". A run row claiming to have
+    # published with no record of publishing is precisely the inconsistency
+    # `decile_api.integrity`'s `published_runs_have_steps` assertion exists to catch — and it
+    # would catch this one, on a seeded database, for a reason that has nothing to do with a bad
+    # backup. So the step is written, and its payload says plainly that it was seeded rather than
+    # run: the fixture is `factor_daily` rows loaded directly, not a pipeline that executed.
     session.add(
-        PipelineRun(
-            trade_date=trade_date,
+        PipelineRunStep(
+            run_id=run.id,
+            step="publish",
             status="succeeded",
-            started_at=now,
-            finished_at=now,
-            data_version=1,
+            rows_in=1,
+            rows_out=1,
+            duration_ms=0,
+            error={
+                "seeded": True,
+                "detail": (
+                    "written by `decile_api.seed`, not by a pipeline run; the reference export "
+                    "is loaded into factor_daily directly (docs/13 §5)"
+                ),
+                "data_version": data_version,
+            },
         )
     )
     return 1

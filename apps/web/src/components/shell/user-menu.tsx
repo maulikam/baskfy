@@ -1,6 +1,6 @@
 "use client";
 
-import { LogIn, LogOut, User } from "lucide-react";
+import { LogIn, LogOut, ShieldCheck, User } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -23,9 +23,17 @@ import {
 export interface UserMenuProps {
   email: string | null;
   name: string | null;
+  /**
+   * `app_user.is_staff`, from `GET /me` — server truth, exactly like `entitlements`
+   * (PROMPTS.md Prompt 17 §4). The admin link lives here rather than in `NAV_GROUPS` because
+   * `src/lib/nav.ts` is pinned to docs/08's sidebar IA by a test, and docs/08 does not list an
+   * admin section. Hiding the link is a courtesy; `require_staff` on every `/admin/*` route is
+   * the enforcement, and it answers 404 to a non-staff caller.
+   */
+  isStaff?: boolean;
 }
 
-export function UserMenu({ email, name }: UserMenuProps) {
+export function UserMenu({ email, name, isStaff = false }: UserMenuProps) {
   if (!email) {
     return (
       <Button variant="outline" size="sm" asChild>
@@ -50,6 +58,14 @@ export function UserMenu({ email, name }: UserMenuProps) {
           <span className="block truncate">{email}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="my-1 h-px bg-border" />
+        {isStaff ? (
+          <DropdownMenuItem asChild>
+            <Link href="/admin">
+              <ShieldCheck aria-hidden="true" className="size-4" />
+              Admin
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem asChild>
           <Link href="/logout">
             <LogOut aria-hidden="true" className="size-4" />

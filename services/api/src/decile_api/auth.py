@@ -34,7 +34,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from decile_api.db import SessionDep
-from decile_api.problems import unauthenticated
+from decile_api.problems import Problem, ProblemType, unauthenticated
 from decile_api.settings import JWT_ALGORITHM, Settings, get_settings
 from decile_core.models import AppUser
 
@@ -63,6 +63,10 @@ class Principal:
     user_id: int | None = None
     public_id: str | None = None
     email: str | None = None
+    #: ``app_user.is_staff``. docs/09 §Observability puts ``/admin/pipeline`` "behind staff auth";
+    #: this is what that check reads. Loaded with the account rather than queried again per route,
+    #: so a staff route costs the same one lookup every other authenticated route does.
+    is_staff: bool = False
 
     @property
     def is_authenticated(self) -> bool:
@@ -161,6 +165,7 @@ async def current_principal(request: Request, session: SessionDep) -> Principal:
         user_id=user.id,
         public_id=user.public_id,
         email=user.email,
+        is_staff=user.is_staff,
     )
 
 
@@ -175,6 +180,28 @@ async def require_authenticated(principal: PrincipalDep) -> Principal:
 
 
 AuthenticatedDep = Annotated[Principal, Depends(require_authenticated)]
+
+
+async def require_staff(principal: PrincipalDep) -> Principal:
+    """The gate on every ``/admin/*`` route (Prompt 17 deliverable 4).
+
+    A non-staff caller gets **404**, not 403. docs/07's catalogue has no ``forbidden`` type, and
+    more to the point: a 403 confirms that the path exists and that the account simply lacks the
+    bit, which tells an attacker exactly which endpoint to go and get a session for. An anonymous
+    caller still gets 401, because "you are not signed in" is not a secret.
+    """
+    if not principal.is_authenticated:
+        raise unauthenticated()
+    if not principal.is_staff:
+        log.warning(
+            "non-staff principal refused an admin route",
+            extra={"public_id": principal.public_id},
+        )
+        raise Problem(ProblemType.NOT_FOUND, "Not found.")
+    return principal
+
+
+StaffDep = Annotated[Principal, Depends(require_staff)]
 
 
 def encode_token(  # noqa: PLR0913 - one parameter per JWT claim the web app may set

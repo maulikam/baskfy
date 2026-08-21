@@ -1,0 +1,36 @@
+# docs/02 §Observability: "OpenTelemetry -> Grafana/Tempo/Loki". Three datasources, one per signal.
+# Prometheus is the only one the committed dashboards query; Tempo and Loki are declared so the
+# trace id and request id a panel shows are clickable rather than copy-paste.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: decile-prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+
+  - name: Tempo
+    type: tempo
+    uid: decile-tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      # `decile.request_id` is on every API span and on every JSON log line
+      # (`decile_api.logging`), which is what makes this join work at all.
+      tracesToLogsV2:
+        datasourceUid: decile-loki
+        filterByTraceID: true
+
+  - name: Loki
+    type: loki
+    uid: decile-loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        - name: TraceID
+          matcherRegex: '"trace_id":"(\w+)"'
+          url: "$${__value.raw}"
+          datasourceUid: decile-tempo

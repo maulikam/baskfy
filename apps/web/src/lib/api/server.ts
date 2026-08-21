@@ -4,6 +4,7 @@ import { createDecileClient, type DecileClient } from "@decile/api-client";
 
 import { auth } from "@/lib/auth";
 import { apiOrigin } from "@/lib/api/config";
+import { currentTraceparent } from "@/lib/api/trace";
 
 /**
  * The API client for server components and route handlers — docs/03 §"Request path for a screen
@@ -19,10 +20,13 @@ export async function serverApi(): Promise<DecileClient> {
   return createDecileClient({
     baseUrl: apiOrigin(),
     ...(token ? { getAccessToken: () => token } : {}),
+    // Prompt 17 §1: carry the render's span across the hop, so a slow page and the screen query
+    // behind it are one trace in Tempo rather than two.
+    getTraceparent: currentTraceparent,
   });
 }
 
 /** An unauthenticated client, for the public pages that read `/meta/*` during SSG. */
 export function publicApi(): DecileClient {
-  return createDecileClient({ baseUrl: apiOrigin() });
+  return createDecileClient({ baseUrl: apiOrigin(), getTraceparent: currentTraceparent });
 }

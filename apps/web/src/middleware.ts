@@ -21,7 +21,18 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 
 /** Routes that are meaningless without an account. `/screens` is not one: examples read publicly. */
-const GATED_PREFIXES = ["/profile", "/change-password", "/portfolios", "/backtests", "/invoices"];
+const GATED_PREFIXES = [
+  "/profile",
+  "/change-password",
+  "/portfolios",
+  "/backtests",
+  "/invoices",
+  // Prompt 17 §4. This only checks that *a* session cookie exists; whether it is a **staff**
+  // session is decided by `require_staff` on the API, which answers 404. So a signed-in
+  // non-staff user reaches the page and the page 404s, which is the intended behaviour — the
+  // middleware is a convenience, not the enforcement (docs/12a §11).
+  "/admin",
+];
 
 /** Auth.js v5 sets one of these depending on whether the deployment is on HTTPS. */
 const SESSION_COOKIES = ["authjs.session-token", "__Secure-authjs.session-token"];

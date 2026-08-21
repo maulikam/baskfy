@@ -73,6 +73,12 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # when". docs/04 defines `portfolio` and `portfolio_holding` and stops there. See
     # `decile_core.models.accounts.PortfolioRebalance` and docs/DECISIONS.md §14.
     "portfolio_rebalance": ("id",),
+    # Prompt 17 §4: "/admin (staff-only): ... entitlement override, and a reprocess-instrument
+    # action." docs/09 §Observability puts the admin surface behind "staff auth" and docs/04
+    # defines neither the grant nor the audit trail. See `decile_core.models.admin` and
+    # docs/DECISIONS.md §17.
+    "entitlement_override": ("id",),
+    "admin_action": ("id",),
 }
 
 #: docs/04 opening paragraph: "Money in numeric, never float."
@@ -138,14 +144,20 @@ def test_every_added_table_has_an_addendum() -> None:
 
 
 def test_billing_tables_are_recorded_in_decisions() -> None:
-    """The Prompt 13 and Prompt 14 additions are written down too, in docs/DECISIONS.md.
+    """The Prompt 13, 14 and 17 additions are written down too, in docs/DECISIONS.md.
 
     Same rule as the addendum test above: a table nobody wrote down is a table nobody maintains.
     These are recorded in DECISIONS.md rather than a `04x` addendum because the overnight build
     was permitted to append there and nowhere else under docs/.
     """
     decisions = (REPO_ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
-    for table in ("webhook_event", "invoice_counter", "portfolio_rebalance"):
+    for table in (
+        "webhook_event",
+        "invoice_counter",
+        "portfolio_rebalance",
+        "entitlement_override",
+        "admin_action",
+    ):
         assert table in decisions, f"{table} is not described in docs/DECISIONS.md"
 
 

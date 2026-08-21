@@ -652,3 +652,192 @@ Server Component and `ssr: false` is not available there.
 * **The dashboard and factsheet budgets are measured on 271 instruments and 117 indices**, not the
   ~2,300 and ~145 the documents describe. Only the CSV export builds a synthetic universe to reach
   the size docs/11 states.
+
+---
+
+## Prompt 17 — Observability, admin, and operations (2026-08-21)
+
+Everything below was decided while building Prompt 17 and is **not** in the bundle. Where a
+decision contradicts something a document says, it says so.
+
+### 17.1 `docs/runbooks/` was created, and it is the one place under `docs/` this run wrote to
+
+The overnight instruction is "never edit anything under `docs/` except appending to
+`docs/DECISIONS.md`", with the reason attached: "the specs are the source of truth, not something
+to adjust when the code disagrees with them." PROMPTS.md Prompt 17 §5 names its deliverable by
+path — "Runbooks in `docs/runbooks/`: kite-token-expired.md, pipeline-failed.md,
+bad-data-published.md ..., restore-from-backup.md, razorpay-webhook-replay.md".
+
+Those two are in tension only if "edit" means "create a new file in a new subdirectory". They are
+not, so the runbooks are at the path the prompt names. **No existing file under `docs/` was
+touched.** The distinction against §16.1 is deliberate: Prompt 16 asked for the "as measured"
+numbers to be written *into `docs/11`*, which is an edit to a specification and was correctly
+refused; five new operational documents in a directory no specification occupies are not.
+
+### 17.2 Three additions to `docs/04`: `app_user.is_staff`, `entitlement_override`, `admin_action`
+
+`docs/09` §Observability puts the operator UI "behind staff auth" and the bundle never says what
+staff *is*. `app_user.is_staff` is that answer: a boolean on the account, server-side, never set
+by a self-service form. It is on the account rather than in a table of its own because a join on
+every authenticated request to answer one bit is a worse shape, not a better one.
+
+`entitlement_override` exists because Prompt 17 §4 asks for an "entitlement override" and the two
+alternatives are both wrong. Writing `plan.features` changes what *every* account on that plan
+gets. Inserting a synthetic `subscription` row makes the billing history — the thing GST invoices
+are raised against — lie. So an override is its own row, with an author, a mandatory reason and an
+expiry, applied by `decile_core.entitlements.apply_overrides` after the plan is resolved, inside
+the one function every gated endpoint already calls.
+
+`admin_action` is **not asked for by anything in the bundle.** Every action on the admin surface is
+either privileged (granting an entitlement) or expensive (re-running a night, rewriting an
+instrument's whole adjusted history), and none of them can be undone. A privileged, irreversible
+action with no record of who took it is a hole that is only noticed after it matters. One
+append-only row per action, written in the same transaction as the action.
+
+### 17.3 A non-staff caller gets 404 from `/admin/*`, not 403
+
+`docs/07`'s error catalogue has no `forbidden` type, so a 403 would have to be invented. More to
+the point, a 403 confirms that the path exists and that the caller merely lacks a bit, which tells
+an attacker exactly which endpoint is worth getting a session for. An *anonymous* caller still
+gets 401, because "you are not signed in" is not a secret. `decile_api.auth.require_staff`.
+
+### 17.4 `/admin/*` is in the OpenAPI document and in the generated TypeScript client
+
+`docs/07` describes the product's API and says nothing about `/admin`. The routes are published
+anyway, tagged `admin`, because `docs/02` rule 5 is "typed end to end — Pydantic models → OpenAPI
+→ generated TS client. No hand-written fetch types", and a staff page is not an exemption from it.
+`services/api/tests/test_api_artifacts.py` lists them so that a route which is served and not
+written down still fails the build.
+
+### 17.5 The run record is committed before the chain starts
+
+`decile_worker.orchestrator` runs all ten steps in **one** transaction, for the reason its own
+docstring gives: a run that dies between `apply_adjustments` and `compute_factors` would leave
+adjusted prices beside stale factor rows. That is right for the data and wrong for the audit
+trail — a `SIGKILL` rolls the transaction back and the `pipeline_run` row goes with it, so the
+operator sees a night with no run at all, indistinguishable from a night Beat never fired.
+
+So `decile_worker.ops.begin_run` writes and commits the run row on a session of its own *before*
+the chain opens its transaction, and the orchestrator adopts it by id. A clean failure updates it
+to `failed`; a killed worker leaves it in `running` forever, which is a distinct and detectable
+state. The step rows still share the chain's fate, and that is unchanged: a partial step history
+for a rolled-back night would describe work that did not happen.
+
+### 17.6 Abandonment is detected by age, not by a heartbeat
+
+`decile.ops.reap_abandoned_runs` fails any run still `running` past
+`DECILE_PIPELINE_STALE_AFTER_MINUTES` (90) and raises `pipeline_abandoned`. A heartbeat would find
+it in seconds instead of up to 105 minutes (90 + the 15-minute sweep). It would also need a second
+connection held open for the whole run, writing a row the chain's own transaction is also writing
+— two writers on one row, one of them outside the transaction that owns it. The stale window sits
+above `docs/11`'s 45-minute end-to-end budget with room for a slow night, so a *healthy* long run
+is never reaped. Detection latency is the price and it is worth paying.
+
+### 17.7 Six alert rules, evaluated in two places
+
+Four of `PROMPTS.md` §3's rules are facts this codebase learns directly — pipeline failure, gate
+failure, Kite token expiry, and (added) an abandoned run. Those are raised in-process by
+`decile_worker.alerts.dispatch`, so the alert carries the run id, the failing assertion and the
+error text rather than a threshold crossing. Two of them — API error rate > 1% and queue backlog —
+are rates over a window, which is what a time-series database is for; they are Prometheus rules in
+`infra/prometheus/alerts.yml`. The publish deadline is in **both**, because `docs/11` names a
+specific instant (20:15 IST) and because a worker that is itself down must not take the alert
+about it down as well.
+
+An alert always logs at ERROR with `alert=` set and always increments `decile_alerts_total`.
+Beyond that it goes to Sentry, an ops email address and a JSON webhook, each only if configured.
+**None configured is a valid deployment** — it is a laptop — and `dispatch` says so once per
+process rather than failing.
+
+### 17.8 Prometheus is a dependency `docs/02` does not lock
+
+`docs/02` §Observability locks "OpenTelemetry → Grafana/Tempo/Loki" for traces and logs and names
+no metrics backend. `PROMPTS.md` Prompt 17 §2 asks for "Prometheus metrics + Grafana dashboards"
+by name, and Grafana is already the locked dashboard surface, so `prometheus-client` is added to
+`decile-api`. It was already in `uv.lock` as a `flower` dependency; this makes the use explicit.
+
+`/metrics` sits **outside** `/api/v1`: it is not part of `docs/07`'s surface, it carries no rate
+limit (a fifteen-second scrape would eat the anonymous bucket in a minute), and it is not in the
+OpenAPI document, so it never reaches the generated client. It is unauthenticated unless
+`DECILE_METRICS_TOKEN` is set, which is correct on a private network and wrong on the public
+internet — `docs/runbooks/` says so.
+
+### 17.9 Pipeline metrics are read from the database at scrape time, not held in the API
+
+Nine of `docs/03`'s ten steps run in a Celery worker that may not be the process being scraped,
+and a worker that finished the run an hour ago may since have been restarted. So
+`decile_api.metrics.refresh_pipeline_metrics` re-reads `pipeline_run` and `pipeline_run_step` on
+each scrape and sets gauges from them. This is the difference between "the step-duration metric
+disappeared" and "the pipeline has not run", which are very different pages at 3am. The worker
+*also* records its own histogram, which is the one with a distribution in it.
+
+### 17.10 Publish latency is measured from 15:30 IST
+
+`docs/09` §Observability asks for "publish latency (EOD close → data live)" and does not define
+"close". NSE's continuous session ends at 15:30 IST, so that is the zero — not the ~18:00–19:00
+IST EOD-file settle window `docs/03` mentions, which is when the *inputs* arrive rather than when
+the day ended. The 20:15 IST SLO in `docs/11` is therefore a 4h45m budget, which is the number the
+Grafana panel is scaled to.
+
+### 17.11 Sentry's own tracing is off
+
+`traces_sample_rate=0.0`. `docs/02` sends traces to Tempo; two tracers sampling the same request
+independently produce two disagreeing pictures of it. The active OpenTelemetry trace id is
+attached to every Sentry event as the `otel.trace_id` tag instead, so an issue links to a trace.
+Events are additionally scrubbed by the same redactor the logs use
+(`decile_api.logging.redact_text`) before they leave the process, on top of `send_default_pii=False`.
+
+### 17.12 The web app initialises Sentry server-side only
+
+`@sentry/nextjs` is wired through `instrumentation.ts`'s `register()` and `onRequestError` hooks
+and **not** through `withSentryConfig`, and there is no `instrumentation-client.ts`. The client
+bundle is therefore byte-identical to what it was before Prompt 17, which matters because
+`docs/11` budgets the screens route at 250 KB gzip and it is already at ~194 KB. The consequence
+is stated plainly: **browser exceptions are not reported.** Only server components, route handlers
+and server actions are.
+
+### 17.13 The restore drill takes its own backup; it does not read a real one
+
+`PROMPTS.md` §6 asks for "a monthly restore-drill CI job that provisions a scratch database from
+the latest backup". The overnight rules forbid contacting real infrastructure, and CI has no R2
+credentials, so `.github/workflows/restore-drill.yml` runs `infra/backup/pg_backup.sh` against a
+freshly migrated and seeded database, restores that dump into a scratch database with
+`infra/backup/restore.sh`, and runs `decile_api.integrity` against the result. That exercises the
+backup script, the restore script and the assertions — everything except "the object in R2 is
+readable", which only a deployment can prove. The workflow says so in a comment and the runbook
+says so in prose.
+
+### 17.14 What is **not** done
+
+* **No runbook has been executed against staging.** There is no staging environment in this
+  repository and the overnight rules forbid standing one up. Prompt 17's third acceptance
+  criterion is therefore **not met**, and each runbook carries a "Verified against" line reading
+  `NOT YET — written from the code, not from a real incident`.
+* **Grafana dashboards are JSON files, not a provisioned Grafana.** `infra/grafana/` holds the
+  dashboard definitions and a provisioning file. Nothing has rendered them.
+* **The alert rules have never fired in anger.** `infra/prometheus/alerts.yml` is written against
+  the metric names `decile_api.metrics` exposes, and a test asserts every metric an alert
+  references is one this codebase actually publishes — but no Prometheus has evaluated them.
+* **`/metrics` reports queue depth by `LLEN` on the queue name.** That is how Celery's Redis
+  transport stores a queue, and it is transport-specific. A deployment that moves to RabbitMQ
+  gets a silent zero, not an error.
+* **Browser exceptions are unreported** (§17.12).
+* **The worker's Prometheus endpoint is one port per process.** With a prefork pool, only the
+  first child to bind serves; the rest are silent. `PROMETHEUS_MULTIPROC_DIR` is the supported
+  answer and is not configured here.
+
+### 17.15 The app shell now makes one extra `GET /me` per authenticated render
+
+`apps/web/src/app/(app)/layout.tsx` reads `/me` so the user menu can render the `/admin` link
+from `is_staff` — server truth, the same source every entitlement gate reads. It runs inside the
+existing `Promise.all` beside `auth()` and `cookies()`, so the wall-clock cost is the *maximum* of
+the three rather than their sum, and `fetchMe` short-circuits without a request when there is no
+session cookie.
+
+The measured budgets are unaffected: `docs/11`'s factsheet TTFB (< 300 ms) and LCP (< 1.8 s) are
+asserted by `apps/web/e2e/performance.spec.ts`, which visits **signed out** — so the extra call is
+not on the path it measures. It *is* on the path every signed-in page render takes, and nothing
+measures that. If it becomes a problem the fix is to carry `is_staff` on the Auth.js session
+rather than to drop the link, and the cost of that is staleness: a staff bit revoked mid-session
+would keep rendering the link until the session refreshed. The API decides again on every
+`/admin/*` request either way.

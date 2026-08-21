@@ -67,6 +67,15 @@ jobs:
         with:
           name: as-measured
           path: benchmarks/AS-MEASURED.md
+      # Prompt 17 deliverables 2 and 3. `services/api/tests/test_metrics.py` already asserts that
+      # every rule names a metric we publish; this asserts that Prometheus itself would load the
+      # file — a PromQL typo parses as valid YAML and fails only at evaluation time, in
+      # production, silently.
+      - name: Prometheus rules and config are loadable
+        run: |
+          docker run --rm --entrypoint promtool \
+            -v "$PWD/infra/prometheus:/rules:ro" prom/prometheus:v3.1.0 \
+            check config /rules/prometheus.yml
 
   client:
     # docs/07 §"OpenAPI -> TypeScript": "Hand-written request types are a CI failure."

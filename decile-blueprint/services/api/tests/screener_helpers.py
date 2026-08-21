@@ -84,7 +84,27 @@ async def _reset_and_seed(url: str) -> None:
     engine = create_async_engine(url)
     try:
         async with engine.begin() as connection:
+            # DROPPING THE SCHEMA IS NOT ENOUGH, AND THE DIFFERENCE IS INVISIBLE UNTIL AN INSERT.
+            #
+            # TimescaleDB keeps its chunks, compressed hypertables and continuous-aggregate
+            # materialisations in `_timescaledb_internal`, not in `public`. `DROP SCHEMA public
+            # CASCADE` removes the hypertable *parents* and leaves those behind: after a reset
+            # `timescaledb_information.chunks` reports zero while `_timescaledb_internal` still
+            # holds `_hyper_*_chunk`, `_materialized_hypertable_*` and `_compressed_hypertable_*`
+            # relations from the previous generation.
+            #
+            # Each orphan carries its own foreign keys, still pointing at the dropped tables. The
+            # first insert into a hypertable is then routed into stale storage and fails with
+            # something that looks like a seeding bug and is not — the shape it took here was
+            #
+            #   insert on "_hyper_3_5_chunk" violates "5_10_fk_index_member_daily_index_id_index_def"
+            #   Key (index_id)=(5) is not present in table "index_def"
+            #
+            # while `index_def` demonstrably held all fourteen rows. Dropping the extension is what
+            # clears the internal schema; migration 0001 recreates it with `CREATE EXTENSION IF NOT
+            # EXISTS`, so the reset stays a reset.
             await connection.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+            await connection.execute(text("DROP EXTENSION IF EXISTS timescaledb CASCADE"))
             await connection.execute(text("CREATE SCHEMA public"))
     finally:
         await engine.dispose()

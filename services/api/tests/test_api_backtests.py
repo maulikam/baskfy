@@ -21,12 +21,15 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Final
 
+import anyio
 import api_helpers
 import httpx
 import pytest
 import pytest_asyncio
 import screener_helpers
 from api_helpers import bearer, make_user, running_app, url
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from screener_helpers import requires_db
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,9 +39,13 @@ from decile_api.backtests import (
     artefact_bytes,
     artefact_key,
     build_payload,
+    events_channel,
     new_public_id,
+    progress_frame,
+    progress_key,
     sign_download,
 )
+from decile_api.routers.backtests import event_stream
 from decile_api.settings import Settings
 from decile_core.backtest import (
     BacktestConfig,
@@ -592,6 +599,69 @@ async def test_the_event_stream_opens_with_the_current_state(
     ]
     assert frames[-1]["status"] == "done"
     assert frames[-1]["percent"] == 100
+
+
+@pytest.mark.redis
+async def test_a_running_backtest_relays_the_workers_frames(tmp_path: Path) -> None:
+    """PROMPTS.md Prompt 15 §4: "progress events streamed to the client over SSE".
+
+    The worker and the browser never talk directly: the job publishes to a Redis channel and
+    mirrors the latest frame on a key, and the endpoint replays the key and then relays the
+    channel. This test *is* the worker — it writes the key, opens the stream, publishes a running
+    frame and then a terminal one — and asserts all three arrive in order and that the stream
+    then closes on its own.
+
+    Driven against ``event_stream`` rather than over HTTP because httpx's ``ASGITransport``
+    buffers a response to completion; a stream that only ends when the run does can never be read
+    through it. The HTTP wiring is covered by the terminal-state test above.
+    """
+    public_id = new_public_id()
+    settings = _settings(tmp_path)
+    client: Redis = Redis.from_url(settings.redis_url)
+    try:
+        await client.ping()
+    except RedisError:  # pragma: no cover - guarded by the redis marker
+        pytest.skip("no Redis; run `make up`")
+
+    stored = progress_frame(public_id, "running", stage="screening", completed=3, total=180)
+    running = progress_frame(public_id, "running", stage="simulating", completed=250, total=3900)
+    finished = progress_frame(public_id, "done", stage="done", completed=1, total=1)
+    await client.set(progress_key(public_id), stored, ex=60)
+
+    frames: list[dict[str, object]] = []
+    ended = False
+    try:
+        stream = event_stream(client, public_id, stored, terminal=False)
+        with anyio.fail_after(20):
+            async for block in stream:
+                text = block.decode("utf-8")
+                if text.startswith("event: end"):
+                    ended = True
+                    break
+                received = [
+                    json.loads(line[len("data: ") :])
+                    for line in text.splitlines()
+                    if line.startswith("data: ")
+                ]
+                if not received:
+                    # A keep-alive comment. Publishing again here would send the same frame
+                    # twice, which is how the first draft of this test lied to itself.
+                    continue
+                frames.extend(received)
+                # The subscription is live the moment the first frame is out, because
+                # `event_stream` subscribes before yielding it.
+                if len(frames) == 1:
+                    await client.publish(events_channel(public_id), running)
+                elif len(frames) == 2:
+                    await client.publish(events_channel(public_id), finished)
+        await stream.aclose()
+    finally:
+        await client.delete(progress_key(public_id))
+        await client.aclose()
+
+    assert [frame["stage"] for frame in frames] == ["screening", "simulating", "done"]
+    assert frames[-1]["status"] == "done"
+    assert ended, "the stream did not close itself when the run finished"
 
 
 async def test_the_event_stream_is_entitlement_gated(session: AsyncSession, tmp_path: Path) -> None:

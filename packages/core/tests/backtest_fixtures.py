@@ -207,8 +207,10 @@ def build_market(  # noqa: PLR0913 - a market is described by exactly these knob
     days = len(calendar)
     instrument_ids = tuple(range(1, instruments + 1))
 
-    # Each name gets its own drift so the ranking has something to rank.
-    drifts = drift + rng.normal(0.0, drift, size=instruments)
+    # Each name gets its own drift so the ranking has something to rank. The dispersion is the
+    # *magnitude* of the drift, so a downward-trending market (a negative drift) is as valid a
+    # fixture as an upward one — `numpy` refuses a negative scale.
+    drifts = drift + rng.normal(0.0, abs(drift), size=instruments)
     base = rng.uniform(80.0, 900.0, size=instruments)
 
     steps = rng.normal(0.0, volatility, size=(days, instruments)) + drifts

@@ -36,6 +36,7 @@ from decile_core.backtest import (
     BacktestData,
     BacktestDataError,
     BacktestResult,
+    CashPolicy,
     CostSpec,
     DividendPolicy,
     LookAheadError,
@@ -44,6 +45,7 @@ from decile_core.backtest import (
     RebalanceDay,
     RebalanceFrequency,
     RebalanceSpec,
+    RiskOverlay,
     SelectionSpec,
     TradeReason,
     Weighting,
@@ -538,6 +540,75 @@ def test_rank_weighting_favours_the_best_ranked_name() -> None:
         if holding.executed_on == first.executed_on and holding.instrument_id != first.instrument_id
     ]
     assert all(first.target_weight >= peer.target_weight for peer in peers)
+
+
+# ---------------------------------------------------------------------------
+# The risk overlay and the cash policy (docs/10 §Config)
+# ---------------------------------------------------------------------------
+
+
+def _falling_market() -> tuple[fixtures.SyntheticMarket, BacktestData, tuple[dt.date, ...]]:
+    """A market that trends down, so ``index_above_200dma`` has something to trigger on."""
+    start, end = dt.date(2011, 1, 3), dt.date(2013, 12, 31)
+    market = fixtures.build_market(start=start, end=end, instruments=40, drift=-0.0009)
+    schedule = rebalance_dates(market.calendar, start, end, MONTHLY)
+    return market, market.data(schedule), schedule
+
+
+def test_the_risk_overlay_goes_to_cash_below_the_200_day_average() -> None:
+    """docs/10 §Config: ``"risk_overlay": { "enabled": false, "rule": "index_above_200dma" }``."""
+    _, data, _ = _falling_market()
+    off = run_backtest(_config(costs=NO_COSTS), data)
+    on = run_backtest(_config(costs=NO_COSTS, risk_overlay=RiskOverlay(enabled=True)), data)
+
+    def cash_days(result: BacktestResult) -> int:
+        # Day one is always fully in cash — the first order is not filled until day two — so the
+        # comparison starts after the first fill, where the difference is the overlay's doing.
+        return sum(1 for value in result.invested[2:] if value == Decimal(0))
+
+    assert any("risk overlay was triggered" in note for note in on.notes)
+    # The overlay's whole purpose: after it fires the book is entirely in cash, for a while.
+    assert cash_days(on) > 100
+    assert cash_days(off) == 0
+    # Sitting out a falling market beats riding it down.
+    assert on.final_equity > off.final_equity
+
+
+def test_the_overlay_stays_invested_until_it_has_200_observations() -> None:
+    """A 200-day average needs 200 days. Computing one from 40 and acting on it would be worse
+    than not having an overlay at all, so the engine says so in the notes and stays invested."""
+    start, end = dt.date(2011, 1, 3), dt.date(2011, 6, 30)
+    market = fixtures.build_market(start=start, end=end, instruments=40)
+    schedule = rebalance_dates(market.calendar, start, end, MONTHLY)
+    result = run_backtest(
+        _config(
+            start=start,
+            end=end,
+            costs=NO_COSTS,
+            risk_overlay=RiskOverlay(enabled=True),
+        ),
+        market.data(schedule),
+    )
+    assert any("fewer than the 200" in note for note in result.notes)
+    assert max(result.invested) > Decimal(0)
+
+
+def test_cash_policy_benchmark_makes_idle_cash_track_the_index() -> None:
+    """docs/10 §Config: ``"cash_policy": "hold_cash" | "benchmark"``.
+
+    Measured on the overlay's own market, because that is the only configuration in which a
+    meaningful share of the book *is* idle: once the overlay fires the whole portfolio is cash,
+    and the two policies then say different things about what happens to it. In a falling market
+    tracking the index is worse than holding cash, which is exactly the direction asserted.
+    """
+    _, data, _ = _falling_market()
+    overlay = RiskOverlay(enabled=True)
+    held = run_backtest(_config(costs=NO_COSTS, risk_overlay=overlay), data)
+    tracked = run_backtest(
+        _config(costs=NO_COSTS, risk_overlay=overlay, cash_policy=CashPolicy.BENCHMARK), data
+    )
+    assert tracked.final_equity != held.final_equity
+    assert tracked.final_equity < held.final_equity
 
 
 # ---------------------------------------------------------------------------

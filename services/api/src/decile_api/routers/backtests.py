@@ -37,7 +37,7 @@ import datetime as dt
 import io
 import json
 import logging
-from collections.abc import AsyncIterator, Awaitable, Mapping, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Mapping, Sequence
 from typing import Annotated, Final, Protocol
 
 import anyio
@@ -657,17 +657,27 @@ def _sse(event: str, data: str) -> bytes:
     return f"event: {event}\ndata: {data}\n\n".encode()
 
 
-async def _stream(
+async def event_stream(
     cache: Redis | None, public_id: str, initial: str, terminal: bool
-) -> AsyncIterator[bytes]:
+) -> AsyncGenerator[bytes, None]:
     """One SSE connection.
+
+    Public rather than private so it can be driven directly by a test. httpx's ``ASGITransport``
+    buffers a response to completion before returning it, so a long-lived stream cannot be
+    exercised over the in-process client at all — the only way to assert that a frame published
+    mid-run reaches a subscriber is to drive this generator.
 
     The first frame is always the *current* state — read from Redis if the worker has published
     one, else synthesised from the row — so a client that connects after the run started is not
     left staring at an empty progress bar until the next event.
+
+    **The subscription is opened before that first frame is sent.** Sending first and subscribing
+    afterwards leaves a window in which the worker publishes and nobody is listening, and the
+    frame that goes missing is disproportionately likely to be the terminal one — the run would
+    then appear to hang at 97% until the client's poll caught up.
     """
-    yield _sse("progress", initial)
     if terminal or cache is None:
+        yield _sse("progress", initial)
         yield _sse("end", initial)
         return
 
@@ -675,6 +685,7 @@ async def _stream(
     began = anyio.current_time()
     try:
         await pubsub.subscribe(service.events_channel(public_id))
+        yield _sse("progress", initial)
         while anyio.current_time() - began < SSE_MAX_SECONDS:
             message = await pubsub.get_message(
                 ignore_subscribe_messages=True, timeout=SSE_HEARTBEAT_SECONDS
@@ -692,6 +703,7 @@ async def _stream(
         yield _sse("end", initial)
     except RedisError as exc:  # pragma: no cover - a broker that dies mid-stream
         log.warning("backtest event stream failed", extra={"error": str(exc)})
+        yield _sse("progress", initial)
         yield _sse("end", initial)
     finally:
         try:
@@ -751,7 +763,7 @@ async def backtest_events(
         else stored
     )
     return StreamingResponse(
-        _stream(cache, public_id, initial, terminal),
+        event_stream(cache, public_id, initial, terminal),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
     )

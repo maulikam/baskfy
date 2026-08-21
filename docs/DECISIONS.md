@@ -285,3 +285,181 @@ boundary parsing. Flagged here per house rule 1.
   call, because `run_screen`'s cached bytes carry no `instrument_id` and the rule matches on
   `instrument_id`, never on symbol (a symbol diff would exit a position on the day NSE renames
   it).
+
+---
+
+## Prompt 15 — Backtest engine (2026-08-21)
+
+As with §13 and §14, these would normally live in a numbered implementation-notes file
+(`docs/10a-backtest-implementation-notes.md`, following the `07a`/`08a`/`12a` convention). The
+overnight instructions permit appending to this file and no other change under `docs/`, so they
+are collected here. **A human should move §15.1–§15.20 into that numbered file** and leave a
+pointer, so `CLAUDE.md`'s "Where things live" table can name it.
+
+### 15.1 The dividend policy default is `reinvest`, and `cash`/`ignore` are refused today
+
+`docs/10` §"Execution model" step 7 offers `dividends: "reinvest" | "cash" | "ignore"` and says
+"Corporate actions are already in the adjusted series; cash dividends are optionally credited as
+cash". Those two sentences cannot both be acted on with the series this repository stores.
+`docs/09`'s adjustment algorithm — implemented in `decile_core.adjustments` — folds **cash
+dividends** into `adj_factor` alongside splits and bonuses, so `ohlcv_daily.close` is already a
+*total-return* series. Crediting the dividend as cash on top of it counts it twice.
+
+**Chosen:** `reinvest` marks to the adjusted series as-is, which is exactly what back-adjustment
+models, and is the default. `cash` and `ignore` are implemented in the engine against a
+dividend-stripped price series (`price_open`/`price_close` on the panel) and are **refused with a
+`BacktestConfigError`** until a loader supplies one, rather than being silently served as
+`reinvest`. `decile_worker.backtest` does not build that series today. See `DividendPolicy`.
+
+### 15.2 Prices are float for lookup, `Decimal` for every rupee that moves
+
+CLAUDE.md house rule 9 says money and prices are `numeric`, never `float`. A 2,800 × 2,000 price
+matrix of `Decimal` objects is 5.6 million Python objects, which `docs/10` §Performance's
+ten-second budget cannot afford.
+
+**Chosen:** the lookup table is `float64`; every price is converted back to `Decimal` at the point
+of use with `Decimal(f"{x:.4f}")`. `ohlcv_daily` stores prices at four decimal places, and a
+four-decimal value below 10¹¹ survives a float64 round trip exactly, so the conversion recovers
+the stored number rather than approximating it. **Cash, notional, cost, dividend and equity are
+`Decimal` throughout.** A departure from the letter of house rule 9, stated out loud.
+
+### 15.3 Statistics are float
+
+Volatility, Sharpe, Sortino, beta, tracking error and the rest live in
+`decile_core.backtest_metrics` and are computed in NumPy. They are ratios estimated from a sample,
+not money; a Sharpe ratio in `Decimal` would be false precision on a number whose second decimal
+place is noise. `Metrics.as_dict` rounds them to ten places, which is also what makes `docs/10`'s
+determinism test meaningful.
+
+### 15.4 Annualisation is observed, not assumed
+
+`docs/10` names no annualisation factor. 252 is the number that gets copied from US texts; NSE
+gives roughly 247 trading days a year (`docs/13` §3). The engine divides the number of daily
+returns by the elapsed year fraction and uses that, so the factor is a property of the data.
+
+### 15.5 The risk-free rate is a flat annual rate, defaulting to zero
+
+`docs/10` §Outputs asks for "Sharpe (rf from a configurable T-bill series)". `docs/04` has no
+T-bill table and no pipeline step fetches one. A flat `risk_free_rate` on the config is the only
+thing this service can serve; **zero** is the default, because an invented 6.5% would move every
+Sharpe and Sortino on the page. It is configuration rather than a constant so it stops being a
+placeholder the moment a series exists.
+
+### 15.6 The first trading day is always a rebalance date
+
+`docs/10` §Config gives a frequency and a day-of-period but no rule for the stub period at the
+front of the window. Waiting for the end of the first month would leave the whole initial capital
+in cash for up to a month and would silently change the answer for any short backtest.
+
+### 15.7 A decision on the final day of the window is never filled
+
+`docs/10` §4 requires execution at the next trading day's open. On the last day of the run there
+is no next day inside the window, so the decision is dropped rather than filled at that day's
+close — filling it at the close is precisely the shortcut §4 exists to forbid.
+
+### 15.8 Position limits are water-filled, and an impossible bound is relaxed rather than raised
+
+`docs/10` §3 says weights are "clipped by `position_limits`, renormalised" and stops there.
+Clipping once and renormalising pushes clipped names back through their own cap, so
+`apply_position_limits` iterates to a fixed point, resolving ceilings before floors. Twenty names
+cannot each hold ten per cent; rather than refusing a portfolio the user can see on the screen,
+the offending bound is relaxed to `1/n`, which is equal weight.
+
+### 15.9 Rank weighting is linear **within the selected set**
+
+`docs/10` names `rank` as a weighting scheme and does not define it. Weighting by the screen's
+absolute rank would make a portfolio drawn from ranks 400–420 very nearly equal-weighted. The best
+selected name gets `n`, the worst gets 1.
+
+### 15.10 Delisting is detected by a backward-looking staleness rule
+
+`docs/10` §8 says to liquidate a delisted holding at its last available close and never
+forward-fill. `instrument.delisted_on` is the primary trigger. Where it is absent, a position is
+closed once its instrument has printed no bar for five consecutive trading days — a question
+answerable on the day it is asked, so no future data decides it. A halt of a day or two is carried
+at its last close; a series that has stopped for a week has stopped.
+
+### 15.11 Costs are charged on both legs
+
+`docs/10` §5 says "Apply costs on traded notional" without distinguishing buys from sells. In
+India STT is levied on both legs of a delivery trade, brokerage is per order, and slippage is a
+property of crossing the spread in either direction, so all three are charged on every fill.
+`impact_model` accepts only `"fixed"`, the one value `docs/10` names.
+
+### 15.12 Hit rate and average win/loss are measured over **round trips**
+
+`docs/10` asks for them and does not define the unit. Counting every partial trim of a winner as
+its own winning trade would put the hit rate wherever the rebalance frequency happened to put it.
+A round trip is one position, from the first share bought to the last share sold, net of every
+cost on the way in and out.
+
+### 15.13 The loader reads only the top `top_n + hold_buffer` rows of each screen
+
+A name ranked worse than the buffer limit is sold at the next rebalance whether it appears in the
+frame or not (`decile_core.rebalance` exits it either way, and the engine does not record the
+reason). Loading four thousand rows for each of 180 rebalance dates to decide something already
+decided would be the slowest possible way to reach the same answer. The bar panel is restricted
+to the union of those candidates for the same reason.
+
+### 15.14 Three artefacts, one `trades_key` column
+
+`docs/10` sends "trades, per-day holdings" to R2; `docs/04` gives `backtest` a single
+`trades_key`. Three CSVs are written — the trade log, the per-rebalance holdings and the full
+daily equity/drawdown series — under one deterministic prefix derived from `public_id`, and
+`trades_key` records the trade log's key. The other two are `artefact_key(public_id, …)` of the
+same prefix.
+
+### 15.15 The "signed URL" is signed by this service
+
+`docs/07` asks `GET /backtests/{id}/export` for a "CSV/Parquet signed URL". A Cloudflare R2 bucket
+can mint a presigned GET; a directory on a laptop cannot, and the archive abstraction covers both
+(`docs/02` §"Object storage"). The link is therefore an HMAC over `(public_id, artefact, expiry)`
+keyed on the JWT secret, redeemed at an **unauthenticated** download route that streams the
+object. It expires in fifteen minutes and names exactly one object. **CSV, not Parquet:** `docs/07`
+offers either, `docs/02` locks no Parquet writer for the API, and a trade log is a table a user
+opens in a spreadsheet.
+
+### 15.16 A concurrency refusal is a `429`
+
+`docs/07`'s error catalogue has no "busy" type. `429 rate-limited` with `Retry-After` is the row
+that means "come back later", and the `detail` names which cap was hit. The per-user cap of 1 is
+Prompt 15 §4's; the **global cap is not in the bundle at all** — `docs/03` §"Scaling plan" step 4
+only says backtests get their own worker pool. Eight is a chosen default, and both are settings
+(`DECILE_BACKTEST_USER_CONCURRENCY`, `DECILE_BACKTEST_GLOBAL_CONCURRENCY`).
+
+### 15.17 Four routes `docs/07` does not list
+
+`GET /backtests` (docs/08 §Routes names a `/backtests` page, and a page listing runs needs an
+endpoint listing runs), `GET /backtests/{id}/holdings` (docs/08 §Backtests asks the results page
+for "per-period holdings"), `GET /backtests/{id}/events` (Prompt 15 §4 requires SSE, which
+postdates `docs/07`'s list), and `GET /backtests/{id}/download/{artefact}` (what the signed export
+link redeems against).
+
+### 15.18 The API is now a Celery **producer**
+
+`docs/02` already locks "Jobs — Celery + Celery Beat". What is new is that `decile-api` depends on
+the library directly: `POST /backtests` publishes `decile.backtest.run` by name, because
+`decile-worker` depends on `decile-api` and the import cannot go the other way. See
+`decile_api.queue`. A missing broker leaves the row `queued` and logs it rather than failing the
+request — the run *was* recorded, and an operator can re-drive it.
+
+### 15.19 Deleting a backtest does not delete its R2 artefacts
+
+The objects are keyed by `public_id`, which is never reissued, so nothing can read them once the
+row is gone. Deleting them inside the request would make a `DELETE` depend on an object store
+being reachable. A sweeper belongs with the other retention jobs (`docs/04` §"Retention & size
+estimates") and **does not exist yet**.
+
+### 15.20 What is **not** built
+
+* **No `price_open`/`price_close` loader**, so `dividends: "cash"` and `dividends: "ignore"` are
+  refused end to end (§15.1). Only `reinvest` runs.
+* **No Parquet export.** `docs/07` offers "CSV/Parquet"; only CSV is served (§15.15).
+* **No artefact retention sweeper** (§15.19).
+* **No Playwright coverage.** The engine, the loader, the job, the endpoints and the React
+  components are all tested, but no browser test walks the config form through to a results page.
+  The same gap the rebalance tracker has.
+* **The 15-year performance criterion is measured on a synthetic market, not "the seeded
+  dataset".** The seeded database is a single trading day of *results* (`docs/13`'s export); it
+  has no price history, so no fifteen-year backtest can run against it. See the module docstring
+  in `packages/core/tests/backtest_fixtures.py`.

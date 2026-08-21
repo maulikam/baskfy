@@ -100,6 +100,18 @@ database, a network or a disk belongs in `services/` or `packages/providers`.
 | The wizard, the three columns, the parse report | `apps/web/src/components/portfolios/` |
 | Portfolio reads, clipboard and CSV payloads | `apps/web/src/lib/portfolios/` |
 | **Every Prompt 14 decision taken under ambiguity** | `docs/DECISIONS.md` §14 |
+| **The backtest engine (pure, point-in-time)** | `packages/core/src/decile_core/backtest.py` |
+| The look-ahead guard (`PointInTimeReader`) | `packages/core/src/decile_core/backtest.py` |
+| Backtest metrics and artefacts (pure) | `packages/core/src/decile_core/backtest_metrics.py` |
+| The synthetic market the six correctness tests run on | `packages/core/tests/backtest_fixtures.py` |
+| Panel loading, screen-per-rebalance-date, fragility | `services/worker/src/decile_worker/backtest.py` |
+| The backtest job (claim, simulate, store, publish) | `services/worker/src/decile_worker/tasks/backtests.py` |
+| Concurrency caps, artefact keys, signed links, payload | `services/api/src/decile_api/backtests.py` |
+| `/backtests`, `/trades`, `/holdings`, `/export`, SSE | `services/api/src/decile_api/routers/backtests.py` |
+| Enqueuing to Celery from the API | `services/api/src/decile_api/queue.py` |
+| Config form, progress, results, fragility, assumptions | `apps/web/src/components/backtests/` |
+| Backtest reads, the SSE reader, metric labels | `apps/web/src/lib/backtests/` |
+| **Every Prompt 15 decision taken under ambiguity** | `docs/DECISIONS.md` §15 |
 | Auth tables not in `docs/04` | `docs/04c-auth-tables-addendum.md` |
 | HTTP rate limiting (docs/07 §Conventions) | `services/api/src/decile_api/ratelimit.py` |
 | Streaming CSV export | `services/api/src/decile_api/csv_export.py` |
@@ -230,9 +242,33 @@ make e2e         Playwright acceptance checks (builds and starts the app itself)
   there is no add-a-row form. `docs/08` §"Rebalance tracker" describes the wizard and asks for none.
 - **The rebalance tracker has no Playwright coverage.** The rule, the parser, the endpoints and the
   React components are all tested, but no browser test walks the wizard end to end.
-- **Backtests are now a paid entitlement, and nothing enforces it.** Prompt 13 §6 lists them among
-  the gated features and the `/me` payload says so, but `/backtests` does not exist until
-  Prompt 15. Wire `entitlements.require(Feature.BACKTESTS)` into it when it lands.
+- **`docs/DECISIONS.md` §15 should become `docs/10a-backtest-implementation-notes.md`.** Same
+  reason as §13 and §14: the overnight run could append to `DECISIONS.md` and change nothing else
+  under `docs/`. Note that `docs/10a` is currently the *instrument factsheet* notes, so the
+  backtest file needs a different number.
+- **`dividends: "cash"` and `dividends: "ignore"` are refused, not implemented-and-wrong.**
+  `docs/09`'s adjustment folds cash dividends into `adj_factor`, so `ohlcv_daily.close` is already
+  a total-return series and crediting the dividend again would double count. `reinvest` is exact
+  and is the default; the other two need a dividend-stripped price series nothing builds yet, and
+  the engine raises rather than quietly serving `reinvest` (`docs/DECISIONS.md` §15.1).
+- **The backtest's risk-free rate is a flat annual rate defaulting to 0.** `docs/10` §Outputs asks
+  for "rf from a configurable T-bill series" and `docs/04` has no T-bill table. Every Sharpe and
+  Sortino on the page is therefore an *excess-over-zero* figure until one exists
+  (`docs/DECISIONS.md` §15.5).
+- **The 15-year backtest budget is measured against a synthetic market, not the seeded dataset.**
+  PROMPTS.md Prompt 15's last acceptance criterion says "on the seeded dataset"; the seeded
+  database holds one trading day of *results* (`docs/13`'s export) and no price history, so no
+  multi-year backtest can run against it at all. The budget is met with room to spare on a
+  300-instrument, 15-year synthetic panel — 0.24 s against 10 s — but that is not the same
+  measurement.
+- **The backtest's `export` link is signed by us, not presigned by R2.** `docs/07` asks for a
+  "signed URL"; the archive abstraction covers both a bucket and a directory, and a directory
+  cannot presign. The link is an HMAC over `(public_id, artefact, expiry)` redeemed at an
+  unauthenticated download route (`docs/DECISIONS.md` §15.15). CSV only — no Parquet writer.
+- **Deleting a backtest leaves its R2 artefacts behind.** They are keyed by a `public_id` that is
+  never reissued, so nothing can read them; but nothing sweeps them either
+  (`docs/DECISIONS.md` §15.19).
+- **The backtest surface has no Playwright coverage,** the same gap the rebalance tracker has.
 - **An unpaid account's `max_screens` is 5, and 5 is invented.** `docs/07`'s example payload shows
   50, which is the paid number; the bundle gives no free-tier figure
   (`decile_core.entitlements.FREE_MAX_SCREENS`, `docs/DECISIONS.md` §13.12).
@@ -412,7 +448,9 @@ make e2e         Playwright acceptance checks (builds and starts the app itself)
   hand-pinned at ids 1–14 because they carry `factor_daily` mask bits.
 - **Pre-2018 index membership is reconstructed, and marked as such.** `index_member_daily.source`
   distinguishes `nse_file` from `reconstructed` and `derived` (`docs/09` §Backfill,
-  `docs/04b`). Prompt 15's backtests must exclude reconstructed periods or state that they did not.
+  `docs/04b`). Prompt 15's backtests **state** it rather than excluding it: every backtest's
+  assumptions panel says so in as many words (`decile_api.backtests.assumptions`), which is what
+  `docs/10` §"honesty features" asks for. Nothing filters a run by `index_member_daily.source`.
 - **No pipeline step fetches fundamentals.** `docs/03`'s ten steps have no source for
   `fundamental_daily`, yet `factor_daily.marketcap_cr` and `.pe` are needed by the screener
   (`docs/06` buckets deciles by marketcap). Needs a decision in Prompt 4 or 5.

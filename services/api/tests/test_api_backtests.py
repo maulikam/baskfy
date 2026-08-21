@@ -261,6 +261,59 @@ async def test_a_second_concurrent_run_is_refused(session: AsyncSession, tmp_pat
     assert "already have a backtest running" in second.json()["detail"]
 
 
+async def test_the_concurrency_caps_are_configuration(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """The per-user cap is docs'; the global one is invented (``docs/DECISIONS.md`` §15). Both are
+    settings, and a test that only exercised the default would not prove it."""
+    user_id, public_id = await make_user(session, "twoup.backtest@example.com", subscribed=True)
+    screen = await _screen(session, user_id)
+    payload = {"config": json.loads(_config(screen_public_id=screen.public_id).model_dump_json())}
+    settings = api_helpers.api_settings(
+        screener_helpers.database_url(),
+        invoice_local_dir=str(tmp_path),
+        backtest_user_concurrency=2,
+    )
+    async with running_app(settings, session, task_queue=RecordingQueue()) as client:
+        first = await client.post(url("/backtests"), json=payload, headers=bearer(public_id))
+        second = await client.post(url("/backtests"), json=payload, headers=bearer(public_id))
+        third = await client.post(url("/backtests"), json=payload, headers=bearer(public_id))
+    assert [first.status_code, second.status_code, third.status_code] == [202, 202, 429]
+
+
+async def test_the_global_cap_refuses_everyone(session: AsyncSession, tmp_path: Path) -> None:
+    """With the global cap at one, a *second* account is refused even though its own cap is free."""
+    first_id, first_public = await make_user(
+        session, "globalone.backtest@example.com", subscribed=True
+    )
+    second_id, second_public = await make_user(
+        session, "globaltwo.backtest@example.com", subscribed=True
+    )
+    mine_screen = await _screen(session, first_id)
+    # Their own screen: a backtest naming somebody else's screen is a 404 long before the cap is
+    # consulted, which would make this test pass for entirely the wrong reason.
+    their_screen = await _screen(session, second_id)
+    settings = api_helpers.api_settings(
+        screener_helpers.database_url(),
+        invoice_local_dir=str(tmp_path),
+        backtest_global_concurrency=1,
+    )
+
+    def body(public_id: str) -> dict[str, object]:
+        return {"config": json.loads(_config(screen_public_id=public_id).model_dump_json())}
+
+    async with running_app(settings, session, task_queue=RecordingQueue()) as client:
+        mine = await client.post(
+            url("/backtests"), json=body(mine_screen.public_id), headers=bearer(first_public)
+        )
+        theirs = await client.post(
+            url("/backtests"), json=body(their_screen.public_id), headers=bearer(second_public)
+        )
+    assert mine.status_code == 202
+    assert theirs.status_code == 429
+    assert "maximum" in theirs.json()["detail"]
+
+
 async def test_a_config_with_neither_screen_nor_definition_is_rejected(
     session: AsyncSession, tmp_path: Path
 ) -> None:

@@ -293,7 +293,12 @@ async def create_backtest(  # noqa: PLR0913, PLR0917 - FastAPI injects one param
         entitlements.require_universe(_definition_index(screen.definition) or config.benchmark)
 
     try:
-        await service.capacity_check(session, user_id)
+        await service.capacity_check(
+            session,
+            user_id,
+            per_user=settings_for(request).backtest_user_concurrency,
+            global_limit=settings_for(request).backtest_global_concurrency,
+        )
     except service.ConcurrencyExceeded as exc:
         # docs/07's catalogue has no "busy" type; 429 with `Retry-After` is the row that means
         # "come back later", and the detail names which cap was hit. `docs/DECISIONS.md` §15.

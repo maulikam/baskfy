@@ -18,6 +18,7 @@ out of step with reality.
 
 from __future__ import annotations
 
+import datetime as dt
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
@@ -52,13 +53,30 @@ class InstrumentAdjustment:
     unquantified: tuple[str, ...]
 
 
-async def reprocess_instrument(session: AsyncSession, instrument_id: int) -> InstrumentAdjustment:
+async def reprocess_instrument(
+    session: AsyncSession, instrument_id: int, *, as_of: dt.date | None = None
+) -> InstrumentAdjustment:
     """Rebuild one instrument's whole adjusted history from its raw prints.
 
     Idempotent by construction: the inputs are ``*_raw`` (never written by this step) and the
     corporate-action table, so running it twice writes identical values the second time.
+
+    ``as_of`` bounds which actions may be applied to ``ex_date <= as_of``, and exists because
+    ``ohlcv_daily.close`` is an **"as of today" series**: it carries every action known *now*,
+    including ones whose ex-date is in the future relative to some earlier date of interest.
+
+    That is not wrong for serving today's screen, and it is wrong for anything reasoning about a
+    past date. `docs/DECISIONS.md` §21.9 found it the hard way: eight of the 271 export rows
+    disagreed by exactly a dividend, because actions with ``ex_date = 2026-08-21`` had already
+    rewritten the adjusted close for **2026-08-18**. House rule 5 is "No look-ahead, ever".
+
+    So the caller states the date it is reconstructing. The nightly pipeline passes nothing and
+    gets today's series, which is what it should serve. The parity harness and any point-in-time
+    reader pass the as-of they are reproducing, and get the series as it stood that day —
+    **without** the storage having to hold one adjusted series per as-of date, which is the larger
+    design question §21.9 declined to settle and this does not settle either.
     """
-    actions = await _load_actions(session, instrument_id)
+    actions = await _load_actions(session, instrument_id, as_of=as_of)
     bars = await _load_raw_bars(session, instrument_id)
     if bars.height == 0:
         return InstrumentAdjustment(instrument_id, 0, 0, ())
@@ -154,12 +172,14 @@ async def instruments_with_actions(session: AsyncSession) -> list[int]:
     return [row[0] for row in rows]
 
 
-async def _load_actions(session: AsyncSession, instrument_id: int) -> list[CorporateActionInput]:
-    rows = await session.execute(
-        select(CorporateAction)
-        .where(CorporateAction.instrument_id == instrument_id)
-        .order_by(CorporateAction.ex_date)
-    )
+async def _load_actions(
+    session: AsyncSession, instrument_id: int, *, as_of: dt.date | None = None
+) -> list[CorporateActionInput]:
+    """Every action for an instrument, optionally bounded to those already ex as of a date."""
+    query = select(CorporateAction).where(CorporateAction.instrument_id == instrument_id)
+    if as_of is not None:
+        query = query.where(CorporateAction.ex_date <= as_of)
+    rows = await session.execute(query.order_by(CorporateAction.ex_date))
     return [
         CorporateActionInput(
             action_type=row.action_type,

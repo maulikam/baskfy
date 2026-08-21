@@ -620,3 +620,113 @@ prints — `SM` (SME, 362 rows), `ST` (trusts, 100), `GS`/`GB` (government secur
 (debt, 25) — while `instrument` holds only cash equities: EQ 2,291, BE 234, BZ 28. The unmatched
 are the series the product deliberately does not screen. Recorded so a future reader does not
 mistake it for missing data.
+
+---
+
+## M10
+
+### M10.1 — The calendar is now observed, and 3 of 5 windows land exactly ⚠ UNREVIEWED
+`reconcile_calendar` over 2024-01-01 → 2026-08-21: **651 days confirmed** from bars, 16 still
+provisional, 0 holidays inferred. The calendar in the loaded range is now backed by observation on
+both sides — every day we call trading has bars, and every weekday we call a holiday returns a
+**404 from the NSE archive** (verified directly for 2026-01-15, which 404s while the 14th and 16th
+return 200). The six days marked `source='bhavcopy', is_trading_day=false` are exactly that:
+holidays discovered by absence, not a contradiction.
+
+**Window lengths against `EXPECTED_WINDOW_LENGTHS_2026_08_18`:**
+
+| Window | Seeded calendar (M0) | Now | Required |
+|---|---:|---:|---:|
+| 1 month | 22 | **22** ✅ | 22 |
+| 3 months | 67 | 65 ❌ | 64 |
+| 6 months | 127 | 122 ❌ | 121 |
+| 9 months | 191 | **185** ✅ | 185 |
+| 12 months | 256 | **247** ✅ | 247 |
+
+**Three of five now reproduce exactly where none did before**, and the two that miss are off by
+exactly one bar.
+
+**What it is not.** Not the boundary rule: excluding the boundary day fixes 3M and 6M and *breaks*
+9M and 12M (184 and 246 against 185 and 247), so no single inclusive/exclusive choice fits.
+Not a spurious trading day: 9M and 12M are supersets of 3M and 6M and are correct, so any extra day
+inside the short windows would have to be cancelled by a missing day in
+[2025-11-18, 2026-02-18) — and the only candidate there, 2026-01-15, is a genuine NSE holiday.
+Not the algorithm: `docs/13` §3 specifies calendar offset → snap forward → count inclusive, which
+is exactly what `resolve_window` does.
+
+**Decided: measure it precisely, change nothing, hand it to M11.** The required counts were
+recovered by `docs/13` §3 from the export itself — the minimal N making all 271
+`positive_days_percent_N` values integer multiples of 1/N — which is strong evidence about the
+*reference product*, and `DECISIONS.md` §21.7 has already established that the reference is one bar
+away from `docs/05` on return windows. **These are very likely the same defect seen from two
+directions**, and M11 owns settling it spec-first. Guessing a rule here that made two numbers match
+would be exactly the fudge rule 5 forbids.
+
+### M10.2 — The §21.9 look-ahead is fixed, and the fix is proven ⚠ UNREVIEWED
+`reprocess_instrument` applied every corporate action regardless of ex-date, so an action dated
+2026-08-21 had already rewritten the adjusted close for 2026-08-18 — eight of the 271 export rows
+were out by exactly a dividend. House rule 5 is "No look-ahead, ever".
+
+§21.9 declined to fix it because the right answer looked like a storage question: is
+`ohlcv_daily.close` one "as of today" series, or must it be resolved per as-of date? **Decided: it
+is an "as of today" series, and the caller states the date it is reconstructing.**
+`reprocess_instrument(..., as_of=date)` bounds actions to `ex_date <= as_of`; the nightly pipeline
+passes nothing and gets today's series, which is what it should serve, while the parity harness and
+any point-in-time reader pass their as-of.
+
+**Proven, not asserted.** Reprocessing CUPID with `as_of=2026-03-08` — the day before its 4:1 bonus
+went ex — applies **2 actions instead of 3** and returns the middle era's `adj_factor` to
+**1.0** from 0.2. Rolled back; the live table still reads 0.2.
+
+This does **not** settle the larger question of storing one adjusted series per as-of date. It
+makes point-in-time reconstruction possible without that, which is what M11 needs and what a
+backtest needs, and it is cheap to reverse.
+
+### M10.3 — CUPID reproduces; rights issues cannot be exercised on this data
+CUPID's documented actions are all present and produce exactly the right factors: split 10:1 and
+bonus 1:1 (both ex 2024-04-15) and bonus 4:1 (ex 2026-03-09) give `adj_factor` **0.2000000000**
+for 2024-04-15 → 2026-03-08 and **1.0000000000** from 2026-03-09, across 449 bars.
+
+**`INSUFFICIENT_DATA` for rights issues could not be exercised against real data**: `corporate_action`
+holds 4 rows — 2 bonuses, 1 split, 1 dividend — and no rights issue, because `DECISIONS.md` §21.8
+records that NSE serves only a recent corporate-actions window. The behaviour is covered by unit
+tests; it has still never been seen on live data. Said plainly rather than reported as verified.
+
+---
+
+## Interlude — the `db`-marked suites, run for the first time
+
+### DB.1 — 792 tests had never executed, and one shared fixture was failing most of them ⚠ UNREVIEWED
+M0's baseline recorded 794 skips as "expected without `make up`". With the stack up (M7) and a
+`baskfy_test` database created, they run — and on first execution failures were spread across most
+files, which looked like a broad problem and was not.
+
+**Root cause: `DROP SCHEMA public CASCADE` does not reset a TimescaleDB database.**
+`screener_helpers._reset_and_seed` dropped and recreated `public` between modules. TimescaleDB
+keeps chunks, compressed hypertables and continuous-aggregate materialisations in
+**`_timescaledb_internal`**, so the parents went and the storage stayed. After a "reset",
+`timescaledb_information.chunks` reported **0** while `_timescaledb_internal` still held
+`_hyper_5_34_chunk`, `_materialized_hypertable_7`, `_materialized_hypertable_8` and
+`_compressed_hypertable_4` from the previous generation.
+
+Each orphan carries its own foreign keys, still pointing at tables that no longer exist. The first
+insert into a hypertable routed into stale storage and failed as:
+
+```
+insert on "_hyper_3_5_chunk" violates "5_10_fk_index_member_daily_index_id_index_def"
+Key (index_id)=(5) is not present in table "index_def"
+```
+
+…while `index_def` demonstrably held all fourteen rows — verified by running the seed path directly
+and listing them. **The error names seeding and the fault is in resetting**, which is why it reads
+as a broad failure rather than a single bug.
+
+**Decided.** `_reset_and_seed` now also runs `DROP EXTENSION IF EXISTS timescaledb CASCADE`, which
+is what clears `_timescaledb_internal`. Migration `0001` recreates it with `CREATE EXTENSION IF NOT
+EXISTS`, so the reset stays a reset and nothing else changes.
+
+`services/api/tests/test_screener_db.py` went from failing on its first test to **118 passed**.
+
+**Why this was never caught:** the suite type-checked and was never run — the same class of gap the
+screener's own `CLAUDE.md` lists throughout ("the ten-journey Playwright suite has never been
+executed", "no Celery worker has run…"). Running it was worth doing for this alone.

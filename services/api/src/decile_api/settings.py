@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from functools import lru_cache
 from typing import Final, Literal
 
@@ -98,6 +99,54 @@ class Settings(BaseSettings):
     #: The web app's origin, for the links in emails.
     web_origin: str = "http://localhost:3000"
 
+    # --- Payments (docs/02 §Payments: Razorpay; Prompt 13) -------------------
+    #: Razorpay's REST base. A setting so a test can point it at a local stub and so nothing in
+    #: this repository can accidentally reach the live gateway (`network_guard.py` blocks it
+    #: outright in the suite).
+    razorpay_api_base: str = "https://api.razorpay.com/v1"
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    #: docs/11 §Security: "Razorpay webhooks: verify signature". A *different* secret from the
+    #: API key — Razorpay signs webhooks with the value configured on the webhook, not the key.
+    razorpay_webhook_secret: str = ""
+    #: Razorpay subscriptions bill against a plan created in *their* dashboard, which has its own
+    #: id. It is environment-specific (test vs live), so it is configuration, not seed data.
+    razorpay_plan_id_monthly: str = ""
+    razorpay_plan_id_yearly: str = ""
+    #: How many billing cycles a subscription is created for. Razorpay requires a finite count;
+    #: ten years of cycles is "until cancelled" in practice.
+    razorpay_subscription_cycles_monthly: int = Field(default=120, gt=0)
+    razorpay_subscription_cycles_yearly: int = Field(default=10, gt=0)
+    #: Seconds a call to the gateway may take before it is abandoned.
+    razorpay_timeout_seconds: float = Field(default=10.0, gt=0)
+
+    #: PROMPTS.md Prompt 13 §5: "A ₹0 free tier with a limited universe is optional — implement it
+    #: behind a feature flag." docs/11 §Reliability: "Feature flags for anything touching money".
+    free_tier_enabled: bool = False
+
+    # --- GST invoicing (docs/11 §"Compliance & legal (India)") ---------------
+    #: 18% for an online information service. A setting because the rate is Parliament's to
+    #: change, and an issued invoice keeps the rate it was raised at (`payment.gst_rate`).
+    gst_rate_percent: Decimal = Field(default=Decimal("18"), ge=0)
+    #: SAC 998439, "Other on-line contents n.e.c." NOT CONFIRMED BY A CHARTERED ACCOUNTANT.
+    gst_sac_code: str = "998439"
+    #: The supplier's own particulars — whoever operates the service, not the code.
+    supplier_legal_name: str = "Decile"
+    supplier_address_lines: tuple[str, ...] = ()
+    supplier_gstin: str = ""
+    #: Spelled as the GST return expects it, e.g. "Karnataka (29)". Used as the default place of
+    #: supply for a customer who has told us nothing (IGST Act §12(2)(b)).
+    supplier_state: str = ""
+    #: Prefix of the invoice series: ``DCL/2026-27/000001``.
+    invoice_series_prefix: str = "DCL"
+    #: Zero-padding of the running number inside a series.
+    invoice_number_width: int = Field(default=6, gt=0)
+    #: Where invoice PDFs are written. ``payment.invoice_pdf_key`` stores the full key.
+    invoice_object_prefix: str = "invoices"
+    #: The directory invoice PDFs land in when no S3/R2 bucket is configured. Shares the raw-file
+    #: archive's default so a laptop has one place to look.
+    invoice_local_dir: str = ".archive"
+
     # --- Rate limits (docs/07 §Conventions) ----------------------------------
     rate_limit_anonymous_per_minute: int = Field(default=10, gt=0)
     rate_limit_authenticated_per_minute: int = Field(default=60, gt=0)
@@ -105,6 +154,10 @@ class Settings(BaseSettings):
     #: docs/11: "exponential backoff on auth endpoints". Per IP, far below the anonymous tier,
     #: because an auth endpoint is the one place a stranger's request costs a password guess.
     rate_limit_auth_per_minute: int = Field(default=10, gt=0)
+    #: Gateway webhooks are not anonymous browser traffic. Razorpay retries a failed delivery,
+    #: and dropping one at ten a minute would lose a payment; the bucket exists so the endpoint is
+    #: still metered rather than open. Keyed per IP, like every other anonymous caller.
+    rate_limit_webhook_per_minute: int = Field(default=600, gt=0)
     #: Turned off in tests that are not about rate limiting, and in `local` by choice.
     rate_limit_enabled: bool = True
 
@@ -150,6 +203,27 @@ class Settings(BaseSettings):
             )
         if self.email_transport == "resend" and not self.resend_api_key:
             raise RuntimeError("DECILE_RESEND_API_KEY is empty but the transport is 'resend'")
+        # docs/11 §Security: "Razorpay webhooks: verify signature". An empty secret cannot verify
+        # one, and a webhook handler that accepts anything is a way to grant yourself a plan.
+        if not self.razorpay_webhook_secret:
+            raise RuntimeError(
+                "DECILE_RAZORPAY_WEBHOOK_SECRET is empty in production; no webhook could be "
+                "verified"
+            )
+        if not (self.razorpay_key_id and self.razorpay_key_secret):
+            raise RuntimeError("DECILE_RAZORPAY_KEY_ID/SECRET are empty in production")
+        # docs/11 §Compliance: "GST-compliant invoices with GSTIN ...". An invoice without the
+        # supplier's GSTIN is not a tax invoice, and it is issued the moment someone pays.
+        if not self.supplier_gstin:
+            raise RuntimeError("DECILE_SUPPLIER_GSTIN is empty in production; invoices need it")
+        if not self.supplier_state:
+            raise RuntimeError(
+                "DECILE_SUPPLIER_STATE is empty in production; place of supply needs it"
+            )
+
+    def payments_configured(self) -> bool:
+        """Whether a checkout can actually be created. False on a laptop with no keys."""
+        return bool(self.razorpay_key_id and self.razorpay_key_secret)
 
 
 @lru_cache(maxsize=1)

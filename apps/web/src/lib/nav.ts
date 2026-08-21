@@ -90,8 +90,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
   {
     label: "Account",
     items: [
-      { href: "/pricing", label: "Pricing", icon: "tag", status: "planned", arrivesIn: "Prompt 13" },
-      { href: "/invoices", label: "Invoices", icon: "receipt", status: "planned", arrivesIn: "Prompt 13" },
+      { href: "/pricing", label: "Pricing", icon: "tag", status: "ready" },
+      { href: "/invoices", label: "Invoices", icon: "receipt", status: "ready" },
       { href: "/profile", label: "Profile", icon: "user", status: "ready" },
       { href: "/change-password", label: "Change Password", icon: "key-round", status: "ready" },
     ],

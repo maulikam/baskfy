@@ -73,6 +73,15 @@ export type LoginIn = Schemas["LoginIn"];
 export type ChangePasswordIn = Schemas["ChangePasswordIn"];
 export type RankPointOut = Schemas["RankPointOut"];
 
+/** docs/07 §"Account & billing" — plans, checkout and invoices (Prompt 13). */
+export type PlanOut = Schemas["PlanOut"];
+export type PlanListOut = Schemas["PlanListOut"];
+export type PlanFeatureOut = Schemas["PlanFeatureOut"];
+export type CheckoutSessionIn = Schemas["CheckoutSessionIn"];
+export type CheckoutSessionOut = Schemas["CheckoutSessionOut"];
+export type InvoiceOut = Schemas["InvoiceOut"];
+export type InvoicePage = Schemas["InvoicePage"];
+
 /** docs/07: "Base: `/api/v1`". */
 export const API_PREFIX = "/api/v1";
 

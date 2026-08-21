@@ -32,6 +32,7 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from decile_api import invoices
 from decile_api.db import create_engine, session_factory
 from decile_api.email import Mailer, build_transport
 from decile_api.logging import (
@@ -48,14 +49,16 @@ from decile_api.problems import (
     ProblemType,
     invalid_screen_definition,
     no_trading_day,
+    payment_required,
     pipeline_degraded,
 )
 from decile_api.ratelimit import RateLimiter, enforce_rate_limit
-from decile_api.routers import auth, instruments, market_data, meta, screens
+from decile_api.routers import auth, billing, instruments, market_data, meta, screens
 from decile_api.schemas import HealthOut, ProblemOut
 from decile_api.screener import AsOfOutOfRange, NoPublishedData
 from decile_api.settings import API_PREFIX, Settings, get_settings
 from decile_api.telemetry import annotate_current_span, configure_telemetry
+from decile_core.entitlements import FeatureNotEntitled
 from decile_core.screener import ScreenQueryError
 
 log = logging.getLogger(__name__)
@@ -167,6 +170,16 @@ def register_error_handlers(app: FastAPI) -> None:
         """
         return _problem_response(pipeline_degraded(str(exc)), request)
 
+    @app.exception_handler(FeatureNotEntitled)
+    async def _handle_entitlement(request: Request, exc: FeatureNotEntitled) -> JSONResponse:
+        """docs/07 §Entitlements: 'A 402 `payment_required` problem response carries
+        `{"upgrade_url": "/pricing"}`.'
+
+        Raised by `Entitlements.require`, which lives in `decile_core` and therefore cannot know
+        about HTTP. Translating it here is what keeps the gate one line at every call site.
+        """
+        return _problem_response(payment_required(exc.feature, detail=exc.detail), request)
+
     @app.exception_handler(StarletteHTTPException)
     async def _handle_http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         """Anything the framework raises before a route runs — an unrouted path, a bad method."""
@@ -257,6 +270,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # One transport for the process (docs/02 §Email). Built here rather than per request so a
     # Resend client's connection pool is reused and a misconfiguration fails at startup.
     app.state.mailer = Mailer(build_transport(settings))
+    # docs/02 §"Object storage": Cloudflare R2, or a directory when no bucket is configured.
+    # Built once, like the mailer, so an S3 client's connection pool is reused across invoices.
+    app.state.invoice_archive = invoices.build_invoice_archive(settings)
     app.state.rate_limiter = (
         RateLimiter(cache, settings) if cache is not None and settings.rate_limit_enabled else None
     )
@@ -302,6 +318,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     versioned.include_router(instruments.router)
     versioned.include_router(market_data.router)
     versioned.include_router(auth.router)
+    versioned.include_router(billing.router)
     app.include_router(versioned)
 
     @app.get("/health", response_model=HealthOut, tags=["ops"], include_in_schema=False)

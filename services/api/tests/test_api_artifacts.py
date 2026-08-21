@@ -49,8 +49,7 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/indices/dashboard": {"get"},
     "/market-health": {"get"},
     "/market-health/history": {"get"},
-    # docs/07 §"Account & billing" (Prompt 12). `/plans`, `/checkout/session`,
-    # `/webhooks/razorpay` and `/invoices*` are Prompt 13's.
+    # docs/07 §"Account & billing" — the auth half is Prompt 12's, the billing half Prompt 13's.
     "/auth/register": {"post"},
     "/auth/login": {"post"},
     "/auth/refresh": {"post"},
@@ -64,6 +63,14 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/me/change-password": {"post"},
     "/me/export": {"get"},
     "/me/restore": {"post"},
+    # docs/07 §"Account & billing", the billing half (Prompt 13).
+    "/plans": {"get"},
+    "/checkout/session": {"post"},
+    "/webhooks/razorpay": {"post"},
+    "/invoices": {"get"},
+    # `{invoice_number:path}` because the number contains slashes (`DCL/2026-27/000001`); FastAPI
+    # renders the converter into the OpenAPI path template.
+    "/invoices/{invoice_number}/pdf": {"get"},
 }
 
 

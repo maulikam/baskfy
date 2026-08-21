@@ -660,6 +660,7 @@ async def export_me(
         ],
         subscriptions=[
             {
+                "plan_id": row.plan_id,
                 "status": row.status,
                 "started_at": row.started_at.isoformat(),
                 "current_period_end": (
@@ -673,6 +674,22 @@ async def export_me(
                 "amount_inr": str(row.amount_inr),
                 "status": row.status,
                 "invoice_number": row.invoice_number,
+                "invoice_date": row.invoice_date.isoformat() if row.invoice_date else None,
+                # docs/11 §Compliance: the GST particulars are part of what we hold about the
+                # person, so a DPDP export that omitted them would be an incomplete export
+                # (Prompt 13). The gateway's own ids are included for the same reason: they are
+                # what a customer needs to reconcile a charge with their bank.
+                "taxable_inr": str(row.taxable_inr) if row.taxable_inr is not None else None,
+                "cgst_inr": str(row.cgst_inr) if row.cgst_inr is not None else None,
+                "sgst_inr": str(row.sgst_inr) if row.sgst_inr is not None else None,
+                "igst_inr": str(row.igst_inr) if row.igst_inr is not None else None,
+                "gst_inr": str(row.gst_inr) if row.gst_inr is not None else None,
+                "gst_rate": str(row.gst_rate) if row.gst_rate is not None else None,
+                "place_of_supply": row.place_of_supply,
+                "customer_gstin": row.customer_gstin,
+                "sac_code": row.sac_code,
+                "razorpay_payment_id": row.razorpay_payment_id,
+                "razorpay_order_id": row.razorpay_order_id,
                 "created_at": row.created_at.isoformat(),
             }
             for row in payments

@@ -5,6 +5,7 @@ Importing this package registers every table on ``Base.metadata``, which is what
 """
 
 from decile_core.models.accounts import (
+    PAYMENT_STATUSES,
     AppUser,
     Backtest,
     Payment,
@@ -26,6 +27,12 @@ from decile_core.models.auth import (
     RefreshToken,
 )
 from decile_core.models.base import Base, JsonObject
+from decile_core.models.billing import (
+    RAZORPAY_PROVIDER,
+    WEBHOOK_STATUSES,
+    InvoiceCounter,
+    WebhookEvent,
+)
 from decile_core.models.facts import FactorDaily
 from decile_core.models.market import (
     MEMBERSHIP_SOURCES,
@@ -44,7 +51,10 @@ __all__ = [
     "CONSENT_KINDS",
     "CURSOR_KIND_BARS",
     "MEMBERSHIP_SOURCES",
+    "PAYMENT_STATUSES",
+    "RAZORPAY_PROVIDER",
     "TOKEN_PURPOSES",
+    "WEBHOOK_STATUSES",
     "AccountDeletion",
     "AppUser",
     "AuthLockout",
@@ -62,6 +72,7 @@ __all__ = [
     "IndexSnapshotDaily",
     "IngestCursor",
     "Instrument",
+    "InvoiceCounter",
     "JsonObject",
     "MarketHealthDaily",
     "OhlcvDaily",
@@ -77,4 +88,5 @@ __all__ = [
     "Subscription",
     "SymbolAlias",
     "TradingDay",
+    "WebhookEvent",
 ]

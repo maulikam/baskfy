@@ -78,6 +78,20 @@ database, a network or a disk belongs in `services/` or `packages/providers`.
 | Email templates and transports | `services/api/src/decile_api/email/` |
 | Log redaction (no secret ever printed) | `services/api/src/decile_api/logging.py` |
 | Auth deviations from `docs/07`/`docs/11` | `docs/12a-auth-implementation-notes.md` |
+| **The entitlement service (one place, server truth)** | `services/api/src/decile_api/entitlements.py` |
+| Entitlement shape, tiers, `plan.features` parsing | `packages/core/src/decile_core/entitlements.py` |
+| Razorpay client + every signature check | `services/api/src/decile_api/razorpay.py` |
+| Checkout, webhook, subscription lifecycle | `services/api/src/decile_api/billing.py` |
+| Invoice numbering, GST wiring, R2 storage | `services/api/src/decile_api/invoices.py` |
+| GST arithmetic (pure) | `packages/core/src/decile_core/gst.py` |
+| The tax invoice, as a document (pure) | `packages/core/src/decile_core/invoice.py` |
+| The minimal PDF writer (pure, no dependency) | `packages/core/src/decile_core/pdf.py` |
+| `/plans`, `/checkout/session`, `/webhooks/razorpay`, `/invoices` | `services/api/src/decile_api/routers/billing.py` |
+| Billing tables not in `docs/04` | `packages/core/src/decile_core/models/billing.py` |
+| `/pricing` and `/invoices` pages | `apps/web/src/app/(app)/{pricing,invoices}/` |
+| Plan card, checkout button, invoice table | `apps/web/src/components/billing/` |
+| Plan and invoice reads, price formatting | `apps/web/src/lib/billing/` |
+| **Every Prompt 13 decision taken under ambiguity** | `docs/DECISIONS.md` §13 |
 | Auth tables not in `docs/04` | `docs/04c-auth-tables-addendum.md` |
 | HTTP rate limiting (docs/07 §Conventions) | `services/api/src/decile_api/ratelimit.py` |
 | Streaming CSV export | `services/api/src/decile_api/csv_export.py` |
@@ -177,6 +191,47 @@ make e2e         Playwright acceptance checks (builds and starts the app itself)
 `make test-db` needs `DECILE_TEST_DATABASE_URL`. Without it those tests skip rather than fail.
 
 ## Open items carried forward
+
+- **The GST rate and the SAC code need a chartered accountant.** 18% and SAC 998439 are defaults,
+  not advice. Both are settings (`DECILE_GST_RATE_PERCENT`, `DECILE_GST_SAC_CODE`) and every
+  issued invoice stores what it was raised at, so changing them cannot rewrite history — but
+  nothing has confirmed them (`docs/DECISIONS.md` §13.2). **Confirm before the first real charge.**
+- **The advertised prices are GST-inclusive.** `docs/01` §1 gives ₹500 / ₹3,999 / ₹14,999 with no
+  mention of tax; charging ₹590 for a plan the page calls ₹500 would be the alternative. The
+  taxable value is back-computed and the tax is the remainder, so the invoice total is always the
+  payment to the paisa (`docs/DECISIONS.md` §13.1).
+- **The Razorpay webhook has never seen a real delivery.** The signature scheme, the event names
+  and the entity shapes are written from the documented formats, not against the live gateway —
+  the suite is network-blocked and every test drives an `httpx.MockTransport`. Confirm against a
+  test-mode delivery before taking money (`docs/DECISIONS.md` §13.17).
+- **Nothing collects a customer GSTIN or a place of supply.** The columns, the arithmetic and the
+  inter-state (IGST) path all exist and are tested; no UI fills them, so every invoice raised
+  today is B2C, intra-state, at the supplier's own state. A B2B customer cannot claim input credit
+  until a form exists.
+- **`payment.status` never becomes `refunded`.** `refund.*` events are acknowledged and ignored.
+  `docs/07` has no refund endpoint and `docs/11` names a Refund Policy page that is not written.
+- **Backtests are now a paid entitlement, and nothing enforces it.** Prompt 13 §6 lists them among
+  the gated features and the `/me` payload says so, but `/backtests` does not exist until
+  Prompt 15. Wire `entitlements.require(Feature.BACKTESTS)` into it when it lands.
+- **An unpaid account's `max_screens` is 5, and 5 is invented.** `docs/07`'s example payload shows
+  50, which is the paid number; the bundle gives no free-tier figure
+  (`decile_core.entitlements.FREE_MAX_SCREENS`, `docs/DECISIONS.md` §13.12).
+- **The ₹0 tier exists but is off.** `DECILE_FREE_TIER_ENABLED` gates it, and the plan row is only
+  seeded while the flag is set — turning it on means re-running `make seed`. Its "limited
+  universe" is NIFTY 50, which `docs/01` does not specify (`docs/DECISIONS.md` §13.14).
+- **The invoice PDF is written by hand, in Courier.** `docs/02` locks no PDF library, so
+  `decile_core.pdf` writes PDF 1.4 directly; Courier because its fixed 600/1000 em width makes
+  right-aligned figures exact without transcribing a font-metrics table. A designed invoice is
+  later, deliberate work (`docs/DECISIONS.md` §13.6).
+- **`docs/DECISIONS.md` §13 should become `docs/13b-billing-implementation-notes.md`.** The
+  overnight run was permitted to append to `DECISIONS.md` and change nothing else under `docs/`,
+  so Prompt 13's implementation notes are collected there instead of in the numbered file the
+  `07a`/`08a`/`12a` convention would put them in.
+- **One intermittent test deadlock, seen once and not reproduced.**
+  `test_seed.py::test_reseeding_does_not_demote_reconciled_days` failed with
+  `DeadlockDetectedError` on its `DROP SCHEMA ... CASCADE` during a full `pytest` run, then passed
+  on two further full runs and on every targeted run. Two connections to the same test database
+  contending; worth pinning down before CI relies on it.
 
 - **The trading calendar reconciles itself now, but only where data exists.** `reconcile_calendar`
   (Prompt 3) promotes dates with bars to `bhavcopy` and infers holidays across densely populated

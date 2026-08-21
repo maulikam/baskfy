@@ -53,6 +53,7 @@ from decile_core.models import (
 )
 from decile_core.reference_export import ReferenceRows, to_rows
 from decile_core.seed_data import (
+    ALL_PLANS,
     EXAMPLE_SCREENS,
     NSE_EXCHANGE_CODE,
     NSE_EXCHANGE_ID,
@@ -95,15 +96,27 @@ async def seed_universes(session: AsyncSession) -> int:
 
 
 async def seed_plans(session: AsyncSession) -> int:
+    """docs/01 §1's three plans, plus the flagged ₹0 row (Prompt 13 §5).
+
+    The ₹0 row exists only when `DECILE_FREE_TIER_ENABLED` is on. PROMPTS.md Prompt 13 §5 makes
+    that tier optional and puts it "behind a feature flag", and a flag that leaves the plan in the
+    catalogue while hiding it from one endpoint is a flag that half-works: `POST /checkout/session`
+    and every join through `plan` would still find it. Flipping the flag on and re-running
+    `make seed` — which is idempotent — is what creates the row.
+
+    The pricing copy (label, tagline) is stored on the row so the web app reads it from the API
+    rather than holding a second copy (Prompt 13 acceptance criterion 4).
+    """
+    catalogue = ALL_PLANS if get_settings().free_tier_enabled else PLANS
     values = [
         {
             "id": plan.id,
             "code": plan.code,
             "price_inr": plan.price_inr,
             "interval": plan.interval,
-            "features": plan.features,
+            "features": {**plan.features, "label": plan.label, "tagline": plan.tagline},
         }
-        for plan in PLANS
+        for plan in catalogue
     ]
     stmt = insert(Plan).values(values)
     await session.execute(

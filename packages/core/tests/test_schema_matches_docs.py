@@ -63,6 +63,12 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "auth_lockout": ("identifier",),
     "account_deletion": ("user_id",),
     "consent_record": ("id",),
+    # Billing additions — not in docs/04's DDL either. docs/11 §Security requires webhook
+    # deduplication by event id and PROMPTS.md Prompt 13 requires gapless invoice numbers;
+    # neither is possible with `plan`/`subscription`/`payment` alone. See
+    # `decile_core.models.billing` and docs/DECISIONS.md.
+    "webhook_event": ("id",),
+    "invoice_counter": ("series",),
 }
 
 #: docs/04 opening paragraph: "Money in numeric, never float."
@@ -125,6 +131,18 @@ def test_every_added_table_has_an_addendum() -> None:
     combined = "\n".join(path.read_text(encoding="utf-8") for path in docs.glob("04*addendum*.md"))
     for table in ("trading_day", "ingest_cursor"):
         assert table in combined, f"{table} is not described in any docs/04 addendum"
+
+
+def test_billing_tables_are_recorded_in_decisions() -> None:
+    """The Prompt 13 additions are written down too, in docs/DECISIONS.md.
+
+    Same rule as the addendum test above: a table nobody wrote down is a table nobody maintains.
+    These two are recorded in DECISIONS.md rather than a `04x` addendum because the overnight
+    build was permitted to append there and nowhere else under docs/.
+    """
+    decisions = (REPO_ROOT / "docs" / "DECISIONS.md").read_text(encoding="utf-8")
+    for table in ("webhook_event", "invoice_counter"):
+        assert table in decisions, f"{table} is not described in docs/DECISIONS.md"
 
 
 def test_no_float_columns_anywhere() -> None:

@@ -193,6 +193,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/checkout/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a Razorpay checkout
+         * @description docs/07: `POST /checkout/session { plan_code } -> Razorpay order/subscription payload`.
+         */
+        post: operations["createCheckoutSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/indices/dashboard": {
         parameters: {
             query?: never;
@@ -313,6 +333,52 @@ export interface paths {
          *     one point, and the response says so rather than padding it.
          */
         get: operations["rankHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your invoices
+         * @description docs/07: `GET /invoices`, cursor-paginated per §Conventions.
+         *
+         *     Only payments that have an invoice number: a `created` row is an attempt, not a document.
+         */
+        get: operations["listInvoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invoices/{invoice_number}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download one invoice
+         * @description docs/07: `GET /invoices/{id}/pdf`.
+         *
+         *     ``{invoice_number:path}`` because the number contains slashes — ``DCL/2026-27/000001`` — which
+         *     Rule 46(b)'s "consecutive serial number" tradition puts there and a path parameter would
+         *     otherwise split.
+         */
+        get: operations["downloadInvoice"];
         put?: never;
         post?: never;
         delete?: never;
@@ -594,6 +660,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The plan catalogue
+         * @description docs/07: `GET /plans`.
+         *
+         *     Public: `/pricing` is a marketing surface and must render for a signed-out visitor. The ₹0
+         *     tier is hidden unless its feature flag is on (Prompt 13 §5).
+         */
+        get: operations["listPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/screens": {
         parameters: {
             query?: never;
@@ -740,6 +829,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/webhooks/razorpay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Razorpay webhook
+         * @description docs/07: "(signature-verified, idempotent by event id)".
+         *
+         *     docs/11 §Security: "verify signature, dedupe by event id, process idempotently".
+         */
+        post: operations["razorpayWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -804,6 +915,46 @@ export interface components {
             current_password?: string | null;
             /** New Password */
             new_password: string;
+        };
+        /**
+         * CheckoutSessionIn
+         * @description docs/07: `POST /checkout/session { plan_code }`.
+         */
+        CheckoutSessionIn: {
+            /** Plan Code */
+            plan_code: string;
+        };
+        /**
+         * CheckoutSessionOut
+         * @description docs/07: "-> Razorpay order/subscription payload".
+         *
+         *     Exactly what Razorpay's browser widget needs, and nothing that identifies another account.
+         *     `key_id` is the *publishable* key; the secret never leaves the service.
+         */
+        CheckoutSessionOut: {
+            /** Amount Inr */
+            amount_inr: string;
+            /**
+             * Currency
+             * @default INR
+             * @constant
+             */
+            currency: "INR";
+            /** Disclosure */
+            disclosure?: string | null;
+            /** Key Id */
+            key_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "order" | "subscription";
+            /** Order Id */
+            order_id?: string | null;
+            /** Plan Code */
+            plan_code: string;
+            /** Subscription Id */
+            subscription_id?: string | null;
         };
         /**
          * CircuitsFilter
@@ -1188,6 +1339,56 @@ export interface components {
             /** Data */
             data: components["schemas"]["InstrumentHitOut"][];
         };
+        /**
+         * InvoiceOut
+         * @description One row of `GET /invoices` — docs/07 §"Account & billing".
+         *
+         *     Every amount is a string-exact `Decimal`, and the tax is broken out per head because that is
+         *     what the customer's own accountant needs (docs/11 §Compliance).
+         */
+        InvoiceOut: {
+            /** Amount Inr */
+            amount_inr: string;
+            /** Cgst Inr */
+            cgst_inr?: string | null;
+            /** Gst Inr */
+            gst_inr?: string | null;
+            /** Gst Rate */
+            gst_rate?: string | null;
+            /** Igst Inr */
+            igst_inr?: string | null;
+            /**
+             * Invoice Date
+             * Format: date
+             */
+            invoice_date: string;
+            /** Invoice Number */
+            invoice_number: string;
+            /** Pdf Url */
+            pdf_url: string;
+            /** Place Of Supply */
+            place_of_supply?: string | null;
+            /** Plan Code */
+            plan_code?: string | null;
+            /** Sac Code */
+            sac_code?: string | null;
+            /** Sgst Inr */
+            sgst_inr?: string | null;
+            /** Status */
+            status: string;
+            /** Taxable Inr */
+            taxable_inr?: string | null;
+        };
+        /**
+         * InvoicePage
+         * @description docs/07 §Conventions: `{ "data": [...], "next_cursor": "…" }`.
+         */
+        InvoicePage: {
+            /** Data */
+            data: components["schemas"]["InvoiceOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         JsonValue: unknown;
         /** LabelledValueOut */
         LabelledValueOut: {
@@ -1457,6 +1658,64 @@ export interface components {
              * Format: date
              */
             trade_date: string;
+        };
+        /**
+         * PlanFeatureOut
+         * @description One line of "what you get", as the plan row records it.
+         *
+         *     ``entitlement`` is ``None`` for the two docs/01 §1 features this service cannot enforce —
+         *     community Slack and the AMAs — so the UI can render them without pretending they are gated.
+         */
+        PlanFeatureOut: {
+            /** Entitlement */
+            entitlement?: string | null;
+            /** Label */
+            label: string;
+        };
+        /**
+         * PlanListOut
+         * @description The catalogue plus everything the checkout page is legally required to show.
+         */
+        PlanListOut: {
+            /** Data */
+            data: components["schemas"]["PlanOut"][];
+            /** Disclaimers */
+            disclaimers: string[];
+            /** Free Tier Enabled */
+            free_tier_enabled: boolean;
+        };
+        /**
+         * PlanOut
+         * @description docs/07: `GET /plans`. Everything `/pricing` renders comes from here.
+         *
+         *     PROMPTS.md Prompt 13 acceptance criterion 4: "No price or entitlement is hard-coded in the web
+         *     app; all read from the API." So the price, the label, the tagline, the feature list, the
+         *     Dec-2026 price and the Forever disclosure are all fields, not copy in a component.
+         */
+        PlanOut: {
+            /** Code */
+            code: string;
+            /**
+             * Currency
+             * @default INR
+             * @constant
+             */
+            currency: "INR";
+            /** Disclosure */
+            disclosure?: string | null;
+            entitlements: components["schemas"]["EntitlementsOut"];
+            /** Features */
+            features: components["schemas"]["PlanFeatureOut"][];
+            /** Interval */
+            interval?: ("month" | "year") | null;
+            /** Label */
+            label: string;
+            /** Price From Dec 2026 */
+            price_from_dec_2026?: string | null;
+            /** Price Inr */
+            price_inr: string;
+            /** Tagline */
+            tagline: string;
         };
         /**
          * PositiveDaysFilter
@@ -1979,6 +2238,18 @@ export interface components {
              * Format: email
              */
             email: string;
+        };
+        /**
+         * WebhookAck
+         * @description What Razorpay is told. Deliberately uninformative: a delivery is acknowledged or retried,
+         *     and telling an unauthenticated caller which account an event touched would be a leak.
+         */
+        WebhookAck: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "processed" | "ignored" | "failed";
         };
     };
     responses: never;
@@ -2924,6 +3195,111 @@ export interface operations {
             };
         };
     };
+    createCheckoutSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckoutSessionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutSessionOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     getIndexDashboard: {
         parameters: {
             query?: {
@@ -3469,6 +3845,213 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RankHistoryOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    listInvoices: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvoicePage"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    downloadInvoice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoice_number: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
                 };
             };
             /** @description Invalid screen definition */
@@ -5003,6 +5586,107 @@ export interface operations {
             };
         };
     };
+    listPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanListOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     listScreens: {
         parameters: {
             query?: never;
@@ -5967,6 +6651,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScreenRunPage"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    razorpayWebhook: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Razorpay-Signature"?: string | null;
+                "X-Razorpay-Event-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookAck"];
                 };
             };
             /** @description Invalid screen definition */

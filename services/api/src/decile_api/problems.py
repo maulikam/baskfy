@@ -115,11 +115,15 @@ def not_found(what: str, identifier: str) -> Problem:
     return Problem(ProblemType.NOT_FOUND, f"No {what} with id {identifier!r}.")
 
 
-def payment_required(feature: str) -> Problem:
-    """docs/07: the 402 carries the upgrade URL, so the UI never has to hard-code it."""
+def payment_required(feature: str, *, detail: str | None = None) -> Problem:
+    """docs/07: the 402 carries the upgrade URL, so the UI never has to hard-code it.
+
+    ``detail`` lets a gate say something more useful than the generic sentence — the ₹0 tier's
+    universe restriction names the universes it does allow (Prompt 13 §5).
+    """
     return Problem(
         ProblemType.PAYMENT_REQUIRED,
-        f"{feature!r} is not included in your plan.",
+        detail or f"{feature!r} is not included in your plan.",
         feature=feature,
         upgrade_url=UPGRADE_URL,
     )

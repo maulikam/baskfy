@@ -69,7 +69,10 @@ def api_settings(database_url: str, **overrides: object) -> Settings:
 
 @asynccontextmanager
 async def running_app(
-    settings: Settings, session: AsyncSession
+    settings: Settings,
+    session: AsyncSession,
+    *,
+    razorpay: object | None = None,
 ) -> AsyncIterator[httpx.AsyncClient]:
     """The real application, with only the session dependency swapped.
 
@@ -84,6 +87,10 @@ async def running_app(
 
     app.dependency_overrides[get_session] = _session_override
     async with app.router.lifespan_context(app):
+        if razorpay is not None:
+            # Prompt 13: the gateway is read from `app.state`, so a suite that must never reach
+            # Razorpay attaches one driven by an `httpx.MockTransport`.
+            app.state.razorpay = razorpay
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             yield client

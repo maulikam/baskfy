@@ -73,6 +73,7 @@ async def running_app(
     session: AsyncSession,
     *,
     razorpay: object | None = None,
+    task_queue: object | None = None,
 ) -> AsyncIterator[httpx.AsyncClient]:
     """The real application, with only the session dependency swapped.
 
@@ -91,6 +92,12 @@ async def running_app(
             # Prompt 13: the gateway is read from `app.state`, so a suite that must never reach
             # Razorpay attaches one driven by an `httpx.MockTransport`.
             app.state.razorpay = razorpay
+        if task_queue is not None:
+            # Prompt 15: `POST /backtests` publishes `decile.backtest.run` to the broker. A
+            # contract test asserts *that it was published*, not that Celery can publish, so it
+            # swaps in a recorder — otherwise every run would leave a message in the developer's
+            # Redis that no worker ever consumes.
+            app.state.task_queue = task_queue
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             yield client

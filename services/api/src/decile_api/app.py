@@ -52,9 +52,11 @@ from decile_api.problems import (
     payment_required,
     pipeline_degraded,
 )
+from decile_api.queue import build_task_queue
 from decile_api.ratelimit import RateLimiter, enforce_rate_limit
 from decile_api.routers import (
     auth,
+    backtests,
     billing,
     instruments,
     market_data,
@@ -281,6 +283,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # docs/02 §"Object storage": Cloudflare R2, or a directory when no bucket is configured.
     # Built once, like the mailer, so an S3 client's connection pool is reused across invoices.
     app.state.invoice_archive = invoices.build_invoice_archive(settings)
+    # docs/03 §"Scaling plan" step 4: backtests run on their own queue. The API is a producer
+    # only — see `decile_api.queue` for why it publishes by task name rather than importing the
+    # worker.
+    app.state.task_queue = build_task_queue(settings)
     app.state.rate_limiter = (
         RateLimiter(cache, settings) if cache is not None and settings.rate_limit_enabled else None
     )
@@ -328,6 +334,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     versioned.include_router(auth.router)
     versioned.include_router(billing.router)
     versioned.include_router(portfolios.router)
+    versioned.include_router(backtests.router)
     app.include_router(versioned)
 
     @app.get("/health", response_model=HealthOut, tags=["ops"], include_in_schema=False)

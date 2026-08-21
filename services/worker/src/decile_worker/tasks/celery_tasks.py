@@ -31,6 +31,12 @@ from decile_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
 from decile_worker.providers import build_cache, build_pipeline_dependencies
 from decile_worker.steps import StepOutcome
 from decile_worker.tasks.adjustments import instruments_with_actions, reprocess_instrument
+from decile_worker.tasks.backtests import (
+    BacktestNotRunnable,
+    build_backtest_archive,
+    build_publisher,
+    run_backtest_job,
+)
 from decile_worker.tasks.purge_accounts import run_purge_accounts
 
 #: docs/09 §"Kite specifics" — a rate-limited or flaky upstream is worth retrying; a malformed
@@ -145,3 +151,34 @@ def warm_screen_cache_task(limit: int = WARM_CACHE_SCREEN_LIMIT) -> JsonObject:
         "skipped": result.skipped,
         "failures": list(result.failures),
     }
+
+
+@shared_task(name="decile.backtest.run", acks_late=True)
+def run_backtest_task(public_id: str, fragility: bool = True) -> JsonObject:
+    """PROMPTS.md Prompt 15 §4: the backtest, on its own queue.
+
+    Routed to ``backtest`` by the ``decile.backtest.*`` prefix in
+    ``decile_worker.celery_app.TASK_ROUTES``, which is docs/03 §"Scaling plan" step 4: "Move
+    backtest fan-out to a dedicated worker pool with its own queue."
+
+    Deliberately **not** auto-retried. A backtest that failed on bad configuration will fail the
+    same way in sixty seconds, and one that failed on a missing price series will fail until the
+    backfill runs; both belong on the row where the user can read them (``backtest.error``), not
+    in a retry loop that hides them. The concurrency caps are enforced when the run is *enqueued*
+    (`decile_api.backtests.capacity_check`), so a retry storm would also breach them.
+    """
+    archive = build_backtest_archive()
+    publisher = build_publisher()
+    try:
+        outcome = run_in_session(
+            lambda session: run_backtest_job(
+                session, public_id, archive=archive, publisher=publisher, fragility=fragility
+            )
+        )
+    except BacktestNotRunnable as exc:
+        # A redelivered message for a run somebody else already took. Not an error.
+        return {"public_id": public_id, "status": "skipped", "detail": str(exc)}
+    finally:
+        if publisher is not None:
+            publisher.close()
+    return outcome.as_dict()

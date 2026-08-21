@@ -11,6 +11,36 @@ what was done meanwhile.
 
 ## Open
 
+### 3. A Kite login, when convenient — for deep history only
+**Status:** open, **not blocking the run** · **Raised:** M9, 22 Aug 2026
+
+`data/.kite_token.json` is from 19 Aug and Kite mints tokens daily with no refresh, so it is
+expired (`TokenException`). M9 wanted 2011→today in `ohlcv_daily`.
+
+**What is needed:** one Kite login, exactly as you do it now — `./run.sh`, click Login, complete
+the flow. That writes a fresh token the pipeline can borrow. Nothing else.
+
+**What it unblocks:** *depth only*. `decile_worker.backfill` pulls daily candles from Kite, which
+is the only source that reaches before 2024.
+
+**What it does NOT block, because the run already did it without Kite:**
+
+- `ohlcv_daily` now holds **1,145,922 bars, 2024-01-01 → 2026-08-21**, 2,553 instruments, from the
+  NSE bhavcopy. The recent gap was filled during M9.
+- **The product's own window is fully covered.** `docs/01` §2.13 sets `DATA_START_DATE` to
+  2024-11-01, so the screener has ten months of headroom.
+- **The parity gates M11 and M12 need about one year of history and have two and a half.**
+
+**What stays wrong until it arrives:** the fifteen-year backtest is unrunnable, and anything
+reading `high_all_time` is *wrong rather than absent* — it is computed as a running maximum over
+whatever history exists, so on a 2024-start series it is a 2024-onward maximum wearing an all-time
+label (`decile-blueprint/docs/DECISIONS.md` §21.2). The parity work treats those columns as
+unverifiable rather than comparing them.
+
+**Blocks:** deep history, and the backtests that need it. Not the merge's gates.
+
+---
+
 ### 1. Deploy the risk-ceiling lock to the Mumbai box — **non-trading hours**
 **Status:** waiting for a deliberate deploy · **Raised:** M4, 22 Aug 2026
 

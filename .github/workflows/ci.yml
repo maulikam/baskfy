@@ -47,8 +47,25 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
           uv run mypy
-      - name: Tests
-        run: uv run pytest
+      # Prompt 19 §1: ">= 90% on packages/core, >= 80% on services/api. Fail CI below those
+      # thresholds." Coverage is measured on the same run that asserts behaviour, so the numbers
+      # cannot come from a second, differently-configured invocation. The gate itself is
+      # `tools/coverage_gate.py`, which is per package — a single --cov-fail-under would let
+      # decile_core slide while decile_worker climbed.
+      - name: Tests, with per-package coverage gates
+        run: |
+          uv run pytest --cov --cov-report=term-missing --cov-report=json:coverage.json
+          uv run python -m tools.coverage_gate --report coverage.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.json
+      # Prompt 19 §4's first acceptance criterion: "The reconciliation report runs clean or every
+      # deviation has a written, committed explanation." The command exits non-zero on any
+      # disagreement over its derived tolerances.
+      - name: Reconciliation report against the reference export
+        run: uv run python -m decile_worker.reconcile_cli
       # Prompt 16 deliverable 2: "a CI check that fails if any hot query's plan changes to a
       # sequential scan on the seeded dataset". Run separately from the suite above so the log
       # says *this* is what broke — a plan regression and a failed assertion read very
@@ -165,7 +182,7 @@ jobs:
       # `playwright.config.ts` runs `next build` itself and reads `.next/app-build-manifest.json`
       # — measuring the very bytes the browser suite was just served, with no second build.
       # `if: always()` so a failing Playwright assertion does not hide a blown budget.
-      - name: Client-JS budget (docs/11: screens route < 250 KB gzip)
+      - name: "Client-JS budget (docs/11: screens route < 250 KB gzip)"
         if: always()
         run: pnpm --filter @decile/web run bundle-budget
       - uses: actions/upload-artifact@v4

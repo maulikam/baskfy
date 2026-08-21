@@ -35,6 +35,8 @@ dev = [
     "httpx>=0.28",
     "pyyaml>=6.0",
     "types-pyyaml>=6.0",
+    "pandas>=2.2",
+    "pandas-stubs>=2.2",
 ]
 
 # ---------------------------------------------------------------------------
@@ -52,6 +54,11 @@ ignore = []
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["PLR2004"]
+# Prompt 19 §3's pandas oracle is deliberately one flat transcription of docs/05, section by
+# section, with no helpers of its own. Splitting it to satisfy the branch and statement limits
+# would introduce exactly the shared abstraction an oracle exists to avoid: the value of the
+# cross-validation is that the two implementations have no structure in common.
+"packages/core/tests/factor_oracle.py" = ["PLR0912", "PLR0915"]
 "services/api/alembic/versions/*" = ["E501"]
 
 [tool.mypy]
@@ -72,6 +79,9 @@ explicit_package_bases = true
 exclude = ["(^|/)conftest\\.py$"]
 files = [
     "network_guard.py",
+    # Prompt 19's repo-level tooling: the per-package coverage gate and the mutation harness.
+    # `benchmarks/` predates this list and is checked by ruff only.
+    "tools",
     "packages/core/src",
     "packages/core/tests",
     "packages/providers/src",
@@ -149,3 +159,4 @@ markers = [
 [tool.coverage.run]
 branch = true
 source = ["decile_core", "decile_api", "decile_providers", "decile_worker"]
+

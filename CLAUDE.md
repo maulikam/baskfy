@@ -140,6 +140,14 @@ database, a network or a disk belongs in `services/` or `packages/providers`.
 | The restore drill's data-integrity assertions | `services/api/src/decile_api/integrity.py` |
 | The monthly restore drill | `.github/workflows/restore-drill.yml` |
 | **Every Prompt 17 decision taken under ambiguity** | `docs/DECISIONS.md` §17 |
+| **The per-package coverage gate (core >= 90%, api >= 80%)** | `tools/coverage_gate.py` |
+| The reconciliation checks against the reference export (pure) | `packages/core/src/decile_core/reconcile.py` |
+| `make reconcile`, and the committed report | `services/worker/src/decile_worker/reconcile_cli.py`, `reconciliation/REPORT.md` |
+| The naive pandas oracle, and the 25-instrument corpus | `packages/core/tests/factor_oracle.py`, `factor_corpus.py` |
+| Hypothesis properties for the factor engine | `packages/core/tests/test_factor_properties.py` |
+| Mutation testing, and its committed survivor report | `tools/mutation.py`, `reconciliation/MUTANTS.md` |
+| The ten critical user journeys, as a registry | `apps/web/e2e/critical-journeys.spec.ts` |
+| **Every Prompt 19 decision taken under ambiguity** | `docs/DECISIONS.md` §19 |
 | **The public route table (footer, sitemap, static-CSP predicate)** | `apps/web/src/lib/marketing/routes.ts` |
 | Landing page, FAQ, about, support, blog, announcement | `apps/web/src/app/(marketing)/` |
 | The public header and footer | `apps/web/src/components/marketing/` |
@@ -254,6 +262,9 @@ make backup      pg_dump the local database into .backups/ (no upload)
 make restore     restore a dump into a scratch database: make restore DUMP=.backups/x.dump
 make integrity   assert a database could serve the app: make integrity URL=postgresql+asyncpg://...
 make drill       the monthly restore drill, end to end, against the local stack
+make coverage    per-package coverage gate (needs DECILE_TEST_DATABASE_URL and `make up`)
+make reconcile   reconcile our formulas against the reference export; rewrites reconciliation/REPORT.md
+make mutants     mutation-test decile_core.factors and .screener; writes reconciliation/MUTANTS.md
 ```
 
 The Prometheus + Grafana stack is behind a compose profile, so `make up` does not start it:
@@ -262,6 +273,26 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
 `make test-db` needs `DECILE_TEST_DATABASE_URL`. Without it those tests skip rather than fail.
 
 ## Open items carried forward
+
+- **`docs/05` §8's skip-month definition is now REFUTED, not resolved.** Prompt 19's
+  reconciliation shows candidate A (`P_{t-21}/P_{t-252}`, the one we ship) implies **521.31%** for
+  CUPID against the published **608.37%** — a 16.7% gap the 21-vs-22 / 247-vs-252 offset mismatch
+  cannot explain. Candidate B is *not* confirmed; it is merely uncontradicted. The 93-column export
+  carries no skip-month column, so nothing in this repository can settle it. **`docs/05` §8 needs a
+  hand-edit** pointing at `docs/DECISIONS.md` §19.5, and the same goes for §12
+  (circuit detection, §19.6). Both still read "INFERRED", which remains correct.
+- **`pos_days_N` and `rsi_N` are not scale invariant for a daily return within one ULP of zero.**
+  Found by hypothesis, not by review. A strict-inequality count cannot survive a multiplication
+  that moves a 1e-16 tick across zero. Harmless in production (prices are stored at 2 dp) and
+  pinned by `TestKnownDiscontinuity` in `packages/core/tests/test_factor_properties.py` so nobody
+  "fixes" it by loosening the invariance property.
+- **`compute_factors_unrounded` exists and must never be called by a write path.** It is the
+  cross-validation harness's seam; `test_factor_crossvalidation.py` asserts no `src/` tree calls it.
+- **mutmut and cosmic-ray do not work in this workspace**, and the reason is structural (editable
+  src-layout packages resolved by `.pth`). `tools/mutation.py` replaces them;
+  `docs/DECISIONS.md` §19.4.
+- **The ten-journey Playwright suite has never been executed.** It type-checks; no browser has run
+  it, and the backtest journey it adds has therefore never passed.
 
 - **NO LAWYER HAS READ THE FOUR LEGAL DRAFTS.** `apps/web/src/content/legal/*.mdx` are drafts
   written by engineers from `docs/11` §Compliance and Prompt 18 §3. Each opens with a

@@ -25,3 +25,7 @@ build/
 # Prompt 16: one JSON file per measurement, written by `make bench`. The rendered table
 # (benchmarks/AS-MEASURED.md) is committed; the raw samples are not — they are machine-specific.
 benchmarks/results/
+
+# Prompt 19's mutation harness: throwaway copies of decile_core, one per worker.
+.mutants/
+coverage.json

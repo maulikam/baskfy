@@ -1111,3 +1111,238 @@ still prefetch on hover, which is when a visitor has shown they might click.
 
 Nothing else on the page changed, and no other `<Link>` in the app was touched: inside the
 application, prefetching a factsheet is the behaviour that makes the table feel instant.
+
+---
+
+## Prompt 19 — Test hardening and data-correctness audit (2026-08-21)
+
+Prompt 19 adds no features. Every decision below is about what can honestly be *asserted* with the
+data this repository contains, and what has to be recorded as unresolved instead.
+
+### 19.1 The coverage gate is per package, and it refuses to run without a database
+
+Prompt 19 §1 asks for ">= 90% on packages/core, >= 80% on services/api. Fail CI below those
+thresholds." `pytest-cov`'s `--cov-fail-under` is one number over everything measured, which hides
+the case that matters: `decile_core` sliding from 92% to 84% while `decile_worker` climbs, leaving
+the total flat. So the gate is `tools/coverage_gate.py`, one threshold per package, with
+`decile_providers` and `decile_worker` measured and printed but not gated — Prompt 19 names only
+two, and an ungated number nobody can see is an ungated number that only falls.
+
+The gate **exits 2 rather than passing** when `DECILE_TEST_DATABASE_URL` is unset. Most of
+`services/api` is exercised by `db`-marked tests; without a database they skip and `decile_api`
+measures far below 80% — not because coverage is worse but because the suite did not run. A gate
+that reports a number meaning something different from CI's number is worse than no gate.
+
+As measured on 2026-08-21 against a live PostgreSQL 16 + TimescaleDB and Redis:
+`decile_core` **92.34%**, `decile_api` **81.70%**, `decile_providers` 89.51%,
+`decile_worker` 76.91%. Both gated thresholds are met **with less than two points of headroom on
+`services/api`**, which is the number to watch.
+
+### 19.2 `compute_factors` gained an `apply_precision` flag, for one caller
+
+Prompt 19 §3 requires the Polars engine and the pandas oracle to agree "to 4 decimal places".
+`compute_factors` rounds to storage precision on the way out (CLAUDE.md house rule 8 — returns at
+2 dp), so a 4-dp comparison against it is a comparison of two roundings and proves almost nothing.
+
+The alternative to a flag was for the harness to re-implement the engine's pipeline minus the
+rounding call, which is a copy of the thing under test. So `compute_factors(..., apply_precision=
+False)` exists, defaults to `True`, and `packages/core/tests/test_factor_crossvalidation.py`
+asserts that **no file under any `src/` tree mentions it** — a write path that skipped rounding
+would break the CSV/API/UI tie that house rule 8 exists to protect. The same file also asserts the
+stronger property the flag makes checkable: rounded, the two implementations produce the identical
+stored row.
+
+### 19.3 The cross-validation corpus is 25 real symbols on synthetic price paths
+
+Prompt 19 §3 says "pick 25 real instruments". The symbols, names, series and closing prices on
+2026-08-18 are real — they come from the docs/13 export by way of the Prompt 2 provider fixtures —
+but **every bar before that date is a seeded random walk** (`tests/fixtures/providers/
+PROVENANCE.md`). There is no real price history in this repository and the suite is network-blocked.
+
+That does not weaken the harness: cross-validation asks whether two independent implementations
+agree on the *same* input, not whether the input is the market. Three branches a random walk never
+reaches are injected deliberately (`factor_corpus._inject_edge_cases`): the docs/05 §12 band
+heuristic, the §13 turnover fallback, and locked days at fixed positions. What it cannot do is say
+anything about whether docs/05 matches the reference product — that is §19.5's job.
+
+`vol_avg_*` and `median_vol_12m` are compared at a relative 1e-12 rather than an absolute 1e-4,
+because they are rupee sums running to 10^10 where a float64 ULP is already ~2e-6 and a 252-term
+summation in two different orders cannot agree to 1e-4. In the units that matter that tolerance is
+about a thousand times tighter than 4 dp, not looser.
+
+### 19.4 Mutation testing is not mutmut, and the attempt is on the record
+
+Prompt 19 §6 says "mutmut or cosmic-ray". mutmut 3.7 was installed and configured first. It works
+by copying `source_paths` into a `mutants/` directory and running pytest from there; this
+repository is a **uv workspace of four editable, src-layout packages**, so `decile_core` resolves
+through `.venv/.../_editable_impl_decile_core.pth` — an absolute path to the real
+`packages/core/src`. Under `mutmut run` the tests import the unmutated module, mutmut attributes no
+test to any mutant, and it stops with "we could not find any test case for any mutant". Prepending
+the mutant tree to `PYTHONPATH` does not help, because mutmut re-execs pytest itself. `cosmic-ray`
+has the same shape of problem. The dependency was removed rather than left in place broken.
+
+`tools/mutation.py` does what mutmut's model does in the way this layout supports: it copies
+`decile_core` to a temporary directory, mutates one file in the copy per mutant, and runs a scoped
+pytest with that directory first on `PYTHONPATH` so the copy shadows the editable install. **The
+real source tree is never written to** — which matters for a tool normally run unattended. Six
+operators, each chosen for a bug class docs/05 or docs/06 would actually suffer; docstrings are
+excluded. The report is committed at `reconciliation/MUTANTS.md` and survivors with no written
+justification are a non-zero exit.
+
+### 19.5 The 12-1 momentum definition CANNOT be resolved, and candidate A is inconsistent
+
+docs/05 §8 asks Prompt 19 to settle the skip-month definition "empirically". **It cannot be settled
+from this bundle**, for a structural reason:
+
+* the 93-column reference export carries **no skip-month column at all** — the reference product
+  offers 12-1 and 12-2 as *sort keys* (docs/01 §3) and never exports the values, so all 271 rows
+  contribute nothing to the question;
+* the only published values anywhere in `docs/` are docs/05 §8's own CUPID figures, 608.37 and
+  852.21, observed on 19 Aug 2026.
+
+What the arithmetic on those two numbers does establish (`decile_core.reconcile.
+skip_month_evidence`, asserted in `packages/core/tests/test_reconcile.py`):
+
+**Candidate A — docs/05's primary, `P_{t-21} / P_{t-252}` — is inconsistent with the published
+figure.** It is fully determined by CUPID's other published numbers that day:
+`(1 + 753.00%) / (1 + 37.29%) - 1 = 521.31%`, against a published **608.37%**. The gap is 87.06
+percentage points, 16.7% of the value. The 21-vs-22 and 247-vs-252 bar mismatches between §8's bar
+offsets and §1's calendar windows are worth roughly six bars of a name compounding at ~0.86% a day
+— about 5%, a quarter of the gap.
+
+**Candidate B — `P_{t-21} / P_{t-273}` — is not confirmed.** It is under-determined: it implies a
+13-month return of ~873% for CUPID, which nothing in the bundle contradicts and nothing supports.
+"A is refuted" is not "B is correct", and shipping B on that basis would be exactly the confident
+wrongness docs/05 warns about.
+
+**Decision: the engine keeps shipping candidate A** — `SkipMonthDefinition.SKIP_END`, the
+definition docs/05 §8 instructs us to implement — and the switch to B stays a constructor argument
+(`decile_core.momentum.SkipMonthConfig`). Resolving it needs CUPID's real adjusted closes for ~294
+trading days, which arrives with the first production backfill and not before.
+
+**docs/05 §8 therefore still says "INFERRED, calibrate", and that is correct.** Prompt 19 asks to
+"update docs/05 with the resolved definitions"; the honest update is that one of the two is now
+*refuted* and neither is *resolved*. The overnight run may not edit `docs/`, so this section is the
+update, and docs/05 §8 needs a hand-edit in the morning to point at it.
+
+### 19.6 Circuit detection is likewise unresolvable, with a bound rather than a validation
+
+docs/05 §12's rule has two branches and the snapshot can distinguish neither: telling them apart
+needs, per bar, high / low / close_raw / previous close / the day's NSE band, and the export is one
+day of counts. What the counts do say is a bound: **56 of 271 rows** record at least one hit in the
+last year and the largest is 16 days out of 247. A rule that fired on every 20% up-day would
+produce far more than that on a momentum screen, so the reference product's rule is at least as
+strict as ours. That is a bound, not a validation. The engine keeps §12's rule as written, with
+the published-band branch preferred and `CircuitMethod` recorded per row.
+
+The one thing the report *can* prove about the published counts is that they are nested across
+windows and bounded by the window length — 2,439 assertions, all clean.
+
+### 19.7 Reconciliation tolerances are derived from storage precision, never picked
+
+Every published column is rounded (docs/13 §4), so a relationship between two of them cannot hold
+exactly. Each check therefore propagates the half-ULP of each input through its own formula, per
+cell. The sharpe identity's tolerance is not "0.005" but
+`0.005 + 0.005/(vol x 100) + |sharpe| x 5e-9/vol` — about 0.00525 for a 20%-volatility name. That
+distinction is not cosmetic: a flat 0.005 flags **11 of 1,355** sharpe cells, every one of them
+inside the derived tolerance, and docs/05 §3 itself records the maximum error as 0.0051.
+
+Two checks needed their tolerance corrected during the build, both in the same direction —
+initially too tight, and both fixed by deriving rather than guessing. `blend_ordering` now
+reproduces docs/13 §2's figure exactly: **48 inversions, worst 0.0075**, all inside the two
+half-ULPs that 2-dp component rounding allows.
+
+`turnover_is_exchange_value` declines to answer below 30 rows rather than manufacturing a
+disagreement: docs/13 §2 states its evidence as a mean and a standard deviation
+(measured here as **0.999905 ± 0.008363** over 271 rows, against docs/13's "0.9999 ± 0.008"), and
+`--symbols CUPID` is a sample of one.
+
+### 19.8 The ten critical journeys are a registry, not ten new browser tests
+
+Prompt 19 §5 asks for "a Playwright e2e suite covering the ten critical user journeys". Nine of
+the ten were already walked end to end by the specs Prompts 8-15 delivered. Rewriting them in a new
+file would roughly double the browser suite's wall clock — against Prompt 19's own "CI ... completes
+in under 15 minutes" — and leave two copies to drift apart.
+
+`apps/web/e2e/critical-journeys.spec.ts` therefore *names* the ten in one place, each with the spec
+file and the exact test title that walks it, and a test in that file reads those spec files and
+fails if a named test has been renamed or deleted. The tenth — running a backtest — had no coverage
+before this module and is walked in full here.
+
+**What the backtest journey can assert is limited, and the test says so.** `POST /backtests`
+publishes to Celery and the browser suite starts no worker, so the run stays `queued`. Even with a
+worker it would fail: the seeded database holds one trading day of *results* and no price history.
+So the journey asserted is the one the repository can deliver — configure, queue, land on a page
+that states the run's real state — and everything past "queued" waits on a backfill.
+
+### 19.9 What is not done, and what a human must look at
+
+* **docs/05 §8 and §12 still say INFERRED and both still need a hand-edit** to point at §19.5 and
+  §19.6. The resolved-definitions update Prompt 19 asks for is "one candidate refuted, neither
+  resolved", and it lives here because the overnight run may not edit `docs/`.
+* **The Playwright suite was not executed as part of this module.** The ten-journey registry and
+  the new backtest journey type-check (`tsc --noEmit` clean) but no browser ran; the browser suite
+  needs `make up`, a `decile_e2e` database, a production `next build` and a chromium install, and
+  the module's time budget went to the Python deliverables. **The backtest journey has therefore
+  never passed.**
+* **CI's wall clock is unmeasured, and until this module CI could not run at all.**
+  `.github/workflows/ci.yml` **was not valid YAML** and had not been since Prompt 16: the step
+  name `Client-JS budget (docs/11: screens route < 250 KB gzip)` is an unquoted scalar containing
+  `: `, which YAML reads as a nested mapping. GitHub Actions refuses to run a file it cannot
+  parse, so every job in it would have been skipped and nothing would have said so. Prompt 19 §5
+  quotes "run against a seeded database in CI" and the acceptance criterion says "CI is green"; a
+  workflow that never parsed is neither green nor red. It is fixed (one pair of quotes), and
+  `services/api/tests/test_ci_workflows.py` now asserts every workflow parses and still runs each
+  numbered prompt's gate. **No GitHub Actions run has ever happened**, so the under-15-minutes
+  criterion has no measurement behind it at all. Locally, the Python suite with a database
+  attached takes tens of minutes — it was never timed on an idle machine, because every
+  measurement this module took was competing with the mutation harness.
+* **`services/api/tests/test_load.py::test_p95_stays_under_four_hundred_milliseconds_with_no_errors`
+  fails on this machine** with a database attached, and did so before Prompt 19 touched anything.
+  It is a 50-concurrent in-process load benchmark; it is not part of `make test` (it is `db`-marked
+  and skips without `DECILE_TEST_DATABASE_URL`). Not investigated — out of Prompt 19's scope, and
+  recorded rather than hidden.
+
+### 19.10 Mutation testing: 148/191 killed, 6 justified, 37 left standing in the screener
+
+The score is **77.5%**, not the 100% an earlier run reported. That earlier 100% was false and the
+harness's own control pass is what proved it — see §19.4. The honest breakdown:
+
+**Twelve mutants were killed by writing tests**, each pointing at a guard nothing exercised. The
+two worth knowing about beyond their own line:
+
+* **`turnover_source` had no assertion anywhere in `packages/core`.** docs/05 §13 does not only
+  say which field to prefer, it says *"record which was used"* — the provenance column exists so a
+  liquidity figure can be traced to its source. `vol_day_val` was covered by the cross-validation;
+  the column beside it was not. Both mutants on its expression survived every other test.
+* **Wilder's seeding could not be observed by any existing test.** docs/05 §5 is unusually
+  specific about the seed ("a simple mean over the first N observations"), and
+  `decile_core.factors` carries a paragraph on why Polars' `ewm_mean` cannot be substituted. Every
+  test ran 765 bars against windows of at most 247, where the seed row is hundreds of steps behind
+  the row being read. Two new cases — a history of exactly `N + 1` bars, and a calendar whose
+  1-month window resolves to a single trading day — put the seed row *on* the bar under
+  inspection, which is the only arrangement in which the off-by-one is visible at all.
+
+**Six survivors are equivalent mutants** and are justified in
+`reconciliation/mutant-justifications.json`: two `slots=True` dataclass flags, the
+`ZERO_VOLATILITY_EPSILON` strict-vs-non-strict boundary (they differ for exactly one representable
+float), an RSI empty-frame guard made redundant by the `len(dates) < 2` guard eight lines below
+it, and the two `np.where(changes > 0, ...)` comparisons whose branches both yield 0.0 at the
+boundary.
+
+**37 survivors are unjustified, 34 of them in `screener.py`, and Prompt 19 §6 is therefore not
+fully met.** `make mutants` exits non-zero and names each one. They are not known bugs; they are
+lines `test_screener.py` executes without asserting anything about — the three row-limit constants
+(`top_50`, `top_100`, `MAX_RESULT_ROWS = 4000`), the P/E range filter's inclusivity at both ends,
+two branches of `validate_definition`, the 1-based filter position in error messages, nine
+dataclass flags, and some mask comparisons in the top-risk exclusion clauses. Writing those tests
+is straightforward and was not done; recording the gap precisely is more useful than a justification
+file full of "probably fine".
+
+### 19.11 One incidental find: `TOP_RISK_FLAG_PERCENTILE` is declared twice
+
+`decile_core.universes` and `decile_core.factors` each define it as `0.10`, and
+`decile_worker.tasks.factors` imports the second. Nothing noticed if they drifted, which is why
+mutating one of them survived. A test now asserts they agree — a patch over a duplication that
+should simply be removed, by having one module import the other. Not done here: it changes a
+public name's home, which is a Prompt 5 decision rather than a Prompt 19 one.

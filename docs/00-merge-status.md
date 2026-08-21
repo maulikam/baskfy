@@ -4,7 +4,7 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M3 · **State:** running
+**Run started:** 22 Aug 2026 · **Current module:** M4 · **State:** running
 
 ---
 
@@ -15,8 +15,8 @@ that culture continues here.
 | M0 | Preflight, baselines, safety copy | ✅ done | 22 Aug 2026 | Baselines + verified safety copy recorded. Blocker resolved: decile's overnight work committed as `ea5dd0f` (M0.8) |
 | M1 | Umbrella repo (subtree) | ✅ done | 22 Aug 2026 | One repo at the root; 117 commits; both histories reachable from HEAD. `--follow` does not prove it — see M1.1 for the commands that do |
 | M2 | The rename | ✅ done | 22 Aug 2026 | 425 files, 2347+/2347−. Namespaces are Baskfy's; the D1–D6 vocabulary is kept by design. Enforced by `tools/check-namespace.sh` (M2.1) |
-| M3 | Working agreement + status page | 🔄 running | 22 Aug 2026 | |
-| M4 | One env schema | — | | |
+| M3 | Working agreement + status page | ✅ done | 22 Aug 2026 | Root CLAUDE.md absorbed the screener's nine house rules and the GTT caveat it had dropped; both sub-files marked; status page linked first |
+| M4 | One env schema | 🔄 running | 22 Aug 2026 | |
 | M5 | One CI workflow | — | | |
 | M6 | Freeze the strangle lab | — | | |
 | M7 | Local stack up | — | | |
@@ -177,6 +177,20 @@ history is an open question for M9 (`DECISIONS-MERGE.md` M0.9).
 It allows exactly `decile_1`…`decile_6` (the D1–D6 public API values), `DECILE_RANK_KEY` and
 `decile_bucket`, and excludes both trees' `docs/` plus the two documents that instruct the rename.
 Run it from the repository root; it exits non-zero and prints `file:line: token` on any violation.
+
+## Two open defects the root agreement now carries
+
+M3 folded the screener's house rules into the root `CLAUDE.md`, and two of them are **currently
+violated** — recorded there with ⚠️ so nobody reads the rule as a description of the code:
+
+- **House rule 5, "No look-ahead, ever"** — `apply_adjustments` applies corporate actions with a
+  *future* ex-date (`decile-blueprint/docs/DECISIONS.md` §21.9). **M10 owns the fix.**
+- **House rule 6, "Adjusted by default"** — adjusting `open`/`high`/`low` is destructive because
+  no raw counterpart is stored (§21.10).
+
+And one documented exception to non-negotiable 6, carried from the desk's own wording: GTT stops
+go through `kite_client.place_gtt_stop` with its own guard, not through the gateway, which has no
+GTT method. **M16 owns closing that.**
 
 ## Things a future session must know
 

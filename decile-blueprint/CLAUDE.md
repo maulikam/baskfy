@@ -1,5 +1,9 @@
 # Decile — working agreement
 
+> **Part of [Baskfy](../CLAUDE.md).** The root `CLAUDE.md` governs — it carries the two laws,
+> the desk's seven non-negotiables and the screener's nine house rules. This file remains
+> authoritative for this tree's internals.
+
 India-equities momentum screener. `docs/` is the **source of truth**. If your instinct conflicts
 with it, say so out loud rather than deviating quietly.
 

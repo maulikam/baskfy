@@ -1,5 +1,9 @@
 # Kite Momentum Rebalancer
 
+> **Part of [Baskfy](../CLAUDE.md).** The root `CLAUDE.md` governs — it carries the two laws,
+> the desk's seven non-negotiables and the screener's nine house rules. This file remains
+> authoritative for this tree's internals.
+
 Personal momentum-portfolio system for Indian cash equities (NSE, delivery/CNC only).
 Flow: upload weekly momentum scan CSV → score → build rebalance plan vs live Kite
 holdings → review in webview → explicit confirm → orders via Kite Connect API →

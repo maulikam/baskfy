@@ -469,3 +469,81 @@ that silently stops testing, and this one had already stopped under CI's own con
 The suite is now identical under both — **1202 passed, 17 skipped** with `DRY_RUN=true` forced and
 with the repository defaults. Supersedes the workaround noted in M0.4, which baselined at repo
 defaults precisely to avoid this collision.
+
+---
+
+## M7
+
+### M7.1 — `make seed` overwrote 25,256 real bars, and now it refuses to ⚠ UNREVIEWED
+**The most consequential finding of this module, and it would have been invisible.**
+
+M2.2 required M7 to restore the overnight backfill rather than migrate an empty database. That was
+done. Then `make seed` ran, as M7 step 1 says it should — and `ohlcv_daily` went from
+**1,138,300 to 1,143,604**. Only +5,304 rows, which reads like a harmless top-up.
+
+It was not. Diffing the seeded database against a scratch restore of the same dump:
+**25,256 rows share an `(instrument_id, date)` key and disagree on `close`.** `seed_fixture_bars`
+upserts on that key, so every collision replaced a real bhavcopy close with a synthetic one.
+`tests/fixtures/providers/PROVENANCE.md` says what those values are: *every bar before 2026-08-18
+is a seeded random walk*. They land with `source='nse'`, exactly like real rows, so **nothing
+downstream can tell them apart** — not the factor engine, not the parity test, not a human reading
+the table.
+
+M10, M11 and M12 are all graded on these bars. A quarter of a million contaminated closes would
+have produced a parity failure with no discoverable cause.
+
+**Decided.** `seed_fixture_bars` now refuses when `ohlcv_daily` is non-empty, prints why, and
+returns 0. `BASKFY_SEED_FORCE_BARS=1` overrides it for a scratch database or the e2e run, which
+builds from empty. `make seed` is for bringing a fresh database up; a populated one is not that.
+The database was restored from the dump a third time and re-seeded — bars unchanged at 1,138,300,
+verified either side.
+
+**Rejected:** giving fixture bars a distinct `source`. It is the better long-term answer — honest
+provenance, and real rows could then never be silently replaced — but it changes seeded data's
+shape and several tests assert on `source`. **Worth doing properly before the next backfill;
+flagged here rather than done inside a module whose job was to bring a stack up.**
+
+**Caught only because row counts were snapshotted either side of the command.** Do that around
+anything that writes to a populated table.
+
+### M7.2 — The restore sequence has an order that matters, and getting it wrong is silent
+`pg_restore` of a TimescaleDB dump needs `timescaledb_pre_restore()` before and
+`timescaledb_post_restore()` after, and **`pre_restore` requires the extension to already exist**.
+Restoring into a freshly `CREATE DATABASE`d database without creating the extension first makes
+`pre_restore` error; if that error is not surfaced the restore still appears to succeed, and the
+damage shows up later as **`factor_daily` having no primary key at all** — which then fails every
+upsert with "no unique or exclusion constraint matching the ON CONFLICT specification".
+
+The working sequence, now in the status page:
+`CREATE DATABASE` → `CREATE EXTENSION timescaledb` → `timescaledb_pre_restore()` → `pg_restore
+--no-owner --no-privileges --disable-triggers` → `timescaledb_post_restore()` → re-add the user
+policies.
+
+**The dump also cannot carry its background jobs.** `bgw_job` fails with `role "decile" does not
+exist` — the policies were owned by the pre-rename role. Three user policies had to be recreated
+by hand from their migrations: the `ohlcv_daily` compression policy (`0001`) and the two
+continuous-aggregate refresh policies (`0008`). Without that step the aggregates silently stop
+refreshing. They are back; `timescaledb_information.jobs` shows all three.
+
+### M7.3 — One integrity check fails, and it is telling the truth ⚠ UNREVIEWED
+`make integrity` reports **`published_runs_have_steps: 1 published run has no pipeline_run_step
+rows`**. It came from the dump, not from anything this module did — the scratch restore of the
+untouched dump has the same row.
+
+The overnight bhavcopy backfill published `data_version = 1` without going through the
+orchestrator that records per-step provenance, which is consistent with `DECISIONS.md` §21.3
+("resumability is per-day upsert, not `ingest_cursor`"). So the check is correct: the provenance
+record for the data currently being served **is incomplete**.
+
+**Decided: record it, do not fabricate steps, do not weaken the check.** M9/M10 re-run the chain
+through the orchestrator, and the run they produce will carry its steps. If it still fails after
+that, it is a real defect in the step recorder rather than an artifact of how this data arrived.
+Everything else passes, including every foreign-key and populated-table assertion.
+
+### M7.4 — The screener's `.env` was renamed in place, without its values being read
+`decile-blueprint/.env` still carried 18 `DECILE_*` keys after M2 (it is untracked, so the rename
+could not reach it) — including the Kite, Razorpay, Resend, JWT and token-encryption secrets. Key
+**names** were rewritten with `perl -pi -e 's/^DECILE_/BASKFY_/'` and the two database URLs
+repointed at `baskfy`; no value was printed, logged or copied into this repository. A `0600` copy
+of the original is at `~/baskfy-safety/2026-08-22/env/`, outside the tree. The file itself is
+`0600` and untracked.

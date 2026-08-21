@@ -22,11 +22,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime as dt
+import os
 import sys
 from collections.abc import Sequence
 from typing import Final
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -258,7 +259,31 @@ async def seed_fixture_bars(session: AsyncSession, provider: FixtureProvider | N
     raw exchange prints, and docs/09 is explicit that adjustment is the pipeline's job, not a
     provider's. Prompt 3's ``apply_adjustments`` is what will make ``close`` diverge from
     ``close_raw`` for CUPID's split and bonuses.
+
+    IT REFUSES TO RUN OVER A POPULATED TABLE, AND THAT GUARD WAS PAID FOR (M7).
+    ``tests/fixtures/providers/PROVENANCE.md`` says it plainly: every bar before 2026-08-18 is a
+    seeded random walk. The rows carry ``source='nse'`` like real ones, so nothing downstream can
+    tell them apart — and the upsert is keyed on ``(instrument_id, date)``, so running this against
+    a database holding a real backfill silently **replaces real closes with synthetic ones**. It
+    did exactly that once: `make seed` over the restored 1,138,300-bar backfill rewrote 25,256 real
+    bars, caught only because the row counts were snapshotted either side of the command.
+
+    So: if any bars exist, this is a no-op that says why. `make seed` is for bringing a fresh
+    database up, and a populated one is not that. Force it with ``BASKFY_SEED_FORCE_BARS=1`` when
+    you genuinely want the fixture market — a scratch database, or the e2e run, which builds its
+    own from empty.
     """
+    existing = int(
+        (await session.execute(select(func.count()).select_from(OhlcvDaily))).scalar_one()
+    )
+    if existing and os.getenv("BASKFY_SEED_FORCE_BARS") != "1":
+        print(
+            f"ohlcv_daily: SKIPPED — {existing:,} bars already present. The fixture bars are a "
+            f"random walk (tests/fixtures/providers/PROVENANCE.md) and would overwrite real "
+            f"closes on matching (instrument_id, date). Set BASKFY_SEED_FORCE_BARS=1 to override."
+        )
+        return 0
+
     source = provider if provider is not None else FixtureProvider()
 
     instruments = source.list_instruments()

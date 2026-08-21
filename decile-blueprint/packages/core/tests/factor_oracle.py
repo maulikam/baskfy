@@ -221,11 +221,14 @@ def compute_factors_pandas(
         for months, n in sorted(window_lengths.items()):
             key = f"{months}m"
 
-            # §1: ret_N = (P_t / P_{t-N} - 1) x 100
-            if t - n < 0:
+            # §1: ret_N = (P_t / P_{t-(N-1)} - 1) x 100 — the base is the window's FIRST bar.
+            # Corrected 2026-08-22 with docs/05 §1; this oracle is deliberately a naive
+            # re-implementation of the spec, so it moves when the spec does, never to chase
+            # baskfy_core.factors.
+            if t - (n - 1) < 0:
                 values[f"ret_{key}"] = None
             else:
-                base = closes[t - n]
+                base = closes[t - (n - 1)]
                 values[f"ret_{key}"] = None if base == 0 else (closes[t] / base - 1) * 100
 
             # §2: stdev(r over the window's N returns) x sqrt(252). Stored as a FRACTION.

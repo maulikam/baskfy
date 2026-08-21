@@ -33,11 +33,40 @@ As of **2026-08-18** those offsets span exactly:
 
 ---
 
-## 1. Absolute return — VERIFIED
+## 1. Absolute return — CORRECTED 2026-08-22 (was off by one bar)
 
 ```
-ret_N = (P_t / P_{t-N} - 1) × 100
+ret_N = (P_t / P_{t-(N-1)} - 1) × 100
 ```
+
+where `N` is the window length in trading days from §"Notation" — the calendar-offset window
+**inclusive of both endpoints**, as `docs/13` §3 recovered it. The base is therefore the window's
+**first bar**, not the bar before the window starts.
+
+**This line previously read `P_{t-N}`, and that was wrong.** It was written before any real price
+history existed and was never exercised: the parity test that would have caught it needed bars the
+repository did not have, so it skipped. Measured against all 271 rows of the reference export on
+real NSE bars, the base one bar later reproduces the file and the documented base does not:
+
+| column | base `P_{t-N}` (was) | base `P_{t-(N-1)}` (is) |
+|---|---:|---:|
+| `absolute_return_one_month` | 0 / 271 exact | **265 / 271** |
+| `absolute_return_three_months` | 1 / 270 | **260 / 270** |
+| `absolute_return_six_months` | 0 / 270 | **256 / 270** |
+| `absolute_return_nine_months` | 0 / 269 | **250 / 269** |
+| `absolute_return_one_year` | 0 / 268 | **240 / 268** |
+
+CUPID is the worked example: the published `ret_1m` of 37.03 is `284.03 / 207.27 − 1`, where
+207.27 is the close **21** bars back; 22 bars back is 214.78 and gives 32.24.
+
+Everything downstream inherits the base: `sharpe_N` is a ratio of two window quantities, and
+`vol_N`, `rsi_N`, `high_1y` and `away_from_high_1y` all read the same window. All of them failed
+271/271 for this one reason.
+
+**The residual is a calendar difference, not a formula one.** Exact matches fall from 265 to 240
+as the window lengthens, which is drift between our trading calendar and the reference's, not a
+second formula defect — see `docs/DECISIONS.md` §21.7 and the merge's `DECISIONS-MERGE.md` M10.1
+and M11.1.
 
 ## 2. Volatility — annualised, per window
 

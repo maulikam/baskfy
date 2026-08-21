@@ -148,14 +148,19 @@ class TestTheZeroDenominatorGuards:
         assert frame["pos_days_1m"][0] == pytest.approx(expected_positive / n * 100)
 
     def test_the_return_denominator_being_one_does_not_null_the_return(self) -> None:
-        """``P_{t-N} == 1.0`` exactly, which a ``base == 1`` mutant would treat as missing."""
+        """``P_{t-(N-1)} == 1.0`` exactly, which a ``base == 1`` mutant would treat as missing.
+
+        The base moved one bar later when docs/05 §1 was corrected on 2026-08-22 — it is the
+        window's first bar, not the bar before it — so the index this plants the 1.0 at moved
+        with it. The guard being tested is unchanged.
+        """
         days = weekdays(30)
         window = compute_factors_unrounded(
             bars([float(i + 1) for i in range(len(days))], days), AS_OF, days, config=SHORT
         )
         n = window.window_lengths[1]
         closes = [float(i + 2) for i in range(len(days))]
-        closes[len(days) - 1 - n] = 1.0
+        closes[len(days) - 1 - (n - 1)] = 1.0
         frame = compute_factors_unrounded(bars(closes, days), AS_OF, days, config=SHORT).frame
         assert frame["ret_1m"][0] == pytest.approx((closes[-1] / 1.0 - 1) * 100)
 

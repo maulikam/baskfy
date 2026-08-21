@@ -730,3 +730,91 @@ EXISTS`, so the reset stays a reset and nothing else changes.
 **Why this was never caught:** the suite type-checked and was never run — the same class of gap the
 screener's own `CLAUDE.md` lists throughout ("the ten-journey Playwright suite has never been
 executed", "no Celery worker has run…"). Running it was worth doing for this alone.
+
+---
+
+## M11 — RED GATE, not green
+
+### M11.1 — `docs/05` §1's return base was wrong, and it is now corrected ⚠ UNREVIEWED
+**The parity test runs for the first time.** With `BASKFY_PARITY_BARS` pointed at 1,138,300 real
+adjusted bars exported from the restored backfill, `TestStep2FullRowReproduction` executes instead
+of skipping — the first time in this repository's life.
+
+It confirmed §21.7 independently. Sweeping every shift from 15 to 261 and counting exact matches
+against the export reproduces the overnight run's table exactly:
+
+| column | best shift | exact |
+|---|---:|---:|
+| `absolute_return_one_month` | **21** | 265 / 271 |
+| `absolute_return_three_months` | **63** | 260 / 270 |
+| `absolute_return_six_months` | **120** | 256 / 270 |
+| `absolute_return_nine_months` | **183** | 250 / 269 |
+| `absolute_return_one_year` | **245** | 240 / 268 |
+
+At the documented base the counts are **0, 1, 0, 0, 0**.
+
+**Fixed spec-first, in the order §21.7 prescribed.** `docs/05` §1 was hand-edited from
+`P_{t-N}` to `P_{t-(N-1)}` — the base is the window's **first bar**, the calendar-offset window
+being inclusive of both endpoints — with the measurement table and CUPID's worked example in the
+document. Then one line of `baskfy_core.factors`: `shift(n)` → `shift(n - 1)`.
+
+**Two consequences followed, and both are real.**
+
+The **cross-validation oracle** disagreed, because `packages/core/tests/factor_oracle.py` is a
+deliberately naive re-implementation of the spec. It moves when the spec moves, never to chase the
+engine — updated with the same comment.
+
+More interestingly, a golden test broke: *"an instrument without a full window gets null"*.
+`docs/05` §Notation says a factor is "never computed on a short window, because that would break
+the shared-denominator property" — and that guarantee turned out to be held up by **the
+off-by-one itself**. With the base one bar before the window, a calendar holding exactly N days ran
+out of bars and produced a null by accident. Correcting the base removed the accident and exposed
+that **no actual check existed**. `FactorWindow.spans_full_window` is that check
+(`calendar_first <= calendar_start`), and short windows now null explicitly.
+
+**Suite after all of it: 1385 passed, 794 skipped — exactly the M0 baseline.**
+
+### M11.2 — The gate is NOT green, and the residual is one precisely-stated question ⚠ UNREVIEWED
+**6,934 of 9,166 compared cells still fail.** `absolute_return_one_month` reproduces; the rest do
+not, and the reason is no longer the base — it is the **window lengths**.
+
+Our calendar resolves 22 / **65** / **122** / 185 / 247 where `docs/13` §3 requires
+22 / **64** / **121** / 185 / 247 (M10.1). With the base at `length − 1`, a 3-month length of 65
+gives shift 64 where the export needs 63. **The two defects were coupled all along**: fixing the
+base alone cannot reproduce a window whose length is wrong.
+
+**An experiment settles what the answer looks like, and raises the cost of choosing it.** Making
+the window *exclusive* of the boundary day — snap forward strictly past the calendar offset —
+yields lengths 22/64/121/**184**/**246**, and `length − 1` then gives shifts
+**21/63/120/183/245**: *exactly* the five measured best shifts, from one rule rather than five
+fitted constants. Failures drop from 6,934 to **5,115**, the lowest of any configuration tried.
+
+But it breaks `positive_days_percent` at 9 and 12 months (0 → 271/271 failures), because those are
+the columns `docs/13` §3 used to **recover** N in the first place — by finding the minimal N making
+all 271 values integer multiples of 1/N. That method is rigorous, and it says 185 and 247.
+
+**So the return base and the positive-days denominator want windows that differ by one bar**, and
+`docs/05` and `docs/13` do not reconcile. That is a specification question about what the product
+computes for every user on every screen, not a debugging one.
+
+**Decided: stop here, keep the evidenced fix, do not guess the window rule.** The base correction
+is committed — one rule, five windows, overwhelming evidence, suite green. The boundary change is
+**reverted**, because it fits three columns by breaking two others and contradicts the only
+rigorous derivation anyone has of N. Choosing between them is Maulik's call.
+
+**Rule 7 applies: M13 does not open.** Rule 11 does — M15, M16, M17, M19, M20 and M18's
+script-building depend only on the code and the uploads corpus, not on these numbers, and the run
+continues there.
+
+### M11.3 — Nine columns are declared unverifiable, with their reasons
+Reported by the harness itself rather than dropped: `beta` (needs the NIFTY 50 level series —
+`index_snapshot_daily` holds 30 days, not the year `beta_12m` needs), `marketcap` (an optional
+*input*, never computed; nothing fetches fundamentals), `high_all_time` and
+`away_from_high_all_time` (need history from each listing date; ours starts 2024 — a running
+maximum wearing an all-time label, §21.2), and the five `circuits_*` columns (§19.6: the export
+carries a per-window count and no daily band, and more than one rule reproduces it).
+
+### M11.4 — The failure report now groups by column
+271 rows × ~60 columns meant the first forty failures were forty rows of one column. The assertion
+now prints a per-column count before the examples, which is what turned "7,319 cells failed" into a
+diagnosis. Small change; it is the reason the rest of this entry could be written.

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import Sequence
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -67,6 +68,31 @@ async def run_fetch_corporate_actions(
         outcome.note(since=since.isoformat(), unknown_symbols=unknown or None, touched=0)
         return set()
 
+    # NSE really does publish two distinct actions sharing this table's key. Observed on the first
+    # real backfill: SIYSIL announced "Scheme Of Arrangement - Bonus Ncrps 3:1" *and* "... 4:1" on
+    # the same ex-date, so `(instrument_id, 'bonus', 2026-08-21)` arrives twice in one file.
+    #
+    # docs/04 keys `corporate_action` on `(instrument_id, action_type, ex_date)`, which cannot
+    # represent that, and PostgreSQL refuses a single ON CONFLICT DO UPDATE whose VALUES contain
+    # the same key twice ("cannot affect row a second time") — so before this, one such
+    # announcement failed the *whole* fetch and no action for any instrument was written.
+    #
+    # Collapsing to the last occurrence is what sequential upserts would have produced. It is a
+    # lossy answer to a schema question (docs/DECISIONS.md §21.5) and it is therefore reported,
+    # never silent: `duplicate_keys` names every collision so a missed adjustment is visible.
+    last_index: dict[tuple[int, str, dt.date], int] = {}
+    collisions: list[str] = []
+    for index, value in enumerate(values):
+        key = (
+            int(str(value["instrument_id"])),
+            str(value["action_type"]),
+            cast(dt.date, value["ex_date"]),
+        )
+        if key in last_index:
+            collisions.append(f"{key[0]}:{key[1]}:{key[2].isoformat()}")
+        last_index[key] = index
+    values = [values[index] for index in sorted(last_index.values())]
+
     stmt = insert(CorporateAction).values(values)
     await session.execute(
         stmt.on_conflict_do_update(
@@ -92,5 +118,7 @@ async def run_fetch_corporate_actions(
         # Symbols NSE announces an action for that we have never listed. Usually a rename; worth
         # seeing, because a missed rename means a missed adjustment.
         unknown_symbols=unknown or None,
+        # Two announcements this table's key cannot tell apart; only one survived.
+        duplicate_keys=sorted(set(collisions)) or None,
     )
     return touched

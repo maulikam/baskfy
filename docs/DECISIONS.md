@@ -1587,3 +1587,201 @@ and consistent with §20.1: the public tier does not exist yet, so no plan can i
 lifecycle is not gated on it** — an account can create keys today, and they authenticate nothing
 until the public API is mounted. That is the honest arrangement for a feature whose credentials must
 be issuable and testable before the surface they open is legal to serve.
+
+---
+
+## Prompt 21 — The real backfill (2026-08-21)
+
+Taken with a human awake, not overnight. These are decisions about how the first real dataset was
+loaded, and every one of them is a departure from something `docs/09` says.
+
+### 21.1 Bars are ingested from the NSE bhavcopy, not from Kite
+
+`docs/09` §"Provider ports" is explicit: `KiteProvider` implements `BarsProvider.daily_bars`, and
+`bhavcopy` belongs to `NSEProvider` as a `ReferenceProvider` method — "incl. circuit bands,
+series". `docs/09` §Backfill sizes the bar backfill as "~2,300 instruments × 15 years", chunked per
+instrument and resumed from `ingest_cursor`. `decile_worker.backfill` implements exactly that and
+**is unchanged by this work**.
+
+`decile_worker.bhavcopy_backfill` is a second, additional path that reads the same bars out of the
+daily bhavcopy. **This is a deviation from `docs/09` and it is not a small one** — it changes which
+provider owns the most important table in the system.
+
+Two reasons, and the second is the one that matters.
+
+**It was necessary.** `DECILE_KITE_API_KEY` and `DECILE_KITE_API_SECRET` are empty and
+`DECILE_KITE_TOKEN_ENCRYPTION_KEY` is unset, so `make doctor` reports Kite DOWN and
+`decile_worker.backfill` raises "no provider offers daily_bars" before it fetches anything. With no
+credentials there is no Kite path to take.
+
+**It is better, for this engine.** The bhavcopy carries `turnover` and both circuit bands; Kite
+carries neither.
+
+* `docs/05` §13 says to use exchange turnover for `vol_day_val` and to "only fall back to close ×
+  volume when turnover is unavailable, and record which was used". Ingesting via Kite makes that
+  fallback unconditional — the *documented* preference is unreachable on the *documented* provider.
+  Via the bhavcopy it is the primary path, and `ohlcv_daily.turnover` is populated for every row.
+* `docs/05` §12's circuit detection is marked INFERRED precisely because no band is published to
+  compare against. The bhavcopy publishes `upper_circuit` and `lower_circuit` per row. That does
+  not by itself resolve §12 — `docs/DECISIONS.md` §19.6 shows the export cannot arbitrate the rule
+  — but it replaces a guessed input with an observed one.
+
+`ohlcv_daily` needed no migration: `source` already admits `'nse'`, and `turnover`,
+`upper_circuit` and `lower_circuit` are already columns. The schema anticipated this; only the
+ingest path did not.
+
+### 21.2 The bhavcopy cannot serve `docs/09`'s fifteen years, and the archive says so
+
+The NSE archive serves the UDiFF layout only. Measured: 2011-01-05, 2015-06-10, 2018-03-14 and
+2021-09-15 all return **404**; 2023-07-03 returns 404; **2024-01-02 returns 2,658 rows**. So the
+earliest bhavcopy is in the first days of 2024 and `docs/09` §Backfill's `--from 2011-01-01` cannot
+be honoured from this source at any price.
+
+Consequences, stated rather than discovered later:
+
+* The **fifteen-year backtest remains unrunnable**, and for a new reason. It was previously blocked
+  because `ohlcv_daily` was empty; it is now blocked because the history is ~2.6 years deep.
+* Anything depending on `high_all_time` is **wrong on this dataset**, not merely absent:
+  `decile_core.factors._with_price_levels` computes it as a `cum_max` over the supplied history, so
+  on a 2024-start series it is a 2024-onward maximum wearing an all-time label. This is why
+  `DECILE_PARITY_BARS_ARE_FULL_HISTORY` exists and why it is **not** set for this dataset.
+* `docs/01` §2.13's `DATA_START_DATE` is 2024-11-01, so the *product's* served window is covered
+  with ten months to spare. It is deep history, not the product, that this source cannot supply.
+
+When Kite credentials exist the right answer is **both**: `decile_worker.backfill` for depth,
+`decile_worker.bhavcopy_backfill` for the recent window's turnover and bands.
+
+### 21.3 Resumability is per-day upsert, not `ingest_cursor`
+
+`ingest_cursor`'s primary key is `(kind, instrument_id, window_start)` — it models per-instrument
+chunks, which is the shape Kite's per-instrument API forces. A bhavcopy backfill is a date loop
+over one file per day, so it has no instrument dimension to key on, and inventing a sentinel
+`instrument_id` would put rows in that table meaning something different from every other row in
+it.
+
+Instead this follows the model `decile_worker.reference_backfill` already uses and documents: each
+day commits in its own transaction and every write is an upsert, so an interrupted run is resumed
+by re-running the same range. That is cheaper here than it looks, because `docs/09` §"NSE
+specifics" requires every file to be archived before it is parsed — "Never re-fetch to re-parse:
+the archive is the reproducibility record" — so a resumed run reads the archive from disk.
+
+### 21.4 The synthetic fixture bars were deleted before the real load
+
+`ohlcv_daily` held 30,600 rows for 40 instruments across 765 dates — the Prompt 2 fixture's seeded
+random walks, which `tests/fixtures/providers/PROVENANCE.md` describes as "real symbols … every bar
+before 2026-08-18 is a seeded random walk". They carried `source = 'nse'`, so **nothing in the
+schema distinguished them from real bars**, and CUPID in particular had 765 bars of which 758 were
+invented.
+
+Leaving them would have mixed invented history into every path-dependent factor and produced a
+parity diff that looked like an engine defect. They were deleted before the real ingest rather than
+overwritten, because the fixture's 40 instruments are a subset of the real universe and an
+overwrite would have left the non-overlapping dates behind. `make seed` regenerates them.
+
+**This is worth a schema change that has not been made:** `source` cannot currently express
+"synthetic". A `fixture` value in the `ohlcv_daily_source` CHECK would have made the contamination
+visible instead of requiring someone to notice that 765 distinct dates had appeared from a
+seven-day ingest.
+
+### 21.5 `corporate_action` cannot represent two announcements sharing a key
+
+`docs/04` keys `corporate_action` on `(instrument_id, action_type, ex_date)`. NSE published two on
+the first real backfill: SIYSIL's "Scheme Of Arrangement - Bonus Ncrps 3:1" and "... 4:1", both
+`bonus`, both ex 2026-08-21. PostgreSQL refuses one `ON CONFLICT DO UPDATE` whose VALUES carry the
+same key twice, so **that single announcement failed the entire fetch** — no action for any
+instrument was written, for any date.
+
+`run_fetch_corporate_actions` now collapses to the last occurrence, which is what sequential
+upserts would have produced, and names every collision in the step's `duplicate_keys` note. That is
+a lossy answer to a schema question and it is deliberately loud rather than silent. The real fix is
+a key that admits both — a surrogate id, or `subject` in the key — and that is a `docs/04` change.
+
+### 21.6 `factor_daily`'s upsert chunk was sized in rows, not bind parameters
+
+`UPSERT_CHUNK = 2000` rows against a ~70-column table is 140,000 bound parameters, and PostgreSQL's
+wire protocol caps a statement at 32,767. Invisible against the 40-instrument fixture; fatal at the
+2,540 instruments a real NSE day carries. The row count is now derived from the payload's width.
+
+### 21.7 THE RETURN WINDOW IS OFF BY ONE BAR, AND THE EXPORT SAYS SO
+
+**This is the substantive finding of the first real parity run, and it is a `docs/05` problem.**
+
+`docs/05` §1 gives `ret_N = (P_t / P_{t-N} - 1) x 100`, and `decile_core.factors._with_window_factors`
+implements it literally — `pl.col("close").shift(n)` with `n = window.length`, commented "P_{t-N} is
+the bar before the window starts."
+
+Measured against all 271 rows of the reference export, on real NSE bars whose as-of OHLC reproduces
+the export exactly, the reference product's base is **one bar later**:
+
+| column | our shift | reference's shift | exact cells at the reference's shift |
+|---|---|---|---|
+| `absolute_return_one_month`    |  22 |  21 | 265 / 271 |
+| `absolute_return_three_months` |  65 |  63 | 260 / 270 |
+| `absolute_return_six_months`   | 122 | 120 | 256 / 270 |
+| `absolute_return_nine_months`  | 185 | 183 | 250 / 269 |
+| `absolute_return_one_year`     | 247 | 245 | 240 / 268 |
+
+At our shift the exact-match count is **0, 1, 0, 0, 0**. At the reference's it is 90-98%. CUPID is
+the worked example: published `ret_1m` 37.03 is `284.03 / 207.27 - 1` where 207.27 is the close 21
+bars back; 22 bars back is 214.78 and gives 32.24, which is what we currently store.
+
+So the reference counts a window of N bars **inclusive of both endpoints** — base `P_{t-(N-1)}` —
+while `docs/05` §1 as written counts N bars *before* t. Everything reading those windows inherits
+it: `sharpe_N` (a ratio of two of them), `vol_N`, `rsi_N`, `high_1y` and `away_from_high_1y` all
+fail at 271/271 today for this one reason.
+
+**The engine has not been changed.** `docs/05` is the source of truth and CLAUDE.md's house rule is
+to say so out loud rather than deviate quietly. This needs a hand-edit to `docs/05` §1 fixing the
+definition, and then a one-line change in `factors.py` — in that order.
+
+Two caveats on the residual, so nobody reads the 90-98% as "the rest is noise":
+
+* The exact-match rate **falls with the horizon** (98% at 1m to 90% at 12m), which is the shape
+  missing corporate actions produce: a longer window spans more unadjusted events. See §21.8.
+* 9m and 12m sit at shift `length - 2` where 1m/3m/6m sit at `length - 1`, so there is a further
+  one-day calendar discrepancy at the long end that this table does not explain and §21.9 records.
+
+### 21.8 NSE serves only a recent corporate-actions window, so the deep series are unadjusted
+
+`NSEProvider.corporate_actions(since)` returned **19 records for `since = 2024-01-01`** — the same
+19 it returns for `since = 2026-07-01`. The endpoint serves a current window and ignores how far
+back the caller asks. Only **4** of those have an ex-date on or before the 2026-08-18 as-of date.
+
+So `ohlcv_daily.close` is adjusted for four actions across two and a half years. Any split or bonus
+in between is **not** applied, and every factor whose window spans one is wrong by the ratio. This
+is the most likely explanation for the residual in §21.7 and it bounds what this dataset can prove.
+A historical corporate-actions source is now the single highest-value missing input.
+
+### 21.9 `apply_adjustments` applies actions with a *future* ex-date — a look-ahead
+
+Found by the parity harness's pre-flight, not by review. On the first run, 8 of the 271 as-of bars
+disagreed with the export by exactly a dividend amount:
+
+```
+ZENTEC.close     1981.4 vs 1982.4   delta 1.00   ZENTEC dividend Re 1,  ex 2026-08-21
+JINDALSTEL.close 1099.5 vs 1101.5   delta 2.00   JINDALSTEL dividend,   ex 2026-08-21
+```
+
+The as-of date is **2026-08-18**. `reprocess_instrument` adjusts an instrument's whole series for
+every action in `corporate_action`, with no upper bound on `ex_date`, so an action announced for
+three days *after* the as-of date rewrote that day's adjusted close. CLAUDE.md house rule 5 is "No
+look-ahead, ever", and this is one.
+
+It is not merely a parity nuisance. A backtest as of any past date reads a series adjusted for every
+action that has happened *since*, which is the same class of defect as `docs/DECISIONS.md` §15's
+`liquidation_day`. The dataset here was made point-in-time by deleting the future-dated actions
+before adjusting; **the code was not changed**, because the right fix is a decision about whether
+`ohlcv_daily.close` is a single "as of today" series or must be resolved per as-of date.
+
+### 21.10 Adjusting `open`/`high`/`low` is destructive: there is no raw counterpart
+
+`docs/04` gives `ohlcv_daily` a `close_raw` beside `close`, and **no `open_raw`, `high_raw` or
+`low_raw`** — but `reprocess_instrument` rewrites all four. So `close` can always be recovered and
+the other three cannot: resetting `close = close_raw, adj_factor = 1` (the obvious way to undo a bad
+adjustment) leaves `open`, `high` and `low` adjusted, with the factor that would have un-adjusted
+them already gone.
+
+Recovery here was only possible because `docs/09` §"NSE specifics" requires the raw file to be
+archived before it is parsed — re-running the ingest from `.archive` restored them with no network
+call. That is the archive earning its keep exactly as documented. It is still a schema gap: either
+store the three raw columns, or never rewrite the three adjusted ones.

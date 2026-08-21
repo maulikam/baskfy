@@ -23,10 +23,32 @@ symbol's real close (so `close` matches) but their path is invented, so every pa
 factor is necessarily different. And the suite is network-blocked by design (Prompt 2 acceptance
 criterion 1), so no amount of test code can fetch the real series.
 
-So :class:`TestFullRowReproduction` is written in full and **skips**, with the reason attached.
-It is not xfail and its tolerances are not widened — Prompt 5 is explicit: "Treat any column that
-cannot be reproduced as a specification bug to be investigated and documented, not as a test to be
-loosened." Point ``DECILE_PARITY_BARS`` at a Parquet file of real adjusted history and it runs.
+So :class:`TestStep2FullRowReproduction` is written in full and **skips**, with the reason
+attached. It is not xfail and its tolerances are not widened — Prompt 5 is explicit: "Treat any
+column that cannot be reproduced as a specification bug to be investigated and documented, not as
+a test to be loosened."
+
+WHAT A BAR SERIES ALONE DOES NOT BUY YOU
+-----------------------------------------
+This paragraph used to end "point ``DECILE_PARITY_BARS`` at a Parquet of real adjusted history and
+it runs", which was **false**, and nobody found out because a skipped test is never executed. Four
+of the mapped columns cannot be reproduced from adjusted bars at all:
+
+* ``beta`` — ``compute_factors`` takes the benchmark as an *argument*. The comparison did not pass
+  one, so every ``beta_12m`` was NULL by construction and 271 cells would have failed against a
+  NULL this file itself produced. See :data:`BENCHMARK_ENV_VAR`.
+* ``marketcap`` — ``marketcap_cr`` is an *optional input* to the engine, never a computed output,
+  and nothing in docs/03 fetches fundamentals. Another 271 guaranteed failures.
+* ``high_all_time`` / ``away_from_high_all_time`` — ``high_ath`` is a ``cum_max`` over whatever
+  history it is handed, so on 248 days it is a 248-day maximum wearing an all-time label.
+
+Each is now declared in :data:`NEEDS_EXTRA_INPUT` and *reported as unchecked* until its input
+arrives, rather than being compared against a NULL or dropped in silence. Supplying the input
+compares it at full precision — the registry shrinks as the data improves, and
+:func:`test_supplying_every_input_would_leave_nothing_unchecked` stops it becoming a permanent
+excuse. The five ``circuits_*`` columns had no tolerance entry at all and were being dropped
+through an absent dict key; they are now declared in :data:`UNRESOLVED_DEFINITION`, and
+:func:`test_every_mapped_column_is_checked_or_explained` makes that impossible to repeat.
 
 **Known to be unreproducible even with the data (documented, not hidden).**
 docs/05 §8 already records that ``ret_12m_minus_1m`` / ``ret_12m_minus_2m`` do not reconcile:
@@ -63,7 +85,25 @@ AS_OF: Final = dt.date(2026, 8, 18)
 #: Where a caller can supply the real adjusted history that step 2 needs.
 BARS_ENV_VAR: Final = "DECILE_PARITY_BARS"
 
+#: Where a caller can supply the NIFTY 50 level series docs/05 §6 measures beta against.
+#: ``compute_factors`` takes the benchmark as a *parameter*, not as a column on the bars, so
+#: without this every ``beta_12m`` is NULL by construction (``decile_core.factors._with_beta``).
+BENCHMARK_ENV_VAR: Final = "DECILE_PARITY_BENCHMARK"
+
+#: Set when the supplied bars begin at each symbol's listing date. ``high_ath`` is a ``cum_max``
+#: over whatever history it is given (``decile_core.factors`` §``_with_price_levels``), so on a
+#: truncated series it is the window maximum wearing an all-time label — wrong, and quietly so.
+FULL_HISTORY_ENV_VAR: Final = "DECILE_PARITY_BARS_ARE_FULL_HISTORY"
+
+#: The five window suffixes the export names, in the export's own order.
+WINDOW_SUFFIXES: Final = ("one_year", "nine_months", "six_months", "three_months", "one_month")
+
 #: docs/05 §8 — known not to reconcile, and why. Listed, never silently skipped.
+#:
+#: Keyed by *model* column. Note that neither appears in ``FACTOR_COLUMN_MAP``: the 93-column
+#: export carries no skip-month column at all, so the guard that consults this in the comparison
+#: below can never actually fire. It is kept because the day a skip-month column is mapped, the
+#: exclusion must already be in place and documented rather than being discovered by a failure.
 KNOWN_UNRECONCILED: Final[dict[str, str]] = {
     "ret_12m_minus_1m": (
         "docs/05 §8: the reference product's published value (608.37 for CUPID) does not "
@@ -71,6 +111,55 @@ KNOWN_UNRECONCILED: Final[dict[str, str]] = {
     ),
     "ret_12m_minus_2m": ("docs/05 §8: same — published 852.21 for CUPID, unreconciled"),
 }
+
+#: Mapped columns the comparison cannot check from a bar series alone, and the input each needs.
+#: Keyed by *export* column, like :data:`COLUMN_TOLERANCE`.
+#:
+#: Nothing here is a tolerance being loosened. Each column is compared at full precision the
+#: moment its input is supplied; until then it is *reported as unchecked*, which is the honest
+#: statement. Before this existed, ``beta`` and ``marketcap`` were compared against a NULL the
+#: harness itself guaranteed, so the decisive test could not have passed on any input.
+NEEDS_EXTRA_INPUT: Final[dict[str, str]] = {
+    "marketcap": (
+        "needs shares outstanding. `marketcap_cr` is an OPTIONAL INPUT to compute_factors "
+        "(decile_core.factors.OPTIONAL_COLUMNS), never a computed output, and no step in docs/03 "
+        "fetches fundamentals — CLAUDE.md carries this as an open item. Put a `marketcap_cr` "
+        f"column on the {BARS_ENV_VAR} frame and it is checked at full precision."
+    ),
+    "beta": (
+        "needs the NIFTY 50 level series (docs/05 §6: Cov/Var against the benchmark). Point "
+        f"{BENCHMARK_ENV_VAR} at a Parquet of (date, close) and it is checked at full precision."
+    ),
+    "high_all_time": (
+        "needs history from the listing date, not the 248 trading days the window factors need. "
+        f"Set {FULL_HISTORY_ENV_VAR}=1 once the supplied bars go back that far."
+    ),
+    "away_from_high_all_time": (
+        f"derived from high_all_time; same requirement. Set {FULL_HISTORY_ENV_VAR}=1."
+    ),
+}
+
+#: Mapped columns whose *definition* the repository cannot settle, so a mismatch would not tell
+#: us the engine is wrong. docs/05 §12 marks circuit detection INFERRED and
+#: docs/DECISIONS.md §19.6 records that the export cannot arbitrate it — it publishes a circuit
+#: *count* per window and no daily band, so many detection rules reproduce any given count.
+#:
+#: These five had no :data:`COLUMN_TOLERANCE` entry, so the comparison dropped them through an
+#: absent dict key and said nothing. That is the hole
+#: :func:`test_every_mapped_column_is_checked_or_explained` now closes.
+UNRESOLVED_DEFINITION: Final[dict[str, str]] = {
+    f"circuits_{suffix}": (
+        "docs/05 §12 circuit detection is INFERRED and docs/DECISIONS.md §19.6 records it as "
+        "unresolvable from this export: the file carries a per-window count and no daily circuit "
+        "band, and more than one detection rule reproduces the same count"
+    )
+    for suffix in WINDOW_SUFFIXES
+}
+
+#: Export columns that are *inputs* to the engine rather than outputs of it, so the row-by-row
+#: comparison does not map them. They are checked instead by the pre-flight on the data itself,
+#: ``TestStep2FullRowReproduction.test_the_supplied_bars_agree_with_the_export_on_the_as_of_day``.
+RAW_INPUT_COLUMNS: Final = ("open", "high", "low")
 
 #: The tolerance each column's stored precision implies: half of its last decimal place
 #: (docs/13 §5: "within the tolerance implied by its stored precision").
@@ -531,8 +620,14 @@ class TestStep6ExportShape:
 def _load_real_bars() -> pl.DataFrame | None:
     """Real adjusted history, if a caller has supplied it.
 
-    Expected columns: ``symbol``, ``date``, ``close``, ``close_raw``, ``high``, ``low``,
-    ``volume_raw``, and optionally ``turnover``, ``upper_circuit``, ``lower_circuit``.
+    Required columns: ``symbol``, ``date``, ``close`` (**adjusted**), ``close_raw``, ``high``,
+    ``low``, ``volume_raw``. Optional: ``turnover``, ``upper_circuit``, ``lower_circuit``,
+    ``series``, ``marketcap_cr``, ``pe`` — each checked only when present, see
+    :data:`NEEDS_EXTRA_INPUT`.
+
+    ``close`` must be the adjusted series. A provider that returns the exchange print — Kite does,
+    per docs/09: "Treat everything from Kite as raw" — has to go through
+    ``decile_core.adjustments`` first, or every path-dependent factor is measured across a split.
     """
     path = os.environ.get(BARS_ENV_VAR)
     if not path:
@@ -543,6 +638,45 @@ def _load_real_bars() -> pl.DataFrame | None:
     return pl.read_parquet(file)
 
 
+def _load_benchmark() -> pl.DataFrame | None:
+    """The NIFTY 50 level series docs/05 §6 measures beta against, if supplied.
+
+    Expected columns: ``date`` and ``close``.
+    """
+    path = os.environ.get(BENCHMARK_ENV_VAR)
+    if not path:
+        return None
+    file = Path(path)
+    if not file.is_file():
+        raise FileNotFoundError(f"{BENCHMARK_ENV_VAR} points at {file}, which does not exist")
+    return pl.read_parquet(file)
+
+
+def _full_history_declared() -> bool:
+    """Whether the caller states the bars reach back to each symbol's listing date."""
+    return os.environ.get(FULL_HISTORY_ENV_VAR, "") not in ("", "0", "false", "False")
+
+
+def _unchecked_columns(bars: pl.DataFrame, benchmark: pl.DataFrame | None) -> dict[str, str]:
+    """Which mapped columns this particular invocation cannot compare, and why.
+
+    Computed from what the caller actually supplied, so supplying more shrinks it. Reported in
+    full by the comparison rather than being dropped, which is the difference between "we did not
+    check marketcap because nothing can compute it" and silence.
+    """
+    unchecked = dict(UNRESOLVED_DEFINITION)
+    for column, reason in NEEDS_EXTRA_INPUT.items():
+        supplied = {
+            "marketcap": "marketcap_cr" in bars.columns,
+            "beta": benchmark is not None and benchmark.height > 0,
+            "high_all_time": _full_history_declared(),
+            "away_from_high_all_time": _full_history_declared(),
+        }[column]
+        if not supplied:
+            unchecked[column] = reason
+    return unchecked
+
+
 REAL_BARS_REASON: Final = (
     f"{BARS_ENV_VAR} is not set. docs/13 §5 step 2 reproduces every numeric column of all 271 "
     "rows, which requires each instrument's adjusted daily closes for the 248 trading days ending "
@@ -550,7 +684,10 @@ REAL_BARS_REASON: Final = (
     "of results — and the suite makes no network calls (Prompt 2 acceptance criterion 1). The "
     "Prompt 2 provider fixtures are seeded random walks: they end on each symbol's real close but "
     "their path is invented, so every path-dependent factor differs by construction. Point "
-    f"{BARS_ENV_VAR} at a Parquet file of real adjusted history and this test runs."
+    f"{BARS_ENV_VAR} at a Parquet file of real adjusted history to run it. Four columns need more "
+    f"than a bar series and are reported as unchecked until they get it: see NEEDS_EXTRA_INPUT "
+    f"({BENCHMARK_ENV_VAR} for beta, {FULL_HISTORY_ENV_VAR} for the all-time high, a "
+    "`marketcap_cr` column for marketcap)."
 )
 
 
@@ -560,9 +697,54 @@ class TestStep2FullRowReproduction:
     widened, per Prompt 5: "Treat any column that cannot be reproduced as a specification bug to
     be investigated and documented, not as a test to be loosened"."""
 
+    def test_the_supplied_bars_agree_with_the_export_on_the_as_of_day(
+        self, export: pl.DataFrame
+    ) -> None:
+        """Pre-flight on the *data*, before any factor is believed.
+
+        The export publishes each instrument's own OHLC for 2026-08-18. If the supplied series
+        disagrees there, the series is the wrong thing — the exchange print where the adjusted
+        close was wanted, a mis-resolved symbol, a shifted calendar — and every factor failure
+        after it would be a story about the input dressed up as a story about the engine. This is
+        why it is a separate test: it fails first, and it fails legibly.
+        """
+        bars = _load_real_bars()
+        assert bars is not None
+        as_of_bars = bars.filter(pl.col("date") == AS_OF)
+        by_symbol = {row["symbol"]: row for row in as_of_bars.iter_rows(named=True)}
+
+        columns = [c for c in (*RAW_INPUT_COLUMNS, "close") if c in bars.columns]
+        assert columns, f"the {BARS_ENV_VAR} frame carries none of {(*RAW_INPUT_COLUMNS, 'close')}"
+
+        failures: list[str] = []
+        for row in export.iter_rows(named=True):
+            mine = by_symbol.get(row["symbol"])
+            if mine is None:
+                failures.append(f"{row['symbol']}: no bar on {AS_OF.isoformat()}")
+                continue
+            for column in columns:
+                published, ours = row.get(column), mine.get(column)
+                if published is None or ours is None:
+                    continue
+                tolerance = COLUMN_TOLERANCE[column]
+                delta = abs(Decimal(str(ours)) - Decimal(str(published)))
+                if delta > tolerance:
+                    failures.append(
+                        f"{row['symbol']}.{column}: supplied {ours} vs published {published} "
+                        f"(delta {delta}, tolerance {tolerance})"
+                    )
+
+        assert failures == [], (
+            f"{len(failures)} of the supplied bars disagree with the export on "
+            f"{AS_OF.isoformat()}. The input is wrong; do not read the factor comparison until "
+            "this passes.\n" + "\n".join(failures[:40])
+        )
+
     def test_every_numeric_column_of_every_row_reproduces(self, export: pl.DataFrame) -> None:
         bars = _load_real_bars()
         assert bars is not None
+        benchmark = _load_benchmark()
+        unchecked = _unchecked_columns(bars, benchmark)
         trading_days = sorted(set(bars["date"].to_list()))
 
         symbols = {
@@ -572,10 +754,14 @@ class TestStep2FullRowReproduction:
             pl.col("symbol").replace_strict(symbols, default=None).alias("instrument_id")
         ).drop_nulls("instrument_id")
 
-        result = compute_factors(prepared, AS_OF, trading_days)
+        # docs/05 §6's beta is measured against a benchmark passed as an argument, not carried on
+        # the bars. Omitting it does not skip beta — it NULLs it, and the comparison below then
+        # reports 271 phantom failures against a NULL this harness itself produced.
+        result = compute_factors(prepared, AS_OF, trading_days, benchmark)
         computed = {int(row["instrument_id"]): row for row in result.frame.iter_rows(named=True)}
 
         failures: list[str] = []
+        compared = 0
         for row in export.iter_rows(named=True):
             ours = computed.get(symbols[row["symbol"]])
             if ours is None:
@@ -584,13 +770,16 @@ class TestStep2FullRowReproduction:
             for export_column, model_column in FACTOR_COLUMN_MAP.items():
                 if export_column in ("series",) or model_column in KNOWN_UNRECONCILED:
                     continue
-                tolerance = COLUMN_TOLERANCE.get(export_column)
-                if tolerance is None or row[export_column] is None:
+                if export_column in unchecked:
+                    continue
+                tolerance = COLUMN_TOLERANCE[export_column]
+                if row[export_column] is None:
                     continue
                 mine = ours.get(model_column)
                 if mine is None:
                     failures.append(f"{row['symbol']}.{export_column}: computed NULL")
                     continue
+                compared += 1
                 delta = abs(Decimal(str(mine)) - Decimal(str(row[export_column])))
                 if delta > tolerance:
                     failures.append(
@@ -598,7 +787,12 @@ class TestStep2FullRowReproduction:
                         f"(delta {delta}, tolerance {tolerance})"
                     )
 
-        assert failures == [], f"{len(failures)} cells failed:\n" + "\n".join(failures[:40])
+        report = "\n".join(f"  {column}: {reason}" for column, reason in sorted(unchecked.items()))
+        assert failures == [], (
+            f"{len(failures)} cells failed ({compared} compared; "
+            f"{len(unchecked)} columns not checked:\n{report}\n)\n" + "\n".join(failures[:40])
+        )
+        assert compared > 0, f"nothing was compared. Columns not checked:\n{report}"
 
 
 def test_the_unreconciled_columns_are_documented() -> None:
@@ -608,7 +802,88 @@ def test_the_unreconciled_columns_are_documented() -> None:
         assert "docs/05 §8" in reason
 
 
+def test_every_mapped_column_is_checked_or_explained() -> None:
+    """No column may leave the comparison silently.
+
+    THE HOLE THIS CLOSES. The comparison read its tolerance with ``COLUMN_TOLERANCE.get(...)``
+    and skipped the column when that returned ``None``. Five columns had no entry — every
+    ``circuits_*`` window — so they were dropped by an absent dict key, with nothing anywhere
+    recording that they were unverified. Adding a factor to ``FACTOR_COLUMN_MAP`` and forgetting
+    its tolerance silently shrank the decisive test.
+
+    So each mapped column must now sit in exactly one bucket, and the buckets are exhaustive.
+    """
+    for column in FACTOR_COLUMN_MAP:
+        if column == "series":  # a string label, not a number to reproduce
+            continue
+        if column in UNRESOLVED_DEFINITION:
+            # Never compared, so it needs no tolerance — and must not carry one, or a reader
+            # would reasonably conclude it is being checked.
+            assert column not in COLUMN_TOLERANCE, (
+                f"{column!r} is declared definition-unresolved yet carries a tolerance, which "
+                "reads as though the comparison checks it"
+            )
+            continue
+        assert column in COLUMN_TOLERANCE, (
+            f"{column!r} is mapped but has no COLUMN_TOLERANCE entry, so the comparison drops it "
+            "in silence. Give it the tolerance its stored precision implies, or declare it in "
+            "UNRESOLVED_DEFINITION with the docs section that argues why."
+        )
+
+    # A column needing an extra input is still compared the moment that input arrives, so it must
+    # carry a real tolerance too. This is what stops NEEDS_EXTRA_INPUT becoming a way out.
+    for column in NEEDS_EXTRA_INPUT:
+        assert column in COLUMN_TOLERANCE, (
+            f"{column!r} needs an extra input but has no tolerance, so supplying that input would "
+            "still not compare it"
+        )
+        assert column in FACTOR_COLUMN_MAP, f"{column!r} is not a mapped column"
+
+
+def test_the_columns_needing_more_than_bars_each_name_their_input() -> None:
+    """A reason a reader cannot act on is decoration. Each must name the input that unblocks it."""
+    assert set(NEEDS_EXTRA_INPUT) == {
+        "marketcap",
+        "beta",
+        "high_all_time",
+        "away_from_high_all_time",
+    }
+    assert BENCHMARK_ENV_VAR in NEEDS_EXTRA_INPUT["beta"]
+    assert "marketcap_cr" in NEEDS_EXTRA_INPUT["marketcap"]
+    for column in ("high_all_time", "away_from_high_all_time"):
+        assert FULL_HISTORY_ENV_VAR in NEEDS_EXTRA_INPUT[column]
+
+
+def test_the_unresolved_definitions_cite_where_they_were_argued() -> None:
+    """docs/05 §12 is INFERRED and docs/DECISIONS.md §19.6 is where that was concluded."""
+    assert set(UNRESOLVED_DEFINITION) == {f"circuits_{suffix}" for suffix in WINDOW_SUFFIXES}
+    for reason in UNRESOLVED_DEFINITION.values():
+        assert "docs/05 §12" in reason
+        assert "§19.6" in reason
+
+
+def test_supplying_every_input_would_leave_nothing_unchecked() -> None:
+    """The registry must be a statement about *this run's inputs*, never a permanent excuse.
+
+    Asserts that a caller who supplies a benchmark, a ``marketcap_cr`` column and full history has
+    an unchecked set containing only the genuinely unresolvable circuit columns — so
+    :data:`NEEDS_EXTRA_INPUT` cannot quietly become a place columns go to die.
+    """
+    fully_supplied = pl.DataFrame({"marketcap_cr": [1.0]})
+    benchmark = pl.DataFrame({"date": [AS_OF], "close": [1.0]})
+    os.environ[FULL_HISTORY_ENV_VAR] = "1"
+    try:
+        unchecked = _unchecked_columns(fully_supplied, benchmark)
+    finally:
+        del os.environ[FULL_HISTORY_ENV_VAR]
+    assert set(unchecked) == set(UNRESOLVED_DEFINITION)
+
+
 def test_the_decisive_test_is_skipped_for_a_stated_reason() -> None:
     """A skip nobody can see is a lie. This asserts the reason is present and specific."""
     assert BARS_ENV_VAR in REAL_BARS_REASON
     assert "no price history" in REAL_BARS_REASON
+    # The reason used to end "point BARS at a Parquet and this test runs", which was false: beta
+    # and marketcap could not have passed on any input. It must now say what else is needed.
+    assert BENCHMARK_ENV_VAR in REAL_BARS_REASON
+    assert FULL_HISTORY_ENV_VAR in REAL_BARS_REASON

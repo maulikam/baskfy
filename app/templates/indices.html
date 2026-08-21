@@ -5,8 +5,12 @@
 {% block heading_aside %}
   {% if v.stale %}
     <span class="sc-badge sc-badge--warn">NSE unreachable — showing last good board</span>
-  {% elif v.fetched_at %}
-    <span class="sc-badge sc-badge--mute">NSE {{ v.fetched_at }}</span>
+  {% else %}
+    {% if v.fetched_at %}<span class="sc-badge sc-badge--mute">NSE {{ v.fetched_at }}</span>{% endif %}
+    {% if v.eod_only %}
+      <span class="sc-badge sc-badge--info" title="NSE quotes {{ v.live_count }} indices live; the rest come from its daily close report.">
+        {{ v.live_count }} live · {{ v.eod_only }} EOD</span>
+    {% endif %}
   {% endif %}
   <a class="sc-btn sc-btn--ghost sc-btn--sm" href="/indices">Refresh</a>
 {% endblock %}
@@ -26,6 +30,7 @@
   <div class="sc-card__h">
     <h2 id="hero-name">{{ v.selected.name if v.selected else '—' }}</h2>
     <div class="flex items-center gap-2">
+      <span class="sc-badge sc-badge--info" id="hero-eod" hidden></span>
       <span class="sc-badge sc-badge--mute" id="hero-family"></span>
       <button class="sc-btn sc-btn--secondary sc-btn--sm" id="hero-stocks" type="button">
         Show constituents
@@ -153,8 +158,13 @@
 </section>
 
 <p class="mt-4 text-[12px] leading-relaxed text-ink-3">
-  Index levels, P/E, P/B, dividend yield and the advance/decline counts come from NSE's
-  public board. Constituent lists come from NSE's index archive and are cached for a month —
+  The list is NSE's daily index close report, which covers every published index; NSE's live
+  board is layered on top of it for the {{ v.live_count }} indices it quotes intraday, adding
+  the current level, the 52-week range, the 1-year and 30-day returns and the advance/decline
+  counts. The {{ v.eod_only }} rows marked <b>EOD</b> — Sugar &amp; Ethanol, NBFC, Insurance,
+  Power, Capital Goods, Hospitals and the corporate-group indices among them — are not quoted
+  intraday at all, so they show the last published close{% if v.close_as_of %} ({{ v.close_as_of }}){% endif %}
+  rather than a live figure. Constituent lists come from the same archive and are cached for a month —
   they change at a semi-annual review, and NSE blocks a client that asks too often, so a
   list is fetched only when you open it. Per-stock prices come from Kite and need a live
   broker session; scores come from the desk's own latest scan, which covers the screened
@@ -216,6 +226,11 @@
     selected = r;
     el("hero-name").textContent = r.name;
     el("hero-family").textContent = r.family;
+    // NSE does not quote every index intraday. For one it only publishes in the daily
+    // close report, say whose close this is rather than letting it read as today's move.
+    const eod = el("hero-eod");
+    eod.hidden = r.source !== "eod";
+    eod.textContent = r.source === "eod" ? "Close of " + (r.as_of || "the last session") : "";
     el("hero-last").textContent = n2(r.last);
     const chg = el("hero-chg");
     chg.textContent = sgn(r.change);
@@ -397,7 +412,11 @@
           ${r.drillable ? 'tabindex="0" role="button" aria-expanded="false"' : ""}>
         <td class="sym">
           <span class="idx-caret ${r.drillable ? "" : "invisible"}" aria-hidden="true">›</span>
-          <span class="idx-chip">${r.family}</span> ${esc(r.name)}</td>
+          <span class="idx-chip">${r.family}</span> ${esc(r.name)}
+          ${r.source === "eod"
+            ? `<span class="idx-chip" style="border-color:var(--color-link);color:var(--color-link)"
+                 title="Not quoted intraday by NSE — this is the close of ${esc(r.as_of || "the last session")}">EOD</span>`
+            : ""}</td>
         <td class="r num">${n2(r.last)}</td>
         <td class="r num ${dir(r.pct)}">${sgn(r.change)}</td>
         <td class="r num ${dir(r.pct)}">${r.pct === null ? "—" : sgn(r.pct) + "%"}</td>

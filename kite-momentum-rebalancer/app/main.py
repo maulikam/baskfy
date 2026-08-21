@@ -93,7 +93,33 @@ def _apply_stored_settings() -> None:
         logging.warning("could not apply stored settings: %s", exc)
 
 
+def _log_risk_ceilings() -> None:
+    """Print the risk ceilings in force, once, at startup.
+
+    These four moved out of the settings page on 22 Aug 2026 (docs/03 §3f -- a ceiling a
+    user can raise is not a ceiling). That removed the settings_audit row that used to
+    record every change, so this replaces it: the values in force are stated at every boot,
+    which means `journalctl -u momentum-web` still answers "what were the limits on the day
+    of that trade?" from the machine's own record rather than from memory.
+
+    Percentages and multiples only -- no NAV, no rupee amounts, nothing account-identifying.
+    """
+    try:
+        from . import config as C
+        logging.info(
+            "risk ceilings in force (env-only, not editable from /settings): "
+            "daily_loss=%.2f%% position_headroom=%.2fx gross_multiple=%.2fx "
+            "max_orders_per_day=%d max_position_value=%s max_gross_exposure=%s",
+            C.RISK_MAX_DAILY_LOSS_PCT, C.RISK_POSITION_HEADROOM, C.RISK_GROSS_MULTIPLE,
+            C.RISK_MAX_ORDERS_PER_DAY,
+            C.RISK_MAX_POSITION_VALUE or "derived", C.RISK_MAX_GROSS_EXPOSURE or "derived",
+        )
+    except Exception as exc:                                    # never block a boot on a log
+        logging.warning("could not report risk ceilings: %s", exc)
+
+
 _apply_stored_settings()
+_log_risk_ceilings()
 
 PLANS: dict[str, dict] = {}          # plan_id -> plan (in-memory, session-scoped)
 _kite: Kite | None = None

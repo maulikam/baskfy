@@ -21,16 +21,17 @@
     <code>.env</code>.</span>
 </div>
 
-<form method="post" action="/settings">
-  {#- names the checkboxes this form rendered, so an absent one means "unchecked"
-      rather than being applied to every boolean the system has -#}
-  <input type="hidden" name="_form_bools"
-         value="{{ eff.values() | selectattr('spec.kind','equalto','bool')
-                   | map(attribute='spec.key') | join(',') }}">
-  {% for group in groups %}
-  <section>
-    <h2>{{ group }}</h2>
-    {% if group == 'Risk limits' and risk %}
+{# The risk ceilings are NOT editable here (docs/03 §3f; DECISIONS-MERGE.md M4.1) --
+   a ceiling a user can raise is not a ceiling. They live in .env and take a restart. This
+   block still SHOWS what they resolve to, because being unable to change a limit is no
+   reason to be unable to see it; the effective values are also logged at every startup. #}
+{% if risk %}
+<section>
+  <h2>Risk limits</h2>
+  <p class="help" style="margin:-6px 0 10px">Not editable from this page. These bound how much
+    can be lost and how fast orders can leave, so they are set in <code>.env</code> and take a
+    restart &mdash; a deliberate act on the machine that runs the desk. The values in force are
+    written to the log at every startup.</p>
       {# A percentage is not a decision. These limits are all derived from NAV, so the
          number in the field means nothing until it is multiplied out. #}
       <div class="card" style="margin-bottom:12px">
@@ -66,7 +67,18 @@
             falls back to fixed defaults that have nothing to do with your book.</p>
         {% endif %}
       </div>
-    {% endif %}
+</section>
+{% endif %}
+
+<form method="post" action="/settings">
+  {#- names the checkboxes this form rendered, so an absent one means "unchecked"
+      rather than being applied to every boolean the system has -#}
+  <input type="hidden" name="_form_bools"
+         value="{{ eff.values() | selectattr('spec.kind','equalto','bool')
+                   | map(attribute='spec.key') | join(',') }}">
+  {% for group in groups %}
+  <section>
+    <h2>{{ group }}</h2>
     <div class="card">
       {% for key, e in eff.items() %}
         {% if e.spec.group == group %}

@@ -243,3 +243,71 @@ custom format, 76 table-data entries, `pg_restore -l` verified).
 > `make up` under the renamed compose creates a *new* volume; the 1.1M bars would be stranded in
 > the old one — recoverable, but only if someone remembers they are there. This note is that
 > reminder.
+
+---
+
+## M4
+
+### M4.1 — Four risk ceilings are editable from the desk's browser today, and `docs/03` §3f says they must not be
+**The case.** M4 step 3 asks for "a test asserting no system-only risk constant (`RISK_*`, rate
+caps, kill switch) is reachable from any user-facing settings route in either app". The test is
+written (`kite-momentum-rebalancer/tests/test_settings_boundary.py`) and **it fails 5 of 12**:
+
+| Assertion | Result |
+|---|---|
+| Credentials (`KITE_API_KEY`, `KITE_API_SECRET`) never editable | **passes** — `SECRET_KEYS` |
+| Safety switches (`DRY_RUN`, `INTRADAY_ENABLED`, `OPTIONS_ENABLED`) env-only | **passes** — `LOCKED_KEYS` |
+| `RISK_MAX_POSITION_VALUE`, `RISK_MAX_GROSS_EXPOSURE` not editable | **passes** — no `Spec` |
+| `RISK_POSITION_HEADROOM`, `RISK_GROSS_MULTIPLE`, `RISK_MAX_DAILY_LOSS_PCT`, `RISK_MAX_ORDERS_PER_DAY` | **FAIL — all four are `Spec`s in the "Risk limits" group on `/settings`** |
+
+`RISK_MAX_DAILY_LOSS_PCT` is the kill switch; the desk's own `.env.example` annotates it
+*"kill switch: halts trading for the day at this loss"*. `docs/03` §3f names this exact variable:
+*"This split is a security boundary, not a preference: `RISK_MAX_DAILY_LOSS_PCT` must not become a
+form field."* It is one.
+
+**Why this is not simply a defect.** `app/analytics/settings.py` is not careless — its docstring
+reasons explicitly about what to lock and locks credentials, the safety switches and the scoring
+weights, giving a reason for each. Leaving the risk ceilings editable was a choice for a
+**single-operator desk**, where the user *is* the administrator and nothing is escalated by
+raising your own ceiling. The four knobs have typed validation, range checks and a
+`settings_audit` row per change. Under multi-tenancy (P4) the same form is privilege escalation.
+
+**Facts that bear on the choice.** No `RISK_*` override is stored — `settings` holds exactly one
+row, `REGIME_ENABLED=true` — so locking these changes nothing that is currently in force, and the
+operator would still change them in `.env` plus a restart. The four are also rendered as a "Risk
+limits" group in `settings.html` and echoed by a derived block in `settings.py` (~line 439), so
+locking them is a UI change, not only a constant move.
+
+**SETTLED (Maulik, 22 Aug 2026): lock all four.** Carried into `MERGE-PROMPTS.md`
+§"Decisions already taken". Not `⚠ UNREVIEWED` — this one was answered directly.
+
+**What was done**
+
+1. All six `RISK_*` keys moved to `settings.LOCKED_KEYS`; the four `Spec`s dropped, which removes
+   the editable "Risk limits" form group with them. `save()` already refused locked keys, so the
+   write path needed no change.
+2. `settings.py`'s own "WHAT IS NOT EDITABLE HERE, AND WHY" docstring extended to say so — the
+   module explains its other locks and would have been silently wrong about this one.
+3. **The read-only preview was kept, and had to be rescued.** `settings.html` rendered it inside
+   `{% if group == 'Risk limits' and risk %}` within the group loop, so deleting the Specs deleted
+   the *display* too — three tests caught it. It is now its own section above the form: being
+   unable to change a limit is no reason to be unable to see it.
+4. **Compensating control for the lost audit row.** `app.main._log_risk_ceilings()` writes the
+   values in force at every startup, so `journalctl -u momentum-web` still answers "what were the
+   limits on the day of that trade?" from the machine's record. Percentages and multiples only —
+   no NAV, no rupee figures, nothing account-identifying.
+5. `tests/test_settings_boundary.py` grew two page-level assertions: no `RISK_*` renders as an
+   input, and the ceilings are still displayed. A form that renders a field it will then refuse is
+   worse than one that does not, and it invites someone to "fix" the refusal later.
+
+**Empirical basis that made this safe.** The `settings` table holds exactly one row —
+`REGIME_ENABLED=true`, set 15 Aug 2026 — and `settings_audit` one matching entry. **No `RISK_*`
+override has ever been stored**, so every one of the four was already running on its `.env`/code
+default and nothing in force changed. Reversal is cheap: restore the four `Spec`s and remove the
+keys from `LOCKED_KEYS`.
+
+**Reaches the live desk on the next *deliberate* `git pull`, non-trading hours only.** The Mumbai
+box runs the pre-lock layout until then. After it lands, changing a ceiling is `.env` + `systemctl
+restart momentum-web` — and the new value appears in the log.
+
+**Suite:** 1544 passed, 1 failed (the known M0 plist artifact, M6's to remove from the gates).

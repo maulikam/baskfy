@@ -4,7 +4,12 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M4 · **State:** running
+**Run started:** 22 Aug 2026 · **Current module:** M5 · **State:** running autonomously
+
+Since 22 Aug 2026 this is an **autonomous run** under `CLAUDE.md` §Autonomy charter:
+judgement calls are decided, recorded in `DECISIONS-MERGE.md` (tagged `⚠ UNREVIEWED`
+where nobody has reviewed them) and the run continues. Anything only Maulik can supply
+is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around it.
 
 ---
 
@@ -16,8 +21,8 @@ that culture continues here.
 | M1 | Umbrella repo (subtree) | ✅ done | 22 Aug 2026 | One repo at the root; 117 commits; both histories reachable from HEAD. `--follow` does not prove it — see M1.1 for the commands that do |
 | M2 | The rename | ✅ done | 22 Aug 2026 | 425 files, 2347+/2347−. Namespaces are Baskfy's; the D1–D6 vocabulary is kept by design. Enforced by `tools/check-namespace.sh` (M2.1) |
 | M3 | Working agreement + status page | ✅ done | 22 Aug 2026 | Root CLAUDE.md absorbed the screener's nine house rules and the GTT caveat it had dropped; both sub-files marked; status page linked first |
-| M4 | One env schema | 🔄 running | 22 Aug 2026 | |
-| M5 | One CI workflow | — | | |
+| M4 | One env schema | ✅ done | 22 Aug 2026 | Root `.env.example`, 371 lines, every var marked (16 user-editable / 122 system-only). Four risk ceilings locked out of `/settings` (M4.1) |
+| M5 | One CI workflow | 🔄 running | 22 Aug 2026 | |
 | M6 | Freeze the strangle lab | — | | |
 | M7 | Local stack up | — | | |
 | M8 | NSE endpoints verified | — | | |
@@ -191,6 +196,16 @@ violated** — recorded there with ⚠️ so nobody reads the rule as a descript
 And one documented exception to non-negotiable 6, carried from the desk's own wording: GTT stops
 go through `kite_client.place_gtt_stop` with its own guard, not through the gateway, which has no
 GTT method. **M16 owns closing that.**
+
+## The risk ceilings are no longer editable from the browser (M4)
+
+`RISK_MAX_DAILY_LOSS_PCT` (the kill switch), `RISK_POSITION_HEADROOM`, `RISK_GROSS_MULTIPLE` and
+`RISK_MAX_ORDERS_PER_DAY` moved to `.env`-only. `docs/03` §3f names this exact case. Nothing in
+force changed — no `RISK_*` override had ever been stored — and the ceilings are still *displayed*
+read-only, plus logged at every startup to replace the audit row that locking removed.
+
+**This reaches the live Mumbai box only on its next deliberate `git pull`, and that should be
+outside market hours.** Queued as item 1 in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md).
 
 ## Things a future session must know
 

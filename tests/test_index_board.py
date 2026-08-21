@@ -31,6 +31,7 @@ def isolate(tmp_path, monkeypatch):
     """Point every cache at a temp dir and reset the module's in-process state."""
     monkeypatch.setattr(NSE, "BOARD_CACHE", str(tmp_path / "board.json"))
     monkeypatch.setattr(NSE, "CONSTITUENT_CACHE", str(tmp_path / "cons.json"))
+    monkeypatch.setattr(NSE, "CLOSE_CACHE", str(tmp_path / "close.json"))
     monkeypatch.setattr(NSE, "MIN_ARCHIVE_GAP", 0.0)
     monkeypatch.setattr(NSE, "_blocked_until", 0.0)
     monkeypatch.setattr(NSE, "_session", None)
@@ -190,10 +191,70 @@ def test_slug_strips_every_separator_nse_drops():
     assert NSE.slug("NIFTY MIDSMALLCAP400 50:50") == "niftymidsmallcap4005050"
 
 
+def test_camel_keeps_acronyms_whole():
+    """ind_niftyNBFC_list.csv is the real filename — "Nbfc" would 404."""
+    assert NSE.camel("Nifty Sugar & Ethanol") == "niftySugarEthanol"
+    assert NSE.camel("Nifty NBFC") == "niftyNBFC"
+    assert NSE.camel("Nifty Hospitals") == "niftyHospitals"
+    assert NSE.camel("Nifty India Defence") == "niftyIndiaDefence"
+    # A full-caps name from the live feed must not become niftyPRIVATEBANK.
+    assert NSE.camel("NIFTY PRIVATE BANK") == "niftyPrivateBank"
+    assert NSE.camel("NIFTY IT") == "niftyIT"
+
+
+def test_candidates_cover_both_hosts_and_both_spellings():
+    c = NSE._archive_candidates("Nifty Hospitals")
+    assert any(u.endswith("/ind_niftyhospitalslist.csv") for u in c)
+    assert any(u.endswith("/ind_niftyHospitals_list.csv") for u in c)
+    assert any("nsearchives" in u for u in c) and any("niftyindices" in u for u in c)
+
+
+def test_a_wrong_name_answering_200_with_html_is_not_treated_as_an_empty_index(monkeypatch):
+    """niftyindices.com soft-404s: it returns 200 and an HTML page. Trusting the status
+    would cache "this index has no constituents" for a month."""
+    class HTML:
+        status_code = 200
+        text = "<!DOCTYPE html><html><head><title>Not found</title></head></html>"
+
+    monkeypatch.setattr(NSE.requests, "get", lambda *a, **k: HTML())
+    with pytest.raises(RuntimeError, match="no constituent list"):
+        NSE._fetch_constituents("Nifty Nonexistent")
+
+
+def test_an_unresolvable_index_is_not_re_probed_on_every_open(monkeypatch):
+    calls = {"n": 0}
+
+    def fetch(name):
+        calls["n"] += 1
+        raise RuntimeError("no constituent list for 'X' (ind_x.csv -> HTTP 404)")
+
+    monkeypatch.setattr(NSE, "_fetch_constituents", fetch)
+    NSE.constituents("Nifty Nonexistent")
+    NSE.constituents("Nifty Nonexistent")
+    assert calls["n"] == 1
+
+
+def test_being_rate_limited_is_never_cached_as_no_such_index(monkeypatch):
+    """A 403 says nothing about whether the index has a list. Remembering it as "absent"
+    would blank a real index for hours after a transient block."""
+    calls = {"n": 0}
+
+    def fetch(name):
+        calls["n"] += 1
+        raise RuntimeError("NSE archive returned 403 — backing off for an hour")
+
+    monkeypatch.setattr(NSE, "_fetch_constituents", fetch)
+    NSE.constituents("Nifty Media")
+    NSE.constituents("Nifty Media")
+    assert calls["n"] == 2
+
+
 def test_pages_render_without_network(monkeypatch):
-    monkeypatch.setattr(NSE, "board", lambda force=False: {
-        "rows": [NSE._board_row(BOARD_ROW)], "fetched_at": "21 Aug 2026 17:00",
-        "stale": False, "error": None})
+    monkeypatch.setattr(NSE, "full_board", lambda: {
+        "rows": [{**NSE._board_row(BOARD_ROW), "volume": None, "turnover": None,
+                  "as_of": None, "source": "live"}],
+        "fetched_at": "21 Aug 2026 17:00", "live_count": 1, "eod_only": 0,
+        "close_as_of": "2026-08-21", "close_stale": False, "stale": False, "error": None})
     monkeypatch.setattr(M, "_kite", None)
     c = TestClient(M.app)
 
@@ -207,9 +268,125 @@ def test_pages_render_without_network(monkeypatch):
 
 
 def test_the_board_page_survives_nse_being_unreachable(monkeypatch):
-    monkeypatch.setattr(NSE, "board", lambda force=False: {
-        "rows": [], "fetched_at": None, "stale": True, "error": "connection refused"})
+    monkeypatch.setattr(NSE, "full_board", lambda: {
+        "rows": [], "fetched_at": None, "live_count": 0, "eod_only": 0,
+        "close_as_of": None, "close_stale": True, "stale": True,
+        "error": "connection refused"})
     monkeypatch.setattr(M, "_kite", None)
     r = TestClient(M.app).get("/indices")
     assert r.status_code == 200
     assert "No index data" in r.text
+
+
+# =====================================================================================
+# the merge: the live feed alone silently drops 21 equity indices
+# =====================================================================================
+CLOSE_CSV = (
+    "Index Name,Index Date,Open Index Value,High Index Value,Low Index Value,"
+    "Closing Index Value,Points Change,Change(%),Volume,Turnover (Rs. Cr.),P/E,P/B,Div Yield\n"
+    "Nifty 50,20-08-2026,24225.45,24265.15,24184.55,24231.85,153.55,0.64,253928495,18777.61,20.48,2.94,1.17\n"
+    "Nifty Sugar & Ethanol,20-08-2026,-,-,-,2864.73,154.78,5.71,405949718,3965.22,28.98,2.59,.42\n"
+)
+
+
+def test_the_close_report_parses_nses_dashes_and_bare_decimals():
+    rows = {r["name"]: r for r in NSE._parse_close(CLOSE_CSV)}
+    sugar = rows["Nifty Sugar & Ethanol"]
+    assert sugar["open"] is None                 # "-" is absent, not zero
+    assert sugar["last"] == 2864.73
+    assert sugar["pct"] == 5.71
+    assert sugar["dy"] == 0.42                   # ".42", not 42
+    assert sugar["turnover"] == 3965.22
+
+
+def test_full_board_keeps_indices_the_live_feed_does_not_quote(monkeypatch):
+    """The regression this exists to prevent: allIndices carries 139 of 164 indices, so a
+    board-only page loses Sugar & Ethanol, NBFC, Insurance, Power and 17 others outright."""
+    monkeypatch.setattr(NSE, "close_report", lambda today=None: {
+        "rows": NSE._parse_close(CLOSE_CSV), "as_of": "2026-08-20",
+        "fetched_at": "x", "stale": False, "error": None})
+    monkeypatch.setattr(NSE, "board", lambda force=False: {
+        "rows": [NSE._board_row(BOARD_ROW)], "fetched_at": "y", "stale": False, "error": None})
+
+    fb = NSE.full_board()
+    by = {r["name"]: r for r in fb["rows"]}
+    assert set(by) == {"Nifty 50", "Nifty Sugar & Ethanol"}
+    assert fb["live_count"] == 1 and fb["eod_only"] == 1
+
+    # The live row wins on level, but keeps what only the report publishes.
+    assert by["Nifty 50"]["source"] == "live"
+    assert by["Nifty 50"]["last"] == 24252.0          # live, not the report's 24231.85
+    assert by["Nifty 50"]["turnover"] == 18777.61     # report-only field, carried over
+    assert by["Nifty 50"]["advances"] == 25           # live-only field, kept
+
+    # The report-only row is labelled, so its move cannot read as today's.
+    sugar = by["Nifty Sugar & Ethanol"]
+    assert sugar["source"] == "eod"
+    assert sugar["as_of"] == "20-08-2026"
+    assert sugar["pct"] == 5.71
+    assert sugar["advances"] is None                  # not invented
+
+
+def test_close_report_walks_back_over_a_weekend(monkeypatch):
+    """Today's file does not exist until after the close, and never on a Sunday."""
+    import datetime as dt
+    asked: list[dt.date] = []
+
+    def fetch(d):
+        asked.append(d)
+        return NSE._parse_close(CLOSE_CSV) if d == dt.date(2026, 8, 21) else []
+
+    monkeypatch.setattr(NSE, "_fetch_close", fetch)
+    rep = NSE.close_report(today=dt.date(2026, 8, 23))   # a Sunday
+    assert rep["rows"] and rep["stale"] is True
+    assert dt.date(2026, 8, 22) not in asked            # Saturday never requested
+    assert dt.date(2026, 8, 23) not in asked            # nor the Sunday itself
+    assert dt.date(2026, 8, 21) in asked
+
+
+def test_a_past_days_report_is_cached_and_never_refetched(monkeypatch):
+    import datetime as dt
+    calls = {"n": 0}
+
+    def fetch(d):
+        calls["n"] += 1
+        return NSE._parse_close(CLOSE_CSV)
+
+    monkeypatch.setattr(NSE, "_fetch_close", fetch)
+    # today = the 22nd, so the 21st's report is finished and immutable.
+    NSE.close_report(today=dt.date(2026, 8, 22))
+    NSE.close_report(today=dt.date(2026, 8, 22))
+    assert calls["n"] == 1
+
+
+def test_todays_report_is_re_read_because_nse_is_still_writing_it(monkeypatch):
+    """The file published just after the close held 148 indices; the finished one held 164.
+    Caching the first copy for the day would keep 16 indices off the page until tomorrow."""
+    import datetime as dt
+    calls = {"n": 0}
+
+    def fetch(d):
+        calls["n"] += 1
+        return NSE._parse_close(CLOSE_CSV)
+
+    monkeypatch.setattr(NSE, "_fetch_close", fetch)
+    day = dt.date(2026, 8, 21)
+    NSE.close_report(today=day)
+    monkeypatch.setattr(NSE, "CLOSE_TODAY_TTL", -1)      # pretend the window elapsed
+    NSE.close_report(today=day)
+    assert calls["n"] == 2
+
+
+def test_a_failure_to_refresh_today_keeps_the_copy_already_held(monkeypatch):
+    import datetime as dt
+    monkeypatch.setattr(NSE, "_fetch_close", lambda d: NSE._parse_close(CLOSE_CSV))
+    day = dt.date(2026, 8, 21)
+    first = NSE.close_report(today=day)
+    assert first["rows"]
+
+    monkeypatch.setattr(NSE, "CLOSE_TODAY_TTL", -1)
+    monkeypatch.setattr(NSE, "_fetch_close",
+                        lambda d: (_ for _ in ()).throw(RuntimeError("403")))
+    again = NSE.close_report(today=day)
+    assert len(again["rows"]) == len(first["rows"])       # not blanked
+    assert again["stale"] is True and "403" in again["error"]

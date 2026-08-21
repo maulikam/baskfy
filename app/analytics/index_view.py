@@ -174,7 +174,7 @@ BROAD = {
 
 def build(selected: str = "") -> dict:
     """Everything /indices needs for its first paint."""
-    b = nse_indices.board()
+    b = nse_indices.full_board()
     scan = scan_scores()
 
     rows = []
@@ -201,6 +201,12 @@ def build(selected: str = "") -> dict:
         "fetched_at": b.get("fetched_at"),
         "stale": b.get("stale"),
         "error": b.get("error"),
+        # How many rows are live vs carried from the last published close report, so the
+        # page can state it instead of showing yesterday's move as though it were today's.
+        "live_count": b.get("live_count"),
+        "eod_only": b.get("eod_only"),
+        "close_as_of": b.get("close_as_of"),
+        "close_stale": b.get("close_stale"),
         "scan": {"as_of": scan["as_of"], "count": scan["count"],
                  "path": os.path.basename(scan["path"]) if scan["path"] else None},
         "families": ["All", "Broad", "Sector", "Factor", "Theme", "Derived"],

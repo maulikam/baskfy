@@ -9,6 +9,7 @@ rules as of today) and the AWS deployment design.
 
 | Doc | What it is |
 |---|---|
+| [`00-merge-status.md`](00-merge-status.md) | **Start here.** The live status page — which module is done, what is blocked, and what a future session must know |
 | [`01-decile-blueprint.md`](01-decile-blueprint.md) | Product A understood — the screener/data plant |
 | [`02-momentum-desk.md`](02-momentum-desk.md) | Product B understood — the live execution desk |
 | [`03-merge-analysis.md`](03-merge-analysis.md) | **The seam.** Where they join, where they collide, what is redundant |

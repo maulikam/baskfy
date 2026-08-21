@@ -6,9 +6,12 @@ execution desk) into one product. The full record is in `docs/01–08`; the exec
 agents is `MERGE-PROMPTS.md`. **Read order for any agent session: this file → `docs/README.md`
 → `MERGE-PROMPTS.md` (and the docs it cites as you reach them).**
 
-Until absorbed (module M3), the two sub-agreements remain authoritative for their own trees:
-`decile-blueprint/CLAUDE.md` and `kite-momentum-rebalancer/CLAUDE.md`. Nothing in this file
-overrides their non-negotiables — it inherits them.
+**Absorbed at M3.** This file now governs: it carries the desk's seven non-negotiables and the
+screener's nine house rules, and a contributor who reads only this file cannot break either
+product. The two sub-agreements remain authoritative for **their own trees' internals** — where
+each module lives, which file to read before touching scoring, the open-items lists that are the
+honest record of what has never run. Nothing here overrides their non-negotiables; it inherits
+them, and where the root and a sub-file disagree on a rule, the root is wrong and should be fixed.
 
 ## Decisions taken (agents may proceed on these)
 
@@ -49,8 +52,48 @@ question — with counsel and Zerodha), D7 pricing amounts, D10 market-data disp
    both default off, enforced inside the gateway.
 6. All order flow goes through the gateway (guards → risk → rate-limits → journal);
    `client_id = plan_id:symbol` so a re-posted plan cannot double-send; SGB*/G-sec blocked at
-   the lowest layer.
+   the lowest layer. **Caveat carried from the desk's own wording, still true:** GTT stops go
+   through `kite_client.place_gtt_stop`, which carries its own guard — the gateway has no GTT
+   method yet. M16 owns closing that gap; until it does, "everything goes through the gateway"
+   has one documented exception.
 7. Filter-rejected stocks are never bought; `EXCLUDED_SYMBOLS` instruments are untouchable.
+
+## The screener's house rules (they govern the data plant, and the root lacked them)
+
+Verbatim from `decile-blueprint/CLAUDE.md`, with module paths updated for M2's rename. A
+contributor who reads only this file must not be able to break the pipeline either, which is
+M3's acceptance criterion.
+
+1. Read `decile-blueprint/docs/02-tech-stack-adr.md` before proposing any dependency. Nothing
+   outside the locked stack without saying why first.
+2. Tests assert the **spec**, never current behaviour. If a test would only lock in what the code
+   happens to do today, it is not worth writing.
+3. No `# type: ignore`, no `any`, no silently swallowed exceptions.
+   `packages/core/tests/test_no_escape_hatches.py` enforces this by scanning the source.
+4. Every module ends with: tests passing, `make lint` clean, and a `docs/` update if behaviour
+   diverged from the spec.
+5. **No look-ahead, ever.** Anything referencing a past date uses point-in-time index membership
+   and point-in-time factor rows. Asserted by tests, not by discipline.
+   ⚠️ **This rule is currently violated and the violation is known:** `apply_adjustments` applies
+   corporate actions with a *future* ex-date (`decile-blueprint/docs/DECISIONS.md` §21.9). It is
+   M10's to fix. Do not add a second one.
+6. **Adjusted by default.** `close` is adjusted; `close_raw` is the exchange print. Factors read
+   `close`; display uses `close_raw` where the user expects a real price.
+   ⚠️ Also open: adjusting `open`/`high`/`low` is destructive because no raw counterpart is
+   stored (§21.10).
+7. **Idempotent ingestion and seeding.** Re-running any day's job produces identical rows.
+8. **Round at write time.** Storage precision is the contract, so the API, the UI and the CSV
+   export can never disagree.
+9. Money and prices are `numeric`, never `float`. Disclaimers are components, not footers.
+
+## The namespace rule (M2)
+
+`decile` is this product's **domain vocabulary** as well as its former brand — a decile is a
+statistical bucket. `tools/check-namespace.sh` is the check: no namespace token survives in code,
+while `decile_1`…`decile_6` (the D1–D6 values of `apply_filters_on`, a public API contract),
+`DECILE_RANK_KEY` and `decile_bucket` are kept deliberately. Never widen the pattern to silence a
+hit; add vocabulary to the script's `ALLOWED` list with a reason, and record it in
+`docs/DECISIONS-MERGE.md`. (`DECISIONS-MERGE.md` M2.1.)
 
 ## Safety rails for agent work in this repo
 

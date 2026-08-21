@@ -104,6 +104,22 @@ class FactorWindow:
     start: dt.date
     #: Every trading day in ``[start, as_of]``, ascending.
     trading_days: tuple[dt.date, ...]
+    #: The first day of the calendar this window was resolved against. Not the window's own
+    #: start: it is how the window knows whether the calendar reached back far enough.
+    calendar_first: dt.date
+
+    @property
+    def spans_full_window(self) -> bool:
+        """Did the supplied calendar actually reach back to the calendar offset?
+
+        docs/05 §Notation: a factor is "never computed on a short window, because that would
+        break the shared-denominator property". Until 2026-08-22 that guarantee was held up by
+        an off-by-one rather than by a check — the return base sat one bar *before* the window,
+        so a calendar with exactly N days produced a null by running out of bars. Correcting the
+        base to the window's first bar (docs/05 §1) removed the accident, which is how a golden
+        test caught it. This is the check that was missing.
+        """
+        return self.calendar_first <= self.calendar_start
 
     @property
     def length(self) -> int:
@@ -141,7 +157,7 @@ def resolve_window(
     start = ordered[index]
     end_index = bisect.bisect_right(ordered, as_of)
     span = tuple(ordered[index:end_index])
-    return FactorWindow(months, as_of, calendar_start, start, span)
+    return FactorWindow(months, as_of, calendar_start, start, span, ordered[0])
 
 
 def resolve_windows(

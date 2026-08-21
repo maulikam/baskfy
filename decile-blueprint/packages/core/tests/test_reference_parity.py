@@ -788,9 +788,22 @@ class TestStep2FullRowReproduction:
                     )
 
         report = "\n".join(f"  {column}: {reason}" for column, reason in sorted(unchecked.items()))
+        # Grouped by column before the examples. 271 rows x ~60 columns means a flat list of the
+        # first forty failures is forty rows of ONE column and says nothing about whether the
+        # engine is one bar out everywhere or one instrument is odd — which is the only question
+        # worth asking first.
+        by_column: dict[str, int] = {}
+        for failure in failures:
+            column = failure.split(": ", 1)[0].rsplit(".", 1)[-1]
+            by_column[column] = by_column.get(column, 0) + 1
+        summary = "\n".join(
+            f"  {column}: {count}/{len(export)}"
+            for column, count in sorted(by_column.items(), key=lambda kv: (-kv[1], kv[0]))
+        )
         assert failures == [], (
             f"{len(failures)} cells failed ({compared} compared; "
-            f"{len(unchecked)} columns not checked:\n{report}\n)\n" + "\n".join(failures[:40])
+            f"{len(unchecked)} columns not checked:\n{report}\n)\n"
+            f"failures per column:\n{summary}\n\nfirst 20:\n" + "\n".join(failures[:20])
         )
         assert compared > 0, f"nothing was compared. Columns not checked:\n{report}"
 

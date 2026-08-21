@@ -266,8 +266,24 @@ def _with_window_factors(
         n = window.length
         key = window.key
 
-        # §1: ret_N = (P_t / P_{t-N} - 1) x 100. P_{t-N} is the bar before the window starts.
-        base = pl.col("close").shift(n).over("instrument_id")
+        if not window.spans_full_window:
+            # The calendar does not reach the offset, so this is not an N-month window — it is
+            # whatever history happened to exist, and docs/05 §Notation forbids computing on it.
+            for name in (f"ret_{key}", f"vol_{key}", f"sharpe_{key}", f"rsi_{key}",
+                         f"pos_days_{key}", f"circuits_{key}"):
+                expressions.append(pl.lit(None, dtype=pl.Float64).alias(name))
+            continue
+
+        # §1: ret_N = (P_t / P_{t-(N-1)} - 1) x 100. The base is the window's FIRST BAR, because
+        # the calendar-offset window is inclusive of both endpoints (docs/13 §3).
+        #
+        # This was `shift(n)` until 2026-08-22 — the bar *before* the window — which is what
+        # docs/05 §1 said and what nothing had ever checked, because the parity test needed price
+        # history the repository did not have and therefore skipped. On real bars against all 271
+        # export rows, `shift(n)` reproduces 0, 1, 0, 0, 0 cells across the five windows and
+        # `shift(n - 1)` reproduces 265, 260, 256, 250, 240. docs/05 §1 was corrected first, then
+        # this line, in that order (docs/DECISIONS.md §21.7).
+        base = pl.col("close").shift(n - 1).over("instrument_id")
         expressions.append(
             pl.when(base.is_null() | (base == 0))
             .then(None)

@@ -16,6 +16,12 @@ WHAT IS NOT EDITABLE HERE, AND WHY
   changing them is a conscious act on the machine that runs the system.
 - Scoring weights. MOMENTUM_BLEND and SHARPE_BLEND are the strategy's definition, not a
   tuning knob, and CLAUDE.md fences them off.
+- The risk ceilings, since 22 Aug 2026. RISK_MAX_DAILY_LOSS_PCT is the kill switch;
+  RISK_POSITION_HEADROOM, RISK_GROSS_MULTIPLE and RISK_MAX_ORDERS_PER_DAY bound position
+  size, gross exposure and order flow. docs/03 §3f: "a security boundary, not a
+  preference". They were editable while this was a one-person desk, where raising your own
+  ceiling escalates nothing; that stops being true at the second account. .env plus a
+  restart, and the effective values are logged at startup so the change leaves a trace.
 
 EVERY CHANGE IS AUDITED. You cannot reconstruct why a trade was sized the way it was
 without knowing what the parameters were at the time.
@@ -34,7 +40,12 @@ from . import db
 SECRET_KEYS = frozenset({"KITE_API_KEY", "KITE_API_SECRET"})
 # Deliberately high-friction: env-only.
 LOCKED_KEYS = frozenset({"DRY_RUN", "INTRADAY_ENABLED", "OPTIONS_ENABLED",
-                         "PORT", "DB_PATH", "TOKEN_FILE"})
+                         "PORT", "DB_PATH", "TOKEN_FILE",
+                         # The risk ceilings and the kill switch (docs/03 §3f). A ceiling a
+                         # user can raise is not a ceiling. See the note in SPECS below.
+                         "RISK_MAX_DAILY_LOSS_PCT", "RISK_POSITION_HEADROOM",
+                         "RISK_GROSS_MULTIPLE", "RISK_MAX_ORDERS_PER_DAY",
+                         "RISK_MAX_POSITION_VALUE", "RISK_MAX_GROSS_EXPOSURE"})
 
 
 class SettingsError(ValueError):
@@ -148,19 +159,17 @@ SPECS: tuple[Spec, ...] = (
          "Weekly volatility multiple before clamping to the floor and ceiling.",
          minimum=0.1, maximum=10.0),
 
-    # --- risk limits --------------------------------------------------------------------
-    Spec("RISK_MAX_DAILY_LOSS_PCT", "Daily loss cap", "Risk limits", "float",
-         "Kill switch: trading halts for the day at this loss against NAV.",
-         minimum=0.1, maximum=100.0, unit="%"),
-    Spec("RISK_POSITION_HEADROOM", "Position cap headroom", "Risk limits", "float",
-         "Multiple above the largest legal position, for price movement between plan "
-         "and fill. Below 1.0 the risk cap would forbid a legal position.",
-         minimum=1.0, maximum=5.0, unit="x"),
-    Spec("RISK_GROSS_MULTIPLE", "Gross exposure multiple", "Risk limits", "float",
-         "Gross cap as a multiple of NAV. Below 1.0 every order is refused.",
-         minimum=1.0, maximum=10.0, unit="x"),
-    Spec("RISK_MAX_ORDERS_PER_DAY", "Daily order cap", "Risk limits", "int",
-         "Our own cap, well under Kite's 3000.", minimum=10, maximum=3000),
+    # --- risk limits: NOT EDITABLE HERE ---------------------------------------------------
+    # The four ceilings that used to sit here (RISK_MAX_DAILY_LOSS_PCT, the kill switch;
+    # RISK_POSITION_HEADROOM; RISK_GROSS_MULTIPLE; RISK_MAX_ORDERS_PER_DAY) were moved to
+    # LOCKED_KEYS on 22 Aug 2026. docs/03 §3f names this exact case: "This split is a
+    # security boundary, not a preference: RISK_MAX_DAILY_LOSS_PCT must not become a form
+    # field." For a single operator nothing was escalated by editing your own ceiling; with
+    # a second account the same form is privilege escalation, and the boundary has to exist
+    # before the account does. They change in .env plus a restart, and the effective values
+    # are logged at startup so a change is still visible after the fact.
+    # `risk_preview()` below still SHOWS what they resolve to -- read-only display is the
+    # point, and it matters more now that they cannot be typed over.
 
     # --- regime overlay -----------------------------------------------------------------
     Spec("REGIME_ENABLED", "Overlay enabled", "Regime overlay", "bool",

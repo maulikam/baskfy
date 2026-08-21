@@ -258,9 +258,16 @@ make e2e         Playwright acceptance checks (builds and starts the app itself)
 - **The 15-year backtest budget is measured against a synthetic market, not the seeded dataset.**
   PROMPTS.md Prompt 15's last acceptance criterion says "on the seeded dataset"; the seeded
   database holds one trading day of *results* (`docs/13`'s export) and no price history, so no
-  multi-year backtest can run against it at all. The budget is met with room to spare on a
-  300-instrument, 15-year synthetic panel — 0.24 s against 10 s — but that is not the same
-  measurement.
+  multi-year backtest can run against it at all. The budget is met with room to spare — 0.24 s for
+  the pure engine over a 300-name panel, 1.44 s for the whole server-side path (181 screen queries
+  + bar load + simulation) over a 250-name market seeded into PostgreSQL, against 10 s — but that
+  is not the same measurement.
+- **Until a real backfill has run, every backtest a user could queue fails.** `ohlcv_daily` holds
+  no history, so the loader raises "no adjusted bars exist for any name this screen selected".
+  That is correct behaviour and it will look like a bug in staging.
+- **The API → broker → worker wire has never run.** `POST /backtests` publishes
+  `decile.backtest.run` by name and the worker binds and routes it; both halves are tested
+  separately, but no test starts a Celery worker. Same class of gap as the Razorpay webhook.
 - **The backtest's `export` link is signed by us, not presigned by R2.** `docs/07` asks for a
   "signed URL"; the archive abstraction covers both a bucket and a directory, and a directory
   cannot presign. The link is an HMAC over `(public_id, artefact, expiry)` redeemed at an

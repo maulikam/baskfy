@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 
@@ -404,21 +404,3 @@ async def execute_backtest(
 def notes_for(loaded: LoadedBacktest, result: BacktestResult) -> tuple[str, ...]:
     """Everything the assumptions panel should say that is specific to *this* run."""
     return tuple(dict.fromkeys((*loaded.notes, *result.notes)))
-
-
-ProgressCallback = Callable[[BacktestProgress], None]
-
-
-def progress_fanout(*sinks: ProgressSink | None) -> ProgressSink:
-    """One sink that feeds several — a Redis publish and a log line, say."""
-
-    def emit(event: BacktestProgress) -> None:
-        for sink in sinks:
-            if sink is not None:
-                sink(event)
-
-    return emit
-
-
-def summarise(mapping: Mapping[str, object]) -> str:  # pragma: no cover - logging helper
-    return ", ".join(f"{key}={value}" for key, value in sorted(mapping.items()))

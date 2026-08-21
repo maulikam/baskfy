@@ -43,6 +43,7 @@ from typing import Annotated, Final, Protocol
 import anyio
 from fastapi import APIRouter, Header, Path, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import delete, select
@@ -77,6 +78,7 @@ from decile_api.settings import API_PREFIX, Settings
 from decile_core.backtest import BacktestConfig
 from decile_core.models import Backtest, Screen
 from decile_core.models.base import JsonObject
+from decile_core.screen_definition import ScreenDefinition
 from decile_providers.archive import RawArchive
 from decile_providers.errors import ArchiveError
 
@@ -289,8 +291,13 @@ async def create_backtest(  # noqa: PLR0913, PLR0917 - FastAPI injects one param
             return _accepted(existing)
 
     screen = await _resolve_screen(session, config, principal)
-    if screen is not None:
-        entitlements.require_universe(_definition_index(screen.definition) or config.benchmark)
+    # The ₹0 tier's universe restriction (Prompt 13 §5) applies to the definition the backtest
+    # will run, whether that came from a saved screen or was posted inline. Checking only the
+    # saved-screen branch would leave the inline one as a way around the restriction.
+    definition = screen.definition if screen is not None else config.screen_definition
+    universe = _definition_index(definition)
+    if universe is not None:
+        entitlements.require_universe(universe)
 
     try:
         await service.capacity_check(
@@ -352,6 +359,21 @@ async def _resolve_screen(
                 ProblemType.INVALID_SCREEN_DEFINITION,
                 "A backtest needs either 'screen_public_id' or an inline 'screen_definition'.",
             )
+        # Validated here rather than on first contact with the worker, so a malformed inline
+        # definition is a 400 at the moment it is posted instead of a `failed` row twenty minutes
+        # later. `ScreenDefinition` forbids unknown keys and gates every factor key against the
+        # registry (docs/06 §"Reference SQL skeleton").
+        try:
+            ScreenDefinition.model_validate(config.screen_definition)
+        except ValidationError as exc:
+            raise Problem(
+                ProblemType.INVALID_SCREEN_DEFINITION,
+                "The inline screen definition failed validation.",
+                errors=[
+                    {"field": ".".join(str(part) for part in error["loc"]), "message": error["msg"]}
+                    for error in exc.errors()
+                ],
+            ) from exc
         return None
     screen = (
         await session.execute(select(Screen).where(Screen.public_id == config.screen_public_id))

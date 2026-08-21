@@ -659,20 +659,16 @@ class PricePanel:
             self._close[day_positions, instrument_positions] = rows.get_column("_close").to_numpy()
 
         present = ~np.isnan(self._close)
-        # The last day each series prints a bar, and the first. Both are properties of the panel,
-        # not of any decision: they schedule liquidations (see `liquidation_day`), and a
-        # liquidation always settles at a price on or before the day it happens.
+        # The last day each series prints a bar. A property of the panel, not of any decision: it
+        # schedules liquidations (see `liquidation_day`), and a liquidation always settles at a
+        # price on or before the day it happens.
         self._last_row = np.where(present.any(axis=0), _last_true(present), -1)
-        self._first_row = np.where(present.any(axis=0), present.argmax(axis=0), -1)
 
     def index_of(self, day: dt.date) -> int:
         position = self._day_index.get(day)
         if position is None:
             raise BacktestDataError(f"{day.isoformat()} is not a trading day in this calendar")
         return position
-
-    def has_instrument(self, instrument_id: int) -> bool:
-        return instrument_id in self._column
 
     def close_on(self, instrument_id: int, day_position: int) -> Decimal | None:
         column = self._column.get(instrument_id)

@@ -29,24 +29,28 @@ export interface ConfigFormProps {
   latest: string;
 }
 
-const FREQUENCIES = [
+type Frequency = BacktestConfigIn["rebalance"]["frequency"];
+type Weighting = BacktestConfigIn["weighting"];
+type CashPolicy = BacktestConfigIn["cash_policy"];
+
+const FREQUENCIES: readonly { value: Frequency; label: string }[] = [
   { value: "monthly", label: "Monthly" },
   { value: "quarterly", label: "Quarterly" },
   { value: "fortnightly", label: "Fortnightly" },
   { value: "weekly", label: "Weekly" },
-] as const;
+];
 
-const WEIGHTINGS = [
+const WEIGHTINGS: readonly { value: Weighting; label: string }[] = [
   { value: "equal", label: "Equal weight" },
   { value: "marketcap", label: "Marketcap weight" },
   { value: "rank", label: "Rank weight" },
   { value: "inverse_volatility", label: "Inverse volatility" },
-] as const;
+];
 
-const CASH_POLICIES = [
+const CASH_POLICIES: readonly { value: CashPolicy; label: string }[] = [
   { value: "hold_cash", label: "Hold cash" },
   { value: "benchmark", label: "Track the benchmark" },
-] as const;
+];
 
 /** The universes docs/01 §2.1 offers, used here only as the benchmark to compare against. */
 const BENCHMARKS = [
@@ -69,17 +73,17 @@ export function ConfigForm({
   const [start, setStart] = useState(earliest);
   const [end, setEnd] = useState(latest);
   const [capital, setCapital] = useState("1000000");
-  const [frequency, setFrequency] = useState<string>("monthly");
+  const [frequency, setFrequency] = useState<Frequency>("monthly");
   const [topN, setTopN] = useState("20");
   const [holdBuffer, setHoldBuffer] = useState("10");
-  const [weighting, setWeighting] = useState<string>("equal");
+  const [weighting, setWeighting] = useState<Weighting>("equal");
   const [maxWeight, setMaxWeight] = useState("10");
   const [minWeight, setMinWeight] = useState("1");
   const [brokerage, setBrokerage] = useState("3");
   const [stt, setStt] = useState("10");
   const [slippage, setSlippage] = useState("15");
   const [benchmark, setBenchmark] = useState<string>("nifty-500");
-  const [cashPolicy, setCashPolicy] = useState<string>("hold_cash");
+  const [cashPolicy, setCashPolicy] = useState<CashPolicy>("hold_cash");
   const [overlay, setOverlay] = useState(false);
 
   const invalid = !screenId || start >= end;
@@ -110,7 +114,14 @@ export function ConfigForm({
       cash_policy: cashPolicy,
       benchmark,
       risk_overlay: { enabled: overlay, rule: "index_above_200dma" },
-    } as BacktestConfigIn);
+      // Both are docs/10 §Config keys the form does not expose. `reinvest` is the only dividend
+      // policy this service can serve (see `DividendPolicy` in `decile_core.backtest`), and the
+      // risk-free rate has no T-bill series behind it, so offering either as a control would be
+      // offering a choice that is not there. Sent explicitly rather than left to the server's
+      // default, so the stored config says what the run actually used.
+      dividends: "reinvest",
+      risk_free_rate: "0",
+    });
   }
 
   return (
@@ -168,7 +179,7 @@ export function ConfigForm({
           <Select
             id="bt-frequency"
             value={frequency}
-            onChange={(event) => setFrequency(event.target.value)}
+            onChange={(event) => setFrequency(event.target.value as Frequency)}
           >
             {FREQUENCIES.map((option) => (
               <option key={option.value} value={option.value}>
@@ -182,7 +193,7 @@ export function ConfigForm({
           <Select
             id="bt-weighting"
             value={weighting}
-            onChange={(event) => setWeighting(event.target.value)}
+            onChange={(event) => setWeighting(event.target.value as Weighting)}
           >
             {WEIGHTINGS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -260,7 +271,7 @@ export function ConfigForm({
           <Select
             id="bt-cash"
             value={cashPolicy}
-            onChange={(event) => setCashPolicy(event.target.value)}
+            onChange={(event) => setCashPolicy(event.target.value as CashPolicy)}
           >
             {CASH_POLICIES.map((option) => (
               <option key={option.value} value={option.value}>

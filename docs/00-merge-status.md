@@ -102,6 +102,7 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M26 | The desk's record on the web app | ✅ **green** | 22 Aug 2026 | Performance, Holdings, Trades, Market stance, Plan vs fills — Next.js, plain language, read-only asserted twice more. Live-broker pages stay in the console pending D3 (M26.1–.5) |
 | M27 | The dividend question, measured | ✅ **green** | 22 Aug 2026 | **Price return.** 42–3, and **25 of 25 exact** on 1M/3M/6M. Confirms M11's base fix and M24's splits for free (M27.1–.4) |
 | M22 | The merged face (read-only) | ✅ **green** | 22 Aug 2026 | `/baskets` and `/baskets/plan` on real data. Every mutation **405**; two suites hold it read-only. Desk suite untouched |
+| M41 | Broker connect catalog | ✅ **green** | 23 Aug 2026 | Ten-broker `/brokers` grid + gated OAuth. Live redirects held on D3 (`BROKER_OAUTH_REVIEW`). CSV import remains the holdings path (M41.1–.3) |
 
 ---
 
@@ -512,3 +513,13 @@ deleted — the vector's channels are genuinely empty.
    sub-pixel at every size we render. **Regenerate the trace before any large or print render**
    (§M38.2).
 
+### M41 — broker connect catalog ✅
+
+Ten brokers on `/brokers` (Zerodha, HDFC, Kotak, ICICI, Upstox, Angel One, Groww, Fyers, 5paisa,
+Dhan). Click a tile → three-step flow → Connect. Live OAuth is source-gated
+(`BROKER_OAUTH_REVIEW.signed_off = False`) until D3 is written — same pattern as the public API.
+`POST /brokers/{id}/connect` never returns a redirect while the gate is shut and never stores a
+token. That is Track C in `docs/smallcase/02` and Phase 4 in `docs/05`.
+
+**NOT done:** live redirects, per-user token encryption, holdings sync from any broker, official
+logo licences, HDFC/Kotak/ICICI app registration. Queued as NEEDS-MAULIK item 13.

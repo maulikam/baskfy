@@ -110,6 +110,11 @@ export const PAGES = {
   "/pricing": { title: "Plans", blurb: "What each plan includes.", formerly: "Pricing" },
   "/invoices": { title: "Invoices", blurb: "Your tax invoices, ready to download." },
   "/profile": { title: "Profile", blurb: "Your name, your email, and your data." },
+  "/brokers": {
+    title: "Brokers",
+    blurb: "Connect Zerodha, HDFC, Kotak, ICICI and more in a few clicks.",
+    formerly: "Broker connections",
+  },
   "/change-password": {
     title: "Password",
     blurb: "Change the password you sign in with.",

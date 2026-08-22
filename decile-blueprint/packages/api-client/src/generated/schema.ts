@@ -726,6 +726,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/brokers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Broker connect catalog
+         * @description The ten brokers on the grid. Requires a signed-in account; never starts OAuth.
+         */
+        get: operations["listBrokers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brokers/{broker_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One broker on the catalog */
+        get: operations["getOneBroker"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brokers/{broker_id}/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start broker OAuth (gated on D3)
+         * @description Begin the redirect flow, or explain why it cannot start.
+         *
+         *     A closed gate is ``oauth_available: false`` with the requirement as ``reason`` — never a
+         *     redirect, and never a stored token. That is Track C in ``docs/smallcase/02``.
+         */
+        post: operations["connectBroker"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/checkout/session": {
         parameters: {
             query?: never;
@@ -2521,6 +2581,71 @@ export interface components {
              */
             file: string;
         };
+        /** BrokerCapabilitiesOut */
+        BrokerCapabilitiesOut: {
+            /** Holdings Sync */
+            holdings_sync: string;
+            /** Oauth */
+            oauth: string;
+            /** Trading */
+            trading: string;
+        };
+        /** BrokerGateOut */
+        BrokerGateOut: {
+            /** Decision Reference */
+            decision_reference: string;
+            /** Live Oauth Enabled */
+            live_oauth_enabled: boolean;
+            /** Requirement */
+            requirement: string;
+            /** Signed Off */
+            signed_off: boolean;
+        };
+        /** BrokerListOut */
+        BrokerListOut: {
+            /** Adapters Wired */
+            adapters_wired: number;
+            /** Brokers */
+            brokers: components["schemas"]["BrokerOut"][];
+            gate: components["schemas"]["BrokerGateOut"];
+        };
+        /** BrokerOut */
+        BrokerOut: {
+            /**
+             * Adapter Wired
+             * @default false
+             */
+            adapter_wired: boolean;
+            /** Api Name */
+            api_name: string;
+            /** Blurb */
+            blurb: string;
+            capabilities: components["schemas"]["BrokerCapabilitiesOut"];
+            /** Color */
+            color: string;
+            /**
+             * Connected
+             * @default false
+             */
+            connected: boolean;
+            /**
+             * Connection Status
+             * @default not_connected
+             */
+            connection_status: string;
+            /** Docs Url */
+            docs_url: string;
+            /** Id */
+            id: string;
+            /** Mark */
+            mark: string;
+            /** Name */
+            name: string;
+            /** Short Name */
+            short_name: string;
+            /** Sort Order */
+            sort_order: number;
+        };
         /**
          * CandidateOut
          * @description One instrument an ambiguous symbol could mean.
@@ -2659,6 +2784,22 @@ export interface components {
             label: string;
             /** Unit */
             unit: string;
+        };
+        /** ConnectOut */
+        ConnectOut: {
+            /** Broker Id */
+            broker_id: string;
+            /** Oauth Available */
+            oauth_available: boolean;
+            /**
+             * Reason
+             * @description Why connect cannot start, when oauth_available is false. Empty when it can.
+             */
+            reason: string;
+            /** Redirect Url */
+            redirect_url?: string | null;
+            /** State */
+            state?: string | null;
         };
         /**
          * CorporateActionOut
@@ -9199,6 +9340,313 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RebalancePlanOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    listBrokers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrokerListOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getOneBroker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                broker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrokerOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    connectBroker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                broker_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectOut"];
                 };
             };
             /** @description Invalid screen definition */

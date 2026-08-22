@@ -63,11 +63,15 @@ describe("the sidebar IA", () => {
     ]);
   });
 
-  it("lists the account group exactly as docs/08 does", () => {
+  it("lists the account group with M41's brokers page beside profile", () => {
+    // docs/08 named Pricing, Invoices, Profile, Change Password. Brokers is the P5.8 surface
+    // the merge plan already scheduled; it sits next to Profile because connecting a book is
+    // account setup, not a market-analysis destination.
     expect(NAV_GROUPS[2]?.items.map((item) => item.href)).toEqual([
       "/pricing",
       "/invoices",
       "/profile",
+      "/brokers",
       "/change-password",
     ]);
   });

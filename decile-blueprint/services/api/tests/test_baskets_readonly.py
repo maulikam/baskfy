@@ -38,14 +38,23 @@ class TestNoOrderPlacingRouteIsReachable:
             assert methods == ["get"], f"{path} exposes {methods}"
 
     def test_the_whole_api_has_no_order_route(self, spec: OpenApiSpec) -> None:
-        """Not just the basket router — the entire surface the web app can reach."""
-        forbidden = ("order", "execute", "gtt", "trade/place", "broker")
-        offenders = [
-            f"{method.upper()} {path}"
-            for path in spec["paths"]
-            for method in spec["paths"][path]
-            if method in MUTATING and any(word in path.lower() for word in forbidden)
-        ]
+        """Not just the basket router — the entire surface the web app can reach.
+
+        M41 adds ``POST /brokers/{id}/connect``. That starts an OAuth redirect (or explains why
+        it cannot); it never places an order. The forbidden token used to be the substring
+        ``broker``, which would have blocked the connect route for the wrong reason.
+        """
+        forbidden = ("/order", "execute", "gtt", "trade/place", "place_order")
+        offenders: list[str] = []
+        for path in spec["paths"]:
+            for method in spec["paths"][path]:
+                if method not in MUTATING:
+                    continue
+                lower = path.lower()
+                if method == "post" and "/brokers/" in lower and lower.endswith("/connect"):
+                    continue
+                if any(word in lower for word in forbidden):
+                    offenders.append(f"{method.upper()} {path}")
         assert offenders == [], f"the web API exposes {offenders}"
 
     def test_the_router_source_declares_no_mutating_verb(self) -> None:

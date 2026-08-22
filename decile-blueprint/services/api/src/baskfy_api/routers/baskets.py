@@ -77,7 +77,7 @@ class BasketOut(BaseModel):
     rows: list[BasketRowOut]
 
 
-class PlanOrderOut(BaseModel):
+class RebalanceOrderOut(BaseModel):
     """Every column the desk's Jinja plan table shows, including the pledged flag."""
 
     symbol: str
@@ -91,14 +91,22 @@ class PlanOrderOut(BaseModel):
     reconciled_at: str | None
 
 
-class PlanOut(BaseModel):
+# Named `Rebalance...` rather than `Plan...` deliberately: `PlanOut` already exists in
+# `baskfy_api.schemas` and means a *billing* plan. Two models sharing one name made the generated
+# TypeScript rename the older one, which broke `packages/api-client/src/client.ts` — a compile
+# error in the web app caused by a name chosen carelessly in a Python file. Kept as a comment
+# rather than a docstring because a model docstring becomes the public OpenAPI description, and an
+# internal naming decision is not something an API consumer needs to read.
+class RebalancePlanOut(BaseModel):
+    """One rebalance plan: what the desk decided to trade, and what happened to each order."""
+
     plan_id: str
     created_at: str
     note: str | None
     evaluation_id: str | None
     constituents: list[str]
     weights: dict[str, float]
-    orders: list[PlanOrderOut]
+    orders: list[RebalanceOrderOut]
 
 
 @router.get("/baskets", response_model=BasketOut)
@@ -124,8 +132,8 @@ async def current_basket(
     return resolved
 
 
-@router.get("/baskets/plan", response_model=PlanOut)
-async def latest_plan(session: SessionDep) -> PlanOut:
+@router.get("/baskets/plan", response_model=RebalancePlanOut)
+async def latest_plan(session: SessionDep) -> RebalancePlanOut:
     """The desk's most recent rebalance plan, read from the `desk` schema."""
     version = (
         (
@@ -159,7 +167,7 @@ async def latest_plan(session: SessionDep) -> PlanOut:
         .all()
     )
 
-    return PlanOut(
+    return RebalancePlanOut(
         plan_id=str(version["version_id"]),
         created_at=dt.datetime.fromtimestamp(float(version["created_ts"]), tz=dt.UTC).isoformat(),
         note=version["note"],
@@ -167,7 +175,7 @@ async def latest_plan(session: SessionDep) -> PlanOut:
         constituents=_as_list(version["constituents_json"]),
         weights=_as_weights(version["weights_json"]),
         orders=[
-            PlanOrderOut(
+            RebalanceOrderOut(
                 symbol=o["symbol"],
                 side=o["side"],
                 planned_qty=int(o["planned_qty"] or 0),

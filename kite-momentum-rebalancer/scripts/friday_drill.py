@@ -14,6 +14,10 @@ will eventually have set for a real session and forgotten.
 
 WITHOUT A KITE TOKEN IT STILL RUNS, AND SAYS SO
 ------------------------------------------------
+(Unless `--require-live` is given, which is the flag for a *scheduled* drill: it exits 2, the
+desk's shared "the token has expired" code, so an unattended run is triageable from launchctl
+output rather than from a traceback.)
+
 `/analyze` needs holdings and cash, which need a live session, and Kite tokens die every morning
 (`NEEDS-MAULIK.md` item 3). Rather than being un-runnable most of the time, the drill substitutes a
 clearly-labelled stub book and prints **STUB BOOK** in its header and its verdict. What it proves
@@ -27,8 +31,9 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -46,8 +51,8 @@ class RefusingBroker:
     one variable is the failure this whole script is shaped to prevent.
     """
 
-    def __getattr__(self, name: str) -> Any:
-        def refuse(*_a: object, **_k: object) -> Any:  # noqa: ANN401 — it never returns
+    def __getattr__(self, name: str) -> Callable[..., NoReturn]:
+        def refuse(*_a: object, **_k: object) -> NoReturn:
             raise RuntimeError(
                 f"the drill's stub broker was asked to {name}(). Nothing in a drill may reach a "
                 f"broker; if DRY_RUN is off, that is the bug."
@@ -151,6 +156,11 @@ def main() -> int:  # noqa: PLR0912, PLR0915 — a linear script; splitting it w
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--date", required=True, help="the Friday, YYYY-MM-DD")
+    parser.add_argument(
+        "--require-live",
+        action="store_true",
+        help="fail with exit 2 rather than falling back to a stub book. For a scheduled run.",
+    )
     args = parser.parse_args()
     as_of = dt.date.fromisoformat(args.date)
 
@@ -160,6 +170,13 @@ def main() -> int:  # noqa: PLR0912, PLR0915 — a linear script; splitting it w
         authed = bool(live.is_authed())
     except Exception:  # a broken session is a stub book, not a crashed drill
         authed = False
+
+    if not authed and args.require_live:
+        # Exit 2 is the desk's "the Kite token has expired" code, shared by every script that can
+        # hit one, so an unattended run is triageable from launchctl output alone rather than by
+        # reading a traceback. `tests/test_exit_codes.py` enforces it across scripts/.
+        print("Friday drill: no Kite session, and --require-live was given.")
+        return 2
 
     mode = "LIVE BOOK" if authed else "STUB BOOK"
     if not authed:

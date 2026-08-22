@@ -80,7 +80,7 @@ class TestItShowsWhatTheDeskWouldShow:
         order and the page renders it. A plan view that dropped it would hide the one flag that
         changes what a sell actually does to collateral margin.
         """
-        fields = set(baskets.PlanOrderOut.model_fields)
+        fields = set(baskets.RebalanceOrderOut.model_fields)
         assert {"symbol", "side", "planned_qty", "planned_ref_price", "status"} <= fields
         assert {"filled_qty", "avg_fill_price", "order_id", "reconciled_at"} <= fields
 

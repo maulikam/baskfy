@@ -99,7 +99,7 @@ This is the acceptance test for the merged system, and it runs on a Sunday.
 
 ```bash
 cd decile-blueprint
-make drill DATE=2026-08-18
+make friday-drill DATE=2026-08-18
 ```
 
 It refuses to run unless `DRY_RUN=true`. Not a warning — a refusal, before anything is built,
@@ -196,7 +196,7 @@ uv run python reconciliation/desk_parity.py   # the merged engine vs the desk's 
 make backend-parity                           # every desk page on SQLite and on Postgres, diffed
 make shadow DATE=2026-08-18                   # both scan paths, diffed at order level
 bash ../tools/check-namespace.sh              # no namespace token survived the rename
-make drill DATE=2026-08-18                    # the whole Friday loop, zero orders
+make friday-drill DATE=2026-08-18                    # the whole Friday loop, zero orders
 ```
 
 ---

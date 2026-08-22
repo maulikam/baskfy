@@ -2562,3 +2562,52 @@ default, and the sentence saying execution is in the desk console still present.
 password, which is not something I do — so the component was asserted rather than rendered. The
 API path underneath it *was* exercised end to end against real data: a crore across three screens
 and a manual slice, 5 / 4 / 3 names, totals reconciling to the rupee.
+
+---
+
+## M35 — design tooling, and the review it made possible
+
+Maulik asked for four installs. Three landed; one does not exist as written.
+
+### M35.1 — what was installed ⚠ UNREVIEWED
+| | |
+|---|---|
+| `npx skills add Leonxlnx/taste-skill` | ✅ 13 skills into `.agents/skills/`, symlinked into `.claude/skills/` — 364K, 14 files |
+| `npx getdesign@latest add claude` | ✅ `DESIGN.md` at the root |
+| Vercel web-interface-guidelines | ✅ fetched fresh, and used — findings below |
+| `npx playwright-cli install --skills` | ❌ **no such command** |
+
+`playwright-cli` is a real npm package at 0.262.0 — the deprecated predecessor of
+`@playwright/test` — and it publishes **no executable**, so `npx` cannot run it. The current CLI has
+no `--skills` flag either. **Playwright was already a dependency of this repo** (`@playwright/test`
+1.62.1, `apps/web/e2e/`), so the capability was never missing; only that command was.
+
+**Committed rather than ignored.** They are project-scoped tooling somebody chose, 364K, and a
+checkout that has to re-fetch its own review rules from a third party before it can review anything
+is a checkout that reviews differently on a bad network day.
+
+### M35.2 — the review, and what it found in my own work ⚠ UNREVIEWED
+Ran against `sleeve-planner.tsx` (M34), `components/desk/ui.tsx` (M26) and the Market Health page
+(M33). Eleven findings in the planner, one in the desk furniture, none in Market Health.
+
+Fixed: `autoComplete` and `inputMode` on every input; `focus-visible` rings (there were none);
+`min-w-0`/`truncate` so a long sleeve name cannot widen a column; an empty state instead of a
+headed table with no body; Title Case on the buttons; and `max-w-0 truncate` on the desk tables.
+
+Two were more than cosmetic:
+
+* **`key={index}` on editable rows.** Removing row 2 rebinds row 3's state to row 4 — the wrong
+  capital against the wrong sleeve, silently. Rows carry stable keys now.
+* **Removing a sleeve was immediate and silent.** It throws away a capital figure somebody chose.
+  There is an **undo window** now, announced through `role="status"` so it is not only visual.
+
+And `applyCap` moved from `useState` into the URL as `?cap=`. The capped and uncapped views are
+genuinely different answers about somebody's money; a link to one should open that one.
+
+### M35.3 — the screenshot found what no test did ⚠ UNREVIEWED
+Playwright signed in as the seeded e2e account and captured the planner. Every test passed and the
+capital fields read **`4000000.00`** — `numeric(18,2)` serialised into a number input verbatim, so
+the box a person types into looked like an accounting entry.
+
+No assertion here was ever going to catch that, and I had already declared the page verified "by
+test, not by eye" one module earlier. **Looking at it was the check that worked.**

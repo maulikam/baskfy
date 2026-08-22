@@ -2,6 +2,7 @@
 
 import type { ScreenOut, SleeveIn, SleeveListOut } from "@baskfy/api-client";
 import { Plus, Trash2 } from "lucide-react";
+import { parseAsBoolean, useQueryState } from "nuqs";
 import { useState } from "react";
 
 import { Disclaimer } from "@/components/data/disclaimer";
@@ -32,11 +33,21 @@ import { useAllocation, useSaveSleeves, useSleeves } from "@/lib/portfolios/quer
 
 const RUPEE = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
 
+/** Monotonic ids for rows the reader adds, so a new row keeps its identity while being typed in. */
+let keySeed = 0;
+function nextKey(): number {
+  keySeed += 1;
+  return keySeed;
+}
+
 function money(value: string | number): string {
   return `₹${RUPEE.format(Number(value))}`;
 }
 
 interface Row {
+  /** Stable across edits and removals. An index key rebinds row 3's state to row 4 the moment
+   *  row 2 is deleted, which shows the wrong capital against the wrong sleeve. */
+  key: string;
   name: string;
   kind: "screen" | "manual";
   capital: string;
@@ -46,9 +57,14 @@ interface Row {
 
 function toRows(listing: SleeveListOut | undefined): Row[] {
   return (listing?.sleeves ?? []).map((sleeve) => ({
+    key: `saved-${sleeve.id}`,
     name: sleeve.name,
     kind: sleeve.kind === "manual" ? "manual" : "screen",
-    capital: String(sleeve.capital ?? "0"),
+    // `numeric(18,2)` serialises as "4000000.00" and a number input renders that verbatim, so
+    // the field reads like an accounting entry. Whole rupees is the precision the allocator uses;
+    // the trailing paise are noise in a box somebody types into. Caught by screenshotting the
+    // page rather than by a test -- no assertion here was ever going to notice.
+    capital: String(Math.round(Number(sleeve.capital ?? 0))),
     screen_public_id: sleeve.screen_public_id ?? null,
     top_n: sleeve.top_n ?? 15,
   }));
@@ -65,10 +81,19 @@ export function SleevePlanner({
 }) {
   const sleeves = useSleeves(portfolioId, initial);
   const save = useSaveSleeves(portfolioId);
-  const [applyCap, setApplyCap] = useState(false);
+  // In the URL, not component state: the capped and uncapped views are genuinely different
+  // answers about somebody's money, and a link to one of them should open that one.
+  const [applyCap, setApplyCap] = useQueryState(
+    "cap",
+    parseAsBoolean.withDefault(false).withOptions({ shallow: false, history: "push" }),
+  );
   const allocation = useAllocation(portfolioId, applyCap);
 
   const [rows, setRows] = useState<Row[] | null>(null);
+  // Removing a sleeve throws away a capital figure somebody chose. An undo window is cheaper than
+  // a confirmation dialog for something this reversible, and the guidelines allow either -- what
+  // they refuse is an immediate, silent delete.
+  const [undo, setUndo] = useState<{ row: Row; at: number } | null>(null);
   const editing = rows ?? toRows(sleeves.data);
   const total = editing.reduce((sum, row) => sum + (Number(row.capital) || 0), 0);
 
@@ -108,8 +133,10 @@ export function SleevePlanner({
             <input
               type="checkbox"
               checked={applyCap}
-              onChange={(event) => setApplyCap(event.target.checked)}
-              className="size-4"
+              // `void`: nuqs's setter returns a Promise the change handler has no use for, and
+              // awaiting a URL update inside an onChange would only delay the tick.
+              onChange={(event) => void setApplyCap(event.target.checked)}
+              className="size-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             Size my screen sleeves to this cap
           </label>
@@ -143,14 +170,23 @@ export function SleevePlanner({
               </tr>
             </thead>
             <tbody>
+              {editing.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                    No sleeves yet. Add one to divide this portfolio.
+                  </td>
+                </tr>
+              )}
               {editing.map((row, index) => (
-                <tr key={index} className="border-b last:border-0">
+                <tr key={row.key} className="border-b last:border-0">
                   <td className="py-2 pr-3">
                     <input
                       aria-label="Sleeve name"
                       value={row.name}
                       onChange={(event) => update(index, { name: event.target.value })}
-                      className="w-40 rounded-md border bg-background px-2 py-1"
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="w-40 min-w-0 truncate rounded-md border bg-background px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     />
                   </td>
                   <td className="py-2 pr-3">
@@ -166,7 +202,7 @@ export function SleevePlanner({
                             : { kind: "screen", screen_public_id: value },
                         );
                       }}
-                      className="w-56 rounded-md border bg-background px-2 py-1"
+                      className="w-56 min-w-0 truncate rounded-md border bg-background px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <option value="manual">I run this myself</option>
                       {screens.map((screen) => (
@@ -187,7 +223,9 @@ export function SleevePlanner({
                         onChange={(event) =>
                           update(index, { top_n: Number(event.target.value) || 1 })
                         }
-                        className="w-20 rounded-md border bg-background px-2 py-1 tabular-nums"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        className="w-20 rounded-md border bg-background px-2 py-1 tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       />
                     ) : (
                       <span className="text-muted-foreground">—</span>
@@ -201,7 +239,9 @@ export function SleevePlanner({
                       step={1000}
                       value={row.capital}
                       onChange={(event) => update(index, { capital: event.target.value })}
-                      className="w-36 rounded-md border bg-background px-2 py-1 text-right tabular-nums"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      className="w-36 rounded-md border bg-background px-2 py-1 text-right tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     />
                   </td>
                   <td className="py-2">
@@ -209,7 +249,10 @@ export function SleevePlanner({
                       variant="ghost"
                       size="sm"
                       aria-label={`Remove ${row.name}`}
-                      onClick={() => setRows(editing.filter((_, i) => i !== index))}
+                      onClick={() => {
+                        setUndo({ row, at: index });
+                        setRows(editing.filter((_, i) => i !== index));
+                      }}
                     >
                       <Trash2 className="size-4" />
                     </Button>
@@ -228,6 +271,7 @@ export function SleevePlanner({
               setRows([
                 ...editing,
                 {
+                  key: `new-${nextKey()}`,
                   name: `Sleeve ${editing.length + 1}`,
                   kind: "manual",
                   capital: "0",
@@ -237,7 +281,7 @@ export function SleevePlanner({
               ])
             }
           >
-            <Plus className="mr-1 size-4" /> Add a sleeve
+            <Plus className="mr-1 size-4" /> Add Sleeve
           </Button>
           <Button
             size="sm"
@@ -250,11 +294,40 @@ export function SleevePlanner({
                 screen_public_id: row.kind === "screen" ? row.screen_public_id : null,
                 top_n: row.top_n,
               }));
-              save.mutate(body, { onSuccess: () => setRows(null) });
+              save.mutate(body, {
+                onSuccess: () => {
+                  setRows(null);
+                  setUndo(null);
+                },
+              });
             }}
           >
-            {save.isPending ? "Saving…" : "Save"}
+            {save.isPending ? "Saving…" : "Save Sleeves"}
           </Button>
+        </div>
+        {/*
+          Announced, not just drawn: a reader using a screen reader gets no signal from a row
+          vanishing. `role="status"` carries an implicit aria-live="polite".
+        */}
+        <div role="status" aria-live="polite" className="min-h-6 text-sm">
+          {undo && (
+            <span className="flex items-center gap-2">
+              <span className="text-muted-foreground">Removed {undo.row.name}.</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const restored = [...editing];
+                  restored.splice(undo.at, 0, undo.row);
+                  setRows(restored);
+                  setUndo(null);
+                }}
+              >
+                Undo
+              </Button>
+            </span>
+          )}
+          {save.isSuccess && !undo && <span className="text-muted-foreground">Sleeves saved.</span>}
         </div>
         {save.isError && <ErrorState error={save.error} />}
       </section>

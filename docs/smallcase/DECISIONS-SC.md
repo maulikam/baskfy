@@ -42,3 +42,62 @@ live OAuth is already D3-gated.
 tree (throws away the connect UI the product ask wanted).
 
 **Reversal.** Revert the M41 commit; SC0 STATUS baselines still hold.
+
+## SC1 — extend M22 `/baskets`, do not duplicate · ⚠ UNREVIEWED
+
+**Context.** M22/M30 already serve `/baskets` from `basket_snapshot` — a nightly JSON cache of the
+live MomentumScan build. SC1 introduces `cb_basket` as the curated **product** layer (managers,
+versions, constituents, collections, investments). The two must coexist until SC5 merges the read
+surfaces.
+
+**Taken.** **Extend, don't duplicate.** `basket_snapshot` and `GET /api/v1/baskets` stay as the desk
+operator's live scan basket. `cb_basket` with `source=SCAN` is the catalog projection cut from those
+runs (deterministic: same scan in → same version out). `source=MANUAL` covers operator- and
+user-created private baskets. No second MomentumScan page or duplicate instrument table in SC1–SC2.
+
+**Rejected.** Renaming or dropping `basket_snapshot` in SC1 (breaks the desk before SC5 is ready).
+Mirroring every nightly snapshot into `cb_basket_version` immediately (SC3's rebalance engine owns
+the cut). A separate `cb_instrument` table (house rule: join the screener's `instrument` master).
+
+**Reversal.** Drop `cb_*` migration 0014 and models; `/baskets` continues unchanged.
+
+## SC1 — weight sum enforced in domain, not Postgres · ⚠ UNREVIEWED
+
+**Context.** docs/smallcase/03 asks for `CHECK sum(weight) per version = 1.0000` but Postgres cannot
+express a per-parent aggregate check without triggers.
+
+**Taken.** Service-layer assertion via `baskfy_core.curated_baskets.assert_weights_sum_to_one`,
+tested in `test_curated_baskets.py` and `test_curated_schema.py`. Constituent weight storage is
+`numeric(7,4)`; tolerance `0.00005` after quantize-to-4dp.
+
+**Rejected.** A deferrable trigger in SC1 (more moving parts before the insert path exists in SC3).
+Storing unnormalized weights and fixing at read time (violates house rule 8).
+
+**Reversal.** Add a trigger migration; keep the pure assert as a fast-fail before the DB round-trip.
+
+## SC1 — enum casing matches the smallcase spec · ⚠ UNREVIEWED
+
+**Context.** Billing `plan`/`subscription` enums in docs/04 use lowercase (`active`, `month`). The
+smallcase pack uses uppercase (`ENGINE`, `FREE`, `PUBLISHED`).
+
+**Taken.** All `cb_*` check constraints use the uppercase vocabulary from docs/smallcase/03 verbatim.
+The dormant billing tables are untouched.
+
+**Rejected.** Lowercasing cb enums to match docs/04 (would diverge from the product spec and every
+mock in the smallcase pack).
+
+**Reversal.** One migration to rewrite constraints and seed rows; no production data yet.
+
+## SC1 — sole user resolved from env or e2e account · ⚠ UNREVIEWED
+
+**Context.** Track A is single-tenant; every user-scoped row carries `user_id` equal to
+`BASKFY_SOLE_USER_ID` (docs/smallcase/02).
+
+**Taken.** `SOLE_USER_ENV = "BASKFY_SOLE_USER_ID"` in core; `baskfy_api.curated_seed.resolve_sole_user_id`
+reads the env var when set, otherwise upserts the e2e account via `seed_e2e_account` and returns its id.
+SC1 seeds managers only — no `cb_investment` rows until SC4.
+
+**Rejected.** Hard-coding user id `1` (breaks fresh databases where the first user is not id 1).
+Inferring "the only user" implicitly in queries (forbidden by docs/smallcase/03 rule 1).
+
+**Reversal.** Delete `curated_seed.resolve_sole_user_id`; callers pass explicit ids in tests only.

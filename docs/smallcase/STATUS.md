@@ -3,14 +3,14 @@
 The status page for the smallcase-layer run. Updated at the end of every module, loud
 about what is NOT done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: SC0 green · continuing to SC1.** Started 23 Aug 2026.
+**Run state: SC1 green · continuing to SC2.** Started 23 Aug 2026.
 
 ## Module ledger
 
 | Module | State | One line |
 |---|---|---|
 | SC0 — Baseline and read-in | ✅ | Baselines recorded; desk 1328 passed; DRY_RUN=true; M41 catalog uncommitted at start |
-| SC1 — Schema and domain objects | ⬜ | |
+| SC1 — Schema and domain objects | ✅ | 18 `cb_*` tables + migration 0014; domain asserts; manager seed; tests green |
 | SC2 — Catalog computation and API | ⬜ | |
 | SC3 — Versions, rebalance engine, plans | ⬜ | |
 | SC4 — Investment accounting | ⬜ | |
@@ -46,15 +46,14 @@ Recorded 23 Aug 2026 on macOS (darwin 24), repo root `/Users/maulikdave/Document
 | Web nav (vitest, post-M41 `/brokers`) | **10 passed** |
 | Full screener `uv run pytest` | Not re-run end-to-end this session (~80s historically). Last merge-status baseline was 1385 passed / 794 skipped. **SC1 will not land unless `make test` / targeted suites stay green.** |
 
-### Screener Postgres tables (SQLAlchemy `Base.metadata`, 43)
+### Screener Postgres tables (SQLAlchemy `Base.metadata`, 61)
 
 Relevant to this run:
 
 - **Instruments / prices:** `instrument`, `ohlcv_daily`, `corporate_action`, `trading_day`, `factor_daily`, `index_*`, `market_health_daily`
 - **Portfolios (CSV path):** `portfolio`, `portfolio_holding`, `portfolio_rebalance`, `portfolio_sleeve`
 - **Baskets (M22/M30):** `basket_snapshot`, `screen_run`, `screen`
-- **Accounts:** `app_user`, `subscription`, `plan`, …
-- **No `cb_*` tables yet** — that is SC1
+- **Accounts / curated baskets:** `app_user`, `subscription`, `plan`, …; **`cb_*` (18 tables, SC1)**
 
 ### Desk schema (M19 cutover, read by `/performance` etc.)
 
@@ -96,10 +95,28 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 
 **No curated-basket / metrics Beat entry yet** — SC2 adds the EOD `cb_metrics` job.
 
+## SC1 deliverables (23 Aug 2026)
+
+**Built**
+
+- SQLAlchemy models for all 18 `cb_*` tables in `baskfy_core.models.curated_baskets` (Track B included)
+- Alembic migration `0014_curated_baskets` revising `0013_portfolio_sleeves`
+- Pure domain in `baskfy_core.curated_baskets` (`assert_weights_sum_to_one`, version immutability, sole-user env constant, manager slug constants)
+- Seed helpers in `baskfy_api.curated_seed` wired into `seed_reference` (`make seed` upserts `baskfy-engine` + `maulik`)
+- Tests: `packages/core/tests/test_curated_baskets.py`, `services/api/tests/test_curated_schema.py`; `test_schema_matches_docs` updated for `cb_*`
+
+**NOT done (by design — later modules)**
+
+- No catalog API, metrics job, or web UI (SC2–SC5)
+- No basket rows seeded beyond managers — baskets/versions/constituents are SC2/SC3
+- `/baskets` (M22 `basket_snapshot`) unchanged; mapping to explore catalog deferred to SC5
+- Track B flags and unreachable-surface tests (SC10)
+- `BASKFY_SOLE_USER_ID` resolver exists but no `cb_*` user rows written until SC4
+
 ## Open items / things a future session must know
 
 1. **D3 still unanswered** (`NEEDS-MAULIK` item 13). Track C stays forbidden: no web execute, no third-party broker OAuth, no payment collection.
 2. **M41 was uncommitted when SC0 started**; commit it before SC1 so the working tree only carries SC work.
 3. Full screener suite was not re-timed this session — treat desk green + M41/nav green as the SC0 safety bar; expand before SC12.
-4. `docs/smallcase/03` `cb_*` schema does not exist in Alembic yet — SC1's job.
+4. ~~`docs/smallcase/03` `cb_*` schema does not exist in Alembic yet — SC1's job.~~ **Done (0014).**
 5. Legacy `/baskets` vs explore catalog collision is deferred to SC5 (do not invent a second MomentumScan basket page in SC1–SC2 without recording the mapping).

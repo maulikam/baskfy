@@ -1209,3 +1209,57 @@ unexecuted**; only the portfolios spec was run, because it is the one M17 asks a
 
 **State:** decile **1447 passed, 794 skipped**; desk **1243 passed, 17 skipped**; `ruff`, `format`
 and `mypy` clean across 267 files; portfolios e2e **4 passed**.
+
+---
+
+## M18 — the migration, drilled; the cutover, deferred to where its mechanism lives
+
+### M18.1 — 19 tables, 42,285 rows, and a one-paisa corruption caught ⚠ UNREVIEWED
+Full report: `decile-blueprint/reconciliation/DB-MIGRATION.md`. Every row count and checksum
+matched, the NAV series is identical, and `index_value` re-derives from `nav`.
+
+The third assertion earned its place: changing one snapshot's `nav` by **a single paisa** in the
+source left counts and checksums matching — the corruption was copied faithfully — and only the NAV
+recomputation caught it. The run rolled back with nothing committed. A migration that only compares
+bytes cannot tell a faithful copy of broken data from a correct one.
+
+Checksums normalise through **one** function called by both databases, and sort row digests before
+hashing so row order — which neither database guarantees and which is not part of the data — cannot
+register as a difference.
+
+**Landed in a `desk` schema, not `public`.** No collision with the screener's 42 tables today, and
+relying on that is how a collision arrives later; `docs/04` §4 renames these at P4 regardless.
+Rollback is `DROP SCHEMA desk CASCADE`.
+
+**Truncate-and-reload, asserted as such.** The SQLite file is the source of truth and the schema is
+a projection, so `--drop-existing` rebuilds it in one transaction; a populated schema without the
+flag is refused with an actionable message rather than a `DuplicateTable` traceback. No upsert: until
+M19 flips the backend, only SQLite is written, so "changed on both sides" cannot happen — and an
+upsert would let a row deleted in SQLite survive in Postgres forever. Proven idempotent: two
+consecutive runs produce identical reports.
+
+### M18.2 — THE DIVERGENCE WINDOW: today's Postgres data is rehearsal, not truth ⚠ UNREVIEWED
+**The desk still writes SQLite and nothing reads Postgres.** `app/analytics/db.py` opens `sqlite3`;
+nothing under `app/` references Postgres at all.
+
+So the `desk` schema is a faithful projection of the database **as it stood at 06:48 IST on 22 Aug
+2026**, and stale the moment the desk writes another row. It is re-runnable rehearsal output. It is
+not authoritative, and nothing should read it as current.
+
+The cutover did **not** happen here, and **not because a precondition failed**. Three of four held:
+assertions green on the copy with the NAV series identical; a fresh `scripts.backup` reporting `ok`
+plus a refreshed offsite copy; and NSE closed on a Saturday morning with the next session ~50 hours
+away. It did not happen because **there is nothing to cut over to** — the switch is M19's.
+
+By the same logic `~/baskfy-safety/sqlite-archive/portfolio-2026-08-22-pre-postgres.db` is a
+**rehearsal archive**, superseded at M19 by an archive of the state that is actually frozen at the
+switch. It was taken from the sqlite-backup-API output rather than a `cp` of a live WAL-mode file —
+I reached for `cp` first, which is precisely the hazard `deploy/README.md` warns about, and redid it.
+
+**The real sequence, which M19 owns:** stop every desk writer → re-run the proven migration against
+the live file → full assertions again → switch the desk to Postgres → **only then** archive that
+SQLite state as the forever copy.
+
+Precondition (c)'s "one-command rollback" gets its meaning at that switch. Today, "point the desk
+back at SQLite" is not a rollback — it is the status quo, and exercising it proves nothing. Once the
+config flip exists, flipping it back is the rollback, and that is what must be exercised.

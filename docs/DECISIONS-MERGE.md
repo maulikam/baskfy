@@ -1929,3 +1929,81 @@ still the clearest explanation of the product vocabulary D1 chose to retain, and
 table (exchange trademarks, SEBI language, `.com` availability) is the reasoning a future rename
 would want to re-read. The pre-launch legal checklist is rewritten for Baskfy and marked as
 Maulik's — a TM filing is not an agent's to do.
+
+---
+
+## M26 — the desk's record, on the web app, in one voice
+
+M22 put the desk's *output* on the web app. Five of the desk console's own pages are now beside
+it — `/performance`, `/holdings`, `/tradebook`, `/regime`, `/reconcile` — so the two products
+have one face rather than two, and nobody has to open an SSH tunnel to see a portfolio.
+
+### M26.1 — the pages were rewritten, not ported ⚠ UNREVIEWED
+Maulik's instruction was explicit: *"it's too technical. I want very minimal pages, user-friendly."*
+The Jinja console is an operator's instrument panel, written by the person who also wrote the
+strategy, and it reads like it.
+
+So the numbers are the desk's and the language is not. `R1` renders as **Risk-on — "Fully invested.
+New positions open at full size."**; `exit_reason='rank'` as **"fell out of the ranking"**;
+`status='RISK_BLOCKED'` as **"blocked by a risk limit"**; `/reconcile` leads with one sentence
+answering the only question anyone opens it to ask. The tier, code and status are still shown
+beside the plain words — a reader who knows the vocabulary should not have it taken away.
+
+`components/desk/ui.tsx` is one set of primitives shared by all five, because the console grew a
+different table style per page over a year of Fridays and that is precisely what this replaces.
+
+### M26.2 — two console pages could not come across whole, and the reason is D3 ⚠ UNREVIEWED
+The desk's `/stops` and `/reconcile` read **live broker state** — open orders, resting triggers,
+holdings straight from Kite — and `/stops` carries an action that *creates and deletes triggers at
+the broker*.
+
+Porting either whole would mean a user-facing web surface holding a live broker session. That is a
+different regulated activity, it is the D3 question CLAUDE.md forbids building against, and the
+arming action is squarely on the wrong side of the desk's non-negotiable #1.
+
+**Taken:** serve what the *database* knows, which turns out to be most of the value and all of the
+truth. `/reconcile` compares the plan against the desk's own record of fills. `/holdings` carries
+the position record, including pledged quantity and the untouchable instruments, marked. Each page
+says in as many words that live broker confirmation happens in the desk console, rather than
+implying a completeness it does not have.
+
+**Rejected:** proxying live Kite reads through the API. Two objections and either is sufficient —
+it puts a broker credential behind a user-facing surface before D3 is answered, and the token
+expires daily with no login flow on this side, so the page would be honestly broken most of the
+day. A surface that says "no session" twenty-three hours out of twenty-four is worse than one that
+points at the console.
+
+**Rejected:** a `/stops` page. Without live triggers there is nothing on it the holdings page does
+not already say, and a stops page that cannot tell you whether your stops are live is a page that
+misleads by existing. The protection note lives on `/holdings` instead.
+
+### M26.3 — read-only is asserted twice more, and one assertion is new ⚠ UNREVIEWED
+`test_desk_readonly.py` and `lib/desk/__tests__/read-only.test.ts` mirror M22's pair: no mutating
+verb in the OpenAPI document, none in the source, no form, no submit control, no server action, no
+`/execute`.
+
+Two checks are new, and both come from what M26 specifically could get wrong:
+
+* **The module cannot reach a broker at all** — asserted by naming the absence of `Kite(`,
+  `kite_client`, `access_token`, `AccessTokenStore`. The basket surfaces never had a live-broker
+  temptation; these pages replace two console pages that do.
+* **Every SQL statement is a SELECT** — `insert into`, `update `, `delete from` and `truncate` are
+  refused over the source. The decorator check cannot catch a write hidden in an f-string, because
+  a write needs no decorator.
+
+The web-side test also pins that every path the fetch helper names begins `/desk/`, so a helper
+re-pointed at another surface fails rather than silently working.
+
+### M26.4 — a new sidebar group, and the nav test updated deliberately ⚠ UNREVIEWED
+`NAV_GROUPS` gains **Desk**, between the primary group and Account. `nav.test.ts` pins the IA
+against docs/08 verbatim and says a deliberate reordering updates the list — this is one.
+
+Grouped rather than scattered through the primary list because the two answer different kinds of
+question: the primary group analyses a *market*, the Desk group reports a *portfolio that is
+actually being traded*. Before Account because it is product, not settings.
+
+### M26.5 — the routes went into the contract test, as M22's did ⚠ UNREVIEWED
+`test_api_artifacts.py` refused all five on the first run — *"a route added without a docs/07 entry
+is a contract change nobody agreed to"*, the same gate that caught M22. Added to `EXPECTED_PATHS`
+with the reason, and `openapi.json` and the generated TypeScript client regenerated, because the
+suite compares both against the live app.

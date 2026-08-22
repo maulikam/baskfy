@@ -23,6 +23,25 @@ JSON**. After that deploy it will be a Fernet blob. This reads either: JSON firs
 fails, the encrypted store using the key the box would have used. The laptop's copy is always
 written encrypted regardless.
 
+TWO STORES ON THIS SIDE, AND BOTH GET WRITTEN
+---------------------------------------------
+The merged repo has two consumers of the same daily token and they do **not** share a file:
+
+* the **desk** reads `app.config.TOKEN_FILE` (`kite-momentum-rebalancer/data/.kite_token.json`);
+* the **screener's pipeline** reads `BASKFY_KITE_TOKEN_PATH`
+  (`decile-blueprint/.secrets/kite-token.enc` by default), which is what
+  `baskfy_worker.backfill` and `providers doctor` look at.
+
+Until 22 Aug 2026 this script wrote only the first, while `NEEDS-MAULIK.md` item 3 claimed the
+bridge unblocked `baskfy_worker.backfill`. It did not: after a perfectly successful sync,
+`make doctor` still reported `[DOWN] kite — no encrypted access token at .secrets/kite-token.enc`.
+One login now feeds both, because the alternative is a bridge that reports success and leaves the
+half the pipeline needs empty.
+
+The two stores use different encryption keys by design — each side reads its own
+`KITE_TOKEN_ENCRYPTION_KEY` — so this writes the plaintext token into each store separately
+rather than copying one blob to two paths.
+
 WHAT THIS DOES NOT DO
 ---------------------
 It does not log in. Kite mints a token per day, per human, through a browser, and nothing here
@@ -42,6 +61,15 @@ from pathlib import Path
 
 DEFAULT_REMOTE_DIR = "/home/desk/kite-momentum-rebalancer"
 DEFAULT_REMOTE_TOKEN = "data/.kite_token.json"
+
+#: The screener tree, relative to this repo's root. Both live under `baskfy/` after M1.
+DEFAULT_SCREENER_DIR = "../decile-blueprint"
+#: `ProviderSettings.kite_token_path`'s default, repeated here so a missing .env still resolves.
+DEFAULT_SCREENER_TOKEN_PATH = ".secrets/kite-token.enc"
+
+#: Exit code for "the desk store was written, the screener store was not". Distinct from 1 so a
+#: caller can tell a half-success from a failure — the desk is usable, the pipeline is not.
+EXIT_SCREENER_NOT_WRITTEN = 3
 
 
 def _fetch(target: str, remote_path: str) -> bytes:
@@ -139,12 +167,82 @@ def _remote_api_key_fingerprint(target: str, remote_dir: str) -> str:
     return "unreadable"
 
 
+def _env_value(env_path: Path, key: str) -> str:
+    """One value out of a .env file, without importing anything that resolves a *different* .env.
+
+    `ProviderSettings` reads `.env` relative to the current working directory, and this script
+    runs from the desk's root — so asking pydantic would hand back the desk's file and silently
+    encrypt the screener's blob with the wrong key. Reading the named file is the whole point.
+
+    Deliberately literal: no interpolation, no export prefix, no quoting rules beyond stripping a
+    matched pair. The screener's .env is generated from `.env.example` and never uses them.
+    """
+    if not env_path.is_file():
+        return ""
+    for raw in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        if name.strip() != key:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        return value
+    return ""
+
+
+def _write_screener_store(token: str, screener_dir: Path) -> tuple[Path | None, str]:
+    """Write the same token into the screener's encrypted store. Returns (path, reason-if-not).
+
+    Never raises: the desk's copy is already on disk by the time this runs, and turning a
+    configuration gap in the *other* tree into a traceback would throw away a good sync. The
+    caller reports the reason and exits non-zero instead.
+    """
+    if not screener_dir.is_dir():
+        return None, f"{screener_dir} does not exist"
+
+    env_path = screener_dir / ".env"
+    key = _env_value(env_path, "BASKFY_KITE_TOKEN_ENCRYPTION_KEY")
+    if not key:
+        return None, (
+            f"BASKFY_KITE_TOKEN_ENCRYPTION_KEY is not set in {env_path}. Generate one with\n"
+            '        python -c "from cryptography.fernet import Fernet; '
+            "print(Fernet.generate_key().decode())\"\n"
+            "    and add it there; the screener refuses to store a token unencrypted."
+        )
+
+    relative = _env_value(env_path, "BASKFY_KITE_TOKEN_PATH") or DEFAULT_SCREENER_TOKEN_PATH
+    target = Path(relative)
+    if not target.is_absolute():
+        target = screener_dir / target
+
+    from baskfy_providers.tokens import AccessTokenStore  # noqa: PLC0415
+
+    try:
+        AccessTokenStore(target, key).save(token)
+    except Exception as exc:  # noqa: BLE001 - reported, not swallowed; see the docstring
+        return None, f"{type(exc).__name__}: {exc}"
+    return target, ""
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--target", required=True, help="e.g. desk@1.2.3.4, as deploy/sync.sh takes")
     ap.add_argument("--remote-dir", default=DEFAULT_REMOTE_DIR)
     ap.add_argument("--remote-token", default=DEFAULT_REMOTE_TOKEN)
     ap.add_argument("--remote-key", default="", help="only if the box stores it encrypted")
+    ap.add_argument(
+        "--screener-dir",
+        default=DEFAULT_SCREENER_DIR,
+        help="the screener tree whose .secrets store also needs the token",
+    )
+    ap.add_argument(
+        "--no-screener",
+        action="store_true",
+        help="write only the desk's store (the pre-22-Aug behaviour)",
+    )
     args = ap.parse_args()
 
     # These imports are deferred, not lazy: `app` is only importable once the repo root
@@ -180,7 +278,28 @@ def main() -> int:
 
     print(f"token pulled from {args.target} and stored encrypted at {C.TOKEN_FILE}")
     print(f"verified with one profile() call — user_type={user_type}")
+
+    screener_path: Path | None = None
+    reason = "skipped by --no-screener"
+    if not args.no_screener:
+        repo_root = Path(__file__).resolve().parent.parent
+        screener_dir = Path(args.screener_dir)
+        if not screener_dir.is_absolute():
+            screener_dir = (repo_root / screener_dir).resolve()
+        screener_path, reason = _write_screener_store(token, screener_dir)
+
+    if screener_path is not None:
+        print(f"the screener's pipeline store was written too: {screener_path}")
     print("the token itself was not printed and is not in any log line above.")
+
+    if screener_path is None and not args.no_screener:
+        print(
+            f"\nWARNING: the desk can trade, but the pipeline cannot fetch bars.\n"
+            f"    {reason}\n"
+            f"    `make backfill` and `make doctor` will report kite as DOWN until this is fixed.",
+            file=sys.stderr,
+        )
+        return EXIT_SCREENER_NOT_WRITTEN
     return 0
 
 

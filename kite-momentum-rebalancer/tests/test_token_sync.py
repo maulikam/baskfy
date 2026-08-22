@@ -98,3 +98,82 @@ def test_verification_is_one_cheap_call_not_a_data_pull() -> None:
     body = src[src.index("def _verify") : src.index("def _fingerprint")]
     assert "kc.profile()" in body
     assert "historical_data" not in body
+
+
+# --- The second store (22 Aug 2026) ------------------------------------------
+#
+# The bridge used to write only the desk's file while NEEDS-MAULIK item 3 claimed it unblocked
+# `baskfy_worker.backfill`. It did not, and `make doctor` said so plainly the first time anyone
+# ran it after a successful sync. These assert the spec that replaced that: one login writes both
+# stores, and a screener store that cannot be written is *reported*, never assumed.
+
+
+def _screener_tree(tmp_path: Path, *, key: str | None = None, token_path: str = "") -> Path:
+    """A minimal screener checkout: a directory with a .env in it."""
+    from cryptography.fernet import Fernet  # noqa: PLC0415
+
+    root = tmp_path / "decile-blueprint"
+    root.mkdir()
+    lines = ["BASKFY_DATABASE_URL=postgresql://nobody@localhost/nothing"]
+    if key is None:
+        key = Fernet.generate_key().decode()
+    if key:
+        lines.append(f"BASKFY_KITE_TOKEN_ENCRYPTION_KEY={key}")
+    if token_path:
+        lines.append(f"BASKFY_KITE_TOKEN_PATH={token_path}")
+    (root / ".env").write_text("\n".join(lines) + "\n")
+    return root
+
+
+def test_the_screener_store_is_written_and_is_readable_by_the_screener(tmp_path: Path) -> None:
+    from baskfy_providers.tokens import AccessTokenStore  # noqa: PLC0415
+
+    root = _screener_tree(tmp_path)
+    key = token_sync._env_value(root / ".env", "BASKFY_KITE_TOKEN_ENCRYPTION_KEY")
+
+    path, reason = token_sync._write_screener_store(SECRET, root)
+
+    assert reason == ""
+    assert path == root / token_sync.DEFAULT_SCREENER_TOKEN_PATH
+    # The point of the whole change: the *screener's* reader gets the token back out.
+    assert AccessTokenStore(path, key).load().value == SECRET
+
+
+def test_the_screener_store_honours_an_overridden_token_path(tmp_path: Path) -> None:
+    root = _screener_tree(tmp_path, token_path="var/kite.enc")
+    path, reason = token_sync._write_screener_store(SECRET, root)
+    assert reason == ""
+    assert path == root / "var" / "kite.enc"
+    assert path.is_file()
+
+
+def test_a_missing_encryption_key_is_reported_and_nothing_is_written(tmp_path: Path) -> None:
+    root = _screener_tree(tmp_path, key="")
+
+    path, reason = token_sync._write_screener_store(SECRET, root)
+
+    assert path is None
+    assert "BASKFY_KITE_TOKEN_ENCRYPTION_KEY" in reason
+    assert SECRET not in reason
+    # Never a plaintext fallback: an unencrypted token on disk is worse than no token.
+    assert not (root / token_sync.DEFAULT_SCREENER_TOKEN_PATH).exists()
+
+
+def test_an_absent_screener_tree_is_reported_rather_than_raised(tmp_path: Path) -> None:
+    path, reason = token_sync._write_screener_store(SECRET, tmp_path / "not-here")
+    assert path is None
+    assert "does not exist" in reason
+
+
+def test_env_values_come_from_the_named_file_not_the_working_directory(tmp_path: Path) -> None:
+    """The script runs from the desk's root, so resolving `.env` by cwd reads the wrong tree."""
+    env = tmp_path / ".env"
+    env.write_text(
+        "# a comment\n"
+        "\n"
+        "BASKFY_KITE_TOKEN_PATH='quoted/path.enc'\n"
+        "BASKFY_KITE_ENCRYPTION_KEY_LOOKALIKE=no\n"
+    )
+    assert token_sync._env_value(env, "BASKFY_KITE_TOKEN_PATH") == "quoted/path.enc"
+    assert token_sync._env_value(env, "BASKFY_KITE_TOKEN_ENCRYPTION_KEY") == ""
+    assert token_sync._env_value(tmp_path / "absent.env", "ANYTHING") == ""

@@ -66,8 +66,12 @@ cd decile-blueprint
 make token-sync TARGET=momentum-desk
 ```
 
-It reads the token over the SSH connection `deploy/sync.sh` already uses, writes it into the local
-encrypted store, and verifies it with one `profile()` call. **The token is never printed.** The
+It reads the token over the SSH connection `deploy/sync.sh` already uses, writes it into **both**
+local encrypted stores — the desk's and the pipeline's, which are different files — and verifies it
+with one `profile()` call. **The token is never printed.**
+
+**Re-run it after *any* Kite login, not just the first of the day.** Minting a new token
+invalidates the previous one, so a second login on the box silently kills the copy on the laptop. The
 Kite app's Redirect URL stays `desk.modelbasket.in/callback`.
 
 ---
@@ -141,14 +145,28 @@ verdict a drill exists to prevent.
 
 ---
 
-## 3a. The basket pages (M22)
+## 3a. The desk's surfaces on the web app (M22, M26)
 
-The web app has two read-only surfaces onto the desk's work:
+Seven read-only pages, all in Next.js on `:3000`, grouped in the sidebar under **Desk**:
 
 | | |
 |---|---|
 | `/baskets` | what the strategy wants to hold today — names, weights, scores, the six score components, and the stop each position would carry |
 | `/baskets/plan` | the desk's most recent rebalance plan: every order, planned and filled quantity, the price each was actually done at |
+| `/performance` | what the portfolio is worth, and how that compares to buying the benchmark |
+| `/holdings` | every position held, its cost, its value, what it has made — pledged and untouchable instruments marked |
+| `/tradebook` | every trade taken, what it made or lost, and why it was closed |
+| `/regime` | how defensive the strategy is being, in the sentences the desk wrote when it decided |
+| `/reconcile` | whether the last plan did what it planned to, order by order |
+
+The five M26 pages are the desk console's own pages **rewritten rather than ported**: `R1` reads
+"Risk-on — fully invested", `exit_reason='rank'` reads "fell out of the ranking",
+`RISK_BLOCKED` reads "blocked by a risk limit". The codes are shown beside the words.
+
+**Two of the console's pages are deliberately not here in full.** The desk's `/stops` and
+`/reconcile` read *live broker state*, and `/stops` creates and deletes triggers at the broker.
+These serve what the database knows; live confirmation stays in the desk console, and each page
+says so. That is the D3 question `CLAUDE.md` forbids building against.
 
 Both are built from the merged backend: live bars → `MomentumScan` → `baskfy_core.score` → the
 basket engine, and the `desk` schema for the plan. The API serves them at `/api/v1/baskets` and
@@ -156,12 +174,59 @@ basket engine, and the `desk` schema for the plan. The API serves them at `/api/
 
 **Strictly read-only, and enforced rather than intended.** There is no execute control on either
 page and no route behind one — `POST`, `PUT` and `DELETE` all return **405**. Two tests hold it
-that way: `services/api/tests/test_baskets_readonly.py` (no mutating verb on the whole API surface,
-no import of `baskfy_execution`) and `apps/web/src/lib/basket/__tests__/read-only.test.ts` (no
-non-GET fetch, no server action, no form, no submit control).
+that way for the basket pages — `services/api/tests/test_baskets_readonly.py` and
+`apps/web/src/lib/basket/__tests__/read-only.test.ts` — and two more for the desk pages:
+`test_desk_readonly.py` and `lib/desk/__tests__/read-only.test.ts`. Between them: no mutating verb
+on the whole API surface, no import of `baskfy_execution`, no Kite client or token named anywhere
+in the desk router, every SQL statement a SELECT, no non-GET fetch, no server action, no form, no
+submit control.
 
 Execution stays in the desk console. That is the SEBI gate — the desk trades one account, its
 owner's — and it is the desk's non-negotiable #1.
+
+---
+
+## 3b. Corporate actions, and how to undo them (M24, M27, M28)
+
+`corporate_action` held **four rows** until 22 Aug 2026, so most splits and bonuses in the bar
+history had never been applied and each one left a cliff. NSE's API serves only a forward window,
+so it cannot supply the history.
+
+**The history was recovered from data already on disk.** Kite's `historical_data` returns
+*adjusted* bars — measured, and contrary to what `docs/09` assumes — while `ohlcv_daily.close_raw`
+is the NSE bhavcopy's exchange print. The ratio between them is the adjustment still owed, so every
+step in it is a corporate action.
+
+```bash
+cd decile-blueprint
+make token-sync TARGET=momentum-desk                  # both token stores; see below
+uv run python -m baskfy_worker.action_recovery        # DRY RUN — reports, writes nothing
+uv run python -m baskfy_worker.action_recovery --write # writes, then rebuilds the adjusted series
+```
+
+**Dry run is the default on purpose.** The writing form rewrites price history for instruments a
+live strategy ranks, so it has to be typed deliberately. It writes **only** splits and bonuses —
+dividends are recovered, counted and refused, because M27 measured the reference corpus and it
+computes momentum on a *price* return.
+
+**To undo all of it**, in one predicate:
+
+```sql
+DELETE FROM corporate_action WHERE raw->>'source' = 'ratio_recovery';
+```
+
+then re-run `reprocess_instrument` for those instruments. `close_raw` is never written by any of
+this, so the reversal is total — `services/worker/tests/test_action_recovery_write.py` asserts
+exactly that round trip.
+
+To re-measure the price-versus-total-return question against the corpus:
+
+```bash
+uv run python -m reconciliation.dividend_convention --write   # rewrites RECOVERED-ACTIONS.md
+```
+
+**The evidence lives in `reconciliation/RECOVERED-ACTIONS.md`** — the recovered actions, the
+method, the measurement and the verdict, all regenerable.
 
 ---
 
@@ -178,15 +243,24 @@ Individually:
 ```bash
 cd decile-blueprint
 uv run ruff check . && uv run ruff format --check . && uv run mypy
-uv run pytest -q                                    # the screener
-uv run pytest -m db -q -p no:randomly                # the ones needing a live database
-pnpm --filter @baskfy/web test                       # the web app
-cd ../kite-momentum-rebalancer && .venv/bin/python -m pytest tests/ -q   # the desk
+uv run pytest -p no:randomly            # screener + worker + core: 2,346 passed
+pnpm -r run test                        # web app (420) and API client (110)
+cd ../kite-momentum-rebalancer && .venv/bin/python -m pytest   # the desk: 1,328 passed
 ```
+
+**Run each suite from its own directory.** `pytest` at the *repository root* walks into
+`frozen/strangle/` and goes red — the frozen tree is excluded from CI and from
+`tools/check-namespace.sh`, is deliberately unmaintained, and nothing stops a root-level collection
+finding it. That is not a regression; it is what "frozen" means.
+
+**Do not pass `-q`.** `addopts` already carries it, so a second one means `-qq` and the summary
+line disappears.
 
 **`-p no:randomly` on the db suite is not optional today.** Under random ordering nine tests fail
 with `DeadlockDetectedError`; each passes alone and the whole suite passes deterministically. It is
 a fixture-concurrency problem, recorded in `docs/DECISIONS-MERGE.md` M19.6, and it is not fixed.
+Even with it, one run in the final pass produced a single intermittent fixture ERROR in
+`test_seed.py`; it passed alone and the suite re-ran clean.
 
 Three checks that are specific to the merge:
 
@@ -195,7 +269,9 @@ cd decile-blueprint
 uv run python reconciliation/desk_parity.py   # the merged engine vs the desk's real scan corpus
 make backend-parity                           # every desk page on SQLite and on Postgres, diffed
 make shadow DATE=2026-08-18                   # both scan paths, diffed at order level
-bash ../tools/check-namespace.sh              # no namespace token survived the rename
+bash ../tools/check-namespace.sh              # no namespace token AND no old brand name survived
+uv run python -m reconciliation.dividend_convention   # price vs total return, re-measured
+uv run python -m baskfy_worker.action_recovery        # corporate actions: DRY RUN, writes nothing
 make friday-drill DATE=2026-08-18                    # the whole Friday loop, zero orders
 ```
 

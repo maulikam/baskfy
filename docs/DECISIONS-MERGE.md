@@ -1537,3 +1537,64 @@ The db-marked suite fails **9 tests under `pytest-randomly`'s ordering** with
 `DeadlockDetectedError` ×111, and passes completely with `-p no:randomly`. Not from M14's column:
 the failures are in alerts and admin, and each passes alone. Recorded rather than fixed — it is a
 fixture-concurrency problem and a separate investigation.
+
+---
+
+## M20 — the order path can be seen, and runbook six
+
+### M20.1 — three views, each optional, none able to stop a trade ⚠ UNREVIEWED
+`app/telemetry.py`: spans, metrics and error capture over plan → execute → GTT, which had
+`journalctl` and nothing else.
+
+**Degrading to nothing is the feature, not the fallback.** The box runs a live desk on a small
+instance with none of the three libraries installed. Every import is guarded, every helper is a
+no-op when its library is absent, and **nothing here can raise into the order path** — a failure to
+record must never become a failure to trade. Tests cover the disabled branch specifically, including
+a tracer that throws (the body still runs) and a counter that throws (the order still completes).
+
+Each view is off unless its variable is set. `install()` reports **what came up**, not what was
+configured: a DSN set against a missing library reports `False`.
+
+**Shape, not content.** No prices, no quantities, no NAV, no token. A span attribute travels to a
+third party; the desk's own journal holds the detail locally under the operator's control. A test
+greps every instrumented line for those words rather than trusting the rule to be remembered.
+
+Proven by scrape, not by assertion: with `prometheus_client` installed,
+`desk_orders_total{action="BUY",outcome="COMPLETE"} 1.0` and five siblings come back over HTTP.
+
+### M20.2 — the alert rules are the 18 Aug incidents, not hypotheticals ⚠ UNREVIEWED
+Four rules, each naming runbook 6:
+
+* `desk_orders_failing_systemically` — the circuit breaker tripped. On 18 Aug twenty-one orders
+  were fired into the same *"No IPs configured for this app"* rejection because nothing noticed
+  the first three had failed identically.
+* `desk_buys_without_stops` — non-negotiable rule 4, compared over a six-hour window because
+  stops are armed after fills rather than at submission.
+* `desk_orders_rejected`, `desk_execute_slow` — a batch taking minutes is a batch whose limit
+  prices are going stale while it runs.
+
+### M20.3 — runbook 6 leads with the question that cannot wait ⚠ UNREVIEWED
+`docs/runbooks/rebalance-half-executed.md` opens with *"is anything unprotected right now?"* before
+any diagnosis, because an over-covered trigger sells shares you do not own (short delivery) and an
+uncovered one is a position with no floor. On 18 Aug the book carried 10,383 shares of GTT against
+9,478 held — SONACOMS at 2.5×, RADICO at 3.1×, and a 438-share stop on PARAS before a single share
+had filled.
+
+It carries the honest `**Verified against:** NOT YET` line the other five carry, and says why: there
+is no staging with a broker in it, and these failures are not reproducible against production
+without placing real orders.
+
+It also says what it cannot tell you — **whether the strategy still wants the second half.** A
+rebalance interrupted between sells and buys leaves the book in a state neither plan describes, and
+after a session the honest move is a fresh Analyze, not a resumption. Half of yesterday's basket is
+not a basket.
+
+### M20.4 — a missing driver the Beat task would have hit at 18:30 ⚠ UNREVIEWED
+M19's worker tests started failing with `ModuleNotFoundError: No module named 'psycopg'`: the desk
+now reads Postgres, the Celery tasks run in the *worker's* environment, and only the desk's venv had
+the driver. Added to `baskfy-worker`'s dependencies.
+
+Worth noting how it was found. The task itself passed every test written for it, because those ran
+before the desk's `.env` pointed at Postgres. It was the **combination** of two modules' work that
+broke, and the only reason it surfaced today rather than at 18:30 on a Monday is that the suite runs
+the real task against the real desk.

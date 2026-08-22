@@ -14,8 +14,10 @@ import sqlite3
 import sys
 import types
 from pathlib import Path
+from typing import cast
 
 import pytest
+from celery.schedules import crontab
 
 from baskfy_worker import celery_app
 from baskfy_worker.tasks import desk
@@ -105,7 +107,9 @@ def test_beat_fires_when_the_systemd_timer_fires() -> None:
     collecting a *different* session's data while claiming to be the same job.
     """
     entry = celery_app.BEAT_SCHEDULE["desk-daily-collection"]
-    schedule = entry["schedule"]
+    # BEAT_SCHEDULE is typed `dict[str, object]` because celery's entries are heterogeneous;
+    # the cast says what this key actually holds rather than loosening the annotation upstream.
+    schedule = cast(crontab, entry["schedule"])
 
     assert entry["task"] == "baskfy.desk.daily"
     assert schedule.hour == {18}
@@ -115,8 +119,8 @@ def test_beat_fires_when_the_systemd_timer_fires() -> None:
 
 def test_the_autorun_net_is_after_the_collection_not_before() -> None:
     """It exists to pick up what 18:30 could not. Firing first would make it the primary path."""
-    daily = celery_app.BEAT_SCHEDULE["desk-daily-collection"]["schedule"]
-    net = celery_app.BEAT_SCHEDULE["desk-autorun-safety-net"]["schedule"]
+    daily = cast(crontab, celery_app.BEAT_SCHEDULE["desk-daily-collection"]["schedule"])
+    net = cast(crontab, celery_app.BEAT_SCHEDULE["desk-autorun-safety-net"]["schedule"])
     assert (min(net.hour), min(net.minute)) > (min(daily.hour), min(daily.minute))
 
 
@@ -156,7 +160,8 @@ def test_a_failing_step_is_reported_not_raised() -> None:
     # on the word "raised" in the comment explaining why it does not raise — which teaches nobody
     # anything and trains you to weaken the assertion until it passes.
     module = types.ModuleType("scripts.failing")
-    module.main = lambda: 2  # the desk's "no Kite token" exit code
+    # 2 is the desk's "no Kite token" exit code. Assigned dynamically, so mypy is told.
+    module.main = lambda: 2  # type: ignore[attr-defined]
     sys.modules["scripts.failing"] = module
     try:
         result = desk._run([], "failing")
@@ -174,7 +179,7 @@ def test_a_step_that_calls_sys_exit_is_also_reported_not_raised() -> None:
     def main() -> int:
         raise SystemExit(3)
 
-    module.main = main
+    module.main = main  # type: ignore[attr-defined]
     sys.modules["scripts.exiting"] = module
     try:
         result = desk._run([], "exiting")

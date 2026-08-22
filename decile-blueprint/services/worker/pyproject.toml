@@ -15,6 +15,11 @@ dependencies = [
     # instrumentor that reads the W3C `traceparent` the API put on it — without it a pipeline span
     # is a new trace rather than a continuation of the request that enqueued it.
     "opentelemetry-instrumentation-celery>=0.49b0",
+    # M19 §1 + §3. The worker runs the desk's collection jobs (`baskfy_worker.tasks.desk`), and
+    # the desk reads its own records through `app/analytics/pg.py`, which is synchronous psycopg
+    # rather than the asyncpg the API uses. Without it the Beat task fails at 18:30 with
+    # ModuleNotFoundError -- which is how the M19 test suite found this.
+    "psycopg[binary]>=3.2",
 ]
 
 [build-system]

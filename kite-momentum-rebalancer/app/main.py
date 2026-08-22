@@ -123,6 +123,12 @@ def _log_risk_ceilings() -> None:
 _apply_stored_settings()
 _log_risk_ceilings()
 
+# M20 §1. Each of the three views is off unless its environment variable is set, and absent
+# libraries degrade to no-ops — the box runs neither a collector nor a Sentry client, and must
+# not need one. What this reports is what actually came up.
+from . import telemetry as _tel                                    # noqa: E402
+logging.info("observability: %s", _tel.install())
+
 PLANS: dict[str, dict] = {}          # plan_id -> plan (in-memory, session-scoped)
 _kite: Kite | None = None
 _gateway: OrderGateway | None = None
@@ -470,7 +476,13 @@ async def _plan_from_scan(df: pd.DataFrame, provenance: dict, note: str):
     # either way, so the weekly divergence between them is visible rather than assumed to be zero.
     breadth = _resolve_breadth(df, scan_audit, provenance)
 
-    plan = build_plan(scored, holdings, cash, live_prices=live, breadth_override=breadth["value"])
+    with _tel.span("desk.plan.build", scan_source=str(provenance.get("source", "?")),
+                   rows=int(len(df))) as _span:
+        plan = build_plan(scored, holdings, cash, live_prices=live,
+                          breadth_override=breadth["value"])
+        if _span is not None:
+            _span.set_attribute("orders", len([o for o in plan["orders"] if o.get("delta")]))
+    _tel.count("plans", source=str(provenance.get("source", "?")))
     plan["audit"] = scan_audit
     plan["breadth"] = breadth
     plan["scan"] = provenance                          # M13 §3: how this plan can be re-resolved
@@ -541,6 +553,7 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
     preflight = await _funding_check(k, plan["orders"])
 
     results = []
+    _execute_started = time.time()
     # --- circuit breaker -----------------------------------------------------------------
     # On 18 Aug 2026 all twenty-one orders were fired into the same rejection — "No IPs
     # configured for this app" — because nothing noticed that the first three had failed
@@ -572,6 +585,11 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
             res = {"symbol": o["symbol"], "status": "BLOCKED", "error": str(exc)}
         res["action"] = o["action"]
         results.append(res)
+        # The outcome vocabulary is the gateway's own, so a status it invents later is counted
+        # under its real name rather than silently folded into "other".
+        _tel.count("orders", action=side, outcome=str(res.get("status") or "UNKNOWN"))
+        if res.get("status") == "BLOCKED":
+            _tel.count("refusals", guard="untouchable_instrument")
 
         # From the gateway's own vocabulary, not a hand-written pair. RISK_BLOCKED was
         # missing, so a tripped loss cap or an exposure limit would refuse every order
@@ -623,6 +641,14 @@ async def execute(plan_id: str = Form(...), confirm: str = Form(...),
             recon = _ps.reconciliation(conn, plan_id)
     except Exception as exc:
         logging.warning("could not record execution for %s: %s", plan_id, exc)
+        # The batch already went to the broker; failing to record it is exactly the situation
+        # runbook 6 covers, so it is reported rather than left in a log line.
+        _tel.capture(exc, plan_id=plan_id, stage="record_execution", orders=len(results))
+
+    _tel.observe("execute_seconds", time.time() - _execute_started)
+    _tel.observe("batch_size", float(len(ordered)))
+    if aborted_for:
+        _tel.count("refusals", guard="circuit_breaker")
 
     return JSONResponse({"dry_run": C.DRY_RUN, "orders": results, "gtt": stops,
                          "stops_note": stops_note, "stops_pending": True,
@@ -810,6 +836,7 @@ async def stops_arm(plan_id: str = Form(...), confirm: str = Form(...)):
             res = {"symbol": c["symbol"], "gtt_id": c["gtt_id"],
                    "status": "GTT_DELETE_ERROR", "error": str(exc)}
         cancelled.append({**res, "reason": c["reason"]})
+        _tel.count("gtt", outcome="CANCELLED")
 
     placed = []
     for r in plan["rows"]:
@@ -825,6 +852,9 @@ async def stops_arm(plan_id: str = Form(...), confirm: str = Form(...)):
             # One rejection must not abandon the rest of the book unprotected.
             res = {"symbol": r["symbol"], "status": "FAILED", "error": str(exc)}
         placed.append({**res, "qty": r["qty"], "trigger": r["trigger"]})
+        # Rule 4 -- every buy gets a stop the same session -- is the one an alert should be able
+        # to check. `desk_gtt_total{outcome=...}` is what that alert evaluates over.
+        _tel.count("gtt", outcome=str(res.get("status") or "UNKNOWN"))
 
     STOP_PLANS.pop(plan_id, None)          # single use: re-arming needs a fresh review
     log_path = f"data/outputs/stops_{plan_id}.json"

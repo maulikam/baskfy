@@ -132,9 +132,25 @@ def test_a_large_rupee_value_that_is_a_tiny_fraction_is_still_skipped():
 
 
 def test_the_floors_are_configured_not_hardcoded():
+    """The floors come from configuration, not from a literal buried in the sizing arithmetic.
+
+    Plan construction moved to `baskfy_core.basket` at M15 (P3.2) and reads the constants off the
+    injected `cfg`, so this follows the module rather than a path -- and asserts the same property
+    it always did.
+    """
+    import inspect
+    import pathlib as _pl
+
+    import baskfy_core.basket as _basket
+
     assert C.MIN_TRADE_VALUE > 0 and C.MIN_TRADE_PCT > 0
-    src = open("app/rebalance.py").read()
-    assert "C.MIN_TRADE_VALUE" in src and "C.MIN_TRADE_PCT" in src
+    src = _pl.Path(inspect.getsourcefile(_basket)).read_text()
+    assert "cfg.MIN_TRADE_VALUE" in src and "cfg.MIN_TRADE_PCT" in src
+    # And the desk still supplies its own config rather than a copy of the numbers.
+    from app import rebalance as _desk
+
+    desk = _pl.Path(inspect.getsourcefile(_desk)).read_text()
+    assert "cfg=C" in desk
 
 
 # =====================================================================================

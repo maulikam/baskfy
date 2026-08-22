@@ -3,7 +3,7 @@ COMPOSE := docker compose -f infra/docker/compose.yml
 UV      := uv run
 
 .DEFAULT_GOAL := help
-.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants
+.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants token-sync
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -146,3 +146,9 @@ bhavcopy:      ## Bar backfill from the NSE bhavcopy (no Kite needed): make bhav
 
 explain:       ## Audit one factor: make explain SYMBOL=CUPID DATE=2026-08-18 FACTOR=sharpe_12m
 	$(UV) python -m baskfy_worker.factors_cli explain --symbol $(SYMBOL) --date $(DATE) --factor $(FACTOR)
+
+DESK    := ../kite-momentum-rebalancer
+
+token-sync:    ## Pull today's Kite token from the box into the local encrypted store: make token-sync TARGET=desk@1.2.3.4
+	@test -n "$(TARGET)" || { echo "TARGET is required, e.g. make token-sync TARGET=desk@1.2.3.4"; exit 2; }
+	cd $(DESK) && .venv/bin/python scripts/token_sync.py --target $(TARGET)

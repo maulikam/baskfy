@@ -1876,3 +1876,56 @@ already found three defects in one afternoon. Sequenced honestly rather than hal
 1. a module that derives actions and writes them with a `source` marker (reversible);
 2. re-run `apply_adjustments`, then M11 and M12 — the gates arbitrate, exactly as they did before;
 3. only then decide whether the deep 2011 backfill is worth running, and into which column.
+
+---
+
+## M25 — the product finally says its own name
+
+`SITE_NAME = "Decile"` sat in `apps/web/src/lib/site.ts` citing `docs/14 §"The name"`, and docs/14
+still read *"**Decile** — `decile.in` (primary)"*. D1 renamed the product on 21 Aug; nobody rewrote
+docs/14, so the app faithfully rendered the old brand for a day — in 35 user-visible strings, its
+outbound email, its invoices, its OpenAPI title and four legal documents. `SITE_URL` already
+pointed at `baskfy.com`, so the app was half-renamed: Baskfy's domain, Decile's name.
+
+### M25.1 — why no gate caught it, and the gate that does now ⚠ UNREVIEWED
+`tools/check-namespace.sh` is **token-scoped on purpose** — it hunts `decile_`, `DECILE_`,
+`@decile/` — because `decile` is domain vocabulary D1 deliberately keeps, and M2.1 records that a
+blanket rename corrupted a public API contract, a code constant and a blog post before it was
+caught. It was never meant to catch the capitalised brand word, and nothing else was looking.
+
+**Two different failures need two different checks.** A second, separate check now looks for
+`Decile` as a *name*, with its own allowlist and its own failure message. It found **24 more
+occurrences** the moment it was written — `.env.example` in both trees, three Grafana dashboards,
+six `pyproject.toml` descriptions, the compose file, two `package.json`s, the generated
+`openapi.json` and the committed alert-email goldens.
+
+**Rejected:** widening the existing pattern to `[Dd]ecile`. That is exactly what CLAUDE.md forbids
+("Never widen the pattern to silence a hit") and it would have flagged `decile_1`…`decile_6` on
+day one.
+
+### M25.2 — the brand word is renamed; the statistic is not ⚠ UNREVIEWED
+`decile_1`…`decile_6` (a public API contract), `DECILE_RANK_KEY`, `decile_bucket`, "top decile" in
+the filter labels, and the blog post *"What a decile actually measures"* — title, slug and import
+identifier — are all untouched. A decile is a statistical bucket and the product still speaks in
+them; only the *name* moved.
+
+Two entries are allowlisted by name in the new check, each with its reason in the script:
+the blog post, and **CLAUDE.md D1's own sentence** — "Decile's product vocabulary … is kept" —
+because rewriting a decision record to satisfy a checker would be the checker editing history.
+
+### M25.3 — the HTTP headers were renamed while they are still free to rename ⚠ UNREVIEWED
+`X-Decile-Data-Version`, `X-Decile-As-Of`, `X-Decile-Signature`, `X-Decile-Event`,
+`X-Decile-Delivery` → `X-Baskfy-*`. These are a public API contract and renaming one later is a
+breaking change.
+
+**It is free today and only today:** D9 holds the public API shut with two locks
+(`public_api_enabled` is `False` and `DATA_REDISTRIBUTION_REVIEW.signed_off` is a source constant),
+so no external caller has ever seen these headers. Sixteen references across six files. Taken now
+precisely because the cost only goes up.
+
+### M25.4 — docs/14 keeps the old naming case, marked as superseded ⚠ UNREVIEWED
+The Decile naming argument is kept under *"Why the name was Decile"* rather than deleted. It is
+still the clearest explanation of the product vocabulary D1 chose to retain, and the constraint
+table (exchange trademarks, SEBI language, `.com` availability) is the reasoning a future rename
+would want to re-read. The pre-launch legal checklist is rewritten for Baskfy and marked as
+Maulik's — a TM filing is not an agent's to do.

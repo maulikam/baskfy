@@ -78,7 +78,7 @@ def billing_settings(database_url: str, invoice_dir: Path, **overrides: object) 
         razorpay_webhook_secret=WEBHOOK_SECRET,
         razorpay_plan_id_monthly="plan_TESTMONTHLY01",
         razorpay_plan_id_yearly="plan_TESTYEARLY001",
-        supplier_legal_name="Decile Analytics Private Limited",
+        supplier_legal_name="Baskfy Analytics Private Limited",
         supplier_address_lines=("12 MG Road", "Bengaluru 560001"),
         supplier_gstin="29AAAAA0000A1Z5",
         supplier_state="Karnataka (29)",

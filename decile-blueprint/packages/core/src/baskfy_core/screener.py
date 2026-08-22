@@ -65,7 +65,7 @@ from baskfy_core.models import FactorDaily, IndexMemberDaily, Instrument, OhlcvD
 from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.universes import DECILE_RANK_KEY, UNIVERSE_BY_SLUG
 
-#: docs/06 §step 3 — the bucket table. Deciles are a fraction of the universe; ``top_50`` and
+#: docs/06 §step 3 — the bucket table. Baskfys are a fraction of the universe; ``top_50`` and
 #: ``top_100`` are row counts ("or LIMIT n" in the skeleton).
 BUCKET_FRACTIONS: Final[Mapping[str, Decimal]] = {
     "decile_1": Decimal("0.10"),

@@ -1,4 +1,4 @@
-# Local development stack for Decile.
+# Local development stack for Baskfy.
 #
 # NOTE ON THE POSTGRES IMAGE: docs/02-tech-stack-adr.md locks "PostgreSQL 16 + TimescaleDB".
 # The stock `postgres:16` image does not ship the TimescaleDB extension, so we use the official

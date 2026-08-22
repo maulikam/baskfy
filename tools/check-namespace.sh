@@ -71,5 +71,43 @@ if [ "$violations" -ne 0 ]; then
   exit 1
 fi
 
+# --- The BRAND word, which is a different check and needed its own -------------------
+#
+# M25, 22 Aug 2026. The check above is token-scoped on purpose: `decile` is domain vocabulary
+# and a blanket rename corrupted a public API contract, a code constant and a blog post before
+# it was caught (M2.1). But nothing looked for the capitalised BRAND word, so
+# `SITE_NAME = "Decile"` sat in the web app for a day after D1 renamed the product — and the
+# app faithfully rendered the old name in 35 user-visible strings, its outbound email, its
+# invoices and four legal documents.
+#
+# Two different failures need two different checks. This one looks for `Decile` as a name.
+#
+#   what-a-decile-actually-measures   a blog post about the STATISTIC, not the brand. Its
+#   WhatADecileMeasures               title, slug and import identifier are deliberately kept
+#                                     (docs/14 §"The brand word is not the vocabulary word").
+#   Decile's product vocabulary       CLAUDE.md D1's own sentence, which names the former brand
+#                                     in order to say its vocabulary is kept. Rewriting a
+#                                     decision record to satisfy a checker would be the checker
+#                                     editing history. Narrow on purpose: the exact phrase.
+BRAND_ALLOWED="(what-a-decile-actually-measures|WhatADecileMeasures|Decile's product vocabulary)"
+
+brand_hits=0
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  printf '%s' "$line" | grep -qE "$BRAND_ALLOWED" && continue
+  printf '%s\n' "$line"
+  brand_hits=$((brand_hits + 1))
+done < <(git grep -I -n -E 'Decile' -- "${EXCLUDES[@]}" 2>/dev/null)
+
+if [ "$brand_hits" -ne 0 ]; then
+  echo
+  echo "FAIL: $brand_hits occurrence(s) of the old brand name survived."
+  echo "The product is Baskfy (CLAUDE.md D1, docs/14). If a hit is genuinely about the"
+  echo "STATISTIC rather than the name, add it to BRAND_ALLOWED with a reason and record it"
+  echo "in docs/DECISIONS-MERGE.md."
+  exit 1
+fi
+
 echo "OK: no namespace tokens outside the named exceptions (docs/, the two instruction"
-echo "    documents, decile_1..6, DECILE_RANK_KEY, decile_bucket)."
+echo "    documents, decile_1..6, DECILE_RANK_KEY, decile_bucket),"
+echo "    and no occurrence of the old brand name outside the blog post about deciles."

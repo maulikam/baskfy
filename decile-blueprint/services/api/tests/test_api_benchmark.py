@@ -56,7 +56,7 @@ async def _time_run(api: httpx.AsyncClient) -> tuple[float, str]:
     elapsed_ms = (time.perf_counter() - started) * 1000
     assert response.status_code == 200, response.text[:300]
     assert response.json()["result_count"] == 271
-    return elapsed_ms, response.headers.get("X-Decile-Cache", "?")
+    return elapsed_ms, response.headers.get("X-Baskfy-Cache", "?")
 
 
 class TestScreenRunLatency:
@@ -102,7 +102,7 @@ class TestScreenRunLatency:
             )
             samples.append((time.perf_counter() - started) * 1000)
             assert response.status_code == 200, response.text[:300]
-            assert response.headers["X-Decile-Cache"] == "miss"
+            assert response.headers["X-Baskfy-Cache"] == "miss"
 
         p95 = percentile(samples, 0.95)
         assert p95 < COLD_BUDGET_MS, (

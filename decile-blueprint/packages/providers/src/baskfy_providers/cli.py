@@ -36,7 +36,7 @@ def doctor_report(stack: CompositeProvider) -> list[ProviderHealth]:
 
 
 def render_text(reports: Sequence[ProviderHealth], stack: CompositeProvider) -> str:
-    lines = ["Decile providers", "=" * 60]
+    lines = ["Baskfy providers", "=" * 60]
     for report in reports:
         marker = "OK  " if report.available else "DOWN"
         lines.append(f"[{marker}] {report.name}")

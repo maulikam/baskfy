@@ -1,7 +1,7 @@
 [project]
 name = "baskfy"
 version = "0.1.0"
-description = "Decile — India-equities momentum screener (workspace root)"
+description = "Baskfy — India-equities momentum screener (workspace root)"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "baskfy-core",

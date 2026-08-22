@@ -117,7 +117,7 @@ export default async function LandingPage() {
           {SITE_TAGLINE}
         </h1>
         <p className="mt-4 max-w-prose text-muted-foreground">
-          Decile ranks every NSE-listed equity by momentum every night, across sixty-four published
+          Baskfy ranks every NSE-listed equity by momentum every night, across sixty-four published
           factors and fourteen index universes, and shows you the arithmetic behind each number.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">

@@ -54,7 +54,7 @@ def render() -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Emit the Decile OpenAPI document.")
+    parser = argparse.ArgumentParser(description="Emit the Baskfy OpenAPI document.")
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument(
         "--check",

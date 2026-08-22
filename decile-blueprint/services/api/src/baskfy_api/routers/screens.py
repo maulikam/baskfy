@@ -177,9 +177,9 @@ async def _check_data_version(session: AsyncSession, sent: int | None) -> int:
 
 def _json(outcome: ScreenRunResult) -> Response:
     headers = {
-        "X-Decile-As-Of": outcome.resolution.as_of.isoformat(),
-        "X-Decile-Data-Version": str(outcome.data_version),
-        "X-Decile-Cache": "hit" if outcome.cache_hit else "miss",
+        "X-Baskfy-As-Of": outcome.resolution.as_of.isoformat(),
+        "X-Baskfy-Data-Version": str(outcome.data_version),
+        "X-Baskfy-Cache": "hit" if outcome.cache_hit else "miss",
     }
     return Response(content=outcome.payload, media_type=JSON_MEDIA_TYPE, headers=headers)
 
@@ -462,8 +462,8 @@ async def export_screen_csv(
         media_type="text/csv; charset=utf-8",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
-            "X-Decile-As-Of": resolution.as_of.isoformat(),
-            "X-Decile-Data-Version": str(await current_data_version(session)),
+            "X-Baskfy-As-Of": resolution.as_of.isoformat(),
+            "X-Baskfy-Data-Version": str(await current_data_version(session)),
         },
     )
 

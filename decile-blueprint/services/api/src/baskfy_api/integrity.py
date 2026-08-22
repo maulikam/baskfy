@@ -109,7 +109,7 @@ class IntegrityReport:
         }
 
     def render(self) -> str:
-        lines = ["Decile — restored-database integrity", "=" * 60]
+        lines = ["Baskfy — restored-database integrity", "=" * 60]
         for result in self.results:
             marker = {"passed": "PASS", "failed": "FAIL", "skipped": "SKIP"}[result.status.value]
             lines.append(f"[{marker}] {result.name}")
@@ -161,7 +161,7 @@ async def _check_alembic(session: AsyncSession) -> IntegrityResult:
         return IntegrityResult(
             "alembic_revision",
             CheckStatus.FAILED,
-            "alembic_version does not exist; this is not a migrated Decile database",
+            "alembic_version does not exist; this is not a migrated Baskfy database",
         )
     revision = await _scalar(session, "SELECT version_num FROM alembic_version")
     if revision is None:
@@ -380,7 +380,7 @@ async def run_integrity_checks(session: AsyncSession) -> IntegrityReport:
 
 
 async def _main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Assert a restored Decile database is usable.")
+    parser = argparse.ArgumentParser(description="Assert a restored Baskfy database is usable.")
     parser.add_argument("--database-url", default=None, help="Defaults to BASKFY_DATABASE_URL.")
     parser.add_argument("--json", action="store_true", help="Machine-readable output.")
     args = parser.parse_args(argv)

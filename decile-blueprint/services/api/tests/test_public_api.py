@@ -151,7 +151,7 @@ class TestDerivedAnalyticsOnly:
             assert _leaks(body) == [], f"a withheld field reached the wire: {_leaks(body)}"
             assert body["rows"], "the seeded reference export should produce rows"
             assert "close_raw" not in body["columns"]
-            assert body["disclaimer"].startswith("Decile is not a SEBI-registered")
+            assert body["disclaimer"].startswith("Baskfy is not a SEBI-registered")
 
     async def test_a_screen_sorted_by_a_withheld_column_is_refused(
         self, seeded_url: str, screener_session: AsyncSession, clean_redis_namespaces: None

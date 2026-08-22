@@ -4,7 +4,7 @@ import type { Adapter, AdapterUser, VerificationToken } from "@auth/core/adapter
 import { Pool } from "pg";
 
 /**
- * A Postgres adapter over Decile's own schema — docs/02 §"The decision in one table":
+ * A Postgres adapter over Baskfy's own schema — docs/02 §"The decision in one table":
  * "Auth.js v5 (credentials + email OTP), sessions in Postgres".
  *
  * Why not `@auth/pg-adapter`

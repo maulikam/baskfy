@@ -1,7 +1,7 @@
 [project]
 name = "baskfy-core"
 version = "0.1.0"
-description = "Decile domain model: schema, factors, screener, backtest. Pure — no I/O."
+description = "Baskfy domain model: schema, factors, screener, backtest. Pure — no I/O."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "sqlalchemy[asyncio]>=2.0.36",

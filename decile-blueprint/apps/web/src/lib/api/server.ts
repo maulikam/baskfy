@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createDecileClient, type DecileClient } from "@baskfy/api-client";
+import { createBaskfyClient, type BaskfyClient } from "@baskfy/api-client";
 
 import { auth } from "@/lib/auth";
 import { apiOrigin } from "@/lib/api/config";
@@ -14,10 +14,10 @@ import { currentTraceparent } from "@/lib/api/trace";
  * client would capture whichever user rendered first. `server-only` makes importing this from a
  * client component a build error rather than a leaked token.
  */
-export async function serverApi(): Promise<DecileClient> {
+export async function serverApi(): Promise<BaskfyClient> {
   const session = await auth();
   const token = session?.accessToken;
-  return createDecileClient({
+  return createBaskfyClient({
     baseUrl: apiOrigin(),
     ...(token ? { getAccessToken: () => token } : {}),
     // Prompt 17 §1: carry the render's span across the hop, so a slow page and the screen query
@@ -27,6 +27,6 @@ export async function serverApi(): Promise<DecileClient> {
 }
 
 /** An unauthenticated client, for the public pages that read `/meta/*` during SSG. */
-export function publicApi(): DecileClient {
-  return createDecileClient({ baseUrl: apiOrigin(), getTraceparent: currentTraceparent });
+export function publicApi(): BaskfyClient {
+  return createBaskfyClient({ baseUrl: apiOrigin(), getTraceparent: currentTraceparent });
 }

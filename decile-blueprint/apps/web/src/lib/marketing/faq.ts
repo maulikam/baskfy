@@ -39,10 +39,10 @@ export const FAQ_SECTIONS: readonly FaqSection[] = [
     heading: "What this is",
     entries: [
       {
-        id: "what-is-decile",
-        question: "What does Decile actually do?",
+        id: "what-is-baskfy",
+        question: "What does Baskfy actually do?",
         answer: [
-          "Every night after the NSE session, Decile computes sixty-four ranking factors for every listed equity and stores one wide row per instrument per date. A screen is then a filter and a sort over that table: pick a universe, pick a factor, add as many of the twenty-odd filters as you want, and read the ranking.",
+          "Every night after the NSE session, Baskfy computes sixty-four ranking factors for every listed equity and stores one wide row per instrument per date. A screen is then a filter and a sort over that table: pick a universe, pick a factor, add as many of the twenty-odd filters as you want, and read the ranking.",
           "It is a measurement tool. It tells you how a set of names ranks on a stated formula on a stated date. It does not tell you what to do with that.",
         ],
       },
@@ -50,7 +50,7 @@ export const FAQ_SECTIONS: readonly FaqSection[] = [
         id: "not-an-adviser",
         question: "Is this investment advice?",
         answer: [
-          "No. Decile is not a SEBI-registered investment adviser and does not publish advice, recommendations, target prices or model portfolios. Every output is arithmetic over published market data.",
+          "No. Baskfy is not a SEBI-registered investment adviser and does not publish advice, recommendations, target prices or model portfolios. Every output is arithmetic over published market data.",
           "The disclaimer page sets this out at length, and the same statement is rendered on every screen in the product rather than tucked into a footer.",
         ],
       },
@@ -102,7 +102,7 @@ export const FAQ_SECTIONS: readonly FaqSection[] = [
         id: "where-from",
         question: "Where does the data come from?",
         answer: [
-          "Daily bars come from Zerodha Kite; corporate actions, index membership and the listings register come from NSE's own published files. Both are licensed for our own use, which is why Decile publishes derived analytics and does not expose a raw-bar feed.",
+          "Daily bars come from Zerodha Kite; corporate actions, index membership and the listings register come from NSE's own published files. Both are licensed for our own use, which is why Baskfy publishes derived analytics and does not expose a raw-bar feed.",
         ],
       },
     ],

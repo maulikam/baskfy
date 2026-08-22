@@ -63,7 +63,7 @@ UpdatedAt = Annotated[
 
 
 class Base(DeclarativeBase):
-    """Declarative base for every Decile table."""
+    """Declarative base for every Baskfy table."""
 
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 

@@ -46,7 +46,7 @@ API_KEY_HEADER: Final = "X-API-Key"
 
 PLACEHOLDER_KEY: Final = "dk_7f3a9c1b4d2e_YOUR_SECRET_HERE"
 
-DOC_TITLE: Final = "Decile public API"
+DOC_TITLE: Final = "Baskfy public API"
 DOC_DESCRIPTION: Final = f"""
 Derived analytics from Indian equity market data — screen results, factor values and market
 breadth. Read-only, versioned at `{PUBLIC_API_VERSION}`, authenticated with an API key in the
@@ -57,7 +57,7 @@ them as JSON, including the exact list of fields this API serves and the list it
 underlying price and volume records are licensed for our own use and are never served: no
 open/high/low/close, no volume, no moving averages, no highs. See the `withheld_fields` member.
 
-Decile is not a SEBI-registered investment adviser. Nothing this API returns is investment advice.
+Baskfy is not a SEBI-registered investment adviser. Nothing this API returns is investment advice.
 """.strip()
 
 
@@ -86,7 +86,7 @@ def _typescript(method: str, url: str) -> str:
         f'  method: "{method}",\n'
         f'  headers: {{ "{API_KEY_HEADER}": "{PLACEHOLDER_KEY}" }},\n'
         "});\n"
-        "if (!response.ok) throw new Error(`Decile API: ${response.status}`);\n"
+        "if (!response.ok) throw new Error(`Baskfy API: ${response.status}`);\n"
         "console.log(await response.json());"
     )
 

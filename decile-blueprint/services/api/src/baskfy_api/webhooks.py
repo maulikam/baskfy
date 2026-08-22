@@ -8,7 +8,7 @@ drives attempts is ``baskfy_worker.tasks.webhooks``.
 
 The signing scheme
 ------------------
-Header ``X-Decile-Signature: t=<unix seconds>,v1=<hex sha256 hmac>``, over
+Header ``X-Baskfy-Signature: t=<unix seconds>,v1=<hex sha256 hmac>``, over
 ``"<t>.<raw request body>"``. It is Stripe's scheme, deliberately: it is the one a receiver is
 most likely to already have code for, and the timestamp inside the signed payload is what makes a
 captured delivery un-replayable after the receiver's tolerance window. The alternative — signing
@@ -70,9 +70,9 @@ __all__ = [
 
 #: What a receiver reads. ``X-`` prefixed because RFC 6648 deprecates the convention for
 #: *standardised* headers and this is not one; every gateway in this space still spells it so.
-SIGNATURE_HEADER: Final = "X-Decile-Signature"
-EVENT_HEADER: Final = "X-Decile-Event"
-DELIVERY_HEADER: Final = "X-Decile-Delivery"
+SIGNATURE_HEADER: Final = "X-Baskfy-Signature"
+EVENT_HEADER: Final = "X-Baskfy-Event"
+DELIVERY_HEADER: Final = "X-Baskfy-Delivery"
 #: Receivers are told to reject a signature older than this. Five minutes is Stripe's tolerance
 #: and is long enough to survive a clock that is a couple of minutes out.
 SIGNATURE_TOLERANCE_SECONDS: Final = 300
@@ -265,7 +265,7 @@ async def attempt_delivery(  # noqa: PLR0913 - the row, its endpoint, config, tr
         SIGNATURE_HEADER: signature_for(secret, body, timestamp=int(moment.timestamp())),
         EVENT_HEADER: delivery.event,
         DELIVERY_HEADER: str(delivery.id),
-        "User-Agent": "Decile-Webhooks/1",
+        "User-Agent": "Baskfy-Webhooks/1",
     }
 
     delivery.attempts += 1

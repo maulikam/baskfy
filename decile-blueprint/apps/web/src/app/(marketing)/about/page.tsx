@@ -17,7 +17,7 @@ import { SITE_NAME } from "@/lib/site";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "How Decile is built: where the market data comes from, how the factor formulas were " +
+    "How Baskfy is built: where the market data comes from, how the factor formulas were " +
     "verified against a reference export, and which parts are still incomplete.",
   alternates: { canonical: "/about" },
 };

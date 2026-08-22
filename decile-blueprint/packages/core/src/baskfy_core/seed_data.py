@@ -31,7 +31,7 @@ from baskfy_core.screen_definition import (
 from baskfy_core.universes import UNIVERSES
 
 #: docs/14 §"The name". One spelling, shared by the seed rows, the emails and the invoices.
-PRODUCT_NAME: Final = "Decile"
+PRODUCT_NAME: Final = "Baskfy"
 
 #: docs/04 — exchange table. NSE is the only exchange in scope.
 NSE_EXCHANGE_ID: Final = 1
@@ -71,7 +71,7 @@ GATED_FEATURES: Final[tuple[str, ...]] = (
 #: product's own words — "the lifetime of the website" — so both sentences are here: the
 #: reference's clarification, then what it means for us. docs/DECISIONS.md.
 FOREVER_DISCLOSURE: Final = (
-    "Forever means the lifetime of the website. If Decile stops operating, the plan stops with "
+    "Forever means the lifetime of the website. If Baskfy stops operating, the plan stops with "
     "it — there is no refund of the unused remainder and no transfer to another service."
 )
 
@@ -79,9 +79,9 @@ FOREVER_DISCLOSURE: Final = (
 #: docs/01 §1: 'Explicit "not a SEBI registered advisor" disclaimer.' Served by `GET /plans` so
 #: `/pricing` renders the same words the API holds rather than a copy in a component.
 PRE_PURCHASE_DISCLAIMERS: Final[tuple[str, ...]] = (
-    "Decile is not a SEBI-registered investment adviser. Nothing here is investment advice, a "
+    "Baskfy is not a SEBI-registered investment adviser. Nothing here is investment advice, a "
     "recommendation to buy or sell, or a target price.",
-    "Decile is a screening and analytics tool. Every number on it is derived from historical "
+    "Baskfy is a screening and analytics tool. Every number on it is derived from historical "
     "exchange data and can be wrong, stale, or both.",
     "Past performance — including anything a backtest shows — does not indicate future returns.",
     "Prices are in Indian rupees and include GST at the prevailing rate. A GST invoice is issued "
@@ -279,7 +279,7 @@ EXAMPLE_SCREENS: Final[tuple[ScreenSeed, ...]] = (
     ),
     ScreenSeed(
         public_id="exmpl0000003",
-        name="Top Decile Liquid Momentum",
+        name="Top Baskfy Liquid Momentum",
         definition=ScreenDefinition(
             index="nifty-total-market",
             sort_by="sharpe_12m",

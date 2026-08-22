@@ -21,7 +21,7 @@ import { fetchMe } from "@/lib/auth/me";
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "Decile plans: the full NSE momentum screener, CSV export, custom columns, historical ranks " +
+    "Baskfy plans: the full NSE momentum screener, CSV export, custom columns, historical ranks " +
     "and backtests. Monthly, yearly, or a one-time Forever purchase.",
 };
 

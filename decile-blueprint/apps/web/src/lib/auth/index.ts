@@ -45,7 +45,7 @@ declare module "next-auth" {
  * augmenting a module path that the installed package does not publish is a compile error that
  * says nothing useful about the actual contract.
  */
-interface DecileToken {
+interface BaskfyToken {
   publicId?: string | undefined;
   accessToken?: string | undefined;
   accessTokenExpiresAt?: number | undefined;
@@ -119,7 +119,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user }) {
-      const claims: DecileToken = token;
+      const claims: BaskfyToken = token;
       if (user?.id) {
         claims.publicId = user.id;
         // The API issued this on `/auth/login`; carrying it rather than minting a second one
@@ -150,7 +150,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
 
     session({ session, token }) {
-      const claims: DecileToken = token;
+      const claims: BaskfyToken = token;
       session.user.publicId = claims.publicId;
       session.accessToken = claims.accessToken;
       session.accessTokenExpiresAt = claims.accessTokenExpiresAt;

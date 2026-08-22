@@ -1,4 +1,4 @@
-# Decile — working agreement
+# Baskfy — working agreement
 
 > **Part of [Baskfy](../CLAUDE.md).** The root `CLAUDE.md` governs — it carries the two laws,
 > the desk's seven non-negotiables and the screener's nine house rules. This file remains

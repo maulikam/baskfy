@@ -17,7 +17,7 @@ import { SITE_URL } from "@/lib/site";
 export const metadata: Metadata = {
   title: "FAQ",
   description:
-    "How Decile computes its momentum rankings, which universes and dates it covers, what the " +
+    "How Baskfy computes its momentum rankings, which universes and dates it covers, what the " +
     "sentinel filter values mean, what the paid plans include, and what does not work yet.",
   alternates: { canonical: "/faq" },
 };

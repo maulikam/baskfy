@@ -1,7 +1,7 @@
 [project]
 name = "baskfy-worker"
 version = "0.1.0"
-description = "Decile Celery workers, Beat schedule and the nightly pipeline."
+description = "Baskfy Celery workers, Beat schedule and the nightly pipeline."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "baskfy-core",

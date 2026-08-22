@@ -88,8 +88,8 @@ export function widgetOptions(
   const amountPaise = Math.round(Number(session.amount_inr) * 100);
   const base: RazorpayOptions = {
     key: session.key_id,
-    name: "Decile",
-    description: `Decile ${session.plan_code} plan`,
+    name: "Baskfy",
+    description: `Baskfy ${session.plan_code} plan`,
     currency: session.currency,
     prefill: { email: account.email, ...(account.name ? { name: account.name } : {}) },
   };

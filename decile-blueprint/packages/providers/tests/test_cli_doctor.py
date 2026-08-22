@@ -132,7 +132,7 @@ class TestWithProvidersUp:
 class TestArgumentParsing:
     def test_the_doctor_subcommand_runs(self, capsys: pytest.CaptureFixture[str]) -> None:
         assert main(["doctor"]) in (EXIT_OK, EXIT_UNAVAILABLE)
-        assert "Decile providers" in capsys.readouterr().out
+        assert "Baskfy providers" in capsys.readouterr().out
 
     def test_json_flag_is_accepted(self, capsys: pytest.CaptureFixture[str]) -> None:
         main(["doctor", "--json"])

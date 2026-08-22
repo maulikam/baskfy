@@ -32,7 +32,7 @@ IST: Final = dt.timezone(dt.timedelta(hours=5, minutes=30), "IST")
 #: Every invoice says this, because docs/11 §Compliance requires the disclaimer in the footer as
 #: well as on every analytics surface.
 DISCLAIMER: Final = (
-    "Decile is not a SEBI-registered investment adviser. Nothing sold here is investment advice."
+    "Baskfy is not a SEBI-registered investment adviser. Nothing sold here is investment advice."
 )
 
 REVERSE_CHARGE_NOTE: Final = "Whether tax is payable on reverse charge basis: No"
@@ -57,7 +57,7 @@ class InvoiceDocument:
     invoice_date: dt.date
     supplier: Party
     recipient: Party
-    #: What was sold, in the customer's words — "Decile Monthly subscription".
+    #: What was sold, in the customer's words — "Baskfy Monthly subscription".
     description: str
     #: docs/11: "HSN/SAC". A service, so SAC.
     sac_code: str

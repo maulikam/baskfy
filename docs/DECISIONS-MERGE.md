@@ -1155,3 +1155,57 @@ it should be one module of its own, after M21.
 
 **State:** decile **1438 passed, 794 skipped**; desk **1243 passed, 17 skipped**; `ruff check`,
 `ruff format --check` and `mypy` clean across 266 files.
+
+---
+
+## M17 — the rank buffer, demoted to one rule
+
+### M17.1 — `rebalance.py` → `rank_buffer.py`, and the band is now one function ⚠ UNREVIEWED
+Renamed and rewired across seven consumers (`backtest.py`, `schemas.py`, `portfolios.py`, the
+router, the worker's backtest, and two test modules). The name matters: `rebalance` implied a
+second way to build a basket, and there is one — `baskfy_core.basket`, the desk's engine, which
+turns ranks into orders with weights, cluster caps, cash bands, costs and stops. This module owns
+the **rule**, not the construction.
+
+**They were the same rule written twice, and now they are the same function.** The desk's planner
+tested `r <= n + RETENTION_BUFFER`; the screener's tracker had the identical comparison written out
+separately. `rank_buffer.inside_hold_band(rank, top_n, hold_buffer)` is that comparison, named once,
+and `basket.py` calls it. Verified: **plans over the M12 corpus are identical** at three cash levels
+after the change — it is genuinely the same test, not a near-miss.
+
+**They are not the same rule end to end, and the difference is the interesting part.** The desk's
+is this band **plus** a replacement-edge hurdle: a name that falls out of the band is *kept* unless
+a challenger beats it by `REPLACEMENT_EDGE` points, where the tracker exits it outright. So the
+desk's rule is strictly the richer one — which is what `docs/03` §3a claimed, now demonstrated
+rather than asserted.
+
+`packages/core/tests/test_rank_buffer_is_one_rule.py` pins both halves: the boundary is where
+`docs/07` puts it (`rank == top_n + hold_buffer` **holds**, one worse exits), the tracker agrees
+with the predicate on every rank, and the desk's source still contains **both** the shared call and
+the hurdle — so a refactor that dropped `REPLACEMENT_EDGE`, quietly turning the desk's planner into
+the tracker, fails here rather than in a live rebalance.
+
+`cutoff_rank` became dead when `basket` started calling the predicate and was removed; unlike the
+exposure overlay's dead locals, this one was dead *because of* the change and its removal is part
+of it.
+
+### M17.2 — A browser ran a Playwright spec for the first time in this repository's history
+`e2e/portfolios.spec.ts`: **4 passed in 33.2s**, exit 0.
+
+The screener's `CLAUDE.md` carried "The ten-journey Playwright suite has never been executed. It
+type-checks; no browser has run it." **That is no longer true**, and the entry has been rewritten
+to say what is now the case rather than left as a stale claim — the honest-open-items culture cuts
+both ways.
+
+Two things had to exist that never had. A **populated database**, which M7 restored. And a
+**`baskfy_e2e` database**: `playwright.config.ts` migrates and seeds it but does not *create* it —
+CI does that explicitly with a `psql -c "CREATE DATABASE baskfy_e2e"` step, and nothing local ever
+had. The first attempt failed on exactly that, which is a real gap in the local setup and is now
+recorded in the status page's how-to.
+
+The run drove real endpoints — `/api/v1/plans`, `/listings`, `/indices/dashboard`,
+`POST /screens/preview` — all 200. **The other nine journeys, including the backtest one, are still
+unexecuted**; only the portfolios spec was run, because it is the one M17 asks about.
+
+**State:** decile **1447 passed, 794 skipped**; desk **1243 passed, 17 skipped**; `ruff`, `format`
+and `mypy` clean across 267 files; portfolios e2e **4 passed**.

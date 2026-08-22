@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, JsonValue
 
 from baskfy_core.backtest import BacktestConfig
 from baskfy_core.portfolio_csv import MatchStatus, RowIssue, SkipReason, UnmatchedReason
-from baskfy_core.rebalance import Action, ExitReason
+from baskfy_core.rank_buffer import Action, ExitReason
 from baskfy_core.screen_definition import ScreenDefinition
 
 #: docs/07 §Conventions: "Cursor pagination: `?limit=100&cursor=…`".
@@ -955,7 +955,7 @@ class RebalancePayload(_Out):
 
     `holds` is not in docs/07's four keys. It is the held names ranked *inside* `top_n`, which
     belong to none of the three lists and which the target weights include — see
-    `baskfy_core.rebalance` and docs/DECISIONS.md §14.
+    `baskfy_core.rank_buffer` and docs/DECISIONS.md §14.
 
     This is also exactly what `portfolio_rebalance.payload` stores, which is why it is a model in
     its own right: the record and the response are serialised by the same code, so they cannot

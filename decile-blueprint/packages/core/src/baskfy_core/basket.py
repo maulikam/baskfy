@@ -36,6 +36,7 @@ import numpy as np
 import pandas as pd
 
 from baskfy_core.costs import cost_pct, order_cost, plan_cost
+from baskfy_core.rank_buffer import inside_hold_band
 from baskfy_core.score import stop_from_vol
 
 
@@ -165,12 +166,15 @@ def build_plan(
     elig = scored[(scored.reject == "") & (~scored.symbol.isin(unpriced))].sort_values("rank")
     n_lo, n_hi = cfg.TARGET_POSITIONS
     n = int(np.clip(len(elig[elig.SCORE.quantile(0.85) <= elig.SCORE]) + len(keepers), n_lo, n_hi))
-    cutoff_rank = n + cfg.RETENTION_BUFFER
-
     selected: dict[str, float] = {}
     for s, sc in keepers.items():
         r = int(idx.loc[s, "rank"])
-        if r <= cutoff_rank:
+        # THE SAME RULE THE SCREENER'S TRACKER USES, and now literally the same function.
+        # This read `r <= n + RETENTION_BUFFER` and the screener's `plan_rebalance` had the
+        # identical comparison written out separately; a rule embodied twice is one that drifts.
+        # The desk's version is this band PLUS the replacement-edge hurdle below, which is why
+        # it keeps a name the tracker would exit (M17, docs/03 §3a).
+        if inside_hold_band(r, n, cfg.RETENTION_BUFFER):
             selected[s] = sc
         else:
             challenger = elig.iloc[len(selected)] if len(selected) < len(elig) else None

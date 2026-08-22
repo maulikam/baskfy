@@ -98,7 +98,7 @@ from baskfy_core.portfolio_csv import (
     normalise_symbol,
     parse_portfolio_csv,
 )
-from baskfy_core.rebalance import RebalancePlan, RebalanceRow, TargetWeight
+from baskfy_core.rank_buffer import RebalancePlan, RebalanceRow, TargetWeight
 from baskfy_core.screen_definition import ScreenDefinition
 
 log = logging.getLogger(__name__)

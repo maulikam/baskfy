@@ -101,9 +101,23 @@ export function Th({ children, align }: { children: ReactNode; align?: "right" }
   );
 }
 
-export function Td({ children, align, tone }: { children: ReactNode; align?: "right"; tone?: string }) {
+export function Td({
+  children,
+  align,
+  tone,
+}: {
+  children: ReactNode;
+  align?: "right";
+  tone?: string;
+}) {
+  // `max-w-0` with `truncate` is what lets a cell shrink inside a table layout; without it a long
+  // symbol widens the column and pushes the row into a horizontal scroll nobody asked for.
   return (
-    <td className={`py-2 pr-3 ${align === "right" ? "text-right" : ""} ${tone ?? ""}`}>{children}</td>
+    <td
+      className={`max-w-0 truncate py-2 pr-3 ${align === "right" ? "text-right" : ""} ${tone ?? ""}`}
+    >
+      {children}
+    </td>
   );
 }
 

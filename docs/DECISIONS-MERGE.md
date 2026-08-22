@@ -2611,3 +2611,137 @@ the box a person types into looked like an accounting entry.
 
 No assertion here was ever going to catch that, and I had already declared the page verified "by
 test, not by eye" one module earlier. **Looking at it was the check that worked.**
+
+## M37 — the redesign, the plain English, and the mark
+
+Three instructions from Maulik on 23 Aug 2026, in one session:
+
+1. *"use those skills in DESIGN.md, and completely change the look and feel of the UI with very,
+   very user-efficient and simple. If you require to change the label for layman to understand the
+   complexity, make it fun!"*
+2. *"Currently, it shows that we have copied somebody else's screen as it is, ditto ... redesign it
+   to be something different so no one can identify, 'Oh, it matches Momoscreener.'"*
+3. New module: land the chosen logo across both faces of the product.
+
+`DESIGN.md` was replaced three times during the module — a Claude-brand analysis, then a
+Zapier-inspired one, then an Apple one. Two full palettes were built and discarded before the
+commit; only the third exists in history. That churn is the reason for §M37.1 below.
+
+### M37.1 — `DESIGN.md` is read as an architecture, not as a look ⚠ UNREVIEWED
+Following the file literally is what produced note (2). A generated analysis of another company's
+site describes *that company's* surface, and reproducing its canvas, its accent and its type ramp
+gives a page that is recognisably theirs with different words in it — which is exactly what came
+back after the Zapier pass: cream canvas, orange CTA, a left rail of icons, a dense table.
+
+So `DESIGN.md` now supplies the **token architecture** — the spacing ramp, the radii (sm 6px, md
+12px), the warm-canvas/deep-ink relationship, and the current file's principles ("UI chrome
+recedes", "no decorative gradients", "no shadows on chrome", one interactive colour, display type
+with negative tracking). The palette, the type and the layout are Baskfy's own. **If `DESIGN.md`
+is replaced again, this is the line: take the structure, not the skin.**
+
+### M37.2 — the interface is monochrome; the numbers are the only colour ⚠ UNREVIEWED
+`--accent` is now **the ink itself**. Buttons, links and the active state are near-black on warm
+paper. Green and red appear on a Baskfy page in exactly one circumstance: a number went up or a
+number went down.
+
+That is the strongest available reading of docs/08's own rule — *"colour is reserved for meaning
+only"* — which every previous palette claimed to follow while putting a saturated blue, navy or
+orange on every primary control. It is also most of why the product no longer resembles a screener:
+the genre signature is a coloured chrome around a grey table, and this is the opposite.
+
+Consequence, recorded so it is not rediscovered as a bug: `breadth-gauge.tsx`'s middle band was the
+accent and is now a warm grey. Against an orange accent a 56% dial and a 19% dial read as the same
+colour at a glance.
+
+### M37.3 — the sidebar is gone, which is a departure from docs/08 ⚠ UNREVIEWED
+docs/08 §"App shell" asks for a *"Collapsible left sidebar (matching the reference IA)"*. The
+parenthesis is the whole reason it existed. Navigation is now a two-row bar along the top: seven
+destinations in a row, the five desk pages behind one menu, Account and Help in the user menu.
+
+It buys ~15% of the window back on the axis a table needs, replaces fifteen rail items with one
+readable row, and is the single most visible reason the product does not look like the thing it
+was reproduced from.
+
+**This is the largest deliberate departure from docs/08 in the merge.** `nav.test.ts` still pins
+the IA — the groups, the order, the routes — because that part of docs/08 is an observation worth
+keeping; only where it is *drawn* changed. Reversing it means restoring `sidebar.tsx` from this
+commit's parent and swapping one component in `app-shell.tsx`.
+
+`e2e/keyboard.spec.ts`'s sidebar collapse/expand test was removed with the feature.
+
+### M37.4 — plain English, and the rule that keeps it honest ⚠ UNREVIEWED
+`apps/web/src/lib/vocabulary.ts` holds one record per route and one per measure. The rule:
+
+> **The visible label is the plain one; the technical one is never deleted.**
+
+"Above 200 DMA" renders as "Above their one-year trend", with "Above the 200-day moving average"
+and a sentence explaining it one hover *and one tab-stop* away — `<Term/>` and `<TermHint/>` use a
+`<button>`, not a styled `<span>`, because a hover-only tooltip is invisible to a keyboard and to
+a touch screen and the explanation is the half carrying the meaning.
+
+The sidebar's labels came from docs/08 verbatim and `nav.test.ts` pinned that sentence **as
+words**; it now pins the IA **by route**, which is stronger — a rename can no longer silently point
+an item somewhere else. Every renamed destination carries `formerly`, shown on hover.
+
+Tone: facts, never advice. "What you own" is a statement about a database row; "stocks you should
+own" would be a recommendation, which docs/11 §Compliance forbids on every surface.
+
+`market-health-disclosure.test.ts` was updated with the reworded notices. Each still pins an exact
+sentence, so dropping a paragraph still fails the build; only the sentence being pinned is new.
+
+### M37.5 — pages state their answer before their evidence ⚠ UNREVIEWED
+`components/shell/answer.tsx`. A screener page opening with four dials is the right material in the
+wrong order: "56.4%" under "Above 200 DMA" makes the reader do three steps of work to reach the
+thought the page exists to deliver. Market mood now opens with *"about 6 in every 10 companies in
+NIFTY 500 are trading above their own average price for the past year"* at display size, with the
+figure marked, and the dials become the working underneath it.
+
+Anybody can restyle a dashboard. This is the change that alters what the page is *for*, and it is
+the one worth carrying to the remaining surfaces.
+
+### M37.6 — the mark, and the two colours it settled ⚠ UNREVIEWED
+Source: a 4096px PNG on white, three oranges (#FF6A00 / #FF8B2D / #FFAD5C), at the CloudFront URL
+in the session record. **The raw master is gitignored** and `apps/web/brand-src/build_brand.py` is
+committed, so the asset set is reproducible from a re-download.
+
+*The matte.* The obvious `alpha = 1 - min(R,G,B)/255` is exact for #FF6A00 and wrong for the other
+two — #FFAD5C has a blue channel of 92, so it would render the palest ribbons at 64% opacity and
+halo every edge. Instead each pixel is projected onto the line from white toward each brand colour;
+the nearest line identifies the colour, the distance along it is the alpha. No halos, and the light
+tint stays opaque.
+
+*The colour.* `--brand` is now **#FF6A00, taken from the mark** rather than from `DESIGN.md`. A
+logo is a stronger source of truth for a brand colour than an analysis of a company we are not.
+Ink on it is 6.42:1. As type on the canvas it is 2.54:1, which is why it is never type —
+`no-brand-as-text.test.ts` fails the build on `text-brand`, and `contrast.test.ts` asserts the
+ink-on-fill pair so the split cannot be a way of routing around the contrast rule rather than
+satisfying it. `fill-brand`/`stroke-brand` are allowed: WCAG wants 4.5:1 for text (1.4.3) and 3:1
+for graphical objects (1.4.11).
+
+One honest caveat: as a *graphical* fill on the light canvas the orange is 2.54:1, marginally under
+1.4.11's 3:1. The active nav tab therefore carries a hairline and `aria-current` as well as the
+fill — the colour is never the only thing saying "you are here".
+
+### M37.7 — the 16px acceptance failed, and the favicon is a crop ⚠ UNREVIEWED
+Rendered at actual size, the whole mark does not survive. The weave is six ribbons separated by
+white channels about one pixel wide at 16px, and Lanczos averages them into an orange smear with
+no shape. Eroding the art first, so the channels widen before the downsample, was tried at three
+radii and only made the smear paler. A morphologically closed silhouette was tried and reads as an
+undifferentiated blob.
+
+So the brief's fallback was taken: **the favicon is the strongest single ribbon-crossing**, where
+the deep #FF6A00 band sweeps across two pale ones. Five candidate crops were rendered at 16px and
+compared; `GLYPH_BOX = (2000, 1600, 1600)` in the source's own coordinates won. At 16px that is
+three high-contrast diagonals and a hook — a shape rather than a texture.
+
+**The size set is therefore two icons.** 64px and above is the whole woven mark; 48/32/16 and every
+entry in `favicon.ico` is the glyph. That is deliberate and standard practice, not a slip.
+
+### M37.8 — the sign-in page asked for your email twice ⚠ UNREVIEWED
+Found by screenshot, not by any test, and **pre-existing since Prompt 12**. Requesting a one-time
+code and redeeming it are two server actions, so they are two `<form>` elements — and both rendered
+at once, each with its own "Email" input, stacked. The default sign-in path opened by asking you to
+type your address into two identical boxes.
+
+The address is held in state now, travels hidden, and the code box appears only once a code has
+been sent. `e2e/account.spec.ts` asserts both halves.

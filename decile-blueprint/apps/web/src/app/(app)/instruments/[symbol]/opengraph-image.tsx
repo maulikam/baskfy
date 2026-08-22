@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { ImageResponse } from "next/og";
 
 import { fetchFactsheet } from "@/lib/instrument/fetch";
@@ -17,9 +20,17 @@ export const alt = "Instrument factor snapshot";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-const BACKGROUND = "#0b0d11";
-const FOREGROUND = "#f4f5f7";
-const MUTED = "#9aa3b2";
+/* The dark half of M36's palette, and the mark's own orange. Literals rather than CSS variables:
+   satori resolves no cascade, so an OG card cannot read `globals.css`. */
+const BACKGROUND = "#131310";
+const FOREGROUND = "#f0efe8";
+const MUTED = "#a3a094";
+const ACCENT = "#ff6a00";
+
+/** The mark, inlined off disk — an OG route is not guaranteed egress to its own origin. */
+const MARK = `data:image/png;base64,${readFileSync(
+  join(process.cwd(), "public", "brand", "logo-mark-192.png"),
+).toString("base64")}`;
 const POSITIVE = "#3fb950";
 const NEGATIVE = "#f85149";
 
@@ -83,9 +94,25 @@ export default async function Image({ params }: { params: Promise<{ symbol: stri
           </div>
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 24, color: MUTED }}>
-          <div>{SITE_NAME}</div>
-          <div>Factual analysis of published market data. Not investment advice.</div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            fontSize: 24,
+            color: MUTED,
+            borderTop: `4px solid ${ACCENT}`,
+            paddingTop: 22,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {/* satori renders raw <img>; next/image is a React component it cannot resolve. */}
+            <img src={MARK} alt="" width={38} height={38} />
+            <div style={{ display: "flex", color: FOREGROUND }}>{SITE_NAME}</div>
+          </div>
+          <div style={{ display: "flex" }}>
+            Factual analysis of published market data. Not investment advice.
+          </div>
         </div>
       </div>
     ),

@@ -97,7 +97,7 @@ export default async function PlanPage() {
       </div>
 
       {Object.keys(plan.weights).length > 0 && (
-        <details className="rounded-lg border p-3 text-sm">
+        <details className="rounded-xl border border-border/70 bg-card p-4 text-sm">
           <summary className="cursor-pointer font-medium">Target weights</summary>
           <ul className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
             {Object.entries(plan.weights)
@@ -133,7 +133,7 @@ export default async function PlanPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border p-3">
+    <div className="rounded-xl border border-border/70 bg-card p-4">
       <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 text-lg font-semibold tabular-nums">{value}</div>
     </div>

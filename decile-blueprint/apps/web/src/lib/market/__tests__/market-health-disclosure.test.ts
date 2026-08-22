@@ -17,6 +17,13 @@ import { describe, expect, it } from "vitest";
  *
  * Asserted over the source because both are prose: a refactor that drops a paragraph passes every
  * behavioural test there is.
+ *
+ * **M36 changed the wording of both, and this file changed with them.** The page was rewritten for
+ * a reader who does not have the vocabulary, so "The selected range starts before the data does"
+ * became "You asked for more history than exists" and the bias notice leads with what it means
+ * ("The past here looks better than it was") before naming itself. The obligation is unchanged and
+ * so is the strength of these assertions: each still pins an exact sentence, so dropping the
+ * paragraph still fails. Only the sentence being pinned is new.
  */
 const PAGE = readFileSync(
   join(__dirname, "..", "..", "..", "app", "(app)", "market-health", "page.tsx"),
@@ -26,7 +33,7 @@ const PAGE = readFileSync(
 describe("the Market Health page discloses what it cannot show", () => {
   it("warns when the selected range starts before the data does", () => {
     expect(PAGE).toContain("truncated");
-    expect(PAGE).toMatch(/selected range starts before the data does/i);
+    expect(PAGE).toMatch(/asked for more history than exists/i);
   });
 
   it("derives that warning from the data rather than hard-coding a date", () => {
@@ -36,7 +43,10 @@ describe("the Market Health page discloses what it cannot show", () => {
   });
 
   it("states the survivorship bias in the reader's words, not the schema's", () => {
-    expect(PAGE).toMatch(/survivorship-biased/i);
+    // The plain sentence leads and the technical name follows it, which is M36's rule everywhere:
+    // the term is never dropped, only moved out of first position.
+    expect(PAGE).toMatch(/past here looks better than it was/i);
+    expect(PAGE).toMatch(/survivorship bias/i);
     expect(PAGE).toMatch(/constituents for today only/i);
     expect(PAGE).toMatch(/carried\s+backwards/i);
   });
@@ -49,7 +59,7 @@ describe("the Market Health page discloses what it cannot show", () => {
 
   it("keeps both notices inside the History section", () => {
     const history = PAGE.slice(PAGE.indexOf('id="history-heading"'));
-    expect(history).toMatch(/survivorship-biased/i);
-    expect(history).toMatch(/selected range starts before/i);
+    expect(history).toMatch(/survivorship bias/i);
+    expect(history).toMatch(/more history than exists/i);
   });
 });

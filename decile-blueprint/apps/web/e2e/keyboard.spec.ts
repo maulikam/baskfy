@@ -46,17 +46,13 @@ test.describe("keyboard-only walkthrough", () => {
     }
   });
 
-  test("the sidebar collapses and expands from the keyboard", async ({ page }) => {
-    await page.goto("/kitchen-sink");
+  /*
+   * M37 removed the collapsible left sidebar — navigation is a bar along the top now, and there
+   * is nothing to collapse. The test that drove `#app-sidebar`'s `data-collapsed` went with the
+   * feature rather than being adapted to something it no longer describes.
+   * `docs/DECISIONS-MERGE.md` §M37.3 records the departure from docs/08 §"App shell".
+   */
 
-    const toggle = page.getByRole("button", { name: /Collapse sidebar|Expand sidebar/ });
-    await toggle.focus();
-    await expect(page.locator("#app-sidebar")).toHaveAttribute("data-collapsed", "false");
-    await page.keyboard.press("Enter");
-    await expect(page.locator("#app-sidebar")).toHaveAttribute("data-collapsed", "true");
-    await page.keyboard.press("Enter");
-    await expect(page.locator("#app-sidebar")).toHaveAttribute("data-collapsed", "false");
-  });
 
   test("the command palette opens on ⌘K and closes on Escape without trapping focus", async ({
     page,

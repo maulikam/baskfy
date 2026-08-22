@@ -86,7 +86,8 @@
   .sc-topbar  { @apply sticky top-0 z-30 border-b border-line bg-paper/95 backdrop-blur; }
   .sc-topbar__in { @apply mx-auto flex h-14 max-w-[1180px] items-center gap-1 px-4 sm:px-6; }
   .sc-brand   { @apply mr-3 flex shrink-0 items-center gap-2 text-[15px] font-bold tracking-tight text-ink; }
-  .sc-brand__mark { @apply grid h-7 w-7 place-items-center rounded-lg bg-brand text-[13px] font-bold text-white; }
+  /* M37: an image, not a letter tile — no fill, no radius, nothing behind it. */
+  .sc-brand__mark { @apply block h-7 w-7 shrink-0 object-contain; }
 
   /* min-w-0 IS THE WHOLE FIX. A flex item defaults to min-width:auto, so the nav refuses
      to shrink below its content, pushes the bar wider than the viewport and takes the

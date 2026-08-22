@@ -10,6 +10,8 @@ import { ConfigForm } from "@/components/backtests/config-form";
 import { Disclaimer } from "@/components/data/disclaimer";
 import { EmptyState } from "@/components/data/empty-state";
 import { ErrorState } from "@/components/data/error-state";
+import { PageHeader } from "@/components/shell/page-header";
+import { PAGES } from "@/lib/vocabulary";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UNKNOWN } from "@/lib/backtests/metrics";
@@ -55,27 +57,25 @@ export function BacktestsList({
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-wrap items-center gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Backtests</h1>
-          <p className="text-sm text-muted-foreground">
-            Run a saved screen over history, point in time, with costs and whole shares.
-          </p>
-        </div>
-        <Button
-          variant={showForm ? "secondary" : "primary"}
-          size="sm"
-          className="ml-auto"
-          onClick={() => setShowForm((open) => !open)}
-        >
-          <Plus aria-hidden="true" className="size-4" />
-          {showForm ? "Close" : "New backtest"}
-        </Button>
-      </header>
+      <PageHeader
+        title={PAGES["/backtests"].title}
+        blurb={PAGES["/backtests"].blurb}
+        actions={
+          <Button
+            variant={showForm ? "outline" : "primary"}
+            size="sm"
+            onClick={() => setShowForm((open) => !open)}
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            {showForm ? "Close" : "New run"}
+          </Button>
+        }
+        meta="Nothing here knows anything the market did not know at the time — costs and whole shares included."
+      />
 
       {running ? (
-        <p className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-          One backtest at a time per account. The one below finishes before another can start.
+        <p className="rounded-xl border border-border/70 bg-muted/50 p-3.5 text-sm text-muted-foreground">
+          One run at a time. The one below has to finish before another can start.
         </p>
       ) : null}
 

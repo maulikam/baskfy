@@ -20,7 +20,7 @@ export function BufferExplainer({ topN, holdBuffer, result }: BufferExplainerPro
   const limit = topN + holdBuffer;
   return (
     <aside
-      className="rounded-md border border-border bg-muted/40 p-4 text-sm"
+      className="rounded-xl border border-border/70 bg-muted/50 p-4 text-sm leading-relaxed"
       data-testid="buffer-explainer"
       aria-label="How the buffer rule works"
     >

@@ -3,6 +3,8 @@
 import { Bell, LogIn, LogOut, Plug, ShieldCheck, User } from "lucide-react";
 import Link from "next/link";
 
+import { NAV_GROUPS } from "@/lib/nav";
+
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,6 +21,12 @@ import {
  * The signed-in identity is passed in from the server layout (`auth()`), not fetched here: the
  * session is already known when the shell renders, and a client fetch would flash "Sign in" for a
  * user who is signed in — a layout shift on every page load.
+ *
+ * **M36 moved the Account and Help groups in here.** They were two blocks of the sidebar, drawn at
+ * the same weight as the seven product destinations, which is a lot of furniture for "change my
+ * password" and "read the FAQ". With navigation along the top there is no rail to put them in and
+ * no reason to want one: settings belong behind the account control. `NAV_GROUPS` is unchanged, so
+ * `nav.test.ts` still pins docs/08's IA — only where it is *drawn* moved.
  */
 export interface UserMenuProps {
   email: string | null;
@@ -32,6 +40,11 @@ export interface UserMenuProps {
    */
   isStaff?: boolean;
 }
+
+/** docs/08's Account and Help groups, drawn here since M36 rather than in a rail. */
+const ACCOUNT_AND_HELP = NAV_GROUPS.filter(
+  (group) => group.label === "Account" || group.label === "Help",
+);
 
 export function UserMenu({ email, name, isStaff = false }: UserMenuProps) {
   if (!email) {
@@ -57,6 +70,23 @@ export function UserMenu({ email, name, isStaff = false }: UserMenuProps) {
           <span className="block font-medium text-foreground">{name ?? "Signed in"}</span>
           <span className="block truncate">{email}</span>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator className="my-1 h-px bg-border" />
+
+        {ACCOUNT_AND_HELP.map((group) => (
+          <div key={group.label}>
+            <DropdownMenuLabel className="pt-1 text-[11px] font-medium tracking-[0.04em]">
+              {group.label}
+            </DropdownMenuLabel>
+            {group.items.map((item) =>
+              item.status === "ready" ? (
+                <DropdownMenuItem key={item.href} asChild>
+                  <Link href={item.href}>{item.label}</Link>
+                </DropdownMenuItem>
+              ) : null,
+            )}
+          </div>
+        ))}
+
         <DropdownMenuSeparator className="my-1 h-px bg-border" />
         {/*
           Prompt 20 §1 and §3. Here rather than in `NAV_GROUPS` for exactly the reason the admin

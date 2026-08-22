@@ -11,6 +11,7 @@ import {
   pct,
 } from "@/components/desk/ui";
 import { DeskUnavailable, fetchRegime } from "@/lib/desk/fetch";
+import { PAGES } from "@/lib/vocabulary";
 
 /**
  * `/regime` — M26. How defensive the strategy is being, and why.
@@ -24,7 +25,7 @@ import { DeskUnavailable, fetchRegime } from "@/lib/desk/fetch";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Market stance",
+  title: PAGES["/regime"].title,
   description: "How defensive the strategy is being right now, and the reasons it gave.",
 };
 
@@ -50,7 +51,7 @@ export default async function RegimePage() {
     if (!(error instanceof DeskUnavailable)) throw error;
     return (
       <Empty
-        title="Market stance"
+        title={PAGES["/regime"].title}
         body="The desk has not evaluated the market stance yet. It does so weekly."
       />
     );
@@ -61,13 +62,13 @@ export default async function RegimePage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Market stance"
-        lede="How defensive the strategy is being right now, and the reasons it gave when it decided."
-        meta={`Evaluated ${data.evaluated_at}${data.signal_date ? ` on ${data.signal_date} closing data` : ""}`}
+        title={PAGES["/regime"].title}
+        lede={PAGES["/regime"].blurb}
+        meta={`Last worked out ${data.evaluated_at.slice(0, 10)}${data.signal_date ? `, from ${data.signal_date} closing prices` : ""}.`}
       />
 
-      <section className="rounded-lg border p-4">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">Current stance</div>
+      <section className="rounded-xl border border-border/70 bg-card p-5">
+        <div className="eyebrow">Where the dial is now</div>
         <div className="mt-1 text-2xl font-semibold">
           {tier.label} <span className="text-base font-normal text-muted-foreground">({data.tier})</span>
         </div>
@@ -90,14 +91,14 @@ export default async function RegimePage() {
 
       <StatRow>
         <Stat
-          label="Breadth"
+          label="How many are joining in"
           value={pct(data.breadth_pct)}
-          hint="of the universe above its 20-day average"
+          hint="above their one-month trend"
         />
-        <Stat label="Invested" value={pct(data.actual_equity_pct)} hint="of the portfolio" />
-        <Stat label="Ceiling" value={pct(data.target_equity_cap_pct)} hint="the stance allows" />
+        <Stat label="In shares right now" value={pct(data.actual_equity_pct)} hint="of the portfolio" />
+        <Stat label="Most it may hold" value={pct(data.target_equity_cap_pct)} hint="at this setting on the dial" />
         <Stat
-          label="New positions"
+          label="New buys allowed"
           value={data.new_buys ? (data.new_buys === "full" ? "Full size" : data.new_buys === "half" ? "Half size" : "None") : "–"}
         />
       </StatRow>
@@ -107,7 +108,7 @@ export default async function RegimePage() {
       )}
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold">Why</h2>
+        <h2 className="text-base">Why it is set there</h2>
         <ul className="flex flex-col gap-1.5 text-sm">
           {data.reasons.map((reason) => (
             <li key={reason} className="flex gap-2">

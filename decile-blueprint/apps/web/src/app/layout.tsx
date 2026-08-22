@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ConsentBanner } from "@/components/consent/consent-banner";
@@ -8,16 +8,34 @@ import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site"
 import "./globals.css";
 
 /**
- * docs/08 §"Design principles": "one sans for UI (Inter or Geist)".
+ * Three faces, each with one job — see `globals.css` §`@theme` for why the split exists.
  *
- * `next/font` self-hosts the file and emits `size-adjust` fallback metrics, so the fallback and
+ * `next/font` self-hosts every file and emits `size-adjust` fallback metrics, so the fallback and
  * the real font occupy the same space — the layout does not move when the webfont arrives, which
  * is Prompt 8's fourth acceptance criterion applied to type.
+ *
+ * The root `DESIGN.md` names Degular Display with Inter for body. Degular is a licensed face this
+ * project holds no licence for, and Inter is the most-used interface font on the web — following
+ * that pairing literally produced a page that read as somebody else's product. Both are replaced,
+ * and the note is in `docs/DECISIONS-MERGE.md` §M36.3.
  */
-const inter = Inter({
+const geist = Geist({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-inter",
+  variable: "--font-geist",
+});
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-geist-mono",
+});
+
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-bricolage",
+  axes: ["opsz"],
 });
 
 export const metadata: Metadata = {
@@ -49,8 +67,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   /* The browser chrome follows the theme, so the toggle does not leave a white status bar. */
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbfbfd" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b0d11" },
+    { media: "(prefers-color-scheme: light)", color: "#f2f1ec" },
+    { media: "(prefers-color-scheme: dark)", color: "#131310" },
   ],
 };
 
@@ -78,8 +96,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
      * markup and the client's first read differ by design. That script is what prevents the
      * light-then-dark flash (Prompt 8 deliverable 6, "a working dark mode with no FOUC").
      */
-    <html lang="en-IN" suppressHydrationWarning className={inter.variable}>
-      <body className="antialiased">
+    <html lang="en-IN" suppressHydrationWarning className={`${geist.variable} ${bricolage.variable} ${geistMono.variable}`}>
+      <body className="grain antialiased">
         {children}
         <ConsentBanner />
       </body>

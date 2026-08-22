@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Disclaimer } from "@/components/data/disclaimer";
 import { CONTENT_ROUTES, LEGAL_ROUTES, PRODUCT_ROUTES } from "@/lib/marketing/routes";
+import { Wordmark } from "@/components/shell/wordmark";
 import { SITE_NAME } from "@/lib/site";
 
 /**
@@ -24,11 +25,13 @@ const COLUMNS = [
 export function SiteFooter() {
   return (
     <footer className="mt-16 border-t border-border">
-      <div className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-10">
+      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12">
+        {/* The mark closes the page as well as opening it — M37. */}
+        <Wordmark />
         <div className="grid gap-8 sm:grid-cols-3">
           {COLUMNS.map((column) => (
             <nav key={column.heading} aria-label={column.heading} className="space-y-3">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h2 className="eyebrow">
                 {column.heading}
               </h2>
               <ul className="space-y-2 text-sm">

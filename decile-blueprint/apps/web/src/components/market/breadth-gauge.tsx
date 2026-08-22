@@ -1,4 +1,6 @@
+import { TermHint } from "@/components/ui/term";
 import { EMPTY_CELL, formatNumber } from "@/lib/format";
+import type { TermId } from "@/lib/vocabulary";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,6 +23,14 @@ export interface BreadthGaugeProps {
   label: string;
   /** A percentage, 0–100. `null` when the inputs are absent. */
   value: number | null;
+  /**
+   * The vocabulary entry that says what this measures (M36). The caption carries the plain label
+   * and this puts the professional name and the explanation one hover away — the gauges are the
+   * densest jargon on the site, and "Within 10% of ATH" is unreadable to a first-time visitor.
+   */
+  term?: TermId;
+  /** One line under the caption reading the number back in words. */
+  reading?: string;
   className?: string | undefined;
 }
 
@@ -32,14 +42,25 @@ const SWEEP_DEGREES = 270;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const ARC_LENGTH = (CIRCUMFERENCE * SWEEP_DEGREES) / 360;
 
+/**
+ * Green when most of the market is participating, red when little of it is, neutral in between.
+ *
+ * The middle band used to be the accent. That worked while the accent was a blue; against M36's
+ * orange it sat a few degrees of hue from `--negative` and the two arcs became one colour at a
+ * glance — a 56% dial and a 19% dial looked like the same reading. A warm grey says "neither"
+ * without pretending to be a verdict, which is also the more honest thing for a middling number.
+ *
+ * Colour is never the only carrier: the figure is printed inside the arc, the accessible name
+ * repeats it, and the caption reads it back in words (docs/11 §Accessibility).
+ */
 function toneFor(value: number | null): string {
   if (value === null) return "stroke-border";
   if (value >= 60) return "stroke-positive";
-  if (value >= 40) return "stroke-accent";
+  if (value >= 40) return "stroke-muted-foreground";
   return "stroke-negative";
 }
 
-export function BreadthGauge({ label, value, className }: BreadthGaugeProps) {
+export function BreadthGauge({ label, value, term, reading, className }: BreadthGaugeProps) {
   const clamped = value === null ? 0 : Math.min(Math.max(value, 0), 100);
   const filled = (ARC_LENGTH * clamped) / 100;
   const display = value === null ? EMPTY_CELL : `${formatNumber(value, { decimals: 1 })}%`;
@@ -47,7 +68,7 @@ export function BreadthGauge({ label, value, className }: BreadthGaugeProps) {
   return (
     <figure
       className={cn(
-        "flex flex-col items-center gap-2 rounded-lg border border-border bg-card p-4",
+        "flex flex-col items-center gap-2 rounded-xl border border-border/70 bg-card p-5",
         className,
       )}
     >
@@ -88,7 +109,15 @@ export function BreadthGauge({ label, value, className }: BreadthGaugeProps) {
           {display}
         </p>
       </div>
-      <figcaption className="text-center text-sm text-muted-foreground">{label}</figcaption>
+      <figcaption className="flex flex-col items-center gap-1 text-center">
+        <span className="flex items-center gap-1.5 text-sm font-medium">
+          {label}
+          {term ? <TermHint id={term} /> : null}
+        </span>
+        {reading ? (
+          <span className="text-xs leading-relaxed text-muted-foreground">{reading}</span>
+        ) : null}
+      </figcaption>
     </figure>
   );
 }

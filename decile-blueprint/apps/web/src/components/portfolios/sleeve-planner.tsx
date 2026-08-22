@@ -118,7 +118,7 @@ export function SleevePlanner({
         is what that tier implies, and applying it to your own sleeves is a tick you make.
       */}
       {stance && (
-        <section className="rounded-lg border p-3">
+        <section className="rounded-xl border border-border/70 bg-card p-4">
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-muted-foreground">Market stance:</span>
             <Badge variant="neutral">{stance.tier}</Badge>
@@ -349,7 +349,7 @@ export function SleevePlanner({
 
           <div className="grid gap-3 xl:grid-cols-2">
             {allocation.data.sleeves.map((sleeve) => (
-              <div key={sleeve.name} className="rounded-lg border p-3">
+              <div key={sleeve.name} className="rounded-xl border border-border/70 bg-card p-4">
                 <div className="flex items-baseline justify-between">
                   <div>
                     <div className="text-sm font-medium">{sleeve.name}</div>

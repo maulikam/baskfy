@@ -2,15 +2,51 @@
 @import "tw-animate-css";
 
 /*
- * Baskfy's design tokens — docs/08 §"Design principles".
+ * Baskfy's design tokens.
+ *
+ * docs/08 §"Design principles" set the rule, and M36 finally takes it literally:
  *
  *   "neutral greyscale carries the layout; colour is reserved for meaning only —
  *    positive/negative, rank emphasis, and one accent for primary actions."
  *
- * Every colour below that carries text is verified against its surface at >= 4.5:1 in BOTH
- * themes by `src/lib/__tests__/contrast.test.ts`, which parses this file. docs/11 §Accessibility
- * makes that a requirement rather than an aspiration, and the positive/negative pair is called
- * out there by name because it is the one people get wrong.
+ * ## The interface is monochrome. The numbers are the only colour on it.
+ *
+ * Every earlier version of this file had a coloured accent — a blue, then a navy, then
+ * `DESIGN.md`'s orange — and every one of them put a second colour on screen competing with the
+ * one that carries meaning. A page where the primary button, the active nav item and a falling
+ * price are all saturated is a page where nothing is emphasised.
+ *
+ * So `--accent` is **the ink itself**. Buttons, links and the active state are near-black on warm
+ * paper. Green and red appear on a Baskfy page in exactly one circumstance: a number went up or a
+ * number went down. That is not an aesthetic preference, it is the strongest possible reading of
+ * the rule docs/08 wrote and the earlier palettes only claimed to follow.
+ *
+ * ## `--brand` is the logo's orange, and it is a fill
+ *
+ * `#FF6A00`, taken from the mark itself (M37) rather than from a reference analysis of somebody
+ * else's product — a logo is a stronger source of truth for a brand colour than a document
+ * describing a company we are not. It is used the way a marker pen is used: as a **fill with ink
+ * on top**, never as type. Ink on it measures 6.42:1.
+ *
+ * As type it measures 2.54:1 on the canvas, which is why it never is type. As a *graphical* fill
+ * that is marginally under WCAG 1.4.11's 3:1, so the active nav item carries a hairline as well as
+ * the fill and states itself with `aria-current` — the colour is never the only thing saying
+ * "you are here".
+ *
+ * `contrast.test.ts` asserts the ink-on-chartreuse pair, and `no-brand-as-text.test.ts` fails the
+ * build if anybody sets type in it. See `docs/DECISIONS-MERGE.md` §M36.2.
+ *
+ * ## Where the palette came from
+ *
+ * The root `DESIGN.md` is read as a **token architecture** — its spacing ramp, its radii, its
+ * warm-canvas-and-deep-ink relationship — and not as a look to reproduce. Reproducing it gave a
+ * page that was recognisably somebody else's product in a different typeface, which was the note
+ * that produced this version.
+ *
+ * Every colour below that carries text is verified against its surface at >= 4.5:1 in BOTH themes
+ * by `src/lib/__tests__/contrast.test.ts`, which parses this file. docs/11 §Accessibility makes
+ * that a requirement rather than an aspiration, and the positive/negative pair is called out there
+ * by name because it is the one people get wrong.
  *
  * Tailwind v4 has no `tailwind.config.js`: the theme *is* this file.
  */
@@ -20,64 +56,92 @@
 :root {
   color-scheme: light;
 
-  /* --- Neutral greyscale: the whole layout ------------------------------- */
-  --background: #fbfbfd;
-  --foreground: #0d1117;
-  --card: #ffffff;
-  --card-foreground: #0d1117;
-  --popover: #ffffff;
-  --popover-foreground: #0d1117;
-  --muted: #f1f2f5;
-  --muted-foreground: #596273;
-  --border: #e2e4ea;
-  --input: #d7dae2;
-  --ring: #2d5bd0;
+  /* --- Warm paper, warm ink. One family, no hue anywhere. ---------------- */
+  --background: #f2f1ec;
+  --foreground: #15140f;
+  --card: #fbfaf7;
+  --card-foreground: #15140f;
+  --popover: #fbfaf7;
+  --popover-foreground: #15140f;
+  --muted: #e7e5dd;
+  --muted-foreground: #5c5a51;
+  --border: #dcd9d0;
+  --input: #c9c5b9;
+  --ring: #15140f;
 
-  /* --- The one accent ---------------------------------------------------- */
-  --accent: #2d5bd0;
-  --accent-foreground: #ffffff;
-  --accent-muted: #eaf0ff;
+  /* --- The accent is the ink. See the note above. ------------------------ */
+  --accent: #15140f;
+  --accent-foreground: #f7f6f2;
+  --accent-muted: #e4e2d9;
 
-  /* --- Semantic meaning. Never decoration. ------------------------------- */
-  --positive: #077a48;
-  --positive-muted: #e6f5ee;
-  --negative: #bd2437;
-  --negative-muted: #fdeaec;
-  --warning: #8a5a00;
-  --warning-muted: #fdf3e0;
+  /* --- The highlighter. A fill, with ink on it. Never type. --------------- */
+  --brand: #ff6a00;
+  --brand-foreground: #15140f;
+
+  /* --- Semantic meaning. The only colour on the page. --------------------- */
+  --positive: #1a6b3f;
+  --positive-muted: #e0efe5;
+  --negative: #93181e;
+  --negative-muted: #f8e6e6;
+  --warning: #7d5a0b;
+  --warning-muted: #f6eeda;
 
   /* --- Density (docs/08: "default row height 34px") ---------------------- */
   --row-height: 34px;
   --row-height-compact: 28px;
 
-  --radius: 0.5rem;
+  /* DESIGN.md §rounded: sm 6px, md 12px, pill. The container radius is the md. */
+  --radius: 0.75rem;
+
+  /*
+   * Shadows carry the canvas's hue rather than plain black. A neutral-black shadow on a warm
+   * surface reads as dirt; the same shadow tinted toward the paper reads as depth.
+   */
+  --shadow-tint: 30 28 20;
+  --shadow-strength: 0.07;
+
+  /* The grain overlay's opacity — see `.grain` below. */
+  --grain-opacity: 0.55;
 }
 
 .dark {
   color-scheme: dark;
 
-  --background: #0b0d11;
-  --foreground: #e8ebf0;
-  --card: #14181e;
-  --card-foreground: #e8ebf0;
-  --popover: #14181e;
-  --popover-foreground: #e8ebf0;
-  --muted: #1b212a;
-  --muted-foreground: #949eae;
-  --border: #262d38;
-  --input: #313a47;
-  --ring: #78a1ff;
+  /*
+   * The same system with the polarity flipped: the ink becomes the paper. The accent flips with
+   * it — a near-white button on near-black — so "the accent is the ink" holds in both themes
+   * rather than only in the one it was designed in.
+   */
+  --background: #131310;
+  --foreground: #f0efe8;
+  --card: #1c1c18;
+  --card-foreground: #f0efe8;
+  --popover: #1c1c18;
+  --popover-foreground: #f0efe8;
+  --muted: #26261f;
+  --muted-foreground: #a3a094;
+  --border: #32322a;
+  --input: #43423a;
+  --ring: #ff8b2d;
 
-  --accent: #78a1ff;
-  --accent-foreground: #0b0d11;
-  --accent-muted: #1a2440;
+  --accent: #f0efe8;
+  --accent-foreground: #131310;
+  --accent-muted: #2c2c24;
 
-  --positive: #3ecf90;
-  --positive-muted: #10301f;
-  --negative: #fd7684;
-  --negative-muted: #331319;
-  --warning: #e0a63a;
-  --warning-muted: #2c220d;
+  /* The mark does not change colour between themes, so neither does this. */
+  --brand: #ff6a00;
+  --brand-foreground: #131310;
+
+  --positive: #4ecb8a;
+  --positive-muted: #102c1d;
+  --negative: #ff7f84;
+  --negative-muted: #331618;
+  --warning: #e0aa46;
+  --warning-muted: #2b2210;
+
+  --shadow-tint: 0 0 0;
+  --shadow-strength: 0.5;
+  --grain-opacity: 0.3;
 }
 
 @theme inline {
@@ -95,6 +159,8 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent-muted: var(--accent-muted);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
   --color-positive: var(--positive);
   --color-positive-muted: var(--positive-muted);
   --color-negative: var(--negative);
@@ -102,17 +168,48 @@
   --color-warning: var(--warning);
   --color-warning-muted: var(--warning-muted);
 
-  --radius-sm: calc(var(--radius) - 2px);
+  /*
+   * Radius varies by scale rather than being one value everywhere: an inner control sits tighter
+   * than the panel that contains it, which is what makes nesting legible.
+   */
+  --radius-sm: 6px;
   --radius-md: var(--radius);
-  --radius-lg: calc(var(--radius) + 2px);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
 
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+  /*
+   * Two families and a mono, each doing one job.
+   *
+   *   display — Bricolage Grotesque. A variable grotesk with real character in its curves and an
+   *             `opsz` axis, so a 56px page title and a 20px section heading are drawn differently
+   *             rather than scaled. Headings only.
+   *   sans    — Geist, for every label, control and paragraph. Deliberately not Inter: Inter is
+   *             the most-used interface face on the web, and a product that wants not to look
+   *             like every other product should not open with the font every other product uses.
+   *   mono    — Geist Mono, and it does more work here than usual. **Every figure on a Baskfy
+   *             page is set in it**, which is the largest single reason the interface does not
+   *             look like a generic dashboard: prices, percentages and counts read as a ledger
+   *             rather than as body text that happens to contain digits.
+   */
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", "Menlo", monospace;
+
+  /*
+   * `DESIGN.md`: "no shadows on chrome, only one signature drop-shadow under product imagery."
+   * `--shadow-soft` is therefore nearly nothing — a single hairline-weight lift, so a card is
+   * separated from the page by its border and by space rather than by a glow. `--shadow-lift` is
+   * the signature one, and it is spent on exactly two things: a popover and the sign-in card.
+   */
+  --shadow-soft: 0 1px 1px rgb(var(--shadow-tint) / calc(var(--shadow-strength) * 0.7));
+  --shadow-lift: 0 2px 4px rgb(var(--shadow-tint) / var(--shadow-strength)),
+    0 12px 28px -8px rgb(var(--shadow-tint) / var(--shadow-strength));
 
   /* docs/08 §Motion: "<=150 ms". Height is not transform/opacity, but an accordion cannot open
      without it; the duration is kept at the floor and `prefers-reduced-motion` removes it. */
   --animate-accordion-down: accordion-down 140ms ease-out;
   --animate-accordion-up: accordion-up 140ms ease-out;
+  --animate-rise: rise 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes accordion-down {
@@ -133,6 +230,18 @@
   }
 }
 
+/* Transform and opacity only, so entry costs the compositor and not the layout engine. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @layer base {
   * {
     border-color: var(--border);
@@ -146,6 +255,7 @@
      */
     font-variant-numeric: tabular-nums;
     -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
   }
 
   body {
@@ -154,6 +264,26 @@
     font-family: var(--font-sans);
     /* Reserve the scrollbar so a short page and a long one do not shift horizontally. */
     scrollbar-gutter: stable;
+  }
+
+  /*
+   * Headings are the serif, everywhere, without each component remembering to ask. Tight tracking
+   * and a short line-height are what give a display face presence; at body size they would make
+   * it unreadable, which is why only the heading levels get them.
+   */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+
+  /* An orphan is a word alone on the last line; `pretty` moves one up rather than leaving it. */
+  p {
+    text-wrap: pretty;
   }
 
   /*
@@ -187,6 +317,22 @@
   }
 
   /*
+   * A single fixed grain layer over the whole document. Flat vector surfaces read as sterile at
+   * this size; a fraction of a percent of noise is the cheapest thing that makes a large pale
+   * area look like a material. It is an inline SVG rather than an image so it costs no request,
+   * and `pointer-events: none` keeps it out of every hit test.
+   */
+  .grain::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: var(--grain-opacity);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  }
+
+  /*
    * docs/08 §"Accessibility & quality bar" — the skip link is the first thing a keyboard user
    * meets, so it must be invisible until focused and unmissable after.
    */
@@ -201,5 +347,52 @@
 
   .skip-link:focus-visible {
     transform: translateY(0);
+  }
+
+  /*
+   * Every figure on the site. Mono, tabular, tracked in a little — the single utility that makes
+   * a page of numbers read as a ledger rather than as prose containing digits. Applied by the
+   * components that render figures, so no page has to remember.
+   */
+  .fig {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    font-feature-settings: "ss01";
+  }
+
+  /*
+   * The highlighter. A chartreuse fill with ink on it, sized to the text and offset like a marker
+   * stroke rather than a badge — which is what keeps it from reading as one more coloured pill.
+   */
+  .marker {
+    background-color: var(--brand);
+    color: var(--brand-foreground);
+    box-shadow:
+      -0.18em 0 0 var(--brand),
+      0.18em 0 0 var(--brand);
+  }
+
+  /*
+   * The marker where it is an interface control rather than a phrase — a nav tab. The hairline is
+   * not decoration: the fill is 2.54:1 against the canvas, which is under WCAG 1.4.11's 3:1 for a
+   * graphical object, so the boundary has to be drawn rather than implied by the colour alone.
+   */
+  .marker-control {
+    background-color: var(--brand);
+    color: var(--brand-foreground);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-foreground) 30%, transparent);
+  }
+
+  /*
+   * The label above a figure. Small, spaced, sentence case — not the all-caps shout the previous
+   * design used on every stat card. Positive tracking is what keeps small text legible once the
+   * weight comes down.
+   */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
   }
 }

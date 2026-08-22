@@ -14,6 +14,8 @@ import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { TermHint } from "@/components/ui/term";
+import { TERMS, type TermId } from "@/lib/vocabulary";
 import { cn } from "@/lib/utils";
 
 /**
@@ -39,6 +41,37 @@ import { cn } from "@/lib/utils";
  * The repeated header rows are `aria-hidden`: they are a visual affordance for long scrolls, and
  * announcing the column names again every sixteen rows would be actively worse.
  */
+
+
+/**
+ * How wide a column is allowed to be (M36).
+ *
+ * Every column used to be a fixed `size` and nothing filled the leftover, so on a wide display the
+ * table stopped mid-screen and left a band of empty grid to the right of the last header — which
+ * reads as a rendering fault rather than as spare room. A column whose `meta.grow` is set takes
+ * the slack instead, with its declared `size` as a floor so it can still be sized deliberately on
+ * a narrow one.
+ */
+export function columnWidth(size: number, grow: boolean | undefined) {
+  return grow
+    ? ({ flex: `1 1 ${size}px`, minWidth: size } as const)
+    : ({ width: size, flexShrink: 0 } as const);
+}
+
+/** `meta: { grow: true }` on a column definition. Read without widening anything to `any`. */
+export function columnGrows(meta: unknown): boolean {
+  return typeof meta === "object" && meta !== null && (meta as { grow?: boolean }).grow === true;
+}
+
+/**
+ * `meta: { term: "pe" }` on a column definition — the plain-English vocabulary entry that
+ * explains what the column measures. Rendered as a sibling of the sort button, never inside it.
+ */
+export function columnTerm(meta: unknown): TermId | undefined {
+  if (typeof meta !== "object" || meta === null) return undefined;
+  const value = (meta as { term?: string }).term;
+  return value && value in TERMS ? (value as TermId) : undefined;
+}
 
 export type Density = "comfortable" | "compact";
 
@@ -139,9 +172,9 @@ function TableRowInner<TRow>({
                   }
                 : undefined
             }
-            style={{ width: cell.column.getSize() }}
+            style={columnWidth(cell.column.getSize(), columnGrows(cell.column.columnDef.meta))}
             className={cn(
-              "flex shrink-0 items-center overflow-hidden truncate px-2",
+              "flex items-center overflow-hidden truncate px-2",
               focused && "ring-2 ring-ring ring-inset",
             )}
           >
@@ -281,8 +314,8 @@ export function DataTable<TRow>({
       {table.getHeaderGroups()[0]?.headers.map((header) => (
         <div
           key={`repeat-${header.id}`}
-          style={{ width: header.getSize() }}
-          className="flex shrink-0 items-center border-b border-border bg-muted/60 px-2 py-1.5 text-xs font-medium text-muted-foreground"
+          style={columnWidth(header.getSize(), columnGrows(header.column.columnDef.meta))}
+          className="flex items-center border-b border-border bg-muted/60 px-2 py-1.5 text-xs font-medium text-muted-foreground"
         >
           <span className="truncate">
             {flexRender(header.column.columnDef.header, header.getContext())}
@@ -297,20 +330,24 @@ export function DataTable<TRow>({
       {table.getHeaderGroups()[0]?.headers.map((header) => {
         const sorted = header.column.getIsSorted();
         const sortable = header.column.getCanSort();
+        const term = columnTerm(header.column.columnDef.meta);
         return (
           <div
             key={header.id}
             role="columnheader"
             aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}
-            style={{ width: header.getSize() }}
-            className="shrink-0 border-b border-border bg-muted/60 px-2 text-xs font-medium text-muted-foreground"
+            style={columnWidth(header.getSize(), columnGrows(header.column.columnDef.meta))}
+            className="flex items-center gap-1 border-b border-border bg-muted/60 px-2 text-xs font-medium text-muted-foreground"
           >
             <button
               type="button"
               disabled={!sortable}
               onClick={header.column.getToggleSortingHandler()}
               className={cn(
-                "flex h-full w-full items-center gap-1 py-1.5 text-left",
+                // Not `flex-1`: a button that fills the cell pushes the `?` mark to the far
+                // right edge, where it reads as belonging to the next column rather than to this
+                // label. Sized to its content, the two stay together.
+                "flex h-full min-w-0 items-center gap-1 py-1.5 text-left",
                 sortable ? "hover:text-foreground" : "cursor-default",
               )}
             >
@@ -329,6 +366,7 @@ export function DataTable<TRow>({
                 </span>
               ) : null}
             </button>
+            {term ? <TermHint id={term} /> : null}
           </div>
         );
       })}

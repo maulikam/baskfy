@@ -1,8 +1,8 @@
 import Link from "next/link";
 
+import { Wordmark } from "@/components/shell/wordmark";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { SITE_NAME } from "@/lib/site";
 
 /**
  * The public header. Deliberately not the app shell: docs/08 §"App shell" describes a sidebar for
@@ -19,14 +19,12 @@ const LINKS = [
 
 export function SiteHeader() {
   return (
-    <header className="border-b border-border">
+    <header className="border-b border-border/70">
       <nav
         aria-label="Site"
-        className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-6 text-sm"
+        className="mx-auto flex h-16 max-w-6xl items-center gap-7 px-6 text-sm"
       >
-        <Link href="/" className="font-semibold tracking-tight">
-          {SITE_NAME}
-        </Link>
+        <Wordmark />
         <ul className="hidden gap-5 text-muted-foreground sm:flex">
           {LINKS.map((link) => (
             <li key={link.href}>

@@ -3,7 +3,7 @@ COMPOSE := docker compose -f infra/docker/compose.yml
 UV      := uv run
 
 .DEFAULT_GOAL := help
-.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants token-sync shadow
+.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants token-sync shadow backend-parity
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -156,3 +156,6 @@ token-sync:    ## Pull today's Kite token from the box into the local encrypted 
 shadow:        ## One Friday's plan both ways, diffed at order level: make shadow DATE=2026-08-18
 	@test -n "$(DATE)" || { echo "DATE is required, e.g. make shadow DATE=2026-08-18"; exit 2; }
 	cd $(DESK) && .venv/bin/python -m scripts.shadow_mode --date $(DATE)
+
+backend-parity:  ## Render every desk page on both backends and diff the HTML (M19 §3)
+	cd $(DESK) && .venv/bin/python -m scripts.backend_parity

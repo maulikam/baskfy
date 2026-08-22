@@ -54,10 +54,29 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # Prompt 20's screen alerts and webhook deliveries. Short, latency-sensitive and idempotent;
     # the same queue the publish step runs on, and for the same reason.
     "baskfy.alerts.*": {"queue": QUEUE_DEFAULT},
+    # M19 §1. The desk's collection jobs: short, idempotent, and blocked on a Kite token rather
+    # than on CPU. They must not queue behind a backfill chunk, so they take the default queue.
+    "baskfy.desk.*": {"queue": QUEUE_DEFAULT},
 }
 
 #: docs/09 §Schedule (IST), weekdays. Times are the doc's; the task names are docs/03's.
 BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
+    # --- M19 §1: the desk's own schedule, mirroring deploy/systemd/momentum-daily.timer ---
+    # The systemd timers stay running until five green Beat runs are recorded (M19 §2). Both
+    # firing is safe because every step of scripts/daily.py is independently idempotent, which
+    # `tests/test_desk_tasks.py` asserts rather than assumes.
+    "desk-daily-collection": {
+        "task": "baskfy.desk.daily",
+        "schedule": crontab(hour=18, minute=30, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    # Twenty minutes later, and only useful when the 18:30 run found no token. Idempotent, so on
+    # an ordinary day it collects nothing and says so.
+    "desk-autorun-safety-net": {
+        "task": "baskfy.desk.autorun",
+        "schedule": crontab(hour=18, minute=50, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
     "refresh-reference-data": {
         "task": "baskfy.pipeline.nightly",
         "schedule": crontab(hour=18, minute=45, day_of_week="mon-fri"),

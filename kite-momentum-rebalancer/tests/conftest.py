@@ -27,6 +27,25 @@ def isolate_order_journal(tmp_path, monkeypatch):
     monkeypatch.setattr(gateway, "JOURNAL", str(tmp_path / "orders_journal.jsonl"))
 
 
+@pytest.fixture(autouse=True)
+def isolate_database(tmp_path, monkeypatch):
+    """The same rule as the journal above, for the database — and for the same reason.
+
+    The journal fixture exists because a suite run left 2,434 synthetic orders in the real audit
+    record. The database was never given the same protection, and M13's route tests found the gap
+    the hard way: every `/analyze` in the suite persisted a plan, so a single run wrote ten plans
+    into the desk's real `rebalance_versions`, and the day's testing put ninety-eight synthetic
+    plans — for symbols named ALPHA through ECHO — into the ledger the desk trades from.
+
+    Autouse and unconditional. A test that wants a real path can still pass one explicitly; no
+    test reaches the production database by omission.
+    """
+    from app.analytics import db
+
+    monkeypatch.setattr(db, "DB_BACKEND", "sqlite")
+    monkeypatch.setattr(db.C, "DB_PATH", str(tmp_path / "portfolio.db"))
+
+
 # =====================================================================================
 # Browsers send Origin on every POST, including same-origin ones, and core/websec.py
 # requires it — that is what stops a form on another site posting to the desk while the

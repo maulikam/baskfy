@@ -459,9 +459,17 @@ def transition_history(conn, cfg, limit: int = 12) -> list[dict]:
     history. A committed decision wins its week; otherwise the newest preview does.
     """
     rows = conn.execute(
+        # The subquery wants "the exposure observed last, per evaluation". It used to say that
+        # as `SELECT evaluation_id, actual_equity_pct, MAX(observed_at) GROUP BY evaluation_id`,
+        # which relies on SQLite's bare-column extension: with a MAX aggregate SQLite quietly
+        # returns the column from the row that produced the maximum. Postgres refuses the query
+        # outright, and any other engine is free to return a value from an arbitrary row.
+        # ROW_NUMBER says the same thing explicitly and runs on both.
         "SELECT e.*, x.actual_equity_pct FROM regime_evaluations e "
-        "LEFT JOIN (SELECT evaluation_id, actual_equity_pct, MAX(observed_at) mo "
-        "           FROM regime_exposure GROUP BY evaluation_id) x "
+        "LEFT JOIN (SELECT evaluation_id, actual_equity_pct FROM ("
+        "             SELECT evaluation_id, actual_equity_pct, ROW_NUMBER() OVER ("
+        "               PARTITION BY evaluation_id ORDER BY observed_at DESC) rn "
+        "             FROM regime_exposure) ranked WHERE rn = 1) x "
         "  ON x.evaluation_id = e.evaluation_id "
         "ORDER BY e.scheduled_week_end DESC, (e.run_id = ?) DESC, e.id DESC",
         (RS.CANONICAL,)).fetchall()
@@ -738,16 +746,46 @@ def _store_status(conn) -> dict:
     out: dict = {"schema_version": None, "journal_mode": None, "db_bytes": None,
                  "last_collection": None, "last_collection_outcome": None,
                  "consecutive_failures": 0, "last_index_write": None}
-    try:
-        out["schema_version"] = conn.execute("PRAGMA user_version").fetchone()[0]
-        out["journal_mode"] = conn.execute("PRAGMA journal_mode").fetchone()[0]
-        page = conn.execute("PRAGMA page_size").fetchone()[0]
-        count = conn.execute("PRAGMA page_count").fetchone()[0]
-        out["db_bytes"] = int(page) * int(count)
-        row = conn.execute("SELECT MAX(updated_at) m FROM index_series").fetchone()
-        out["last_index_write"] = row["m"] if row else None
-    except Exception:
-        pass
+    # One probe per fact, each with its own guard. This used to be a single try/except: pass
+    # around all five, so the first PRAGMA to fail blanked the whole panel — which is exactly what
+    # happened on Postgres, where `PRAGMA user_version` raises and took `last_index_write` down
+    # with it. The desk's own convention is that one failure never stops the rest.
+    from . import db as _db
+
+    def _probe(name: str, fn) -> None:
+        try:
+            out[name] = fn()
+        except Exception:                                          # noqa: BLE001 — a diagnostic
+            out[name] = None
+
+    _probe("schema_version", lambda: _db.schema_version(conn))
+    if _db._is_postgres(conn):
+        # Postgres has no journal mode and no page count. Its equivalents are the WAL it always
+        # runs and a size the server can report, so both are asked for in its own terms rather
+        # than left blank as if the information did not exist.
+        _probe("journal_mode", lambda: "postgres/wal")
+        _probe(
+            "db_bytes",
+            lambda: int(
+                conn.execute(
+                    "SELECT sum(pg_total_relation_size(c.oid)) FROM pg_class c "
+                    "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = ?",
+                    (_db.DB_SCHEMA,),
+                ).fetchone()[0]
+                or 0
+            ),
+        )
+    else:
+        _probe("journal_mode", lambda: conn.execute("PRAGMA journal_mode").fetchone()[0])
+        _probe(
+            "db_bytes",
+            lambda: int(conn.execute("PRAGMA page_size").fetchone()[0])
+            * int(conn.execute("PRAGMA page_count").fetchone()[0]),
+        )
+    _probe(
+        "last_index_write",
+        lambda: (conn.execute("SELECT MAX(updated_at) m FROM index_series").fetchone() or {})["m"],
+    )
     try:
         from . import daily_runs as DR
         st = DR.status(conn)

@@ -36,7 +36,7 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M16 | Execution package + broker split | ✅ done | 22 Aug 2026 | `packages/execution` created; guards/risk/ratelimit **byte-identical**; 7 non-negotiables have 16 named tests; token encrypted at rest (M16.1–M16.4) |
 | M17 | Rank buffer demoted | ✅ done | 22 Aug 2026 | One band predicate, called by both; plans unchanged. **First-ever Playwright run: portfolios 4 passed** (M17.1–M17.2) |
 | M18 | Database migration | ⚠️ drilled | 22 Aug 2026 | 19 tables / 42,285 rows, all assertions green, idempotent. **Cutover is M19's** — nothing reads Postgres yet (M18.2) |
-| M19 | Schedules → Celery | — | | |
+| M19 | Schedules → Celery, desk on merged backend | ✅ **green** | 22 Aug 2026 | Beat tasks + timer-retirement protocol. **Cutover done**: 10/11 pages byte-identical, 11th differs only in journal mode + file size. Four dialect defects fixed (M19.1–.6) |
 | M20 | Observability + runbook 6 | — | | |
 | M21 | Verification + handover | — | | |
 
@@ -256,6 +256,20 @@ still required and always will be** (NEEDS-MAULIK 3), so **M9's deep backfill an
 corporate-action work stay queued**. New: NEEDS-MAULIK 6, a one-time check that the app carries the
 paid historical-data tier — `profile()` succeeding does not prove bars can be pulled.
 
+## ✅ THE DIVERGENCE WINDOW IS CLOSED (M19, 08:30 IST)
+
+The sequence below was run exactly as written. The re-run earned its place: Postgres held 13 plans
+and SQLite held 91, and the gap showed up as a wrong plan id on `/regime` rather than as an error.
+
+The forever archive is `~/baskfy-safety/sqlite-archive/portfolio-2026-08-22T08-30-IST-FINAL-pre-postgres.db`
+(0444, integrity ok, taken through the sqlite backup API). The 06:48 copy is renamed
+`SUPERSEDED-rehearsal-…`.
+
+**The desk reads and writes Postgres locally.** The code default is still `sqlite`, because the box
+has no Postgres — see M19.2.
+
+<details><summary>The sequence, as it was specified at M18</summary>
+
 ## ⚠️ THE DIVERGENCE WINDOW (M18 → M19)
 
 **The `desk` schema in Postgres is rehearsal output, not truth.** The desk still writes SQLite;
@@ -275,6 +289,8 @@ The real sequence is M19's, in this order:
 
 Precondition (c)'s one-command rollback becomes real at step 4 — today "point the desk back at
 SQLite" is the status quo, not a rollback.
+
+</details>
 
 ## Two open defects the root agreement now carries
 

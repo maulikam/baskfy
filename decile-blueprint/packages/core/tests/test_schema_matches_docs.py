@@ -15,6 +15,7 @@ from sqlalchemy import Float, Numeric
 from baskfy_core.models import Base
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+MONOREPO_ROOT = Path(__file__).resolve().parents[4]
 
 #: Every table in docs/04, with the primary key its DDL declares.
 #: Two tables are additions that docs/04 does not define, each with its own addendum:
@@ -88,6 +89,25 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # when". docs/04 defines `portfolio` and `portfolio_holding` and stops there. See
     # `baskfy_core.models.accounts.PortfolioRebalance` and docs/DECISIONS.md §14.
     "portfolio_rebalance": ("id",),
+    # Curated-basket product layer — docs/smallcase/03-data-model.md (SC1).
+    "cb_manager": ("id",),
+    "cb_basket": ("id",),
+    "cb_basket_version": ("id",),
+    "cb_constituent": ("id",),
+    "cb_metrics": ("basket_id", "as_of_date"),
+    "cb_collection": ("id",),
+    "cb_watchlist_item": ("id",),
+    "cb_investment": ("id",),
+    "cb_investment_holding": ("id",),
+    "cb_order_batch": ("id",),
+    "cb_fee_ledger": ("id",),
+    "cb_dividend": ("id",),
+    "cb_sip_plan": ("id",),
+    "cb_pending_action": ("id",),
+    "cb_update_post": ("id",),
+    "cb_user_rebalance_state": ("user_id", "version_id"),
+    "cb_plan": ("id",),
+    "cb_subscription": ("id",),
     # Prompt 17 §4: "/admin (staff-only): ... entitlement override, and a reprocess-instrument
     # action." docs/09 §Observability puts the admin surface behind "staff auth" and docs/04
     # defines neither the grant nor the audit trail. See `baskfy_core.models.admin` and
@@ -156,6 +176,27 @@ def test_every_added_table_has_an_addendum() -> None:
     combined = "\n".join(path.read_text(encoding="utf-8") for path in docs.glob("04*addendum*.md"))
     for table in ("trading_day", "ingest_cursor", "basket_snapshot", "portfolio_sleeve"):
         assert table in combined, f"{table} is not described in any docs/04 addendum"
+
+
+def test_smallcase_tables_are_recorded_in_docs() -> None:
+    """SC1 tables live in docs/smallcase/03, not docs/04."""
+    smallcase_model = (MONOREPO_ROOT / "docs" / "smallcase" / "03-data-model.md").read_text(
+        encoding="utf-8"
+    )
+    for table in (
+        "cb_manager",
+        "cb_basket",
+        "cb_basket_version",
+        "cb_constituent",
+        "cb_metrics",
+        "cb_collection",
+        "cb_watchlist_item",
+        "cb_investment",
+        "cb_order_batch",
+        "cb_plan",
+        "cb_subscription",
+    ):
+        assert table in smallcase_model, f"{table} is not described in docs/smallcase/03"
 
 
 def test_billing_tables_are_recorded_in_decisions() -> None:

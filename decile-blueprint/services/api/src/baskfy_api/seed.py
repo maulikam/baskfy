@@ -31,6 +31,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.curated_seed import seed_curated_managers
 from baskfy_api.db import session_scope
 from baskfy_api.security import hash_password
 from baskfy_api.settings import get_settings
@@ -654,6 +655,7 @@ async def seed_reference(session: AsyncSession) -> dict[str, int]:
         "index_def": await seed_universes(session),
         "plan": await seed_plans(session),
         "screen": await seed_example_screens(session),
+        "cb_manager": await seed_curated_managers(session),
     }
 
 

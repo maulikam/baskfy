@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Protocol
@@ -31,7 +32,7 @@ from typing import Final, Protocol
 from redis import Redis as SyncRedis
 from redis.exceptions import RedisError
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from baskfy_api.backtests import (
     ARTEFACTS,
@@ -47,6 +48,7 @@ from baskfy_core.backtest import (
     BacktestConfig,
     BacktestError,
     BacktestProgress,
+    DividendPolicy,
     ProgressSink,
 )
 from baskfy_core.models import Backtest, Screen
@@ -166,6 +168,29 @@ class JobOutcome:
         }
 
 
+def _migrated(stored: Mapping[str, object]) -> dict[str, object]:
+    """Read a config written before M39 without changing what it computes (M42).
+
+    Rows created before M39 carry ``dividends: "reinvest"``, which is now refused without a
+    dividend schedule — so every backtest queued before that commit would fail on a policy the
+    user never chose and cannot fix.
+
+    Rewriting it to ``ignore`` is safe **because the numbers do not move**. Pre-M39 ``reinvest``
+    marked the book to `ohlcv_daily.close` and credited nothing; that series is a price return
+    (M28 applied the 47 share-count actions and not the 38 dividend-shaped ones), so the run it
+    produced *was* a price return. Only the label was wrong, and `ignore` is the same arithmetic
+    under the name it always deserved. The result is bit-identical.
+
+    A read-time shim, not a data migration: the stored row keeps what it was written with, so
+    nothing is rewritten under a user who may want to see what they originally asked for. It can
+    be deleted once no `queued` row predates M39.
+    """
+    config = dict(stored)
+    if config.get("dividends") == DividendPolicy.REINVEST.value:
+        config["dividends"] = DividendPolicy.IGNORE.value
+    return config
+
+
 async def _claim(session: AsyncSession, public_id: str) -> Backtest:
     """Move the row from ``queued`` to ``running``, or refuse.
 
@@ -233,7 +258,7 @@ async def run_backtest_job(
     row = await _claim(session, public_id)
     sink = _sink(public_id, publisher)
     try:
-        config = BacktestConfig.model_validate(row.config)
+        config = BacktestConfig.model_validate(_migrated(row.config))
         definition = await _definition(session, row, config)
         outcome = await execute_backtest(
             session, config, definition, fragility=fragility, progress=sink
@@ -291,3 +316,58 @@ async def run_backtest_job(
         trades=len(outcome.result.trades),
         rebalances=len(outcome.result.rebalance_dates),
     )
+
+
+def run_backtest_inline(
+    session_factory: async_sessionmaker[AsyncSession], settings: Settings
+) -> Callable[[str, bool], Awaitable[None]]:
+    """Adapt :func:`run_backtest_job` to the shape `BacktestRunner` wants (M42).
+
+    The runner deliberately knows nothing about sessions, archives or publishers — it schedules an
+    awaitable and bounds how many are in flight. This closure supplies those, and it lives in the
+    worker package because that is where the job and its dependencies already are.
+
+    One session per run, committed on the way out. A backtest is a single transaction by design
+    (`run_backtest_job`: "If the artefacts cannot be written the row does not go to done"), and
+    sharing the request's session would tie that transaction to an HTTP response already sent.
+    """
+    archive = build_backtest_archive(settings)
+    publisher = build_publisher(settings)
+
+    async def run(public_id: str, fragility: bool) -> None:
+        async with session_factory() as session:
+            try:
+                await run_backtest_job(
+                    session, public_id, archive=archive, publisher=publisher, fragility=fragility
+                )
+                await session.commit()
+            except BacktestNotRunnable:
+                # Somebody else claimed it, or it is not queued any more. Not an error.
+                await session.rollback()
+            except Exception:
+                await session.rollback()
+                # The job records failures on the row inside its own transaction, and that
+                # transaction is what just rolled back. Do it in a fresh one, because a run that
+                # ends as a silent `queued` is the exact state M42 exists to make impossible.
+                await _mark_failed_out_of_band(session_factory, public_id)
+                raise
+
+    return run
+
+
+async def _mark_failed_out_of_band(
+    session_factory: async_sessionmaker[AsyncSession], public_id: str
+) -> None:
+    """Last resort: record the failure in its own transaction."""
+    try:
+        async with session_factory() as session:
+            row = (
+                await session.execute(select(Backtest).where(Backtest.public_id == public_id))
+            ).scalar_one_or_none()
+            if row is not None and row.status in {STATUS_QUEUED, STATUS_RUNNING}:
+                row.status = STATUS_FAILED
+                row.error = "the run stopped unexpectedly and nothing was recorded"
+                row.finished_at = dt.datetime.now(tz=dt.UTC)
+            await session.commit()
+    except Exception:  # pragma: no cover - the database itself is gone
+        log.exception("could not record backtest failure", extra={"public_id": public_id})

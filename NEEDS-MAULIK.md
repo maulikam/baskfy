@@ -213,7 +213,33 @@ histories live inside `baskfy/.git` — proved four separate ways at M1, because
 cannot prove it for a subtree — so nothing is lost with it. Until then it costs disk and nothing
 else.
 
-### 8. **A product decision: should momentum be a price return or a total return?**
+### 8. Momentum: price return or total return — **ANSWERED BY MEASUREMENT, 22 Aug 2026** ✅
+**Status:** settled. **Price return.** You chose option (2) — let the corpus decide — and it did,
+decisively. · **Raised:** M24 · **Closed:** M27
+
+* **The vote: price 42, total 3** over 45 deciding rows.
+* **The exact matches are the stronger signal.** On 1M, 3M and 6M the price convention matches
+  **25 of 25** dividend-paying symbols *exactly* at stored precision. The total convention matches
+  only where no dividend falls inside the window and the two are identical anyway.
+* **Over all 271 rows:** applying splits and bonuses moves exact matches up at every window
+  (6M 255→261); applying dividends on top pushes them *below* today's unadjusted baseline.
+
+So: apply the 47 splits and bonuses, do not apply the 38 dividends. Evidence and the regenerable
+measurement are in `decile-blueprint/reconciliation/RECOVERED-ACTIONS.md`; reasoning in
+`DECISIONS-MERGE.md` M27.
+
+**A switch to total return stays a recompute, not a schema change** — every action is recorded with
+its ex-date, factor and class, `close_raw` is untouched, and the derivation marks its rows with a
+source. If you ever want the other convention, it costs one pipeline re-run.
+
+**Two things it confirmed for free:** M11's return-base fix and M24's recovered splits are both
+right, because neither could produce a 25-of-25 exact match if it were wrong.
+
+The original question follows.
+
+---
+
+#### (original entry)
 **Status:** open, **blocks half of the corporate-action fix** · **Raised:** M24, 22 Aug 2026
 
 This is the only genuinely new question from 22 Aug, and it is yours because it changes what the

@@ -242,6 +242,12 @@ disallow_untyped_decorators = false
 module = ["baskfy_worker.tasks.celery_tasks"]
 disallow_untyped_decorators = false
 
+# M19 §1. Same reason as the two above: `@app.task` is untyped in celery's stubs, so every task it
+# decorates reads as untyped no matter how the function itself is annotated.
+[[tool.mypy.overrides]]
+module = ["baskfy_worker.tasks.desk"]
+disallow_untyped_decorators = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = [

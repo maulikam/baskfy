@@ -1450,3 +1450,90 @@ weeks and a rounding delta is a restart, because a rule that bends once has no f
 why it is a config flag and not a deletion. Upload keeps working in both settings, permanently: a
 hand-downloaded export is still the fastest way to check the desk against the outside world, and
 the only way to trade a date the pipeline has no bars for. `docs/SHADOW-MODE.md` holds the protocol.
+
+---
+
+## M19 — the desk on the merged backend, and what the cutover found
+
+### M19.1 — the desk's jobs on Beat, with the timers still running ⚠ UNREVIEWED
+`baskfy.desk.daily` and `baskfy.desk.autorun`, at the systemd timer's own hour (Mon–Fri 18:30 IST),
+routed to the default queue so they cannot queue behind a backfill chunk. They import the desk
+rather than shelling out — `app.analytics` loads cleanly in this workspace — so failures are return
+codes rather than a number from a subprocess.
+
+`desk_context()` sets and restores the working directory, because `daily.py` resolves
+`data/portfolio.db` relative to cwd and a Celery worker's cwd is wherever it was started. Without
+it the job would either fail or, far worse, create a second empty database and succeed against it.
+Both restoration properties are tested, including through an exception.
+
+**The timers stay.** `docs/TIMER-RETIREMENT.md` holds the five-green-runs rule and the by-hand
+retirement. Five rather than one because the risk is not "Beat is broken" but "Beat works on the
+day someone is watching".
+
+### M19.2 — the cutover: 10 of 11 pages byte-identical, and the 11th differs correctly ⚠ UNREVIEWED
+`DESK_DB_BACKEND=sqlite|postgres`. **The code default stays `sqlite`** — the box has no Postgres, so
+a default of `postgres` would break it silently at 18:30 on the next deploy. The switch is a local
+`.env` line and the rollback is that line in reverse.
+
+`app/analytics/pg.py` presents the sqlite3 surface the desk actually uses — measured, not guessed —
+over psycopg. Rewriting 9,500 lines of NAV and tax-lot code in one commit is not a reviewable
+migration; moving the interface and leaving the call sites is.
+
+`scripts/backend_parity.py` renders every page on both backends **in separate subprocesses** and
+diffs the HTML, because "all 13 pages work" is satisfied by thirteen 200s over an empty database.
+Result: **10 of 11 identical**; `/regime` differs only in the journal mode and the on-disk size —
+two lines that describe the storage engine, not the desk's data, and which *should* differ.
+
+### M19.3 — four defects, two of which returned 200 on both sides ⚠ UNREVIEWED
+1. **`PRAGMA user_version` has no Postgres equivalent.** Five pages 500'd. Postgres now keeps the
+   same number in a one-row table, and `scripts/migrate_to_postgres.py` carries it across so a
+   migrated schema does not read as version 0 and try to re-apply every migration.
+2. **`float / Decimal` raised on `/tradebook`.** Postgres returns NUMERIC as `Decimal`. Converting
+   to float is the faithful choice, not the lazy one: SQLite has been the system of record since
+   the desk existed and stores these as REAL, so every number the desk has ever traded on was
+   already a float. Keeping `Decimal` would make the copy arithmetically different from the record.
+3. **SQLite's bare-column extension.** `SELECT evaluation_id, actual_equity_pct, MAX(observed_at)
+   … GROUP BY evaluation_id` relies on SQLite returning the column from the row that produced the
+   maximum. Postgres refuses; any other engine may answer from an arbitrary row. `ROW_NUMBER` says
+   it explicitly and runs on both.
+4. **One `try/except: pass` around five diagnostics.** The first PRAGMA to fail blanked the other
+   four, so `/regime` showed "never" for a value it had. One probe per fact now — which is the
+   desk's own convention applied to a panel that had never had it.
+
+### M19.4 — the cutover sequence, run exactly as M18 specified ⚠ UNREVIEWED
+Writers stopped (none running), fresh verified backup, Saturday 08:08 IST with NSE closed and the
+next session ~50 hours out. Then: re-run the migration against the live file → full assertions →
+switch → archive.
+
+**The re-run mattered.** The Postgres copy held 13 plans and SQLite held 91: the divergence window,
+exactly as M18.2 predicted, and it surfaced as a wrong plan id on `/regime` rather than as an error.
+That is the whole argument for M18's sequence, demonstrated rather than asserted.
+
+The forever archive is `portfolio-2026-08-22T08-30-IST-FINAL-pre-postgres.db`, 0444, integrity
+`ok`, taken through the sqlite backup API. The 06:48 rehearsal copy is renamed
+`SUPERSEDED-rehearsal-…` so nobody reaches for the wrong one.
+
+### M19.5 — the suite was writing to the production ledger ⚠ UNREVIEWED
+The archive came back with **111 plans against Postgres's 91**, and the cause was mine: M13's route
+tests call `/analyze`, and `/analyze` persists. **Ten plans per suite run went into the desk's real
+`rebalance_versions`** — 98 by the end of the day, for symbols named ALPHA through ECHO.
+
+`tests/conftest.py` already carried this exact fixture for the order journal, written after a run
+left 2,434 synthetic orders in the real audit record: *"An audit record that contains events which
+did not happen cannot be used as evidence of anything."* The database never got the same
+protection. It has it now — autouse, unconditional, pointing `DB_PATH` at `tmp_path`.
+
+The 98 synthetic plans were removed from SQLite inside a transaction with an assertion on the
+counts, after proving every symbol in them was one of the five fixture names and that no trade,
+fill or snapshot was involved. The migration was re-run and the archive re-taken. **42,285 rows —
+M18's number exactly.**
+
+One test broke when the isolation landed: `/settings` renders its rupee table only when a NAV
+exists, and the test had been reading whatever NAV happened to be in the developer's real database.
+It was, in other words, also a test that this machine had traded. It seeds its own NAV now.
+
+### M19.6 — a pre-existing condition, found not caused ⚠ UNREVIEWED
+The db-marked suite fails **9 tests under `pytest-randomly`'s ordering** with
+`DeadlockDetectedError` ×111, and passes completely with `-p no:randomly`. Not from M14's column:
+the failures are in alerts and admin, and each passes alone. Recorded rather than fixed — it is a
+fixture-concurrency problem and a separate investigation.

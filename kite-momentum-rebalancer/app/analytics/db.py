@@ -19,6 +19,7 @@ import csv
 import json
 import os
 import sqlite3
+from typing import Any
 from typing import Iterator, Sequence
 
 from .. import config as C
@@ -481,13 +482,37 @@ _MIGRATIONS: dict[int, Sequence[str]] = {
 
 
 # --- connection -----------------------------------------------------------------------
+#: M19 §3. "sqlite" (the default, and what the box runs) or "postgres" (the merged backend).
+#: The desk's record of its own trades is the last thing that should move on a hunch, so this is
+#: a deliberate opt-in and rolling back is the same one variable in reverse.
+DB_BACKEND = os.getenv("DESK_DB_BACKEND", "sqlite")
+
+#: Where M18's migration put the desk's tables. A schema rather than `public`, so the screener's
+#: forty-two tables and the desk's nineteen cannot collide.
+DB_SCHEMA = os.getenv("DESK_DB_SCHEMA", "desk")
+
+
 @contextlib.contextmanager
-def connect(path: str | None = None) -> Iterator[sqlite3.Connection]:
+def connect(path: str | None = None) -> Iterator[Any]:
     """The one and only connection helper. WAL + foreign keys + Row factory.
 
     isolation_level=None puts us in autocommit; use transaction() for multi-statement
     writes so a failure mid-way rolls back cleanly.
+
+    On the Postgres backend (M19 §3) the same call returns `analytics.pg.Connection`, which
+    presents the subset of sqlite3's interface the desk actually uses. An explicit `path` always
+    means SQLite: a caller naming a file wants that file, and tests pass `tmp_path` constantly.
     """
+    if path is None and DB_BACKEND == "postgres":
+        from .pg import Connection                                            # noqa: PLC0415
+
+        conn = Connection(f"{_pg_dsn()}?options=-csearch_path%3D{DB_SCHEMA}")
+        try:
+            yield conn
+        finally:
+            conn.close()
+        return
+
     p = path or C.DB_PATH
     parent = os.path.dirname(p)
     if parent:
@@ -503,9 +528,15 @@ def connect(path: str | None = None) -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def _pg_dsn() -> str:
+    return os.getenv("DESK_DATABASE_URL", "postgresql://baskfy:baskfy@localhost:5433/baskfy")
+
+
 @contextlib.contextmanager
-def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
-    conn.execute("BEGIN IMMEDIATE")
+def transaction(conn: Any) -> Iterator[Any]:
+    # BEGIN IMMEDIATE is SQLite's way of taking the write lock up front rather than discovering
+    # a conflict half-way through. Postgres has no such spelling and does not need one.
+    conn.execute("BEGIN IMMEDIATE" if not _is_postgres(conn) else "BEGIN")
     try:
         yield conn
     except Exception:
@@ -514,15 +545,44 @@ def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
     conn.execute("COMMIT")
 
 
-def migrate(conn: sqlite3.Connection) -> int:
+def _is_postgres(conn: Any) -> bool:
+    """Which backend a connection is, without importing psycopg to ask."""
+    return conn.__class__.__module__.endswith("analytics.pg")
+
+
+def schema_version(conn: Any) -> int:
+    """The applied migration number.
+
+    SQLite keeps it in the file header (`PRAGMA user_version`), which is elegant and has no
+    Postgres equivalent — Postgres gets a one-row table in the desk schema instead. Same number,
+    same meaning; the difference is confined to these six lines rather than to `migrate`.
+    """
+    if not _is_postgres(conn):
+        return int(conn.execute("PRAGMA user_version").fetchone()[0])
+    conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version integer not null)")
+    row = conn.execute("SELECT version FROM schema_version").fetchone()
+    if row is None:
+        conn.execute("INSERT INTO schema_version (version) VALUES (0)")
+        return 0
+    return int(row[0])
+
+
+def _set_schema_version(conn: Any, version: int) -> None:
+    if not _is_postgres(conn):
+        conn.execute(f"PRAGMA user_version={version}")
+    else:
+        conn.execute("UPDATE schema_version SET version = ?", (version,))
+
+
+def migrate(conn: Any) -> int:
     """Apply pending migrations. Returns the resulting schema version."""
-    have = conn.execute("PRAGMA user_version").fetchone()[0]
+    have = schema_version(conn)
     for version in sorted(_MIGRATIONS):
         if version > have:
             with transaction(conn):
                 for stmt in _MIGRATIONS[version]:
                     conn.execute(stmt)
-                conn.execute(f"PRAGMA user_version={version}")
+                _set_schema_version(conn, version)
             have = version
     return have
 

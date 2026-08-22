@@ -185,6 +185,19 @@ def migrate(sqlite_path: str, postgres_url: str, schema: str, drop_existing: boo
                     if not entry["checksum_match"]:
                         report["failures"].append(f"{table}: checksum differs")
 
+                # The schema version travels with the data. Without it the desk, pointed at this
+                # schema, reads version 0 and tries to re-apply every migration against tables
+                # that already exist -- which is how M19's first cutover attempt died on
+                # "column evaluation_id of relation rebalance_versions already exists".
+                version = int(src.execute("PRAGMA user_version").fetchone()[0])
+                cur.execute(
+                    f'CREATE TABLE IF NOT EXISTS "{schema}".schema_version '
+                    f"(version integer not null)"
+                )
+                cur.execute(f'DELETE FROM "{schema}".schema_version')
+                cur.execute(f'INSERT INTO "{schema}".schema_version VALUES (%s)', (version,))
+                report["schema_version"] = version
+
                 report["nav"] = _check_nav(src, cur, schema)
                 if not report["nav"]["identical"]:
                     report["failures"].append("the NAV series does not match")

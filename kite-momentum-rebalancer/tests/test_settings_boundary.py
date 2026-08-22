@@ -93,10 +93,30 @@ class TestTheSettingsPageItself:
 
         The read-only preview is the compensating control for the settings_audit row that
         locking these removed, alongside the startup log in app.main._log_risk_ceilings.
+
+        The NAV is seeded here rather than borrowed. Every RISK_* limit is a percentage of NAV,
+        so the page renders the rupee table only when a snapshot exists — and this test used to
+        pass by reading whatever NAV happened to be in the desk's real database. It was therefore
+        also a test that the developer's own machine had traded, which is not a property of the
+        code. `tests/conftest.py`'s database isolation exposed it.
         """
         from fastapi.testclient import TestClient
 
+        from app.analytics import db
         from app.main import app
+
+        with db.connect() as conn:
+            db.migrate(conn)
+            db.upsert_snapshot(
+                conn,
+                {
+                    "date": "2026-08-19",
+                    "nav": 5_000_000.0,
+                    "invested": 4_900_000.0,
+                    "cash": 100_000.0,
+                    "holdings_json": [],
+                },
+            )
 
         page = TestClient(app).get("/settings").text
         assert "Risk limits" in page

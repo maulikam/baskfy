@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import re
 
+from ._source import src_of
+
 import app.main as M
 
 TEMPLATE = "app/templates/index.html"
@@ -27,9 +29,13 @@ def declared_statuses() -> set[str]:
     return set(re.findall(r"^\s*([A-Z_]+):\s*\{", block.group(1), re.M))
 
 
-def returned_by(path: str) -> set[str]:
-    with open(path) as f:
-        return set(re.findall(r'"status":\s*"([A-Z_]+)"', f.read()))
+def returned_by(module) -> set[str]:
+    """Every status literal a module can return, read from the module rather than a path.
+
+    The gateway moved to `baskfy_execution` at M16; asking the module where it lives means the
+    next move does not break this either. See tests/_source.py.
+    """
+    return set(re.findall(r'"status":\s*"([A-Z_]+)"', src_of(module)))
 
 
 # =====================================================================================
@@ -39,7 +45,9 @@ def test_every_status_the_gateway_returns_has_an_explanation():
     """The gateway is the sole order path, so its vocabulary IS the report's vocabulary.
     An unnamed status still renders safely as unresolved, but it renders without the one
     thing the operator needs — whether the order reached the exchange, and what to do."""
-    gateway = returned_by("app/core/gateway.py")
+    from baskfy_execution import gateway as _gw
+
+    gateway = returned_by(_gw)
     assert gateway, "gateway no longer returns a recognisable status"
     missing = gateway - declared_statuses()
     assert not missing, f"{missing} would render with no remedy for the operator"
@@ -72,7 +80,9 @@ def test_the_gtt_success_set_matches_the_route_that_arms_stops():
 
 
 def test_every_gtt_status_kite_client_returns_is_classified():
-    gtt = {s for s in returned_by("app/kite_client.py") if "GTT" in s}
+    from app import kite_client as _kc
+
+    gtt = {s for s in returned_by(_kc) if "GTT" in s}
     assert gtt, "kite_client no longer returns a recognisable GTT status"
     src = template()
     for s in gtt:

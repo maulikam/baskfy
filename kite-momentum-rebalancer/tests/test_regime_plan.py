@@ -6,6 +6,8 @@ import datetime as dt
 
 import pytest
 
+from ._source import src_of
+
 from app import config as C
 from app.analytics import db, regime_run as RR
 from app.analytics import regime_store as RS
@@ -637,8 +639,11 @@ def test_summary_is_json_friendly(cfg):
 # gateway integrity
 # =====================================================================================
 def test_gateway_order_sequence_is_unchanged():
-    import app.core.gateway as gw
-    src = open(gw.__file__).read()
+    # The order path moved to baskfy_execution at M16; app.core.gateway is now a thin binding
+    # of the desk's product switches, so the layers live in the package.
+    import baskfy_execution.gateway as gw
+
+    src = src_of(gw)
     order = [src.index(m) for m in ("layer 1: untouchables", "layer 2: risk",
                                     "layer 3: idempotency", "layer 4: rate limits")]
     assert order == sorted(order)
@@ -648,7 +653,7 @@ def test_regime_modules_never_call_the_broker_directly():
     import app.analytics.regime_run as mod
     import app.core.regime_alloc as alloc
     for m in (mod, alloc):
-        src = open(m.__file__).read()
+        src = src_of(m)
         # look for CALLS, not prose: the module docstrings mention these names when
         # documenting that they are never invoked
         assert "kc.place_order(" not in src

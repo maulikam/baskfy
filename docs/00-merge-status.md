@@ -4,7 +4,7 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M16 · M11/M12 red; M13–M14 blocked by rule 7 · **State:** running autonomously
+**Run started:** 22 Aug 2026 · **Current module:** M17 · M11/M12 red; M13–M14 blocked by rule 7 · **State:** running autonomously
 
 Since 22 Aug 2026 this is an **autonomous run** under `CLAUDE.md` §Autonomy charter:
 judgement calls are decided, recorded in `DECISIONS-MERGE.md` (tagged `⚠ UNREVIEWED`
@@ -33,8 +33,8 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M13 | MomentumScan — CSV cord cut | — | | |
 | M14 | Breadth + shadow harness | — | | |
 | M15 | Desk brains → core | ✅ done | 22 Aug 2026 | score, costs, basket and the exposure overlay all in core. Outputs **verified identical**; `regime.py` byte-identical. Typing debt recorded (M15.7) |
-| M16 | Execution package + broker split | 🔄 next | | |
-| M17 | Rank buffer demoted | — | | |
+| M16 | Execution package + broker split | ✅ done | 22 Aug 2026 | `packages/execution` created; guards/risk/ratelimit **byte-identical**; 7 non-negotiables have 16 named tests; token encrypted at rest (M16.1–M16.4) |
+| M17 | Rank buffer demoted | 🔄 next | | |
 | M18 | Database migration | — | | **HUMAN GATE** |
 | M19 | Schedules → Celery | — | | |
 | M20 | Observability + runbook 6 | — | | |

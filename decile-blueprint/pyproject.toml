@@ -14,16 +14,18 @@ dependencies = [
 package = false
 
 [tool.uv.workspace]
-members = ["packages/core", "packages/providers", "services/api", "services/worker"]
+members = ["packages/core", "packages/execution", "packages/providers", "services/api", "services/worker"]
 
 [tool.uv.sources]
 baskfy-core = { workspace = true }
+baskfy-execution = { workspace = true }
 baskfy-api = { workspace = true }
 baskfy-providers = { workspace = true }
 baskfy-worker = { workspace = true }
 
 [dependency-groups]
 dev = [
+    "baskfy-execution",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "pytest-cov>=6.0",
@@ -65,7 +67,10 @@ ignore = []
 # They are excluded from formatting, not from linting: `ruff check` still reads them, with the
 # rules that would demand restructuring scoped in per-file-ignores below and its reasons given
 # there. Whoever types these properly (docs/DECISIONS-MERGE.md M15.6) can lift this.
-exclude = ["packages/core/src/baskfy_core/exposure/*.py"]
+exclude = [
+    "packages/core/src/baskfy_core/exposure/*.py",
+    "packages/execution/src/baskfy_execution/*.py",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["PLR2004"]
@@ -111,6 +116,18 @@ exclude = ["packages/core/src/baskfy_core/exposure/*.py"]
     "UP037",   # quoted annotations: same
 ]
 "packages/core/src/baskfy_core/basket.py" = ["PLR0912", "PLR0913", "PLR0915", "PLR2004"]
+# The order path, moved verbatim from the desk at M16. Same argument as the exposure overlay: this
+# is code that has been placing this account's orders, its acceptance criterion is that it did not
+# change, and annotating or restructuring it to satisfy a counter is a change to the module that
+# talks to a broker. It is LINTED -- these are the rules that would require editing it, each named.
+"packages/execution/src/baskfy_execution/*.py" = [
+    "ANN001", "ANN201", "ANN202", "ANN204",  # missing annotations: see the mypy override below
+    "E401",     # `import asyncio, json, os, time, uuid, logging` on one line, as it was
+    "I001",     # import order, as it was
+    "PLR0911",  # many returns: each is a named refusal, and collapsing them loses the reason
+    "PLR0913",  # place() takes every order parameter explicitly, which is the point
+    "UP035",
+]
 
 # The three modules moved from the desk at M15 (P3.1-P3.3). They are byte-identical to code that
 # has been scoring and sizing a live book, and they arrived from a tree with no type checker at
@@ -130,10 +147,19 @@ module = [
     "baskfy_core.score",
     "baskfy_core.basket",
     "baskfy_core.exposure.*",
+    "baskfy_execution.*",
 ]
 disallow_any_expr = false
 warn_return_any = false
-disable_error_code = ["type-arg", "operator", "arg-type", "func-returns-value"]
+# `no-untyped-def` / `no-untyped-call` are here for baskfy_execution specifically: the four order-path
+# modules arrived from a tree with no type checker, and annotating them means editing code whose
+# acceptance criterion is that it did not change. Everything else mypy checks about them still
+# applies. Typing them is real work with real value and it is recorded as debt, not skipped
+# silently -- docs/DECISIONS-MERGE.md M16.3, alongside the same debt from M15.
+disable_error_code = [
+    "type-arg", "operator", "arg-type", "func-returns-value",
+    "no-untyped-def", "no-untyped-call",
+]
 
 [tool.mypy]
 python_version = "3.12"
@@ -144,7 +170,7 @@ warn_unreachable = true
 # house rule "no `any`" is enforced instead by ruff's ANN401 and by
 # packages/core/tests/test_no_escape_hatches.py, which scan our source rather than generated code.
 plugins = ["pydantic.mypy"]
-mypy_path = "packages/core/src:packages/core/tests:packages/providers/src:packages/providers/tests:services/api/src:services/api/tests:services/worker/src:services/worker/tests"
+mypy_path = "packages/core/src:packages/core/tests:packages/execution/src:packages/providers/src:packages/providers/tests:services/api/src:services/api/tests:services/worker/src:services/worker/tests"
 explicit_package_bases = true
 # NOTE: `conftest.py` files are excluded below. Each test tree is a mypy base (so that its
 # sibling helper module — `stubs`, `helpers` — resolves), which makes every conftest the
@@ -153,6 +179,7 @@ explicit_package_bases = true
 exclude = ["(^|/)conftest\\.py$"]
 files = [
     "network_guard.py",
+    "packages/execution/src",
     # Prompt 19's repo-level tooling: the per-package coverage gate and the mutation harness.
     # `benchmarks/` predates this list and is checked by ruff only.
     "tools",

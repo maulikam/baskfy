@@ -12,6 +12,7 @@ members = [
     "baskfy",
     "baskfy-api",
     "baskfy-core",
+    "baskfy-execution",
     "baskfy-providers",
     "baskfy-worker",
 ]
@@ -211,6 +212,184 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e3/0f/d40bbe294bbf004d436a8bcbcfaadca8b5140d39ad0ad3d73d1a8ba15f14/automat-25.4.16.tar.gz", hash = "sha256:0017591a5477066e90d26b0e696ddc143baafd87b588cfac8100bc6be9634de0", size = 129977, upload-time = "2025-04-16T20:12:16.002Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/02/ff/1175b0b7371e46244032d43a56862d0af455823b5280a50c63d99cc50f18/automat-25.4.16-py3-none-any.whl", hash = "sha256:04e9bce696a8d5671ee698005af6e5a9fa15354140a87f4870744604dcdd3ba1", size = 42842, upload-time = "2025-04-16T20:12:14.447Z" },
+]
+
+[[package]]
+name = "baskfy"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "baskfy-api" },
+    { name = "baskfy-core" },
+    { name = "baskfy-providers" },
+    { name = "baskfy-worker" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "baskfy-execution" },
+    { name = "httpx" },
+    { name = "hypothesis" },
+    { name = "mypy" },
+    { name = "pandas" },
+    { name = "pandas-stubs" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pyyaml" },
+    { name = "ruff" },
+    { name = "types-pyyaml" },
+    { name = "types-requests" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "baskfy-api", editable = "services/api" },
+    { name = "baskfy-core", editable = "packages/core" },
+    { name = "baskfy-providers", editable = "packages/providers" },
+    { name = "baskfy-worker", editable = "services/worker" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "baskfy-execution", editable = "packages/execution" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "hypothesis", specifier = ">=6.112" },
+    { name = "mypy", specifier = ">=1.13" },
+    { name = "pandas", specifier = ">=2.2" },
+    { name = "pandas-stubs", specifier = ">=2.2" },
+    { name = "pytest", specifier = ">=8.3" },
+    { name = "pytest-asyncio", specifier = ">=0.24" },
+    { name = "pytest-cov", specifier = ">=6.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "ruff", specifier = ">=0.8" },
+    { name = "types-pyyaml", specifier = ">=6.0" },
+    { name = "types-requests", specifier = ">=2.32" },
+]
+
+[[package]]
+name = "baskfy-api"
+version = "0.1.0"
+source = { editable = "services/api" }
+dependencies = [
+    { name = "alembic" },
+    { name = "argon2-cffi" },
+    { name = "asyncpg" },
+    { name = "baskfy-core" },
+    { name = "baskfy-providers" },
+    { name = "celery", extra = ["redis"] },
+    { name = "email-validator" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "opentelemetry-instrumentation-fastapi" },
+    { name = "opentelemetry-instrumentation-sqlalchemy" },
+    { name = "opentelemetry-sdk" },
+    { name = "prometheus-client" },
+    { name = "pydantic-settings" },
+    { name = "pyjwt" },
+    { name = "python-multipart" },
+    { name = "redis" },
+    { name = "sentry-sdk", extra = ["fastapi"] },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alembic", specifier = ">=1.14" },
+    { name = "argon2-cffi", specifier = ">=23.1" },
+    { name = "asyncpg", specifier = ">=0.30" },
+    { name = "baskfy-core", editable = "packages/core" },
+    { name = "baskfy-providers", editable = "packages/providers" },
+    { name = "celery", extras = ["redis"], specifier = ">=5.4" },
+    { name = "email-validator", specifier = ">=2.2" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "opentelemetry-api", specifier = ">=1.28" },
+    { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.28" },
+    { name = "opentelemetry-instrumentation-fastapi", specifier = ">=0.49b0" },
+    { name = "opentelemetry-instrumentation-sqlalchemy", specifier = ">=0.49b0" },
+    { name = "opentelemetry-sdk", specifier = ">=1.28" },
+    { name = "prometheus-client", specifier = ">=0.21" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "pyjwt", specifier = ">=2.10" },
+    { name = "python-multipart", specifier = ">=0.0.20" },
+    { name = "redis", specifier = ">=5.2" },
+    { name = "sentry-sdk", extras = ["fastapi"], specifier = ">=2.19" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+]
+
+[[package]]
+name = "baskfy-core"
+version = "0.1.0"
+source = { editable = "packages/core" }
+dependencies = [
+    { name = "numpy" },
+    { name = "polars" },
+    { name = "pydantic" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.1" },
+    { name = "polars", specifier = ">=1.12" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36" },
+]
+
+[[package]]
+name = "baskfy-execution"
+version = "0.1.0"
+source = { editable = "packages/execution" }
+
+[[package]]
+name = "baskfy-providers"
+version = "0.1.0"
+source = { editable = "packages/providers" }
+dependencies = [
+    { name = "baskfy-core" },
+    { name = "boto3" },
+    { name = "cryptography" },
+    { name = "httpx" },
+    { name = "kiteconnect" },
+    { name = "pydantic-settings" },
+    { name = "redis" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "baskfy-core", editable = "packages/core" },
+    { name = "boto3", specifier = ">=1.35" },
+    { name = "cryptography", specifier = ">=43.0" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "kiteconnect", specifier = ">=5.0" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "redis", specifier = ">=5.2" },
+]
+
+[[package]]
+name = "baskfy-worker"
+version = "0.1.0"
+source = { editable = "services/worker" }
+dependencies = [
+    { name = "baskfy-api" },
+    { name = "baskfy-core" },
+    { name = "baskfy-providers" },
+    { name = "celery", extra = ["redis"] },
+    { name = "flower" },
+    { name = "opentelemetry-instrumentation-celery" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "baskfy-api", editable = "services/api" },
+    { name = "baskfy-core", editable = "packages/core" },
+    { name = "baskfy-providers", editable = "packages/providers" },
+    { name = "celery", extras = ["redis"], specifier = ">=5.4" },
+    { name = "flower", specifier = ">=2.0" },
+    { name = "opentelemetry-instrumentation-celery", specifier = ">=0.49b0" },
 ]
 
 [[package]]
@@ -474,177 +653,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/64/a2/4615c8f7d81a00b1d6e6afe19f694e1543582349fb5f4076f6cb5dc36485/cryptography-50.0.0-cp39-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:c87f62a3d3b9888ed0fdde100ec06aa61ca9cd44bad9057d1dff9a516b5f5bb9", size = 4878208, upload-time = "2026-07-31T14:24:45.522Z" },
     { url = "https://files.pythonhosted.org/packages/d2/1a/efcfb02f91407149a0dacffffab791f7e19bf6385f63b3666dc8b5e5c9c8/cryptography-50.0.0-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:65c2c3add92b45fd0709db8594536aea39c2a67af0e27ffcf049c498501140b7", size = 5037050, upload-time = "2026-07-31T14:24:47.697Z" },
     { url = "https://files.pythonhosted.org/packages/57/30/4a22984d4f1bdfb8c054f07a92bc176b97a3134cc1d6c4b3bffb1f3688b4/cryptography-50.0.0-cp39-abi3-win_amd64.whl", hash = "sha256:d24fead1d4d076e1bfb006dcec392074a3cd8d7b4fc8a595aa64073b2b7a96ba", size = 3874135, upload-time = "2026-07-31T14:24:50.085Z" },
-]
-
-[[package]]
-name = "baskfy"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "baskfy-api" },
-    { name = "baskfy-core" },
-    { name = "baskfy-providers" },
-    { name = "baskfy-worker" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "httpx" },
-    { name = "hypothesis" },
-    { name = "mypy" },
-    { name = "pandas" },
-    { name = "pandas-stubs" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "pyyaml" },
-    { name = "ruff" },
-    { name = "types-pyyaml" },
-    { name = "types-requests" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "baskfy-api", editable = "services/api" },
-    { name = "baskfy-core", editable = "packages/core" },
-    { name = "baskfy-providers", editable = "packages/providers" },
-    { name = "baskfy-worker", editable = "services/worker" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "httpx", specifier = ">=0.28" },
-    { name = "hypothesis", specifier = ">=6.112" },
-    { name = "mypy", specifier = ">=1.13" },
-    { name = "pandas", specifier = ">=2.2" },
-    { name = "pandas-stubs", specifier = ">=2.2" },
-    { name = "pytest", specifier = ">=8.3" },
-    { name = "pytest-asyncio", specifier = ">=0.24" },
-    { name = "pytest-cov", specifier = ">=6.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "ruff", specifier = ">=0.8" },
-    { name = "types-pyyaml", specifier = ">=6.0" },
-    { name = "types-requests", specifier = ">=2.32" },
-]
-
-[[package]]
-name = "baskfy-api"
-version = "0.1.0"
-source = { editable = "services/api" }
-dependencies = [
-    { name = "alembic" },
-    { name = "argon2-cffi" },
-    { name = "asyncpg" },
-    { name = "celery", extra = ["redis"] },
-    { name = "baskfy-core" },
-    { name = "baskfy-providers" },
-    { name = "email-validator" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-exporter-otlp-proto-http" },
-    { name = "opentelemetry-instrumentation-fastapi" },
-    { name = "opentelemetry-instrumentation-sqlalchemy" },
-    { name = "opentelemetry-sdk" },
-    { name = "prometheus-client" },
-    { name = "pydantic-settings" },
-    { name = "pyjwt" },
-    { name = "python-multipart" },
-    { name = "redis" },
-    { name = "sentry-sdk", extra = ["fastapi"] },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "alembic", specifier = ">=1.14" },
-    { name = "argon2-cffi", specifier = ">=23.1" },
-    { name = "asyncpg", specifier = ">=0.30" },
-    { name = "celery", extras = ["redis"], specifier = ">=5.4" },
-    { name = "baskfy-core", editable = "packages/core" },
-    { name = "baskfy-providers", editable = "packages/providers" },
-    { name = "email-validator", specifier = ">=2.2" },
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "httpx", specifier = ">=0.28" },
-    { name = "opentelemetry-api", specifier = ">=1.28" },
-    { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.28" },
-    { name = "opentelemetry-instrumentation-fastapi", specifier = ">=0.49b0" },
-    { name = "opentelemetry-instrumentation-sqlalchemy", specifier = ">=0.49b0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.28" },
-    { name = "prometheus-client", specifier = ">=0.21" },
-    { name = "pydantic-settings", specifier = ">=2.6" },
-    { name = "pyjwt", specifier = ">=2.10" },
-    { name = "python-multipart", specifier = ">=0.0.20" },
-    { name = "redis", specifier = ">=5.2" },
-    { name = "sentry-sdk", extras = ["fastapi"], specifier = ">=2.19" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
-]
-
-[[package]]
-name = "baskfy-core"
-version = "0.1.0"
-source = { editable = "packages/core" }
-dependencies = [
-    { name = "numpy" },
-    { name = "polars" },
-    { name = "pydantic" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy", specifier = ">=2.1" },
-    { name = "polars", specifier = ">=1.12" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36" },
-]
-
-[[package]]
-name = "baskfy-providers"
-version = "0.1.0"
-source = { editable = "packages/providers" }
-dependencies = [
-    { name = "boto3" },
-    { name = "cryptography" },
-    { name = "baskfy-core" },
-    { name = "httpx" },
-    { name = "kiteconnect" },
-    { name = "pydantic-settings" },
-    { name = "redis" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "boto3", specifier = ">=1.35" },
-    { name = "cryptography", specifier = ">=43.0" },
-    { name = "baskfy-core", editable = "packages/core" },
-    { name = "httpx", specifier = ">=0.28" },
-    { name = "kiteconnect", specifier = ">=5.0" },
-    { name = "pydantic-settings", specifier = ">=2.6" },
-    { name = "redis", specifier = ">=5.2" },
-]
-
-[[package]]
-name = "baskfy-worker"
-version = "0.1.0"
-source = { editable = "services/worker" }
-dependencies = [
-    { name = "celery", extra = ["redis"] },
-    { name = "baskfy-api" },
-    { name = "baskfy-core" },
-    { name = "baskfy-providers" },
-    { name = "flower" },
-    { name = "opentelemetry-instrumentation-celery" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "celery", extras = ["redis"], specifier = ">=5.4" },
-    { name = "baskfy-api", editable = "services/api" },
-    { name = "baskfy-core", editable = "packages/core" },
-    { name = "baskfy-providers", editable = "packages/providers" },
-    { name = "flower", specifier = ">=2.0" },
-    { name = "opentelemetry-instrumentation-celery", specifier = ">=0.49b0" },
 ]
 
 [[package]]

@@ -1060,3 +1060,98 @@ and the rest still apply. **That typing work is the real remaining debt from M15
 
 **Final state:** decile **1438 passed, 794 skipped**; desk **1214 passed, 17 skipped**;
 `ruff check`, `ruff format --check` and `mypy` all clean across 260 files.
+
+---
+
+## M16 — the execution package and the broker split
+
+### M16.1 — `packages/execution` exists, and the gates fail closed ⚠ UNREVIEWED
+`app/core/{guards,risk,ratelimit,gateway}.py` → `baskfy_execution`. **`guards.py`, `risk.py` and
+`ratelimit.py` are byte-identical — zero changed lines.** `gateway.py` changed in one respect: the
+three product switches it read off the desk's `config` module now arrive as an injected
+`ProductGates`.
+
+**They fail closed.** Every default refuses — `dry_run=True`, `intraday_enabled=False`,
+`options_enabled=False`. A caller who forgets to supply gates gets *simulate, cash-equity only*,
+which is the opposite of what a default usually does and the only sane choice for the module that
+talks to a broker. It is also exactly non-negotiable 5: "both default off, enforced inside the
+gateway."
+
+**Passed as a callable, not a value.** `C.DRY_RUN` was read at the moment of each order, so a
+setting changed mid-session took effect on the next order. Capturing the gates at construction
+would have quietly made it take effect on the next *restart*. The desk's shim passes
+`_gates_from_config`, which reads the config when the order is placed.
+
+### M16.2 — The seven non-negotiables have seven named tests
+`kite-momentum-rebalancer/tests/test_seven_non_negotiables.py`, 16 cases, one section per rule, in
+the order `CLAUDE.md` lists them. Structural where the property is structural (the four layers
+appear in order; nothing outside the gateway calls `place_order`, proven by AST over `app/`),
+behavioural where it can be exercised (`DRY_RUN` places nothing; a gated product returns `BLOCKED`;
+`SGBDE31III-GB` raises before the broker is touched).
+
+They duplicate coverage that exists elsewhere, deliberately. The rules live across three trees now,
+and this is the one file a reviewer can open to check that all seven still hold.
+
+### M16.3 — The broker's two faces are disjoint, which is the enforceable half of the rule ⚠ UNREVIEWED
+`docs/03` §3b: *a user's access token must never fetch universe data, and the system token must
+never place an order.* **A token is an opaque string; nothing can type-check which one a caller
+holds.** What can be enforced is that the two clients do not share a surface.
+
+`baskfy_execution.brokers` names both sets — `MARKET_DATA_ONLY` and `TRADING_ONLY` — and
+`tests/test_broker_faces.py` asserts `baskfy_providers.KiteProvider` has none of the trading
+methods and the desk's `Kite` has none of the ingestion ones. If the market-data client never grows
+`place_order`, the system token cannot reach the order path *at all*; if the trading client never
+grows `daily_bars`, a user's token cannot run the pipeline by accident.
+
+Weaker than per-token authorisation, much stronger than a comment, and it becomes load-bearing at
+P4 when there is more than one account. The test lives in the **desk's** suite because that is the
+only environment where both clients are importable; a copy under `packages/execution/tests` would
+skip the half that matters and then drift.
+
+### M16.4 — The access token is encrypted at rest, and the key story is stated honestly ⚠ UNREVIEWED
+The token was plain JSON at mode 0600 — the right mode, and still a readable secret in any backup,
+`rsync` or snapshot of the directory. It now goes through `baskfy_providers.tokens.AccessTokenStore`,
+the screener's Fernet store, so the merged system keeps a Kite token exactly one way.
+
+Verified by round-trip: the token value **does not appear** in the written bytes, it loads back
+identically, and both files are 0600.
+
+**On the key, plainly.** `KITE_TOKEN_ENCRYPTION_KEY` in the environment is the real protection — the
+key lives where the ciphertext does not. When it is absent, `app/token_store.py` generates one
+beside the token at 0600 and **logs that it did, saying what that is and is not worth**. A
+co-located key defends the secret against being *copied* and does **not** defend it against anything
+that can already read files as this user.
+
+Rejected: refusing to store a token without configuration. It is the stricter choice and it breaks
+login on a desk whose safety rail is that it must be able to rebalance on a Friday. The fallback is
+loud, documented in `.env.example`, and stops being used the moment the variable is set.
+
+**The old plaintext token is still on disk and self-heals.** It is expired, the new path refuses it
+with a clear "log in again", and the next login overwrites that same path with ciphertext. Noted
+rather than deleted: it is the operator's credential, not mine to remove. It is also in the M0
+safety copy at `~/baskfy-safety/2026-08-22/data/` — **that copy contains a plaintext token**.
+
+### M16.5 — Test source-scanning now follows the module, once, for all of them
+Three separate modules broke the same way across M15 and M16: tests that assert structural
+properties by reading `open("app/core/gateway.py")`. Good tests — they catch a refactor that
+reorders the guard and the risk check, which no behavioural test would. The **path** was the
+coupling.
+
+`tests/_source.py` provides `src_of(module)`. Every such read now asks the module where it lives.
+Fixed in `test_execute_gateway`, `test_execution_report`, `test_regime_plan`, `test_costs`,
+`test_no_trade_band` and the new files.
+
+### M16.6 — The typing debt is now four packages wide, and it is one job
+`baskfy_execution` joins `score`, `basket` and `exposure` under the mypy override: `no-untyped-def`
+and `no-untyped-call` are disabled for it, because annotating means editing code whose acceptance
+criterion is that it did not change. The package **is** now type-checked (added to mypy's `files`
+and `mypy_path`; 266 source files, up from 260) — it is the strictness that requires edits that is
+relaxed, not the checking.
+
+**This is the single largest piece of deliberate debt the merge has taken on**: roughly 2,300 lines
+across four packages that a strict checker has never fully read. Doing it properly means giving the
+plan, the regime state, the allocation and the order result real shapes. It is one coherent job and
+it should be one module of its own, after M21.
+
+**State:** decile **1438 passed, 794 skipped**; desk **1243 passed, 17 skipped**; `ruff check`,
+`ruff format --check` and `mypy` clean across 266 files.

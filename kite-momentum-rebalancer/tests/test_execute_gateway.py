@@ -12,6 +12,8 @@ import pathlib
 import time
 
 import pytest
+
+from ._source import src_of
 from fastapi.testclient import TestClient
 
 from app import config as C
@@ -248,7 +250,9 @@ def test_blocking_sleep_removed_from_the_async_endpoint():
 
 
 def test_gateway_layer_order_is_unchanged():
-    src = open("app/core/gateway.py").read()
+    from baskfy_execution import gateway as _gw
+
+    src = src_of(_gw)
     marks = ["layer 1: untouchables", "layer 2: risk", "layer 3: idempotency",
              "layer 4: rate limits"]
     positions = [src.index(m) for m in marks]
@@ -398,7 +402,9 @@ def _returned_status_error_pairs() -> set[tuple[str, bool]]:
     The breaker had the same shape and the same defect.
     """
     import ast
-    tree = ast.parse(pathlib.Path("app/core/gateway.py").read_text())
+    from baskfy_execution import gateway as _gw
+
+    tree = ast.parse(src_of(_gw))
     out = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Dict):

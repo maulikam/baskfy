@@ -2446,3 +2446,41 @@ else.
 
 Where the wrong 1,128 came from is **not diagnosed**; `refresh_index_snapshots` is now
 contradicted by two independent sources and that is worth someone's morning.
+
+---
+
+## M33 — the page says what it cannot show
+
+Maulik read *"Data available from 1 Aug 2025"* beside a range selector offering 5Y, saw a shorter
+line than the button implied, and concluded the filter was broken.
+
+**The filter was not broken.** `range=1m` renders 22 Jul → 18 Aug 2026 and `range=1y` renders
+20 Aug 2025 → 18 Aug 2026; the API honours `from` exactly (10, 19 and 55 points for three windows).
+What was broken was the page: it offered five years, had one, and said so only in a header line
+that does not respond to the selector.
+
+### M33.1 — a truncated range is stated where the chart is ⚠ UNREVIEWED
+When the requested window starts before `data_available_from`, the History section says so —
+"these charts begin 1 Aug 2025, which is as far back as breadth has been computed, not as far back
+as prices go". Derived from the data, never a constant: a hard-coded date starts lying the day the
+backfill goes further back, and a test asserts no literal date appears in the page source.
+
+### M33.2 — the survivorship bias is on the page, not only in the schema ⚠ UNREVIEWED
+`source = 'derived'` lets a backtest exclude biased rows. It does nothing for a person reading a
+chart. The notice states the mechanism — constituents published for today only, carried backwards
+— so the claim can be checked rather than taken on faith, and it says **the live gauges are
+unaffected**, because a reader who distrusted the whole page over this would be discarding four
+numbers that are exactly right.
+
+Asserted over the page source, because both notices are prose and a refactor that drops a
+paragraph passes every behavioural test there is.
+
+### M33.3 — a name collision M26 introduced, found by `tsc` ⚠ UNREVIEWED
+`routers/desk.py` declared `HoldingOut` and `TradeOut`; `baskfy_api.schemas` already had both.
+Two models with one name do not collide in Python — different modules — but **the OpenAPI document
+is a flat namespace**, so the generator module-qualified one of each pair and the hand-written
+`client.ts`, which referenced the plain names, stopped compiling.
+
+Exactly what `PlanOut` did at M19, and it surfaced the same way: on the TypeScript side, from a
+`tsc` run, long after the Python tests were green. Renamed to `DeskHoldingOut` and `DeskTradeOut`
+with the reason recorded at the class.

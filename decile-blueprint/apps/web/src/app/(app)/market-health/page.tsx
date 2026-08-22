@@ -69,7 +69,15 @@ export default async function MarketHealthPage({
    * objects to.
    */
   const health = await fetchMarketHealth(universe);
-  const history = await fetchMarketHealthHistory(universe, daysBefore(health.as_of, rangeDays(range)));
+  const from = daysBefore(health.as_of, rangeDays(range));
+  const history = await fetchMarketHealthHistory(universe, from);
+
+  // True when the reader asked for more history than exists. `data_available_from` is the
+  // earliest stored breadth row, which is what the chart can actually start at.
+  const truncated =
+    health.data_available_from !== null &&
+    health.data_available_from !== undefined &&
+    from < health.data_available_from;
 
   return (
     <div className="flex flex-col gap-5">
@@ -113,6 +121,38 @@ export default async function MarketHealthPage({
             reference product does not show.
           </p>
         </div>
+
+        {/*
+          The range selector offers 5Y whether or not five years exist. Saying "Data available
+          from ..." in the header and then drawing a shorter line than the button implies is how
+          a reader concludes the filter is broken -- so when the requested window starts before
+          the data does, the page says so where the chart is.
+        */}
+        {truncated && (
+          <p role="status" className="rounded-md border bg-muted/40 p-2.5 text-xs">
+            The selected range starts before the data does. These charts begin{" "}
+            <strong>{formatTradeDate(health.data_available_from ?? health.as_of)}</strong>, which is
+            as far back as breadth has been computed &mdash; not as far back as prices go.
+          </p>
+        )}
+
+        {/*
+          Not a footnote. Breadth is computed over the constituents on each date, and for every
+          date before the membership was published those constituents are today's, carried
+          backwards and stored as `source = 'derived'`. That biases the past upward, and a reader
+          comparing 2025's breadth with today's deserves to know before they draw a conclusion
+          rather than after.
+        */}
+        <p
+          role="status"
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs"
+        >
+          <strong>Historical breadth is survivorship-biased.</strong> NSE publishes index
+          constituents for today only, so for dates before that the current members are carried
+          backwards. A company dropped from {health.universe.name} after falling is missing from
+          its own history, which makes the past look healthier than it was. Today&rsquo;s gauges
+          are unaffected; the stored rows are marked so backtests can exclude them.
+        </p>
         <div className="grid gap-3 xl:grid-cols-2">
           {SERIES.map((series) => (
             <BreadthHistory

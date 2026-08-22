@@ -74,6 +74,9 @@ exclude = [
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["PLR2004"]
+# Same reason as the line above, for the reconciliation tests that sit outside a tests/ directory:
+# in a test the literal IS the specification, and naming it costs the reader the number.
+"reconciliation/test_*.py" = ["PLR2004"]
 # Prompt 19 §3's pandas oracle is deliberately one flat transcription of docs/05, section by
 # section, with no helpers of its own. Splitting it to satisfy the branch and statement limits
 # would introduce exactly the shared abstraction an oracle exists to avoid: the value of the
@@ -263,6 +266,11 @@ testpaths = [
     "packages/providers/tests",
     "services/api/tests",
     "services/worker/tests",
+    # M27's measurement lives beside the module it verifies rather than in a package's tests/
+    # directory, because it is about a reconciliation artifact and not about a package. Without
+    # this line it was collected by nothing and ran only when named explicitly -- which is the
+    # same as not existing.
+    "reconciliation",
 ]
 addopts = "-q --strict-markers --strict-config"
 markers = [

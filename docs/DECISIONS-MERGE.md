@@ -2007,3 +2007,70 @@ actually being traded*. Before Account because it is product, not settings.
 is a contract change nobody agreed to"*, the same gate that caught M22. Added to `EXPECTED_PATHS`
 with the reason, and `openapi.json` and the generated TypeScript client regenerated, because the
 suite compares both against the live app.
+
+---
+
+## M27 — the dividend question, answered by the corpus rather than by me
+
+M24 recovered 85 corporate actions and deliberately took only half the decision: the 47 splits and
+bonuses are wrong data, but the 38 dividends turn momentum from a *price* return into a *total*
+return, which reorders the basket and changes what the desk buys. That went to Maulik as
+`NEEDS-MAULIK.md` item 8.
+
+**His answer was to let the corpus decide, by measurement**, with the method specified: compute the
+window return both ways for every instrument with a dividend inside the window, see which matches
+`data/uploads`' reference export within stored precision, cross-check that the winner keeps the
+271-row parity green, and default to price return if the corpus cannot discriminate.
+
+### M27.1 — the corpus discriminates, and it says PRICE RETURN ⚠ UNREVIEWED
+`reconciliation/dividend_convention.py`, regenerable, writing its own result into
+`RECOVERED-ACTIONS.md`. **The two readings agree and neither is close:**
+
+* **The vote: price 42, total 3**, over 45 deciding rows.
+* **The exact matches are the stronger signal.** On 1M, 3M and 6M — the three windows M11
+  established reproduce — the price convention matches **25 of 25** dividend-paying symbols
+  *exactly at stored precision*. The total convention matches only 22 / 18 / 16, and those are
+  precisely the rows where no dividend falls inside the window and the two conventions are
+  identical by construction. That is the signature the price hypothesis predicts and nothing else
+  produces.
+* **The 271-row cross-check, run over every corpus row rather than the payers:** applying the
+  splits and bonuses moves exact matches **up** at every window (1M 264→266, 3M 260→263, 6M
+  255→261); applying the dividends on top pushes them **below even today's unadjusted baseline**
+  (263 / 256 / 252).
+
+**Guarded against the obvious ways to get this wrong.** Both conventions are computed over the
+identical window, so the residual window error is common to both and cancels — this measures the
+adjustment and nothing else. A row only votes where a dividend actually falls *inside* the window;
+80 of the 125 comparisons are abstentions and counting them would have stuffed the tally with rows
+that agree by construction.
+
+**Taken:** momentum is a **price return**. Apply the 47 share-count actions; do not apply the 38
+dividends.
+
+### M27.2 — all three total-return "wins" are in the two broken windows ⚠ UNREVIEWED
+9M and 12M match exactly under **neither** convention — 0 of 25 either way. That is the known
+window-length residual, not an adjustment question: the seeded calendar is short about nine
+lunar-calendar holidays a year, so those two windows resolve long (22/67/127/191/256 against the
+required 22/64/121/185/247). Every one of the three total-return wins sits there, where both
+conventions are wrong and total is accidentally the nearer of two misses.
+
+Worth stating because it cuts the other way too: the measurement **independently confirms M11's
+base fix and M24's recovered splits**, since neither would produce 25-of-25 exact matches if
+either were wrong.
+
+### M27.3 — the reversal path, because a product decision should stay cheap to reverse ⚠ UNREVIEWED
+**A switch to total return is a recompute, not a schema change.** All 85 actions are recorded in
+`RECOVERED-ACTIONS.md` with ex-date, factor and classification; `close_raw` is untouched and stays
+the exchange print; the derivation writes to `corporate_action` with a `source` marker, so the
+dividend rows can be added later with one insert and `apply_adjustments` re-run. Nothing about this
+decision is baked into a column, a migration or a stored value.
+
+If the reference product ever changes convention, or Maulik decides a total return is what he wants
+regardless of what the reference product did, the cost is one pipeline re-run.
+
+### M27.4 — the test file was collected by nothing ⚠ UNREVIEWED
+`reconciliation/test_dividend_convention.py` sits beside the module it verifies rather than in a
+package's `tests/` directory, and `testpaths` did not name `reconciliation` — so it ran only when
+named explicitly, which is the same as not existing. `pyproject.toml` now lists it, and the suite
+went 1,496 → 1,510. `PLR2004` is scoped to it for the reason the existing `**/tests/**` entry gives:
+in a test the literal *is* the specification.

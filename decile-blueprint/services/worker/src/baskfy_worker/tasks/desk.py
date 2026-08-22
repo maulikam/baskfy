@@ -38,7 +38,7 @@ import os
 import sys
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import TypedDict
 
 from baskfy_worker.celery_app import app
 
@@ -70,7 +70,23 @@ def desk_context() -> Iterator[None]:
             sys.path.remove(str(DESK_ROOT))
 
 
-def _run(argv: list[str], entry: str) -> dict[str, Any]:
+class DeskRunResult(TypedDict):
+    """What a desk job hands back to Celery.
+
+    A TypedDict rather than a loosely-typed dict, because PROMPTS.md §"House rules" forbids the
+    dynamic escape hatch and the shape is fixed anyway: an operator reading a task result wants
+    these four things, and a loose mapping would let a fifth appear without anyone noticing.
+    (`test_no_escape_hatches.py` scans source text, so this paragraph describes the forbidden
+    annotation rather than spelling it.)
+    """
+
+    entry: str
+    argv: list[str]
+    exit_code: int
+    seconds: float
+
+
+def _run(argv: list[str], entry: str) -> DeskRunResult:
     """Invoke one of the desk's `main()` functions with a constructed argv."""
     started = dt.datetime.now(dt.UTC)
     with desk_context():
@@ -85,7 +101,12 @@ def _run(argv: list[str], entry: str) -> dict[str, Any]:
             sys.argv = original
 
     elapsed = (dt.datetime.now(dt.UTC) - started).total_seconds()
-    result = {"entry": entry, "argv": argv, "exit_code": code, "seconds": round(elapsed, 2)}
+    result: DeskRunResult = {
+        "entry": entry,
+        "argv": argv,
+        "exit_code": code,
+        "seconds": round(elapsed, 2),
+    }
     # A non-zero exit is reported, not raised. The desk's convention is that one failure never
     # stops the rest, and a Celery retry storm over a job whose steps are already idempotent and
     # already logged would add noise without adding a single collected row.
@@ -94,13 +115,13 @@ def _run(argv: list[str], entry: str) -> dict[str, Any]:
 
 
 @app.task(name="baskfy.desk.daily", bind=False)
-def run_desk_daily(source: str = "schedule") -> dict[str, Any]:
+def run_desk_daily(source: str = "schedule") -> DeskRunResult:
     """`python -m scripts.daily --quiet --source schedule` — the 18:30 IST collection."""
     return _run(["--quiet", "--source", source], "daily")
 
 
 @app.task(name="baskfy.desk.autorun", bind=False)
-def run_desk_autorun() -> dict[str, Any]:
+def run_desk_autorun() -> DeskRunResult:
     """`python -m scripts.autorun` — whatever today still needs collected.
 
     Its trigger has always been a human logging in, because both jobs are blocked on a Kite token
@@ -111,6 +132,6 @@ def run_desk_autorun() -> dict[str, Any]:
 
 
 @app.task(name="baskfy.desk.daily_check", bind=False)
-def check_desk_daily() -> dict[str, Any]:
+def check_desk_daily() -> DeskRunResult:
     """`--check`: report state, change nothing. Safe to run anywhere, including a test."""
     return _run(["--check"], "daily")

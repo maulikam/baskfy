@@ -53,6 +53,7 @@ export type NavIconName =
   | "activity"
   | "table-2"
   | "scale"
+  | "briefcase"
   | "history"
   | "list"
   | "tag"
@@ -71,6 +72,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: "/market-health", label: "Market Health", icon: "activity", status: "ready" },
       { href: "/screens", label: "Screens", icon: "table-2", status: "ready" },
       { href: "/portfolios", label: "Rebalance Tracker", icon: "scale", status: "ready" },
+      // M22. The desk's output, read-only: what the strategy wants today and what was last
+      // planned. Not in docs/08's IA, which predates the merge -- see MERGE-PROMPTS.md §M22.
+      { href: "/baskets", label: "Baskets", icon: "briefcase", status: "ready" },
       { href: "/backtests", label: "Backtests", icon: "history", status: "ready" },
       { href: "/listings", label: "Listings", icon: "list", status: "ready" },
     ],

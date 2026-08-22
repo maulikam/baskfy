@@ -447,6 +447,30 @@ are Maulik's call).
 
 ---
 
+## M22 — The merged face (read-only basket surfaces in the web app)
+
+After M21. The screener's Next.js app has never shown a basket; the desk's Jinja pages have never
+been seen outside an SSH tunnel. This puts the desk's *output* on the web app, for the single
+founder account, and nothing else.
+
+1. **`/baskets`** — built from the live `MomentumScan` + `baskfy_core.score` + the basket engine.
+   The current basket, its scores, its weights.
+2. **A plan view** — the latest rebalance plan, rendering **every column the Jinja page shows,
+   including the pledged-share flags.**
+3. **Links into the existing performance and backtest pages**, so the basket sits beside the
+   record of how it has done.
+
+**Strictly read-only. No execute button, no broker mutation from the web app.** Execution stays in
+the desk console, so nothing crosses the SEBI gate and the desk's non-negotiable #1 — that
+`packages/execution` is the only path to an order — is untouched.
+
+**Acceptance:** the pages render real data from the merged backend; a test asserts that no
+order-placing route is reachable from the web app; the desk suite is untouched and green.
+Then: update `RUN-AND-TEST.md` and the status page, tag `v0.2.0`, and write the final report —
+everything green, everything queued in `NEEDS-MAULIK.md`, every `⚠ UNREVIEWED` decision listed.
+
+---
+
 ## After M21 (not in this script)
 
 - **Shadow Fridays** (docs/SHADOW-MODE.md) — four consecutive green weeks, then flip the

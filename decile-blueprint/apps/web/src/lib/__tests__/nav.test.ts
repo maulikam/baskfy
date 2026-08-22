@@ -11,6 +11,11 @@ import { NAV_GROUPS, NAV_ITEMS } from "@/lib/nav";
  * The order is the reference product's information architecture, not a preference, so it is pinned
  * rather than described. A reordering that is deliberate updates this list; one that is accidental
  * fails here.
+ *
+ * **Baskets is the one addition, and it is deliberate.** docs/08 predates the merge: it describes
+ * the screener alone, which had no basket to show. MERGE-PROMPTS.md §M22 adds the desk's output as
+ * a read-only surface, and it sits directly after Rebalance Tracker because that is the item it
+ * belongs beside — what the strategy wants, next to what was actually traded.
  */
 describe("the sidebar IA", () => {
   it("has the three groups docs/08 names, in order", () => {
@@ -23,6 +28,7 @@ describe("the sidebar IA", () => {
       "Market Health",
       "Screens",
       "Rebalance Tracker",
+      "Baskets",
       "Backtests",
       "Listings",
     ]);

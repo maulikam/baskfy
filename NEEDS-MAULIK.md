@@ -35,7 +35,7 @@ Friday's token, correctly refused to store it, and said why:
 through a browser, and expires them at ~06:00 IST the next morning; nothing on this side removes
 that. The bridge removes the *second* manual step — getting that token onto the laptop.
 
-**What it unblocks:** *depth only*. `decile_worker.backfill` pulls daily candles from Kite, which
+**What it unblocks:** *depth only*. `baskfy_worker.backfill` pulls daily candles from Kite, which
 is the only source that reaches before 2024.
 
 **What it does NOT block, because the run already did it without Kite:**
@@ -92,9 +92,8 @@ _(nothing yet)_
   the desk's existing token at `data/.kite_token.json`; only if that is expired and no login has
   happened will it queue an ask here. Kite tokens expire nightly with no refresh, so this is the
   one step no automation can remove.
-- **M21 — deleting `../_baskfy_subtree_tmp/`.** The pre-merge rollback copy of both repositories.
-  An agent never deletes it. It becomes safe for you to remove once you have skimmed the final
-  status page.
+- **M21 — deleting `../_baskfy_subtree_tmp/`.** ~~Coming.~~ **M21 is done (22 Aug 2026), so this
+  is now open — see item 7 below.**
 
 ### 2. The box's strangle collectors will point at moved paths after the next deploy
 **Status:** informational, no action until you deploy · **Raised:** M6, 22 Aug 2026
@@ -158,6 +157,18 @@ Not the merge's parity gates.
 
 **Blocks:** nothing today — but check it before the next backfill attempt rather than during one.
 
+### 7. `../_baskfy_subtree_tmp/` is yours to delete
+**Status:** open, zero urgency · **Raised:** M21, 22 Aug 2026
+
+The scratch copy the `git subtree add` worked from. **No agent will ever delete it** — that rule is
+in `MERGE-PROMPTS.md` §M21.4, and it exists because an agent cannot know what a rollback copy is
+worth to the person who might need it.
+
+**Safe to `rm -rf` once you have skimmed `docs/00-merge-status.md` and are content with it.** Both
+histories live inside `baskfy/.git` — proved four separate ways at M1, because `git log --follow`
+cannot prove it for a subtree — so nothing is lost with it. Until then it costs disk and nothing
+else.
+
 ### 5. Two small credential items from M16
 **Status:** informational · **Raised:** M16, 22 Aug 2026
 
@@ -173,5 +184,11 @@ Not the merge's parity gates.
    that one file when you next look at the safety copy. The live one at
    `kite-momentum-rebalancer/data/.kite_token.json` is also still plaintext and expired; your next
    Kite login overwrites it with ciphertext automatically.
+3. **Observed on 22 Aug during the M21 drill:** the desk logs *"the token blob could not be
+   decrypted; the encryption key has probably been rotated"*. That is the bootstrap key beside the
+   token no longer matching the blob — harmless, because the token in it expired at 06:00 anyway,
+   and your next login writes a fresh pair. Mentioned only so the warning is not a surprise. Setting
+   `KITE_TOKEN_ENCRYPTION_KEY` per (1) stops it recurring, because the key then lives somewhere
+   that is not regenerated.
 
 **Blocks:** nothing.

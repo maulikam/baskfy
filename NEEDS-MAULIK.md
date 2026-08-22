@@ -337,6 +337,50 @@ types. It would settle split-versus-bonus and demerger-versus-dividend, which pr
 
 **Blocks:** nothing.
 
+### 10. **A design call: `/baskets` now takes 67 seconds**
+**Status:** open, **decision needed, not hands** · **Raised:** M29, 22 Aug 2026
+
+The deep backfill took `ohlcv_daily` from 1.1M bars to 3.5M. `/baskets` computes its basket live
+from those bars, so the page went from about a second to **67**. Nothing about the answer is wrong;
+it is doing three times the work.
+
+Three ways out, and I did not want to pick one in the last minutes of a session:
+
+1. **Precompute the scan in the nightly chain** — my recommendation. The pipeline already does this
+   work every evening; the page would read a stored result instead of recomputing it. Fastest page,
+   and the basket becomes a record rather than a live calculation.
+2. **Bound the window the basket engine loads.** It needs about a year of bars to score; it is
+   currently handed everything. Smallest change, keeps the page live.
+3. **Cache the computed scan** behind the existing Redis screen cache. Cheap, but the first
+   request after every publish still pays the 67 seconds.
+
+**Tell me which and I will build it** — (2) is roughly an hour, (1) is half a day.
+
+**Blocks:** nothing else. Every other page is unaffected; the desk console is unaffected.
+
+### 11. **231 instruments Kite cannot serve at all**
+**Status:** open, low priority, **needs a decision about whether it is worth it** · **Raised:** M29
+
+231 of the 2,525 tradable EQ/BE instruments have **no Kite instrument token** — and this is not a
+merge bug: checked against Kite's live dump of 10,222 symbols, **0 of the 231 appear in it**.
+`ABAN`, `ALPHAGEO`, `AKSHARCHEM`, `AHLWEST` and 227 others are in NSE's listings register and not
+in Kite's instrument master.
+
+They have bhavcopy bars from 2024 onward and **nothing before**. Kite cannot be asked for them at
+any depth, so no re-run helps.
+
+**The one source that could fill them** is the NSE bhavcopy archive, which is keyed by symbol
+rather than instrument token — which is exactly why it reaches names Kite cannot. That same module
+would also fix the convention seam in the deep segment (`DECISIONS-MERGE.md` M29.3): with real
+exchange prints for 2017–2023, the whole history could be price-return adjusted instead of the
+first six years carrying Kite's dividend adjustment.
+
+**My read:** worth doing before the fifteen-year backtests are taken seriously, not worth doing
+before you have looked at the screener. These 231 are small and mostly illiquid; none is in the
+momentum basket.
+
+**Blocks:** nothing today.
+
 ### 5. Two small credential items from M16
 **Status:** informational · **Raised:** M16, 22 Aug 2026
 

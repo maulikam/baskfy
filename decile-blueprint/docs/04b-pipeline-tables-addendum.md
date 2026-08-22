@@ -112,3 +112,40 @@ not earned. Two rules enforce this:
 
 `decile_worker.tasks.membership.membership_sources()` is the query Prompt 15 uses to exclude
 uncertain periods.
+
+---
+
+## `basket_snapshot` — the nightly chain's answer, stored (M30)
+
+Not in `docs/04`, which predates the merge and describes a screener with no basket to show.
+
+`/baskets` computed its answer per request: every bar the scanned symbols have ever had, loaded
+into Polars, scored, and turned into a plan. That cost about a second while `ohlcv_daily` held two
+years of history. After the deep backfill took it to nine, the page took **67 seconds**.
+
+None of that is per-request work — the inputs change once a night — so pipeline step 11,
+`refresh_basket`, computes it after `publish` and stores it here.
+
+| column | why |
+|---|---|
+| `as_of` | the trade date the basket is for |
+| `screen_run_id` | docs/06's cache key: definition + as-of + data version |
+| `data_version` | the version `publish` bumped, which the basket is identified by |
+| `payload` | the endpoint's response body, **stored whole** |
+| `computed_ms` | how long it took, so a regression is visible in the table rather than only in somebody's patience |
+| `computed_at` | when |
+
+**`payload` is JSONB and deliberately not shredded into columns.** It is a record of what the
+strategy wanted on a date — nothing queries across it, and the page reads exactly one row.
+Shredding it would mean a migration every time the basket page gains a field, which is the
+opposite of what a snapshot table is for.
+
+**Unique on `(as_of, data_version)`**, so re-running a night replaces its own row rather than
+piling up (house rule 7). A second publish on the same date writes a second row and the page takes
+the newer one.
+
+**It is a cache, and the code treats it as one.** `refresh_basket` records its own failure and
+returns rather than raising, so a basket that cannot be built never holds back a `data_version`
+that is otherwise good; and `GET /baskets` falls back to computing live when no snapshot exists,
+because a page that 404s on a cold cache would be worse than a slow page.
+

@@ -13098,7 +13098,7 @@
     },
     "/api/v1/baskets": {
       "get": {
-        "description": "The basket the strategy wants today, computed from live bars.\n\nBuilt against an all-cash book on purpose. A basket page answers *\"what does the strategy\nwant?\"*, which is a property of the market; a plan answers *\"what would we have to trade?\"*,\nwhich is a property of the book. Those are different questions and `/baskets/plan` is the\nother one.",
+        "description": "The basket the strategy wants today.\n\nBuilt against an all-cash book on purpose. A basket page answers *\"what does the strategy\nwant?\"*, which is a property of the market; a plan answers *\"what would we have to trade?\"*,\nwhich is a property of the book. Those are different questions and `/baskets/plan` is the\nother one.\n\n**Served from the nightly snapshot when there is one** (M30). Building it live means loading\nevery bar the scanned symbols have ever had into Polars, which took about a second at two\nyears of history and **67 seconds** at nine. The nightly chain computes it once, after\npublish, into `basket_snapshot`.\n\nThe live path is kept as the fallback, and that is not belt-and-braces: on a fresh database,\nbefore the first nightly run, or on any night the step was skipped for want of an uploaded\nscan, there is no snapshot. A page that 404s because a cache is cold would be worse than a\nslow page.",
         "operationId": "currentBasket",
         "parameters": [
           {

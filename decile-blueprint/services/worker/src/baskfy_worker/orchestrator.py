@@ -49,6 +49,7 @@ from baskfy_worker.steps import (
 from baskfy_worker.tasks import (
     adjustments,
     bars,
+    basket,
     corporate_actions,
     factors,
     listings,
@@ -135,7 +136,9 @@ async def run_nightly_pipeline(
     return outcome
 
 
-async def _run_chain(
+async def _run_chain(  # noqa: PLR0915 - one block per pipeline step, and docs/03 defines
+    # eleven of them. Splitting a linear chain into helpers to satisfy a statement count
+    # would hide the order the steps run in, which is the one thing this function is for.
     session: AsyncSession,
     run: PipelineRun,
     trade_date: dt.date,
@@ -233,3 +236,19 @@ async def _run_chain(
         result = await publish.run_publish(session, step, run, deps.cache)
         outcome.data_version = result.data_version
     outcome.steps_completed.append(PipelineStep.PUBLISH)
+
+    # --- 11. refresh_basket ----------------------------------------------
+    #
+    # M30. `/baskets` computed this per request and took 67 seconds once M29 gave it nine years
+    # of bars to load. The inputs change once a night; so does the answer.
+    #
+    # AFTER publish, deliberately: the basket is identified by the `data_version` publish bumps,
+    # so computing it earlier would store a basket labelled with a data set it was not built
+    # from. And it runs last because it is a *cache* -- `run_refresh_basket` records its own
+    # failure and returns rather than raising, so a basket that cannot be built (no uploaded
+    # scan, say) never holds back a `data_version` that is otherwise good.
+    async with record_step(session, run.id, PipelineStep.REFRESH_BASKET, trade_date) as step:
+        names = await basket.run_refresh_basket(session, step, trade_date)
+        if names == 0:
+            step.status = StepStatus.SKIPPED
+    outcome.steps_completed.append(PipelineStep.REFRESH_BASKET)

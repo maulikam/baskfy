@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 #: Two tables are additions that docs/04 does not define, each with its own addendum:
 #:   ``trading_day``   — Prompt 1 deliverable 3; see docs/04a-trading-day-addendum.md
 #:   ``ingest_cursor`` — Prompt 3 deliverable 6; see docs/04b-pipeline-tables-addendum.md
+#:   ``basket_snapshot`` — M30's nightly basket cache; see docs/04b-pipeline-tables-addendum.md
 DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # Reference & instrument data
     "exchange": ("id",),
@@ -27,6 +28,9 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "symbol_alias": ("id",),
     "trading_day": ("exchange_id", "date"),
     "ingest_cursor": ("kind", "instrument_id", "window_start"),
+    # M30: the nightly chain's basket, stored so `/baskets` reads a row instead of loading nine
+    # years of bars per request. docs/04b addendum.
+    "basket_snapshot": ("id",),
     # Price history
     "ohlcv_daily": ("instrument_id", "date"),
     # Corporate actions
@@ -148,7 +152,7 @@ def test_every_added_table_has_an_addendum() -> None:
     """The two tables not in docs/04 must each be written down somewhere in docs/."""
     docs = REPO_ROOT / "docs"
     combined = "\n".join(path.read_text(encoding="utf-8") for path in docs.glob("04*addendum*.md"))
-    for table in ("trading_day", "ingest_cursor"):
+    for table in ("trading_day", "ingest_cursor", "basket_snapshot"):
         assert table in combined, f"{table} is not described in any docs/04 addendum"
 
 

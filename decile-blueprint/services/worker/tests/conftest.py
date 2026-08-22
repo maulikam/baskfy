@@ -37,6 +37,9 @@ API_DIR = Path(__file__).resolve().parents[2] / "api"
 #: assertion silently depends on execution order. `seed_reference` restores the 14 pinned
 #: universes afterwards.
 PIPELINE_TABLES = (
+    # `basket_snapshot` is M30's nightly cache. Without it here a snapshot written by one test is
+    # still there for the next, and "the cache is cold" becomes untestable.
+    "basket_snapshot, "
     "ohlcv_daily, factor_daily, index_member_daily, index_snapshot_daily, market_health_daily, "
     "corporate_action, ingest_cursor, pipeline_run_step, pipeline_run, instrument, trading_day, "
     # Prompt 12's account purge is a worker task too, and it writes `app_user` — which nothing

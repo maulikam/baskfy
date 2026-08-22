@@ -53,8 +53,34 @@ REPUBLIC_DAY = dt.date(2026, 1, 26)
 
 
 class TestTheChain:
-    def test_it_is_the_ten_steps_docs_03_lists(self) -> None:
+    def test_it_is_the_ten_steps_docs_03_lists_plus_M30s_cache(self) -> None:
+        """docs/03's ten, in order, and one addition after them.
+
+        `refresh_basket` is M30 and is deliberately **eleventh**, after `publish`: the basket is
+        identified by the `data_version` publish bumps, so computing it earlier would store a
+        basket labelled with a data set it was not built from. It is also last because it is a
+        presentation cache — nothing downstream may depend on it, and it records its own failure
+        rather than raising, so it can never hold back a `data_version` that is otherwise good.
+
+        A reordering that is deliberate updates this list; one that is accidental fails here.
+        """
         assert [s.value for s in NIGHTLY_CHAIN] == [
+            "refresh_instruments",
+            "fetch_daily_bars",
+            "fetch_corporate_actions",
+            "apply_adjustments",
+            "refresh_index_membership",
+            "refresh_index_snapshots",
+            "compute_factors",
+            "compute_market_health",
+            "data_quality_gate",
+            "publish",
+            "refresh_basket",
+        ]
+
+    def test_docs_03s_own_ten_still_come_first_and_in_order(self) -> None:
+        """The addition must not have disturbed the chain docs/03 specifies."""
+        assert [s.value for s in NIGHTLY_CHAIN][:10] == [
             "refresh_instruments",
             "fetch_daily_bars",
             "fetch_corporate_actions",
@@ -67,8 +93,8 @@ class TestTheChain:
             "publish",
         ]
 
-    def test_there_are_exactly_ten(self) -> None:
-        assert len(NIGHTLY_CHAIN) == 10
+    def test_there_are_eleven(self) -> None:
+        assert len(NIGHTLY_CHAIN) == 11
 
 
 class TestTradingDayAwareness:

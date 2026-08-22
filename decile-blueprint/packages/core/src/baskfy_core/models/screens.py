@@ -9,6 +9,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     Date,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -89,3 +90,33 @@ class MarketHealthDaily(Base):
     pct_within_10pct_ath: Mapped[Decimal | None] = mapped_column(BREADTH)
     pct_ret_1y_positive: Mapped[Decimal | None] = mapped_column(BREADTH)
     constituent_count: Mapped[int | None] = mapped_column(Integer)
+
+
+class BasketSnapshot(Base):
+    """What the strategy wanted on one date, computed once by the nightly chain (M30).
+
+    `/baskets` used to build this per request: every bar the scanned symbols have ever had, into
+    Polars, scored, turned into a plan. Fine at two years of history; **67 seconds** at nine
+    (`DECISIONS-MERGE.md` M29.6). The inputs change once a night, so it is computed once a night.
+
+    ``payload`` is the endpoint's response body, stored whole. It is a record of a decision on a
+    date, not something anything queries across, and shredding it into columns would mean a
+    migration every time the page gains a field.
+    """
+
+    __tablename__ = "basket_snapshot"
+    __table_args__ = (
+        UniqueConstraint("as_of", "data_version", name="uq_basket_snapshot_as_of_version"),
+    )
+
+    id: Mapped[BigIntPk]
+    as_of: Mapped[dt.date] = mapped_column(Date, nullable=False, index=True)
+    #: docs/06's cache key — definition + as-of + data version.
+    screen_run_id: Mapped[str] = mapped_column(String, nullable=False)
+    data_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[JsonObject] = mapped_column(JSONB, nullable=False)
+    #: So a regression like M29's shows up in the table rather than only in somebody's patience.
+    computed_ms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    computed_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )

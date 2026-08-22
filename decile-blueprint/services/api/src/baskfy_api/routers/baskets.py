@@ -114,14 +114,29 @@ async def current_basket(
     session: SessionDep,
     date: Annotated[dt.date | None, Query(description="as-of; defaults to the latest bars")] = None,
 ) -> BasketOut:
-    """The basket the strategy wants today, computed from live bars.
+    """The basket the strategy wants today.
 
     Built against an all-cash book on purpose. A basket page answers *"what does the strategy
     want?"*, which is a property of the market; a plan answers *"what would we have to trade?"*,
     which is a property of the book. Those are different questions and `/baskets/plan` is the
     other one.
+
+    **Served from the nightly snapshot when there is one** (M30). Building it live means loading
+    every bar the scanned symbols have ever had into Polars, which took about a second at two
+    years of history and **67 seconds** at nine. The nightly chain computes it once, after
+    publish, into `basket_snapshot`.
+
+    The live path is kept as the fallback, and that is not belt-and-braces: on a fresh database,
+    before the first nightly run, or on any night the step was skipped for want of an uploaded
+    scan, there is no snapshot. A page that 404s because a cache is cold would be worse than a
+    slow page.
     """
     from baskfy_api.baskets import build_current_basket  # noqa: PLC0415
+    from baskfy_worker.tasks.basket import latest_snapshot  # noqa: PLC0415
+
+    stored = await latest_snapshot(session, date)
+    if stored is not None:
+        return BasketOut.model_validate(stored)
 
     resolved = await build_current_basket(session, date)
     if resolved is None:

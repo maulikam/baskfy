@@ -100,6 +100,12 @@ class MomentumScan:
         return buffer.getvalue().decode("utf-8").encode(EXPORT_ENCODING)
 
 
+#: Calendar days two bars may be apart and still count as consecutive. A long weekend plus a
+#: holiday cluster fits inside a week; a wider spacing is a hole in the history, and a price step
+#: across a hole is not evidence of anything.
+MAX_ADJACENT_DAYS: Final = 7
+
+
 def unadjusted_symbols(bars: pl.DataFrame, threshold: float = SPLIT_SIGNATURE) -> tuple[str, ...]:
     """Symbols whose history contains a price step no market makes — a missing adjustment.
 
@@ -117,8 +123,22 @@ def unadjusted_symbols(bars: pl.DataFrame, threshold: float = SPLIT_SIGNATURE) -
         return ()
     stepped = (
         bars.sort(["symbol", "date"])
-        .with_columns(pl.col("close").shift(1).over("symbol").alias("_prev"))
+        .with_columns(
+            pl.col("close").shift(1).over("symbol").alias("_prev"),
+            pl.col("date").shift(1).over("symbol").alias("_prev_date"),
+        )
         .filter(pl.col("_prev").is_not_null() & (pl.col("_prev") > 0))
+        # THE TWO BARS MUST ACTUALLY BE ADJACENT IN TIME, not merely adjacent in the table.
+        #
+        # A step between consecutive rows is only evidence of a missing adjustment if those rows
+        # are consecutive *days*. Across a hole in the history it is just the price moving while
+        # nobody was looking, and a hole can be years wide: ARIHANT's bars stop in Feb 2022 and
+        # resume in Apr 2026, which read as a single +2,188% "split" and flagged the symbol.
+        #
+        # Found when M29's deep backfill took the history from 2024 back to 2017 and the banner
+        # went from 5 symbols to 11 -- every one of the new ones a gap rather than an action.
+        # A week covers a long weekend plus a holiday cluster; anything wider is a hole.
+        .filter((pl.col("date") - pl.col("_prev_date")).dt.total_days() <= MAX_ADJACENT_DAYS)
         .filter(((pl.col("close") / pl.col("_prev")) - 1).abs() > threshold)
     )
     return tuple(sorted(set(stepped["symbol"].to_list())))

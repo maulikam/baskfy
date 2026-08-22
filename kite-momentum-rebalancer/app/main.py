@@ -297,6 +297,10 @@ async def analyze(scan: UploadFile | None = None, generate_for: str = Form("")):
         df, provenance, note = _generated_scan(generate_for)
     elif scan is not None:
         df, provenance, note = _uploaded_scan(scan, await scan.read())
+    elif C.SCAN_SOURCE_DEFAULT == "generated":
+        # M14 §3's flag, off by default. When it is on, "no file and no date" means "build it" —
+        # which is what the desk's weekly rhythm looks like once the CSV is genuinely retired.
+        df, provenance, note = _generated_scan(_latest_pipeline_date().isoformat())
     else:
         raise HTTPException(400, "send a scan file, or generate_for=YYYY-MM-DD")
 
@@ -390,6 +394,45 @@ def _carried_columns():
     return pl.DataFrame(frame[["symbol", "series", *CARRIED_COLUMNS]].to_dict(orient="records"))
 
 
+def _latest_pipeline_date() -> dt.date:
+    """The most recent date the pipeline has bars for. Only reached when the M14 flag is on."""
+    import psycopg
+
+    from . import scan_source
+
+    try:
+        with psycopg.connect(scan_source.SCREENER_DSN) as conn, conn.cursor() as cur:
+            cur.execute("select max(date) from ohlcv_daily")
+            row = cur.fetchone()
+    except Exception as exc:
+        raise HTTPException(503, f"SCAN_SOURCE_DEFAULT is 'generated' but the screener is "
+                                 f"unreachable: {exc}") from None
+    if not row or row[0] is None:
+        raise HTTPException(503, "SCAN_SOURCE_DEFAULT is 'generated' but the screener has no bars")
+    return row[0]
+
+
+def _resolve_breadth(df: pd.DataFrame, scan_audit: dict, provenance: dict) -> dict:
+    """Which 20-DMA breadth number the cash bands see, and the record of why.
+
+    A failure here must never stop a rebalance: an unreachable screener falls back to the number
+    the desk has always computed for itself, which is exactly what it would have used anyway.
+    """
+    from . import breadth_source
+
+    scan_value = float(scan_audit["breadth_above_20dma"])
+    raw_date = provenance.get("as_of") or (str(df["date"].iloc[0]) if len(df) else "")
+    try:
+        as_of = dt.date.fromisoformat(str(raw_date)[:10])
+    except ValueError:
+        return {
+            "value": scan_value, "source": "scan", "scan_value": scan_value,
+            "pipeline_value": None, "universe": breadth_source.DESK_UNIVERSE_SLUG,
+            "reason": f"scan carries no usable date ({raw_date!r}); used the scan's own",
+        }
+    return breadth_source.breadth_for_plan(scan_value, set(df["symbol"].astype(str)), as_of)
+
+
 async def _plan_from_scan(df: pd.DataFrame, provenance: dict, note: str):
     """Everything after the scan arrives — identical for both paths, by construction.
 
@@ -422,8 +465,14 @@ async def _plan_from_scan(df: pd.DataFrame, provenance: dict, note: str):
     for h in holdings:
         h["last_price"] = live.get(h["symbol"], h["last_price"])
 
-    plan = build_plan(scored, holdings, cash, live_prices=live)
+    # M14 §1: the cash band's breadth comes from the pipeline when the scan covers the universe
+    # the pipeline measured, and from the scan itself when it does not. Both numbers are recorded
+    # either way, so the weekly divergence between them is visible rather than assumed to be zero.
+    breadth = _resolve_breadth(df, scan_audit, provenance)
+
+    plan = build_plan(scored, holdings, cash, live_prices=live, breadth_override=breadth["value"])
     plan["audit"] = scan_audit
+    plan["breadth"] = breadth
     plan["scan"] = provenance                          # M13 §3: how this plan can be re-resolved
     # Before you confirm, not after the batch is half sent.
     plan["funding"] = await _funding_check(k, plan["orders"])

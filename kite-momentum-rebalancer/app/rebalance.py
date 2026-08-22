@@ -49,8 +49,9 @@ def _cash_pct(breadth20: float) -> float:
 
 
 def build_plan(scored: pd.DataFrame, holdings: list[dict], cash: float,
-               live_prices: dict[str, float] | None = None) -> dict:
-    """Same signature as before the move; binds the desk's config, clusters and guard."""
+               live_prices: dict[str, float] | None = None,
+               breadth_override: float | None = None) -> dict:
+    """As before the move, plus M14's breadth input; binds the desk's config, clusters, guard."""
     return _core.build_plan(
         scored,
         holdings,
@@ -59,4 +60,5 @@ def build_plan(scored: pd.DataFrame, holdings: list[dict], cash: float,
         tradeable=_tradeable,
         clusters=_load_clusters(),
         live_prices=live_prices,
+        breadth_override=breadth_override,
     )

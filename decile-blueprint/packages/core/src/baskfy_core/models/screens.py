@@ -83,6 +83,9 @@ class MarketHealthDaily(Base):
     date: Mapped[dt.date] = mapped_column(Date)
     pct_above_200dma: Mapped[Decimal | None] = mapped_column(BREADTH)
     pct_above_50dma: Mapped[Decimal | None] = mapped_column(BREADTH)
+    #: M14 §1 — the desk's cash bands are calibrated on this one. Nullable: rows written before
+    #: migration 0011 have no 20-day figure and must say so rather than claim zero.
+    pct_above_20dma: Mapped[Decimal | None] = mapped_column(BREADTH)
     pct_within_10pct_ath: Mapped[Decimal | None] = mapped_column(BREADTH)
     pct_ret_1y_positive: Mapped[Decimal | None] = mapped_column(BREADTH)
     constituent_count: Mapped[int | None] = mapped_column(Integer)

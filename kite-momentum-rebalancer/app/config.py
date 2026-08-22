@@ -74,6 +74,16 @@ MAX_POS_VS_DAY_VALUE = 0.01                # position ≤ 1% of median daily tra
 HALF_SIZE_WEIGHT = 3.0                     # for short-history listings
 SHORT_HISTORY_MONTHS = 18
 
+# --- M14 §3: the shadow-mode flag flip (P2.6) --------------------------------------------------
+# "upload" — /analyze needs a file, or an explicit generate_for=YYYY-MM-DD. This is the default
+#            and stays the default until four consecutive Fridays of shadow mode come back green.
+# "generated" — /analyze with neither builds the scan itself for the latest pipeline date.
+#
+# One flagged config change, per docs/SHADOW-MODE.md. Flipping it early is not a shortcut: on
+# 2026-08-18 the two paths disagreed on four orders, and one of them was a substitution caused by
+# a missing corporate action (NEEDS-MAULIK item 4), not by rounding.
+SCAN_SOURCE_DEFAULT = os.getenv("SCAN_SOURCE_DEFAULT", "upload")
+
 # Cash bands by breadth (% of universe above 20-DMA)
 CASH_BANDS = [                             # (min_breadth, cash_pct)
     (65.0, 5.0),                           # bullish → 5% cash

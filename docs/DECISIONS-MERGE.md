@@ -1382,3 +1382,71 @@ The first fixture was worse than useless before this: every symbol was rejected 
 crore turnover against a ₹5 crore floor, so "both paths produce the same plan" passed by comparing
 an empty plan to an empty plan. The fixture now clears the floor, two names survive, and a test
 asserts the plan is non-empty so it cannot quietly regress to comparing nothing with nothing.
+
+---
+
+## M14 — breadth, reconciled; the flag, built and off
+
+### M14.1 — P1.9 is closed, and the answer was to add a column ⚠ UNREVIEWED
+`DESK-PARITY.md` §P1.9 recorded desk and pipeline breadth as **not reconcilable**: different
+metrics over different populations, with no `pct_above_20dma` in the pipeline at all. It named two
+ways out and I took the first, because the second is a strategy change wearing a wiring change's
+clothes — the desk's cash bands were fitted to the 20-day number, and re-expressing them against
+the 50-day figure silently re-tunes when the book holds cash.
+
+Migration `0011` adds `market_health_daily.pct_above_20dma`. `factor_daily.ma_20` already existed,
+so this is arithmetic the pipeline could already do.
+
+**Then the two sides reconciled exactly.** On 2026-08-18 the desk's 271-row scan and the
+pipeline's `nifty-total-market` membership are the **same 271 symbols, symbol for symbol** — and
+both report **68.6347%**. Not close. Equal. The desk counts a NaN as below its 20-DMA and the
+pipeline excludes NULLs from the denominator; on this data nothing is missing either input, so the
+two denominators coincide.
+
+### M14.2 — the source follows the scan, because breadth is a claim about a population ⚠ UNREVIEWED
+`_cash_pct` now reads the pipeline **when the scan's symbols are that universe**, and the scan's
+own figure when they are not. The membership is re-checked per plan rather than trusted once: index
+membership changes, and a scan CSV can be exported from anywhere.
+
+A breadth number measured over a different set of stocks is not a more authoritative number. It is
+a wrong one. Both values land on the plan either way, so weekly divergence is visible rather than
+assumed to be zero. An unreachable screener falls back silently to what the desk has always
+computed — the desk trades on Monday whether or not a container is up.
+
+### M14.3 — and the honest part: today it decides nothing ⚠ UNREVIEWED
+`FULLY_INVESTED` is on, and `cash_pct_for` returns 0% **before it ever looks at the bands**. So
+M14's wiring is correct, reconciled, and currently **inert**.
+
+I nearly shipped a test asserting the two numbers "land in the same 5% band", which would have been
+false and would have implied the wiring was load-bearing. It becomes load-bearing the moment anyone
+turns `FULLY_INVESTED` off — which is exactly when you want the input already right rather than
+being repointed under pressure. Two tests now: one for each state.
+
+### M14.4 — shadow mode compares orders, and the first run is red ⚠ UNREVIEWED
+`scripts/shadow_mode.py`, `make shadow DATE=…`. Both plans against the same fixed book and the same
+capital, so the only variable is the scan. No Kite session, no live prices, no holdings — it runs on
+a Sunday, which is when anyone will look at it. A test asserts nothing in it references the order
+path at all.
+
+**Orders, not scores.** `DESK-PARITY.md` already compares scores and ranks, and a score that moves
+by a tenth changes nothing anyone can lose money on.
+
+First run, 2026-08-18: **four order deltas out of fifteen orders**.
+
+    AETHER      BUY 40  →  BUY 39
+    WELCORP     BUY 35  →  BUY 36
+    SHILPAMED   BUY 81  →  —
+    DIVISLAB    —       →  BUY 7
+
+Two are one share. The other two are a **substitution**, and it is not mysterious: `SHILPAMED` steps
+778.75 → 384.95 overnight on 2025-10-03, unadjusted. It is one of the forty-one contaminated names.
+**This is `NEEDS-MAULIK` item 4 arriving in the orders** — the only place that ultimately matters.
+
+**A ±1 share difference is not green**, and a red week restarts the counter at zero. Three green
+weeks and a rounding delta is a restart, because a rule that bends once has no fourth week either.
+
+### M14.5 — the flag exists, is one line, and is off ⚠ UNREVIEWED
+`SCAN_SOURCE_DEFAULT=upload|generated`. Rolling back is the same one change in reverse, which is
+why it is a config flag and not a deletion. Upload keeps working in both settings, permanently: a
+hand-downloaded export is still the fastest way to check the desk against the outside world, and
+the only way to trade a date the pipeline has no bars for. `docs/SHADOW-MODE.md` holds the protocol.

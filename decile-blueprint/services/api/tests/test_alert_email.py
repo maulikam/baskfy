@@ -170,17 +170,17 @@ class TestDigest:
         message = templates.screen_alert(
             "subscriber@example.com", [section, section], manage_url=MANAGE_URL
         )
-        assert message.subject == "Decile screen alerts: 2 screens changed"
+        assert message.subject == "Baskfy screen alerts: 2 screens changed"
 
     def test_a_digest_titles_each_section_and_a_single_alert_does_not(self) -> None:
         section = _section()
         single = templates.screen_alert("a@example.com", [section], manage_url=MANAGE_URL)
         digest = templates.screen_alert("a@example.com", [section, section], manage_url=MANAGE_URL)
         # A single alert's <h1> *is* the screen name, so it appears once and the section is
-        # untitled. A digest's <h1> is "Your Decile screen alerts", so each section titles itself.
+        # untitled. A digest's <h1> is "Your Baskfy screen alerts", so each section titles itself.
         assert single.html.count("Investing 001") == 1
         assert digest.html.count("Investing 001") == 2
-        assert "Your Decile screen alerts" in digest.html
+        assert "Your Baskfy screen alerts" in digest.html
 
     def test_an_email_with_no_sections_is_refused(self) -> None:
         with pytest.raises(ValueError, match="nothing to say"):

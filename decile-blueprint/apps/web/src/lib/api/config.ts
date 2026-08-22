@@ -2,7 +2,7 @@
  * Where the API lives, and the contract the browser and the server share.
  *
  * docs/07: "Base: `/api/v1`". `NEXT_PUBLIC_API_URL` in `.env.example` already carries the prefix,
- * so it is stripped here: `createDecileClient` takes an origin and the generated paths supply the
+ * so it is stripped here: `createBaskfyClient` takes an origin and the generated paths supply the
  * rest. Doing it in one place stops `/api/v1/api/v1/...` from ever being a bug anyone has to find.
  */
 import { API_PREFIX } from "@baskfy/api-client";

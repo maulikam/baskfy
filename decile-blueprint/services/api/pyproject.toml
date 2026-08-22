@@ -1,7 +1,7 @@
 [project]
 name = "baskfy-api"
 version = "0.1.0"
-description = "Decile FastAPI service and Alembic migrations."
+description = "Baskfy FastAPI service and Alembic migrations."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "baskfy-core",

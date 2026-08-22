@@ -134,7 +134,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div className={cn("flex items-center px-1 pb-2", collapsed ? "justify-center" : "justify-between")}>
         {collapsed ? null : (
           <Link href="/" className="px-1 text-sm font-semibold tracking-tight">
-            Decile
+            Baskfy
           </Link>
         )}
         <Button

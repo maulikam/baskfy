@@ -139,7 +139,7 @@ class TestFullUniverseCost:
     async def test_the_heaviest_shape_also_fits_the_budget(
         self, perf_session: AsyncSession
     ) -> None:
-        """Decile bucketing plus three ranking factors — four window functions in one statement."""
+        """Baskfy bucketing plus three ranking factors — four window functions in one statement."""
         definition = full_universe_screen(
             apply_filters_on="decile_5",
             min_return_1y=Decimal("-50"),

@@ -143,7 +143,7 @@ def describe(plan: Plan, period_end: dt.datetime | None) -> str:
     del period_end
     label = plan.code.replace("_", " ").title()
     kind = "subscription" if plan.interval else "plan"
-    return f"Decile {label} {kind}"
+    return f"Baskfy {label} {kind}"
 
 
 @dataclass(frozen=True, slots=True)

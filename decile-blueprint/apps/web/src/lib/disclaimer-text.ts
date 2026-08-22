@@ -10,7 +10,7 @@
  * route.
  */
 export const DISCLAIMER_TEXT =
-  "Decile is not a SEBI-registered investment adviser. Everything here is factual analysis of " +
+  "Baskfy is not a SEBI-registered investment adviser. Everything here is factual analysis of " +
   "published market data, not investment advice, and no output is a recommendation to buy or " +
   "sell any security.";
 

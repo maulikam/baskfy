@@ -1,14 +1,54 @@
-# 14 — Brand: Decile
+# 14 — Brand: Baskfy
+
+> **Superseded 21 Aug 2026 by root `CLAUDE.md` D1, and rewritten 22 Aug 2026 (M25).** This file
+> named the product **Decile** and the web app read its brand from here — `SITE_NAME` in
+> `apps/web/src/lib/site.ts` cited this section verbatim — so the app rendered "Decile" long after
+> the merge had renamed everything else. The original naming case is kept below under
+> *"Why the name was Decile"*, because the reasoning still explains the product vocabulary D1
+> deliberately keeps.
 
 ## The name
 
-**Decile** — `decile.in` (primary), `decile.trade` (fallback), `usedecile.com` (marketing redirect).
+**Baskfy** — `baskfy.com` (primary, owned by Maulik since 21 Aug 2026). `baskfy.in` and
+`baskfy.co.in` to be registered defensively. `desk.modelbasket.in` stays the operator console.
+
+The product is no longer only a screener: after the merge it ranks a universe *and* turns the top
+slice into a basket you can hold and rebalance. **Baskfy** names that — the basket — while the
+ranking vocabulary below still names how the basket is chosen.
+
+**Namespaces** (D1, enforced by `tools/check-namespace.sh`): `baskfy_core`, `baskfy_api`,
+`baskfy_worker`, `baskfy_providers`, `baskfy_execution`; TypeScript `@baskfy/*`; environment
+prefix `BASKFY_`; database `baskfy`.
+
+**The brand word is not the vocabulary word.** "Decile" as a *name* is gone. "decile" as a
+*statistical bucket* stays everywhere it was already earning its place — `decile_1`…`decile_6` are
+a public API contract, "top decile" is how the filter reads, and the blog post *"What a decile
+actually measures"* keeps its title and slug. M2 recorded that a blanket rename corrupted exactly
+those things before it was caught; M25 renamed the brand and left the vocabulary alone.
+
+**Pre-launch legal checklist (do before spending on brand assets):**
+
+1. Trademark search on the Indian IP registry, **Class 9** (software) and **Class 36** (financial
+   services), for "Baskfy" and phonetic equivalents.
+2. File a TM-A application in both classes. Budget ~₹9,000 per class for an individual/startup.
+3. Register the defensive domains: `baskfy.in`, `baskfy.co.in`.
+4. Secure handles: `@baskfy` on X, `/baskfy` on YouTube, `baskfy` on Instagram/LinkedIn.
+5. Confirm no conflict with an existing NBFC or RIA name in the SEBI intermediary registry.
+
+These are Maulik's, not an agent's — they are on the human track in `CLAUDE.md`.
+
+---
+
+## Why the name was Decile (kept — the reasoning still explains the vocabulary)
+
+**Decile** — `decile.in` (primary), `decile.trade` (fallback), `usedecile.com` (marketing
+redirect).
 
 It names the exact action the product performs: rank a universe, take the top slice. It is also
 the reference product's own vocabulary — its filter reads *"Top decile stocks of selected index"* —
 so the name is already how your users think.
 
-**Why it clears the constraints:**
+**Why it cleared the constraints:**
 
 | Constraint | Status |
 |---|---|
@@ -16,16 +56,9 @@ so the name is already how your users think.
 | SEBI advisory implication | Clean — no Advisor/Wealth/Profit/Signal language |
 | "Screener" incumbency (screener.in) | Clean — does not compete on their brand term |
 | Sector collision in India | Clean — no Indian fintech uses it |
-| `.com` availability | ⚠️ Taken by an unrelated US e-commerce analytics firm (Nice Class 42, different market). Low practical risk; `.in` is the correct primary anyway for an India-equities product |
+| `.com` availability | ⚠️ Taken by an unrelated US e-commerce analytics firm. This is part of why the name moved: `baskfy.com` is owned outright |
 
-**Pre-launch legal checklist (do before spending on brand assets):**
-
-1. Trademark search on the Indian IP registry, **Class 9** (software) and **Class 36** (financial
-   services), for "Decile" and phonetic equivalents.
-2. File a TM-A application in both classes. Budget ~₹9,000 per class for an individual/startup.
-3. Register `decile.in` + defensive `decile.co.in`, `deciles.in`.
-4. Secure handles: `@decile_in` on X, `/decile` on YouTube, `decile.in` on Instagram/LinkedIn.
-5. Confirm no conflict with an existing NBFC or RIA name in the SEBI intermediary registry.
+---
 
 ## Product vocabulary — the name does work for you
 

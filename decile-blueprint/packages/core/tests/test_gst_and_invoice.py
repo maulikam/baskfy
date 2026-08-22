@@ -155,7 +155,7 @@ class TestThePdfWriter:
 
 
 SUPPLIER = Party(
-    "Decile Analytics Private Limited",
+    "Baskfy Analytics Private Limited",
     ("12 MG Road", "Bengaluru 560001"),
     "29AAAAA0000A1Z5",
     "Karnataka",
@@ -178,7 +178,7 @@ def _document(
         invoice_date=dt.date(2026, 8, 21),
         supplier=SUPPLIER,
         recipient=recipient,
-        description="Decile Monthly subscription",
+        description="Baskfy Monthly subscription",
         sac_code="998439",
         place_of_supply=place_of_supply,
         tax=tax if tax is not None else split_inclusive(Decimal("500.00")),

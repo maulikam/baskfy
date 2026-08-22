@@ -92,7 +92,7 @@ class Settings(BaseSettings):
     #: "resend" in a deployment, "smtp" for mailpit, "console" when neither is configured.
     email_transport: Literal["resend", "smtp", "console"] = "console"
     resend_api_key: str = ""
-    email_from: str = "Decile <no-reply@baskfy.com>"
+    email_from: str = "Baskfy <no-reply@baskfy.com>"
     email_reply_to: str | None = None
     smtp_host: str = "localhost"
     smtp_port: int = Field(default=1025, gt=0)
@@ -135,7 +135,7 @@ class Settings(BaseSettings):
     #: SAC 998439, "Other on-line contents n.e.c." NOT CONFIRMED BY A CHARTERED ACCOUNTANT.
     gst_sac_code: str = "998439"
     #: The supplier's own particulars — whoever operates the service, not the code.
-    supplier_legal_name: str = "Decile"
+    supplier_legal_name: str = "Baskfy"
     supplier_address_lines: tuple[str, ...] = ()
     supplier_gstin: str = ""
     #: Spelled as the GST return expects it, e.g. "Karnataka (29)". Used as the default place of

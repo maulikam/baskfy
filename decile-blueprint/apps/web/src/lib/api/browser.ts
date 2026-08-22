@@ -1,6 +1,6 @@
 "use client";
 
-import { createDecileClient, type DecileClient } from "@baskfy/api-client";
+import { createBaskfyClient, type BaskfyClient } from "@baskfy/api-client";
 
 import { apiOrigin } from "@/lib/api/config";
 
@@ -51,10 +51,10 @@ export async function accessToken(now: number = Date.now()): Promise<string | un
   return inFlight;
 }
 
-let client: DecileClient | null = null;
+let client: BaskfyClient | null = null;
 
-export function browserApi(): DecileClient {
-  client ??= createDecileClient({
+export function browserApi(): BaskfyClient {
+  client ??= createBaskfyClient({
     baseUrl: apiOrigin(),
     getAccessToken: () => accessToken(),
   });

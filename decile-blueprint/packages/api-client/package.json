@@ -2,7 +2,7 @@
   "name": "@baskfy/api-client",
   "version": "0.1.0",
   "private": true,
-  "description": "Typed client and shared contracts for the Decile API.",
+  "description": "Typed client and shared contracts for the Baskfy API.",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {

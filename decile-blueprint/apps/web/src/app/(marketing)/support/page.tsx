@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 const BEFORE_YOU_WRITE = [
   {
     title: "A figure disagrees with my broker",
-    body: "Check whether you are comparing the adjusted close against an exchange print. Decile computes every factor on an adjusted series and shows the exchange print in the price column; the two differ by every corporate action since the split date.",
+    body: "Check whether you are comparing the adjusted close against an exchange print. Baskfy computes every factor on an adjusted series and shows the exchange print in the price column; the two differ by every corporate action since the split date.",
   },
   {
     title: "A stock is missing from my screen",

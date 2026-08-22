@@ -1,5 +1,5 @@
 /**
- * The typed Decile API client — docs/07 §"OpenAPI → TypeScript".
+ * The typed Baskfy API client — docs/07 §"OpenAPI → TypeScript".
  *
  *     "`services/api` emits `openapi.json` on build; `packages/api-client` is generated with
  *      `openapi-typescript` + `openapi-fetch` in CI. Hand-written request types are a CI failure."
@@ -182,7 +182,7 @@ export type PublicApiGateOut = Schemas["PublicApiGateOut"];
 /** docs/07: "Base: `/api/v1`". */
 export const API_PREFIX = "/api/v1";
 
-export interface DecileClientOptions {
+export interface BaskfyClientOptions {
   /** Origin of the API, e.g. `http://localhost:8000`. The `/api/v1` prefix is part of every path. */
   baseUrl: string;
   /** docs/07: `Authorization: Bearer <JWT>`, minted by the web app. */
@@ -204,7 +204,7 @@ export interface DecileClientOptions {
   getTraceparent?: () => string | undefined;
 }
 
-export type DecileClient = ReturnType<typeof createDecileClient>;
+export type BaskfyClient = ReturnType<typeof createBaskfyClient>;
 
 /**
  * A client with the bearer token attached to every request.
@@ -212,7 +212,7 @@ export type DecileClient = ReturnType<typeof createDecileClient>;
  * The token is read per request rather than captured once, so a refresh in the web app is picked
  * up without rebuilding the client.
  */
-export function createDecileClient(options: DecileClientOptions) {
+export function createBaskfyClient(options: BaskfyClientOptions) {
   const client = createClient<paths>(
     options.fetch
       ? { baseUrl: options.baseUrl, fetch: options.fetch }

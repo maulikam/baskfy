@@ -157,8 +157,8 @@ def render_pdf(pages: list[Page], *, title: str, created: dt.datetime) -> bytes:
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold /Encoding /WinAnsiEncoding >>"
     )
     info_number = add(
-        b"<< /Title (" + _escape(title).encode("latin-1") + b") /Producer (Decile) "
-        b"/Creator (Decile) /CreationDate (" + _pdf_date(created).encode("latin-1") + b") >>"
+        b"<< /Title (" + _escape(title).encode("latin-1") + b") /Producer (Baskfy) "
+        b"/Creator (Baskfy) /CreationDate (" + _pdf_date(created).encode("latin-1") + b") >>"
     )
 
     page_numbers: list[int] = []

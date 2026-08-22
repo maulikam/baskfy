@@ -28,7 +28,7 @@ import type {
   StatusOut,
   UniverseOut,
 } from "../src/client.js";
-import { PROBLEM_TYPES, createDecileClient, isProblem } from "../src/client.js";
+import { PROBLEM_TYPES, createBaskfyClient, isProblem } from "../src/client.js";
 import type { paths } from "../src/generated/schema.js";
 
 // --- compile-time assertion helpers -----------------------------------------
@@ -185,10 +185,10 @@ describe("the emitted OpenAPI document", () => {
   });
 });
 
-describe("createDecileClient", () => {
+describe("createBaskfyClient", () => {
   it("attaches the bearer token to every request", async () => {
     const seen: Headers[] = [];
-    const client = createDecileClient({
+    const client = createBaskfyClient({
       baseUrl: "http://api.test",
       getAccessToken: () => "token-abc",
       fetch: async (request: Request) => {
@@ -207,7 +207,7 @@ describe("createDecileClient", () => {
 
   it("omits the header when there is no token", async () => {
     const seen: Headers[] = [];
-    const client = createDecileClient({
+    const client = createBaskfyClient({
       baseUrl: "http://api.test",
       getAccessToken: () => undefined,
       fetch: async (request: Request) => {
@@ -232,7 +232,7 @@ describe("createDecileClient", () => {
       instance: "/api/v1/screens/exmpl0000001/csv",
       upgrade_url: "/pricing",
     };
-    const client = createDecileClient({
+    const client = createBaskfyClient({
       baseUrl: "http://api.test",
       fetch: async () =>
         new Response(JSON.stringify(problem), {

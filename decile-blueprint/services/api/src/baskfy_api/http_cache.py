@@ -73,8 +73,8 @@ UNCACHEABLE_SUFFIXES: Final[tuple[str, ...]] = ("/csv", "/export", "/download", 
 HTTP_OK: Final = 200
 HTTP_NOT_MODIFIED: Final = 304
 
-DATA_VERSION_HEADER: Final = "X-Decile-Data-Version"
-AS_OF_HEADER: Final = "X-Decile-As-Of"
+DATA_VERSION_HEADER: Final = "X-Baskfy-Data-Version"
+AS_OF_HEADER: Final = "X-Baskfy-As-Of"
 
 #: How many bytes of the digest go into the tag. 128 bits: a collision would have to be
 #: engineered, and there is nothing to gain by engineering one — a false 304 shows a user their

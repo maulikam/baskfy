@@ -1,6 +1,6 @@
-# Decile — Build Blueprint
+# Baskfy — Build Blueprint
 
-A complete, implementation-ready specification for building **Decile**, an India-equities
+A complete, implementation-ready specification for building **Baskfy**, an India-equities
 momentum screener modelled on **momoindiascreener.in**, plus the exact, ordered set of prompts to
 feed Claude Code so it builds the system one module at a time.
 

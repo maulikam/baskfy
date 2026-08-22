@@ -29,26 +29,26 @@ export const LEGAL_DOCUMENTS: readonly LegalDocument[] = [
     slug: "terms-conditions",
     title: "Terms & Conditions",
     description:
-      "The agreement between you and Decile: what the service is, what the plans include, what " +
+      "The agreement between you and Baskfy: what the service is, what the plans include, what " +
       "Forever means, and the limits of what any of it claims.",
   },
   {
     slug: "privacy-policy",
     title: "Privacy Policy",
     description:
-      "What personal data Decile collects, why, how long it is kept, and the rights the DPDP Act " +
+      "What personal data Baskfy collects, why, how long it is kept, and the rights the DPDP Act " +
       "gives you over it.",
   },
   {
     slug: "refund-policy",
     title: "Refund Policy",
-    description: "When a Decile subscription can be refunded, how to ask, and what happens next.",
+    description: "When a Baskfy subscription can be refunded, how to ask, and what happens next.",
   },
   {
     slug: "disclaimer",
     title: "Disclaimer",
     description:
-      "Decile is not a SEBI-registered investment adviser. What that means for every number on " +
+      "Baskfy is not a SEBI-registered investment adviser. What that means for every number on " +
       "the site, at length.",
   },
 ] as const;

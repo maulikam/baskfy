@@ -263,7 +263,7 @@ def support_request(to: str, submission: SupportSubmission) -> Message:
         attribution,
         submission.body_text,
     ]
-    footer = "Sent by the Decile support form. Reply to this message to answer the sender."
+    footer = "Sent by the Baskfy support form. Reply to this message to answer the sender."
     return Message(
         to=to,
         subject=f"[{PRODUCT_NAME} support] {submission.topic}",

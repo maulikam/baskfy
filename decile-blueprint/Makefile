@@ -1,4 +1,4 @@
-# Decile — developer entrypoints. See CLAUDE.md.
+# Baskfy — developer entrypoints. See CLAUDE.md.
 COMPOSE := docker compose -f infra/docker/compose.yml
 UV      := uv run
 

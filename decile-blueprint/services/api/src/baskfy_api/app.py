@@ -102,7 +102,7 @@ CELERY_QUEUES: tuple[str, ...] = ("ingest", "compute", "backtest", "default")
 #: Statuses at or above this are ours to explain, so they are logged at ERROR.
 SERVER_ERROR_FLOOR = 500
 
-TITLE = "Decile API"
+TITLE = "Baskfy API"
 DESCRIPTION = "India-equities momentum screener. See docs/07-api-spec.md."
 VERSION = "0.1.0"
 
@@ -119,7 +119,7 @@ def operation_id(route: APIRoute) -> str:
     return head + "".join(word.capitalize() for word in rest)
 
 
-class DecileAPI(FastAPI):
+class BaskfyAPI(FastAPI):
     """FastAPI, plus one schema the generator would otherwise miss.
 
     ``ProblemOut`` is referenced by every route's error responses but returned by no handler, so
@@ -311,8 +311,8 @@ def register_middleware(app: FastAPI, settings: Settings) -> None:
         expose_headers=[
             REQUEST_ID_HEADER,
             TRACE_ID_HEADER,
-            "X-Decile-As-Of",
-            "X-Decile-Data-Version",
+            "X-Baskfy-As-Of",
+            "X-Baskfy-Data-Version",
         ],
     )
 
@@ -377,7 +377,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Before the app object exists, so an exception raised while wiring it is still reported.
     configure_sentry(resolved, service=resolved.otel_service_name)
 
-    app = DecileAPI(
+    app = BaskfyAPI(
         title=TITLE,
         description=DESCRIPTION,
         version=VERSION,

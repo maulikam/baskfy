@@ -22,5 +22,5 @@ Stop this alert: http://localhost:3000/alerts/unsubscribe?token=0123456789abcdef
 Manage your alerts: http://localhost:3000/alerts
 
 --
-You are receiving this because you subscribed a Decile screen to alerts. Every alert carries its own link to stop it.
-Decile is not a SEBI-registered investment adviser. Everything here is factual analysis of published market data, not investment advice.
+You are receiving this because you subscribed a Baskfy screen to alerts. Every alert carries its own link to stop it.
+Baskfy is not a SEBI-registered investment adviser. Everything here is factual analysis of published market data, not investment advice.

@@ -124,3 +124,21 @@ split and both bonuses exactly — so this is purely missing input, and it is cu
 cause of both parity gates failing. It is more load-bearing than the window question M11 raised.
 
 **Blocks:** M13 (rule 7 opens it only on empty delta tables). Does not block M15–M20.
+
+### 5. Two small credential items from M16
+**Status:** informational · **Raised:** M16, 22 Aug 2026
+
+1. **Set `KITE_TOKEN_ENCRYPTION_KEY` in the desk's `.env`.** The access token is now encrypted at
+   rest. Without this variable the desk generates a key *beside* the token — which protects the
+   secret from being copied out in a backup and **not** from anything that can read files as your
+   user. Setting it puts the key somewhere the ciphertext is not:
+   ```
+   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+   ```
+2. **`~/baskfy-safety/2026-08-22/data/.kite_token.json` contains a plaintext token.** It is the M0
+   safety copy, taken before the encryption change, and the token in it is expired. Worth deleting
+   that one file when you next look at the safety copy. The live one at
+   `kite-momentum-rebalancer/data/.kite_token.json` is also still plaintext and expired; your next
+   Kite login overwrites it with ciphertext automatically.
+
+**Blocks:** nothing.

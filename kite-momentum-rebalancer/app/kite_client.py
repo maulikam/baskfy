@@ -30,19 +30,28 @@ class Kite:
     def exchange_token(self, request_token: str) -> None:
         data = self.kc.generate_session(request_token, api_secret=C.KITE_API_SECRET)
         self.kc.set_access_token(data["access_token"])
-        os.makedirs(os.path.dirname(C.TOKEN_FILE), exist_ok=True)
-        # 0600 BEFORE anything is written. This token places orders for the rest of the
-        # trading day; on a shared or hosted box a default-umask file is readable by every
-        # account on it. Created with the mode rather than chmod'd afterwards, so the
-        # secret is never on disk world-readable even briefly.
-        fd = os.open(C.TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as f:
-            json.dump({"access_token": data["access_token"]}, f)
+        # ENCRYPTED AT REST since M16. It used to be plain JSON at 0600 -- the right mode, and
+        # still a readable secret in any backup, sync or snapshot of this directory. The store
+        # is the screener's, so the merged system keeps a Kite token exactly one way.
+        # See app/token_store.py for what the key fallback does and does not protect against.
+        from .token_store import store_for
+
+        store_for(C.TOKEN_FILE, getattr(C, "KITE_TOKEN_ENCRYPTION_KEY", "")).save(
+            data["access_token"]
+        )
 
     def _load_token(self) -> None:
-        if os.path.exists(C.TOKEN_FILE):
-            with open(C.TOKEN_FILE) as f:
-                self.kc.set_access_token(json.load(f)["access_token"])
+        from .token_store import store_for
+
+        store = store_for(C.TOKEN_FILE, getattr(C, "KITE_TOKEN_ENCRYPTION_KEY", ""))
+        if not store.exists():
+            return
+        try:
+            self.kc.set_access_token(store.load().value)
+        except Exception as exc:                                          # noqa: BLE001
+            # A token that cannot be read is the same situation as no token: the operator
+            # logs in again. Failing to start the desk over it would be worse.
+            log.warning("could not read the stored access token (%s); log in again", exc)
 
     def is_authed(self) -> bool:
         try:

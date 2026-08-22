@@ -100,6 +100,7 @@ async def load_history(
                 }
                 for r in records
             ],
+            schema=BAR_SCHEMA,
             strict=False,
         )
         if records
@@ -149,22 +150,35 @@ async def load_history(
     return LoadedHistory(bars, benchmark, trading_days, all_time_highs)
 
 
+#: The bar frame's schema, declared once and passed explicitly.
+#:
+#: **Not left to inference.** Polars reads the first `infer_schema_length` rows (100) to decide a
+#: column's type; a column that is entirely NULL across those rows is inferred as `Null`, and the
+#: first real value afterwards cannot be appended to it:
+#:
+#:     ComputeError: could not append value: 1.1917e7 of type: f64 to the builder
+#:
+#: That was unreachable while every bar came from the bhavcopy and carried a turnover. M29's deep
+#: history does not — Kite serves no turnover and no circuit bands — so the oldest hundred rows of
+#: any instrument are now all-NULL in three columns, and computing factors for any date before
+#: 2024 failed outright. Naming the schema removes the guess.
+BAR_SCHEMA: Final[dict[str, pl.DataType]] = {
+    "instrument_id": pl.Int64(),
+    "date": pl.Date(),
+    "close": pl.Float64(),
+    "close_raw": pl.Float64(),
+    "high": pl.Float64(),
+    "low": pl.Float64(),
+    "volume_raw": pl.Float64(),
+    "turnover": pl.Float64(),
+    "upper_circuit": pl.Float64(),
+    "lower_circuit": pl.Float64(),
+    "series": pl.String(),
+}
+
+
 def _empty_bars() -> pl.DataFrame:
-    return pl.DataFrame(
-        schema={
-            "instrument_id": pl.Int64(),
-            "date": pl.Date(),
-            "close": pl.Float64(),
-            "close_raw": pl.Float64(),
-            "high": pl.Float64(),
-            "low": pl.Float64(),
-            "volume_raw": pl.Float64(),
-            "turnover": pl.Float64(),
-            "upper_circuit": pl.Float64(),
-            "lower_circuit": pl.Float64(),
-            "series": pl.String(),
-        }
-    )
+    return pl.DataFrame(schema=BAR_SCHEMA)
 
 
 class PolarsFactorEngine:

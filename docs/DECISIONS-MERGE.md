@@ -2385,3 +2385,64 @@ constituents".
 So breadth history needs either NSE's index-change announcements reconstructed, or today's
 membership held constant backwards — and the second puts **survivorship bias** into a table the
 backtester reads, which is not a decision to take quietly. `NEEDS-MAULIK.md` item 12.
+
+---
+
+## M32 — the Market Health charts have a line, and what it cost to find out why
+
+`/market-health` said *"Only 1 day of history so far"* on every chart. Three tables had to line up
+and only one did.
+
+### M32.1 — the real cause was `factor_daily`, not membership ⚠ UNREVIEWED
+| | held | needed |
+|---|---|---|
+| `ohlcv_daily` | 2017 → today (M29) | ✅ |
+| `factor_daily` | **one date** | one row per instrument per date |
+| `index_member_daily` | seven dates | constituents per date |
+
+The seven membership rows were a red herring: six of them *did* have breadth rows, and every one
+was **NULL**, because breadth reads `factor_daily` and factors had only ever been computed for
+2026-08-18. The page was telling the exact truth.
+
+### M32.2 — computing factors for any historical date crashed, and M29 caused it ⚠ UNREVIEWED
+```
+polars.exceptions.ComputeError: could not append value: 1.1917e7 of type: f64 to the builder
+```
+`load_history` built its frame from a list of dicts and let Polars infer the schema from the first
+100 rows. A column that is entirely NULL across those rows infers as `Null`, and the first real
+value afterwards cannot be appended.
+
+That was unreachable while every bar came from the bhavcopy and carried a turnover. **M29's deep
+history does not** — Kite serves no turnover and no circuit bands — so the oldest hundred rows of
+every instrument became all-NULL in three columns and factors could not be computed for any date
+before 2024. Fixed by naming `BAR_SCHEMA` explicitly rather than inferring it.
+
+### M32.3 — sampled weekly, because the cost is the computation ⚠ UNREVIEWED
+Measured rather than assumed: **45 seconds of computing, 6 seconds of loading**, per as-of date. So
+the database is 12% of it and loading the panel once would not help. Nine years daily is ~30 hours.
+
+`--every 5` samples one trading day a week — 52 points a year, the same line, a fifth of the cost.
+One year took 39 minutes and produced **101,080 factor rows** and 53 breadth dates. `--every 1` is
+there for whoever has the machine time.
+
+### M32.4 — the membership is carried backwards and says so ⚠ UNREVIEWED
+Kite has **no index-constituents endpoint** — its API surface was enumerated, not assumed. So the
+most recent published membership is carried back, written `source = 'derived'`, the value docs/09
+reserved for exactly this.
+
+**This is survivorship bias, stated plainly**: a company dropped from NIFTY 50 in 2019 was usually
+dropped after falling, so 2019's breadth over today's fifty looks healthier than it was. The rows
+carry the marker; `NEEDS-MAULIK.md` item 12 carries the decision.
+
+### M32.5 — the stored index levels were wrong by 21×, and M31 had been protecting them ⚠ UNREVIEWED
+With the charts finally drawing, the NIFTY 50 overlay fell off a cliff. The nightly chain's rows
+held NIFTY 50 at **1,128** for August 2026 where Kite says **24,078** — and the desk's own regime
+evaluation independently recorded `NIFTY 50 close 24078.3` for 2026-08-19.
+
+M31's `ON CONFLICT DO NOTHING` had faithfully preserved the wrong number, on the reasoning that the
+nightly row might carry `pe`/`pb`/`div_yield`. It does — so the upsert now **updates the level and
+leaves the three fundamentals alone**. Kite is authoritative for what it serves and for nothing
+else.
+
+Where the wrong 1,128 came from is **not diagnosed**; `refresh_index_snapshots` is now
+contradicted by two independent sources and that is worth someone's morning.

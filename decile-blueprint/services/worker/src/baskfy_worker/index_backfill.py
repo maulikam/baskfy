@@ -156,10 +156,23 @@ async def _write(session: AsyncSession, rows: list[dict[str, object]]) -> int:
         chunk = rows[offset : offset + UPSERT_CHUNK]
         statement = insert(IndexSnapshotDaily).values(chunk)
         await session.execute(
-            # A date the nightly chain already wrote keeps its row: that one may carry `pe`, `pb`
-            # and `div_yield` from NSE, which this module cannot supply and must not erase.
-            statement.on_conflict_do_nothing(
-                index_elements=[IndexSnapshotDaily.index_id, IndexSnapshotDaily.date]
+            # `level` is overwritten; `pe`, `pb` and `div_yield` are not.
+            #
+            # The first version did `DO NOTHING` to protect the nightly chain's rows, and that
+            # protected a wrong number: those rows carry NIFTY 50 at **1,128** for August 2026
+            # where Kite -- and the desk's own regime evaluation, independently -- say **24,078**.
+            # Preserving them left a 21x cliff in the middle of every history chart at exactly the
+            # date the backfill met the existing data.
+            #
+            # Kite is authoritative for the level. It is not authoritative for the three
+            # fundamentals it does not serve, so those keep whatever NSE supplied.
+            statement.on_conflict_do_update(
+                index_elements=[IndexSnapshotDaily.index_id, IndexSnapshotDaily.date],
+                set_={
+                    "level": statement.excluded.level,
+                    "change_abs": statement.excluded.change_abs,
+                    "change_pct": statement.excluded.change_pct,
+                },
             )
         )
         written += len(chunk)

@@ -2074,3 +2074,92 @@ package's `tests/` directory, and `testpaths` did not name `reconciliation` — 
 named explicitly, which is the same as not existing. `pyproject.toml` now lists it, and the suite
 went 1,496 → 1,510. `PLR2004` is scoped to it for the reason the existing `**/tests/**` entry gives:
 in a test the literal *is* the specification.
+
+---
+
+## M28 — the actions were written, and the gates moved
+
+M24 found the source, M27 settled the convention, and M28 does the thing they were for: derive the
+actions, write the share-count ones, rebuild the adjusted series, and let the gates arbitrate.
+
+`baskfy_core.action_recovery` is the pure half (series in, actions out — docs/02's I/O-free rule);
+`baskfy_worker.action_recovery` is the database half. **Dry run is the default**, because this
+rewrites price history for instruments a live strategy ranks.
+
+### M28.1 — what was written, and what the gates said ⚠ UNREVIEWED
+Over all 2,294 EQ/BE instruments carrying a Kite token: **402 carried an unapplied action; 285
+share-count actions written; 151,922 bars rebuilt.** `corporate_action` went from **4 rows to 289**.
+
+**202 cash-shaped actions were recovered and deliberately not written**, per M27.
+
+The arbitration, which is the point:
+
+| | before | after |
+|---|---|---|
+| `/baskets` "unadjusted corporate action" banner | **41** symbols | **5** |
+| corpus exact matches, 1M | 264 | **266** |
+| corpus exact matches, 3M | 260 | **264** |
+| corpus exact matches, 6M | 255 | **263** |
+| corpus exact matches, 9M / 12M | 1 / 1 | 1 / 1 |
+| **M12 top-25 membership** | **23 / 25** | **25 / 25** |
+| `SHILPAMED` in the M12 comparison | #10 → **#57** | #10 → **#12** |
+
+9M and 12M did not move, exactly as M27 predicted: that residual is the window length, not the
+adjustment.
+
+**M12's delta table is still not empty** — 16 rank deltas, 14 of them ±3 or less — so rule 7 keeps
+M13's generated-scan flag **off**. The gate moved a long way and has not closed.
+
+### M28.2 — the double-count the unique constraint could not catch ⚠ UNREVIEWED
+The first write produced a **25x** adjustment on CUPID where a 5x was owed, and it was found by
+reading the resulting prices rather than by trusting the insert.
+
+`corporate_action` is unique on `(instrument_id, action_type, ex_date)`. NSE had recorded CUPID's
+2026-03-09 event as **`bonus 4:1`**; the recovery derived the same event as **`split 5:1`**.
+Different `action_type`, so different rows, so the constraint let both in — and `apply_adjustments`
+applied both.
+
+**Taken:** a recovered action is refused for any ex-date the instrument already has *any* action
+on. The recovered factor measures the **whole** step at that date, so anything already recorded
+there is a component of it, not a separate event. The feed's row is the one that stays.
+
+Two actions on one date from the same source remain fine and real — CUPID carries an NSE split and
+an NSE bonus both dated 2024-04-15.
+
+The one bad row was deleted and CUPID reprocessed; a regression test reproduces the exact shape.
+
+### M28.3 — a flank test, and the six things it caught ⚠ UNREVIEWED
+A one-day error in either series makes **two** opposite steps a day apart; a real action makes one
+step with a flat ratio either side. Six steps were rejected on that test across 2,294 instruments —
+including `ESSENTIA` at 2.0419 and `KANANIIND` at 1.9906, both of which would otherwise have been
+written as 2:1 splits.
+
+**"Unconfirmable" is not "rejected", and conflating them was the first version's bug.** A step at
+the edge of the observation window had no flank to test; NESTLEIND's 10:1 sits four days in and is
+entirely real. `at_edge` and `rejected` are separate, and the write takes `confirmed or at_edge`.
+
+### M28.4 — 46 of the 285 are not splits, and the rows now say so ⚠ UNREVIEWED
+Auditing the ratio distribution after the write: 239 land on shapes a split or bonus actually
+produces — 2:1 (84), 5:1 (47), 10:1 (39), 3:1 (14), 4:1 (12), 3:2 (11). **Forty-six do not**, and
+the recognisable ones are all 2025 demergers: **ITC 22:19** (ITC Hotels), **SIEMENS 21:16**
+(Siemens Energy India), **VEDL 21:11**, **RAYMOND 23:14**. Nothing issues a 19:17.
+
+**Taken:** apply them — the price step is real and Kite adjusts for it — and **mark them**.
+`raw['shape']` is `split_or_bonus` or `irregular_probably_demerger`. A row calling a demerger a
+split is a row lying about where a number came from, and the factor being right does not make the
+label right.
+
+**Not taken:** tightening the classifier to reject them. That would leave ITC, VEDL, SIEMENS and
+RAYMOND carrying visible cliffs to fix a labelling problem.
+
+**The residual risk, stated rather than buried:** a dividend above about 5% resolves to a small
+fraction (21:20, 20:19) and would be written as a share-count action, which would quietly violate
+M27's price-return verdict. The corpus-level parity says it is not currently hurting — every window
+M11 fixed improved — but nothing here *proves* no dividend slipped through. Queued for review.
+
+### M28.5 — reversibility, exercised rather than asserted ⚠ UNREVIEWED
+Every row carries `raw['source'] = 'ratio_recovery'`, so the set is one predicate. A test writes an
+action, reprocesses, deletes the row, reprocesses again and asserts the series returns **exactly**
+to its starting value. `close_raw` is never written by any of this and stays the exchange print.
+
+The repair in M28.2 used that path for real, on live data, before it was needed anywhere else.

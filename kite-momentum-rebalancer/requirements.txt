@@ -20,3 +20,10 @@ pytest==9.1.1
 httpx2==2.10.0            # starlette TestClient
 # future engines (uncomment when enabling):
 # py_vollib>=1.0.1   # option greeks
+
+# --- M20 §1: observability, all three optional ------------------------------------------------
+# app/telemetry.py guards every import and degrades to no-ops, so none of these is required for
+# the desk to run or to trade. They are pinned here so `pip install -r` gives a machine that CAN
+# be observed; the box installs what it wants. Each view is still off unless its environment
+# variable is set.
+prometheus_client==0.24.1

@@ -177,3 +177,55 @@ groups:
             Every alert above is evaluated over metrics from this target. While it is down, the
             absence of an alert means nothing.
           runbook_url: docs/runbooks/pipeline-failed.md
+
+      # ---------------------------------------------------------------------------------------
+      # M20 §1: the desk's order path. Until now this had journalctl and nothing else, which is
+      # why the incidents these evaluate over were all found by reading a log after the fact.
+      # Every one of them is a real event from 18-19 Aug 2026, not a hypothetical.
+      # ---------------------------------------------------------------------------------------
+      - alert: desk_orders_failing_systemically
+        # 18 Aug 2026: twenty-one orders fired into the same "No IPs configured for this app"
+        # rejection because nothing noticed the first three had failed identically. The desk now
+        # has a circuit breaker; this is the alert that says the breaker tripped.
+        expr: increase(desk_guard_refusals_total{guard="circuit_breaker"}[10m]) > 0
+        for: 0m
+        labels: {severity: critical, service: desk}
+        annotations:
+          summary: "A rebalance batch was stopped by the circuit breaker — three identical failures."
+          description: >-
+            The batch is half-executed by definition: orders before the trip went to the broker
+            and the rest did not.
+          runbook_url: docs/runbooks/rebalance-half-executed.md
+
+      - alert: desk_orders_rejected
+        expr: increase(desk_orders_total{outcome=~"REJECTED|FAILED|RISK_BLOCKED|BLOCKED"}[15m]) > 0
+        for: 0m
+        labels: {severity: warning, service: desk}
+        annotations:
+          summary: "{{ $value }} order(s) were rejected or blocked in the last fifteen minutes."
+          runbook_url: docs/runbooks/rebalance-half-executed.md
+
+      - alert: desk_buys_without_stops
+        # Non-negotiable rule 4: every buy gets a stop the same session. Stops are armed from
+        # /stops after fills are known, so this compares the session's buys against the session's
+        # GTTs rather than expecting them to be simultaneous.
+        expr: >-
+          increase(desk_orders_total{action="BUY",outcome="COMPLETE"}[6h])
+          > increase(desk_gtt_total{outcome!="CANCELLED"}[6h])
+        for: 30m
+        labels: {severity: critical, service: desk}
+        annotations:
+          summary: "More buys completed today than stops were armed. Rule 4 is not satisfied."
+          description: >-
+            An unstopped position is the one failure mode the desk's own rules single out. Arm
+            the missing triggers from /stops.
+          runbook_url: docs/runbooks/rebalance-half-executed.md
+
+      - alert: desk_execute_slow
+        # A batch that takes minutes is a batch whose limit prices are going stale while it runs.
+        expr: histogram_quantile(0.95, rate(desk_execute_seconds_bucket[30m])) > 120
+        for: 0m
+        labels: {severity: warning, service: desk}
+        annotations:
+          summary: "An execute batch took over two minutes at p95 — limit prices may be stale."
+          runbook_url: docs/runbooks/rebalance-half-executed.md

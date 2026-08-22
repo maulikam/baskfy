@@ -37,7 +37,7 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M17 | Rank buffer demoted | ✅ done | 22 Aug 2026 | One band predicate, called by both; plans unchanged. **First-ever Playwright run: portfolios 4 passed** (M17.1–M17.2) |
 | M18 | Database migration | ⚠️ drilled | 22 Aug 2026 | 19 tables / 42,285 rows, all assertions green, idempotent. **Cutover is M19's** — nothing reads Postgres yet (M18.2) |
 | M19 | Schedules → Celery, desk on merged backend | ✅ **green** | 22 Aug 2026 | Beat tasks + timer-retirement protocol. **Cutover done**: 10/11 pages byte-identical, 11th differs only in journal mode + file size. Four dialect defects fixed (M19.1–.6) |
-| M20 | Observability + runbook 6 | — | | |
+| M20 | Observability + runbook 6 | ✅ **green** | 22 Aug 2026 | Spans/metrics/Sentry over plan→execute→GTT, all optional and unable to raise into the order path. 4 alert rules, runbook 6 committed (M20.1–.4) |
 | M21 | Verification + handover | — | | |
 
 ---

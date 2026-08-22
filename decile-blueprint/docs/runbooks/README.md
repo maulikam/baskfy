@@ -46,3 +46,8 @@ a run whose quality gate passed, and docs/06 §Caching keys every cached screen 
 it forward over data the gate rejected poisons the cache *and* tells every client the poison is
 fresh. If you think you need to, read [bad-data-published.md](bad-data-published.md) first — it
 almost certainly has the thing you actually wanted.
+
+- [`rebalance-half-executed.md`](rebalance-half-executed.md) — a rebalance batch stopped part way,
+  or completed its buys without arming their stops. **Verified against: NOT YET.** Written from the
+  18–19 Aug 2026 incidents in the desk's own journal; there is no staging with a broker in it, and
+  these failures are not reproducible against production without placing real orders.

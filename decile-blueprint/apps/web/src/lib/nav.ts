@@ -87,7 +87,8 @@ export type NavIconName =
   | "wallet"
   | "arrow-left-right"
   | "gauge"
-  | "check-check";
+  | "check-check"
+  | "plug";
 
 /**
  * Build a ready item from its route, so the label, the blurb and the professional name can never
@@ -147,6 +148,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       page("/pricing", "tag"),
       page("/invoices", "receipt"),
       page("/profile", "user"),
+      // M41: broker connect grid (P5.8). Live OAuth stays D3-gated; the page itself is ready.
+      page("/brokers", "plug"),
       page("/change-password", "key-round"),
     ],
   },

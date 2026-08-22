@@ -66,6 +66,7 @@ from baskfy_api.routers import (
     backtests,
     baskets,
     billing,
+    brokers,
     desk,
     instruments,
     market_data,
@@ -422,6 +423,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     versioned.include_router(api_keys.router)
     versioned.include_router(alerts.router)
     versioned.include_router(webhook_endpoints.router)
+    # M41: broker connect catalog. Live OAuth is source-gated on BROKER_OAUTH_REVIEW (D3 /
+    # docs/smallcase Track C); the list itself is always served so the UI can be complete.
+    versioned.include_router(brokers.router)
     app.include_router(versioned)
 
     # PROMPTS.md Prompt 20 §2: "Gate the entire feature behind a flag that stays OFF until the

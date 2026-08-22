@@ -2929,3 +2929,45 @@ job better. It is the one deliberate departure from the reference.
 
 The paper grain is gone (`--grain-opacity: 0` and the class off `<body>`) and the container radius
 drops from 12px to 8px. Both belonged to the warm-paper system; a broker screen is a screen.
+
+## M41 — broker connect catalog, live OAuth held on D3
+
+Maulik, 23 Aug 2026: integrate the top brokers (Zerodha, HDFC, Kotak, ICICI and peers) so a
+signed-in user connects in a few clicks, authorises, and syncs holdings.
+
+### M41.1 — ship the grid; do not ship live multi-user OAuth ⚠ UNREVIEWED
+
+**Context.** The ask is P4.2 / P5.8. Root CLAUDE.md and `docs/05` forbid Phase 4 until D3 has a
+written answer. `docs/smallcase/02-scope-and-gating.md` Track C forbids broker OAuth for anyone
+other than the operator's own account in the SC run. Live multi-broker token storage for end
+users is therefore out of scope for this module.
+
+**Taken.** Build the complete connect **catalog and UI** now:
+
+* `baskfy_core.broker_connections` — ten brokers (Zerodha, HDFC, Kotak, ICICI, Upstox, Angel One,
+  Groww, Fyers, 5paisa, Dhan), with monogram tiles (not trademarked logos) and capability flags.
+* `BROKER_OAUTH_REVIEW` — source gate, `signed_off=False`, same shape as the public-API review.
+* `GET /api/v1/brokers` + `POST .../connect` — connect returns `oauth_available: false` and never
+  a redirect while the gate is shut; never stores a token.
+* `/brokers` in the Account menu — click a tile, see the three-step flow, Connect explains why
+  the redirect is held and points at CSV import on `/portfolios`.
+
+**Rejected.** (a) Wiring live OAuth for ten brokers now — Track C / D3. (b) UI-only mock with no
+API — the gate must be the server's answer, not a client string. (c) Waiting for D3 before any
+UI — the product ask was seamless connect; the furniture can be ready the day the gate opens.
+
+**Reversal.** Delete `/brokers`, the router, and `broker_connections.py`. Flip nothing: the gate
+is already off.
+
+### M41.2 — Zerodha is the only wired authorize URL today ⚠ UNREVIEWED
+
+Kite Connect's login URL shape is known (the desk already uses it). Every other broker stays on
+the catalog with `adapter_wired=false` until its app credentials and redirect are registered
+after D3. Official broker logos are not copied — monograms in approximate house colours — until
+licence terms allow.
+
+### M41.3 — holdings row shape lands in execution, empty of I/O ⚠ UNREVIEWED
+
+`baskfy_execution.broker_ports.HoldingRow` normalises quantity + t1 + collateral (non-negotiable
+#2) as Decimal. No adapter fetches yet; the type is the contract future syncs must meet so a
+second broker cannot invent a second holdings shape.

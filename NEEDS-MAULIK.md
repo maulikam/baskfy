@@ -29,6 +29,7 @@ blocker in the project.
 | **11** | 231 instruments absent from Kite's master — a decision about whether it is worth filling them from the NSE archive. |
 | **12** | Historical breadth is survivorship-biased. The page says so now; the fix needs NSE's index-change announcements. |
 | **2, 5, 7** | Housekeeping — strangle collectors, two credential items, and a scratch directory to delete. |
+| **13** | **D3 regulatory posture** (written answer in `docs/DECISIONS-MERGE.md`). Blocks live multi-user broker OAuth and holdings sync (M41 / P4.2). Catalog UI is ready; redirects stay off. |
 
 ---
 
@@ -448,3 +449,18 @@ is what lets a backtest exclude the uncertain period.
    that is not regenerated.
 
 **Blocks:** nothing.
+
+### 13. D3 — regulatory posture (SEBI / RA) — **blocks live broker connect**
+**Status:** open · **Raised:** M41, 23 Aug 2026
+
+**What is needed:** a written answer to `docs/06-decisions-required.md` D3 in
+`docs/DECISIONS-MERGE.md` (posture A / B / C). Intended is B: publish baskets, users execute in
+their own broker accounts via OAuth.
+
+**What it blocks:** flipping `baskfy_core.broker_connections.BROKER_OAUTH_REVIEW.signed_off`,
+live redirects from `/brokers`, per-user token storage, holdings sync from HDFC / Kotak / ICICI /
+peers, and the rest of Phase 4.
+
+**What was done meanwhile (M41):** the ten-broker connect catalog, `/brokers` UI, gated
+`POST /brokers/{id}/connect` (always `oauth_available: false` until the gate flips), and the
+normalized holdings row shape. CSV import on `/portfolios` remains the way to load a book.

@@ -35,6 +35,20 @@ class Settings(BaseSettings):
     )
     redis_url: str = Field(default="redis://localhost:6380/0")
 
+    #: Where a backtest actually runs (M42).
+    #:
+    #: ``inline`` runs it in this process, in a bounded pool, and is the default because it is what
+    #: the work is worth: a nine-year monthly run measures about two seconds, nearly all of it
+    #: waiting on Postgres. It is also the only mode with no way to leave a run queued for ever,
+    #: which is the failure this default exists to remove — see `backtest_runner`.
+    #:
+    #: ``celery`` publishes to the broker instead, for a deployment that wants the simulation off
+    #: the web process. Choosing it means running a worker on the ``backtest`` queue.
+    backtest_executor: Literal["inline", "celery"] = "inline"
+
+    #: How many backtests one API process runs at once. See `backtest_runner.DEFAULT_CONCURRENCY`.
+    backtest_concurrency: int = Field(default=2, ge=1, le=8)
+
     #: Used only by the `db`-marked test suite; unset means those tests skip.
     test_database_url: str | None = None
 

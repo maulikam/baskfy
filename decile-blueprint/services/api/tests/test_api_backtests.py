@@ -14,6 +14,7 @@ that pagination works would test the engine for the third time and the router fo
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import json
 from collections.abc import AsyncIterator, Sequence
@@ -81,15 +82,23 @@ async def session(screener_session: AsyncSession) -> AsyncIterator[AsyncSession]
     yield screener_session
 
 
-def _settings(archive_dir: Path) -> Settings:
+def _settings(archive_dir: Path, *, executor: str = "celery") -> Settings:
     """The usual test settings, with the artefact store pointed at the test's own directory.
 
     ``invoice_local_dir`` is the directory ``build_invoice_archive`` falls back to when no bucket
     is configured, and backtests share that store — one abstraction over R2-or-a-directory, not
     two (see ``baskfy_api.backtests``).
+
+    ``executor`` defaults to ``celery`` here and to ``inline`` in production, which is the opposite
+    of the obvious arrangement and is deliberate. These tests assert what the *endpoint* does — the
+    row it writes, the cap it enforces, the idempotency key it honours — and an inline executor
+    would run a real simulation inside each of them against a fixture database with no bars.
+    `RecordingQueue` keeps the dispatch observable without simulating anything.
     """
     return api_helpers.api_settings(
-        screener_helpers.database_url(), invoice_local_dir=str(archive_dir)
+        screener_helpers.database_url(),
+        invoice_local_dir=str(archive_dir),
+        backtest_executor=executor,
     )
 
 
@@ -250,6 +259,82 @@ async def test_a_paid_account_queues_a_run(session: AsyncSession, tmp_path: Path
     assert row.user_id == user_id
     assert row.screen_id == screen.id
     assert queue.sent == [("baskfy.backtest.run", [body["public_id"], True])]
+
+
+async def test_a_run_nothing_can_execute_fails_rather_than_waiting(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """M42. ``queued`` must only ever mean "about to run".
+
+    The failure this pins actually happened: a run sat at ``queued`` for hours because no broker
+    URL reached the API, nothing was published, and the page said "queued" while meaning "never".
+    The old code logged that and returned, reasoning that an operator could re-drive it. There was
+    no operator.
+    """
+    user_id, public_id = await make_user(session, "noqueue.backtest@example.com", subscribed=True)
+    screen = await _screen(session, user_id)
+    config = _config(screen_public_id=screen.public_id)
+
+    # `task_queue=None` would leave the real Celery producer the lifespan builds, which would
+    # publish happily into the developer's Redis. This stands in for the state that occurred: an
+    # app whose broker was never configured, so there is nothing to publish with.
+    class NoBroker:
+        """Deliberately has no `send_task`."""
+
+    async with running_app(_settings(tmp_path), session, task_queue=NoBroker()) as client:
+        response = await client.post(
+            url("/backtests"),
+            json={"config": json.loads(config.model_dump_json())},
+            headers=bearer(public_id),
+        )
+
+    assert response.status_code == 202, "the row was recorded, so the caller is not given a 500"
+    row = (
+        await session.execute(
+            select(Backtest).where(Backtest.public_id == response.json()["public_id"])
+        )
+    ).scalar_one()
+    assert row.status == "failed"
+    assert row.error is not None and "no message broker" in row.error
+    assert row.finished_at is not None
+
+
+async def test_the_inline_executor_starts_the_run_without_a_broker(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """The default path: no broker anywhere, and the run still leaves `queued`.
+
+    What is asserted is that it *started* — the runner took it — not that it finished, because the
+    fixture database has no bars to simulate against. Finishing is covered end to end by
+    `services/worker/tests/test_backtest_job.py`.
+    """
+    user_id, public_id = await make_user(session, "inline.backtest@example.com", subscribed=True)
+    screen = await _screen(session, user_id)
+    config = _config(screen_public_id=screen.public_id)
+
+    class NoBroker:
+        """Deliberately has no `send_task`."""
+
+    async with running_app(
+        _settings(tmp_path, executor="inline"), session, task_queue=NoBroker()
+    ) as client:
+        response = await client.post(
+            url("/backtests"),
+            json={"config": json.loads(config.model_dump_json())},
+            headers=bearer(public_id),
+        )
+        assert response.status_code == 202
+        # The runner is scheduled on the loop; give it the turn it needs to claim the row.
+        await asyncio.sleep(0)
+
+    row = (
+        await session.execute(
+            select(Backtest).where(Backtest.public_id == response.json()["public_id"])
+        )
+    ).scalar_one()
+    assert row.status != "failed" or "no message broker" not in (row.error or ""), (
+        "the inline runner should have taken this, not reported a missing broker"
+    )
 
 
 async def test_a_second_concurrent_run_is_refused(session: AsyncSession, tmp_path: Path) -> None:

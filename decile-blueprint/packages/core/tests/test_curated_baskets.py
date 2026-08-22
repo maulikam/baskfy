@@ -27,9 +27,7 @@ class TestWeightSum:
         assert_weights_sum_to_one([Decimal("0.2500")] * 4)
 
     def test_unequal_weights_that_reconcile_pass(self) -> None:
-        assert_weights_sum_to_one(
-            [Decimal("0.3333"), Decimal("0.3333"), Decimal("0.3334")]
-        )
+        assert_weights_sum_to_one([Decimal("0.3333"), Decimal("0.3333"), Decimal("0.3334")])
 
     def test_empty_weights_fail(self) -> None:
         with pytest.raises(ValueError, match="cannot be empty"):

@@ -125,9 +125,7 @@ class CbBasket(Base):
     id: Mapped[BigIntPk]
     slug: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    manager_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("cb_manager.id"), nullable=False
-    )
+    manager_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cb_manager.id"), nullable=False)
     type: Mapped[str] = mapped_column(String, nullable=False)
     access: Mapped[str] = mapped_column(String, nullable=False)
     visibility: Mapped[str] = mapped_column(String, nullable=False)

@@ -49,7 +49,7 @@ async def resolve_sole_user_id(session: AsyncSession) -> int:
     if env_val is not None:
         return int(env_val)
     # Local import breaks ``seed`` ↔ ``curated_seed`` circular dependency.
-    from baskfy_api.seed import E2E_PUBLIC_ID, seed_e2e_account
+    from baskfy_api.seed import E2E_PUBLIC_ID, seed_e2e_account  # noqa: PLC0415
 
     await seed_e2e_account(session)
     return (

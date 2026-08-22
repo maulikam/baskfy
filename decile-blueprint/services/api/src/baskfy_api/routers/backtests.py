@@ -52,6 +52,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_api import backtests as service
 from baskfy_api import idempotency, invoices
 from baskfy_api.auth import AuthenticatedDep, Principal, settings_for
+from baskfy_api.backtest_runner import BacktestRunner, RunnerBusy
 from baskfy_api.db import SessionDep
 from baskfy_api.entitlements import EntitlementsDep, Feature
 from baskfy_api.problems import Problem, ProblemType, not_found, rate_limited, stale_data_version
@@ -328,7 +329,19 @@ async def create_backtest(  # noqa: PLR0913, PLR0917 - FastAPI injects one param
     session.add(row)
     await session.flush()
     await idempotency.remember(_cache(request), scope, idempotency_key, row.public_id)
-    _dispatch(request, row.public_id, fragility=body.fragility)
+
+    # M42. If nothing can run it, say so on the row before answering. A 202 whose row then sits at
+    # `queued` for ever is the one outcome this endpoint must not produce.
+    reason = _dispatch(request, row.public_id, fragility=body.fragility)
+    if reason is not None:
+        row.status = "failed"
+        row.error = reason
+        row.finished_at = dt.datetime.now(tz=dt.UTC)
+        await session.flush()
+        log.error(
+            "backtest could not be started",
+            extra={"public_id": row.public_id, "reason": reason},
+        )
     return _accepted(row)
 
 
@@ -383,28 +396,76 @@ async def _resolve_screen(
     return screen
 
 
-def _dispatch(request: Request, public_id: str, *, fragility: bool) -> None:
-    """Hand the run to the ``backtest`` queue.
+def _runner(request: Request) -> BacktestRunner | None:
+    """The in-process runner, built on first use if the composition root has not supplied one.
 
-    A missing broker is **not** silently swallowed: the row stays ``queued`` and the log says so,
-    which is a state an operator can see and re-drive. Raising here would leave the user with a
-    500 for a run that was in fact recorded.
+    `app.lifespan` builds it at startup, which is where wiring belongs. This fallback exists so the
+    endpoint does not depend on that having happened: an API started by a test, by the OpenAPI
+    emitter, or by a deployment whose lifespan predates M42 still runs backtests rather than
+    silently queueing them, which is the whole point of the module.
+
+    Built once and cached on `app.state`, so the archive and publisher are not reconstructed per
+    request.
     """
+    settings: Settings = request.app.state.settings
+    if settings.backtest_executor != "inline":
+        return None
+    existing = getattr(request.app.state, "backtest_runner", None)
+    if isinstance(existing, BacktestRunner):
+        return existing
+
+    # `baskfy_worker` imports `baskfy_api`, so this one is deferred to call time to keep the
+    # module-level graph acyclic. `BacktestRunner` itself lives in this package and is imported
+    # normally at the top.
+    from baskfy_worker.tasks.backtests import run_backtest_inline  # noqa: PLC0415
+
+    runner = BacktestRunner(
+        run_backtest_inline(request.app.state.session_factory, settings),
+        concurrency=settings.backtest_concurrency,
+    )
+    request.app.state.backtest_runner = runner
+    return runner
+
+
+def _dispatch(request: Request, public_id: str, *, fragility: bool) -> str | None:
+    """Start the run. Returns ``None`` on success, or the reason it could not start (M42).
+
+    ## What changed, and why
+
+    This used to end with a log line and a shrug. A missing broker left the row ``queued`` on the
+    reasoning that "an operator can see and re-drive it" — and in practice a run sat at ``queued``
+    for hours because no ``BASKFY_REDIS_URL`` reached the API, nothing was ever published, and the
+    page said "queued" while meaning "never". There was no operator. There is never an operator.
+
+    The contract now: **a caller either gets a run that has started, or a reason.** The reason
+    lands on the row as a failure the user can read, because ``queued`` must only ever mean "about
+    to run".
+    """
+    runner = _runner(request)
+    if runner is not None:
+        try:
+            runner.submit(public_id, fragility=fragility)
+        except RunnerBusy as exc:
+            return str(exc)
+        return None
+
     queue = _queue(request)
     sender = getattr(queue, "send_task", None)
     if not callable(sender):
-        log.error(
-            "backtest queued with no broker to run it",
-            extra={"public_id": public_id},
+        return (
+            "this deployment runs backtests on a Celery worker "
+            "(BASKFY_BACKTEST_EXECUTOR=celery) and no message broker is reachable, so there is "
+            "nothing to run it."
         )
-        return
     try:
         sender(BACKTEST_TASK, [public_id, fragility])
-    except Exception as exc:  # any broker failure has the same remedy: leave it queued
+    except Exception as exc:
         log.error(
             "backtest could not be dispatched",
             extra={"public_id": public_id, "error": str(exc)},
         )
+        return f"the run could not be handed to the worker queue: {type(exc).__name__}: {exc}"
+    return None
 
 
 # ---------------------------------------------------------------------------

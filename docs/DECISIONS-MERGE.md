@@ -2334,3 +2334,54 @@ Found by the test written for that property, before it ran anywhere near a pipel
 * `test_api_artifacts` refused the changed endpoint docstring until `openapi.json` was regenerated.
 * The worker conftest's truncate list had to learn the new table, or "the cache is cold" was
   untestable — one test's snapshot survived into the next.
+
+---
+
+## M31 — index and sector history, and the half of the page it does not fix
+
+`/market-health` showed *"Only 1 day of history so far — a line needs two"*. The bars behind it went
+back to 2017 at M29; `index_snapshot_daily` still held **six weeks**.
+
+### M31.1 — Kite carries the indices themselves ⚠ UNREVIEWED
+136 NSE indices in Kite's `INDICES` segment — NIFTY 50, NIFTY BANK and every sector index — each
+serving daily candles with the same 2,000-day cap as an equity, back to 2017. So the levels were a
+fetch rather than a reconstruction.
+
+**64 matched to `index_def`, 146,049 rows written.** NIFTY 50, BANK, IT, AUTO, PHARMA, MIDCAP 150
+and SMALLCAP 250 all now run **2017-01-02 → 2026-08-21**, 2,389 rows each.
+
+`level`, `change_abs` and `change_pct` are filled. `pe`, `pb` and `div_yield` are left NULL: Kite
+does not serve them, and an invented P/E is worse than an empty column. Existing rows are never
+overwritten (`ON CONFLICT DO NOTHING`) because a row the nightly chain wrote may carry those three
+from NSE.
+
+### M31.2 — the matcher is asserted in both directions, and it caught a real one ⚠ UNREVIEWED
+The two sources disagree in punctuation and abbreviation: `NIFTY SMALLCAP 250` against Kite's
+`NIFTY SMLCAP 250`. Names normalise to alphanumerics, and a table of NSE's abbreviations expands
+the short form — returning a **set** of candidate forms and intersecting, so the expansion runs one
+way without deciding in advance which side is short. The first version substituted on both sides
+and turned `NIFTYINDIACONSUMPTION` into `NIFTYINDIAINDIACONSUMPTION`: 55 matches instead of 64.
+
+**A wrong match is worse than no match** — it files one index's history under another's name, where
+nothing looks broken. So the tests assert both directions, and one caught a real defect:
+`("PSEBANK", "PSUBANK")` was in the abbreviation table. **NIFTY PSE is public-sector *enterprises*
+and NIFTY PSU BANK is public-sector *banks*.** The rule was found by a test asserting that every
+abbreviation actually shortens its input; the two are the same length. Checked afterwards: the two
+indices did receive different histories (average level 5,446 against 4,121), so nothing was
+corrupted.
+
+### M31.3 — this does NOT fix the breadth charts, and Kite cannot ⚠ UNREVIEWED
+The Market Health history chart is **breadth over time with the index level overlaid**. M31 filled
+the overlay. The breadth series comes from `market_health_daily`, which answers "what percentage of
+NIFTY 50 is above its 200-DMA" — and that needs the **constituents on that date**.
+
+`index_member_daily` holds **seven dates**. NSE publishes constituents for today only.
+
+**Kite cannot supply them.** Its API surface was enumerated rather than assumed: `instruments`,
+`quote`, `ohlc`, `ltp`, `historical_data`, `holdings`, `orders`, `gtt`, `mf*`. **There is no
+index-constituents endpoint at all**, which is what `docs/02` means by "Kite … no index
+constituents".
+
+So breadth history needs either NSE's index-change announcements reconstructed, or today's
+membership held constant backwards — and the second puts **survivorship bias** into a table the
+backtester reads, which is not a decision to take quietly. `NEEDS-MAULIK.md` item 12.

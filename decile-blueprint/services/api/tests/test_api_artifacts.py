@@ -47,6 +47,10 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/desk/tradebook": {"get"},
     "/desk/regime": {"get"},
     "/desk/reconcile": {"get"},
+    # M34, not docs/07: sleeves and the allocation that follows. Amounts and weights only --
+    # `test_sleeves_are_not_orders.py` asserts no share count or price can appear.
+    "/portfolios/{portfolio_id}/sleeves": {"get", "put"},
+    "/portfolios/{portfolio_id}/allocation": {"get"},
     "/screens/{public_id}": {"get", "patch", "delete"},
     "/screens/{public_id}/duplicate": {"post"},
     "/screens/{public_id}/run": {"post"},

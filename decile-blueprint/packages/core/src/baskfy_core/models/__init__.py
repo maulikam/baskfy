@@ -15,6 +15,7 @@ from baskfy_core.models.accounts import (
     Portfolio,
     PortfolioHolding,
     PortfolioRebalance,
+    PortfolioSleeve,
     Subscription,
 )
 from baskfy_core.models.admin import (
@@ -118,6 +119,7 @@ __all__ = [
     "Portfolio",
     "PortfolioHolding",
     "PortfolioRebalance",
+    "PortfolioSleeve",
     "RefreshToken",
     "Screen",
     "ScreenAlert",

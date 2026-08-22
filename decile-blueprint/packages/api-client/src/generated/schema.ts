@@ -1494,6 +1494,26 @@ export interface paths {
         patch: operations["renamePortfolio"];
         trace?: never;
     };
+    "/api/v1/portfolios/{portfolio_id}/allocation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What each sleeve would hold, in rupees
+         * @description Amounts and weights. Never share counts — see the module docstring.
+         */
+        get: operations["allocation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolios/{portfolio_id}/holdings": {
         parameters: {
             query?: never;
@@ -1567,6 +1587,31 @@ export interface paths {
          */
         get: operations["getRebalance"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolios/{portfolio_id}/sleeves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How a portfolio is divided */
+        get: operations["listSleeves"];
+        /**
+         * Replace how a portfolio is divided
+         * @description Replace the whole set, rather than patching one at a time.
+         *
+         *     A portfolio's division is one decision — the slices have to add up to something the owner
+         *     meant — so it is edited and saved whole. Patching sleeve 2 while sleeve 3 still holds last
+         *     week's capital is how a total silently stops being the portfolio.
+         */
+        put: operations["replaceSleeves"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1927,6 +1972,34 @@ export interface components {
             name?: string | null;
             /** Public Id */
             public_id: string;
+        };
+        /** AllocationOut */
+        AllocationOut: {
+            /**
+             * Applied Regime Cap
+             * @default false
+             */
+            applied_regime_cap: boolean;
+            /** Capital */
+            capital: string;
+            /** Cash */
+            cash: string;
+            /** Deployed */
+            deployed: string;
+            /** Equity Cap Pct */
+            equity_cap_pct?: string | null;
+            /** Sleeves */
+            sleeves: components["schemas"]["SleeveAllocationOut"][];
+            stance?: components["schemas"]["StanceOut"] | null;
+        };
+        /** AllocationRowOut */
+        AllocationRowOut: {
+            /** Amount */
+            amount: string;
+            /** Symbol */
+            symbol: string;
+            /** Weight Pct */
+            weight_pct: string;
         };
         /** ApiKeyCreate */
         ApiKeyCreate: {
@@ -4820,12 +4893,104 @@ export interface components {
             raw: string;
             reason: components["schemas"]["SkipReason"];
         };
+        /** SleeveAllocationOut */
+        SleeveAllocationOut: {
+            /** Capital */
+            capital: string;
+            /** Cash */
+            cash: string;
+            /** Deployed */
+            deployed: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Rows */
+            rows: components["schemas"]["AllocationRowOut"][];
+            /** Screen Name */
+            screen_name?: string | null;
+        };
+        /** SleeveIn */
+        SleeveIn: {
+            /** Capital */
+            capital: number | string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Screen Public Id */
+            screen_public_id?: string | null;
+            /**
+             * Top N
+             * @default 15
+             */
+            top_n: number;
+        };
+        /** SleeveListOut */
+        SleeveListOut: {
+            /** Sleeves */
+            sleeves: components["schemas"]["SleeveOut"][];
+            /** Total Capital */
+            total_capital: string;
+        };
+        /** SleeveOut */
+        SleeveOut: {
+            /** Capital */
+            capital: string;
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Screen Name */
+            screen_name?: string | null;
+            /** Screen Public Id */
+            screen_public_id?: string | null;
+            /**
+             * Top N
+             * @default 15
+             */
+            top_n: number;
+        };
+        /**
+         * SleeveSetIn
+         * @description The whole division, validated as one thing.
+         *
+         *     These rules live on the model rather than in the handler because `docs/07`'s error catalogue
+         *     has no "validation" member and is pinned by a test — inventing one to describe a duplicate
+         *     sleeve name would be changing a published contract to report a typo. FastAPI answers a failed
+         *     model validation with 422 and the RFC 9457 body the rest of the API uses.
+         */
+        SleeveSetIn: {
+            /** Sleeves */
+            sleeves: components["schemas"]["SleeveIn"][];
+        };
         /** SortingFactorOut */
         SortingFactorOut: {
             /** Key */
             key: string;
             /** Label */
             label: string;
+        };
+        /**
+         * StanceOut
+         * @description The desk's current policy tier, as a fact.
+         */
+        StanceOut: {
+            /** Equity Cap Pct */
+            equity_cap_pct?: string | null;
+            /** Evaluated At */
+            evaluated_at?: string | null;
+            /** Label */
+            label: string;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+            /** Tier */
+            tier: string;
         };
         /**
          * StatusOut
@@ -13460,6 +13625,112 @@ export interface operations {
             };
         };
     };
+    allocation: {
+        parameters: {
+            query?: {
+                /** @description size the screen sleeves to the current stance's equity cap */
+                apply_regime_cap?: boolean;
+            };
+            header?: never;
+            path: {
+                portfolio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllocationOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     putHoldings: {
         parameters: {
             query?: never;
@@ -13799,6 +14070,216 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RebalanceOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    listSleeves: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portfolio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SleeveListOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    replaceSleeves: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portfolio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SleeveSetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SleeveListOut"];
                 };
             };
             /** @description Invalid screen definition */

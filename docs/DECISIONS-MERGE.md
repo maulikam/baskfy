@@ -2484,3 +2484,59 @@ is a flat namespace**, so the generator module-qualified one of each pair and th
 Exactly what `PlanOut` did at M19, and it surfaced the same way: on the TypeScript side, from a
 `tsc` run, long after the Python tests were green. Renamed to `DeskHoldingOut` and `DeskTradeOut`
 with the reason recorded at the class.
+
+---
+
+## M34 — a portfolio run as several screens, plus a slice run by hand
+
+The Rebalance Tracker answers *"which symbols changed"* (`docs/01` §8) and knows nothing about
+money. A person with a crore asks the other question: **how much goes where**.
+
+**A sleeve** is one slice with its own capital and its own source — a saved screen, or `manual`
+for capital the owner runs themselves, carried through the arithmetic so the totals are honest and
+never allocated.
+
+### M34.1 — most of it already existed ⚠ UNREVIEWED
+`POST /portfolios/{id}/rebalance` has always taken a `screen_public_id`. **Rebalancing from a
+screen was never missing** — the CSV is how you say what you *hold*, not where the target comes
+from. That was a UI gap, and worth saying plainly rather than rebuilding.
+
+What was genuinely absent was money: the tracker is a symbol diff, so "₹40L to screen 2" had
+nowhere to live.
+
+### M34.2 — three choices, all taken toward the conservative reading ⚠ UNREVIEWED
+| | taken | rejected |
+|---|---|---|
+| Output | rupee amounts + target weights | unit counts, which need a market quote and make a buy list |
+| Regime tier | reported as a fact, applied only when asked | applied automatically to every sleeve |
+| Wording | states what the strategy does | tells the reader what to do |
+
+**The output choice is structural, not a promise.** `baskfy_core.sleeves` receives no market quote
+at all, so it *cannot* emit a number of units. `test_sleeves_are_not_orders.py` asserts the
+vocabulary of an order appears in neither the allocator nor the router, and that every route is
+GET or PUT.
+
+**The wording choice is the D3 line.** Baskfy publishes no advice and is not SEBI-registered — it
+says so on every page. A sentence urging a reader to deploy a sum is advice; *"under R2 the
+strategy caps equity at 70%"* is a description of a strategy. The test asserts the advice phrasings
+appear nowhere in either module, because this is the kind of wording that softens over time.
+
+### M34.3 — the arithmetic reconciles to the rupee ⚠ UNREVIEWED
+Equal weights rarely divide into whole rupees. The shortfall becomes the sleeve's **cash** rather
+than being smeared across the names, and `deployed + cash == capital` holds for every sleeve and
+for the portfolio — asserted by test. Rounding is `ROUND_DOWN` so a sleeve can never propose more
+than it has.
+
+**A cap withholds capital; it does not shrink the portfolio.** At R2 a crore is still a crore with
+₹30L held as cash. The alternative — reporting a crore as ₹70L — would be a reporting bug wearing
+a defensive stance.
+
+### M34.4 — `top_n` was accepted and ignored, which is worse than not offering it ⚠ UNREVIEWED
+The first cut took `top_n` on the request, never stored it, and returned fifteen names for every
+sleeve regardless. Found by asking for 5/4/3 and getting 15/15/15. Given a column and a check
+constraint; migration 0013 amended before it was ever released.
+
+### M34.5 — the prose failed the guard it was explaining, again ⚠ UNREVIEWED
+Both docstrings explained why a unit count and an advice sentence are forbidden — by writing them
+— and the scanner caught both. The same collision M22.4 recorded, and the same fix: describe the
+pattern rather than spell it. Recorded a second time because it will happen a third.

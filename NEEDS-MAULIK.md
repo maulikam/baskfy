@@ -17,8 +17,23 @@ what was done meanwhile.
 `data/.kite_token.json` is from 19 Aug and Kite mints tokens daily with no refresh, so it is
 expired (`TokenException`). M9 wanted 2011→today in `ohlcv_daily`.
 
-**What is needed:** one Kite login, exactly as you do it now — `./run.sh`, click Login, complete
-the flow. That writes a fresh token the pipeline can borrow. Nothing else.
+**What is needed:** one Kite login, exactly as you do it now — `./run.sh` on the box (or
+https://desk.modelbasket.in/), click Login, complete the 2FA. **Then tell me, or just leave it: I
+can now fetch the token myself.**
+
+`make token-sync TARGET=momentum-desk` (M18, point 2) reads the token the box already holds over the
+same SSH connection `deploy/sync.sh` uses, writes it into the laptop's encrypted store, and verifies
+it with one `profile()` call. **The Kite app's Redirect URL stays `desk.modelbasket.in/callback`** —
+no second redirect was registered, nothing about the live app changed. The token is never printed.
+
+It is built and exercised end to end against the box. Run this morning (22 Aug, 07:20 IST) it read
+Friday's token, correctly refused to store it, and said why:
+
+> The api_key matches the box's, so the key is not the problem: the token on the box has expired.
+
+**So the only manual step left is the login itself, once a day.** Kite mints tokens per human,
+through a browser, and expires them at ~06:00 IST the next morning; nothing on this side removes
+that. The bridge removes the *second* manual step — getting that token onto the laptop.
 
 **What it unblocks:** *depth only*. `decile_worker.backfill` pulls daily candles from Kite, which
 is the only source that reaches before 2024.
@@ -124,6 +139,24 @@ split and both bonuses exactly — so this is purely missing input, and it is cu
 cause of both parity gates failing. It is more load-bearing than the window question M11 raised.
 
 **Blocks:** M13 (rule 7 opens it only on empty delta tables). Does not block M15–M20.
+
+### 6. One-time: confirm the Kite app is on the paid historical-data tier
+**Status:** open, one browser check · **Raised:** M18, 22 Aug 2026
+
+**What to do, once:** open https://developers.kite.trade, find the app whose api_key fingerprints to
+`50c5bd947587`, and check whether the **historical data** add-on is active. It is ₹500/month, billed
+separately from the ₹2,000/month app.
+
+**Why it matters:** `profile()` works on every tier, so a successful `make token-sync` does **not**
+prove we can pull bars. If historical data is not subscribed, `kc.historical_data()` returns **403**
+with a perfectly valid token — and that failure looks exactly like an auth problem while being
+nothing of the kind. Knowing the answer in advance is the difference between a five-minute fix and
+an afternoon spent re-checking the token bridge that is working fine.
+
+**What it gates:** item 3's deep-history backfill (M9) and, through it, the fifteen-year backtest.
+Not the merge's parity gates.
+
+**Blocks:** nothing today — but check it before the next backfill attempt rather than during one.
 
 ### 5. Two small credential items from M16
 **Status:** informational · **Raised:** M16, 22 Aug 2026

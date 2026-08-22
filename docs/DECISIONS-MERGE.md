@@ -1263,3 +1263,53 @@ SQLite state as the forever copy.
 Precondition (c)'s "one-command rollback" gets its meaning at that switch. Today, "point the desk
 back at SQLite" is not a rollback — it is the status quo, and exercising it proves nothing. Once the
 config flip exists, flipping it back is the rollback, and that is what must be exercised.
+
+---
+
+## Point 2 — the token bridge
+
+### TB.1 — fetch the token the box already has, rather than register a second redirect ⚠ UNREVIEWED
+The Kite app's Redirect URL is `https://desk.modelbasket.in/callback` and **stays that way**. So the
+login lands on the box and the token is minted there, while the merge's pipeline work runs on the
+laptop and needs the same token.
+
+Three ways out: register a second redirect against a **live trading app** (a production change for a
+development convenience — no); copy the token by hand each morning (works, and gets skipped); or
+fetch it over the SSH connection `deploy/sync.sh` already uses. `scripts/token_sync.py` +
+`make token-sync TARGET=…` does the third.
+
+**Verify before store.** The authenticated call runs *first*; a dead token never replaces a live one
+on disk. **The token is never printed** — not stdout, not stderr, not a log record, and a test
+asserts all three by running `main()` end to end and searching the captured output.
+
+**`profile()`, not a bar fetch.** It costs no data quota and cannot fail for a reason unrelated to
+the token. A `historical_data()` probe would 403 on the free data tier with a perfectly valid token
+— the exact ambiguity NEEDS-MAULIK item 6 exists to remove.
+
+**Reads both formats.** The box runs the pre-M16 layout until its next deliberate deploy, so its
+token file is plain JSON today and a Fernet blob after. It tries JSON, then the encrypted store. The
+laptop's copy is written encrypted either way.
+
+### TB.2 — two defects the box found that review had not ⚠ UNREVIEWED
+Running it against the real box, not a fixture, surfaced both:
+
+1. **Pipeline exit status masked a permission failure.** The fingerprint probe ran
+   `grep … | cut | sha256sum` as `ubuntu` against a file owned by `desk`. `grep` failed; the
+   pipeline's status came from `cut`; the probe returned sha256 of *nothing* and the script
+   confidently reported an api_key mismatch that did not exist. Fixed with `bash -o pipefail`.
+2. **Nested quoting broke silently.** A `python3 -c` inside `sudo -n bash -c` inside an `ssh`
+   argument survived one round of shell parsing and not two. Replaced with `sha256sum` on the far
+   side and `shlex.quote` for the one level that remains.
+
+Both produced a *plausible wrong answer* rather than an error, which is the failure mode worth
+paying for a live run to catch.
+
+### TB.3 — the run's finding: M9 and M10 stay blocked on a human ⚠ UNREVIEWED
+The bridge works. The token does not: minted Friday 20:30 IST, dead since ~06:00 this morning. The
+script diagnosed that itself — it compared api_key fingerprints across the two machines, found them
+identical, and therefore named the token rather than guessing.
+
+So **M9's 2011-depth backfill and M10's corporate-action work remain queued on one human login**, and
+under the charter everything independent of them continues. What the bridge removed is the second
+manual step, not the first: Kite mints tokens per human through a browser, and no amount of
+engineering on this side changes that.

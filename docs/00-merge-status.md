@@ -244,6 +244,18 @@ pnpm --filter @baskfy/web exec playwright test e2e/portfolios.spec.ts --reporter
 **`e2e/portfolios.spec.ts` passes: 4 tests, 33s** (M17). The other nine journeys are still
 unexecuted.
 
+## The token bridge (point 2, after M18)
+
+`make token-sync TARGET=momentum-desk` pulls the token the box minted into the laptop's encrypted
+store and verifies it with one `profile()` call, without printing it. **The Kite app's Redirect URL
+stays `desk.modelbasket.in/callback`** — nothing about the live app changed.
+
+Exercised against the real box this morning: it read Friday's token, refused to store it, and
+correctly reported the token as expired rather than blaming the api_key. **One daily human login is
+still required and always will be** (NEEDS-MAULIK 3), so **M9's deep backfill and M10's
+corporate-action work stay queued**. New: NEEDS-MAULIK 6, a one-time check that the app carries the
+paid historical-data tier — `profile()` succeeding does not prove bars can be pulled.
+
 ## ⚠️ THE DIVERGENCE WINDOW (M18 → M19)
 
 **The `desk` schema in Postgres is rehearsal output, not truth.** The desk still writes SQLite;

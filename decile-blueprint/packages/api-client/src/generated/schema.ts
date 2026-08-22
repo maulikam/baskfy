@@ -2169,7 +2169,7 @@ export interface components {
              *     }
              */
             costs: components["schemas"]["CostSpec-Input"];
-            /** @default reinvest */
+            /** @default ignore */
             dividends: components["schemas"]["DividendPolicy"];
             /**
              * End
@@ -2255,7 +2255,7 @@ export interface components {
              *     }
              */
             costs: components["schemas"]["CostSpec-Output"];
-            /** @default reinvest */
+            /** @default ignore */
             dividends: components["schemas"]["DividendPolicy"];
             /**
              * End
@@ -2897,26 +2897,34 @@ export interface components {
          * DividendPolicy
          * @description docs/10 §7: ``dividends: "reinvest" | "cash" | "ignore"``.
          *
-         *     There is a wrinkle the document does not know about, and it decides the default.
+         *     ## What the stored series actually is, and why this changed in M39
          *
-         *     docs/09's adjustment algorithm — which this repository implements in
-         *     :mod:`baskfy_core.adjustments` — folds **cash dividends** into ``adj_factor`` alongside splits
-         *     and bonuses: "Cash dividend D -> (P_cum - D) / P_cum". So ``ohlcv_daily.close``, the adjusted
-         *     series docs/10 §6 marks the book to, is already a *total-return* series. Crediting the
-         *     dividend as cash on top of it would count it twice.
+         *     This enum used to default to ``reinvest`` on the strength of docs/09's adjustment algorithm,
+         *     which folds cash dividends into ``adj_factor`` alongside splits and bonuses
+         *     (``D -> (P_cum - D) / P_cum``). If that ran, ``ohlcv_daily.close`` would be a *total-return*
+         *     series and marking the book to it would be reinvestment, exactly.
          *
-         *     Hence:
+         *     **It does not run.** M27 put the question to the reference corpus and measured the answer:
+         *     of 45 deciding symbol-windows the price convention won 42, and it matched all 25 dividend-
+         *     paying symbols exactly at stored precision on the three windows that reproduce. M28 then
+         *     applied the 47 share-count actions and deliberately **not** the 38 dividend-shaped ones
+         *     (`reconciliation/RECOVERED-ACTIONS.md`, "VERDICT: PRICE RETURN").
          *
-         *     ``reinvest``
-         *         Mark to the adjusted series as-is. Back-adjustment **is** reinvestment at the ex-date
-         *         price, so this is exact and it is the default.
-         *     ``cash``
-         *         Mark to a dividend-stripped price series and credit the dividend to cash on the ex-date.
-         *         Needs ``price_open``/``price_close`` columns and a dividend schedule in the panel; without
-         *         them the run is refused rather than silently served as ``reinvest``.
+         *     So the adjusted close is a **price-return** series: splits and bonuses are inside it, cash
+         *     dividends are not. Every policy below is defined against that fact.
+         *
          *     ``ignore``
-         *         Mark to the dividend-stripped price series and credit nothing — a pure price return.
-         *         Same data requirement.
+         *         Mark to the stored series and credit nothing — a pure price return. **Exact, needs no
+         *         extra data, and is therefore the default.** It is what the engine has always actually
+         *         computed; until M39 it was mislabelled ``reinvest``.
+         *     ``cash``
+         *         Credit each dividend to cash on its ex-date. Needs a dividend schedule on the panel and
+         *         is refused without one.
+         *     ``reinvest``
+         *         Would need a total-return series rebuilt from the dividend schedule. Same requirement,
+         *         same refusal — and note it can no longer be served by doing nothing, which is what made
+         *         the old default wrong rather than merely mislabelled: it understated every return by
+         *         roughly the dividend yield while telling the reader dividends were included.
          * @enum {string}
          */
         DividendPolicy: "reinvest" | "cash" | "ignore";

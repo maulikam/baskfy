@@ -119,7 +119,8 @@ export function ConfigForm({
       // risk-free rate has no T-bill series behind it, so offering either as a control would be
       // offering a choice that is not there. Sent explicitly rather than left to the server's
       // default, so the stored config says what the run actually used.
-      dividends: "reinvest",
+      // M39: the stored close is a price-return series, so this is the only exact policy.
+      dividends: "ignore",
       risk_free_rate: "0",
     });
   }

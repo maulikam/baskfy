@@ -22,8 +22,8 @@ from __future__ import annotations
 import datetime as dt
 import inspect
 import time
-from dataclasses import replace
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from decimal import Decimal
 from itertools import pairwise
 
@@ -798,13 +798,39 @@ def test_min_weight_above_max_weight_is_rejected() -> None:
         PositionLimits(max_weight=Decimal("0.05"), min_weight=Decimal("0.10"))
 
 
-@pytest.mark.parametrize("policy", [DividendPolicy.CASH, DividendPolicy.IGNORE])
+@pytest.mark.parametrize("policy", [DividendPolicy.CASH, DividendPolicy.REINVEST])
 def test_a_dividend_policy_we_cannot_serve_is_refused(policy: DividendPolicy) -> None:
-    """See ``DividendPolicy``: our adjusted close already contains the dividend, so ``cash`` and
-    ``ignore`` need a dividend-stripped series that the panel does not carry."""
+    """M39 turned this test around, because the premise under it was measured and refuted.
+
+    It used to assert that ``cash`` and ``ignore`` were the impossible pair, on the grounds that
+    the adjusted close "already contains the dividend" and only ``reinvest`` could be served by
+    marking to it. M27 asked the reference corpus and got the opposite answer — the price
+    convention won 42 of 45 deciding windows — and M28 applied the share-count actions and not
+    the dividend ones (`reconciliation/RECOVERED-ACTIONS.md`).
+
+    So the stored close is a price-return series. ``ignore`` is the one that needs nothing, and
+    the two that need a dividend schedule are the two that have to *add* a dividend back.
+    """
     _, data, _ = _market_and_data()
-    with pytest.raises(BacktestConfigError, match="dividend-stripped"):
+    with pytest.raises(BacktestConfigError, match="dividend schedule"):
         run_backtest(_config(dividends=policy), data)
+
+
+def test_the_price_return_policy_needs_no_extra_data() -> None:
+    """``ignore`` is what the engine has always computed. M39 stopped calling it something else."""
+    _, data, _ = _market_and_data()
+    result = run_backtest(_config(dividends=DividendPolicy.IGNORE), data)
+
+    assert result.dividends_credited == Decimal(0)
+    assert result.final_equity > Decimal(0)
+
+
+def test_the_default_policy_is_the_one_the_data_supports() -> None:
+    """A default that needs data nobody supplies is a default that fails every run."""
+    assert (
+        BacktestConfig(start=dt.date(2011, 1, 3), end=dt.date(2013, 12, 31)).dividends
+        is DividendPolicy.IGNORE
+    )
 
 
 def test_a_calendar_with_no_days_in_range_is_refused() -> None:
@@ -881,8 +907,7 @@ class TestBlindRebalances:
         _, data, schedule = _market_and_data()
         blinded = set(schedule[::2])
         emptied = {
-            day: (frame.clear() if day in blinded else frame)
-            for day, frame in data.screens.items()
+            day: (frame.clear() if day in blinded else frame) for day, frame in data.screens.items()
         }
         result = run_backtest(_config(), replace(data, screens=emptied))
 
@@ -935,7 +960,5 @@ class TestTheBookAddsUp:
         result = run_backtest(_config(selection=SelectionSpec(top_n=40, hold_buffer=0)), data)
 
         assert result.delistings
-        for equity, cash, invested in zip(
-            result.equity, result.cash, result.invested, strict=True
-        ):
+        for equity, cash, invested in zip(result.equity, result.cash, result.invested, strict=True):
             assert equity == cash + invested

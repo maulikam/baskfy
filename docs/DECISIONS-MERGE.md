@@ -2802,3 +2802,83 @@ its ink and the consumer decides the size — 32px in the header, against 18px t
 
 `next/image` carries `unoptimized`: the optimiser refuses SVG unless `dangerouslyAllowSVG` is set,
 a flag meant to stop *remote* SVGs executing script and not one to turn on to serve our own logo.
+
+## M39 — the backtesting engine, and three things wrong underneath it
+
+Maulik: *"Fix the backtesting engine. I think there are a lot of issues in the backtesting engine."*
+
+The engine's own logic turned out to be in good shape — 41 tests already covered look-ahead, whole
+shares, overdraft, execution timing, delisting, cost monotonicity and the weighting schemes, and
+they all held. **Every problem found was at the data boundary**, which is where a backtest actually
+goes wrong: the arithmetic was right and two of the three inputs were not.
+
+Found by running one against nine years of real Kite history rather than by reading the code.
+
+### M39.1 — the trading calendar was wrong, and it stopped every run ⚠ UNREVIEWED
+A real backtest could not load at all: *"215 bar(s) fall on dates that are not in the trading
+calendar."* The nine offending dates are all genuine NSE sessions the seeded calendar had as
+weekends — **Muhurat trading** on Diwali (2019-10-27, 2020-11-14, 2023-11-12), **Budget-day
+Saturdays** (2020-02-01, 2025-02-01, 2026-02-01) and three **special/DR live sessions** in 2024.
+
+`reconcile_calendar` exists for exactly this and had never been run over the M29 backfill. Run
+across 2017-01-01 → 2026-08-21 it promoted those 9 and inferred **60 missing holidays**. Bounded at
+the last date with bars on purpose: inferring holidays across the unelapsed part of 2026 would mark
+every remaining weekday a holiday.
+
+**This closes a long-standing open item.** `CLAUDE.md` recorded that the calendar-offset windows
+resolved to 22/67/127/191/256 against the 22/64/121/185/247 `docs/13` §3 requires, and that the fix
+was "running `reconcile_calendar` over a real backfill, not changing the engine". Measured after:
+**22/64/121/185/247, exactly.**
+
+Consequence: every `factor_daily` row computed before this used windows three to nine bars too
+long. All 396 dates are being recomputed.
+
+### M39.2 — a blindfolded rebalance produced a confident wrong answer ⚠ UNREVIEWED
+The serious one. With the calendar fixed the run completed and reported **+13.8% over 2022-2026**,
+which is implausible for Indian momentum over that window. It was not a strategy result: the screen
+had factor rows on **15 of its 57 rebalance dates**, and on the other 42 it returned nothing, so
+the book was liquidated to cash.
+
+**An empty screen frame has two causes and one appearance.** Either every filter excluded every
+name — a real outcome, and the engine correctly goes to cash — or no factors exist for that date,
+in which case the screen was never asked a question it could answer. From inside the engine they
+are identical.
+
+Two changes, at the two layers that can each do half of it:
+
+* `baskfy_core` counts them. `BacktestResult.blind_rebalances` and `.blind_fraction`. The engine
+  never sees a database and cannot diagnose the cause, but it can report the symptom.
+* `baskfy_worker` refuses. `_require_factor_coverage` fails the load naming the missing dates and
+  what would fill them. The loader is the layer that knows, so it is the layer that decides.
+
+Only the schedule is checked, not the fragility probe's ±1 offsets: a probe date without factors
+degrades the probe, which reports its own coverage, rather than the result.
+
+### M39.3 — the engine told users dividends were included; M28 had removed them ⚠ UNREVIEWED
+`DividendPolicy` defaulted to `reinvest` on the reasoning that docs/09 folds cash dividends into
+`adj_factor`, making the stored close a total-return series that reinvestment marks to exactly.
+
+**M27 measured that and it is false.** Asked of the reference corpus, the price convention won 42
+of 45 deciding symbol-windows and matched all 25 dividend-paying symbols exactly at stored
+precision on the three windows that reproduce; M28 applied the 47 share-count actions and
+deliberately not the 38 dividend-shaped ones (`reconciliation/RECOVERED-ACTIONS.md`, "VERDICT:
+PRICE RETURN").
+
+So the engine was marking to a **price** series while the assumptions panel told the reader
+*"splits, bonuses and cash dividends are already inside it"*. Every return was understated by
+roughly the dividend yield — about 1.2% a year on NSE, compounding — and labelled as though it
+were not.
+
+Corrected: `ignore` is the default, because it is what the engine has always actually computed;
+`cash` and `reinvest` need a dividend schedule and are refused without one, with a message that
+says why. The assumptions panel now states plainly that these are price returns and are lower than
+total returns by the dividend yield. `config-form.tsx` follows.
+
+The pre-existing test asserting the old premise was **turned around rather than deleted** — it now
+pins the measured convention, and its docstring carries the evidence.
+
+### M39.4 — the accounting identity was never asserted ⚠ UNREVIEWED
+`equity == cash + invested`, every day, to the paisa. It held — but nothing checked it, and it is
+the identity that makes every other number on the page trustworthy. Asserted now, including across
+a delisting, which is the path most likely to lose a rupee because the sale happens outside the
+rebalance schedule.

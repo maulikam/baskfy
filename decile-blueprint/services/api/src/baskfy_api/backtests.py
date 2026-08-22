@@ -408,8 +408,13 @@ def assumptions(config: BacktestConfig, result: BacktestResult) -> list[str]:
         "both the buy and the sell leg. The impact model is flat, not size-dependent.",
         "Share counts are whole. What rounding leaves behind stays in cash and earns "
         + ("the benchmark's return." if config.cash_policy.value == "benchmark" else "nothing."),
-        "Prices are the adjusted series: splits, bonuses and cash dividends are already inside "
-        f"it. The dividend policy is {config.dividends.value!r}.",
+        # M39 corrected this. It used to say cash dividends were "already inside" the series,
+        # which stopped being true when M28 applied the 47 share-count actions and deliberately
+        # not the 38 dividend-shaped ones. A backtest that quietly omits the dividend yield is
+        # one thing; one that tells the reader it included it is another.
+        "Prices are adjusted for splits and bonuses. They are NOT adjusted for cash dividends, "
+        "so every return here is a PRICE return and is lower than a total return by roughly the "
+        f"dividend yield. The dividend policy is {config.dividends.value!r}.",
         "Index membership before the first NSE constituent file NSE publishes is RECONSTRUCTED "
         "from the earliest file available (index_member_daily.source). Any part of this run that "
         "falls in that period rests on membership we inferred, not membership we observed.",

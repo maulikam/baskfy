@@ -264,7 +264,7 @@ async def test_a_rebalance_date_with_no_factor_rows_is_refused(session: AsyncSes
 
 
 async def test_the_refusal_names_the_dates_so_it_can_be_acted_on(session: AsyncSession) -> None:
-    """"Something is missing" is not a bug report. The message has to say what and what to do."""
+    """ "Something is missing" is not a bug report. The message has to say what and what to do."""
     await _seed_market(session)
     config = _config()
     await session.execute(delete(FactorDaily))

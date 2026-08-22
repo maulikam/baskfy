@@ -5,3 +5,6 @@
 _to_delete/
 *.tar.gz
 baskfy-safety/
+
+# tools/coverage-combined.sh's scratch directory: two suites' raw coverage data, combined.
+.coverage-combined/

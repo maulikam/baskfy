@@ -39,6 +39,12 @@ D=decile-blueprint
 K=kite-momentum-rebalancer
 have_pg() { docker exec baskfy-postgres pg_isready -U baskfy >/dev/null 2>&1; }
 
+# The workflow sets this at job level; this script never did, so every "coverage gate" run here
+# skipped the db-marked suites and the gate refused to report a number it did not trust. The
+# port is 5433 because that is what infra/docker/compose.yml publishes locally; CI's service
+# container is on 5432.
+export BASKFY_TEST_DATABASE_URL="${BASKFY_TEST_DATABASE_URL:-postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_test}"
+
 echo "== namespace =="
 run namespace "No namespace token survived the rename" . "tools/check-namespace.sh"
 
@@ -50,7 +56,9 @@ echo "== python =="
 run python "uv sync --frozen" "$D" "uv sync --frozen"
 run python "Lint and type-check" "$D" "uv run ruff check . && uv run ruff format --check . && uv run mypy"
 if have_pg; then
-  run python "Tests, with per-package coverage gates" "$D" "uv run pytest --cov --cov-report=json:coverage.json && uv run python -m tools.coverage_gate --report coverage.json"
+  # Both suites, combined. M15-M17 moved the desk's modules into packages/core and left their
+  # tests in the desk's tree, so measuring only this one reports code as untested that is not.
+  run python "Tests, with per-package coverage gates (both suites)" "." "tools/coverage-combined.sh"
   run python "Hot-query plans have not regressed" "$D" "uv run pytest -q services/api/tests/test_query_plans.py"
 else
   run python "Tests (no database: db-marked suites skip)" "$D" "uv run pytest"

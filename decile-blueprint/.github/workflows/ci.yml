@@ -54,7 +54,12 @@ jobs:
       # baskfy_core slide while baskfy_worker climbed.
       - name: Tests, with per-package coverage gates
         run: |
-          uv run pytest --cov --cov-report=term-missing --cov-report=json:coverage.json
+          # Benchmarks are deselected here and run in their own step below, without coverage.
+          # A p95 latency budget measured under a line profiler measures the profiler:
+          # test_load.py passes standalone and fails under --cov, every time. The
+          # `benchmark` marker exists for exactly this distinction -- "measures a docs/11
+          # performance budget rather than asserting behaviour".
+          uv run pytest -m "not benchmark" --cov --cov-report=term-missing --cov-report=json:coverage.json
           uv run python -m tools.coverage_gate --report coverage.json
       - uses: actions/upload-artifact@v4
         if: always()

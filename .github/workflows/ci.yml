@@ -56,14 +56,24 @@ jobs:
           uv run ruff format --check .
           uv run mypy
       # Prompt 19 §1: ">= 90% on packages/core, >= 80% on services/api. Fail CI below those
-      # thresholds." Coverage is measured on the same run that asserts behaviour, so the numbers
-      # cannot come from a second, differently-configured invocation. The gate itself is
+      # thresholds." Coverage still comes from the runs that assert behaviour rather than from a
+      # second, differently-configured invocation — there are simply two such runs now, the
+      # screener's suite and the desk's, and they are combined. The gate itself is
       # `tools/coverage_gate.py`, which is per package — a single --cov-fail-under would let
       # baskfy_core slide while baskfy_worker climbed.
       - name: Tests, with per-package coverage gates
         run: |
-          uv run pytest --cov --cov-report=term-missing --cov-report=json:coverage.json
-          uv run python -m tools.coverage_gate --report coverage.json
+          # Benchmarks are deselected and run in their own step below, without coverage: a p95
+          # latency budget measured under a line profiler measures the profiler, and test_load.py
+          # passes standalone while failing under --cov every time. The `benchmark` marker exists
+          # for exactly this distinction -- "measures a performance budget rather than asserting
+          # behaviour".
+          # Both suites. M15-M17 moved the desk's modules into packages/core and left their
+          # tests in the desk's tree, so measuring only this one reports code as untested that is
+          # not -- exposure/regime.py reads 39% alone and 95% combined. See
+          # tools/coverage-combined.sh.
+          # The script runs both suites, combines them, writes coverage.json and runs the gate.
+          ../tools/coverage-combined.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

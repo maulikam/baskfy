@@ -52,6 +52,21 @@ src = ["packages/core/src", "packages/providers/src", "services/api/src", "servi
 select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "RUF", "TID", "PL"]
 ignore = []
 
+[tool.ruff.format]
+# THE FORMATTER DOES NOT TOUCH THE MOVED EXPOSURE OVERLAY, AND THAT RULE WAS PAID FOR.
+#
+# These two files are byte-identical to code that has been deciding this book's equity sleeve, and
+# M15's acceptance is that they did not change. A repo-wide `ruff check --fix` plus `ruff format`
+# rewrote 509 lines of them in one command -- reflowing frozensets, rewriting quoted annotations,
+# moving Iterable/Mapping/Sequence from typing to collections.abc, and deleting a `replace` import
+# it judged unused because the only consumers reach it through the desk's star re-export. Five desk
+# tests went red and the cause was a formatter, not a decision.
+#
+# They are excluded from formatting, not from linting: `ruff check` still reads them, with the
+# rules that would demand restructuring scoped in per-file-ignores below and its reasons given
+# there. Whoever types these properly (docs/DECISIONS-MERGE.md M15.6) can lift this.
+exclude = ["packages/core/src/baskfy_core/exposure/*.py"]
+
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["PLR2004"]
 # Prompt 19 §3's pandas oracle is deliberately one flat transcription of docs/05, section by
@@ -67,6 +82,58 @@ ignore = []
 # constant would be a rewrite of the one file whose whole point is that it did not change, and it
 # would put the numbers a step further from the spec that defines them.
 "packages/core/src/baskfy_core/score.py" = ["PLR2004"]
+# The exposure overlay, moved from the desk at M15 and byte-identical to the code that has been
+# deciding this book's equity sleeve. regime.py is one long spec transcription: mutually exclusive
+# tier rules evaluated R4 -> R3 -> R1 -> else R2, each a named threshold from the regime spec, and
+# the solver in allocation.py takes the whole decision as parameters on purpose so that live
+# evaluation and historical replay call it identically. Splitting either to satisfy branch,
+# statement or argument limits would restructure validated trading logic to please a counter --
+# and the counters are what would be satisfied, not the reader.
+#
+# The cosmetic rules are scoped too, and deliberately. These files are byte-identical to code that
+# has been sizing real orders; reflowing a display-string table or rewriting `int(round(qty))` to
+# satisfy a counter buys no reader anything and risks a typo in arithmetic that decides how many
+# shares get bought. The same argument the alembic E501 exemption above already makes.
+"packages/core/src/baskfy_core/exposure/*.py" = [
+    "PLR0912",  # too many branches: the tier rules are a flat decision table
+    "PLR0913",  # too many arguments: every input is explicit, which is the point
+    "PLR0915",  # too many statements: same
+    "PLR2004",  # the thresholds ARE the spec
+    "UP042",    # str+Enum, not StrEnum: changing an enum's base in live trading logic
+                # is a behaviour risk with no reader benefit
+    "E501",     # a Reason -> sentence table, one line per reason
+    "RUF005",
+    "RUF046",
+    "F841",    # three dead locals; reported in DECISIONS-MERGE M15.6, not silently deleted
+    "F401",    # `replace` looks unused here and is re-exported by the desk's shim
+    "SIM114",  # merging two tier branches would hide which rule fired
+    "UP035",   # typing.Iterable/Mapping/Sequence: modernising them edits the file
+    "UP037",   # quoted annotations: same
+]
+"packages/core/src/baskfy_core/basket.py" = ["PLR0912", "PLR0913", "PLR0915", "PLR2004"]
+
+# The three modules moved from the desk at M15 (P3.1-P3.3). They are byte-identical to code that
+# has been scoring and sizing a live book, and they arrived from a tree with no type checker at
+# all, so mypy strict has never seen them.
+#
+# Typing them properly is worth doing and it is NOT a rename-and-annotate job: `dict[str, object]`
+# on one return took the error count from 26 to 50, because narrowing a payload's type surfaces
+# every downstream access at once. Doing it honestly means giving the plan, the regime state and
+# the allocation real shapes -- TypedDicts or dataclasses -- across roughly 1,900 lines whose
+# acceptance criterion this module is that they did not change.
+#
+# So: checked, not ignored. `disallow_untyped_defs` and the rest still apply; what is relaxed is
+# the strictness that only bites because the payloads are untyped dicts today. Recorded in
+# docs/DECISIONS-MERGE.md M15.6 with the work it defers.
+[[tool.mypy.overrides]]
+module = [
+    "baskfy_core.score",
+    "baskfy_core.basket",
+    "baskfy_core.exposure.*",
+]
+disallow_any_expr = false
+warn_return_any = false
+disable_error_code = ["type-arg", "operator", "arg-type", "func-returns-value"]
 
 [tool.mypy]
 python_version = "3.12"

@@ -1001,3 +1001,62 @@ what has moved and will be for what follows.
 
 **Suites at the end of this commit:** decile **1434 passed, 794 skipped**; desk **1205 passed, 17
 skipped**; `ruff check` and `ruff format --check` clean; `mypy` clean across 256 files.
+
+### M15.6 — `rebalance.py` and the exposure overlay are in core; M15 is complete ⚠ UNREVIEWED
+**`app/rebalance.py` → `baskfy_core.basket`.** Three things arrive as arguments now, each of which
+was I/O or ambient state before: `cfg` (the seventeen strategy constants), `clusters` (the
+symbol→sector mapping, whose `pd.read_csv` of `data/sectors.csv` stayed at the desk as a boundary),
+and **`tradeable` — the untouchable-instrument guard**.
+
+That last one is the place this refactor could have made the system *less* safe, so it has **no
+default**. The guard exists because `EXCLUDED_SYMBOLS` held `"SGBDE31III"` while the holding was
+`"SGBDE31III-GB"`, and the planner proposed **EXIT −392** on a ₹60 lakh position it must never
+touch. Injecting it means a caller could pass something permissive; a required keyword-only
+parameter turns "forgot the guard" into a `TypeError` at the call site instead of a silent
+behaviour change. `tests/test_basket_moved_to_core.py` asserts the signature has no default, that
+the desk binds `core.guards.assert_tradeable`, and that the planner still refuses `SGBDE31III-GB`.
+
+**Verified identical, not asserted:** the pre-move file was run out of git alongside the moved one
+over both scans at three cash levels (0, ₹2.5 L, ₹50 L) including an untouchable holding —
+**every plan identical**, modulo the per-build `plan_id`.
+
+**`app/core/regime.py` + `regime_alloc.py` → `baskfy_core.exposure`.** `regime.py` is
+**byte-identical — zero changed lines**; `allocation.py` differs in one import. Both were already
+written to core's first law, which is why the move was a `git mv`.
+
+A full replay of the 13 stored `regime_evaluations` rows was **not** performed: each carries a
+complete `input_snapshot_json`, but nothing reconstructs `IndexSignals`, `BreadthReading`,
+`BookWeights` and `ExposureSnapshot` from it. What *was* verified is that `ALGORITHM_VERSION`
+(`regime/1.0.0`) and the configuration fingerprint (`571bfb93ce64019f`) reproduce against **every**
+stored row — the fingerprint walks the whole `RegimeConfig`, so it is a real check. The replay
+harness is outstanding.
+
+### M15.7 — A repo-wide `ruff --fix` rewrote 509 lines of live trading logic ⚠ UNREVIEWED
+**My error, and the instructive one of this module.** After moving the exposure overlay I ran
+`ruff check --fix .` and `ruff format .` across the repository. They rewrote **509 lines** of code I
+had verified byte-identical minutes earlier: reflowing frozensets, unquoting annotations, moving
+`Iterable`/`Mapping`/`Sequence` from `typing` to `collections.abc`, and **deleting a `replace`
+import** judged unused because its only consumers reach it through the desk's star re-export. Five
+desk tests went red, and the cause was a formatter rather than a decision.
+
+**Restored verbatim from git**, and the rule is now in configuration so a future sweep cannot repeat
+it: `[tool.ruff.format] exclude = ["packages/core/src/baskfy_core/exposure/*.py"]`. Excluded from
+*formatting*, not from *linting* — `ruff check` still reads them, with the rules that would demand
+restructuring scoped in `per-file-ignores`, each with its reason.
+
+**Three dead locals are reported, not deleted.** `h20` and `sentinel_below_50` in
+`classify_candidate`, `by_symbol` in the allocation solver. All three are pure assignments that
+nothing reads — `h50`, `h200` and `sentinel_above_50` beside them *are* used, so these look like
+leftovers rather than a missing condition. I removed them, then restored them with the file. In
+code that sizes real orders, "looks dead" is worth a person's glance before it is worth an edit.
+
+**mypy is scoped, not silenced.** These modules arrived from a tree with no type checker. Annotating
+one return as `dict[str, object]` took the error count from **26 to 50**, because narrowing a
+payload surfaces every downstream access at once. Doing it honestly means giving the plan, the
+regime state and the allocation real shapes — TypedDicts or dataclasses — across ~1,900 lines whose
+acceptance criterion is that they did not change. So `[[tool.mypy.overrides]]` relaxes exactly the
+strictness that only bites because the payloads are untyped dicts today; `disallow_untyped_defs`
+and the rest still apply. **That typing work is the real remaining debt from M15.**
+
+**Final state:** decile **1438 passed, 794 skipped**; desk **1214 passed, 17 skipped**;
+`ruff check`, `ruff format --check` and `mypy` all clean across 260 files.

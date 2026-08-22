@@ -48,15 +48,24 @@ def test_nothing_imports_the_ambiguous_name(path: pathlib.Path) -> None:
 
 
 def test_no_module_holds_both_concepts_at_once() -> None:
-    """The failure mode docs/03 §3c actually warns about: one file reasoning about both."""
+    """The failure mode docs/03 §3c actually warns about: one file reasoning about both.
+
+    Checked on IMPORTS, not on the source text. Several modules name both concepts in prose --
+    that is how a reader learns they are different -- and a text scan would flag the very
+    documentation that prevents the confusion.
+    """
     offenders = []
     for path in _python_files():
-        src = path.read_text()
-        if path.name == "instrument_regime.py":
-            continue  # its docstring names both, on purpose
-        imports_instrument = "instrument_regime" in src
-        imports_exposure = "baskfy_core.exposure" in src or "from .exposure" in src
-        if imports_instrument and imports_exposure:
+        tree = ast.parse(path.read_text(), filename=str(path))
+        modules: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                modules.add(node.module)
+            elif isinstance(node, ast.Import):
+                modules.update(a.name for a in node.names)
+        instrument = any("instrument_regime" in m for m in modules)
+        exposure = any(m.startswith("baskfy_core.exposure") for m in modules)
+        if instrument and exposure:
             offenders.append(path.name)
     assert offenders == [], (
         f"{offenders} import both regime concepts. If that is genuinely needed, alias them at the "

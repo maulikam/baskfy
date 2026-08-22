@@ -2281,3 +2281,56 @@ bhavcopy alone and none reaches before 2024.
 **Conclusion: the history is complete with respect to what Kite can serve.** Filling the remaining
 231 needs the NSE bhavcopy archive, which is keyed by symbol rather than instrument token — a
 different module, and the same one that would fix M29.3's convention seam.
+
+---
+
+## M30 — the basket is computed once a night, not once a request
+
+`/baskets` took **67 seconds** after M29 (M29.6). Maulik chose the precompute.
+
+### M30.1 — what was actually slow ⚠ UNREVIEWED
+`baskets._bars` selects every bar the 271 scanned symbols have ever had — `where date <= :as_of`,
+no lower bound — and hands ~647,000 rows to Polars, on every page view. That was about a second at
+two years of history. Nine years is three times the rows and 67 seconds.
+
+None of it is per-request work: bars, factors and `data_version` change once a night.
+
+**Result: 67s → 0.21s**, and the page renders identical content.
+
+### M30.2 — step 11, after `publish`, and last on purpose ⚠ UNREVIEWED
+`refresh_basket` joins the nightly chain **after** `publish`, because the basket is identified by
+the `data_version` publish bumps — computed earlier it would store a basket labelled with a data
+set it was not built from.
+
+It is **last** for a different reason: it is a presentation cache. `run_refresh_basket` records its
+own failure and returns rather than raising, so a basket that cannot be built never holds back a
+`data_version` that is otherwise good — the opposite of the quality gate two steps earlier.
+
+`GET /baskets` falls back to computing live when no snapshot exists. That is not belt-and-braces:
+on a fresh database, before the first nightly run, or on a night the step was skipped for want of
+an uploaded scan, there is none. **A page that 404s on a cold cache is worse than a slow page.**
+
+### M30.3 — the payload is stored whole ⚠ UNREVIEWED
+`basket_snapshot.payload` is JSONB — the endpoint's response body, not shredded into columns. It is
+a record of what the strategy wanted on a date; nothing queries across it and the page reads one
+row. Shredding it would mean a migration every time the basket page gains a field.
+
+`computed_ms` is stored beside it so a regression like M29's shows up in the table rather than only
+in somebody's patience.
+
+### M30.4 — the test found a crash before the pipeline did ⚠ UNREVIEWED
+`build_current_basket` **returns `None`** when there is nothing to build; it does not raise. The
+first version of the step only caught exceptions, so it would have fallen through to
+`None.model_dump_json()` and taken the whole nightly run down on any day without an uploaded scan —
+precisely the failure the step exists to prevent.
+
+Found by the test written for that property, before it ran anywhere near a pipeline.
+
+### M30.5 — three gates demanded documentation, and all three were right ⚠ UNREVIEWED
+* `test_no_undocumented_tables` refused `basket_snapshot` until it was written into
+  `docs/04b-pipeline-tables-addendum.md` — "a table nobody wrote down is a table nobody maintains".
+* `test_pipeline_steps` pinned the chain at ten. Updated deliberately, with a second test asserting
+  docs/03's own ten still come first and in order, so the addition cannot mask a reordering.
+* `test_api_artifacts` refused the changed endpoint docstring until `openapi.json` was regenerated.
+* The worker conftest's truncate list had to learn the new table, or "the cache is cold" was
+  untestable — one test's snapshot survived into the next.

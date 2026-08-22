@@ -42,6 +42,9 @@ class PipelineStep(StrEnum):
     COMPUTE_MARKET_HEALTH = "compute_market_health"
     DATA_QUALITY_GATE = "data_quality_gate"
     PUBLISH = "publish"
+    #: M30. After publish, because the basket's identity includes the `data_version` publish
+    #: bumps, and because a presentation cache must never hold back a good run.
+    REFRESH_BASKET = "refresh_basket"
 
 
 #: The chain, in the order docs/03 lists it. The orchestrator walks exactly this.

@@ -64,7 +64,12 @@ from baskfy_core.models.market import (
 )
 from baskfy_core.models.pipeline import CURSOR_KIND_BARS, IngestCursor
 from baskfy_core.models.reference import Exchange, Instrument, SymbolAlias, TradingDay
-from baskfy_core.models.screens import MarketHealthDaily, Screen, ScreenRun
+from baskfy_core.models.screens import (
+    BasketSnapshot,
+    MarketHealthDaily,
+    Screen,
+    ScreenRun,
+)
 
 __all__ = [
     "ADMIN_ACTIONS",
@@ -90,6 +95,7 @@ __all__ = [
     "AuthVerificationToken",
     "Backtest",
     "Base",
+    "BasketSnapshot",
     "ConsentRecord",
     "CorporateAction",
     "EntitlementOverride",

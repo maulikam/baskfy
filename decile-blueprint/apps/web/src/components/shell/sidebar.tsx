@@ -2,7 +2,10 @@
 
 import {
   Activity,
+  ArrowLeftRight,
+  CheckCheck,
   CircleHelp,
+  Gauge,
   History,
   KeyRound,
   LayoutDashboard,
@@ -16,7 +19,9 @@ import {
   Scale,
   Table2,
   Tag,
+  TrendingUp,
   User,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -41,6 +46,11 @@ import { cn } from "@/lib/utils";
  * transition is a single layout change rather than one per item.
  */
 const ICONS: Record<NavIconName, LucideIcon> = {
+  "trending-up": TrendingUp,
+  wallet: Wallet,
+  "arrow-left-right": ArrowLeftRight,
+  gauge: Gauge,
+  "check-check": CheckCheck,
   "layout-dashboard": LayoutDashboard,
   activity: Activity,
   "table-2": Table2,

@@ -16,10 +16,17 @@ import { NAV_GROUPS, NAV_ITEMS } from "@/lib/nav";
  * the screener alone, which had no basket to show. MERGE-PROMPTS.md §M22 adds the desk's output as
  * a read-only surface, and it sits directly after Rebalance Tracker because that is the item it
  * belongs beside — what the strategy wants, next to what was actually traded.
+ *
+ * **The Desk group is M26's addition, and also deliberate.** Five of the desk console's own pages
+ * moved onto the web app, and they are grouped rather than scattered through the primary list
+ * because they answer a different kind of question: the primary group analyses a *market*, the
+ * Desk group reports a *portfolio* that is actually being traded. It sits before Account for the
+ * same reason — it is product, not settings. Every page in it is read-only; execution stays in the
+ * desk console (MERGE-PROMPTS.md §M26).
  */
 describe("the sidebar IA", () => {
-  it("has the three groups docs/08 names, in order", () => {
-    expect(NAV_GROUPS.map((group) => group.label)).toEqual([null, "Account", "Help"]);
+  it("has docs/08's groups in order, with M26's Desk group between product and settings", () => {
+    expect(NAV_GROUPS.map((group) => group.label)).toEqual([null, "Desk", "Account", "Help"]);
   });
 
   it("lists the primary group exactly as docs/08 does", () => {
@@ -34,8 +41,18 @@ describe("the sidebar IA", () => {
     ]);
   });
 
-  it("lists the account group exactly as docs/08 does", () => {
+  it("lists the desk group as M26 delivers it", () => {
     expect(NAV_GROUPS[1]?.items.map((item) => item.label)).toEqual([
+      "Performance",
+      "Holdings",
+      "Trades",
+      "Market stance",
+      "Plan vs fills",
+    ]);
+  });
+
+  it("lists the account group exactly as docs/08 does", () => {
+    expect(NAV_GROUPS[2]?.items.map((item) => item.label)).toEqual([
       "Pricing",
       "Invoices",
       "Profile",
@@ -44,7 +61,7 @@ describe("the sidebar IA", () => {
   });
 
   it("lists the help group exactly as docs/08 does", () => {
-    expect(NAV_GROUPS[2]?.items.map((item) => item.label)).toEqual(["FAQ", "Blog", "Support"]);
+    expect(NAV_GROUPS[3]?.items.map((item) => item.label)).toEqual(["FAQ", "Blog", "Support"]);
   });
 
   it("uses the routes docs/08 §Routes and docs/01 §1 name", () => {
@@ -53,6 +70,15 @@ describe("the sidebar IA", () => {
     expect(byLabel.get("Market Health")).toBe("/market-health");
     expect(byLabel.get("Screens")).toBe("/screens");
     expect(byLabel.get("Listings")).toBe("/listings");
+  });
+
+  it("points the desk group at the M26 routes", () => {
+    const byLabel = new Map(NAV_ITEMS.map((item) => [item.label, item.href]));
+    expect(byLabel.get("Performance")).toBe("/performance");
+    expect(byLabel.get("Holdings")).toBe("/holdings");
+    expect(byLabel.get("Trades")).toBe("/tradebook");
+    expect(byLabel.get("Market stance")).toBe("/regime");
+    expect(byLabel.get("Plan vs fills")).toBe("/reconcile");
   });
 
   it("gives every not-yet-built destination a prompt to point at", () => {

@@ -62,7 +62,12 @@ export type NavIconName =
   | "key-round"
   | "circle-help"
   | "newspaper"
-  | "life-buoy";
+  | "life-buoy"
+  | "trending-up"
+  | "wallet"
+  | "arrow-left-right"
+  | "gauge"
+  | "check-check";
 
 export const NAV_GROUPS: readonly NavGroup[] = [
   {
@@ -77,6 +82,22 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: "/baskets", label: "Baskets", icon: "briefcase", status: "ready" },
       { href: "/backtests", label: "Backtests", icon: "history", status: "ready" },
       { href: "/listings", label: "Listings", icon: "list", status: "ready" },
+    ],
+  },
+  // M26. The desk's read-only surfaces, gathered rather than scattered through the primary
+  // group. docs/08's IA predates the merge and describes the screener alone; these five are the
+  // desk's own console pages, and grouping them says what they are -- the record of a portfolio
+  // that is actually being traded, as against the screener's analysis of a market.
+  //
+  // Every one is read-only. Execution stays in the desk console (MERGE-PROMPTS.md §M26, D3).
+  {
+    label: "Desk",
+    items: [
+      { href: "/performance", label: "Performance", icon: "trending-up", status: "ready" },
+      { href: "/holdings", label: "Holdings", icon: "wallet", status: "ready" },
+      { href: "/tradebook", label: "Trades", icon: "arrow-left-right", status: "ready" },
+      { href: "/regime", label: "Market stance", icon: "gauge", status: "ready" },
+      { href: "/reconcile", label: "Plan vs fills", icon: "check-check", status: "ready" },
     ],
   },
   {

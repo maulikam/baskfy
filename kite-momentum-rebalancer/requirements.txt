@@ -27,3 +27,11 @@ httpx2==2.10.0            # starlette TestClient
 # be observed; the box installs what it wants. Each view is still off unless its environment
 # variable is set.
 prometheus_client==0.24.1
+
+# --- M21/M22: the desk's tests measure packages/core too --------------------------------------
+# M15-M17 moved the score, the basket engine, the exposure overlay and the cost model into
+# packages/core and left their tests here. tools/coverage-combined.sh runs this suite with
+# coverage over baskfy_core and combines it with the screener's, because a gate that counts only
+# one suite reports code as untested that is not: exposure/regime.py reads 39% alone and 95%
+# combined, and nothing about the code differs between those numbers.
+pytest-cov==7.0.0

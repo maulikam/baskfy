@@ -49,16 +49,8 @@ const RASTER_OUT = join(WEB, "brand-src", "mark-master.png");
 /** The master's edge, in pixels. Every exported size is a downsample of this. */
 const MASTER = 4096;
 
-/**
- * Air around the art in the *SVG*, as a fraction of its longest edge — and it is zero.
- *
- * Padding belongs to an icon, not to a logo. A favicon or a touch icon is cropped and masked by
- * the operating system, so its raster needs a margin baked in; `build_brand.py` adds that on its
- * own. An SVG dropped into a 28px slot beside 17px type has no such problem, and any margin here
- * comes straight off the mark's optical size — which is exactly what the first attempt got wrong.
- * The viewBox is tight to the ink and the consumer decides how big to draw it.
- */
-const PAD = 0;
+/** Air around the art in the square *icon* master. The served SVG is cropped tight; see `crop`. */
+const PAD = 0.04;
 
 /** Decimal places kept in path data. See the header. */
 const PRECISION = 1;
@@ -79,18 +71,35 @@ function optimise(svg) {
     .trim();
 }
 
+const round = (v) => Number(v.toFixed(PRECISION));
+
 /**
- * Replace the viewBox with a padded square around the art's real bounds.
+ * Crop the viewBox to the art's real bounds, keeping its own proportions.
  *
- * The supplied file is 1833×1716 and the ink does not fill it. Squaring it here means every
- * consumer — a 28px header slot, a 512px icon, a share card — can drop it into a square box
- * without each one re-deriving the same centring.
+ * The supplied file draws its mark inside a canvas the ink does not fill, and the mark is not
+ * square — the current one is a portrait lettermark at roughly 0.69:1. **This is the file the
+ * browser gets**, so it keeps that shape: a portrait mark stretched into a square box beside a
+ * line of type has to shrink to fit the width it does not need, which is what made the previous
+ * one look undersized. The header sizes it by height and lets the width follow.
+ */
+function crop(svg, box) {
+  return svg.replace(
+    /viewBox="[^"]*"/,
+    `viewBox="${round(box.x)} ${round(box.y)} ${round(box.width)} ${round(box.height)}"`,
+  );
+}
+
+/**
+ * The same art centred in a padded square — the shape an *icon* has to be.
+ *
+ * Only the raster master is built from this. A favicon, a touch icon and a share card are all
+ * square by definition and are cropped and masked by an operating system, so they need both the
+ * square canvas and the margin; `PAD` exists for them and for nothing else.
  */
 function square(svg, box) {
   const side = Math.max(box.width, box.height) * (1 + 2 * PAD);
   const x = box.x + box.width / 2 - side / 2;
   const y = box.y + box.height / 2 - side / 2;
-  const round = (v) => Number(v.toFixed(PRECISION));
   return svg.replace(
     /viewBox="[^"]*"/,
     `viewBox="${round(x)} ${round(y)} ${round(side)} ${round(side)}"`,
@@ -111,10 +120,11 @@ try {
   });
   await measure.close();
 
+  const cropped = crop(optimised, box);
   const squared = square(optimised, box);
   mkdirSync(dirname(SVG_OUT), { recursive: true });
   mkdirSync(dirname(RASTER_OUT), { recursive: true });
-  writeFileSync(SVG_OUT, `${squared}\n`);
+  writeFileSync(SVG_OUT, `${cropped}\n`);
 
   const page = await browser.newPage({
     viewport: { width: MASTER, height: MASTER },
@@ -127,10 +137,12 @@ try {
   writeFileSync(RASTER_OUT, await page.screenshot({ omitBackground: true, type: "png" }));
   await page.close();
 
-  const gzipped = (await import("node:zlib")).gzipSync(squared, { level: 9 }).length;
-  console.log(`ink bbox      ${Math.round(box.width)} x ${Math.round(box.height)}`);
-  console.log(`logo.svg      ${squared.length.toLocaleString()} bytes (${gzipped.toLocaleString()} gzipped)`);
-  console.log(`mark-master   ${MASTER}px transparent`);
+  const gzipped = (await import("node:zlib")).gzipSync(cropped, { level: 9 }).length;
+  const ratio = (box.width / box.height).toFixed(3);
+  console.log(`ink bbox      ${Math.round(box.width)} x ${Math.round(box.height)}  (${ratio}:1)`);
+  console.log(`logo.svg      ${cropped.length.toLocaleString()} bytes (${gzipped.toLocaleString()} gzipped)`);
+  console.log(`mark-master   ${MASTER}px transparent, squared`);
+  console.log(`ASPECT        ${ratio}  <- wordmark.tsx must match`);
 } finally {
   await browser.close();
 }

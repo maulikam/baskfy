@@ -22,6 +22,7 @@ from __future__ import annotations
 import datetime as dt
 import inspect
 import time
+from dataclasses import replace
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from itertools import pairwise
@@ -857,3 +858,84 @@ def test_fifteen_year_monthly_backtest_over_twenty_positions_is_under_ten_second
             "dataset, which holds no price history (docs/DECISIONS.md §15)"
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# M39: a blindfolded rebalance is not a decision to hold cash
+# ---------------------------------------------------------------------------
+
+
+class TestBlindRebalances:
+    """The engine cannot tell "the screen excluded everything" from "there were no factor rows".
+
+    Both arrive as an empty frame and both send the book to cash, which means a run whose data is
+    missing produces a plausible equity curve rather than an error. The engine is not the layer
+    that can distinguish them — it never sees the database — so it counts them instead, and the
+    loader that *does* know refuses (`baskfy_worker.backtest._require_factor_coverage`).
+
+    Found by running a real 2022-2026 monthly test against nine years of Kite history: the screen
+    had factor rows on 15 of 57 rebalance dates and the run reported +13.8% without a murmur.
+    """
+
+    def test_an_empty_screen_is_counted_rather_than_passed_over(self) -> None:
+        _, data, schedule = _market_and_data()
+        blinded = set(schedule[::2])
+        emptied = {
+            day: (frame.clear() if day in blinded else frame)
+            for day, frame in data.screens.items()
+        }
+        result = run_backtest(_config(), replace(data, screens=emptied))
+
+        # The last rebalance date is decided but never filled — there is no next trading day
+        # inside the window — so the engine never reaches its screen. Everything else is counted.
+        assert set(result.blind_rebalances) == blinded - {schedule[-1]}
+        assert result.blind_fraction > Decimal("0.4")
+
+    def test_a_run_whose_screens_all_work_reports_none(self) -> None:
+        _, data, _ = _market_and_data()
+        result = run_backtest(_config(), data)
+
+        assert result.blind_rebalances == ()
+        assert result.blind_fraction == Decimal(0)
+
+    def test_the_overlay_going_to_cash_is_not_counted_as_blind(self) -> None:
+        """A deliberate move to cash is a decision. Only an empty *screen* is blindness.
+
+        Without this the count would fire on every risk-off month and mean nothing.
+        """
+        _, data, _ = _market_and_data()
+        result = run_backtest(_config(risk_overlay=RiskOverlay(enabled=True)), data)
+
+        assert result.blind_rebalances == ()
+
+
+class TestTheBookAddsUp:
+    """`equity == cash + invested`, on every single day of the run.
+
+    Not covered before M39, and it is the one identity that makes every other number on the page
+    trustworthy: a curve that does not reconcile with its own two components is a curve nobody can
+    act on. Asserted to the paisa rather than approximately -- these are `Decimal` throughout, and
+    a rounding drift is exactly the sort of bug this would otherwise hide.
+    """
+
+    def test_equity_reconciles_every_day(self) -> None:
+        _, data, _ = _market_and_data()
+        result = run_backtest(_config(), data)
+
+        assert len(result.equity) == len(result.cash) == len(result.invested) == len(result.dates)
+        for day, equity, cash, invested in zip(
+            result.dates, result.equity, result.cash, result.invested, strict=True
+        ):
+            assert equity == cash + invested, f"{day} does not reconcile"
+
+    def test_it_reconciles_with_a_delisting_in_the_window(self) -> None:
+        """The path most likely to lose a rupee: a forced sale outside the rebalance schedule."""
+        _, data, _ = _market_and_data(delist=(7, dt.date(2012, 6, 15)))
+        # Hold the whole universe, so the delisted name is certainly on the book when it stops.
+        result = run_backtest(_config(selection=SelectionSpec(top_n=40, hold_buffer=0)), data)
+
+        assert result.delistings
+        for equity, cash, invested in zip(
+            result.equity, result.cash, result.invested, strict=True
+        ):
+            assert equity == cash + invested

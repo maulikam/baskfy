@@ -14,12 +14,16 @@ import { cn } from "@/lib/utils";
  *
  * ## Sizing
  *
- * The mark is set against the **cap height of the word beside it, not its font size**, which is
- * the whole reason the first attempt looked undersized. "Baskfy" at 17px has a cap height near
- * 12px; a 28px mark carrying 6% of baked-in padding put roughly 25px of ink against it, and the
- * two read as different weights of the same lockup. The viewBox is tight to the ink now (padding
- * belongs to icons, which get cropped by an operating system) and the mark is drawn at 32px, so
- * the ink genuinely overhangs the type the way a lockup should.
+ * **By height, with the width left to follow.** The mark is a portrait lettermark — a ribbon "B",
+ * 0.694 as wide as it is tall — and `scripts/build-brand-svg.mjs` crops the served viewBox tight
+ * to that shape rather than squaring it. Squaring would make the mark shrink to fit a width it
+ * does not need, which is what made an earlier pass look undersized; so would the 6% of padding
+ * that pass baked into the viewBox. Padding belongs to icons, which an operating system crops.
+ *
+ * The height is set against the **cap height of the word beside it, not its font size**: "Baskfy"
+ * at 18px has a cap height near 13px, so a 34px mark overhangs the type the way a lockup should.
+ * `width` and `height` on the element are the intrinsic ratio — they reserve the right box before
+ * the file arrives, so the header does not reflow — and the class sizes it.
  *
  * **One component, every surface.** The top navigation, the sign-in card, the public header and
  * the public footer all render this, so the mark cannot be one size here and another there — which
@@ -47,8 +51,9 @@ export function Wordmark({ className, markOnly = false }: WordmarkProps) {
       <Image
         src="/brand/logo.svg"
         alt=""
-        width={32}
-        height={32}
+        /* The mark's own proportions, 776 x 1118. `build-brand-svg.mjs` prints the ratio. */
+        width={24}
+        height={34}
         priority
         /*
          * `unoptimized` because there is nothing to optimise: the optimiser resizes and re-encodes
@@ -58,7 +63,7 @@ export function Wordmark({ className, markOnly = false }: WordmarkProps) {
          * straight from `/public` skips a `/_next/image` round trip it would fail anyway.
          */
         unoptimized
-        className="size-8 shrink-0"
+        className="h-[34px] w-auto shrink-0"
       />
       {markOnly ? null : (
         <span className="font-display text-[1.125rem] font-semibold tracking-[-0.035em]">

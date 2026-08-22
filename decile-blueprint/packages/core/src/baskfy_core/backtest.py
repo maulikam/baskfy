@@ -15,7 +15,7 @@ The execution model, step for step (docs/10 §"Execution model")
    raises if a row carries a date later than the clock (deliverable 2).
 2. Target = the top ``top_n``, widened by the **hold buffer**: a name already held is retained
    while its rank is ``<= top_n + hold_buffer``. The rule is not reimplemented here — it is
-   :func:`baskfy_core.rebalance.plan_rebalance`, the same function the rebalance tracker calls,
+   :func:`baskfy_core.rank_buffer.plan_rebalance`, the same function the rebalance tracker calls,
    so the two surfaces cannot disagree about what "inside the buffer" means.
 3. Target weights come from ``weighting``, are clipped by ``position_limits`` and renormalised.
    Clipping and renormalising fight each other, so :func:`apply_position_limits` iterates to a
@@ -61,7 +61,7 @@ import numpy as np
 import polars as pl
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from baskfy_core.rebalance import HeldName, ScreenRank, plan_rebalance
+from baskfy_core.rank_buffer import HeldName, ScreenRank, plan_rebalance
 
 __all__ = [
     "BASIS_POINTS",
@@ -1264,7 +1264,7 @@ def _decide(  # noqa: PLR0913, PLR0917 - a decision joins the screen, the book a
             for instrument_id, position in sorted(positions.items())
             if position.quantity > 0
         ]
-        # The rank-buffer rule is `baskfy_core.rebalance`, not a second copy of it: the tracker
+        # The rank-buffer rule is `baskfy_core.rank_buffer`, not a second copy of it: the tracker
         # and the backtest must never disagree about what "inside the buffer" means.
         plan = plan_rebalance(
             (

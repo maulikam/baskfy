@@ -1,6 +1,6 @@
 """Portfolios, symbol resolution and rebalance execution — docs/07 §"Portfolios & rebalance".
 
-The database half of Prompt 14. ``baskfy_core.rebalance`` owns the *rule* and
+The database half of Prompt 14. ``baskfy_core.rank_buffer`` owns the *rule* and
 ``baskfy_core.portfolio_csv`` owns the *parser*; both are pure. This module is the I/O between
 them: resolving a symbol to an ``instrument`` row, loading a portfolio's holdings, running the
 screen the rebalance is measured against, and writing the history row.
@@ -54,7 +54,7 @@ from baskfy_core.portfolio_csv import (
     SymbolShape,
     UnmatchedReason,
 )
-from baskfy_core.rebalance import HeldName, RebalancePlan, ScreenRank, plan_rebalance
+from baskfy_core.rank_buffer import HeldName, RebalancePlan, ScreenRank, plan_rebalance
 from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 
@@ -394,7 +394,7 @@ async def run_rebalance(  # noqa: PLR0913 - the screen, the date and the two rul
     JSON bytes on a hit and no object graph, and the rule needs ``instrument_id`` per row, which
     the payload does not carry. The cost is one query on a request that is already doing several,
     and the alternative — re-parsing the cached payload and matching on symbol — is exactly the
-    string-matching the rule refuses to do (``baskfy_core.rebalance.plan_rebalance``).
+    string-matching the rule refuses to do (``baskfy_core.rank_buffer.plan_rebalance``).
     """
     requested = requested_as_of if requested_as_of is not None else definition.historical_date
     resolution = await resolve_as_of(session, requested)

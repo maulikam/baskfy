@@ -4,7 +4,7 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M17 · M11/M12 red; M13–M14 blocked by rule 7 · **State:** running autonomously
+**Run started:** 22 Aug 2026 · **Current module:** M18 · M11/M12 red; M13–M14 blocked by rule 7 · **State:** running autonomously
 
 Since 22 Aug 2026 this is an **autonomous run** under `CLAUDE.md` §Autonomy charter:
 judgement calls are decided, recorded in `DECISIONS-MERGE.md` (tagged `⚠ UNREVIEWED`
@@ -34,8 +34,8 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M14 | Breadth + shadow harness | — | | |
 | M15 | Desk brains → core | ✅ done | 22 Aug 2026 | score, costs, basket and the exposure overlay all in core. Outputs **verified identical**; `regime.py` byte-identical. Typing debt recorded (M15.7) |
 | M16 | Execution package + broker split | ✅ done | 22 Aug 2026 | `packages/execution` created; guards/risk/ratelimit **byte-identical**; 7 non-negotiables have 16 named tests; token encrypted at rest (M16.1–M16.4) |
-| M17 | Rank buffer demoted | 🔄 next | | |
-| M18 | Database migration | — | | **HUMAN GATE** |
+| M17 | Rank buffer demoted | ✅ done | 22 Aug 2026 | One band predicate, called by both; plans unchanged. **First-ever Playwright run: portfolios 4 passed** (M17.1–M17.2) |
+| M18 | Database migration | 🔄 next | | Autonomous behind four preconditions |
 | M19 | Schedules → Celery | — | | |
 | M20 | Observability + runbook 6 | — | | |
 | M21 | Verification + handover | — | | |
@@ -228,6 +228,21 @@ history is an open question for M9 (`DECISIONS-MERGE.md` M0.9).
 It allows exactly `decile_1`…`decile_6` (the D1–D6 public API values), `DECILE_RANK_KEY` and
 `decile_bucket`, and excludes both trees' `docs/` plus the two documents that instruct the rename.
 Run it from the repository root; it exits non-zero and prints `file:line: token` on any violation.
+
+## Running the browser suite locally
+
+`playwright.config.ts` migrates and seeds `baskfy_e2e` but does **not create** it. CI does that
+explicitly; nothing local did, which is why the suite had never run. Create it once:
+
+```bash
+docker exec baskfy-postgres psql -U baskfy -d postgres -c "CREATE DATABASE baskfy_e2e;"
+docker exec baskfy-postgres psql -U baskfy -d baskfy_e2e -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
+pnpm --filter @baskfy/web exec playwright install chromium
+pnpm --filter @baskfy/web exec playwright test e2e/portfolios.spec.ts --reporter=line
+```
+
+**`e2e/portfolios.spec.ts` passes: 4 tests, 33s** (M17). The other nine journeys are still
+unexecuted.
 
 ## Two open defects the root agreement now carries
 

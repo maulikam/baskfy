@@ -351,9 +351,11 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
 - **mutmut and cosmic-ray do not work in this workspace**, and the reason is structural (editable
   src-layout packages resolved by `.pth`). `tools/mutation.py` replaces them;
   `docs/DECISIONS.md` §19.4.
-- **The ten-journey Playwright suite has never been executed.** It type-checks; no browser has run
-  it, and the backtest journey it adds has therefore never passed.
-
+- **A browser has now run part of the Playwright suite — `e2e/portfolios.spec.ts`, 4 passed, on
+  22 Aug 2026 (Baskfy M17).** It was the first execution of any spec in this repository. Two things
+  had to exist that never had: a populated database and a `baskfy_e2e` database — the config
+  migrates and seeds the latter but does not create it, which CI does explicitly and nothing local
+  did. The other nine journeys, including the backtest one, are **still unexecuted**.
 - **NO LAWYER HAS READ THE FOUR LEGAL DRAFTS.** `apps/web/src/content/legal/*.mdx` are drafts
   written by engineers from `docs/11` §Compliance and Prompt 18 §3. Each opens with a
   `DRAFT REQUIRING LEGAL REVIEW` marker in an MDX comment, asserted by

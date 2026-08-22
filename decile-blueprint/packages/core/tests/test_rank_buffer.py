@@ -14,7 +14,7 @@ from decimal import Decimal
 
 import pytest
 
-from baskfy_core.rebalance import (
+from baskfy_core.rank_buffer import (
     Action,
     ExitReason,
     HeldName,

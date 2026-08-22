@@ -16,7 +16,7 @@ which is the only arrangement in which the two can be trusted to agree.
 Why only the top ``top_n + hold_buffer`` rows are loaded
 --------------------------------------------------------
 A name ranked worse than ``top_n + hold_buffer`` is sold at the next rebalance whether it appears
-in the frame or not (``baskfy_core.rebalance`` exits it as ``rank_outside_buffer`` if it is there
+in the frame or not (``baskfy_core.rank_buffer`` exits it as ``rank_outside_buffer`` if it is there
 and as ``not_in_screen`` if it is not; the engine does not record the reason). Loading four
 thousand rows for every one of 180 rebalance dates to decide something already decided would be
 the slowest possible way to reach the same answer.

@@ -1,5 +1,17 @@
 """The rank-buffer rebalancing rule — docs/01 §8, docs/07 §"Portfolios & rebalance".
 
+RENAMED FROM ``rebalance`` AT M17 (P3.8), and demoted, because the merged system has exactly one
+basket-construction path and this is not it. :mod:`baskfy_core.basket` — the desk's engine, which
+turns ranks into orders with weights, cluster caps, cash bands, costs and stops — is that path.
+This module owns the *rule*: which held names stay, which go, and which sit in the band between.
+
+The two agree, and `basket` now says so in code rather than by coincidence. Its retention test
+`r <= n + RETENTION_BUFFER` **is** :func:`inside_hold_band`, and it calls it. Where they differ is
+the exit side: this module exits a name that falls out of the band, while the desk keeps it unless
+a challenger beats it by ``REPLACEMENT_EDGE`` points. The desk's rule is therefore this rule plus a
+score hurdle — strictly the richer of the two, and
+``packages/core/tests/test_rank_buffer_is_one_rule.py`` pins the region where they must agree.
+
 docs/01 §8 describes the reference product's tracker as a CSV diff that returns three copyable
 lists, and names the rule behind it:
 
@@ -155,6 +167,20 @@ class RebalancePlan:
     def buffer_limit(self) -> int:
         """``top_n + hold_buffer`` — the worst rank a held name may have and still be kept."""
         return self.top_n + self.hold_buffer
+
+
+def inside_hold_band(rank: int, top_n: int, hold_buffer: int) -> bool:
+    """Is a held name still inside the band that keeps it?
+
+    THE one expression of the rule, called by both consumers. docs/07 fixes the boundary in its
+    own sentence: "held names whose current rank is ``> top_n`` but ``<= top_n + hold_buffer``",
+    so ``rank == top_n + hold_buffer`` **holds** and one worse exits. ``hold_buffer = 0`` collapses
+    the band and gives the plain "rebalance to the top N" rule with no hysteresis.
+
+    It exists because the desk had the same comparison written out as ``r <= n + RETENTION_BUFFER``
+    and nothing connected the two. A rule embodied twice is a rule that drifts.
+    """
+    return rank <= top_n + hold_buffer
 
 
 def plan_rebalance(

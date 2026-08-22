@@ -34,6 +34,11 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/meta/trading-days": {"get"},
     "/meta/status": {"get"},
     "/screens": {"get", "post"},
+    # M22 (MERGE-PROMPTS.md), not docs/07 — which predates the merge and describes a screener
+    # with no basket to show. Both are GET and only GET: execution stays in the desk console, and
+    # `test_baskets_readonly.py` fails if a mutating verb ever appears on either.
+    "/baskets": {"get"},
+    "/baskets/plan": {"get"},
     "/screens/{public_id}": {"get", "patch", "delete"},
     "/screens/{public_id}/duplicate": {"post"},
     "/screens/{public_id}/run": {"post"},

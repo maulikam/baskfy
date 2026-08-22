@@ -216,3 +216,30 @@ produces it, and Prompt 12 will mount it.
 > §"Account & billing" — `/plans`, `/checkout/session`, `/webhooks/razorpay`, `/invoices*`
 > (Prompt 13). `test_api_artifacts.py` still asserts that nothing beyond the built surface is
 > exposed.
+
+## 15. `/baskets` and `/baskets/plan` are not in `docs/07`, and that is deliberate
+
+`docs/07` predates the merge. It specifies a screener's API, and a screener has no basket to show.
+`MERGE-PROMPTS.md` §M22 adds two surfaces onto the desk's output:
+
+    GET /baskets        what the momentum strategy wants to hold today
+    GET /baskets/plan   the desk's most recent rebalance plan, in full
+
+**`GET` and only `GET`, permanently.** `POST`, `PUT` and `DELETE` return `405`, and two test files
+keep it that way — `services/api/tests/test_baskets_readonly.py` on this side and
+`apps/web/src/lib/basket/__tests__/read-only.test.ts` on the web app's.
+
+That is not a style preference. Orders are placed from the desk console, for one account, its
+owner's. A web surface that could place an order for a logged-in user is a different regulated
+activity, and it would also break the rule the whole architecture rests on: `packages/execution` is
+the only path to an order, and neither of these endpoints imports it or can reach it.
+
+The basket is computed live — bars → `compute_factors` → `MomentumScan` → `baskfy_core.score` →
+the basket engine — using the desk's own configuration object rather than a restatement of its
+weights, so the web app cannot show a basket the desk would never trade. The plan is read from the
+`desk` schema M19 cut over to.
+
+`/baskets` also reports how many of the scanned symbols carry an unadjusted corporate action. A
+clean-looking list would assert a cleanliness nobody has established: on real data it is **41 of
+271**, and some of those names are excluded from the basket that should not be
+(`NEEDS-MAULIK.md` item 4).

@@ -671,6 +671,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/baskets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current Basket
+         * @description The basket the strategy wants today, computed from live bars.
+         *
+         *     Built against an all-cash book on purpose. A basket page answers *"what does the strategy
+         *     want?"*, which is a property of the market; a plan answers *"what would we have to trade?"*,
+         *     which is a property of the book. Those are different questions and `/baskets/plan` is the
+         *     other one.
+         */
+        get: operations["currentBasket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/baskets/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Latest Plan
+         * @description The desk's most recent rebalance plan, read from the `desk` schema.
+         */
+        get: operations["latestPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/checkout/session": {
         parameters: {
             query?: never;
@@ -2248,6 +2293,57 @@ export interface components {
             total_return?: number | null;
             /** Weighting */
             weighting: string;
+        };
+        /** BasketOut */
+        BasketOut: {
+            /** As Of */
+            as_of: string;
+            /** Breadth Above 20Dma */
+            breadth_above_20dma: number;
+            /** Capital */
+            capital: number;
+            /** Cash Target Pct */
+            cash_target_pct: number;
+            /** Data Version */
+            data_version: number;
+            /** Rows */
+            rows: components["schemas"]["BasketRowOut"][];
+            /** Screen Run Id */
+            screen_run_id: string;
+            /** Suspect Symbols */
+            suspect_symbols: string[];
+        };
+        /**
+         * BasketRowOut
+         * @description One name in the basket, with the score components that put it there.
+         */
+        BasketRowOut: {
+            /** A Trend */
+            a_trend?: number | null;
+            /** B Momentum */
+            b_momentum?: number | null;
+            /** C Sharpe */
+            c_sharpe?: number | null;
+            /** D Consistency */
+            d_consistency?: number | null;
+            /** E Liquidity */
+            e_liquidity?: number | null;
+            /** F Penalty */
+            f_penalty?: number | null;
+            /** Rank */
+            rank: number;
+            /** Ref Price */
+            ref_price: number;
+            /** Score */
+            score: number;
+            /** Stop */
+            stop: number;
+            /** Symbol */
+            symbol: string;
+            /** Value */
+            value: number;
+            /** Weight */
+            weight: number;
         };
         /** Body_importCsv */
         Body_importCsv: {
@@ -3830,6 +3926,30 @@ export interface components {
             symbol: string;
         };
         /**
+         * RebalanceOrderOut
+         * @description Every column the desk's Jinja plan table shows, including the pledged flag.
+         */
+        RebalanceOrderOut: {
+            /** Avg Fill Price */
+            avg_fill_price: number | null;
+            /** Filled Qty */
+            filled_qty: number | null;
+            /** Order Id */
+            order_id: string | null;
+            /** Planned Qty */
+            planned_qty: number;
+            /** Planned Ref Price */
+            planned_ref_price: number | null;
+            /** Reconciled At */
+            reconciled_at: string | null;
+            /** Side */
+            side: string;
+            /** Status */
+            status: string | null;
+            /** Symbol */
+            symbol: string;
+        };
+        /**
          * RebalanceOut
          * @description The payload as served: the stored record, plus the two columns the row itself carries.
          */
@@ -3871,6 +3991,28 @@ export interface components {
             target_weights: components["schemas"]["TargetWeightOut"][];
             /** Top N */
             top_n: number;
+        };
+        /**
+         * RebalancePlanOut
+         * @description One rebalance plan: what the desk decided to trade, and what happened to each order.
+         */
+        RebalancePlanOut: {
+            /** Constituents */
+            constituents: string[];
+            /** Created At */
+            created_at: string;
+            /** Evaluation Id */
+            evaluation_id: string | null;
+            /** Note */
+            note: string | null;
+            /** Orders */
+            orders: components["schemas"]["RebalanceOrderOut"][];
+            /** Plan Id */
+            plan_id: string;
+            /** Weights */
+            weights: {
+                [key: string]: number;
+            };
         };
         /** RebalanceScreenOut */
         RebalanceScreenOut: {
@@ -8376,6 +8518,211 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TradePage"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    currentBasket: {
+        parameters: {
+            query?: {
+                /** @description as-of; defaults to the latest bars */
+                date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasketOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    latestPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebalancePlanOut"];
                 };
             };
             /** @description Invalid screen definition */

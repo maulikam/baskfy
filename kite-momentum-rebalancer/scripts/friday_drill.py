@@ -6,6 +6,16 @@
 Generate a scan, build a plan, execute it, preview the stops. The whole loop the desk runs on a
 Friday afternoon, with `DRY_RUN=true` so nothing reaches a broker.
 
+EACH RUN LEAVES A PLAN IN THE LEDGER, AND THAT IS CORRECT
+----------------------------------------------------------
+The drill calls the real `/analyze` and the real `/execute`, and those persist. So a plan is
+recorded, with `DRY_RUN` on every one of its orders.
+
+That is deliberate. A drill that skipped the write would be exercising a *different* code path
+from the one it is meant to rehearse, which is the flaw it exists to catch rather than to have.
+The records are distinguishable from live ones by status, and they are the evidence a drill
+happened at all.
+
 IT REFUSES TO RUN WITH DRY_RUN OFF
 ------------------------------------
 Not a warning, not a prompt — a refusal, before anything is built. A drill that can place a real

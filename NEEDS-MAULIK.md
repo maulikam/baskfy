@@ -11,7 +11,22 @@ what was done meanwhile.
 
 ## Open
 
-### 3. A Kite login, when convenient — for deep history only
+### 3. A Kite login — **CLEARED 22 Aug 2026** ✅
+**Status:** done. You logged in; the bridge now works end to end. · **Raised:** M9, 22 Aug 2026
+
+**What happened when it arrived:** the bridge wrote the desk's token store and not the pipeline's,
+so `make doctor` still said `[DOWN] kite` after a successful sync. Fixed (M23.1) — one login now
+writes both. `make doctor` reports `[OK] kite` for the first time in this project.
+
+**Also learned, and it is operational:** a Kite token dies when a *new* one is minted, not only at
+06:00. Two tokens were invalidated mid-session by later logins on the box. **Re-run
+`make token-sync` after any login**, not just the first of the day (M23.4).
+
+Item 6 below is answered too: the paid historical tier **is** active, and 2011 genuinely reaches
+back. The original text follows.
+
+---
+#### (original entry)
 **Status:** open, **not blocking the run** · **Raised:** M9, 22 Aug 2026
 
 `data/.kite_token.json` is from 19 Aug and Kite mints tokens daily with no refresh, so it is
@@ -116,8 +131,29 @@ Nothing breaks until you deploy, and the equity desk is unaffected by all three.
 
 **Blocks:** nothing.
 
-### 4. Corporate-action history — the single biggest blocker on the parity gates
-**Status:** open, **blocks M13** · **Raised:** M12, 22 Aug 2026
+### 4. Corporate-action history — **A SOURCE WAS FOUND, 22 Aug 2026** 🟡
+**Status:** the source problem is solved; the fix is specified, not yet built. · **Raised:** M12
+
+**You do not need to buy a data vendor.** Kite's historical bars are *adjusted* — measured, and
+contrary to what `docs/09` assumed — while `ohlcv_daily.close_raw` holds the raw bhavcopy print.
+The ratio between the two series is therefore the missing corporate-action history itself.
+
+**85 actions recovered across 65 of the 271 corpus symbols**, 83 of them confirmed by requiring the
+ratio to be flat five trading days either side. Evidence:
+`decile-blueprint/reconciliation/RECOVERED-ACTIONS.md`. Reasoning: `DECISIONS-MERGE.md` M24.
+
+**What still needs you — see item 8.** 47 of the 85 are splits and bonuses, which are simply wrong
+data and mine to fix. The other 38 are dividends, and adjusting for those changes momentum from a
+price return to a total return. That is a strategy decision, not a bug fix.
+
+**Also urgent and already acted on:** `make backfill` as built would have written Kite's *adjusted*
+prices into `close_raw`. It was **not run** (M24.1).
+
+The original entry follows.
+
+---
+
+#### (original entry)
 
 `corporate_action` holds **four rows**. NSE's API serves only a recent window
 (`decile-blueprint/docs/DECISIONS.md` §21.8), so almost no split, bonus or dividend before the last
@@ -139,8 +175,16 @@ cause of both parity gates failing. It is more load-bearing than the window ques
 
 **Blocks:** M13 (rule 7 opens it only on empty delta tables). Does not block M15–M20.
 
-### 6. One-time: confirm the Kite app is on the paid historical-data tier
-**Status:** open, one browser check · **Raised:** M18, 22 Aug 2026
+### 6. The paid historical-data tier — **ANSWERED 22 Aug 2026, no browser needed** ✅
+**Status:** confirmed active. · **Raised:** M18, 22 Aug 2026
+
+One `historical_data()` call settled it: bars come back, not a 403, and a 2011 request returns
+January 2011. **The add-on is active and fifteen-year history is servable.** The browser check
+below is no longer needed; kept for the reasoning.
+
+---
+
+#### (original entry)
 
 **What to do, once:** open https://developers.kite.trade, find the app whose api_key fingerprints to
 `50c5bd947587`, and check whether the **historical data** add-on is active. It is ₹500/month, billed
@@ -168,6 +212,37 @@ worth to the person who might need it.
 histories live inside `baskfy/.git` — proved four separate ways at M1, because `git log --follow`
 cannot prove it for a subtree — so nothing is lost with it. Until then it costs disk and nothing
 else.
+
+### 8. **A product decision: should momentum be a price return or a total return?**
+**Status:** open, **blocks half of the corporate-action fix** · **Raised:** M24, 22 Aug 2026
+
+This is the only genuinely new question from 22 Aug, and it is yours because it changes what the
+strategy trades rather than whether the code is right.
+
+Recovering the missing corporate actions (item 4) turned up **two kinds**:
+
+* **47 splits and bonuses.** An unapplied split is simply wrong data — `NESTLEIND` did not fall 90%
+  in a day. I am treating these as a correctness fix and will apply them.
+* **38 dividends.** Kite back-adjusts for these too. Applying them makes every return in the
+  screener a **total return** rather than a **price return**.
+
+**Why it matters:** a stock yielding 4% gains 4% of momentum a year it would not otherwise have.
+Across a 271-name universe that reorders the ranking, which reorders the basket, which changes what
+the desk buys. High-yield names (PSU banks, `NATIONALUM`, `COALINDIA`-shaped stocks) rise; zero-yield
+compounders fall.
+
+**What I need from you:** which one the product means. Two ways to answer, and the second is better:
+
+1. Say which you want.
+2. **Let the reference corpus answer it.** `data/uploads/*.csv` is the answer key the whole merge is
+   graded against, and it was produced by the reference product. Whichever convention it used will
+   match on the dividend-paying names and mismatch on the other. That is a measurement, not an
+   opinion, and I can run it — it is the same arbitration M12 already performs.
+
+**Unless you say otherwise, I will do (2)**: measure which convention the corpus is consistent
+with, adopt that one, and record it. The corpus outranks my preference and yours.
+
+**Blocks:** the dividend half of item 4. The split/bonus half proceeds regardless.
 
 ### 5. Two small credential items from M16
 **Status:** informational · **Raised:** M16, 22 Aug 2026

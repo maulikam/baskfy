@@ -1782,3 +1782,97 @@ that should be committed later.
 
 The underlying cause is item 5 of `NEEDS-MAULIK.md`, still open: with
 `KITE_TOKEN_ENCRYPTION_KEY` set, no key is ever generated beside a token.
+
+---
+
+## M24 — the biggest blocker has an answer, and it was in the data all along
+
+`NEEDS-MAULIK.md` item 4 — "the single biggest blocker on the parity gates", holding M11, M12,
+M13's flag and shadow mode's first green Friday — asked for "a corporate-actions source that serves
+*history*, not a recent window". **There is one, and it is already configured.**
+
+### M24.1 — Kite's historical bars are adjusted, and docs/09 says they are not ⚠ UNREVIEWED
+`packages/providers/.../kite.py` states the assumption in capitals: *"**Kite returns unadjusted
+OHLC.** Everything from here is raw."* `upsert_bars` is built on it — it writes the provider's
+`close` straight into `close_raw`, commented "Raw in, raw out".
+
+**Measured on 22 Aug 2026, it is false.** Against the six symbols the final report names as
+carrying unadjusted history:
+
+| symbol | worst 1-day move, stored series | worst 1-day move, Kite | ratio before ex-date |
+|---|---|---|---|
+| NESTLEIND | −90.2% | +7.3% | 10.0 |
+| BAJFINANCE | −89.9% | +8.3% | 10.0 |
+| ANGELONE | −90.1% | +18.4% | 10.0 |
+| SHRIRAMFIN | −81.1% | +9.9% | 5.0 |
+| CUPID | −77.2% | −20.0% | 5.0 |
+| AARON | −44.5% | +20.0% | 2.0 |
+
+The stored series shows the split as a cliff; Kite's shows no cliff at all, and the ratio between
+them is exactly the split factor before the ex-date and 1.0 after.
+
+**Consequence, and it is the urgent half:** running `make backfill` as built would write *adjusted*
+prices into `close_raw`, the column house rule 6 defines as "the exchange print". On 2011–2023 it
+would manufacture a raw series that is not raw; on the 2024+ overlap it would overwrite genuine
+bhavcopy prints. **The backfill was therefore not run.** That is the single most consequential
+thing this session did not do.
+
+### M24.2 — the ratio between the two series *is* the missing corporate-action history ⚠ UNREVIEWED
+If one series is adjusted and the other is the exchange print, `close_raw / kite_close` is the
+cumulative adjustment still owed at each date. Every step in that ratio is a corporate action: the
+step's date is the ex-date, the size of the step is the factor.
+
+Run over the 271-symbol reference corpus (268 had both series): **85 actions recovered across 65
+symbols.** Evidence, regenerable, in `reconciliation/RECOVERED-ACTIONS.md`.
+
+**Guarded against false positives.** A one-day glitch in either series produces two opposite steps
+a day apart; a corporate action produces one step with a flat ratio either side. Requiring flatness
+to 0.5% for five trading days on both flanks confirms **83 of 85**, and rejects **none** as a
+spike — the two unconfirmed are unconfirmable rather than doubtful, both sitting at the edge of the
+observation window (NESTLEIND's split is four days into it).
+
+**Independently witnessed where a witness exists.** NSE serves only forward-dated actions, which is
+precisely why `corporate_action` holds four rows — so it cannot testify about history. The one
+recovered action that *does* have an independent record is CUPID's 4:1 bonus, ex 2026-03-09, and a
+4:1 bonus is exactly a 5× price factor. Derived: 4.9997.
+
+The recovered factors are their own evidence: 2, 5, 10, 3, 4, 6, 3/2, 4/3, 6/5 — the shapes real
+splits and bonuses actually take, on the exact names the final report named.
+
+### M24.3 — split the decision, because only half of it is mine to make ⚠ UNREVIEWED
+Classifying each factor by whether it is a ratio of small integers separates the 85 cleanly:
+
+* **47 share-count actions** (splits and bonuses) — factors of 2, 5, 10, 3, 4/3 …
+* **38 cash-shaped actions** — all clustered at 1.02–1.04, which is a dividend yield. Kite
+  back-adjusts for dividends too. `TATASTEEL` ex-2024-06-21 derives 1.0201 against a ₹3.60
+  dividend on a ~₹175 price; `HEROMOTOCO` ex-2025-02-12 derives 1.0251 against ₹100 on ~₹4,000.
+
+**Taken:** treat these as two different questions.
+
+An **unapplied split is simply wrong data** — nobody has to decide whether `NESTLEIND` fell 90% in
+a day; it did not. Recovering those 47 is a correctness fix and sits squarely inside the run's
+mandate.
+
+**Dividend adjustment is a strategy decision and is deliberately NOT taken here.** Adjusting for
+dividends turns the screener's momentum from a price return into a total return. That changes which
+stocks rank where, which changes what the desk buys — and the reference corpus is the arbiter of
+what the numbers are supposed to mean, not me. Queued for Maulik as `NEEDS-MAULIK.md` item 8.
+
+**Rejected:** backfilling Kite into `close` and leaving `close_raw` to the bhavcopy. It sounds
+tidier and it hides the evidence: the adjustment would arrive as a vendor's opinion with no
+`corporate_action` row explaining it, `adj_factor` would be a lie, and nothing downstream could
+answer "why is this price what it is?" — which is the question `docs/04` built the raw column to
+answer. Recovering the *actions* keeps the architecture's own shape: raw in, actions applied,
+adjusted out.
+
+**Reverse:** the derivation writes rows to `corporate_action` with a distinguishing `source`, so
+every recovered row can be deleted with one predicate and `apply_adjustments` re-run.
+
+### M24.4 — what is NOT yet done ⚠ UNREVIEWED
+The derivation module is **not written**; this session established the method and the evidence and
+stopped there, because the next step writes to a table the parity gates read and the run had
+already found three defects in one afternoon. Sequenced honestly rather than half-landed:
+
+1. a module that derives actions and writes them with a `source` marker (reversible);
+2. re-run `apply_adjustments`, then M11 and M12 — the gates arbitrate, exactly as they did before;
+3. only then decide whether the deep 2011 backfill is worth running, and into which column.

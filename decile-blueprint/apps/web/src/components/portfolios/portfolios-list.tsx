@@ -10,6 +10,7 @@ import { Disclaimer } from "@/components/data/disclaimer";
 import { EmptyState } from "@/components/data/empty-state";
 import { ErrorState } from "@/components/data/error-state";
 import { UploadCard } from "@/components/portfolios/upload-card";
+import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ import {
   useDeletePortfolio,
   usePortfolios,
 } from "@/lib/portfolios/queries";
+import { PAGES } from "@/lib/vocabulary";
 
 /**
  * `/portfolios` — docs/08 §Routes marks it client-rendered, and it is step 1 of the wizard:
@@ -57,24 +59,22 @@ export function PortfoliosList({ initial, error }: PortfoliosListProps) {
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-wrap items-center gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Rebalance Tracker</h1>
-          <p className="text-sm text-muted-foreground">
-            Keep a portfolio here, then diff it against any screen with a hold buffer.
-          </p>
-        </div>
-        <Button
-          variant={showUpload ? "secondary" : "primary"}
-          size="sm"
-          className="ml-auto"
-          onClick={() => setShowUpload((open) => !open)}
-          data-testid="toggle-upload"
-        >
-          <Plus aria-hidden="true" />
-          {showUpload ? "Close" : "New portfolio"}
-        </Button>
-      </header>
+      <PageHeader
+        title={PAGES["/portfolios"].title}
+        blurb={PAGES["/portfolios"].blurb}
+        actions={
+          <Button
+            variant={showUpload ? "outline" : "primary"}
+            size="sm"
+            onClick={() => setShowUpload((open) => !open)}
+            data-testid="toggle-upload"
+          >
+            <Plus aria-hidden="true" />
+            {showUpload ? "Close" : "New portfolio"}
+          </Button>
+        }
+        meta="Upload what you hold, pick a search to compare it against, and see which names would come in and which would go out."
+      />
 
       {showUpload ? (
         <div className="space-y-4">

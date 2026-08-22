@@ -68,7 +68,7 @@ export default async function AdminPublicApiPage() {
         </dd>
       </dl>
 
-      <section className="space-y-2 rounded-md border border-border bg-muted/40 p-4">
+      <section className="space-y-2 rounded-xl border border-border/70 bg-muted/50 p-4">
         <h2 className="text-sm font-medium">The requirement, from docs/11</h2>
         <p className="max-w-prose text-sm text-muted-foreground">{data.requirement}</p>
       </section>

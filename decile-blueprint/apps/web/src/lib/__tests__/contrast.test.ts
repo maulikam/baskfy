@@ -106,6 +106,28 @@ describe("the token palette", () => {
       expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
     });
 
+    /**
+     * M36. `--brand` is `DESIGN.md`'s `#ff4f00` at its exact brand value, and it exists precisely
+     * because that value **fails** as text — 3.27:1 on the canvas. Splitting it out of `--accent`
+     * is only honest if the token it moved into is checked too; otherwise the rule was not
+     * satisfied, it was routed around.
+     *
+     * So the pair is asserted here in the form it is actually used: a fill, with a label on top.
+     * Note what is deliberately NOT asserted — `--brand` against the page background — because
+     * nothing renders it as text, and asserting it would fail a colour that is used correctly.
+     * `no-brand-as-text.test.ts` is what holds that second half of the bargain.
+     */
+    it("keeps the brand fill legible under its own label", () => {
+      const ratio = contrastRatio(
+        tokens["--brand-foreground"] as string,
+        tokens["--brand"] as string,
+      );
+      expect(
+        ratio,
+        `--brand-foreground on --brand in ${name} is ${ratio.toFixed(2)}:1`,
+      ).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+    });
+
     it("keeps positive and negative distinguishable from each other", () => {
       // Not a WCAG rule, but the pair carries meaning (docs/11 §Accessibility), and two colours
       // of near-identical luminance are the same colour to a monochrome display.

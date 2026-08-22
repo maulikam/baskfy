@@ -460,3 +460,38 @@ skips with a message that reads like the stack is down.
 9. M1 restored untracked state by `rsync --ignore-existing` from the rollback copy. Verified
    afterwards: `portfolio.db` md5 `ae13b32fb9069e62327b02e712139bde` unchanged, integrity `ok`,
    8198/9262/8/133 rows, the 6-CSV `data/uploads/` corpus intact, and **no `.env` in any commit**.
+
+### M37 — the redesign, the plain English, and the mark ✅
+
+The web app no longer looks like the product it was reproduced from, and it says what it means.
+
+**The look.** `--accent` is the ink itself: buttons, links and the active state are near-black on
+warm paper, and green and red appear only when a number went up or down. The **left sidebar is
+gone** — navigation is a two-row bar along the top, which is the largest deliberate departure from
+docs/08 in the merge (`DECISIONS-MERGE.md` §M37.3). Type is Bricolage Grotesque for headings, Geist
+for interface, Geist Mono for **every figure on the site**.
+
+**The words.** `apps/web/src/lib/vocabulary.ts` is the one place jargon becomes English — "Above
+200 DMA" renders as "Above their one-year trend", with the professional name and an explanation one
+hover *and one tab-stop* away. Nothing was renamed away; the two swapped places.
+
+**The mark.** The woven-basket logo now ships across `src/app/icon.png`, `apple-icon.png`,
+`public/brand/`, both OG cards, and the desk console's Jinja templates. `brand-src/build_brand.py`
+rebuilds the set from the master; the master itself is gitignored.
+
+**Open, and honest about it:**
+
+1. **The 16px favicon is a crop, not the mark.** The whole weave turns to mush at actual size —
+   measured, not assumed. 64px and above is the full mark; 48/32/16 and every `.ico` entry are the
+   strongest ribbon-crossing (`DECISIONS-MERGE.md` §M37.7).
+2. **The brand orange is 2.54:1 against the light canvas as a graphical fill**, marginally under
+   WCAG 1.4.11's 3:1. The active nav tab carries a hairline and `aria-current` so the colour is
+   never the only "you are here" signal. Worth a second look if the canvas ever lightens.
+3. **Answer-first is on Market mood only.** `components/shell/answer.tsx` states a page's finding
+   in a sentence above its evidence, and it is the change that most alters what a page is *for*.
+   The other surfaces still open with their measurements.
+4. **`DESIGN.md` was replaced three times during this module.** §M37.1 records the rule that came
+   out of it: read that file as a token architecture, never as a look to reproduce.
+5. **The desk console got the favicon and the brand mark, and nothing else.** Its palette is still
+   the smallcase-derived teal/blue; the two faces now share an icon, not a design.
+

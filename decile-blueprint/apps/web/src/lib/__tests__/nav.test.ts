@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { NAV_GROUPS, NAV_ITEMS } from "@/lib/nav";
+import { PAGES } from "@/lib/vocabulary";
 
 /**
  * docs/08 §"App shell" states the sidebar's contents verbatim:
@@ -8,77 +9,76 @@ import { NAV_GROUPS, NAV_ITEMS } from "@/lib/nav";
  *     "Dashboard · Market Health · Screens · Rebalance Tracker · Backtests · Listings — then
  *      Account (Pricing, Invoices, Profile, Change Password) — then Help (FAQ, Blog, Support)."
  *
- * The order is the reference product's information architecture, not a preference, so it is pinned
- * rather than described. A reordering that is deliberate updates this list; one that is accidental
- * fails here.
+ * ## What M36 changed, and what it did not
  *
- * **Baskets is the one addition, and it is deliberate.** docs/08 predates the merge: it describes
- * the screener alone, which had no basket to show. MERGE-PROMPTS.md §M22 adds the desk's output as
- * a read-only surface, and it sits directly after Rebalance Tracker because that is the item it
- * belongs beside — what the strategy wants, next to what was actually traded.
+ * Until M36 this file pinned that sentence **as words**. It now pins it **as routes**, and the
+ * words are asserted to come from `lib/vocabulary` instead.
  *
- * **The Desk group is M26's addition, and also deliberate.** Five of the desk console's own pages
- * moved onto the web app, and they are grouped rather than scattered through the primary list
- * because they answer a different kind of question: the primary group analyses a *market*, the
- * Desk group reports a *portfolio* that is actually being traded. It sits before Account for the
- * same reason — it is product, not settings. Every page in it is read-only; execution stays in the
- * desk console (MERGE-PROMPTS.md §M26).
+ * That is a change of spec, not a loosened test. Maulik's instruction of 23 Aug 2026 was to make
+ * the product readable by somebody who does not already have the vocabulary, and every one of
+ * "Market Health", "Rebalance Tracker", "Market stance" and "Plan vs fills" requires you to know
+ * the term before you can decide whether to click it. The order docs/08 records is an observation
+ * about the reference product's information architecture and is still pinned exactly; the labels
+ * were a naming choice, and the naming choice changed (`docs/DECISIONS-MERGE.md` §M36.1).
+ *
+ * The test got *stronger* in one respect: pinning routes rather than strings means a future
+ * rename cannot silently point an item somewhere else, which the old string assertions allowed.
+ *
+ * **Baskets is one addition to docs/08's list, and it is deliberate.** docs/08 predates the merge:
+ * it describes the screener alone, which had no basket to show. MERGE-PROMPTS.md §M22 adds the
+ * desk's output as a read-only surface, and it sits directly after the rebalance tracker because
+ * that is the item it belongs beside — what the strategy wants, next to what was actually traded.
+ *
+ * **The "Real money" group is M26's addition, renamed by M36.** Five of the desk console's own
+ * pages moved onto the web app, and they are grouped rather than scattered through the primary
+ * list because they answer a different kind of question: the primary group analyses a *market*,
+ * this group reports a *portfolio* that is actually being traded. It sits before Account for the
+ * same reason — it is product, not settings. Every page in it is read-only; execution stays in
+ * the desk console (MERGE-PROMPTS.md §M26).
  */
 describe("the sidebar IA", () => {
-  it("has docs/08's groups in order, with M26's Desk group between product and settings", () => {
-    expect(NAV_GROUPS.map((group) => group.label)).toEqual([null, "Desk", "Account", "Help"]);
+  it("has docs/08's groups in order, with M26's own group between product and settings", () => {
+    expect(NAV_GROUPS.map((group) => group.label)).toEqual([null, "Real money", "Account", "Help"]);
   });
 
-  it("lists the primary group exactly as docs/08 does", () => {
-    expect(NAV_GROUPS[0]?.items.map((item) => item.label)).toEqual([
-      "Dashboard",
-      "Market Health",
-      "Screens",
-      "Rebalance Tracker",
-      "Baskets",
-      "Backtests",
-      "Listings",
+  it("lists the primary group in docs/08's order, by route", () => {
+    expect(NAV_GROUPS[0]?.items.map((item) => item.href)).toEqual([
+      "/dashboard",
+      "/market-health",
+      "/screens",
+      "/portfolios",
+      "/baskets",
+      "/backtests",
+      "/listings",
     ]);
   });
 
-  it("lists the desk group as M26 delivers it", () => {
-    expect(NAV_GROUPS[1]?.items.map((item) => item.label)).toEqual([
-      "Performance",
-      "Holdings",
-      "Trades",
-      "Market stance",
-      "Plan vs fills",
+  it("lists the desk's five read-only routes as M26 delivers them", () => {
+    expect(NAV_GROUPS[1]?.items.map((item) => item.href)).toEqual([
+      "/performance",
+      "/holdings",
+      "/tradebook",
+      "/regime",
+      "/reconcile",
     ]);
   });
 
   it("lists the account group exactly as docs/08 does", () => {
-    expect(NAV_GROUPS[2]?.items.map((item) => item.label)).toEqual([
-      "Pricing",
-      "Invoices",
-      "Profile",
-      "Change Password",
+    expect(NAV_GROUPS[2]?.items.map((item) => item.href)).toEqual([
+      "/pricing",
+      "/invoices",
+      "/profile",
+      "/change-password",
     ]);
   });
 
   it("lists the help group exactly as docs/08 does", () => {
-    expect(NAV_GROUPS[3]?.items.map((item) => item.label)).toEqual(["FAQ", "Blog", "Support"]);
+    expect(NAV_GROUPS[3]?.items.map((item) => item.href)).toEqual(["/faq", "/blog", "/support"]);
   });
 
-  it("uses the routes docs/08 §Routes and docs/01 §1 name", () => {
-    const byLabel = new Map(NAV_ITEMS.map((item) => [item.label, item.href]));
-    expect(byLabel.get("Dashboard")).toBe("/dashboard");
-    expect(byLabel.get("Market Health")).toBe("/market-health");
-    expect(byLabel.get("Screens")).toBe("/screens");
-    expect(byLabel.get("Listings")).toBe("/listings");
-  });
-
-  it("points the desk group at the M26 routes", () => {
-    const byLabel = new Map(NAV_ITEMS.map((item) => [item.label, item.href]));
-    expect(byLabel.get("Performance")).toBe("/performance");
-    expect(byLabel.get("Holdings")).toBe("/holdings");
-    expect(byLabel.get("Trades")).toBe("/tradebook");
-    expect(byLabel.get("Market stance")).toBe("/regime");
-    expect(byLabel.get("Plan vs fills")).toBe("/reconcile");
+  it("has no duplicate destinations", () => {
+    const hrefs = NAV_ITEMS.map((item) => item.href);
+    expect(new Set(hrefs).size).toBe(hrefs.length);
   });
 
   it("gives every not-yet-built destination a prompt to point at", () => {
@@ -87,9 +87,35 @@ describe("the sidebar IA", () => {
       expect(item.arrivesIn, `${item.label} has no arrival`).toMatch(/^Prompt \d+$/);
     }
   });
+});
 
-  it("has no duplicate destinations", () => {
-    const hrefs = NAV_ITEMS.map((item) => item.href);
-    expect(new Set(hrefs).size).toBe(hrefs.length);
+/**
+ * M36's actual claim: the sidebar, the page heading and the browser tab say the same words,
+ * because there is only one copy of them.
+ */
+describe("the sidebar's words", () => {
+  it("takes every label and blurb from the one vocabulary record", () => {
+    for (const item of NAV_ITEMS) {
+      const entry = PAGES[item.href as keyof typeof PAGES];
+      expect(entry, `${item.href} has no vocabulary entry`).toBeDefined();
+      expect(item.label).toBe(entry.title);
+      expect(item.blurb).toBe(entry.blurb);
+    }
+  });
+
+  it("keeps the professional name for every label that replaced one", () => {
+    // The renamed items are the point of M36 — each must still be able to say what it used to be
+    // called, or an experienced user cannot find the page they already know.
+    const renamed = ["/market-health", "/portfolios", "/regime", "/reconcile", "/backtests"];
+    for (const href of renamed) {
+      const item = NAV_ITEMS.find((entry) => entry.href === href);
+      expect(item?.formerly, `${href} was renamed without keeping its old name`).toBeTruthy();
+    }
+  });
+
+  it("gives every item a blurb short enough to read in a tooltip", () => {
+    for (const item of NAV_ITEMS) {
+      expect(item.blurb.length, `${item.label}'s blurb is an essay`).toBeLessThanOrEqual(96);
+    }
   });
 });

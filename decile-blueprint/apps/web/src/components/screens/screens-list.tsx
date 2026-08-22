@@ -27,6 +27,8 @@ import {
 } from "@/lib/screens/queries";
 import { defaultDefinition } from "@/lib/screens/defaults";
 import { parseDefinition } from "@/lib/screens/url-state";
+import { PageHeader } from "@/components/shell/page-header";
+import { PAGES } from "@/lib/vocabulary";
 
 /**
  * docs/01 §1 and Prompt 9 deliverable 1:
@@ -94,37 +96,35 @@ export function ScreensList({ initial, error }: ScreensListProps) {
 
   return (
     <div className="space-y-10">
-      <header className="flex flex-wrap items-center gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Screens</h1>
-          <p className="text-sm text-muted-foreground">
-            Six read-only templates, plus whatever you save.
-          </p>
-        </div>
-        <Button
-          variant="primary"
-          size="sm"
-          className="ml-auto"
-          disabled={create.isPending}
-          onClick={() => void newScreen()}
-          data-testid="new-screen"
-        >
-          <Plus aria-hidden="true" />
-          New screen
-        </Button>
-      </header>
+      <PageHeader
+        title={PAGES["/screens"].title}
+        blurb={PAGES["/screens"].blurb}
+        actions={
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={create.isPending}
+            onClick={() => void newScreen()}
+            data-testid="new-screen"
+          >
+            <Plus aria-hidden="true" />
+            New search
+          </Button>
+        }
+        meta="Six ready-made searches you can copy and change, plus every one you save."
+      />
 
       {create.error ? <ErrorState error={create.error} /> : null}
       {duplicate.error ? <ErrorState error={duplicate.error} /> : null}
       {remove.error ? <ErrorState error={remove.error} /> : null}
 
       <Section
-        title="Your Screens"
+        title="Your searches"
         testId="your-screens"
         empty={
           <EmptyState
-            title="No screens yet"
-            reason="Screens you save appear here. Start from a template — duplicating one keeps its filters and gives you a copy you can edit."
+            title="Nothing saved yet"
+            reason="Anything you save shows up here. The quickest start is to copy one of the ready-made searches below — you get the same rules, in a copy that is yours to change."
           />
         }
         screens={mine}
@@ -136,7 +136,7 @@ export function ScreensList({ initial, error }: ScreensListProps) {
       />
 
       <Section
-        title="Example Screens"
+        title="Ready-made searches"
         testId="example-screens"
         screens={examples}
         factorLabel={factorLabel}
@@ -276,15 +276,19 @@ function ScreenCard({
 
       <dl className="space-y-1 text-xs text-muted-foreground">
         <div className="flex gap-2">
-          <dt className="w-16 shrink-0">Index</dt>
+          <dt className="w-[5.5rem] shrink-0">Stock list</dt>
           <dd className="truncate text-foreground">{universeName(definition.index)}</dd>
         </div>
         <div className="flex gap-2">
-          <dt className="w-16 shrink-0">Factor</dt>
-          <dd className="truncate text-foreground">{factorLabel(definition.sort_by)}</dd>
+          <dt className="w-[5.5rem] shrink-0">Ranked by</dt>
+          {/* Sentence case: the registry stores these shouted, and a card of three ALL-CAPS
+              values reads as an error message rather than as a description. */}
+          <dd className="truncate text-foreground first-letter:uppercase lowercase">
+            {factorLabel(definition.sort_by)}
+          </dd>
         </div>
         <div className="flex gap-2">
-          <dt className="w-16 shrink-0">Order</dt>
+          <dt className="w-[5.5rem] shrink-0">Best first</dt>
           <dd className="truncate text-foreground">{directionLabel(definition)}</dd>
         </div>
       </dl>

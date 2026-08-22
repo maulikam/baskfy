@@ -39,8 +39,8 @@ export function MarketHealthControls({
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="flex flex-col gap-1">
-        <label htmlFor="universe" className="text-xs text-muted-foreground">
-          Universe
+        <label htmlFor="universe" className="text-xs font-medium text-muted-foreground">
+          Which stocks
         </label>
         <select
           id="universe"
@@ -58,7 +58,7 @@ export function MarketHealthControls({
 
       <div
         role="group"
-        aria-label="History range"
+        aria-label="How far back to look"
         className="flex rounded-md border border-border p-0.5"
       >
         {RANGE_PRESETS.map((preset) => (

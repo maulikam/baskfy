@@ -115,14 +115,20 @@ test.describe("the account lifecycle", () => {
 
     await page.goto("/login");
     await page.getByRole("tab", { name: "One-time code" }).click();
-    await page.getByRole("textbox", { name: "Email" }).first().fill(email);
+    await page.getByRole("textbox", { name: "Email" }).fill(email);
+
+    // The code box does not exist yet, and that is the point: M36 stopped this panel asking for
+    // a code before one had been sent, and stopped it asking for the email a second time.
+    await expect(page.getByLabel("Six-digit code")).toBeHidden();
+
     await page.getByRole("button", { name: "Send me a code" }).click();
     await expect(page.getByText(/we have sent it an email/i)).toBeVisible({ timeout: 15_000 });
 
     const message = await waitForEmail(request, email, { subjectContains: "sign-in code" });
     const code = codeFrom(message);
 
-    await page.getByRole("textbox", { name: "Email" }).nth(1).fill(email);
+    // One field, not two: the address typed above travels with the code.
+    await expect(page.getByRole("textbox", { name: "Email" })).toHaveCount(1);
     await page.getByLabel("Six-digit code").fill(code);
     await page.getByRole("button", { name: "Sign in" }).click();
     await page.waitForURL(/\/screens/, { timeout: 20_000 });

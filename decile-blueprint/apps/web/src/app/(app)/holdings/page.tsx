@@ -18,6 +18,7 @@ import {
   toneOf,
 } from "@/components/desk/ui";
 import { DeskUnavailable, fetchHoldings } from "@/lib/desk/fetch";
+import { PAGES } from "@/lib/vocabulary";
 
 /**
  * `/holdings` — M26. What is actually owned, with what it has made or lost.
@@ -30,7 +31,7 @@ import { DeskUnavailable, fetchHoldings } from "@/lib/desk/fetch";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Holdings",
+  title: PAGES["/holdings"].title,
   description: "Every position currently held, with its cost, its value and what it has made.",
 };
 
@@ -42,7 +43,7 @@ export default async function HoldingsPage() {
     if (!(error instanceof DeskUnavailable)) throw error;
     return (
       <Empty
-        title="Holdings"
+        title={PAGES["/holdings"].title}
         body="No end-of-day snapshot has been recorded yet, so there is nothing to show."
       />
     );
@@ -55,20 +56,20 @@ export default async function HoldingsPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Holdings"
-        lede="Every position currently held, what it cost, and what it is worth now."
+        title={PAGES["/holdings"].title}
+        lede={PAGES["/holdings"].blurb}
         meta={`As of ${data.as_of}`}
       />
 
       <StatRow>
-        <Stat label="Positions" value={String(managed.length)} hint="managed by the strategy" />
-        <Stat label="Value" value={rupees(data.total_value - data.excluded_value)} />
+        <Stat label="Stocks held" value={String(managed.length)} hint="managed by the strategy" />
+        <Stat label="What it is worth" value={rupees(data.total_value - data.excluded_value)} />
         <Stat
-          label="Unrealised"
+          label="Profit if sold today"
           value={rupees(unrealised, { sign: true })}
           tone={toneOf(unrealised)}
         />
-        <Stat label="Pledged" value={String(pledged)} hint="held as collateral" />
+        <Stat label="Pledged" value={String(pledged)} hint="lodged with the broker as security" />
       </StatRow>
 
       {data.excluded_value > 0 && (
@@ -83,13 +84,13 @@ export default async function HoldingsPage() {
         caption={`Positions held on ${data.as_of}`}
         head={
           <>
-            <Th>Symbol</Th>
-            <Th align="right">Qty</Th>
-            <Th align="right">Avg cost</Th>
-            <Th align="right">Price</Th>
-            <Th align="right">Value</Th>
+            <Th>Stock</Th>
+            <Th align="right">Shares</Th>
+            <Th align="right">Average buy price</Th>
+            <Th align="right">Price now</Th>
+            <Th align="right">Worth now</Th>
             <Th align="right">Gain / loss</Th>
-            <Th align="right">%</Th>
+            <Th align="right">Change</Th>
           </>
         }
       >

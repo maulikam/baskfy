@@ -17,6 +17,7 @@ import {
   toneOf,
 } from "@/components/desk/ui";
 import { DeskUnavailable, fetchTradebook } from "@/lib/desk/fetch";
+import { PAGES } from "@/lib/vocabulary";
 
 /**
  * `/tradebook` — M26. Every trade the strategy has taken.
@@ -29,7 +30,7 @@ import { DeskUnavailable, fetchTradebook } from "@/lib/desk/fetch";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Trades",
+  title: PAGES["/tradebook"].title,
   description: "Every trade the strategy has taken, what it made or lost, and why it was closed.",
 };
 
@@ -53,7 +54,7 @@ export default async function TradebookPage() {
     data = await fetchTradebook();
   } catch (error) {
     if (!(error instanceof DeskUnavailable)) throw error;
-    return <Empty title="Trades" body="The desk has recorded no trades yet." />;
+    return <Empty title={PAGES["/tradebook"].title} body="The desk has recorded no trades yet." />;
   }
 
   const decided = data.winners + data.losers;
@@ -62,8 +63,8 @@ export default async function TradebookPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Trades"
-        lede="Every trade the strategy has taken, and what each one made or lost."
+        title={PAGES["/tradebook"].title}
+        lede={PAGES["/tradebook"].blurb}
         meta={`${data.total.toLocaleString("en-IN")} trades · showing the ${data.rows.length} most recent`}
       />
 
@@ -71,13 +72,13 @@ export default async function TradebookPage() {
         <Stat label="Still open" value={String(data.open_count)} />
         <Stat label="Closed" value={data.closed_count.toLocaleString("en-IN")} />
         <Stat
-          label="Realised"
+          label="Money actually made"
           value={rupees(data.realised_pnl, { sign: true })}
           tone={toneOf(data.realised_pnl)}
-          hint="closed trades, after costs"
+          hint="on closed trades, after costs"
         />
         <Stat
-          label="Won"
+          label="Trades that made money"
           value={hitRate === null ? "–" : `${hitRate.toFixed(0)}%`}
           hint={`${data.winners} up, ${data.losers} down`}
         />
@@ -87,15 +88,15 @@ export default async function TradebookPage() {
         caption="Trades, most recently closed or opened first"
         head={
           <>
-            <Th>Symbol</Th>
-            <Th align="right">Qty</Th>
+            <Th>Stock</Th>
+            <Th align="right">Shares</Th>
             <Th>Bought</Th>
             <Th align="right">At</Th>
             <Th>Sold</Th>
             <Th align="right">At</Th>
-            <Th align="right">Gain / loss</Th>
-            <Th align="right">%</Th>
-            <Th>Why closed</Th>
+            <Th align="right">Made or lost</Th>
+            <Th align="right">Change</Th>
+            <Th>Why it was sold</Th>
           </>
         }
       >

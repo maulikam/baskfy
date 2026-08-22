@@ -17,6 +17,7 @@ import {
   toneOf,
 } from "@/components/desk/ui";
 import { DeskUnavailable, fetchReconcile } from "@/lib/desk/fetch";
+import { PAGES } from "@/lib/vocabulary";
 
 /**
  * `/reconcile` — M26. Did the last plan actually happen?
@@ -30,7 +31,7 @@ import { DeskUnavailable, fetchReconcile } from "@/lib/desk/fetch";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Plan vs fills",
+  title: PAGES["/reconcile"].title,
   description: "Whether the last rebalance did what it planned to, order by order.",
 };
 
@@ -52,7 +53,7 @@ export default async function ReconcilePage() {
   } catch (error) {
     if (!(error instanceof DeskUnavailable)) throw error;
     return (
-      <Empty title="Plan vs fills" body="The desk has not recorded a rebalance plan yet." />
+      <Empty title={PAGES["/reconcile"].title} body="The desk has not recorded a rebalance plan yet." />
     );
   }
 
@@ -62,8 +63,8 @@ export default async function ReconcilePage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Plan vs fills"
-        lede="Whether the last rebalance did what it planned to, order by order."
+        title={PAGES["/reconcile"].title}
+        lede={PAGES["/reconcile"].blurb}
         meta={`Plan ${data.plan_id} · ${data.created_at}${data.note ? ` · ${data.note}` : ""}`}
       />
 
@@ -84,24 +85,24 @@ export default async function ReconcilePage() {
       )}
 
       <StatRow>
-        <Stat label="Orders" value={String(data.planned_count)} />
-        <Stat label="Filled" value={String(data.complete_count)} />
-        <Stat label="Partial" value={String(data.partial_count)} />
-        <Stat label="Nothing filled" value={String(data.unfilled_count)} />
+        <Stat label="Orders placed" value={String(data.planned_count)} />
+        <Stat label="Went through in full" value={String(data.complete_count)} />
+        <Stat label="Went through in part" value={String(data.partial_count)} />
+        <Stat label="Did not go through" value={String(data.unfilled_count)} />
       </StatRow>
 
       <Table
         caption={`Orders in plan ${data.plan_id}`}
         head={
           <>
-            <Th>Symbol</Th>
-            <Th>Side</Th>
+            <Th>Stock</Th>
+            <Th>Buy or sell</Th>
             <Th align="right">Planned</Th>
             <Th align="right">Filled</Th>
-            <Th align="right">Ref price</Th>
-            <Th align="right">Avg fill</Th>
-            <Th align="right">Difference</Th>
-            <Th>Status</Th>
+            <Th align="right">Price expected</Th>
+            <Th align="right">Price paid</Th>
+            <Th align="right">Gap</Th>
+            <Th>What happened</Th>
           </>
         }
       >

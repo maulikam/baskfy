@@ -1,6 +1,8 @@
 import type { Metadata, Route } from "next";
 import Link from "next/link";
 
+import { PageHeader } from "@/components/shell/page-header";
+import { PAGES } from "@/lib/vocabulary";
 import { ListingsFilters } from "@/components/market/listings-filters";
 import { EMPTY_CELL, formatTradeDate } from "@/lib/format";
 import { fetchListings } from "@/lib/market/fetch";
@@ -20,7 +22,7 @@ import { fetchListings } from "@/lib/market/fetch";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Listings",
+  title: PAGES["/listings"].title,
   description: "Every instrument listed on the NSE, newest first.",
 };
 
@@ -59,19 +61,18 @@ export default async function ListingsPage({
   })();
 
   return (
-    <div className="flex flex-col gap-4">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Listings</h1>
-        <p className="text-sm text-muted-foreground">
-          Every instrument on the exchange, newest listing first. {PAGE_SIZE} per page.
-        </p>
-      </header>
+    <>
+      <PageHeader
+        title={PAGES["/listings"].title}
+        blurb={PAGES["/listings"].blurb}
+        meta={`Everything trading on the exchange, most recently listed first. ${PAGE_SIZE} at a time.`}
+      />
 
       <ListingsFilters series={series} search={search} options={SERIES_OPTIONS} />
 
       {page.data.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
-          No listing matches this filter.
+          Nothing matches what you have filtered for.
         </p>
       ) : (
         <table className="w-full border-collapse text-sm">
@@ -132,6 +133,6 @@ export default async function ListingsPage({
           <p className="text-xs text-muted-foreground">End of the register.</p>
         )}
       </nav>
-    </div>
+    </>
   );
 }

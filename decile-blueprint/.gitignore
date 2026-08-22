@@ -37,3 +37,10 @@ coverage.json
 *.kite_token.json
 *.kite_token.json.key
 *.enc.key
+
+# M37: the 4096px logo master and the throwaway comparison sheets the 16px acceptance produced.
+# The build script is committed and the derived assets are committed; the 11 MB source is not —
+# it lives at the CloudFront URL recorded in docs/DECISIONS-MERGE.md §M37.1 and is re-downloadable.
+apps/web/brand-src/baskfy-mark-source.png
+apps/web/brand-src/_*.png
+apps/web/brand-src/16px-check.png

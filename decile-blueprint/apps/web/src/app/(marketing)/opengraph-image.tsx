@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { ImageResponse } from "next/og";
 
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
@@ -19,10 +22,24 @@ export const alt = `${SITE_NAME} — momentum, ranked`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-const BACKGROUND = "#0b0d11";
-const FOREGROUND = "#f4f5f7";
-const MUTED = "#9aa3b2";
-const ACCENT = "#4c8dff";
+/* The dark half of M36's palette, and the mark's own orange. Literals rather than CSS variables:
+   satori resolves no cascade, so an OG card cannot read `globals.css`. */
+const BACKGROUND = "#131310";
+const FOREGROUND = "#f0efe8";
+const MUTED = "#a3a094";
+const ACCENT = "#ff6a00";
+
+/**
+ * The mark, inlined.
+ *
+ * Read off disk and base64'd rather than fetched: an OG route renders during the build and in a
+ * serverless function, and neither is guaranteed egress to its own origin. `satori` takes a data
+ * URI happily. Same reasoning as the no-network-font constraint above.
+ */
+const MARK = `data:image/png;base64,${readFileSync(
+  join(process.cwd(), "public", "brand", "logo-mark-192.png"),
+).toString("base64")}`;
+
 
 export default function Image() {
   return new ImageResponse(
@@ -41,14 +58,19 @@ export default function Image() {
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
-          <div style={{ display: "flex", fontSize: 30, color: ACCENT, letterSpacing: "0.04em" }}>
-            {SITE_NAME.toUpperCase()}
+          <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
+            {/* satori renders raw <img>; next/image is a React component it cannot resolve. */}
+            <img src={MARK} alt="" width={64} height={64} />
+            <div style={{ display: "flex", fontSize: 34, letterSpacing: "-0.02em" }}>
+              {SITE_NAME}
+            </div>
           </div>
           <div style={{ display: "flex", fontSize: 58, lineHeight: 1.15, maxWidth: "980px" }}>
             {SITE_TAGLINE}
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          <div style={{ display: "flex", height: 5, width: 132, background: ACCENT }} />
           <div style={{ display: "flex", fontSize: 26, color: MUTED }}>
             64 published factors · 14 index universes · point-in-time membership
           </div>

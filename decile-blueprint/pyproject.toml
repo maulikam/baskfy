@@ -179,7 +179,13 @@ explicit_package_bases = true
 # sibling helper module — `stubs`, `helpers` — resolves), which makes every conftest the
 # top-level module `conftest`, and they collide. Fixtures live in conftest; everything with logic
 # worth checking lives in the helper modules and in `network_guard.py`, which are checked.
-exclude = ["(^|/)conftest\\.py$"]
+# `apps/web/brand-src/` is a build-time script, not part of any package. It imports Pillow and
+# NumPy, which are deliberately NOT project dependencies: it is run once when the logo changes,
+# via `uv run --with pillow --with numpy`, so that a raster tool nothing at runtime needs stays
+# out of the locked stack (house rule 1). mypy cannot resolve those imports and there is nothing
+# to gain by teaching it to — the alternative would be a `# type: ignore`, which house rule 3
+# forbids. Excluded here, with the reason, rather than silenced at the import site.
+exclude = ["(^|/)conftest\\.py$", "^apps/web/brand-src/"]
 files = [
     "network_guard.py",
     "packages/execution/src",

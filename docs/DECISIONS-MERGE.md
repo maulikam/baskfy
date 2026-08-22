@@ -2745,3 +2745,60 @@ type your address into two identical boxes.
 
 The address is held in state now, travels hidden, and the code box appears only once a code has
 been sent. `e2e/account.spec.ts` asserts both halves.
+
+## M38 — the supplied vector becomes the source of the whole brand
+
+Maulik added `logo.svg` at the repo root and said to use it across the platform, then: *"The logo
+which you are using is showing a bit smaller, don't you think?"*
+
+### M38.1 — the vector replaced the raster, and the matte went with it ⚠ UNREVIEWED
+M37 reconstructed an alpha channel from a 4096px PNG on white by projecting each pixel onto the
+line from white toward each brand colour — the naive `1 - min(R,G,B)/255` renders `#FFAD5C` at 64%
+opacity and haloes every edge. That code is deleted. The vector's ribbon channels are *genuinely*
+empty, so the mark sits on the dark theme without anything being inferred.
+
+The pipeline is now two stages: `scripts/build-brand-svg.mjs` optimises the vector and rasterises
+a 4096px transparent master through Chromium; `brand-src/build_brand.py` cuts that into the size
+set and the `.ico`. **One source of truth for every icon on both faces of the product.**
+
+Coordinates are rounded to **one decimal**, measured rather than assumed. Against the untouched
+file at 420px: two decimals and one decimal both differ in 209 pixels of 176,400 (mean channel
+error 0.03); whole numbers differ in 2,131 with a mean of 0.19, which is visible edge wobble on the
+1024px export. One decimal takes 170 KB to 131 KB, 38 KB gzipped.
+
+The `<g>` seam layer is kept though dropping it saves another 29 KB — it carries the anti-aliasing
+between adjacent fills, and without it 973 pixels at 420px shift by up to 103.
+
+### M38.2 — the trace has an artefact, and it was not repaired ⚠ UNREVIEWED
+The file is an autotrace. Where two ribbons overlap, the original raster carries a soft translucent
+shadow that a trace cannot express, so it approximates each one with a **hard-edged block**. At
+900px those blocks are plainly visible.
+
+Not repaired, deliberately. At every size this product renders the mark — 32px in the header, 180px
+for the touch icon, 64px on a share card — they are sub-pixel. Deleting paths out of somebody's
+logo on a guess is how a logo quietly stops being the logo. **If a large render is ever needed
+(print, a hero, a billboard), regenerate the trace or supply a hand-drawn vector.**
+
+### M38.3 — the 16px call from M37 is reversed ⚠ UNREVIEWED
+M37 measured the raster and found the whole mark did not survive at 16px, so the favicon became a
+crop of the strongest ribbon-crossing. **The vector changed the answer, and it was re-measured.**
+
+Rendered from `logo.svg`, 16px is soft but keeps an identifiable silhouette and 32px is
+unambiguously the woven basket. Held against the crop at both sizes, on paper and on ink: the crop
+is sharper and says nothing — anonymous diagonal stripes. A favicon exists to be recognised, so
+sharpness bought at the cost of recognition is the wrong trade.
+
+One icon at every size. `logo-glyph-256.png` and `GLYPH_BOX` are gone.
+
+### M38.4 — why the mark looked undersized, and the rule that fixes it ⚠ UNREVIEWED
+Two compounding mistakes. The first build **baked 6% padding into the SVG's viewBox**, so a 28px
+slot held about 25px of ink. And 28px was chosen against the *font size* of the word beside it
+rather than its **cap height** — "Baskfy" at 17px has a cap height near 12px, so the mark has to be
+markedly larger than the type to read as its equal.
+
+The rule now: **padding belongs to icons, not to logos.** An icon is cropped and masked by an
+operating system and needs the margin baked in, which `build_brand.py` adds. The vector is tight to
+its ink and the consumer decides the size — 32px in the header, against 18px type.
+
+`next/image` carries `unoptimized`: the optimiser refuses SVG unless `dangerouslyAllowSVG` is set,
+a flag meant to stop *remote* SVGs executing script and not one to turn on to serve our own logo.

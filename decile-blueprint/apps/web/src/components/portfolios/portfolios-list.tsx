@@ -1,7 +1,7 @@
 "use client";
 
 import type { PortfolioSummaryOut } from "@baskfy/api-client";
-import { Plus, Scale, Trash2 } from "lucide-react";
+import { Layers, Plus, Scale, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -141,12 +141,24 @@ export function PortfoliosList({ initial, error }: PortfoliosListProps) {
                   <Trash2 aria-hidden="true" />
                 </Button>
               </div>
-              <Button variant="outline" size="sm" asChild className="mt-auto">
-                <Link href={`/portfolios/${portfolio.id}/rebalance` as never}>
-                  <Scale aria-hidden="true" />
-                  Rebalance
-                </Link>
-              </Button>
+              {/*
+                Two questions, two surfaces. Rebalance answers "which symbols changed"; Sleeves
+                answers "how much goes where" for a portfolio run as several screens (M34).
+              */}
+              <div className="mt-auto flex gap-2">
+                <Button variant="outline" size="sm" asChild className="flex-1">
+                  <Link href={`/portfolios/${portfolio.id}/rebalance` as never}>
+                    <Scale aria-hidden="true" />
+                    Rebalance
+                  </Link>
+                </Button>
+                <Button variant="outline" size="sm" asChild className="flex-1">
+                  <Link href={`/portfolios/${portfolio.id}/sleeves` as never}>
+                    <Layers aria-hidden="true" />
+                    Sleeves
+                  </Link>
+                </Button>
+              </div>
             </li>
           ))}
         </ul>

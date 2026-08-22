@@ -1,12 +1,15 @@
 "use client";
 
 import type {
+  AllocationOut,
   PortfolioOut,
   PortfolioSummaryOut,
   PortfolioWriteOut,
   RebalanceHistoryPage,
   RebalanceOut,
   ScreenOut,
+  SleeveIn,
+  SleeveListOut,
 } from "@baskfy/api-client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -33,6 +36,9 @@ export const portfolioKeys = {
   list: ["portfolios"] as const,
   one: (id: number) => ["portfolios", id] as const,
   history: (id: number) => ["portfolios", id, "rebalances"] as const,
+  sleeves: (id: number) => ["portfolios", id, "sleeves"] as const,
+  allocation: (id: number, applyCap: boolean) =>
+    ["portfolios", id, "allocation", applyCap] as const,
 };
 
 export function usePortfolios(initial?: PortfolioSummaryOut[]) {
@@ -202,6 +208,63 @@ export function useRebalanceHistory(id: number | null) {
       );
       if (!data) throw ApiError.from(error, "The rebalance history could not be loaded.");
       return data;
+    },
+  });
+}
+
+/*
+ * Sleeves — M34. A portfolio run as several screens plus a slice run by hand.
+ *
+ * The allocation is a *derived* read, not stored: a sleeve is a standing instruction ("this much,
+ * from this screen"), so saving the sleeves invalidates the allocation and it is computed again
+ * from the screens' current output. `applyCap` is part of the key because the two answers are
+ * genuinely different documents, and caching them together would show the capped figures to
+ * someone who never ticked the box.
+ */
+
+export function useSleeves(id: number, initial?: SleeveListOut) {
+  return useQuery({
+    queryKey: portfolioKeys.sleeves(id),
+    queryFn: async (): Promise<SleeveListOut> => {
+      const { data, error } = await browserApi().GET("/api/v1/portfolios/{portfolio_id}/sleeves", {
+        params: { path: { portfolio_id: id } },
+      });
+      if (!data) throw ApiError.from(error, "The sleeves could not be loaded.");
+      return data;
+    },
+    ...(initial ? { initialData: initial } : {}),
+  });
+}
+
+export function useAllocation(id: number, applyCap: boolean) {
+  return useQuery({
+    queryKey: portfolioKeys.allocation(id, applyCap),
+    queryFn: async (): Promise<AllocationOut> => {
+      const { data, error } = await browserApi().GET(
+        "/api/v1/portfolios/{portfolio_id}/allocation",
+        { params: { path: { portfolio_id: id }, query: { apply_regime_cap: applyCap } } },
+      );
+      if (!data) throw ApiError.from(error, "The allocation could not be computed.");
+      return data;
+    },
+  });
+}
+
+export function useSaveSleeves(id: number) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (sleeves: SleeveIn[]): Promise<SleeveListOut> => {
+      const { data, error } = await browserApi().PUT("/api/v1/portfolios/{portfolio_id}/sleeves", {
+        params: { path: { portfolio_id: id } },
+        body: { sleeves },
+      });
+      if (!data) throw ApiError.from(error, "The sleeves could not be saved.");
+      return data;
+    },
+    onSuccess: async (data) => {
+      client.setQueryData(portfolioKeys.sleeves(id), data);
+      // Both answers are stale now, capped and uncapped alike.
+      await client.invalidateQueries({ queryKey: ["portfolios", id, "allocation"] });
     },
   });
 }

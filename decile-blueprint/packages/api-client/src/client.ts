@@ -93,6 +93,15 @@ export type HoldingOut = Schemas["HoldingOut"];
 export type HoldingsIn = Schemas["HoldingsIn"];
 export type ImportReportOut = Schemas["ImportReportOut"];
 export type ImportRowOut = Schemas["ImportRowOut"];
+
+/** M34 — a portfolio divided into sleeves, and the amounts that follow. */
+export type SleeveIn = Schemas["SleeveIn"];
+export type SleeveOut = Schemas["SleeveOut"];
+export type SleeveListOut = Schemas["SleeveListOut"];
+export type SleeveAllocationOut = Schemas["SleeveAllocationOut"];
+export type AllocationRowOut = Schemas["AllocationRowOut"];
+export type AllocationOut = Schemas["AllocationOut"];
+export type StanceOut = Schemas["StanceOut"];
 export type SkippedRowOut = Schemas["SkippedRowOut"];
 export type CandidateOut = Schemas["CandidateOut"];
 export type MatchStatus = Schemas["MatchStatus"];

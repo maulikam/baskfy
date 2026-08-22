@@ -2540,3 +2540,25 @@ constraint; migration 0013 amended before it was ever released.
 Both docstrings explained why a unit count and an advice sentence are forbidden — by writing them
 — and the scanner caught both. The same collision M22.4 recorded, and the same fix: describe the
 pattern rather than spell it. Recorded a second time because it will happen a third.
+
+### M34.6 — the planner's surface, and what it deliberately has no control for ⚠ UNREVIEWED
+`/portfolios/[id]/sleeves`, linked from each portfolio card beside Rebalance. Two questions, two
+surfaces: Rebalance answers *"which symbols changed"*, Sleeves answers *"how much goes where"*.
+
+The stance sits at the top as a statement — the tier, its label, *"under R1 the strategy caps
+equity at 100%"*, and the desk's own reasons — with an **unticked** control to size the screen
+sleeves to that cap. When ticked, the page says the portfolio is still its full size and the
+difference is *"held as cash, not removed"*, because a crore that renders as ₹70L would be a
+reporting bug wearing a defensive stance.
+
+A manual sleeve is offered as *"I run this myself"* and labelled *"You run this one"* — the
+reader's words rather than the schema's `kind='manual'`.
+
+**No control on the page could place anything**, and `sleeve-planner-contract.test.ts` asserts it
+over the source: no unit count, no order vocabulary, no advice phrasing, the cap unticked by
+default, and the sentence saying execution is in the desk console still present.
+
+**Verified by test, not by eye.** The page is behind authentication and signing in means typing a
+password, which is not something I do — so the component was asserted rather than rendered. The
+API path underneath it *was* exercised end to end against real data: a crore across three screens
+and a manual slice, 5 / 4 / 3 names, totals reconciling to the rupee.

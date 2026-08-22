@@ -29,3 +29,11 @@ benchmarks/results/
 # Prompt 19's mutation harness: throwaway copies of baskfy_core, one per worker.
 .mutants/
 coverage.json
+
+# Kite access tokens, and the bootstrap encryption key the token store writes beside one when
+# KITE_TOKEN_ENCRYPTION_KEY is unset. `.secrets/` above covers the configured path; these cover
+# the fallback, which is what a script run from the wrong working directory produces. One was
+# staged on 22 Aug 2026 by exactly that mistake (DECISIONS-MERGE M23.5).
+*.kite_token.json
+*.kite_token.json.key
+*.enc.key

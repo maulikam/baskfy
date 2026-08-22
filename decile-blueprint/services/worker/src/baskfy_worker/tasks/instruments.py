@@ -12,6 +12,7 @@ between an honest backtest and a survivorship-biased one (docs/01 §10).
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Iterator
 
 from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert
@@ -26,6 +27,38 @@ from baskfy_worker.steps import StepOutcome
 
 #: Series codes the screener works with (docs/01 §2.9). Others are ingested but never screened.
 SCREENABLE_SERIES: tuple[str, ...] = ("EQ", "BE")
+
+#: PostgreSQL's wire protocol allows at most 32,767 bind parameters in one statement, and a
+#: single-statement upsert of the whole instrument master exceeds it.
+#:
+#: This was invisible until 22 Aug 2026, because the step had only ever run against the
+#: 40-instrument fixture. The first run against the real Kite dump — which carries every NSE
+#: instrument, not the ~2,300 the screener ends up keeping — failed with
+#:
+#:     asyncpg.exceptions._base.InterfaceError:
+#:     the number of query arguments cannot exceed 32767
+#:
+#: Eleven columns per row, so 2,048 rows is 22,528 parameters: comfortably under the ceiling with
+#: room for a column to be added without silently reintroducing the bug.
+#: PostgreSQL's hard ceiling, not a tunable.
+MAX_BIND_PARAMETERS: int = 32767
+#: One per key in the `values` dict below. `test_instruments.py` asserts the two stay in step, so
+#: adding a column cannot quietly walk the batch back over the ceiling.
+UPSERT_COLUMNS_PER_ROW: int = 11
+UPSERT_BATCH_ROWS: int = 2048
+
+
+def _batched[T](rows: list[T], size: int) -> Iterator[list[T]]:
+    """Successive slices of ``rows``, at most ``size`` long. Empty input yields nothing.
+
+    Generic over the row type rather than over ``dict[str, object]``: the values dict below is
+    inferred as ``dict[str, str | int | Decimal | date | None]``, and widening it at the call site
+    would need either a cast or a suppression. House rule 3 allows neither.
+    """
+    if size < 1:
+        raise ValueError(f"batch size must be at least 1; got {size}")
+    for start in range(0, len(rows), size):
+        yield rows[start : start + size]
 
 
 async def run_refresh_instruments(
@@ -60,8 +93,8 @@ async def run_refresh_instruments(
         }
         for record in merged
     ]
-    if values:
-        stmt = insert(Instrument).values(values)
+    for batch in _batched(values, UPSERT_BATCH_ROWS):
+        stmt = insert(Instrument).values(batch)
         mutable = (
             "name",
             "instrument_type",

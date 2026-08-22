@@ -15,6 +15,8 @@ Routing rules
   fallback and taking the whole pipeline with it.
 * The failure raised when nothing can serve names every provider that was considered and why it
   was not used. An operator reading the nightly log should not have to guess.
+* **A stale access token never falls through.** See :exc:`AccessTokenExpired` below — it is the
+  one ``ProviderUnavailable`` that stops the routing rather than moving down the list.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ import polars as pl
 
 from baskfy_providers.circuit import CircuitBreaker, CircuitState
 from baskfy_providers.errors import (
+    AccessTokenExpired,
     CapabilityNotAvailable,
     CircuitOpen,
     ProviderUnavailable,
@@ -121,6 +124,25 @@ class CompositeProvider:
         transient error still propagates after the breaker records it, because the caller's own
         retry policy owns that decision and silently failing over on a timeout would mask an
         upstream that is merely slow.
+
+        **:exc:`AccessTokenExpired` is the exception to the exception, and it is deliberate.**
+
+        It subclasses ``ProviderUnavailable`` because a provider holding a dead token genuinely
+        cannot serve — but falling through on it is not a degradation, it is a *substitution*. In
+        this stack the next bars provider is ``FixtureProvider``, whose forty instruments are real
+        NSE symbols (``CUPID``, ``BAJFINANCE``, ``AXISBANK`` …) carrying synthetic prices. A
+        backfill run with a stale token would therefore write invented history over those symbols'
+        real bars and report success, which is the worst failure this repository can have: wrong
+        numbers that look right.
+
+        `CredentialsMissing` still falls through, and must: that is docs/03's ``local``
+        environment ("no Kite calls, provider stubbed"), where serving fixtures is the whole
+        intent. The distinction is *configured but stale* versus *not configured at all*.
+
+        docs/09 §"Kite specifics" already calls token expiry "the #1 pipeline failure" and says it
+        "must alert loudly". A silent fallback is the opposite of loud.
+
+        Found on 22 Aug 2026 by a backfill that fetched fixture bars for a real instrument.
         """
         candidates = self.providers_for(capability)
         if not candidates:
@@ -139,6 +161,9 @@ class CompositeProvider:
             attempt = _bind(call, provider)
             try:
                 return breaker.call(attempt)
+            except AccessTokenExpired:
+                # Never substituted for. See the docstring.
+                raise
             except CircuitOpen as exc:
                 skipped.append(f"{provider.name}: {exc}")
             except ProviderUnavailable as exc:

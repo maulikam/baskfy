@@ -15,6 +15,7 @@ from stubs import StubProvider
 from baskfy_providers.circuit import CircuitBreaker, CircuitState
 from baskfy_providers.composite import CompositeProvider
 from baskfy_providers.errors import (
+    AccessTokenExpired,
     CapabilityNotAvailable,
     CircuitOpen,
     CredentialsMissing,
@@ -94,6 +95,37 @@ class TestFailover:
         result = CompositeProvider([primary, fallback]).listings()
         assert [r.symbol for r in result] == ["SBIN"]
         assert (primary.calls, fallback.calls) == (1, 1)
+
+    def test_a_stale_access_token_is_never_substituted_for(self) -> None:
+        """The one ProviderUnavailable that must stop the routing instead of falling through.
+
+        In the real stack the next bars provider is FixtureProvider, whose forty instruments are
+        real NSE symbols carrying synthetic prices. Falling through here would write invented
+        history over real bars and report success — wrong numbers that look right. docs/09 calls
+        token expiry "the #1 pipeline failure" and requires it to alert loudly.
+        """
+        primary = StubProvider(
+            "kite", BARS_CAPABILITIES, raises=AccessTokenExpired("token is from yesterday")
+        )
+        fallback = StubProvider("fixture", BARS_CAPABILITIES)
+
+        with pytest.raises(AccessTokenExpired):
+            CompositeProvider([primary, fallback]).daily_bars(1, ON, ON)
+
+        assert fallback.calls == 0, "the fixture provider must never see a bars call"
+
+    def test_missing_credentials_still_fall_through_to_fixtures(self) -> None:
+        """The distinction is *configured but stale* against *not configured at all*.
+
+        docs/03's `local` environment is "no Kite calls, provider stubbed", and that is exactly
+        CredentialsMissing. Tightening the rule above must not break local development.
+        """
+        primary = StubProvider("kite", BARS_CAPABILITIES, raises=CredentialsMissing("no key"))
+        fallback = StubProvider("fixture", BARS_CAPABILITIES)
+
+        CompositeProvider([primary, fallback]).daily_bars(1, ON, ON)
+
+        assert fallback.calls == 1
 
     def test_a_transient_error_propagates_rather_than_failing_over(self) -> None:
         """A timeout means "slow", not "down". Silently failing over would mask it, and the

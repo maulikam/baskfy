@@ -1694,3 +1694,91 @@ recorded here so the next person does not read it as a false positive.
 updates this list; one that is accidental fails here."* Baskets is deliberate — docs/08 predates
 the merge and describes a screener with no basket to show — so the list and the reason were updated
 together.
+
+---
+
+## M23 — the Kite login arrived, and three things broke on first contact
+
+Maulik logged in on 22 Aug 2026, clearing `NEEDS-MAULIK.md` item 3's only manual step. Everything
+below was found by *running* the newly-unblocked path, not by reading it — the same pattern the
+final report records.
+
+### M23.1 — the token bridge writes both stores, not one ⚠ UNREVIEWED
+`make token-sync` verified a token, stored it, and printed success — and `make doctor` still said
+`[DOWN] kite — no encrypted access token at .secrets/kite-token.enc`.
+
+The merged repo has **two** consumers of the same daily token and they share no file: the desk
+reads `app.config.TOKEN_FILE`, the pipeline reads `BASKFY_KITE_TOKEN_PATH`. The bridge wrote only
+the first, while `NEEDS-MAULIK.md` item 3 claimed it unblocked `baskfy_worker.backfill`. It did not.
+
+**Taken:** one login writes both stores. The two keep separate encryption keys by design, so the
+plaintext token is written into each store rather than one blob copied to two paths.
+
+**Rejected:** a `--screener` opt-in flag. The next person to run this would hit the same wall, and
+a bridge whose whole purpose is "get the token onto the laptop" should not need a flag to finish
+the job.
+
+Half-success now has its own exit code (3) and a loud stderr line, because "the desk can trade but
+the pipeline cannot fetch bars" is a state worth distinguishing from both success and failure.
+
+**Reverse:** `--no-screener` restores the old behaviour exactly.
+
+### M23.2 — the instrument upsert had never met a real instrument dump ⚠ UNREVIEWED
+`run_refresh_instruments` sent every row in one `INSERT`. Against the 40-instrument fixture that
+was fine; the first run against Kite's real dump died on
+
+    asyncpg.exceptions._base.InterfaceError: the number of query arguments cannot exceed 32767
+
+**Taken:** batch at 2,048 rows (11 columns → 22,528 parameters). `MAX_BIND_PARAMETERS` and
+`UPSERT_COLUMNS_PER_ROW` are named constants and a test asserts they stay under the ceiling, so
+adding a column cannot quietly reintroduce the bug. Two db tests assert the seam does not drop,
+duplicate, or de-idempotise rows — the latter matters because house rule 7 is about re-runs.
+
+**Result:** 10,481 instruments, **10,222 carrying a `kite_token`**, of which **2,294 are screenable
+EQ/BE** — which is docs/09's "~2,300 instruments" arriving for real. Before this, 40 had tokens.
+
+### M23.3 — a stale token silently served synthetic prices ⚠ UNREVIEWED
+**The most serious thing found in this session.** `AccessTokenExpired` subclasses
+`ProviderUnavailable`, and `CompositeProvider.route` falls through to the next provider on that
+family. The next bars provider is `FixtureProvider` — whose forty instruments are **real NSE
+symbols** (`CUPID`, `BAJFINANCE`, `AXISBANK` …) carrying **synthetic prices**.
+
+So a backfill run with a stale token would have written invented history over those symbols' real
+bars, and reported success. `CUPID` is in the live basket at 7.09%.
+
+Observed directly: with an expired token, `composite.daily_bars()` reached
+`FixtureProvider.daily_bars` for a real instrument.
+
+**Taken:** `AccessTokenExpired` never falls through. `CredentialsMissing` still does, and must —
+that is docs/03's `local` environment ("no Kite calls, provider stubbed"), where serving fixtures
+is the entire intent. The distinction is **configured but stale** against **not configured at all**.
+
+docs/09 already calls token expiry "the #1 pipeline failure" and requires it to alert loudly; a
+silent substitution is the opposite of loud.
+
+**Rejected:** dropping `FixtureProvider` from the production stack. It is the right fallback for
+the case it was built for, and removing it would break local development to fix a routing bug.
+
+**Reverse:** delete the four-line `except AccessTokenExpired: raise` clause in `route()`.
+
+### M23.4 — Kite tokens die when a *new* one is minted, not only at 06:00 ⚠ UNREVIEWED
+A token verified at 15:39 IST failed at ~16:00. A second login on the box had minted a fresh one,
+which invalidates its predecessor. `NEEDS-MAULIK.md` item 3 and the token-sync docstring both said
+only "tokens expire at ~06:00 IST the next morning", which is true and incomplete.
+
+**Consequence for operators:** re-run `make token-sync` after *any* login, not just the first of
+the day. Recorded rather than coded around — nothing on this side can prevent it.
+
+### M23.5 — a generated encryption key reached the index, and the rules now stop it ⚠ UNREVIEWED
+A diagnostic script run from the wrong working directory made `app.token_store` fall back to
+generating a key *beside* the token, at `decile-blueprint/data/.kite_token.json.key`. It was
+untracked, unignored, and `git add -A` staged it. Caught before the commit by reading the staged
+list rather than trusting the glob.
+
+**Taken:** `.gitignore` patterns for the token and for the bootstrap key, in the tree that lacked
+them. Deliberately narrow (`*.kite_token.json*`) rather than ignoring `data/` wholesale: nothing is
+tracked under the screener's `data/` today, and a blanket rule would silently swallow something
+that should be committed later.
+
+The underlying cause is item 5 of `NEEDS-MAULIK.md`, still open: with
+`KITE_TOKEN_ENCRYPTION_KEY` set, no key is ever generated beside a token.

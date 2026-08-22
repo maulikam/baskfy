@@ -1598,3 +1598,99 @@ Worth noting how it was found. The task itself passed every test written for it,
 before the desk's `.env` pointed at Postgres. It was the **combination** of two modules' work that
 broke, and the only reason it surfaced today rather than at 18:30 on a Monday is that the suite runs
 the real task against the real desk.
+
+---
+
+## M21 — the handover, and a drill that had to be made honest twice
+
+### M21.1 — `RUN-AND-TEST.md` ⚠ UNREVIEWED
+At the root, and it says what is *not* running as prominently as what is: the frozen strangle
+subsystem, the generated scan that is built and off, the breadth wiring that is correct and inert,
+the timers that are still running, and the desk's Postgres default that stays `sqlite` because the
+box has none.
+
+### M21.2 — the Friday drill, and the two ways it lied ⚠ UNREVIEWED
+`scripts/friday_drill.py`, `make drill DATE=…`. Generate → analyze → review → execute → stops
+preview → **count the orders that reached a broker.**
+
+**It refuses to run with `DRY_RUN=false`** — before anything is built, not as a warning. The
+difference between a drill and a real session is one environment variable that somebody will
+eventually have set for a real session and forgotten.
+
+It lied to me twice before it was worth trusting:
+
+1. **The stub book held nothing.** `/execute` measures the daily-loss cap as
+   `book_value − last_invested`, so a stub holding zero against a database recording ₹1.04 crore
+   invested looks like a total loss, trips the cap, and every order comes back `RISK_BLOCKED`. The
+   drill reported **GREEN** — no orders had reached a broker — while exercising none of the path it
+   exists to exercise. It reads the desk's last snapshot as its book now.
+2. **The verdict only checked for real orders.** Fixed: a run where *nothing was even simulated* is
+   not green. That is exactly the reassuring-but-empty verdict a drill is supposed to prevent.
+
+It also prints **STUB BOOK** or **LIVE BOOK** in the header and again in the verdict, because a
+green run against a stub proves the machinery works and proves nothing about the real portfolio.
+
+Real output: 13 orders, 3 buys, 10 sells, 4 pledged-share flags, all `DRY_RUN`, **0 reached a
+broker.**
+
+### M21.3 — the CI sweep, and one leftover token ⚠ UNREVIEWED
+`tools/ci-local.sh`: 15 passed, 3 skipped with reasons, and one real failure — a single
+`decile_worker` surviving in `NEEDS-MAULIK.md`. Fixed by fixing it, not by widening the pattern.
+
+The M12 corpus re-run is unchanged through M13–M20: 23/25, the same four names.
+
+---
+
+## M22 — the merged face
+
+### M22.1 — read-only, enforced in three places ⚠ UNREVIEWED
+`/baskets` and `/baskets/plan`, served by `GET /api/v1/baskets` and `/api/v1/baskets/plan`.
+`POST`, `PUT` and `DELETE` all return **405**, verified against a running API.
+
+Three enforcements, because one is a promise and three are a property:
+
+* `services/api/tests/test_baskets_readonly.py` — no mutating verb on **the whole API surface**
+  near an order-shaped path, no import of `baskfy_execution`, no `insert`/`update`/`delete` in the
+  router's own source;
+* `apps/web/src/lib/basket/__tests__/read-only.test.ts` — no non-GET fetch, no `"use server"`, no
+  `<form>`, no submit control, in either page or the fetch layer;
+* the pages say "This page is read-only" **to the reader**, because someone looking at a plan table
+  needs to know it is a record and not a control.
+
+Execution stays in the desk console. That is the SEBI gate and the desk's non-negotiable #1.
+
+### M22.2 — it imports the desk's config rather than restating it ⚠ UNREVIEWED
+A restated weight would let the web app show a basket the desk would never trade — the one failure
+mode a shared surface must not have. `DeskConfig` is a Protocol inheriting both `ScoringConfig` and
+`BasketConfig`, since the desk's single `app.config` satisfies both.
+
+The two protocols genuinely disagree about `EXCLUDED_SYMBOLS` — `Collection[str]` in one, `object`
+in the other, because the basket's guard is a prefix match rather than set membership
+(`EXCLUDED_SYMBOLS` held `"SGBDE31III"` while the holding was `"SGBDE31III-GB"`). Resolved in the
+open, with the narrow declaration winning, rather than cast away.
+
+### M22.3 — the contamination is on the page ⚠ UNREVIEWED
+`/baskets` renders the count of symbols carrying an unadjusted corporate action — **41 of 271** on
+real data. A clean-looking list would be asserting a cleanliness nobody has established, and some
+of those names are excluded from the basket that should not be.
+
+### M22.4 — the house rule caught me, and it was right ⚠ UNREVIEWED
+`packages/core/tests/test_no_escape_hatches.py` enforces PROMPTS.md's *"no type-checker
+suppressions, no dynamic escape hatches, no silently swallowed exceptions."* My first version of
+M19 and M22 added **two suppressions and nine dynamic annotations.**
+
+Every one was removable, and removing them improved the code: a proxy class with a dynamic
+attribute lookup became a typed Protocol; a loose result dict became a `TypedDict`; two untyped
+JSON readers became `_as_list` and `_as_weights` with real return types; a module with an attribute
+attached afterwards became a `ModuleType` subclass that declares it.
+
+**Three times the test failed on my prose rather than my code** — a comment explaining why
+something does *not* use the forbidden pattern contains the pattern. That is the scanner working as
+designed over source text, and the fix is to describe the pattern rather than spell it, which is
+recorded here so the next person does not read it as a false positive.
+
+### M22.5 — the nav test was updated deliberately, as it asks to be ⚠ UNREVIEWED
+`nav.test.ts` pins the sidebar to docs/08 verbatim and says: *"A reordering that is deliberate
+updates this list; one that is accidental fails here."* Baskets is deliberate — docs/08 predates
+the merge and describes a screener with no basket to show — so the list and the reason were updated
+together.

@@ -4,7 +4,7 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M9/M10 re-entry, then M11 → M22 · M11/M12 red; M13–M14 blocked by rule 7 · **State:** running autonomously
+**Run started:** 22 Aug 2026 · **Current module:** M22 complete — the script is finished · M11/M12 red; M13–M14 blocked by rule 7 · **State:** running autonomously
 
 Since 22 Aug 2026 this is an **autonomous run** under `CLAUDE.md` §Autonomy charter:
 judgement calls are decided, recorded in `DECISIONS-MERGE.md` (tagged `⚠ UNREVIEWED`
@@ -35,10 +35,11 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M15 | Desk brains → core | ✅ done | 22 Aug 2026 | score, costs, basket and the exposure overlay all in core. Outputs **verified identical**; `regime.py` byte-identical. Typing debt recorded (M15.7) |
 | M16 | Execution package + broker split | ✅ done | 22 Aug 2026 | `packages/execution` created; guards/risk/ratelimit **byte-identical**; 7 non-negotiables have 16 named tests; token encrypted at rest (M16.1–M16.4) |
 | M17 | Rank buffer demoted | ✅ done | 22 Aug 2026 | One band predicate, called by both; plans unchanged. **First-ever Playwright run: portfolios 4 passed** (M17.1–M17.2) |
-| M18 | Database migration | ⚠️ drilled | 22 Aug 2026 | 19 tables / 42,285 rows, all assertions green, idempotent. **Cutover is M19's** — nothing reads Postgres yet (M18.2) |
+| M18 | Database migration | ✅ **green** | 22 Aug 2026 | 19 tables / 42,285 rows, all assertions green, idempotent. **Cutover completed at M19**; forever archive taken, rehearsal copy superseded |
 | M19 | Schedules → Celery, desk on merged backend | ✅ **green** | 22 Aug 2026 | Beat tasks + timer-retirement protocol. **Cutover done**: 10/11 pages byte-identical, 11th differs only in journal mode + file size. Four dialect defects fixed (M19.1–.6) |
 | M20 | Observability + runbook 6 | ✅ **green** | 22 Aug 2026 | Spans/metrics/Sentry over plan→execute→GTT, all optional and unable to raise into the order path. 4 alert rules, runbook 6 committed (M20.1–.4) |
-| M21 | Verification + handover | — | | |
+| M21 | Verification + handover | ✅ **green** | 22 Aug 2026 | `RUN-AND-TEST.md` at the root; the DRY_RUN Friday drill runs end to end with **0 orders reaching a broker**; M12 corpus unchanged through M13–M20 |
+| M22 | The merged face (read-only) | ✅ **green** | 22 Aug 2026 | `/baskets` and `/baskets/plan` on real data. Every mutation **405**; two suites hold it read-only. Desk suite untouched |
 
 ---
 

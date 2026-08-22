@@ -64,6 +64,7 @@ from baskfy_api.routers import (
     api_keys,
     auth,
     backtests,
+    baskets,
     billing,
     instruments,
     market_data,
@@ -401,6 +402,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     versioned.include_router(billing.router)
     versioned.include_router(portfolios.router)
     versioned.include_router(backtests.router)
+    # M22: read-only basket surfaces. No POST, no PUT, no DELETE -- execution stays in the desk
+    # console, so nothing here crosses the SEBI gate. `test_baskets_readonly.py` asserts it.
+    versioned.include_router(baskets.router)
     # PROMPTS.md Prompt 18 §2's contact form. Not in docs/07 (`docs/DECISIONS.md` §18.5).
     versioned.include_router(support.router)
     # docs/09 §Observability: "`pipeline_run_step` is the operator UI; expose it at

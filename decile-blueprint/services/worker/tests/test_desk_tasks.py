@@ -13,6 +13,7 @@ import os
 import sqlite3
 import sys
 import types
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
@@ -21,6 +22,21 @@ from celery.schedules import crontab
 
 from baskfy_worker import celery_app
 from baskfy_worker.tasks import desk
+
+
+class _FakeScript(types.ModuleType):
+    """A stand-in for one of the desk's scripts. `_run` only ever reaches for `.main`.
+
+    A `ModuleType` subclass with a declared attribute, rather than a bare module with one attached
+    afterwards. The latter needs a type-checker suppression comment, which PROMPTS.md §"House
+    rules" forbids and `packages/core/tests/test_no_escape_hatches.py` enforces -- including in
+    prose, which is why this sentence describes the pattern instead of quoting it.
+    """
+
+    def __init__(self, name: str, main: Callable[[], int]) -> None:
+        super().__init__(name)
+        self.main = main
+
 
 STATE_TABLES = (
     "snapshots",
@@ -159,10 +175,8 @@ def test_a_failing_step_is_reported_not_raised() -> None:
     # Behaviour, not prose. The first version of this grepped the source for "raise" and failed
     # on the word "raised" in the comment explaining why it does not raise — which teaches nobody
     # anything and trains you to weaken the assertion until it passes.
-    module = types.ModuleType("scripts.failing")
-    # 2 is the desk's "no Kite token" exit code. Assigned dynamically, so mypy is told.
-    module.main = lambda: 2  # type: ignore[attr-defined]
-    sys.modules["scripts.failing"] = module
+    # 2 is the desk's "no Kite token" exit code.
+    sys.modules["scripts.failing"] = _FakeScript("scripts.failing", lambda: 2)
     try:
         result = desk._run([], "failing")
     finally:
@@ -174,13 +188,11 @@ def test_a_failing_step_is_reported_not_raised() -> None:
 
 def test_a_step_that_calls_sys_exit_is_also_reported_not_raised() -> None:
     """argparse exits rather than returns, and so does the desk in a few places."""
-    module = types.ModuleType("scripts.exiting")
 
     def main() -> int:
         raise SystemExit(3)
 
-    module.main = main  # type: ignore[attr-defined]
-    sys.modules["scripts.exiting"] = module
+    sys.modules["scripts.exiting"] = _FakeScript("scripts.exiting", main)
     try:
         result = desk._run([], "exiting")
     finally:

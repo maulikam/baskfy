@@ -106,3 +106,44 @@ It is much closer than the cell-level parity suggested — 23 of 25, with the to
 and scores agreeing to a tenth — and the gap now has a name. The next move is not a window
 decision; it is **a corporate-action backfill**, which needs a source that serves history. That is
 the same dependency `NEEDS-MAULIK.md` item 3 already carries for bar depth.
+
+---
+
+## Reproduced, 22 Aug 2026 — and now runnable
+
+The section above was written from a one-off analysis. That is not a gate: it cannot answer whether
+the engine drifted between M12 and M19, which is the question every later module keeps raising.
+
+`reconciliation/desk_parity.py` is the same comparison as a committed harness:
+
+    uv run python reconciliation/desk_parity.py
+
+Re-run after M15, M16 and M17 had moved the score, the basket engine, the exposure overlay and the
+whole order path into packages:
+
+| | M12, first run | reproduced |
+|---|---|---|
+| Top-25 membership shared | 23 / 25 | **23 / 25** |
+| Only in the uploaded scan | `ANANDRATHI`, `SHILPAMED` | **same two** |
+| Only in the generated scan | `AKUMS`, `SHRIPISTON` | **same two** |
+| Rank deltas ±3 or less | 15 | **15** |
+
+**The engine did not drift.** Identical membership and identical near-tie behaviour after four
+modules of code movement is the strongest available evidence that those moves were moves.
+
+One number differs and it is a counting difference, not a result: the original reported 19 rank
+deltas "within the union" of both top-25s, and the harness reports **16 within the shared set** —
+the union carries four names that appear in only one list and so have no delta to measure. The
+harness's phrasing is the one to keep, because a rank delta needs two ranks.
+
+Three things the harness does that the prose could only assert:
+
+* it imports the desk's `config` rather than restating the weights, so it cannot pass while the
+  desk scores differently;
+* it renames through `reference_export.FACTOR_COLUMN_MAP`, the seam the merge already established,
+  so a renamed export column breaks it instead of sliding past;
+* it takes ordering from `score()`'s own `rank` column rather than re-sorting on `SCORE`, which
+  would break ties differently from the desk — exactly the defect a parity gate exists to catch.
+
+**Verdict unchanged. Rule 7 holds: the delta table is not empty, so M13 does not open on the
+evidence.** The cause is unchanged too — missing corporate-action history, `NEEDS-MAULIK` item 4.

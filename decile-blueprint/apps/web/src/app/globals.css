@@ -4,49 +4,43 @@
 /*
  * Baskfy's design tokens.
  *
- * docs/08 §"Design principles" set the rule, and M36 finally takes it literally:
+ * docs/08 §"Design principles":
  *
  *   "neutral greyscale carries the layout; colour is reserved for meaning only —
  *    positive/negative, rank emphasis, and one accent for primary actions."
  *
- * ## The interface is monochrome. The numbers are the only colour on it.
+ * ## Where this palette comes from
  *
- * Every earlier version of this file had a coloured accent — a blue, then a navy, then
- * `DESIGN.md`'s orange — and every one of them put a second colour on screen competing with the
- * one that carries meaning. A page where the primary button, the active nav item and a falling
- * price are all saturated is a page where nothing is emphasised.
+ * Maulik, 23 Aug 2026: match the look of **kite.zerodha.com** and **web.sensibull.com**. Both
+ * stylesheets were fetched and read rather than recalled, and they are the same system: a
+ * near-white cool-grey canvas, hairline borders, white panels, one blue accent, green up and red
+ * down. That is the convention every Indian broker screen uses, and this product's user is
+ * already looking at Kite in the next tab.
  *
- * So `--accent` is **the ink itself**. Buttons, links and the active state are near-black on warm
- * paper. Green and red appear on a Baskfy page in exactly one circumstance: a number went up or a
- * number went down. That is not an aesthetic preference, it is the strongest possible reading of
- * the rule docs/08 wrote and the earlier palettes only claimed to follow.
+ * Kite's own values, from `static/css/index.4b954422.css`: blue `#4184f3`, green `#4caf50`,
+ * red `#df514c`, sell-orange `#ff5722`, muted `#9b9b9b`, greys `#f4f4f4`/`#f8f8f8`/`#fafafb`,
+ * washes `#ecf6fd`/`#ebf8f2`/`#fef0ef`/`#fffaeb`. Sensibull: blue `#216ba5`, green `#3dcc4a`.
  *
- * ## `--brand` is the logo's orange, and it is a fill
+ * ## What was NOT copied, and why
  *
- * `#FF6A00`, taken from the mark itself (M37) rather than from a reference analysis of somebody
- * else's product — a logo is a stronger source of truth for a brand colour than a document
- * describing a company we are not. It is used the way a marker pen is used: as a **fill with ink
- * on top**, never as type. Ink on it measures 6.42:1.
+ * **Their text colours.** Measured against white: Kite's blue is 3.61:1, its green 2.78, its red
+ * 3.88, its muted grey 2.78. docs/11 §Accessibility requires 4.5:1 of anything carrying text, and
+ * every one of those is under it. Copying them would import an accessibility gap along with the
+ * look.
  *
- * As type it measures 2.54:1 on the canvas, which is why it never is type. As a *graphical* fill
- * that is marginally under WCAG 1.4.11's 3:1, so the active nav item carries a hairline as well as
- * the fill and states itself with `aria-current` — the colour is never the only thing saying
- * "you are here".
+ * So the *hues* are theirs and the *values* are darkened until they are legible — `#4184f3`
+ * becomes `#1a5fc4` for text at 6.04:1, `#4caf50` becomes `#1a7f37`, `#df514c` becomes `#a81f14`.
+ * The washes are used unchanged, because a background carries no text of its own.
  *
- * `contrast.test.ts` asserts the ink-on-chartreuse pair, and `no-brand-as-text.test.ts` fails the
- * build if anybody sets type in it. See `docs/DECISIONS-MERGE.md` §M36.2.
+ * `--brand` keeps Kite's exact `#4184f3` for **fills** — the active nav tab, a chart series, a
+ * small mark. Near-black on it is 5.12:1 and it clears WCAG 1.4.11's 3:1 as a graphic against the
+ * canvas. It is never type: `no-brand-as-text.test.ts` fails the build on `text-brand`.
  *
- * ## Where the palette came from
- *
- * The root `DESIGN.md` is read as a **token architecture** — its spacing ramp, its radii, its
- * warm-canvas-and-deep-ink relationship — and not as a look to reproduce. Reproducing it gave a
- * page that was recognisably somebody else's product in a different typeface, which was the note
- * that produced this version.
+ * **Kite's sell-orange `#ff5722` is deliberately absent.** Baskfy's mark is orange, and a product
+ * whose logo and whose losses share a hue has made both mean less. Losses are red here.
  *
  * Every colour below that carries text is verified against its surface at >= 4.5:1 in BOTH themes
- * by `src/lib/__tests__/contrast.test.ts`, which parses this file. docs/11 §Accessibility makes
- * that a requirement rather than an aspiration, and the positive/negative pair is called out there
- * by name because it is the one people get wrong.
+ * by `src/lib/__tests__/contrast.test.ts`, which parses this file.
  *
  * Tailwind v4 has no `tailwind.config.js`: the theme *is* this file.
  */
@@ -56,92 +50,81 @@
 :root {
   color-scheme: light;
 
-  /* --- Warm paper, warm ink. One family, no hue anywhere. ---------------- */
-  --background: #f2f1ec;
-  --foreground: #15140f;
-  --card: #fbfaf7;
-  --card-foreground: #15140f;
-  --popover: #fbfaf7;
-  --popover-foreground: #15140f;
-  --muted: #e7e5dd;
-  --muted-foreground: #5c5a51;
-  --border: #dcd9d0;
-  --input: #c9c5b9;
-  --ring: #15140f;
+  /* --- Cool near-white canvas, white panels. The broker-screen convention. --- */
+  --background: #f7f8fa;
+  --foreground: #31353d;
+  --card: #ffffff;
+  --card-foreground: #31353d;
+  --popover: #ffffff;
+  --popover-foreground: #31353d;
+  --muted: #eef0f4;
+  --muted-foreground: #646c7a;
+  --border: #e2e5eb;
+  --input: #cfd4dc;
+  --ring: #1a5fc4;
 
-  /* --- The accent is the ink. See the note above. ------------------------ */
-  --accent: #15140f;
-  --accent-foreground: #f7f6f2;
-  --accent-muted: #e4e2d9;
+  /* --- Kite's blue, in its two legible forms. See the note above. ---------- */
+  --accent: #1a5fc4;
+  --accent-foreground: #ffffff;
+  --accent-muted: #ecf6fd;
+  --brand: #4184f3;
+  --brand-foreground: #111418;
 
-  /* --- The highlighter. A fill, with ink on it. Never type. --------------- */
-  --brand: #ff6a00;
-  --brand-foreground: #15140f;
-
-  /* --- Semantic meaning. The only colour on the page. --------------------- */
-  --positive: #1a6b3f;
-  --positive-muted: #e0efe5;
-  --negative: #93181e;
-  --negative-muted: #f8e6e6;
-  --warning: #7d5a0b;
-  --warning-muted: #f6eeda;
+  /* --- Semantic meaning. Green up, red down; never the mark's orange. ------ */
+  --positive: #1a7f37;
+  --positive-muted: #ebf8f2;
+  --negative: #a81f14;
+  --negative-muted: #fef0ef;
+  --warning: #8a6100;
+  --warning-muted: #fffaeb;
 
   /* --- Density (docs/08: "default row height 34px") ---------------------- */
   --row-height: 34px;
   --row-height-compact: 28px;
 
-  /* DESIGN.md §rounded: sm 6px, md 12px, pill. The container radius is the md. */
-  --radius: 0.75rem;
+  /* Kite's chrome is squarer than the previous system's. 8px, not 12. */
+  --radius: 0.5rem;
 
-  /*
-   * Shadows carry the canvas's hue rather than plain black. A neutral-black shadow on a warm
-   * surface reads as dirt; the same shadow tinted toward the paper reads as depth.
-   */
-  --shadow-tint: 30 28 20;
-  --shadow-strength: 0.07;
+  --shadow-tint: 16 24 40;
+  --shadow-strength: 0.06;
 
-  /* The grain overlay's opacity — see `.grain` below. */
-  --grain-opacity: 0.55;
+  /* Paper grain belongs to a paper canvas. This one is a screen. */
+  --grain-opacity: 0;
 }
 
 .dark {
   color-scheme: dark;
 
-  /*
-   * The same system with the polarity flipped: the ink becomes the paper. The accent flips with
-   * it — a near-white button on near-black — so "the accent is the ink" holds in both themes
-   * rather than only in the one it was designed in.
-   */
-  --background: #131310;
-  --foreground: #f0efe8;
-  --card: #1c1c18;
-  --card-foreground: #f0efe8;
-  --popover: #1c1c18;
-  --popover-foreground: #f0efe8;
-  --muted: #26261f;
-  --muted-foreground: #a3a094;
-  --border: #32322a;
-  --input: #43423a;
-  --ring: #ff8b2d;
+  /* Kite's own dark mode is a cool near-black with the same blue. This follows it. */
+  --background: #14161a;
+  --foreground: #e6e8ec;
+  --card: #1b1e24;
+  --card-foreground: #e6e8ec;
+  --popover: #1b1e24;
+  --popover-foreground: #e6e8ec;
+  --muted: #22262e;
+  --muted-foreground: #98a1b0;
+  --border: #2c313a;
+  --input: #3a4049;
+  --ring: #7fb0ff;
 
-  --accent: #f0efe8;
-  --accent-foreground: #131310;
-  --accent-muted: #2c2c24;
+  --accent: #7fb0ff;
+  --accent-foreground: #14161a;
+  --accent-muted: #16243c;
+  /* Lifted from #4184f3: near-black on the mid blue is 3.61:1 on a dark ground, which is under. */
+  --brand: #5c9bff;
+  --brand-foreground: #111418;
 
-  /* The mark does not change colour between themes, so neither does this. */
-  --brand: #ff6a00;
-  --brand-foreground: #131310;
-
-  --positive: #4ecb8a;
-  --positive-muted: #102c1d;
-  --negative: #ff7f84;
-  --negative-muted: #331618;
-  --warning: #e0aa46;
+  --positive: #4ecb71;
+  --positive-muted: #102a1a;
+  --negative: #ff7b72;
+  --negative-muted: #33161a;
+  --warning: #e3b341;
   --warning-muted: #2b2210;
 
   --shadow-tint: 0 0 0;
-  --shadow-strength: 0.5;
-  --grain-opacity: 0.3;
+  --shadow-strength: 0.45;
+  --grain-opacity: 0;
 }
 
 @theme inline {
@@ -180,19 +163,14 @@
   /*
    * Two families and a mono, each doing one job.
    *
-   *   display — Bricolage Grotesque. A variable grotesk with real character in its curves and an
-   *             `opsz` axis, so a 56px page title and a 20px section heading are drawn differently
-   *             rather than scaled. Headings only.
-   *   sans    — Geist, for every label, control and paragraph. Deliberately not Inter: Inter is
-   *             the most-used interface face on the web, and a product that wants not to look
-   *             like every other product should not open with the font every other product uses.
-   *   mono    — Geist Mono, and it does more work here than usual. **Every figure on a Baskfy
-   *             page is set in it**, which is the largest single reason the interface does not
-   *             look like a generic dashboard: prices, percentages and counts read as a ledger
-   *             rather than as body text that happens to contain digits.
+   *   sans    — Inter, for everything, because Kite and Sensibull are Inter. `--font-display` is
+   *             the same face: headings differ by size and tracking, not by family, which is what
+   *             a broker screen does.
+   *   mono    — Geist Mono. **Every figure on a Baskfy page is set in it**, so a column of prices
+   *             lines up character-for-character rather than merely looking as though it might.
    */
-  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-bricolage), var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", "Menlo", monospace;
 
   /*
@@ -276,8 +254,8 @@
   h3 {
     font-family: var(--font-display);
     font-weight: 600;
-    letter-spacing: -0.03em;
-    line-height: 1.05;
+    letter-spacing: -0.018em;
+    line-height: 1.2;
     text-wrap: balance;
   }
 

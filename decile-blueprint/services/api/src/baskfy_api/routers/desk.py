@@ -93,7 +93,15 @@ class PerformanceOut(BaseModel):
     series: list[NavPointOut]
 
 
-class HoldingOut(BaseModel):
+class DeskHoldingOut(BaseModel):
+    """Prefixed, because `baskfy_api.schemas` already has a `HoldingOut` and a `TradeOut`.
+
+    Two models with one name do not collide in Python -- they are in different modules -- but the
+    OpenAPI document is a flat namespace, so the generator module-qualifies one of them and the
+    hand-written client that referenced the plain name stops compiling. That is exactly what
+    `PlanOut` did at M19, and it broke on the TypeScript side rather than here.
+    """
+
     symbol: str
     quantity: int
     average_price: float | None = None
@@ -111,13 +119,13 @@ class HoldingOut(BaseModel):
 
 class HoldingsOut(BaseModel):
     as_of: str
-    rows: list[HoldingOut]
+    rows: list[DeskHoldingOut]
     total_value: float
     #: The part of `total_value` in instruments the desk will not trade.
     excluded_value: float
 
 
-class TradeOut(BaseModel):
+class DeskTradeOut(BaseModel):
     symbol: str
     quantity: int
     entry_date: str | None = None
@@ -133,7 +141,7 @@ class TradeOut(BaseModel):
 
 
 class TradebookOut(BaseModel):
-    rows: list[TradeOut]
+    rows: list[DeskTradeOut]
     total: int
     open_count: int
     closed_count: int
@@ -444,7 +452,7 @@ async def reconcile(session: SessionDep) -> ReconcileOut:
 # --- conversions -------------------------------------------------------------
 
 
-def _holding(payload: Mapping[str, object]) -> HoldingOut:
+def _holding(payload: Mapping[str, object]) -> DeskHoldingOut:
     quantity = int(_num(payload.get("quantity")))
     average = _f(payload.get("average_price"))
     price = _f(payload.get("price"))
@@ -454,7 +462,7 @@ def _holding(payload: Mapping[str, object]) -> HoldingOut:
         if price is not None and average is not None
         else None
     )
-    return HoldingOut(
+    return DeskHoldingOut(
         symbol=str(payload.get("symbol") or ""),
         quantity=quantity,
         average_price=average,
@@ -467,12 +475,12 @@ def _holding(payload: Mapping[str, object]) -> HoldingOut:
     )
 
 
-def _trade(data: RowMapping) -> TradeOut:
+def _trade(data: RowMapping) -> DeskTradeOut:
     quantity = int(_num(data.get("qty")))
     entry = _f(data.get("entry_price"))
     pnl = _f(data.get("pnl"))
     basis = (entry or 0.0) * quantity
-    return TradeOut(
+    return DeskTradeOut(
         symbol=str(data.get("symbol") or ""),
         quantity=quantity,
         entry_date=_day(data.get("entry_ts")),

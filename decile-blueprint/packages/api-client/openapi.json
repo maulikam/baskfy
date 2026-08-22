@@ -2084,6 +2084,201 @@
         "title": "DeletionOut",
         "type": "object"
       },
+      "DeskHoldingOut": {
+        "description": "Prefixed, because `baskfy_api.schemas` already has a `HoldingOut` and a `TradeOut`.\n\nTwo models with one name do not collide in Python -- they are in different modules -- but the\nOpenAPI document is a flat namespace, so the generator module-qualifies one of them and the\nhand-written client that referenced the plain name stops compiling. That is exactly what\n`PlanOut` did at M19, and it broke on the TypeScript side rather than here.",
+        "properties": {
+          "average_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Price"
+          },
+          "excluded": {
+            "default": false,
+            "title": "Excluded",
+            "type": "boolean"
+          },
+          "pledged_qty": {
+            "default": 0,
+            "title": "Pledged Qty",
+            "type": "integer"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "unrealised": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unrealised"
+          },
+          "unrealised_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unrealised Pct"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "symbol",
+          "quantity"
+        ],
+        "title": "DeskHoldingOut",
+        "type": "object"
+      },
+      "DeskTradeOut": {
+        "properties": {
+          "costs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Costs"
+          },
+          "entry_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Date"
+          },
+          "entry_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Price"
+          },
+          "exit_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Date"
+          },
+          "exit_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Price"
+          },
+          "exit_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Reason"
+          },
+          "open": {
+            "default": false,
+            "title": "Open",
+            "type": "boolean"
+          },
+          "pnl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl"
+          },
+          "pnl_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl Pct"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "quantity"
+        ],
+        "title": "DeskTradeOut",
+        "type": "object"
+      },
       "DividendPolicy": {
         "description": "docs/10 §7: ``dividends: \"reinvest\" | \"cash\" | \"ignore\"``.\n\nThere is a wrinkle the document does not know about, and it decides the default.\n\ndocs/09's adjustment algorithm — which this repository implements in\n:mod:`baskfy_core.adjustments` — folds **cash dividends** into ``adj_factor`` alongside splits\nand bonuses: \"Cash dividend D -> (P_cum - D) / P_cum\". So ``ohlcv_daily.close``, the adjusted\nseries docs/10 §6 marks the book to, is already a *total-return* series. Crediting the\ndividend as cash on top of it would count it twice.\n\nHence:\n\n``reinvest``\n    Mark to the adjusted series as-is. Back-adjustment **is** reinvestment at the ex-date\n    price, so this is exact and it is the default.\n``cash``\n    Mark to a dividend-stripped price series and credit the dividend to cash on the ex-date.\n    Needs ``price_open``/``price_close`` columns and a dividend schedule in the panel; without\n    them the run is refused rather than silently served as ``reinvest``.\n``ignore``\n    Mark to the dividend-stripped price series and credit nothing — a pure price return.\n    Same data requirement.",
         "enum": [
@@ -2791,6 +2986,72 @@
         "title": "HoldingIn",
         "type": "object"
       },
+      "HoldingOut": {
+        "additionalProperties": false,
+        "properties": {
+          "added_on": {
+            "format": "date",
+            "title": "Added On",
+            "type": "string"
+          },
+          "avg_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Price"
+          },
+          "delisted_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delisted On"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "symbol",
+          "name",
+          "added_on"
+        ],
+        "title": "HoldingOut",
+        "type": "object"
+      },
       "HoldingPage": {
         "additionalProperties": false,
         "properties": {
@@ -2849,7 +3110,7 @@
           },
           "rows": {
             "items": {
-              "$ref": "#/components/schemas/baskfy_api__routers__desk__HoldingOut"
+              "$ref": "#/components/schemas/DeskHoldingOut"
             },
             "title": "Rows",
             "type": "array"
@@ -4891,7 +5152,7 @@
           },
           "holdings": {
             "items": {
-              "$ref": "#/components/schemas/baskfy_api__schemas__HoldingOut"
+              "$ref": "#/components/schemas/HoldingOut"
             },
             "title": "Holdings",
             "type": "array"
@@ -7639,13 +7900,89 @@
         "title": "TopRiskFilter",
         "type": "object"
       },
+      "TradeOut": {
+        "additionalProperties": false,
+        "description": "docs/10 §Artefacts: \"date, symbol, side, qty, price, cost, reason\".",
+        "properties": {
+          "cost": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "notional": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Notional",
+            "type": "string"
+          },
+          "price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Price",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "realised_pnl": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Realised Pnl"
+          },
+          "reason": {
+            "enum": [
+              "enter",
+              "exit",
+              "rebalance",
+              "delist"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "symbol",
+          "side",
+          "quantity",
+          "price",
+          "notional",
+          "cost",
+          "reason"
+        ],
+        "title": "TradeOut",
+        "type": "object"
+      },
       "TradePage": {
         "additionalProperties": false,
         "description": "docs/07: `GET /backtests/{id}/trades?cursor=` → \"paginated fills\".",
         "properties": {
           "data": {
             "items": {
-              "$ref": "#/components/schemas/baskfy_api__schemas__TradeOut"
+              "$ref": "#/components/schemas/TradeOut"
             },
             "title": "Data",
             "type": "array"
@@ -7688,7 +8025,7 @@
           },
           "rows": {
             "items": {
-              "$ref": "#/components/schemas/baskfy_api__routers__desk__TradeOut"
+              "$ref": "#/components/schemas/DeskTradeOut"
             },
             "title": "Rows",
             "type": "array"
@@ -8249,342 +8586,6 @@
         ],
         "title": "Weighting",
         "type": "string"
-      },
-      "baskfy_api__routers__desk__HoldingOut": {
-        "properties": {
-          "average_price": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Price"
-          },
-          "excluded": {
-            "default": false,
-            "title": "Excluded",
-            "type": "boolean"
-          },
-          "pledged_qty": {
-            "default": 0,
-            "title": "Pledged Qty",
-            "type": "integer"
-          },
-          "price": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Price"
-          },
-          "quantity": {
-            "title": "Quantity",
-            "type": "integer"
-          },
-          "symbol": {
-            "title": "Symbol",
-            "type": "string"
-          },
-          "unrealised": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Unrealised"
-          },
-          "unrealised_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Unrealised Pct"
-          },
-          "value": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Value"
-          }
-        },
-        "required": [
-          "symbol",
-          "quantity"
-        ],
-        "title": "HoldingOut",
-        "type": "object"
-      },
-      "baskfy_api__routers__desk__TradeOut": {
-        "properties": {
-          "costs": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Costs"
-          },
-          "entry_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Entry Date"
-          },
-          "entry_price": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Entry Price"
-          },
-          "exit_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Exit Date"
-          },
-          "exit_price": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Exit Price"
-          },
-          "exit_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Exit Reason"
-          },
-          "open": {
-            "default": false,
-            "title": "Open",
-            "type": "boolean"
-          },
-          "pnl": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pnl"
-          },
-          "pnl_pct": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pnl Pct"
-          },
-          "quantity": {
-            "title": "Quantity",
-            "type": "integer"
-          },
-          "symbol": {
-            "title": "Symbol",
-            "type": "string"
-          }
-        },
-        "required": [
-          "symbol",
-          "quantity"
-        ],
-        "title": "TradeOut",
-        "type": "object"
-      },
-      "baskfy_api__schemas__HoldingOut": {
-        "additionalProperties": false,
-        "properties": {
-          "added_on": {
-            "format": "date",
-            "title": "Added On",
-            "type": "string"
-          },
-          "avg_price": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Avg Price"
-          },
-          "delisted_on": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Delisted On"
-          },
-          "instrument_id": {
-            "title": "Instrument Id",
-            "type": "integer"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "quantity": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Quantity"
-          },
-          "symbol": {
-            "title": "Symbol",
-            "type": "string"
-          }
-        },
-        "required": [
-          "instrument_id",
-          "symbol",
-          "name",
-          "added_on"
-        ],
-        "title": "HoldingOut",
-        "type": "object"
-      },
-      "baskfy_api__schemas__TradeOut": {
-        "additionalProperties": false,
-        "description": "docs/10 §Artefacts: \"date, symbol, side, qty, price, cost, reason\".",
-        "properties": {
-          "cost": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Cost",
-            "type": "string"
-          },
-          "date": {
-            "format": "date",
-            "title": "Date",
-            "type": "string"
-          },
-          "notional": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Notional",
-            "type": "string"
-          },
-          "price": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Price",
-            "type": "string"
-          },
-          "quantity": {
-            "title": "Quantity",
-            "type": "integer"
-          },
-          "realised_pnl": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Realised Pnl"
-          },
-          "reason": {
-            "enum": [
-              "enter",
-              "exit",
-              "rebalance",
-              "delist"
-            ],
-            "title": "Reason",
-            "type": "string"
-          },
-          "side": {
-            "enum": [
-              "buy",
-              "sell"
-            ],
-            "title": "Side",
-            "type": "string"
-          },
-          "symbol": {
-            "title": "Symbol",
-            "type": "string"
-          }
-        },
-        "required": [
-          "date",
-          "symbol",
-          "side",
-          "quantity",
-          "price",
-          "notional",
-          "cost",
-          "reason"
-        ],
-        "title": "TradeOut",
-        "type": "object"
       }
     }
   },

@@ -680,12 +680,22 @@ export interface paths {
         };
         /**
          * Current Basket
-         * @description The basket the strategy wants today, computed from live bars.
+         * @description The basket the strategy wants today.
          *
          *     Built against an all-cash book on purpose. A basket page answers *"what does the strategy
          *     want?"*, which is a property of the market; a plan answers *"what would we have to trade?"*,
          *     which is a property of the book. Those are different questions and `/baskets/plan` is the
          *     other one.
+         *
+         *     **Served from the nightly snapshot when there is one** (M30). Building it live means loading
+         *     every bar the scanned symbols have ever had into Polars, which took about a second at two
+         *     years of history and **67 seconds** at nine. The nightly chain computes it once, after
+         *     publish, into `basket_snapshot`.
+         *
+         *     The live path is kept as the fallback, and that is not belt-and-braces: on a fresh database,
+         *     before the first nightly run, or on any night the step was skipped for want of an uploaded
+         *     scan, there is no snapshot. A page that 404s because a cache is cold would be worse than a
+         *     slow page.
          */
         get: operations["currentBasket"];
         put?: never;
@@ -2748,6 +2758,69 @@ export interface components {
             status: "scheduled" | "cancelled";
         };
         /**
+         * DeskHoldingOut
+         * @description Prefixed, because `baskfy_api.schemas` already has a `HoldingOut` and a `TradeOut`.
+         *
+         *     Two models with one name do not collide in Python -- they are in different modules -- but the
+         *     OpenAPI document is a flat namespace, so the generator module-qualifies one of them and the
+         *     hand-written client that referenced the plain name stops compiling. That is exactly what
+         *     `PlanOut` did at M19, and it broke on the TypeScript side rather than here.
+         */
+        DeskHoldingOut: {
+            /** Average Price */
+            average_price?: number | null;
+            /**
+             * Excluded
+             * @default false
+             */
+            excluded: boolean;
+            /**
+             * Pledged Qty
+             * @default 0
+             */
+            pledged_qty: number;
+            /** Price */
+            price?: number | null;
+            /** Quantity */
+            quantity: number;
+            /** Symbol */
+            symbol: string;
+            /** Unrealised */
+            unrealised?: number | null;
+            /** Unrealised Pct */
+            unrealised_pct?: number | null;
+            /** Value */
+            value?: number | null;
+        };
+        /** DeskTradeOut */
+        DeskTradeOut: {
+            /** Costs */
+            costs?: number | null;
+            /** Entry Date */
+            entry_date?: string | null;
+            /** Entry Price */
+            entry_price?: number | null;
+            /** Exit Date */
+            exit_date?: string | null;
+            /** Exit Price */
+            exit_price?: number | null;
+            /** Exit Reason */
+            exit_reason?: string | null;
+            /**
+             * Open
+             * @default false
+             */
+            open: boolean;
+            /** Pnl */
+            pnl?: number | null;
+            /** Pnl Pct */
+            pnl_pct?: number | null;
+            /** Quantity */
+            quantity: number;
+            /** Symbol */
+            symbol: string;
+        };
+        /**
          * DividendPolicy
          * @description docs/10 §7: ``dividends: "reinvest" | "cash" | "ignore"``.
          *
@@ -3033,6 +3106,26 @@ export interface components {
             /** Symbol */
             symbol: string;
         };
+        /** HoldingOut */
+        HoldingOut: {
+            /**
+             * Added On
+             * Format: date
+             */
+            added_on: string;
+            /** Avg Price */
+            avg_price?: string | null;
+            /** Delisted On */
+            delisted_on?: string | null;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Name */
+            name: string;
+            /** Quantity */
+            quantity?: string | null;
+            /** Symbol */
+            symbol: string;
+        };
         /** HoldingPage */
         HoldingPage: {
             /** Data */
@@ -3055,7 +3148,7 @@ export interface components {
             /** Excluded Value */
             excluded_value: number;
             /** Rows */
-            rows: components["schemas"]["baskfy_api__routers__desk__HoldingOut"][];
+            rows: components["schemas"]["DeskHoldingOut"][];
             /** Total Value */
             total_value: number;
         };
@@ -3742,7 +3835,7 @@ export interface components {
              */
             created_at: string;
             /** Holdings */
-            holdings: components["schemas"]["baskfy_api__schemas__HoldingOut"][];
+            holdings: components["schemas"]["HoldingOut"][];
             /** Id */
             id: number;
             /** Name */
@@ -4824,12 +4917,45 @@ export interface components {
             enabled: boolean;
         };
         /**
+         * TradeOut
+         * @description docs/10 §Artefacts: "date, symbol, side, qty, price, cost, reason".
+         */
+        TradeOut: {
+            /** Cost */
+            cost: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Notional */
+            notional: string;
+            /** Price */
+            price: string;
+            /** Quantity */
+            quantity: number;
+            /** Realised Pnl */
+            realised_pnl?: string | null;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "enter" | "exit" | "rebalance" | "delist";
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "buy" | "sell";
+            /** Symbol */
+            symbol: string;
+        };
+        /**
          * TradePage
          * @description docs/07: `GET /backtests/{id}/trades?cursor=` → "paginated fills".
          */
         TradePage: {
             /** Data */
-            data: components["schemas"]["baskfy_api__schemas__TradeOut"][];
+            data: components["schemas"]["TradeOut"][];
             /** Next Cursor */
             next_cursor?: string | null;
         };
@@ -4844,7 +4970,7 @@ export interface components {
             /** Realised Pnl */
             realised_pnl: number;
             /** Rows */
-            rows: components["schemas"]["baskfy_api__routers__desk__TradeOut"][];
+            rows: components["schemas"]["DeskTradeOut"][];
             /** Total */
             total: number;
             /** Winners */
@@ -5037,114 +5163,6 @@ export interface components {
          * @enum {string}
          */
         Weighting: "equal" | "inverse_volatility" | "rank" | "marketcap";
-        /** HoldingOut */
-        baskfy_api__routers__desk__HoldingOut: {
-            /** Average Price */
-            average_price?: number | null;
-            /**
-             * Excluded
-             * @default false
-             */
-            excluded: boolean;
-            /**
-             * Pledged Qty
-             * @default 0
-             */
-            pledged_qty: number;
-            /** Price */
-            price?: number | null;
-            /** Quantity */
-            quantity: number;
-            /** Symbol */
-            symbol: string;
-            /** Unrealised */
-            unrealised?: number | null;
-            /** Unrealised Pct */
-            unrealised_pct?: number | null;
-            /** Value */
-            value?: number | null;
-        };
-        /** TradeOut */
-        baskfy_api__routers__desk__TradeOut: {
-            /** Costs */
-            costs?: number | null;
-            /** Entry Date */
-            entry_date?: string | null;
-            /** Entry Price */
-            entry_price?: number | null;
-            /** Exit Date */
-            exit_date?: string | null;
-            /** Exit Price */
-            exit_price?: number | null;
-            /** Exit Reason */
-            exit_reason?: string | null;
-            /**
-             * Open
-             * @default false
-             */
-            open: boolean;
-            /** Pnl */
-            pnl?: number | null;
-            /** Pnl Pct */
-            pnl_pct?: number | null;
-            /** Quantity */
-            quantity: number;
-            /** Symbol */
-            symbol: string;
-        };
-        /** HoldingOut */
-        baskfy_api__schemas__HoldingOut: {
-            /**
-             * Added On
-             * Format: date
-             */
-            added_on: string;
-            /** Avg Price */
-            avg_price?: string | null;
-            /** Delisted On */
-            delisted_on?: string | null;
-            /** Instrument Id */
-            instrument_id: number;
-            /** Name */
-            name: string;
-            /** Quantity */
-            quantity?: string | null;
-            /** Symbol */
-            symbol: string;
-        };
-        /**
-         * TradeOut
-         * @description docs/10 §Artefacts: "date, symbol, side, qty, price, cost, reason".
-         */
-        baskfy_api__schemas__TradeOut: {
-            /** Cost */
-            cost: string;
-            /**
-             * Date
-             * Format: date
-             */
-            date: string;
-            /** Notional */
-            notional: string;
-            /** Price */
-            price: string;
-            /** Quantity */
-            quantity: number;
-            /** Realised Pnl */
-            realised_pnl?: string | null;
-            /**
-             * Reason
-             * @enum {string}
-             */
-            reason: "enter" | "exit" | "rebalance" | "delist";
-            /**
-             * Side
-             * @enum {string}
-             */
-            side: "buy" | "sell";
-            /** Symbol */
-            symbol: string;
-        };
     };
     responses: never;
     parameters: never;

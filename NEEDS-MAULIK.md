@@ -381,6 +381,26 @@ momentum basket.
 
 **Blocks:** nothing today.
 
+### 12. **Historical breadth is survivorship-biased** — the page now says so
+**Status:** open, **a decision, not work** · **Raised:** M32, 22 Aug 2026
+
+Breadth asks "what percentage of NIFTY 50 was above its 200-DMA on this date", which needs the
+constituents **on that date**. NSE publishes today's. **Kite has no constituents endpoint at all** —
+its API surface was enumerated, not assumed.
+
+So the most recent published membership is carried backwards and stored `source = 'derived'`, the
+value `docs/09` reserved for it. A company dropped from an index after falling is missing from its
+own history, which makes the past look healthier than it was.
+
+**This is now on the page** (M33), in the History section, in a reader's words rather than the
+schema's — and it says the live gauges are unaffected, because they are.
+
+**What would fix it properly:** NSE's index-change announcements, reconstructed into
+`index_member_daily` with real dates. Nothing in this repo has that source. Until then the marker
+is what lets a backtest exclude the uncertain period.
+
+**Blocks:** nothing. The gauges are exact; only the history carries the bias.
+
 ### 5. Two small credential items from M16
 **Status:** informational · **Raised:** M16, 22 Aug 2026
 

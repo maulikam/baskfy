@@ -81,11 +81,20 @@ export default tseslint.config(
      * Build tooling runs under Node, not in a browser: `scripts/bundle-budget.mjs` (Prompt 16
      * deliverable 5) reads the build manifest and writes a measurement, so `process` and
      * `console` are the point of it. Declared here rather than by adding the `globals` package —
-     * these three are all any script in this directory uses.
+     * these are all any script in this directory uses.
+     *
+     * `document` is the odd one out and it is not a mistake: `scripts/build-brand-svg.mjs` passes
+     * a callback to Playwright's `page.evaluate()`, which serialises the function and runs it
+     * inside Chromium. The file is Node; that one callback body is not.
      */
     files: ["scripts/**/*.mjs"],
     languageOptions: {
-      globals: { process: "readonly", console: "readonly", Buffer: "readonly" },
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        Buffer: "readonly",
+        document: "readonly",
+      },
     },
   },
 );

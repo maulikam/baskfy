@@ -495,3 +495,20 @@ rebuilds the set from the master; the master itself is gitignored.
 5. **The desk console got the favicon and the brand mark, and nothing else.** Its palette is still
    the smallcase-derived teal/blue; the two faces now share an icon, not a design.
 
+### M38 — the supplied vector is now the source of the whole brand ✅
+
+`logo.svg` at the repo root drives everything: `scripts/build-brand-svg.mjs` optimises it and
+rasterises a transparent 4096px master, `brand-src/build_brand.py` cuts that into every icon, and
+both the web app and the desk console draw the vector on screen. M37's white-background matte is
+deleted — the vector's channels are genuinely empty.
+
+**Two calls reversed or recorded:**
+
+1. **M37's 16px crop is reversed.** Re-measured against the vector: 16px keeps a silhouette and
+   32px is unambiguously the mark, while the crop is sharper and reads as anonymous stripes. One
+   icon at every size (`DECISIONS-MERGE.md` §M38.3).
+2. **The trace has a visible artefact above ~400px** — ribbon overlaps become hard-edged blocks,
+   because an autotrace cannot express the original's translucent shadow. Left alone on purpose;
+   sub-pixel at every size we render. **Regenerate the trace before any large or print render**
+   (§M38.2).
+

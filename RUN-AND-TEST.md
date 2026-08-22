@@ -230,6 +230,67 @@ method, the measurement and the verdict, all regenerable.
 
 ---
 
+## 3c. Deep history, indices and breadth (M29, M31, M32)
+
+**Do not run `make backfill`.** It writes the provider's `close` into `close_raw` on docs/09's
+assumption that Kite returns unadjusted bars, and Kite does not (M24). These are the modules that
+know what they are storing:
+
+```bash
+cd decile-blueprint
+uv run python -m baskfy_worker.deep_backfill                 # DRY RUN — daily bars, 2017 onward
+uv run python -m baskfy_worker.deep_backfill --write
+
+uv run python -m baskfy_worker.index_backfill                # DRY RUN — 136 NSE index levels
+uv run python -m baskfy_worker.index_backfill --write
+
+uv run python -m baskfy_worker.breadth_backfill --from 2021-08-01 --every 5 --write
+```
+
+**Kite's own limits, measured rather than assumed:** history from **2000-01-03** and nothing
+earlier; a hard **2,000-day** cap per `day` request; 3 req/s through a Redis token bucket shared
+across workers, 5-attempt jittered backoff, circuit breaker at 5 failures.
+
+**`breadth_backfill` is sampled, and `--every` is why.** `compute_factors` costs about **45 seconds
+per as-of date**, and it is the computation, not the database — loading 1.2M bars takes 6 seconds.
+Nine years daily is roughly 30 hours. `--every 5` is one trading day a week: 52 points a year, the
+same line on a chart, a fifth of the cost. `--every 1` is the full job.
+
+It also carries index membership backwards, marked **`source = 'derived'`**, because NSE publishes
+constituents for today only and Kite has no constituents endpoint at all. That is survivorship
+bias; `/market-health` says so on the page.
+
+**To undo the deep history:** `DELETE FROM ohlcv_daily WHERE source = 'kite'`. The bhavcopy segment
+is untouched — the write is `ON CONFLICT DO NOTHING`.
+
+---
+
+## 3d. Sleeves — a portfolio run as several screens (M34)
+
+`/portfolios/[id]/sleeves`, linked beside Rebalance on each portfolio card.
+
+Two questions, two surfaces: **Rebalance** answers *"which symbols changed"*; **Sleeves** answers
+*"how much goes where"*. A sleeve is one slice with its own capital and its own source — a saved
+screen, or `manual` for capital you run yourself, counted so the totals are honest and never
+allocated.
+
+```
+GET  /api/v1/portfolios/{id}/sleeves
+PUT  /api/v1/portfolios/{id}/sleeves        # replace the whole division
+GET  /api/v1/portfolios/{id}/allocation?apply_regime_cap=false
+```
+
+**Amounts and target weights, never unit counts.** That is structural rather than a promise:
+`baskfy_core.sleeves` receives no market quote, so it cannot produce a number of units.
+`test_sleeves_are_not_orders.py` asserts the vocabulary of an order appears in neither the
+allocator nor the router, and that every route is GET or PUT.
+
+**The market stance is stated, not recommended.** The page shows the desk's current tier and what
+it implies — *"under R1 the strategy caps equity at 100%"* — with an unticked control to size the
+screen sleeves to that cap. Applying it withholds capital as cash; a crore stays a crore.
+
+---
+
 ## 4. Testing everything
 
 ```bash
@@ -243,8 +304,8 @@ Individually:
 ```bash
 cd decile-blueprint
 uv run ruff check . && uv run ruff format --check . && uv run mypy
-uv run pytest -p no:randomly            # screener + worker + core: 2,346 passed
-pnpm -r run test                        # web app (420) and API client (110)
+uv run pytest -p no:randomly            # screener + worker + core: 2,414 passed
+pnpm -r run test                        # web app (433) and API client (110)
 cd ../kite-momentum-rebalancer && .venv/bin/python -m pytest   # the desk: 1,328 passed
 ```
 
@@ -272,6 +333,7 @@ make shadow DATE=2026-08-18                   # both scan paths, diffed at order
 bash ../tools/check-namespace.sh              # no namespace token AND no old brand name survived
 uv run python -m reconciliation.dividend_convention   # price vs total return, re-measured
 uv run python -m baskfy_worker.action_recovery        # corporate actions: DRY RUN, writes nothing
+uv run python -m baskfy_worker.deep_backfill          # deep history: DRY RUN, writes nothing
 make friday-drill DATE=2026-08-18                    # the whole Friday loop, zero orders
 ```
 

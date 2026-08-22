@@ -1,13 +1,13 @@
 # Baskfy — the merge, finished
 
-**22 August 2026.** M0 through M28, one commit per module. This is the report the run ends with:
+**22 August 2026.** M0 through M34, one commit per module. This is the report the run ends with:
 what is green, what is queued for you, and every judgement I made without asking.
 
 Three documents matter more than this one:
 
 * **[`RUN-AND-TEST.md`](RUN-AND-TEST.md)** — from a fresh checkout to a running, testable Baskfy.
 * **[`NEEDS-MAULIK.md`](NEEDS-MAULIK.md)** — what is left that only you can do.
-* **[`docs/DECISIONS-MERGE.md`](docs/DECISIONS-MERGE.md)** — 85 judgement calls, every one tagged
+* **[`docs/DECISIONS-MERGE.md`](docs/DECISIONS-MERGE.md)** — 115 judgement calls, every one tagged
   `⚠ UNREVIEWED`.
 
 > **The run was declared finished at M22 and then continued**, because Maulik logged in to Kite and
@@ -21,11 +21,12 @@ Three documents matter more than this one:
 
 | | |
 |---|---|
-| Modules complete | **M0 → M28**, 30 module commits |
+| Modules complete | **M0 → M34** |
 | Desk suite | **1,328 passed**, 17 skipped |
-| Screener + worker + core suites | **2,346 passed**, 3 skipped (`-p no:randomly`; caveat below) |
-| Web suite | **420 passed** across 26 files · API client **110 passed** |
-| Lint / format / types | clean across **282** Python source files and the TS workspace |
+| `ohlcv_daily` | **3,534,860 bars, 2017-01-02 → 2026-08-21** |
+| Screener + worker + core suites | **2,414 passed**, 3 skipped (`-p no:randomly`; caveat below) |
+| Web suite | **433 passed** · API client **110 passed** |
+| Lint / format / types | clean across **293** Python source files and the TS workspace |
 | The desk's database | **on Postgres**, cut over at M19, all assertions green |
 | `corporate_action` | **4 rows → 289** |
 | Orders placed during any of this | **zero** |
@@ -189,6 +190,42 @@ twice more.
 
 ---
 
+## The third half: what was asked for after the report was written
+
+### 11. Nine years of history, and the command that would have poisoned it (M29)
+`make backfill` exists, is resumable, and was the obvious thing to run. It writes the provider's
+close into **`close_raw`** on docs/09's assumption that Kite returns unadjusted OHLC — which M24
+had just disproved. Running it would have put adjusted prices in the exchange-print column and let
+the next reprocess adjust them a second time.
+
+So a separate module stores the series as what it is. **1.1M → 3.53M bars, 2017-01-02 onward.**
+Median seam jump where the two segments meet: **1.31%**.
+
+**Coverage measured properly** — each instrument against its own listing date, not against a
+calendar: **98.7% start within 30 days of expected.** The 31 exceptions were checked against Kite
+and it serves nothing earlier. A further 231 instruments are absent from Kite's master entirely.
+
+### 12. The pages that history made possible, and the bugs it exposed (M30–M33)
+`/baskets` went **67 seconds → 0.21** once the basket was computed nightly instead of per request.
+Index and sector levels came from Kite — **146,049 rows**, 64 indices, 2017 onward.
+
+Breadth was harder and more interesting. `factor_daily` held **one date**, and computing any
+historical date **crashed** — on a Polars schema that inferred from the first hundred rows, which
+M29's deep history had just made all-NULL in three columns. Then the charts drew and the NIFTY 50
+overlay fell off a cliff, because the stored index levels were **wrong by 21×** and M31's
+`ON CONFLICT DO NOTHING` had been faithfully preserving them.
+
+And when Maulik said the range filter was broken, it wasn't — the page was. It offered five years,
+had one, and disclosed that only in a header line that does not respond to the selector.
+
+### 13. A portfolio run as several screens (M34)
+Sleeves: capital split across screens plus a slice run by hand. **Amounts and target weights, never
+unit counts** — structural rather than promised, because the allocator receives no market quote and
+so cannot produce one. The stance is stated as a fact with an opt-in cap, never as advice, and
+tests assert both the order vocabulary and the advice phrasings appear nowhere.
+
+---
+
 ## What I got wrong, and how it was caught
 
 Recorded because the pattern is more useful than any single fix: **almost everything real was found
@@ -202,6 +239,11 @@ by running the thing, not by reading it.**
 | `float / Decimal` on `/tradebook`; SQLite's bare-column extension on `/regime` | Both returned 200 on one backend and failed on the other. Only a **content** comparison finds these — thirteen 200s over an empty database satisfies "all pages work". |
 | `PlanOut` collided with billing's `PlanOut` | Made the generated TypeScript rename *theirs* and broke the client at compile time. |
 | Two type suppressions and nine dynamic annotations | The house-rule test refused them. Every one was removable and removing them improved the code. Three times it failed on my *prose* — a comment explaining why something avoids a pattern contains the pattern. |
+| Computing factors for any historical date crashed, and my own backfill caused it | Polars infers a column's type from the first 100 rows; the deep Kite bars carry no turnover, so three columns were all-NULL across them and inferred as `Null`. Unreachable while every bar came from the bhavcopy. |
+| The stored index levels were wrong by 21× | NIFTY 50 at 1,128 for August 2026 where Kite and the desk's own regime evaluation both say 24,078. My first upsert protected the wrong number on the reasoning that the existing row might carry fundamentals it does. |
+| `top_n` was accepted and ignored | The sleeve API took "5 names" and returned 15. Found by using it, not by reading it. |
+| A name collision only `tsc` could find | `HoldingOut` and `TradeOut` existed twice. Different Python modules, but OpenAPI is a flat namespace — the generator qualified one of each and the hand-written client stopped compiling. Exactly what `PlanOut` did at M19. |
+| The same prose collision, three times | A docstring explaining why a pattern is forbidden contains the pattern. M22.4, M34.5, and again in the planner. Recorded each time because it keeps happening. |
 | A recovered action double-counted CUPID into a 25× adjustment | The unique constraint is on `(instrument, action_type, ex_date)`. NSE had the event as `bonus 4:1`; the recovery derived `split 5:1`. Different rows, constraint satisfied, **both applied**. Found by reading the resulting prices, not the insert count. |
 | 46 of 285 recovered actions were not splits at all | Auditing the ratio distribution *after* writing: ITC 22:19 is the ITC Hotels demerger, SIEMENS 21:16 is Siemens Energy India, VEDL 21:11, RAYMOND 23:14. Nothing issues a 19:17. Applied — the price step is real — and now marked rather than called splits. |
 | The brand survived because the gate was scoped not to see it | `check-namespace.sh` is token-scoped on purpose, since `decile` is vocabulary D1 keeps. Nothing looked for the capitalised *name*. A second check found 24 more the moment it existed, including generated `openapi.json` and the committed alert-email goldens. |
@@ -266,7 +308,7 @@ What is left, in the order it matters:
 
 ---
 
-## The 85 unreviewed decisions
+## The 115 unreviewed decisions
 
 Every judgement call I made without asking is in `docs/DECISIONS-MERGE.md`, numbered by module and
 tagged `⚠ UNREVIEWED`. The ones I would most want a second opinion on:

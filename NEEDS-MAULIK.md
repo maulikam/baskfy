@@ -17,9 +17,18 @@ blocker:
 | **8. Price or total return?** | ✅ **price return**, measured against the corpus 42–3 (M27) |
 | **4. Corporate-action history** | ✅ **recovered from data already on disk** and applied (M24, M28) |
 
-**What is actually left:** item 9 (review the 46 irregular actions — nothing blocked), item 1
-(deploy the risk-ceiling lock, outside market hours), and items 2, 5 and 7, which are all
-housekeeping.
+**Five closed now** — items 3, 4, 6, 8 and 10, including the one the M22 report called the biggest
+blocker in the project.
+
+**What is actually left:**
+
+| | |
+|---|---|
+| **1** | Deploy the risk-ceiling lock — outside market hours. The only item needing your hands. |
+| **9** | Review the 46 irregular corporate actions (probable demergers). Nothing blocked. |
+| **11** | 231 instruments absent from Kite's master — a decision about whether it is worth filling them from the NSE archive. |
+| **12** | Historical breadth is survivorship-biased. The page says so now; the fix needs NSE's index-change announcements. |
+| **2, 5, 7** | Housekeeping — strangle collectors, two credential items, and a scratch directory to delete. |
 
 ---
 
@@ -337,7 +346,22 @@ types. It would settle split-versus-bonus and demerger-versus-dividend, which pr
 
 **Blocks:** nothing.
 
-### 10. **A design call: `/baskets` now takes 67 seconds**
+### 10. `/baskets` took 67 seconds — **DONE, 22 Aug 2026** ✅
+**Status:** fixed. You chose the precompute; it is built. · **Raised:** M29 · **Closed:** M30
+
+**67 seconds → 0.21.** The basket is computed once a night as pipeline step 11, after `publish`,
+into `basket_snapshot`, and the page reads a row. Same content.
+
+It runs *after* publish because the basket is identified by the `data_version` publish bumps, and
+*last* because it is a cache — it records its own failure rather than raising, so it can never hold
+back a good `data_version`. `/baskets` still falls back to computing live when no snapshot exists,
+because a page that 404s on a cold cache is worse than a slow one.
+
+The original entry follows.
+
+---
+
+#### (original entry)
 **Status:** open, **decision needed, not hands** · **Raised:** M29, 22 Aug 2026
 
 The deep backfill took `ohlcv_daily` from 1.1M bars to 3.5M. `/baskets` computes its basket live

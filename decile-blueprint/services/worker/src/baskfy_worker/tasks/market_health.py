@@ -58,7 +58,7 @@ async def run_compute_market_health(
         universe = UNIVERSE_BY_SLUG[slug]
         row = (await session.execute(breadth_query(universe.index_id, on))).one()
 
-        constituents, above_200, above_50, near_ath, positive_1y = row
+        constituents, above_200, above_50, near_ath, positive_1y, above_20 = row
         if constituents and above_200 is None:
             incomplete.append(slug)
 
@@ -69,6 +69,7 @@ async def run_compute_market_health(
             pct_above_50dma=above_50,
             pct_within_10pct_ath=near_ath,
             pct_ret_1y_positive=positive_1y,
+            pct_above_20dma=above_20,
             constituent_count=constituents,
         )
         await session.execute(
@@ -78,6 +79,7 @@ async def run_compute_market_health(
                     "pct_above_200dma": stmt.excluded.pct_above_200dma,
                     "pct_above_50dma": stmt.excluded.pct_above_50dma,
                     "pct_within_10pct_ath": stmt.excluded.pct_within_10pct_ath,
+                    "pct_above_20dma": stmt.excluded.pct_above_20dma,
                     "pct_ret_1y_positive": stmt.excluded.pct_ret_1y_positive,
                     "constituent_count": stmt.excluded.constituent_count,
                 },

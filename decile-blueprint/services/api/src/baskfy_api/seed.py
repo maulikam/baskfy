@@ -507,7 +507,7 @@ async def seed_market_health(session: AsyncSession, on: dt.date) -> int:
     written = 0
     for slug in MARKET_HEALTH_SLUGS:
         universe = UNIVERSE_BY_SLUG[slug]
-        constituents, above_200, above_50, near_ath, positive_1y = (
+        constituents, above_200, above_50, near_ath, positive_1y, above_20 = (
             await session.execute(breadth_query(universe.index_id, on))
         ).one()
         stmt = insert(MarketHealthDaily).values(
@@ -517,6 +517,7 @@ async def seed_market_health(session: AsyncSession, on: dt.date) -> int:
             pct_above_50dma=above_50,
             pct_within_10pct_ath=near_ath,
             pct_ret_1y_positive=positive_1y,
+            pct_above_20dma=above_20,
             constituent_count=constituents,
         )
         await session.execute(

@@ -84,8 +84,12 @@ def build_plan(
     tradeable: Callable[[str], bool],
     clusters: Mapping[str, str] | None = None,
     live_prices: dict[str, float] | None = None,
+    breadth_override: float | None = None,
 ) -> dict:
     """holdings: [{symbol, quantity(total incl pledged+t1), pledged_qty, last_price, average_price}]
+
+    breadth_override replaces the scan-derived 20-DMA breadth that drives the cash band. See
+    the note at its use below; when it is None nothing about this function changes.
 
     live_prices maps symbol -> last traded price and is REQUIRED for any name not already
     held. A new position was previously sized and limit-priced from the scan CSV's close
@@ -138,7 +142,15 @@ def build_plan(
 
     book_val = sum(h["quantity"] * h["last_price"] for h in hold.values())
     capital = book_val + cash
-    breadth = float((scored.close > scored.ma_20).mean() * 100)
+    # M14 §1: the pipeline computes this same figure over a named index universe, and when the
+    # scan's population is that universe the two agree exactly (68.6347% on 2026-08-18, both
+    # sides). The caller decides which to use, because only the caller knows whether the scan it
+    # was handed covers the universe the pipeline measured. `None` keeps the original behaviour.
+    breadth = (
+        float((scored.close > scored.ma_20).mean() * 100)
+        if breadth_override is None
+        else float(breadth_override)
+    )
     cash_pct = cash_pct_for(breadth, cfg)
     invest = capital * (1 - cash_pct / 100)
 

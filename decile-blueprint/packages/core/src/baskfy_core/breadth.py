@@ -35,13 +35,17 @@ BREADTH_COLUMNS: Final[tuple[str, ...]] = (
     "pct_above_50dma",
     "pct_within_10pct_ath",
     "pct_ret_1y_positive",
+    #: Not one of docs/01 §6's four gauges and not shown on the dashboard. It exists because the
+    #: desk's cash bands are calibrated on the 20-day number (M14 §1), and re-expressing those
+    #: bands against the 50-day figure would be a strategy change rather than a wiring one.
+    "pct_above_20dma",
 )
 
 
 def breadth_query(
     index_id: int, on: dt.date
-) -> Select[tuple[int, Decimal, Decimal, Decimal, Decimal]]:
-    """``(constituent_count, above_200dma, above_50dma, within_10pct_ath, ret_1y_positive)``.
+) -> Select[tuple[int, Decimal, Decimal, Decimal, Decimal, Decimal]]:
+    """``(count, above_200dma, above_50dma, within_10pct_ath, ret_1y_positive, above_20dma)``.
 
     Point-in-time throughout: the constituents are ``index_member_daily`` rows *for that date*, and
     the factor row is joined on the same date. CLAUDE.md house rule 5 — a breadth series computed
@@ -57,6 +61,7 @@ def breadth_query(
                 FactorDaily.away_high_ath,
             ),
             _pct(FactorDaily.ret_12m > 0, FactorDaily.ret_12m),
+            _pct(FactorDaily.close > FactorDaily.ma_20, FactorDaily.ma_20),
         )
         .select_from(IndexMemberDaily)
         .join(

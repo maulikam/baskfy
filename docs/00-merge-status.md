@@ -31,7 +31,7 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M11 | 271-row parity test | 🔴 **red** | 22 Aug 2026 | Test **runs** for the first time. Base fix landed (1M reproduces); **6,934/9,166 cells still fail** on window length. Needs a decision (M11.2) |
 | M12 | Desk parity | 🔴 **red, informative — now reproducible** | 22 Aug 2026 | **23/25 top-25 shared**, unchanged when re-run through `reconciliation/desk_parity.py` after M15–M17. Gap is **missing corporate actions**, not the window |
 | M13 | MomentumScan — CSV cord cut | ⚠️ **built, not switched on** | 22 Aug 2026 | Contract + `/analyze?generate_for=` + `screen_run_id`, all tested. **Upload stays the default**: a generated scan passes 223 symbols where the upload passes 239 (M13.1) |
-| M14 | Breadth + shadow harness | — | | |
+| M14 | Breadth + shadow harness | ⚠️ **built; shadow red** | 22 Aug 2026 | P1.9 **reconciled exactly** — same 271 symbols, 68.6347% both sides. Shadow mode's first run: **4 order deltas**, one a corporate-action substitution. Flag off (M14.1–.5) |
 | M15 | Desk brains → core | ✅ done | 22 Aug 2026 | score, costs, basket and the exposure overlay all in core. Outputs **verified identical**; `regime.py` byte-identical. Typing debt recorded (M15.7) |
 | M16 | Execution package + broker split | ✅ done | 22 Aug 2026 | `packages/execution` created; guards/risk/ratelimit **byte-identical**; 7 non-negotiables have 16 named tests; token encrypted at rest (M16.1–M16.4) |
 | M17 | Rank buffer demoted | ✅ done | 22 Aug 2026 | One band predicate, called by both; plans unchanged. **First-ever Playwright run: portfolios 4 passed** (M17.1–M17.2) |

@@ -2251,3 +2251,33 @@ the response went from about a second to **67**. Nothing about the result is wro
 Recorded rather than fixed because the fix is a design decision — cache the scan, bound the window
 the basket engine loads, or precompute it in the nightly chain — and none of those should be
 chosen in the last ten minutes of a session. `NEEDS-MAULIK.md` item 10.
+
+### M29.7 — coverage, measured against each instrument's own listing date ⚠ UNREVIEWED
+"Do we have history for every instrument" is the wrong question — a stock that listed in June 2024
+*should* start in June 2024. The right question is whether each instrument's first bar matches
+**its own** start, and it was measured that way: `first_bar` against `max(listed_on, 2017-01-01)`.
+
+**2,263 of the 2,294 reachable instruments — 98.7% — start within 30 days of expected.**
+
+| gap between first bar and expected start | instruments |
+|---|---|
+| ≤ 30 days (as expected) | **2,263** |
+| 31–180 days | 6 |
+| 181–365 days | 6 |
+| > 1 year | 19 |
+
+**The 31 exceptions were checked against Kite directly, not assumed.** Kite serves nothing for the
+missing years: CREATIVEYE returns 0 bars for 2017 and 114 for 2019, and our data begins 2018-12-12
+— precisely where Kite's does. `TDPOWERSYS` returns **0 for 2017, 2019, 2021 and 2023** despite
+trading actively and appearing in NSE's own corporate-action feed; that instrument token simply
+carries no history at Kite. These are gaps in the vendor, not in the fetch.
+
+**The 231 instruments with no `kite_token` are a separate, harder bucket.** They are not a merge
+failure: checked against Kite's live dump of 10,222 symbols, **0 of the 231 are present**. `ABAN`,
+`ALPHAGEO`, `AKSHARCHEM`, `AHLWEST` and 227 others exist in NSE's listings register and not in
+Kite's instrument master, so Kite cannot be asked for them at any depth. Their bars come from the
+bhavcopy alone and none reaches before 2024.
+
+**Conclusion: the history is complete with respect to what Kite can serve.** Filling the remaining
+231 needs the NSE bhavcopy archive, which is keyed by symbol rather than instrument token — a
+different module, and the same one that would fix M29.3's convention seam.

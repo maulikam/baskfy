@@ -74,12 +74,11 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     a: ({ href, children }: Anchor) => {
       const target = href ?? "#";
       if (target.startsWith("/")) {
-        /* `next/link` is typed against the generated route union; MDX prose is a string, so the
-           cast is the one place a link's validity is checked by the build rather than by the type
-           system. A broken internal link therefore shows up as a 404, which is why every one of
-           them points at a route in `lib/marketing/routes`. */
+        /* MDX prose supplies a runtime string, so the static route union cannot prove this link.
+           A broken internal link therefore shows up as a 404, which is why every one of them
+           points at a route in `lib/marketing/routes`. */
         return (
-          <Link className="underline underline-offset-2" href={target as never}>
+          <Link className="underline underline-offset-2" href={target}>
             {children}
           </Link>
         );

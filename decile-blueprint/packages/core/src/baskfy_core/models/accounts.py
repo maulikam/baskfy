@@ -278,3 +278,47 @@ class PipelineRunStep(Base):
     rows_out: Mapped[int | None] = mapped_column(BigInteger)
     duration_ms: Mapped[int | None] = mapped_column(Integer)
     error: Mapped[JsonObject | None] = mapped_column(JSONB)
+
+
+class PortfolioSleeve(Base):
+    """One slice of a portfolio, with its own capital and its own source (M34).
+
+    The Rebalance Tracker is a symbol diff and knows nothing about money. A portfolio run as
+    several screens needs the other question answered — how much goes where — and that is what a
+    sleeve is.
+
+    ``kind`` is ``screen`` (names come from ``screen_id``) or ``manual`` (capital the owner runs
+    themselves, reported so the totals are honest and never allocated). The check constraints make
+    the pairing structural rather than conventional.
+
+    Deleting a screen sets ``screen_id`` to NULL rather than cascading: capital allocated against a
+    screen that no longer exists should become visibly unsourced, not silently vanish.
+    """
+
+    __tablename__ = "portfolio_sleeve"
+    __table_args__ = (
+        CheckConstraint("kind IN ('screen', 'manual')", name="portfolio_sleeve_kind"),
+        CheckConstraint("capital >= 0", name="portfolio_sleeve_capital_non_negative"),
+        CheckConstraint("top_n BETWEEN 1 AND 100", name="portfolio_sleeve_top_n"),
+        CheckConstraint(
+            "(kind = 'screen' AND screen_id IS NOT NULL) OR "
+            "(kind = 'manual' AND screen_id IS NULL)",
+            name="portfolio_sleeve_source",
+        ),
+        UniqueConstraint("portfolio_id", "name", name="uq_portfolio_sleeve_name"),
+    )
+
+    id: Mapped[BigIntPk]
+    portfolio_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("portfolio.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    screen_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("screen.id", ondelete="SET NULL")
+    )
+    capital: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, server_default="0")
+    #: How many of the screen's names this sleeve takes, in rank order.
+    top_n: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="15")
+    sort_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
+    created_at: Mapped[CreatedAt]

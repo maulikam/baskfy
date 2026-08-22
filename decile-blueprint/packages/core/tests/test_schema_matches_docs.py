@@ -31,6 +31,8 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # M30: the nightly chain's basket, stored so `/baskets` reads a row instead of loading nine
     # years of bars per request. docs/04b addendum.
     "basket_snapshot": ("id",),
+    # M34: a portfolio divided across screens plus a slice run by hand. docs/04b addendum.
+    "portfolio_sleeve": ("id",),
     # Price history
     "ohlcv_daily": ("instrument_id", "date"),
     # Corporate actions
@@ -152,7 +154,7 @@ def test_every_added_table_has_an_addendum() -> None:
     """The two tables not in docs/04 must each be written down somewhere in docs/."""
     docs = REPO_ROOT / "docs"
     combined = "\n".join(path.read_text(encoding="utf-8") for path in docs.glob("04*addendum*.md"))
-    for table in ("trading_day", "ingest_cursor", "basket_snapshot"):
+    for table in ("trading_day", "ingest_cursor", "basket_snapshot", "portfolio_sleeve"):
         assert table in combined, f"{table} is not described in any docs/04 addendum"
 
 

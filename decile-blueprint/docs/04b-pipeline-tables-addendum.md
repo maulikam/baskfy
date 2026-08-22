@@ -149,3 +149,35 @@ returns rather than raising, so a basket that cannot be built never holds back a
 that is otherwise good; and `GET /baskets` falls back to computing live when no snapshot exists,
 because a page that 404s on a cold cache would be worse than a slow page.
 
+---
+
+## `portfolio_sleeve` — a portfolio run as several screens (M34)
+
+Not in `docs/04`. The Rebalance Tracker there answers *"which symbols changed"* and knows nothing
+about money (`docs/01` §8); a portfolio run as several screens needs the other question answered —
+**how much goes where**.
+
+A sleeve is one slice with its own capital and its own source.
+
+| column | why |
+|---|---|
+| `portfolio_id` | owner; `ON DELETE CASCADE` |
+| `name` | unique within the portfolio |
+| `kind` | `screen` or `manual` |
+| `screen_id` | the source, NULL for a manual sleeve |
+| `capital` | `numeric(18,2)` — money is never float (house rule 9) |
+| `sort_order` | the order the owner arranged them in |
+
+**Three check constraints carry the rules structurally** rather than by convention: `kind` is one
+of two values, `capital` is non-negative, and a screen sleeve must name a screen while a manual one
+must not. That last pairing is what keeps *"which screen is this sleeve from"* answerable without a
+join that returns NULL.
+
+**Deleting a screen sets `screen_id` to NULL rather than cascading.** Capital allocated against a
+screen that no longer exists should become visibly unsourced and need attention, not silently
+vanish along with the number the owner chose.
+
+The allocation itself is **not stored**. It is derived on read from the sleeves, the screens'
+current output and — only if asked — the desk's current policy tier, because a sleeve is a standing
+instruction and a stored allocation would answer last week's version of it.
+

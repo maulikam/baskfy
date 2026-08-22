@@ -4,10 +4,17 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Run finished:** 22 Aug 2026 · **State:** complete, **M0 → M28**.
+**Run started:** 22 Aug 2026 · **State:** **M0 → M34**, and continuing on request.
 
 The run reached M22 and was declared finished; Maulik then logged in to Kite, which unblocked the
-path everything else was waiting on, and M23–M28 followed.
+path everything else was waiting on, and M23–M28 followed. **M29–M34 came after that**, each from
+a direct request rather than the script: deep history, the pages that history made possible, and
+the sleeve planner.
+
+**The ledger below is in the order modules were written, not numerical order.** M22 sits last
+because M23 and M24 were appended before it while the file was being edited under time pressure —
+recorded rather than tidied, because a status page that quietly reorders itself is a status page
+nobody can diff.
 
 **M11 and M12 are no longer red for the reason they were.** The corporate-action history that
 blocked both — `NEEDS-MAULIK.md` item 4, "the biggest blocker in the project" — was **recovered
@@ -26,8 +33,24 @@ generated-scan flag **off**. 9M and 12M did not move because their residual is t
 length**, not the adjustment — the seeded calendar is short about nine lunar-calendar holidays a
 year. M27 predicted that before M28 ran.
 
-⚠️ **Do not run `make backfill` until its column mapping is fixed.** As built it writes Kite's
-*adjusted* prices into `close_raw`, the column house rule 6 defines as the exchange print (M24.1).
+⚠️ **Do not run `make backfill`.** As built it writes Kite's *adjusted* prices into `close_raw`,
+the column house rule 6 defines as the exchange print (M24.1). `baskfy_worker.deep_backfill` is
+what M29 used instead, and it says what it stores.
+
+### Where the data stands after M29–M32
+
+| | |
+|---|---|
+| `ohlcv_daily` | **3,534,860 bars, 2017-01-02 → 2026-08-21** (was 1,145,922 from 2024) |
+| `corporate_action` | 289 rows (was 4) |
+| `index_snapshot_daily` | 2017 → today for 64 indices (was six weeks) |
+| `factor_daily` | sampled weekly from 2021; **daily is a ~30-hour job** and has not been run |
+| `index_member_daily` | published for last week; earlier dates **carried backwards, `source='derived'`** |
+
+**Coverage, measured per instrument against its own listing date:** 2,263 of 2,294 reachable
+instruments — **98.7%** — start within 30 days of expected. The 31 exceptions were checked against
+Kite directly and it serves nothing earlier. A further **231 instruments are absent from Kite's
+instrument master entirely** and cannot be reached at any depth (`NEEDS-MAULIK.md` item 11).
 
 Start here: [`FINAL-REPORT.md`](../FINAL-REPORT.md) — what is green, what is queued, and the 58
 decisions I made without asking. Then [`RUN-AND-TEST.md`](../RUN-AND-TEST.md) to run it, and
@@ -68,6 +91,12 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M21 | Verification + handover | ✅ **green** | 22 Aug 2026 | `RUN-AND-TEST.md` at the root; the DRY_RUN Friday drill runs end to end with **0 orders reaching a broker**; M12 corpus unchanged through M13–M20 |
 | M23 | The Kite path, on first contact | ✅ **green** | 22 Aug 2026 | Token bridge writes both stores; instrument upsert batched (10,222 tokens, was 40); a stale token no longer falls through to **fixture prices for real symbols** (M23.1–.5) |
 | M24 | Corporate actions, recovered from the ratio | 🟡 **method proven, not built** | 22 Aug 2026 | Kite's bars are adjusted — docs/09 said otherwise. **85 actions over 65 symbols**, 83 confirmed. Dividend half queued as item 8 (M24.1–.4) |
+| M34 | Sleeves — a portfolio run as several screens | ✅ **green** | 22 Aug 2026 | Capital split across screens plus a slice run by hand. **Amounts and weights, never unit counts** — structural, since the allocator receives no quote. Stance stated, cap opt-in (M34.1–.6) |
+| M33 | The Market Health page says what it cannot show | ✅ **green** | 22 Aug 2026 | The range filter was fine; the page was not. Truncated-range notice + the survivorship-bias disclosure, both asserted over the source (M33.1–.3) |
+| M32 | Breadth history | ✅ **green** | 22 Aug 2026 | The charts draw. `factor_daily` held **one date**; computing any historical date crashed on a schema M29 broke. Sampled weekly: 45s of computing per date (M32.1–.5) |
+| M31 | Index and sector levels | ✅ **green** | 22 Aug 2026 | 136 NSE indices from Kite, **146,049 rows**, 2017→today. A test caught `PSE`≠`PSU BANK` in the abbreviation table (M31.1–.3) |
+| M30 | The basket, precomputed | ✅ **green** | 22 Aug 2026 | `/baskets` **67s → 0.21s**. Step 11, after publish, and a cache that can never fail the run (M30.1–.5) |
+| M29 | Deep history from Kite | ✅ **green** | 22 Aug 2026 | **1.1M → 3.53M bars, 2017-01-02 onward.** Not via `make backfill`, which would have written adjusted prices into `close_raw` (M29.1–.7) |
 | M28 | Corporate actions applied | ✅ **green** | 22 Aug 2026 | **285 actions written, 151,922 bars rebuilt.** Banner 41→5, M12 23/25→**25/25**. Two defects found by reading the prices, not the insert (M28.1–.5) |
 | M25 | Baskfy, everywhere | ✅ **green** | 22 Aug 2026 | The app said "Decile" in 35 strings, its email, its invoices and four legal docs. Renamed, `X-Decile-*` headers included; a brand gate found 24 more (M25.1–.4) |
 | M26 | The desk's record on the web app | ✅ **green** | 22 Aug 2026 | Performance, Holdings, Trades, Market stance, Plan vs fills — Next.js, plain language, read-only asserted twice more. Live-broker pages stay in the console pending D3 (M26.1–.5) |

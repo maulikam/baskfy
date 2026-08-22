@@ -4,7 +4,15 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Current module:** M22 complete — the script is finished · M11/M12 red; M13–M14 blocked by rule 7 · **State:** running autonomously
+**Run started:** 22 Aug 2026 · **Run finished:** 22 Aug 2026 · **State:** complete, M0 → M22.
+
+**M11 and M12 remain red**, both for the same reason: 41 of 271 symbols carry corporate actions
+that were never applied to their price history (`NEEDS-MAULIK.md` item 4). M13 and M14 are
+therefore built-but-not-switched-on rather than green.
+
+Start here: [`FINAL-REPORT.md`](../FINAL-REPORT.md) — what is green, what is queued, and the 58
+decisions I made without asking. Then [`RUN-AND-TEST.md`](../RUN-AND-TEST.md) to run it, and
+[`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) for the seven items only you can do.
 
 Since 22 Aug 2026 this is an **autonomous run** under `CLAUDE.md` §Autonomy charter:
 judgement calls are decided, recorded in `DECISIONS-MERGE.md` (tagged `⚠ UNREVIEWED`

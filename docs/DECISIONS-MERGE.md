@@ -2882,3 +2882,50 @@ pins the measured convention, and its docstring carries the evidence.
 the identity that makes every other number on the page trustworthy. Asserted now, including across
 a delisting, which is the path most likely to lose a rupee because the sale happens outside the
 rebalance schedule.
+
+## M40 — the palette is the broker screen's
+
+Maulik, 23 Aug 2026: *"https://web.sensibull.com/login?broker=kite and https://kite.zerodha.com/
+Color palette and look and feel should be like this of this website."*
+
+### M40.1 — read, not recalled ⚠ UNREVIEWED
+Both stylesheets were fetched. Kite's `static/css/index.4b954422.css`: blue `#4184f3`, green
+`#4caf50`, red `#df514c`, sell-orange `#ff5722`, muted `#9b9b9b`, page greys
+`#f4f4f4`/`#f8f8f8`/`#fafafb`, washes `#ecf6fd`/`#ebf8f2`/`#fef0ef`/`#fffaeb`. Sensibull:
+`#216ba5`, `#2a87d0`, `#3dcc4a`, `#f0f0f0`, `#f7f7f7`. Same system in both — near-white cool-grey
+canvas, hairline borders, white panels, one blue accent, green up and red down.
+
+That is also the right call for this product independently of taste: its user is looking at Kite
+in the next tab, and this is the convention every Indian broker screen already trained them on.
+
+### M40.2 — the hues are theirs; the values are not ⚠ UNREVIEWED
+Measured against white: Kite's blue is **3.61:1**, its green **2.78**, its red **3.88**, its muted
+grey **2.78**. docs/11 §Accessibility requires 4.5:1 of anything carrying text. Every one is under
+it — copying the values verbatim would have imported an accessibility defect along with the look.
+
+So each hue is darkened until it is legible and no further: `#4184f3` → `#1a5fc4` (6.04:1),
+`#4caf50` → `#1a7f37` (5.08), `#df514c` → `#a81f14` (7.31). The four wash colours are used
+**unchanged**, because a background carries no text of its own.
+
+`--brand` keeps Kite's exact `#4184f3` for fills — the active nav tab, a chart series, a small
+mark. Near-black on it is 5.12:1, and it clears WCAG 1.4.11's 3:1 as a graphic against the canvas,
+which the previous palette's orange did not. It is never type; `no-brand-as-text.test.ts` enforces
+that.
+
+### M40.3 — Kite's sell-orange is deliberately absent ⚠ UNREVIEWED
+`#ff5722` is a Zerodha signature and it is not here. Baskfy's mark is orange, and a product whose
+logo and whose losses share a hue has made both mean less — the same mistake M37 caught in the
+breadth gauge, where an orange accent became indistinguishable from a red one. Losses are red.
+
+### M40.4 — Inter, reversing M37's argument ⚠ UNREVIEWED
+M37 chose Bricolage Grotesque for headings on the grounds that Inter is the most-used interface
+face on the web and a product that wants not to look like every other product should not open with
+it. Sound in general, wrong here: the instruction is to feel like the broker screen, and a
+characterful display face is exactly what breaks that. Kite and Sensibull are both Inter, headings
+included, differing by size and tracking rather than by family.
+
+Geist Mono stays for figures — Kite sets its numbers in tabular Inter, and a real mono does that
+job better. It is the one deliberate departure from the reference.
+
+The paper grain is gone (`--grain-opacity: 0` and the class off `<body>`) and the container radius
+drops from 12px to 8px. Both belonged to the warm-paper system; a broker screen is a screen.

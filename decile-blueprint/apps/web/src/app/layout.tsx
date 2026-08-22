@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Inter } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ConsentBanner } from "@/components/consent/consent-banner";
@@ -8,34 +8,33 @@ import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site"
 import "./globals.css";
 
 /**
- * Three faces, each with one job — see `globals.css` §`@theme` for why the split exists.
+ * Two faces, and the second one exists only for figures.
  *
  * `next/font` self-hosts every file and emits `size-adjust` fallback metrics, so the fallback and
  * the real font occupy the same space — the layout does not move when the webfont arrives, which
  * is Prompt 8's fourth acceptance criterion applied to type.
  *
- * The root `DESIGN.md` names Degular Display with Inter for body. Degular is a licensed face this
- * project holds no licence for, and Inter is the most-used interface font on the web — following
- * that pairing literally produced a page that read as somebody else's product. Both are replaced,
- * and the note is in `docs/DECISIONS-MERGE.md` §M36.3.
+ * **Inter, because Kite and Sensibull are Inter.** An earlier pass argued for a display grotesk on
+ * the grounds that Inter is the most-used interface face on the web and a product that wants not
+ * to look like every other product should not open with it. That reasoning is sound in general and
+ * wrong here: Maulik's instruction is that this should feel like the broker screen his user
+ * already has open in the next tab, and a characterful display face is precisely what would break
+ * that. Headings are Inter at a larger size and a tighter track, which is what Kite does.
+ *
+ * Geist Mono stays. Kite sets its figures in tabular Inter; a real mono is strictly better at the
+ * same job and is the one place this departs from the reference, because a column of prices that
+ * lines up character-for-character is worth more than the last few percent of resemblance.
  */
-const geist = Geist({
+const inter = Inter({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-geist",
+  variable: "--font-inter",
 });
 
 const geistMono = Geist_Mono({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-geist-mono",
-});
-
-const bricolage = Bricolage_Grotesque({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-bricolage",
-  axes: ["opsz"],
 });
 
 export const metadata: Metadata = {
@@ -67,8 +66,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   /* The browser chrome follows the theme, so the toggle does not leave a white status bar. */
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f2f1ec" },
-    { media: "(prefers-color-scheme: dark)", color: "#131310" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f8fa" },
+    { media: "(prefers-color-scheme: dark)", color: "#14161a" },
   ],
 };
 
@@ -96,8 +95,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
      * markup and the client's first read differ by design. That script is what prevents the
      * light-then-dark flash (Prompt 8 deliverable 6, "a working dark mode with no FOUC").
      */
-    <html lang="en-IN" suppressHydrationWarning className={`${geist.variable} ${bricolage.variable} ${geistMono.variable}`}>
-      <body className="grain antialiased">
+    <html lang="en-IN" suppressHydrationWarning className={`${inter.variable} ${geistMono.variable}`}>
+      <body className="antialiased">
         {children}
         <ConsentBanner />
       </body>

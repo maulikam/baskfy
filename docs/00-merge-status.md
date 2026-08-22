@@ -15,9 +15,9 @@ turned out to be broken in three places, all now fixed and committed (M23). Then
 moved: **Kite's historical bars are adjusted**, so the ratio between them and the raw bhavcopy print
 *is* the missing corporate-action history. **85 actions recovered across 65 symbols**, 83 confirmed,
 evidence in `decile-blueprint/reconciliation/RECOVERED-ACTIONS.md`. The derivation is specified and
-not yet built (M24.4). One question went back to Maulik — `NEEDS-MAULIK.md` item 8, whether momentum
-is a price return or a total return — because the 38 dividend-shaped actions change what the
-strategy trades, while the 47 splits and bonuses are simply wrong data.
+not yet built (M24.4). That question — `NEEDS-MAULIK.md` item 8, whether momentum is a price return or a total return —
+**was settled at M27 by measuring the corpus rather than by preference: price return**, 42–3, with
+25 of 25 dividend payers matching exactly on the windows M11 fixed.
 
 ⚠️ **Do not run `make backfill` until M24 lands.** As built it writes Kite's *adjusted* prices into
 `close_raw`, the column house rule 6 defines as the exchange print (M24.1).
@@ -61,6 +61,9 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M21 | Verification + handover | ✅ **green** | 22 Aug 2026 | `RUN-AND-TEST.md` at the root; the DRY_RUN Friday drill runs end to end with **0 orders reaching a broker**; M12 corpus unchanged through M13–M20 |
 | M23 | The Kite path, on first contact | ✅ **green** | 22 Aug 2026 | Token bridge writes both stores; instrument upsert batched (10,222 tokens, was 40); a stale token no longer falls through to **fixture prices for real symbols** (M23.1–.5) |
 | M24 | Corporate actions, recovered from the ratio | 🟡 **method proven, not built** | 22 Aug 2026 | Kite's bars are adjusted — docs/09 said otherwise. **85 actions over 65 symbols**, 83 confirmed. Dividend half queued as item 8 (M24.1–.4) |
+| M25 | Baskfy, everywhere | ✅ **green** | 22 Aug 2026 | The app said "Decile" in 35 strings, its email, its invoices and four legal docs. Renamed, `X-Decile-*` headers included; a brand gate found 24 more (M25.1–.4) |
+| M26 | The desk's record on the web app | ✅ **green** | 22 Aug 2026 | Performance, Holdings, Trades, Market stance, Plan vs fills — Next.js, plain language, read-only asserted twice more. Live-broker pages stay in the console pending D3 (M26.1–.5) |
+| M27 | The dividend question, measured | ✅ **green** | 22 Aug 2026 | **Price return.** 42–3, and **25 of 25 exact** on 1M/3M/6M. Confirms M11's base fix and M24's splits for free (M27.1–.4) |
 | M22 | The merged face (read-only) | ✅ **green** | 22 Aug 2026 | `/baskets` and `/baskets/plan` on real data. Every mutation **405**; two suites hold it read-only. Desk suite untouched |
 
 ---

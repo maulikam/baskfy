@@ -687,7 +687,7 @@
           },
           "dividends": {
             "$ref": "#/components/schemas/DividendPolicy",
-            "default": "reinvest"
+            "default": "ignore"
           },
           "end": {
             "format": "date",
@@ -815,7 +815,7 @@
           },
           "dividends": {
             "$ref": "#/components/schemas/DividendPolicy",
-            "default": "reinvest"
+            "default": "ignore"
           },
           "end": {
             "format": "date",
@@ -2366,7 +2366,7 @@
         "type": "object"
       },
       "DividendPolicy": {
-        "description": "docs/10 §7: ``dividends: \"reinvest\" | \"cash\" | \"ignore\"``.\n\nThere is a wrinkle the document does not know about, and it decides the default.\n\ndocs/09's adjustment algorithm — which this repository implements in\n:mod:`baskfy_core.adjustments` — folds **cash dividends** into ``adj_factor`` alongside splits\nand bonuses: \"Cash dividend D -> (P_cum - D) / P_cum\". So ``ohlcv_daily.close``, the adjusted\nseries docs/10 §6 marks the book to, is already a *total-return* series. Crediting the\ndividend as cash on top of it would count it twice.\n\nHence:\n\n``reinvest``\n    Mark to the adjusted series as-is. Back-adjustment **is** reinvestment at the ex-date\n    price, so this is exact and it is the default.\n``cash``\n    Mark to a dividend-stripped price series and credit the dividend to cash on the ex-date.\n    Needs ``price_open``/``price_close`` columns and a dividend schedule in the panel; without\n    them the run is refused rather than silently served as ``reinvest``.\n``ignore``\n    Mark to the dividend-stripped price series and credit nothing — a pure price return.\n    Same data requirement.",
+        "description": "docs/10 §7: ``dividends: \"reinvest\" | \"cash\" | \"ignore\"``.\n\n## What the stored series actually is, and why this changed in M39\n\nThis enum used to default to ``reinvest`` on the strength of docs/09's adjustment algorithm,\nwhich folds cash dividends into ``adj_factor`` alongside splits and bonuses\n(``D -> (P_cum - D) / P_cum``). If that ran, ``ohlcv_daily.close`` would be a *total-return*\nseries and marking the book to it would be reinvestment, exactly.\n\n**It does not run.** M27 put the question to the reference corpus and measured the answer:\nof 45 deciding symbol-windows the price convention won 42, and it matched all 25 dividend-\npaying symbols exactly at stored precision on the three windows that reproduce. M28 then\napplied the 47 share-count actions and deliberately **not** the 38 dividend-shaped ones\n(`reconciliation/RECOVERED-ACTIONS.md`, \"VERDICT: PRICE RETURN\").\n\nSo the adjusted close is a **price-return** series: splits and bonuses are inside it, cash\ndividends are not. Every policy below is defined against that fact.\n\n``ignore``\n    Mark to the stored series and credit nothing — a pure price return. **Exact, needs no\n    extra data, and is therefore the default.** It is what the engine has always actually\n    computed; until M39 it was mislabelled ``reinvest``.\n``cash``\n    Credit each dividend to cash on its ex-date. Needs a dividend schedule on the panel and\n    is refused without one.\n``reinvest``\n    Would need a total-return series rebuilt from the dividend schedule. Same requirement,\n    same refusal — and note it can no longer be served by doing nothing, which is what made\n    the old default wrong rather than merely mislabelled: it understated every return by\n    roughly the dividend yield while telling the reader dividends were included.",
         "enum": [
           "reinvest",
           "cash",

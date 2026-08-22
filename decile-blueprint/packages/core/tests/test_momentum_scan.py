@@ -191,3 +191,51 @@ def test_suspect_symbols_are_limited_to_the_scans_own_rows() -> None:
     assert "ZULU" not in scan.frame["symbol"].to_list()  # ...but it is not in the scan
     assert "ZULU" not in scan.suspect_symbols  # ...so it is not warned about
     assert len(scan.suspect_symbols) <= scan.frame.height
+
+
+class TestGapsAreNotCorporateActions:
+    """A step across a hole in the history is not evidence of a missing adjustment (M29).
+
+    `unadjusted_symbols` compares consecutive *rows*. Until 22 Aug 2026 it did not check that
+    they were consecutive *days*, so a multi-year hole read as a single enormous split. The deep
+    backfill took the history from 2024 back to 2017, filled it with instruments that stop and
+    resume trading, and the contamination banner went from 5 symbols to 11 — every new one a gap.
+    """
+
+    def _bars(self, rows: list[tuple[str, dt.date, float]]) -> pl.DataFrame:
+        return pl.DataFrame(
+            {
+                "symbol": [r[0] for r in rows],
+                "date": [r[1] for r in rows],
+                "close": [r[2] for r in rows],
+            }
+        )
+
+    def test_a_step_between_consecutive_days_is_still_flagged(self) -> None:
+        bars = self._bars(
+            [
+                ("SPLITCO", dt.date(2026, 6, 1), 1000.0),
+                ("SPLITCO", dt.date(2026, 6, 2), 100.0),
+            ]
+        )
+        assert ms.unadjusted_symbols(bars) == ("SPLITCO",)
+
+    def test_the_same_step_across_a_four_year_hole_is_not(self) -> None:
+        """ARIHANT: bars stop in Feb 2022, resume in Apr 2026, +2,188% in one row-to-row step."""
+        bars = self._bars(
+            [
+                ("ARIHANT", dt.date(2022, 2, 3), 39.65),
+                ("ARIHANT", dt.date(2026, 4, 20), 907.55),
+            ]
+        )
+        assert ms.unadjusted_symbols(bars) == ()
+
+    def test_a_long_weekend_still_counts_as_adjacent(self) -> None:
+        """A holiday cluster must not become a licence to hide a real split."""
+        bars = self._bars(
+            [
+                ("SPLITCO", dt.date(2026, 6, 1), 1000.0),
+                ("SPLITCO", dt.date(2026, 6, 5), 100.0),
+            ]
+        )
+        assert ms.unadjusted_symbols(bars) == ("SPLITCO",)

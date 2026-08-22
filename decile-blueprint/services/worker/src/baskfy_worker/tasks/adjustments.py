@@ -234,7 +234,18 @@ async def _load_raw_bars(session: AsyncSession, instrument_id: int) -> pl.DataFr
             OhlcvDaily.volume_raw,
             OhlcvDaily.adj_factor,
         )
-        .where(OhlcvDaily.instrument_id == instrument_id)
+        .where(
+            OhlcvDaily.instrument_id == instrument_id,
+            # M29: deep-history bars come from Kite already adjusted, and there is no exchange
+            # print behind them to re-derive one from. Re-adjusting them would apply the stored
+            # corporate actions a SECOND time, on top of the vendor's own adjustment -- the exact
+            # double-count M28.2 found on CUPID, but silent and across nine years.
+            #
+            # They are excluded from the rebuild rather than deleted by it: `close_raw` carries
+            # the adjusted value for these rows (the column is NOT NULL), so a rebuild that read
+            # them would also overwrite the verified segment's neighbours with nonsense.
+            OhlcvDaily.source != "kite",
+        )
         .order_by(OhlcvDaily.date)
     )
     records = rows.all()

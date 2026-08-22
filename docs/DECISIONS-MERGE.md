@@ -2172,3 +2172,82 @@ editing history — the same argument that allowlists CLAUDE.md D1's own sentenc
 Excluded deliberately alone. **`RUN-AND-TEST.md` and `NEEDS-MAULIK.md` stay in scope**, because
 they are live operator documents rather than records: if either ever says the old name, that is a
 bug and the gate should catch it.
+
+---
+
+## M29 — nine years of history, from Kite, stored as what it is
+
+Maulik asked for the deep backfill through the Kite API, from 2017. `ohlcv_daily` went from
+**1,145,922 bars starting 2024-01-01** to **3,534,860 bars starting 2017-01-02**.
+
+### M29.1 — measured limits, before anything was run ⚠ UNREVIEWED
+| | |
+|---|---|
+| Earliest date Kite serves | **2000-01-03** (RELIANCE; 1999 and earlier return empty, not an error) |
+| Per-request cap, `day` | **2,000 days** — 2,001 is refused with `InputException: interval exceeds max limit` |
+| Rate limit in force | 3 req/s, a Redis token bucket shared across workers |
+| Retry | 5 attempts, 0.5s→30s jittered backoff |
+| Circuit breaker | opens after 5 failures, resets after 60s |
+| Health check | configuration only — never touches the network, so `doctor` works offline |
+
+2017→today is two requests per instrument; 2,294 instruments is ~4,600 calls, which at 3 req/s is
+the ~25 minutes it took.
+
+### M29.2 — why `baskfy_worker.backfill` was not the thing to run ⚠ UNREVIEWED
+It exists, it is resumable, and it would have been the obvious command. It writes the provider's
+`close` into **`close_raw`** — "raw in, raw out" — on docs/09's assumption that Kite returns
+unadjusted OHLC.
+
+**Kite returns adjusted OHLC** (M24). Running it would have put adjusted prices into the column
+house rule 6 defines as the exchange print *and*, with `corporate_action` now holding 289 rows, the
+next `reprocess_instrument` would have adjusted them a second time — M28.2's CUPID double-count,
+silent and across nine years.
+
+**Taken:** a separate module that stores the series as what it is. `source = 'kite'`,
+`adj_factor = 1` (the adjustment is inside the price, not applied on top of it), and `close_raw`
+carrying the same value because the column is NOT NULL and there is no exchange print on this side
+for those years. `reprocess_instrument` now excludes `source = 'kite'` rows, which is the guard
+that makes the whole arrangement safe.
+
+**Reversal:** `DELETE FROM ohlcv_daily WHERE source = 'kite'`. The bhavcopy segment is untouched —
+the write is `ON CONFLICT DO NOTHING`, so a date the database already held kept its real exchange
+print and its verified adjustment.
+
+### M29.3 — the seam is spliced, and that is a real compromise ⚠ UNREVIEWED
+The segments meet at 2024-01-01 and are adjusted differently: ours is **price-return** (M27),
+Kite's includes dividends. Left alone the join would show a step of the cumulative dividend yield
+since 2024 — inside every backtest window that crosses it.
+
+**Taken:** multiply the Kite segment by `ours / kite` on their first shared date. **Median seam
+jump across 1,807 instruments: 1.31%**; only 9 exceed 20%, and every one of those spans a
+multi-year hole in the instrument's history rather than a discontinuity in the splice.
+
+**The compromise, stated plainly:** within the deep segment the *shape* is Kite's, so returns
+computed wholly inside 2017–2023 still carry a dividend adjustment the post-2024 data does not.
+The level is anchored, the convention is not. Fixing that properly needs raw exchange prints for
+those years, which is the NSE bhavcopy archive and a different module.
+
+### M29.4 — a zero close is not a cheap price ⚠ UNREVIEWED
+Kite serves placeholder candles at 0.0 for dates before an instrument listed — 107 of them across
+MAZDOCK and PRIVISCL. A zero makes the next bar an infinite gain and the previous one a total loss.
+Filtered at write time and the 107 already written were deleted.
+
+### M29.5 — the deep history exposed a bug in the contamination banner ⚠ UNREVIEWED
+`/baskets`' suspect count went **5 → 11** after the backfill. None of the new ones were corporate
+actions: `unadjusted_symbols` compared consecutive **rows** without checking they were consecutive
+**days**, so a hole in the history read as a split. ARIHANT's bars stop in Feb 2022 and resume in
+Apr 2026 — one row-to-row step of +2,188%.
+
+**Taken:** two bars must be within seven calendar days to count as adjacent. A long weekend plus a
+holiday cluster fits; anything wider is a hole, and a step across a hole is evidence of nothing.
+Back to **5**, and a more credible five — SKYGOLD, STAR, V2RETAIL and SCHNEIDER were all gaps.
+
+The bug predates M29 and was invisible while the history was two years long and dense.
+
+### M29.6 — `/baskets` now takes 67 seconds, and that is not fixed ⚠ UNREVIEWED
+The page computes its basket live from bars. Three times the history is three times the load, and
+the response went from about a second to **67**. Nothing about the result is wrong; it is slow.
+
+Recorded rather than fixed because the fix is a design decision — cache the scan, bound the window
+the basket engine loads, or precompute it in the nightly chain — and none of those should be
+chosen in the last ten minutes of a session. `NEEDS-MAULIK.md` item 10.

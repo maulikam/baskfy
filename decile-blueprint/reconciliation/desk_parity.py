@@ -39,9 +39,8 @@ from pathlib import Path
 import pandas as pd
 import polars as pl
 
+from baskfy_core import momentum_scan
 from baskfy_core import score as core_score
-from baskfy_core.factors import compute_factors
-from baskfy_core.reference_export import FACTOR_COLUMN_MAP
 
 ROOT = Path(__file__).resolve().parent.parent
 ORACLE = ROOT.parent / "kite-momentum-rebalancer" / "data" / "uploads"
@@ -137,7 +136,13 @@ async def _fetch(symbols: list[str], as_of: dt.date) -> tuple[pl.DataFrame, list
     return frame, [d[0] for d in days]
 
 
-def generate(oracle: pd.DataFrame, as_of: dt.date) -> pd.DataFrame:
+def generate(oracle: pd.DataFrame, as_of: dt.date, cfg: object) -> pd.DataFrame:
+    """Build the scan through the real `MomentumScan` contract, not a copy of it.
+
+    This used to inline the generation. Going through `baskfy_core.momentum_scan` means the gate
+    tests the code the desk actually runs — a harness that reproduces the pipeline instead of
+    calling it can pass while the pipeline is broken.
+    """
     symbols = sorted(oracle["symbol"].tolist())
     bars, trading_days = asyncio.run(_fetch(symbols, as_of))
     if bars.is_empty():
@@ -145,22 +150,10 @@ def generate(oracle: pd.DataFrame, as_of: dt.date) -> pd.DataFrame:
             "no bars in ohlcv_daily for the oracle's symbols — is the database seeded?"
         )
 
-    # `.to_pandas()` needs pyarrow, which this workspace does not carry. `to_dicts()` is the
-    # boundary docs/02 sanctions anyway: polars computes, pandas scores, one line between them.
-    computed = pd.DataFrame(compute_factors(bars, as_of, trading_days).frame.to_dicts())
-
-    # The engine speaks short names (`ret_12m`); the desk and the export speak long ones
-    # (`absolute_return_one_year`). `FACTOR_COLUMN_MAP` is the seam the merge already
-    # established — reusing it means a renamed export column breaks this harness rather than
-    # silently sliding past it.
-    computed = computed.rename(columns={v: k for k, v in FACTOR_COLUMN_MAP.items()})
-    carried = oracle[["symbol", "series", *HELD_CONSTANT]]
-    merged = computed.merge(carried, on="symbol", how="inner", suffixes=("", "_upload"))
-    for col in HELD_CONSTANT:
-        if f"{col}_upload" in merged.columns:  # computed one too; the upload's wins, by design
-            merged[col] = merged[f"{col}_upload"]
-    merged["date"] = str(as_of)
-    return merged
+    carried = pl.DataFrame(oracle[["symbol", "series", *HELD_CONSTANT]].to_dict(orient="records"))
+    scan = momentum_scan.build(bars, as_of, trading_days, cfg=cfg, carried=carried)
+    print(f"screen_run_id: {scan.screen_run_id}  (definition + as_of + data_version)")
+    return pd.DataFrame(scan.frame.to_dicts())
 
 
 def top_n(frame: pd.DataFrame, cfg: object, n: int = 25) -> pd.DataFrame:
@@ -179,7 +172,7 @@ def main() -> int:
     print(f"oracle: {ORACLE_CSV.name} — {len(oracle)} rows, as of {as_of}")
     print(f"held constant from the upload: {', '.join(HELD_CONSTANT)}\n")
 
-    generated = generate(oracle, as_of)
+    generated = generate(oracle, as_of, cfg)
     print(f"generated: {len(generated)} rows through the merged factor engine\n")
 
     a = top_n(oracle, cfg)

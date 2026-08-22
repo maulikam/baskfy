@@ -283,9 +283,28 @@ async def _funding_check(k, orders) -> dict:
 
 
 @app.post("/analyze")
-async def analyze(scan: UploadFile):
-    """Score the uploaded scan, pull live holdings + cash, return the full plan."""
-    raw = await scan.read()
+async def analyze(scan: UploadFile | None = None, generate_for: str = Form("")):
+    """Score a scan, pull live holdings + cash, return the full plan.
+
+    Two ways in, one plan builder (M13 §2). **Upload keeps working and stays the default** — pass
+    `generate_for=YYYY-MM-DD` to build the scan from the merged engine instead. The generated path
+    is opt-in on purpose: `reconciliation/DESK-PARITY.md`'s delta table is not empty, and a
+    generated scan currently offers a *smaller* tradeable universe than an uploaded one because
+    unadjusted corporate actions trip the `far_from_high` filter. The plan says so in
+    `plan["scan"]["warnings"]` rather than arriving quietly short.
+    """
+    if generate_for:
+        df, provenance, note = _generated_scan(generate_for)
+    elif scan is not None:
+        df, provenance, note = _uploaded_scan(scan, await scan.read())
+    else:
+        raise HTTPException(400, "send a scan file, or generate_for=YYYY-MM-DD")
+
+    return await _plan_from_scan(df, provenance, note)
+
+
+def _uploaded_scan(scan: UploadFile, raw: bytes) -> tuple[pd.DataFrame, dict, str]:
+    """The original path, unchanged in behaviour — including retaining the file."""
     df = load_scan(io.BytesIO(raw))
     # Kept, not discarded. The plan already recorded WHICH scan built it; without the file
     # itself that name cannot be resolved back to the numbers, and the holdings page has
@@ -299,6 +318,84 @@ async def analyze(scan: UploadFile):
         dest.write_bytes(raw)
     except Exception as exc:                                       # noqa: BLE001
         logging.warning("could not retain the uploaded scan: %s", exc)
+
+    # An upload has no screen definition, so its inputs are re-resolved through the bytes
+    # themselves. M13 §3 asks that an old plan can name what produced it; for an upload the
+    # honest answer is this exact file, and a digest of it is what makes that checkable.
+    import hashlib
+    provenance = {
+        "source": "upload",
+        "screen_run_id": f"upload:{hashlib.sha256(raw).hexdigest()[:16]}",
+        "filename": scan.filename,
+        "rows": int(len(df)),
+        "warnings": [],
+    }
+    return df, provenance, f"scan {scan.filename}"
+
+
+def _generated_scan(generate_for: str) -> tuple[pd.DataFrame, dict, str]:
+    """M13 §2: the same columns, from the merged engine instead of a website."""
+    from . import scan_source
+
+    try:
+        as_of = dt.date.fromisoformat(generate_for)
+    except ValueError:
+        raise HTTPException(400, f"generate_for must be YYYY-MM-DD, got {generate_for!r}") from None
+
+    carried = _carried_columns()
+    try:
+        generated = scan_source.generate(as_of, carried)
+    except Exception as exc:
+        raise HTTPException(503, f"could not generate a scan for {as_of}: {exc}") from None
+
+    provenance = dict(generated.provenance(), source="generated")
+    provenance["warnings"] = _scan_warnings(generated)
+    return scan_source.as_desk_frame(generated), provenance, f"generated scan {as_of}"
+
+
+def _scan_warnings(generated) -> list[str]:
+    """Say what is wrong with this scan, on the plan, before anyone trades it."""
+    if not generated.suspect_symbols:
+        return []
+    return [
+        f"{len(generated.suspect_symbols)} of {generated.frame.height} symbols carry an "
+        f"unadjusted corporate action: their highs and returns are wrong, and some will be "
+        f"rejected by the far_from_high filter. This scan is a SMALLER universe than an "
+        f"uploaded one. See NEEDS-MAULIK.md item 4."
+    ]
+
+
+def _carried_columns():
+    """The four columns no bar series can produce, taken from the most recent uploaded scan.
+
+    Nothing in either repository fetches fundamentals or a year of index levels yet, so these are
+    borrowed rather than measured — and borrowing them from the last real export is the only
+    honest source available. When the last export is old, the marketcap and beta are old too;
+    that is recorded in the plan's provenance rather than hidden.
+    """
+    import polars as pl
+    from baskfy_core.momentum_scan import CARRIED_COLUMNS
+
+    scans = sorted(UPLOAD_DIR.glob("scan_*.csv"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not scans:
+        raise HTTPException(
+            503,
+            "a generated scan still needs marketcap, beta, circuits and F&O membership, and no "
+            "uploaded scan is available to take them from. Upload one scan first.",
+        )
+    frame = pd.read_csv(scans[0], encoding="utf-8-sig")
+    missing = [c for c in ("symbol", "series", *CARRIED_COLUMNS) if c not in frame.columns]
+    if missing:
+        raise HTTPException(503, f"{scans[0].name} cannot supply {missing}")
+    return pl.DataFrame(frame[["symbol", "series", *CARRIED_COLUMNS]].to_dict(orient="records"))
+
+
+async def _plan_from_scan(df: pd.DataFrame, provenance: dict, note: str):
+    """Everything after the scan arrives — identical for both paths, by construction.
+
+    M13 §2 asks that both paths produce the same plan for the same date. The cheapest way to be
+    sure of that is for there to be only one path from here down.
+    """
     scan_audit = audit(df)
     scored = score(df)
 
@@ -327,6 +424,7 @@ async def analyze(scan: UploadFile):
 
     plan = build_plan(scored, holdings, cash, live_prices=live)
     plan["audit"] = scan_audit
+    plan["scan"] = provenance                          # M13 §3: how this plan can be re-resolved
     # Before you confirm, not after the batch is half sent.
     plan["funding"] = await _funding_check(k, plan["orders"])
     plan["created_at"] = time.time()
@@ -346,7 +444,7 @@ async def analyze(scan: UploadFile):
             ev = _rs.latest_evaluation(conn) if C.REGIME_ENABLED else None
             plan["evaluation_id"] = ev["evaluation_id"] if ev else None
             _ps.save_plan(conn, plan, evaluation_id=plan["evaluation_id"],
-                          note=f"scan {scan.filename}")
+                          note=f"{note} [{provenance['screen_run_id']}]")
     except Exception as exc:
         logging.warning("could not persist plan %s: %s", plan["plan_id"], exc)
 

@@ -1313,3 +1313,72 @@ So **M9's 2011-depth backfill and M10's corporate-action work remain queued on o
 under the charter everything independent of them continues. What the bridge removed is the second
 manual step, not the first: Kite mints tokens per human through a browser, and no amount of
 engineering on this side changes that.
+
+---
+
+## M13 — the CSV cord is cut, and the cord stays plugged in
+
+### M13.1 — the generated path is opt-in, not the default ⚠ UNREVIEWED
+Rule 7 says M13 opens only on empty delta tables, and the table is not empty. The standing
+instruction says finish M13. M13's own text says **"upload keeps working"**, and that is the reading
+that satisfies both: everything M13 asks for is built, and none of it becomes the default.
+
+`POST /analyze` still takes a file. `generate_for=YYYY-MM-DD` is the only way to the new path —
+there is deliberately no "generate today's" shortcut, because opting in should cost a typed date
+until the gate is green.
+
+**Why that caution is not ceremonial:** a generated scan is currently a *smaller* tradeable universe
+than an uploaded one. Measured on the 2026-08-18 corpus, the generated scan passes **223** symbols
+where the upload passes **239** — and **fourteen of the sixteen** are rejected by `far_from_high`,
+because an unadjusted pre-split high makes a stock look 80% below a peak it never reached. A desk
+that silently stopped seeing sixteen names would look exactly like a desk that was working.
+
+So the contamination is surfaced on the plan itself, in `plan["scan"]["warnings"]`, not only in a
+log line nobody reads at 09:10.
+
+### M13.2 — the contamination has a signature, and it accounts for all of it ⚠ UNREVIEWED
+`momentum_scan.unadjusted_symbols` flags any overnight close-to-close step above **35%**. That
+threshold sits between the two populations rather than inside either: NSE's circuit band caps a
+genuine one-day move at 20%, and the smallest adjustment ratio in ordinary use (a 5:4 bonus) is a
+20% step.
+
+Every symbol whose `away_from_high_one_year` disagreed with the export by more than ten points had
+one of these steps. **Every one.** `DIACABS` at −2.92 in the export and −80.63 generated;
+`ANGELONE` stepping 2489.90 → 246.50 overnight; `MCX` 10989 → 2216.
+
+This restates `NEEDS-MAULIK` item 4 far more sharply than "40 of 271 symbols carry unadjusted
+actions". It is not blur in the fourth significant figure. **It removes tradeable names from the
+universe.**
+
+### M13.3 — an empty universe was a 500 ⚠ UNREVIEWED
+`build_plan` divided by zero when nothing survived the filters — `sum(w.values())` over an empty
+weight map. A market where every candidate sits below both its 50- and 200-day averages should
+produce no buys, not a traceback in the middle of a rebalance.
+
+It was unreachable in practice while every scan arrived as a 271-row upload. **M13 made it
+reachable**, since a generated scan can come back with nothing tradeable in it. Guarded, with the
+regression test one layer up as well: the route returns 200 with an empty plan.
+
+### M13.4 — `screen_run_id` answers "what made this plan" for both paths ⚠ UNREVIEWED
+A digest of the **inputs** — definition, as-of date, data version — not of the output. An output
+digest tells you two runs differed without telling you why; the point is to resolve inputs.
+
+An upload has no screen definition, so its honest answer is the file itself: `upload:<sha256[:16]>`
+of the exact bytes. Same file, same id; one trailing newline different, different id. Both forms
+land in `plan["scan"]` and in the persisted plan's note.
+
+### M13.5 — three defects the fixture and the real database found ⚠ UNREVIEWED
+1. **A join let the engine's empty `series` beat the carried one**, and `apply_filters` rejected
+   sixteen names for a null series. Polars suffixes rather than merges; the earlier pandas version
+   had the same defect and hid it. Now whatever the caller carries wins and the loser is dropped.
+2. **`volume` names two different quantities** — a share count on a bar, exchange turnover in ₹ in
+   the export (docs/13 §2 finding 5). Strict polars `rename` refused the collision; pandas had been
+   silently producing two columns of that name.
+3. **"452 of 271 symbols carry an unadjusted corporate action."** The detector ran across every bar
+   fetched rather than the scan's own rows. A warning that is visibly wrong on its face is worse
+   than no warning, because people learn to ignore it.
+
+The first fixture was worse than useless before this: every symbol was rejected as illiquid at ₹1
+crore turnover against a ₹5 crore floor, so "both paths produce the same plan" passed by comparing
+an empty plan to an empty plan. The fixture now clears the floor, two names survive, and a test
+asserts the plan is non-empty so it cannot quietly regress to comparing nothing with nothing.

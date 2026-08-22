@@ -199,22 +199,32 @@ def build_plan(
     pool = invest - runner_val
     raw = {s: sc for s, sc in selected.items()}
     tot = sum(raw.values())
-    w = {
-        s: min(
-            sc / tot * 100 * (invest / capital) * (pool / invest) / (invest / capital),
-            cfg.MAX_SINGLE_WEIGHT,
-        )
-        for s, sc in raw.items()
-    }
+
+    # An empty selection is a legitimate answer, not an error: a market where every candidate sits
+    # below both its 50- and 200-day averages should produce no buys. It became reachable the
+    # moment M13 allowed a generated scan, whose universe is smaller than an upload's whenever
+    # unadjusted corporate actions trip `far_from_high`. Before this guard the next line raised
+    # ZeroDivisionError — on the desk, a 500 in the middle of a rebalance.
+    w = (
+        {}
+        if tot <= 0
+        else {
+            s: min(
+                sc / tot * 100 * (invest / capital) * (pool / invest) / (invest / capital),
+                cfg.MAX_SINGLE_WEIGHT,
+            )
+            for s, sc in raw.items()
+        }
+    )
     # normalise to pool, enforce min & half-size
-    scale = (pool / capital * 100) / sum(w.values())
+    scale = (pool / capital * 100) / sum(w.values()) if w else 0.0
     w = {s: v * scale for s, v in w.items()}
     for s in list(w):
         listed_hist_ok = True  # extend: derive from listing date feed if available
         if not listed_hist_ok:
             w[s] = min(w[s], cfg.HALF_SIZE_WEIGHT)
         w[s] = max(w[s], cfg.MIN_POSITION_WEIGHT) if w[s] > cfg.MIN_POSITION_WEIGHT / 2 else w[s]
-    scale = (pool / capital * 100) / sum(w.values())
+    scale = (pool / capital * 100) / sum(w.values()) if w else 0.0
     w = {s: round(v * scale, 2) for s, v in w.items()}
 
     cluster_warn = []

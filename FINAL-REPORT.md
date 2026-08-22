@@ -96,8 +96,17 @@ the same four names, the same fifteen rank deltas.** The engine did not drift.
 
 ### 5. M22 — the merged face
 
-`/baskets` and `/baskets/plan`, on real data, read-only and enforced in three places. `POST`, `PUT`
-and `DELETE` return **405** against a running API. Execution stays in the desk console.
+`/baskets` and `/baskets/plan`, read-only and enforced in three places. `POST`, `PUT` and `DELETE`
+return **405** against a running API. Execution stays in the desk console.
+
+Verified by rendering them, not by trusting the API layer. `/baskets` returns the real basket —
+15 names, `CUPID` at 81.8 with weight 7.09%, the six score components beside each row, ₹ in Indian
+digit grouping, and the banner saying **41 of the scanned symbols carry an unadjusted corporate
+action**. `/baskets/plan` returns the desk's latest plan with every column its Jinja table shows.
+Both pages contain **zero** forms, submit controls or execute links.
+
+And the cutover held under it: **SQLite frozen at 13 plans** — the state archived as the forever
+copy — while **Postgres took every new write**. That is what M19 was for, visible in one number.
 
 ---
 

@@ -4,23 +4,30 @@ The live status page for the Baskfy merge run (`MERGE-PROMPTS.md`). Updated at t
 module. **Loud about what is NOT done** — both source repos keep honest open-items lists, and
 that culture continues here.
 
-**Run started:** 22 Aug 2026 · **Run finished:** 22 Aug 2026 · **State:** complete, M0 → M22.
+**Run started:** 22 Aug 2026 · **Run finished:** 22 Aug 2026 · **State:** complete, **M0 → M28**.
 
-**M11 and M12 remain red**, both for the same reason: 41 of 271 symbols carry corporate actions
-that were never applied to their price history (`NEEDS-MAULIK.md` item 4). M13 and M14 are
-therefore built-but-not-switched-on rather than green.
+The run reached M22 and was declared finished; Maulik then logged in to Kite, which unblocked the
+path everything else was waiting on, and M23–M28 followed.
 
-**Update, 22 Aug 2026 (M23–M24).** Maulik logged in, which unblocked the Kite path — and the path
-turned out to be broken in three places, all now fixed and committed (M23). Then the blocker itself
-moved: **Kite's historical bars are adjusted**, so the ratio between them and the raw bhavcopy print
-*is* the missing corporate-action history. **85 actions recovered across 65 symbols**, 83 confirmed,
-evidence in `decile-blueprint/reconciliation/RECOVERED-ACTIONS.md`. The derivation is specified and
-not yet built (M24.4). That question — `NEEDS-MAULIK.md` item 8, whether momentum is a price return or a total return —
-**was settled at M27 by measuring the corpus rather than by preference: price return**, 42–3, with
-25 of 25 dividend payers matching exactly on the windows M11 fixed.
+**M11 and M12 are no longer red for the reason they were.** The corporate-action history that
+blocked both — `NEEDS-MAULIK.md` item 4, "the biggest blocker in the project" — was **recovered
+from data already on disk** (M24) and applied (M28). `corporate_action` went from 4 rows to 289.
 
-⚠️ **Do not run `make backfill` until M24 lands.** As built it writes Kite's *adjusted* prices into
-`close_raw`, the column house rule 6 defines as the exchange print (M24.1).
+| | at M22 | now |
+|---|---|---|
+| `/baskets` "unadjusted corporate action" banner | 41 symbols | **5** |
+| M12 top-25 membership | 23 / 25 | **25 / 25** |
+| `SHILPAMED` in the M12 comparison | #10 → #57 | #10 → **#12** |
+| Corpus exact matches — 1M / 3M / 6M | 264 / 260 / 255 | **266 / 264 / 263** |
+| Corpus exact matches — 9M / 12M | 1 / 1 | 1 / 1 |
+
+**M12's delta table is still not empty** (16 rank deltas, 14 within ±3), so rule 7 keeps M13's
+generated-scan flag **off**. 9M and 12M did not move because their residual is the **window
+length**, not the adjustment — the seeded calendar is short about nine lunar-calendar holidays a
+year. M27 predicted that before M28 ran.
+
+⚠️ **Do not run `make backfill` until its column mapping is fixed.** As built it writes Kite's
+*adjusted* prices into `close_raw`, the column house rule 6 defines as the exchange print (M24.1).
 
 Start here: [`FINAL-REPORT.md`](../FINAL-REPORT.md) — what is green, what is queued, and the 58
 decisions I made without asking. Then [`RUN-AND-TEST.md`](../RUN-AND-TEST.md) to run it, and
@@ -61,6 +68,7 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M21 | Verification + handover | ✅ **green** | 22 Aug 2026 | `RUN-AND-TEST.md` at the root; the DRY_RUN Friday drill runs end to end with **0 orders reaching a broker**; M12 corpus unchanged through M13–M20 |
 | M23 | The Kite path, on first contact | ✅ **green** | 22 Aug 2026 | Token bridge writes both stores; instrument upsert batched (10,222 tokens, was 40); a stale token no longer falls through to **fixture prices for real symbols** (M23.1–.5) |
 | M24 | Corporate actions, recovered from the ratio | 🟡 **method proven, not built** | 22 Aug 2026 | Kite's bars are adjusted — docs/09 said otherwise. **85 actions over 65 symbols**, 83 confirmed. Dividend half queued as item 8 (M24.1–.4) |
+| M28 | Corporate actions applied | ✅ **green** | 22 Aug 2026 | **285 actions written, 151,922 bars rebuilt.** Banner 41→5, M12 23/25→**25/25**. Two defects found by reading the prices, not the insert (M28.1–.5) |
 | M25 | Baskfy, everywhere | ✅ **green** | 22 Aug 2026 | The app said "Decile" in 35 strings, its email, its invoices and four legal docs. Renamed, `X-Decile-*` headers included; a brand gate found 24 more (M25.1–.4) |
 | M26 | The desk's record on the web app | ✅ **green** | 22 Aug 2026 | Performance, Holdings, Trades, Market stance, Plan vs fills — Next.js, plain language, read-only asserted twice more. Live-broker pages stay in the console pending D3 (M26.1–.5) |
 | M27 | The dividend question, measured | ✅ **green** | 22 Aug 2026 | **Price return.** 42–3, and **25 of 25 exact** on 1M/3M/6M. Confirms M11's base fix and M24's splits for free (M27.1–.4) |

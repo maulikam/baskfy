@@ -7,6 +7,20 @@ that does not depend on them (rule 11) and returns the moment a dependency clear
 Nothing here is urgent unless marked so. Each entry says what is needed, why, what it blocks, and
 what was done meanwhile.
 
+**Four items closed during the run of 22 Aug 2026** — and one of them was the project's biggest
+blocker:
+
+| | |
+|---|---|
+| **3. A Kite login** | ✅ you did it; the bridge was then found broken and fixed (M23) |
+| **6. The paid data tier** | ✅ answered by one API call, no browser needed — it is active |
+| **8. Price or total return?** | ✅ **price return**, measured against the corpus 42–3 (M27) |
+| **4. Corporate-action history** | ✅ **recovered from data already on disk** and applied (M24, M28) |
+
+**What is actually left:** item 9 (review the 46 irregular actions — nothing blocked), item 1
+(deploy the risk-ceiling lock, outside market hours), and items 2, 5 and 7, which are all
+housekeeping.
+
 ---
 
 ## Open
@@ -131,8 +145,20 @@ Nothing breaks until you deploy, and the equity desk is unaffected by all three.
 
 **Blocks:** nothing.
 
-### 4. Corporate-action history — **A SOURCE WAS FOUND, 22 Aug 2026** 🟡
-**Status:** the source problem is solved; the fix is specified, not yet built. · **Raised:** M12
+### 4. Corporate-action history — **SOLVED AND APPLIED, 22 Aug 2026** ✅
+**Status:** done. Source found (M24), convention measured (M27), actions written (M28).
+· **Raised:** M12 · **Closed:** M28
+
+**285 actions written, 151,922 bars rebuilt, `corporate_action` 4 rows → 289.** The
+`/baskets` contamination banner went **41 → 5**; M12's top-25 membership went **23/25 → 25/25**;
+`SHILPAMED`, which read #10 → #57, now reads #10 → #12.
+
+You do not need to buy a data vendor for this. The one thing left is item 9 — reviewing the 46
+recovered actions that are almost certainly demergers. The original entry follows.
+
+---
+
+#### (original entry)
 
 **You do not need to buy a data vendor.** Kite's historical bars are *adjusted* — measured, and
 contrary to what `docs/09` assumed — while `ohlcv_daily.close_raw` holds the raw bhavcopy print.
@@ -269,6 +295,47 @@ compounders fall.
 with, adopt that one, and record it. The corpus outranks my preference and yours.
 
 **Blocks:** the dividend half of item 4. The split/bonus half proceeds regardless.
+
+### 9. **Review the 46 irregular corporate actions** — the one thing M28 could not settle
+**Status:** open, low urgency, **nothing is blocked by it** · **Raised:** M28, 22 Aug 2026
+
+M28 recovered 285 corporate actions from the gap between Kite's adjusted bars and the raw bhavcopy
+print, and wrote them. **239 land on shapes a split or bonus actually produces** — 2:1 (84), 5:1
+(47), 10:1 (39), 3:1 (14), 4:1 (12), 3:2 (11). Those are not in question.
+
+**46 do not**, and the recognisable ones are all 2025 demergers:
+
+| symbol | ratio | almost certainly |
+|---|---|---|
+| ITC | 22:19 | the ITC Hotels demerger |
+| SIEMENS | 21:16 | Siemens Energy India |
+| VEDL | 21:11 | the Vedanta demerger |
+| RAYMOND | 23:14 | Raymond Lifestyle |
+
+Nothing issues a 19:17. **They are applied** — the price step is real and Kite adjusts for it — and
+each row is tagged `raw['shape'] = 'irregular_probably_demerger'` rather than being called a split.
+
+**What I would like you to check:** the residual risk is that a **dividend above about 5%** also
+resolves to a small fraction (21:20, 20:19) and would have been written as a share-count action —
+which would quietly violate the price-return convention M27 measured. Corpus-level parity says it
+is not currently hurting: every window M11 fixed improved. But nothing *proves* no dividend slipped
+through, and I would rather say so than let it sit unnamed.
+
+**To see them:**
+```sql
+SELECT i.symbol, ca.ex_date, ca.ratio_from, ca.ratio_to, ca.raw
+FROM corporate_action ca JOIN instrument i ON i.id = ca.instrument_id
+WHERE ca.raw->>'shape' = 'irregular_probably_demerger'
+ORDER BY i.symbol;
+```
+
+**To undo any or all of it**, one predicate and a reprocess — see `RUN-AND-TEST.md` §3b. Nothing
+here touched `close_raw`, so the reversal is total.
+
+**The real fix, when it is worth paying for:** a corporate-actions vendor feed with real event
+types. It would settle split-versus-bonus and demerger-versus-dividend, which price data cannot.
+
+**Blocks:** nothing.
 
 ### 5. Two small credential items from M16
 **Status:** informational · **Raised:** M16, 22 Aug 2026

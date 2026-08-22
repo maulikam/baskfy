@@ -971,12 +971,27 @@ class BacktestResult:
     total_costs: Decimal
     dividends_credited: Decimal
     rebalance_dates: tuple[dt.date, ...]
+    #: Rebalance dates whose screen returned no rows at all (M39).
+    #:
+    #: A screen selecting nothing is a legitimate outcome — every filter can exclude every name —
+    #: and the engine handles it by going to cash. But it is *also* what a missing factor row
+    #: looks like from in here, and those two produce the same equity curve while meaning
+    #: completely different things. The engine cannot tell them apart; it can count them, so the
+    #: caller that does know can decide whether the run means anything.
+    blind_rebalances: tuple[dt.date, ...] = ()
     notes: tuple[str, ...] = ()
     data_version: int | None = None
 
     @property
     def final_equity(self) -> Decimal:
         return self.equity[-1] if self.equity else self.config.initial_capital
+
+    @property
+    def blind_fraction(self) -> Decimal:
+        """What share of rebalances decided with an empty screen. 0 when there were none."""
+        if not self.rebalance_dates:
+            return Decimal(0)
+        return Decimal(len(self.blind_rebalances)) / Decimal(len(self.rebalance_dates))
 
 
 # ---------------------------------------------------------------------------
@@ -1042,6 +1057,7 @@ def run_backtest(  # noqa: PLR0912, PLR0915 - the execution model is a sequence;
             "the 'cash' dividend policy needs a dividend schedule and none was supplied"
         )
 
+    blind: list[dt.date] = []
     reader = PointInTimeReader(data)
     panel = data.prices
     days = [day for day in data.calendar if config.start <= day <= config.end]
@@ -1143,10 +1159,12 @@ def run_backtest(  # noqa: PLR0912, PLR0915 - the execution model is a sequence;
 
         # --- Steps 1-3: the decision, taken on today's close --------------------
         if day in fill_for:
-            pending, decision_notes = _decide(
+            pending, decision_notes, screened = _decide(
                 reader, day, positions, config, data, benchmark_levels
             )
             notes.extend(decision_notes)
+            if screened == 0:
+                blind.append(day)
 
         # --- Step 6: mark to market ---------------------------------------------
         invested = _market_value(positions, panel, position_index)
@@ -1171,6 +1189,7 @@ def run_backtest(  # noqa: PLR0912, PLR0915 - the execution model is a sequence;
         total_costs=total_costs,
         dividends_credited=dividends_credited,
         rebalance_dates=tuple(dates),
+        blind_rebalances=tuple(blind),
         notes=tuple(dict.fromkeys(notes)),
         data_version=data.data_version,
     )
@@ -1241,8 +1260,14 @@ def _decide(  # noqa: PLR0913, PLR0917 - a decision joins the screen, the book a
     config: BacktestConfig,
     data: BacktestData,
     benchmark_levels: Mapping[dt.date, Decimal],
-) -> tuple[_Decision, list[str]]:
-    """Steps 1-3: run the screen as of ``day``, apply the buffer, produce target weights."""
+) -> tuple[_Decision, list[str], int]:
+    """Steps 1-3: run the screen as of ``day``, apply the buffer, produce target weights.
+
+    The third return value is how many rows the screen produced. Zero is reported rather than
+    inferred from the decision, because a decision can also be empty when the risk overlay fired
+    or when every selected name was unaffordable — and those are not the same thing as the screen
+    having had nothing to say (see `BacktestResult.blind_rebalances`).
+    """
     notes: list[str] = []
     rows = _selected_rows(reader.screen_on(day))
 
@@ -1300,6 +1325,7 @@ def _decide(  # noqa: PLR0913, PLR0917 - a decision joins the screen, the book a
             reasons=_reasons(targets, positions),
         ),
         notes,
+        len(rows),
     )
 
 

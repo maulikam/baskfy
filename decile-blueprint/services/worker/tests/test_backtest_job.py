@@ -23,7 +23,7 @@ from typing import Final
 
 import pytest
 from helpers import requires_db
-from sqlalchemy import insert, select
+from sqlalchemy import delete, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.backtests import artefact_key, build_payload, new_public_id
@@ -227,6 +227,55 @@ async def test_an_empty_window_is_refused(session: AsyncSession) -> None:
             _definition(),
             with_offsets=False,
         )
+
+
+async def test_a_rebalance_date_with_no_factor_rows_is_refused(session: AsyncSession) -> None:
+    """M39. A gap in `factor_daily` must fail the load, not produce a plausible curve.
+
+    ## Why this is the most valuable refusal in the loader
+
+    An empty screen frame has two completely different causes and one appearance. Either every
+    filter excluded every name — a real result, and the engine correctly goes to cash — or no
+    factors were ever computed for that date, in which case the screen was never asked a question
+    it could answer. The engine sees the same empty frame both ways.
+
+    Against nine years of real Kite history this was not hypothetical: a monthly 2022-2026 run
+    found factor rows on 15 of its 57 rebalance dates and reported +13.8% as a result, having sat
+    the book in cash for the other 42. Nothing downstream could have detected it.
+    """
+    await _seed_market(session)
+    config = _config()
+    schedule = rebalance_dates(
+        await trading_calendar(session, config.start, config.end),
+        config.start,
+        config.end,
+        config.rebalance,
+    )
+    assert len(schedule) > 2
+
+    # Take the factors away from one rebalance date only. One is enough: on that date the book
+    # would be liquidated for a reason that has nothing to do with the strategy.
+    await session.execute(
+        delete(FactorDaily).where(FactorDaily.date == schedule[1]),
+    )
+
+    with pytest.raises(BacktestDataError, match="no factor rows"):
+        await load_backtest_data(session, config, _definition(), with_offsets=False)
+
+
+async def test_the_refusal_names_the_dates_so_it_can_be_acted_on(session: AsyncSession) -> None:
+    """"Something is missing" is not a bug report. The message has to say what and what to do."""
+    await _seed_market(session)
+    config = _config()
+    await session.execute(delete(FactorDaily))
+
+    with pytest.raises(BacktestDataError) as caught:
+        await load_backtest_data(session, config, _definition(), with_offsets=False)
+
+    message = str(caught.value)
+    assert "rebalance dates have no factor rows" in message
+    assert "compute_factors" in message
+    assert config.start.isoformat()[:4] in message, "no date was named"
 
 
 # ---------------------------------------------------------------------------

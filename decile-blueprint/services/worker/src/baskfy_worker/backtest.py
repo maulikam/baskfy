@@ -35,6 +35,7 @@ import logging
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Final
 
 import polars as pl
 from sqlalchemy import Select, select
@@ -56,6 +57,7 @@ from baskfy_core.backtest import (
     shift_schedule,
 )
 from baskfy_core.models import (
+    FactorDaily,
     IndexDef,
     IndexSnapshotDaily,
     Instrument,
@@ -124,6 +126,61 @@ async def trading_calendar(
         .all()
     )
     return tuple(rows)
+
+
+#: How many missing dates to name before summarising. Enough to see the pattern, few enough that
+#: a nine-year gap does not produce a two-hundred-date error string.
+_DATES_IN_MESSAGE: Final = 5
+
+
+async def _require_factor_coverage(session: AsyncSession, schedule: Sequence[dt.date]) -> None:
+    """Refuse a run whose rebalance dates have no factor rows behind them (M39).
+
+    ## Why this is a refusal and not a note
+
+    A screen that selects nothing is a legitimate outcome — every filter can exclude every name —
+    and the engine handles it correctly by going to cash. **A rebalance date with no
+    `factor_daily` rows produces exactly the same empty frame**, and from inside the engine the
+    two are indistinguishable.
+
+    That is how a backtest returns a confident number that means nothing. Run against this
+    database before M39, a monthly 2022-2026 test found factor rows on 15 of its 57 rebalance
+    dates: on the other 42 the book was liquidated to cash because the screen "selected nothing",
+    and the run reported +13.8% as though it had simulated a strategy. It had simulated a strategy
+    being blindfolded three months in four.
+
+    Nothing downstream can recover from that, so it fails here, where the database is in reach and
+    the message can say which dates are missing and what would fill them.
+
+    Only the schedule is checked, not the +/-1 offsets the fragility probe uses: a probe date with
+    no factors degrades the probe, which already reports its own coverage, rather than the result.
+    """
+    if not schedule:
+        return
+    covered = set(
+        (
+            await session.execute(
+                select(FactorDaily.date).where(FactorDaily.date.in_(list(schedule))).distinct()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    missing = [day for day in schedule if day not in covered]
+    if not missing:
+        return
+
+    shown = ", ".join(day.isoformat() for day in missing[:_DATES_IN_MESSAGE])
+    more = (
+        f" and {len(missing) - _DATES_IN_MESSAGE} more" if len(missing) > _DATES_IN_MESSAGE else ""
+    )
+    raise BacktestDataError(
+        f"{len(missing)} of {len(schedule)} rebalance dates have no factor rows, so the screen "
+        f"would select nothing on them and the simulated book would sit in cash: {shown}{more}. "
+        "Factors are computed per date by the nightly pipeline; a backtest needs them on every "
+        "rebalance date in its window. Run `compute_factors` for the missing dates, or choose a "
+        "window and rebalance frequency the computed dates cover."
+    )
 
 
 async def _screen_frames(  # noqa: PLR0913 - the screen, the dates and the version are separate
@@ -327,6 +384,8 @@ async def load_backtest_data(
             f"this configuration needs {len(wanted)} screen runs, above the {MAX_REBALANCE_DATES} "
             "a single backtest may issue. Use a longer rebalance interval or a shorter window."
         )
+
+    await _require_factor_coverage(session, schedule)
 
     data_version = await current_data_version(session)
     limit = config.selection.top_n + config.selection.hold_buffer

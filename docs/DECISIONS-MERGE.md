@@ -2163,3 +2163,12 @@ action, reprocesses, deletes the row, reprocesses again and asserts the series r
 to its starting value. `close_raw` is never written by any of this and stays the exchange print.
 
 The repair in M28.2 used that path for real, on live data, before it was needed anywhere else.
+
+### M25.5 — the report is excluded from the brand gate, and nothing else is ⚠ UNREVIEWED
+`FINAL-REPORT.md` fails the M25.1 brand check by design: it *narrates* the rename, so it has to be
+able to write `SITE_NAME` was `"Decile"`. Rewording that to satisfy a checker would be the checker
+editing history — the same argument that allowlists CLAUDE.md D1's own sentence.
+
+Excluded deliberately alone. **`RUN-AND-TEST.md` and `NEEDS-MAULIK.md` stay in scope**, because
+they are live operator documents rather than records: if either ever says the old name, that is a
+bug and the gate should catch it.

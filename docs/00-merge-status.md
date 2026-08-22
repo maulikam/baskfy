@@ -10,6 +10,18 @@ that culture continues here.
 that were never applied to their price history (`NEEDS-MAULIK.md` item 4). M13 and M14 are
 therefore built-but-not-switched-on rather than green.
 
+**Update, 22 Aug 2026 (M23–M24).** Maulik logged in, which unblocked the Kite path — and the path
+turned out to be broken in three places, all now fixed and committed (M23). Then the blocker itself
+moved: **Kite's historical bars are adjusted**, so the ratio between them and the raw bhavcopy print
+*is* the missing corporate-action history. **85 actions recovered across 65 symbols**, 83 confirmed,
+evidence in `decile-blueprint/reconciliation/RECOVERED-ACTIONS.md`. The derivation is specified and
+not yet built (M24.4). One question went back to Maulik — `NEEDS-MAULIK.md` item 8, whether momentum
+is a price return or a total return — because the 38 dividend-shaped actions change what the
+strategy trades, while the 47 splits and bonuses are simply wrong data.
+
+⚠️ **Do not run `make backfill` until M24 lands.** As built it writes Kite's *adjusted* prices into
+`close_raw`, the column house rule 6 defines as the exchange print (M24.1).
+
 Start here: [`FINAL-REPORT.md`](../FINAL-REPORT.md) — what is green, what is queued, and the 58
 decisions I made without asking. Then [`RUN-AND-TEST.md`](../RUN-AND-TEST.md) to run it, and
 [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) for the seven items only you can do.
@@ -47,6 +59,8 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 | M19 | Schedules → Celery, desk on merged backend | ✅ **green** | 22 Aug 2026 | Beat tasks + timer-retirement protocol. **Cutover done**: 10/11 pages byte-identical, 11th differs only in journal mode + file size. Four dialect defects fixed (M19.1–.6) |
 | M20 | Observability + runbook 6 | ✅ **green** | 22 Aug 2026 | Spans/metrics/Sentry over plan→execute→GTT, all optional and unable to raise into the order path. 4 alert rules, runbook 6 committed (M20.1–.4) |
 | M21 | Verification + handover | ✅ **green** | 22 Aug 2026 | `RUN-AND-TEST.md` at the root; the DRY_RUN Friday drill runs end to end with **0 orders reaching a broker**; M12 corpus unchanged through M13–M20 |
+| M23 | The Kite path, on first contact | ✅ **green** | 22 Aug 2026 | Token bridge writes both stores; instrument upsert batched (10,222 tokens, was 40); a stale token no longer falls through to **fixture prices for real symbols** (M23.1–.5) |
+| M24 | Corporate actions, recovered from the ratio | 🟡 **method proven, not built** | 22 Aug 2026 | Kite's bars are adjusted — docs/09 said otherwise. **85 actions over 65 symbols**, 83 confirmed. Dividend half queued as item 8 (M24.1–.4) |
 | M22 | The merged face (read-only) | ✅ **green** | 22 Aug 2026 | `/baskets` and `/baskets/plan` on real data. Every mutation **405**; two suites hold it read-only. Desk suite untouched |
 
 ---

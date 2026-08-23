@@ -148,6 +148,63 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/webhook-endpoints/{public_id}/rotate-secret": {"post"},
     "/webhook-endpoints/{public_id}/deliveries": {"get"},
     "/admin/public-api": {"get"},
+    # Tree-3 / M41 (MERGE-PROMPTS.md), not docs/07 -- the broker connect catalog and the OAuth
+    # round trip for the operator's OWN account (D3 posture B; live authorize needs
+    # `BROKER_OAUTH_REVIEW.signed_off`). None of these is an order path: `connect` starts a
+    # redirect, `callback` exchanges a request token into an encrypted store, `sync-holdings`
+    # reads. `test_baskets_readonly.py::test_the_whole_api_has_no_order_route` covers them.
+    "/brokers": {"get"},
+    "/brokers/{broker_id}": {"get"},
+    "/brokers/{broker_id}/connect": {"post"},
+    # The redirect target Kite returns to; it takes `request_token` + a state this app issued.
+    "/brokers/callback": {"get"},
+    "/brokers/{broker_id}/sync-holdings": {"post"},
+    # SC2 (docs/smallcase/06-module-plan.md), not docs/07, which predates the curated-basket
+    # product. The `/explore` catalog is Track A and read-only in every branch.
+    "/explore": {"get"},
+    "/explore/{slug}": {"get"},
+    "/explore/managers": {"get"},
+    "/explore/managers/{slug}": {"get"},
+    "/explore/collections": {"get"},
+    "/explore/collections/{slug}": {"get"},
+    # SC2 watchlist. User-scoped writes to the sole tenant's own watchlist -- a bookmark, not an
+    # order; `test_explore_no_orders.py` fails if an order-shaped verb ever appears here.
+    "/watchlist": {"get", "post"},
+    "/watchlist/{slug}": {"delete"},
+    # SC8 (leaf 2.2): create a PRIVATE STOCK basket + its GENESIS version for the sole tenant.
+    # A catalog write with no broker path -- argued for in `test_baskets_readonly.py`'s
+    # `DELIBERATE_MUTATING_BASKET_ROUTES`, which is where the order gate is decided.
+    "/cb/baskets": {"post"},
+    # SC3: desk-shaped plan PREVIEWS. Producing a plan is not placing an order
+    # (docs/smallcase/02, Track A); outside NSE hours they return the closed-market payload.
+    # The desk console remains the only thing that can turn a plan into orders.
+    "/cb/plans/invest": {"post"},
+    "/cb/plans/apply": {"post"},
+    "/cb/plans/exit": {"post"},
+    # SC9 engagement slots. `dismiss` / `resolve` stamp a timestamp on the user's own pending
+    # action row; neither reaches the order path.
+    "/cb/pending-actions": {"get"},
+    "/cb/pending-actions/{action_id}/dismiss": {"post"},
+    "/cb/pending-actions/{action_id}/resolve": {"post"},
+    "/cb/updates": {"get"},
+    # SC10 Track-B surfaces (docs/smallcase/02 §"Track B -- build dark"). Mounted so this
+    # document and the UI can name them, which is the point of listing them here: a route that
+    # is served and not written down is a surface nobody agreed to.
+    #
+    # The first two only *report* flag state and are always readable -- while the flags are off
+    # they say so, which is how the UI knows to render everything as Free Access.
+    "/cb/track-b/flags": {"get"},
+    "/cb/track-b/free-access": {"get"},
+    # The four below are flag-gated stubs. Each calls its `require_*_enabled` guard first and
+    # 404s while the flag is false, and all three flags default to false; when enabled they
+    # return `EnabledStubOut` and do nothing else. `POST /cb/fees/collect` in particular
+    # collects no money -- there is no payment call site anywhere in the tree -- so Track C
+    # ("collecting money") is not breached by the path existing. `test_track_b_gates.py`
+    # asserts the 404s and the defaults; this entry only writes down that the paths exist.
+    "/cb/paywall": {"get"},
+    "/cb/paywall/checkout": {"post"},
+    "/cb/public-signup": {"post"},
+    "/cb/fees/collect": {"post"},
     # NOT LISTED, and deliberately: nothing under `/api/public/v1`. The public tier's router is
     # not mounted while the data-redistribution review docs/11 §Compliance requires is
     # outstanding, so it is absent from this document by construction —

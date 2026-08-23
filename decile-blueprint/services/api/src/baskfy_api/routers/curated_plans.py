@@ -21,7 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.db import SessionDep
 from baskfy_api.problems import Problem, ProblemType
-from baskfy_core.curated_plans import build_apply_plan, build_exit_plan, build_invest_plan
+from baskfy_core.curated_plans import (
+    DeskPlan,
+    build_apply_plan,
+    build_exit_plan,
+    build_invest_plan,
+)
 from baskfy_core.market_hours_cb import (
     IST,
     closed_market_payload,
@@ -104,11 +109,19 @@ async def load_trading_dates(
     return set(rows.all())
 
 
-def _preview_from_core(plan: dict) -> PlanPreviewOut:
+def _preview_from_core(plan: DeskPlan) -> PlanPreviewOut:
     return PlanPreviewOut(
         kind=plan["kind"],
         desk_plan_id=f"cb-sim-{uuid.uuid4()}",
-        legs=[PlanLegOut(**leg) for leg in plan["legs"]],
+        legs=[
+            PlanLegOut(
+                symbol=leg["symbol"],
+                side=leg["side"],
+                quantity=leg["quantity"],
+                ref_price=leg["ref_price"],
+            )
+            for leg in plan["legs"]
+        ],
         requested_amount=plan["requested_amount"],
         expires_at_hint=plan["expires_at_hint"],
     )

@@ -61,6 +61,18 @@ REBALANCE_FREQUENCIES: tuple[str, ...] = (
 BASKET_SOURCES: tuple[str, ...] = ("SCAN", "MANUAL")
 VERSION_LABELS: tuple[str, ...] = ("CHANGED", "NO_CHANGE", "GENESIS")
 VOLATILITY_BUCKETS: tuple[str, ...] = ("LOW", "MED", "HIGH")
+#: Which series a published ``volatility_value`` was measured on. Mirrors
+#: ``baskfy_core.curated_metrics.VolatilityBasis`` — the job writes those literals, so a
+#: check constraint spelled any other way would reject every row it produces.
+VOLATILITY_BASES: tuple[str, ...] = (
+    "BASKET_252D",
+    "BASKET_FULL_HISTORY",
+    "CONSTITUENT_WEIGHTED",
+)
+#: A6 disclosure. ``PRICE_RETURN`` is what the catalog computes today
+#: (``baskfy_core.curated_metrics.RETURN_CONVENTION``); ``TOTAL_RETURN`` is admissible so a
+#: dividend-inclusive series needs no migration, and nothing writes it yet.
+RETURN_CONVENTIONS: tuple[str, ...] = ("PRICE_RETURN", "TOTAL_RETURN")
 INVESTMENT_STATUSES: tuple[str, ...] = ("ACTIVE", "EXITED")
 ORDER_BATCH_KINDS: tuple[str, ...] = (
     "BUY",
@@ -195,6 +207,12 @@ class CbMetrics(Base):
     __tablename__ = "cb_metrics"
     __table_args__ = (
         _in_check("cb_metrics_volatility_bucket", "volatility_bucket", VOLATILITY_BUCKETS),
+        _in_check("cb_metrics_volatility_basis", "volatility_basis", VOLATILITY_BASES),
+        CheckConstraint(
+            "months_available IS NULL OR months_available >= 0",
+            name="cb_metrics_months_available",
+        ),
+        _in_check("cb_metrics_return_convention", "return_convention", RETURN_CONVENTIONS),
         PrimaryKeyConstraint("basket_id", "as_of_date"),
     )
 
@@ -211,6 +229,19 @@ class CbMetrics(Base):
     cagr_3y: Mapped[Decimal | None] = mapped_column(PCT_2DP)
     cagr_5y: Mapped[Decimal | None] = mapped_column(PCT_2DP)
     since_inception_pct: Mapped[Decimal | None] = mapped_column(PCT_2DP)
+    #: Which series ``volatility_value`` was measured on — a 252-bar window, the basket's whole
+    #: (short) history, or the constituent-weighted fallback. NULL when there is no volatility.
+    volatility_basis: Mapped[str | None] = mapped_column(Text)
+    #: Whole months between the since-inception anchor and ``as_of_date``. NULL, never 0, when
+    #: nothing was measured: 0 would claim a measurement.
+    months_available: Mapped[int | None] = mapped_column(Integer)
+    #: A6: every number in this row is a price return from dividend-free adjusted closes.
+    return_convention: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'PRICE_RETURN'")
+    )
+    dividends_included: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
     computed_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 

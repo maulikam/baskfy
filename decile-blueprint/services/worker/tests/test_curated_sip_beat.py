@@ -34,7 +34,12 @@ def test_cb_sip_reminders_beat_entry_exists() -> None:
     schedule = cast(crontab, entry["schedule"])
     assert schedule.hour == {9}
     assert schedule.minute == {0}
-    assert entry["options"]["queue"] == QUEUE_COMPUTE
+    # `BEAT_SCHEDULE` is `dict[str, dict[str, object]]`, so `entry["options"]` is `object`.
+    # Narrowing it is the assertion that the entry has an options mapping at all — the
+    # alternative was a `cast`, which would assert the shape instead of checking it.
+    options = entry["options"]
+    assert isinstance(options, dict), "the beat entry must carry an options mapping"
+    assert options["queue"] == QUEUE_COMPUTE
     # Sibling SC2 entry must survive the merge.
     assert BEAT_SCHEDULE["cb-eod-metrics"]["task"] == "baskfy.cb.compute_metrics"
 

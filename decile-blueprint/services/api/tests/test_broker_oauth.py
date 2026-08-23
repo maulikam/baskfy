@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -25,7 +26,7 @@ from baskfy_core.broker_connections import BROKER_OAUTH_REVIEW
 
 
 @pytest.fixture(autouse=True)
-def _clean_oauth_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def _clean_oauth_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
     clear_oauth_states()
     monkeypatch.setenv("DRY_RUN", "true")
     monkeypatch.delenv("BASKFY_KITE_API_SECRET", raising=False)

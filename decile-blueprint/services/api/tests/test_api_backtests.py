@@ -333,7 +333,12 @@ async def test_the_inline_executor_starts_the_run_without_a_broker(
     # after the request transaction commits — that ordering is the whole point of M44's fix, and
     # it is what this records.
     scheduled: list[str] = []
-    original = BackgroundTasks.add_task
+    # Called unbound, with the instance passed explicitly, so the real `add_task` still runs for
+    # whatever the endpoint scheduled. Starlette types it with a ParamSpec bound to `func`'s own
+    # signature, which cannot be satisfied by a forwarding wrapper that accepts anything; the
+    # honest annotation for "an unbound method invoked dynamically" is `Callable[..., None]`,
+    # and it needs no type-ignore comment (CLAUDE.md house rule 3).
+    original: Callable[..., None] = BackgroundTasks.add_task
 
     def _record(
         self: BackgroundTasks,

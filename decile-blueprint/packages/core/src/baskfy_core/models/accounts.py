@@ -240,6 +240,12 @@ class Backtest(Base):
     trades_key: Mapped[str | None] = mapped_column(String)
     error: Mapped[str | None] = mapped_column(String)
     created_at: Mapped[CreatedAt]
+    #: When a runner actually claimed it, committed in its own transaction (M45.2).
+    #:
+    #: `created_at` records the POST, so it cannot separate a run abandoned weeks ago from one
+    #: waiting legitimately behind the concurrency cap. Without this column, started-then-died was
+    #: byte-identical to never-started and no safe reaper could be written.
+    started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
 

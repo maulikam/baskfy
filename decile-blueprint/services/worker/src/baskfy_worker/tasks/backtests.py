@@ -197,6 +197,12 @@ async def _claim(session: AsyncSession, public_id: str) -> Backtest:
     ``FOR UPDATE`` so two workers handed the same message cannot both start it — Celery's
     ``acks_late`` makes a redelivery possible, and a fifteen-year simulation running twice is
     exactly the kind of waste a dedicated queue exists to avoid.
+
+    `started_at` is stamped here and, in the inline executor, this flush is **committed on its
+    own** before the simulation begins (`run_backtest_inline`). Before M45.2 the whole job was one
+    transaction, so `running` was never durably written: a successful run showed `queued` for its
+    entire duration, and a process killed mid-simulation left a row identical in every column to
+    one that had never been picked up. Neither an operator nor a reaper could tell them apart.
     """
     row = (
         await session.execute(
@@ -211,7 +217,24 @@ async def _claim(session: AsyncSession, public_id: str) -> Backtest:
         )
     row.status = STATUS_RUNNING
     row.error = None
+    row.started_at = dt.datetime.now(tz=dt.UTC)
     await session.flush()
+    return row
+
+
+async def _load_claimed(session: AsyncSession, public_id: str) -> Backtest:
+    """The row a caller has already moved to ``running`` in a committed transaction."""
+    row = (
+        await session.execute(
+            select(Backtest).where(Backtest.public_id == public_id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise BacktestNotRunnable(f"no backtest with public_id {public_id!r}")
+    if row.status != STATUS_RUNNING:
+        raise BacktestNotRunnable(
+            f"backtest {public_id!r} is {row.status!r}, not {STATUS_RUNNING!r}"
+        )
     return row
 
 
@@ -241,21 +264,31 @@ def _store(archive: RawArchive, public_id: str, payloads: dict[str, bytes]) -> l
     return written
 
 
-async def run_backtest_job(
+async def run_backtest_job(  # noqa: PLR0913 - a job needs its store, its publisher and its flags
     session: AsyncSession,
     public_id: str,
     *,
     archive: RawArchive,
     publisher: Publisher | None = None,
     fragility: bool = True,
+    already_claimed: bool = False,
 ) -> JobOutcome:
     """Claim the row, simulate, store, and record. Failures land on the row, never in a log only.
 
-    The whole thing is one transaction. If the artefacts cannot be written the row does not go to
+    ``already_claimed`` says the caller committed the ``running`` transition itself, in its own
+    transaction, and this call should load the row rather than move it (M45.2). The inline
+    executor does that so ``running`` and ``started_at`` are durable before the simulation starts;
+    the Celery task still claims here.
+
+    The simulation is one transaction. If the artefacts cannot be written the row does not go to
     ``done``: a finished backtest whose trade log does not exist would be a result nobody can
     audit, which is the opposite of what docs/10 is for.
     """
-    row = await _claim(session, public_id)
+    row = (
+        await _load_claimed(session, public_id)
+        if already_claimed
+        else await _claim(session, public_id)
+    )
     sink = _sink(public_id, publisher)
     try:
         config = BacktestConfig.model_validate(_migrated(row.config))
@@ -335,10 +368,24 @@ def run_backtest_inline(
     publisher = build_publisher(settings)
 
     async def run(public_id: str, fragility: bool) -> None:
+        # Two transactions, deliberately. The claim commits `running` and `started_at` before any
+        # work begins, so the row says what is happening while it happens and a death mid-run is
+        # distinguishable from a run that never started (M45.2). The simulation then gets its own
+        # transaction, which is still all-or-nothing: a run whose artefacts cannot be written does
+        # not reach `done`.
+        async with session_factory() as claiming:
+            await _claim(claiming, public_id)
+            await claiming.commit()
+
         async with session_factory() as session:
             try:
                 await run_backtest_job(
-                    session, public_id, archive=archive, publisher=publisher, fragility=fragility
+                    session,
+                    public_id,
+                    archive=archive,
+                    publisher=publisher,
+                    fragility=fragility,
+                    already_claimed=True,
                 )
                 await session.commit()
             except BacktestNotRunnable:

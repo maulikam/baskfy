@@ -24,16 +24,22 @@ import inspect
 import pathlib
 from typing import cast
 
+import httpx
 import pytest
+from api_helpers import assert_problem, bearer, make_user, url
 from fastapi.routing import APIRoute
 from screener_helpers import requires_db
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_api import curated_seed
+from baskfy_api import curated_seed, curated_tenant
 from baskfy_api.auth import require_authenticated
+from baskfy_api.curated_seed import seed_curated_managers
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.problems import Problem, not_found
 from baskfy_api.routers import explore
+from baskfy_core.curated_baskets import MANAGER_SLUG_BASKFY_ENGINE, SOLE_USER_ENV
+from baskfy_core.models import AppUser, CbBasket, CbManager
 
 #: Every catalog route, as declared on the router itself. docs/smallcase/02's access matrix
 #: requires "web login only" for Explore, detail, manager and collections — all of them, not
@@ -140,28 +146,60 @@ class TestNotFoundIsA404NotA500:
         )
 
 
-class TestScopingIsToTheCallerNotToAConstant:
-    """S1 — both arms of the old guard returned the sole tenant id."""
+class TestScopingRefusesAForeignPrincipal:
+    """S1 — both arms of the old guard returned the sole tenant id.
 
-    async def test_a_principal_gets_its_own_id_back(self) -> None:
+    Fixed upstream by M43.4, which chose to *refuse* a foreign principal where this branch had
+    chosen to scope to the caller. Both close the hole; M43.4 landed first and reads Law 2's
+    "the gateway refuses a mismatch" literally, so these assertions follow it rather than the
+    version this branch originally carried.
+    """
+
+    async def test_the_sole_tenant_is_allowed_through(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def _resolve(_session: object) -> int:
+            return 43
+
+        monkeypatch.setattr(curated_tenant, "resolve_sole_user_id", _resolve)
         session = cast("AsyncSession", object())
-        assert await scoped_sole_user_id(session, 42) == 42
-        assert await scoped_sole_user_id(session, 7) == 7
+        assert await scoped_sole_user_id(session, 43) == 43
 
-    async def test_two_principals_never_collapse_onto_one_tenant(self) -> None:
-        """The defect this pins: a foreign principal used to be handed the sole tenant's id."""
-        session = cast("AsyncSession", object())
-        first = await scoped_sole_user_id(session, 1)
-        second = await scoped_sole_user_id(session, 2)
-        assert first != second, (
-            "two different principals resolved to the same user_id — that is the "
-            "cross-tenant read/write this function exists to prevent"
-        )
+    async def test_a_foreign_principal_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The defect: a registered account used to be promoted to the operator."""
 
-    async def test_an_unauthenticated_principal_is_refused(self) -> None:
+        async def _resolve(_session: object) -> int:
+            return 43
+
+        monkeypatch.setattr(curated_tenant, "resolve_sole_user_id", _resolve)
         session = cast("AsyncSession", object())
         with pytest.raises(Problem):
-            await scoped_sole_user_id(session, None)
+            await scoped_sole_user_id(session, 44)
+
+    async def test_a_principal_with_no_user_id_is_caught_by_require_user(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The one case scoped_sole_user_id does not refuse, and what does refuse it.
+
+        M43.4 guards on ``principal_user_id is not None``, so a principal carrying no user id
+        still receives the sole tenant. Nothing reaches it that way, because every handler on
+        this router calls ``principal.require_user()`` first — which is the other half of this
+        branch. Asserted here so the two halves stay tied together: if the require_user calls
+        are ever removed, this records what they were holding.
+        """
+
+        async def _resolve(_session: object) -> int:
+            return 43
+
+        monkeypatch.setattr(curated_tenant, "resolve_sole_user_id", _resolve)
+        session = cast("AsyncSession", object())
+        assert await scoped_sole_user_id(session, None) == 43
+
+        source = pathlib.Path(inspect.getfile(explore)).read_text()
+        for handler in ("list_watchlist", "add_watchlist", "remove_watchlist"):
+            body = inspect.getsource(getattr(explore, handler))
+            assert "scoped_sole_user_id" in body
+        assert source.count("principal.require_user()") >= 6
 
 
 class TestSoleUserResolutionNeverWrites:
@@ -230,15 +268,123 @@ class TestVisibilityIsAppliedEverywhereCbBasketIsSelected:
 # They carry `db` and skip without BASKFY_TEST_DATABASE_URL, because the fixtures in this
 # directory drop the public schema and must never be aimed at a live database.
 
-pytestmark_db = [pytest.mark.db, pytest.mark.redis, requires_db]
+# --- end to end, over HTTP, against a disposable database ------------------------------
+#
+# These were skipping until a throwaway database existed: the fixtures in this directory run
+# `DROP SCHEMA IF EXISTS public CASCADE`, and the only Postgres reachable when this branch
+# started was the live one holding an in-progress factor recompute. `baskfy_fixtest` exists
+# now, so they run.
 
 
 @pytest.mark.db
 @pytest.mark.redis
 @requires_db
 class TestEndToEnd:
-    async def test_a_missing_basket_is_404_not_500(self) -> None:
-        pytest.skip("needs a seeded test database; see the module docstring")
+    async def test_a_missing_basket_is_404_not_500(
+        self, api: httpx.AsyncClient, screener_session: AsyncSession
+    ) -> None:
+        """The defect: not_found() took two arguments and every site passed one.
 
-    async def test_a_private_basket_is_invisible_on_detail(self) -> None:
-        pytest.skip("needs a seeded test database; see the module docstring")
+        The TypeError fired while *constructing* the problem, so the Problem was never raised
+        and the catch-all turned it into a 500. Only an HTTP-level request can see that; a
+        test that awaits the handler coroutine never takes the error path at all.
+        """
+        _, public_id = await make_user(screener_session, "explore404@example.com")
+        response = await api.get(url("/explore/no-such-basket"), headers=bearer(public_id))
+        assert response.status_code != 500, response.text[:300]
+        assert_problem(response, 404, "not-found")
+
+    async def test_a_missing_watchlist_delete_is_404_not_500(
+        self,
+        api: httpx.AsyncClient,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Both halves of the fix have to hold for this to be a 404.
+
+        The caller must BE the sole tenant, because M43.4 refuses anyone else; and the sole
+        tenant has to already exist, because resolve_sole_user_id no longer conjures it on the
+        request path. With both satisfied, a delete of something not watched is a 404 — where
+        it used to be a 500 from the not_found arity defect.
+        """
+        user_id, public_id = await make_user(screener_session, "wldel@example.com")
+        monkeypatch.setenv(SOLE_USER_ENV, str(user_id))
+
+        response = await api.delete(url("/watchlist/no-such-basket"), headers=bearer(public_id))
+        assert response.status_code != 500, response.text[:300]
+        assert response.status_code == 404, response.text[:300]
+
+    async def test_an_unconfigured_sole_tenant_refuses_rather_than_seeding(
+        self,
+        api: httpx.AsyncClient,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """S2: a GET used to CREATE an account whose password is a published constant.
+
+        With no sole tenant configured and none seeded, the request is now refused. The
+        assertion that matters is the second one: no app_user appeared as a side effect of a
+        read.
+        """
+        monkeypatch.delenv(SOLE_USER_ENV, raising=False)
+        _, public_id = await make_user(screener_session, "noseed@example.com")
+        before = (
+            await screener_session.execute(select(func.count()).select_from(AppUser))
+        ).scalar_one()
+
+        response = await api.get(url("/watchlist"), headers=bearer(public_id))
+        assert response.status_code != 200
+
+        after = (
+            await screener_session.execute(select(func.count()).select_from(AppUser))
+        ).scalar_one()
+        assert after == before, "a read created an app_user row"
+
+    async def test_the_catalog_refuses_an_anonymous_caller(self, api: httpx.AsyncClient) -> None:
+        """The access matrix in docs/smallcase/02 is "web login only" for the catalog.
+
+        Track C also keeps it off the public web until D3 is answered.
+        """
+        for path in ("/explore", "/explore/managers", "/explore/collections"):
+            response = await api.get(url(path))
+            assert response.status_code in {401, 403}, (
+                f"{path} answered {response.status_code} to an anonymous caller"
+            )
+
+    async def test_a_private_basket_is_invisible_on_detail_and_in_the_list(
+        self, api: httpx.AsyncClient, screener_session: AsyncSession
+    ) -> None:
+        """cb_basket has no owner column, so visibility is the only control there is."""
+        await seed_curated_managers(screener_session)
+        manager_id = (
+            await screener_session.execute(
+                select(CbManager.id).where(CbManager.slug == MANAGER_SLUG_BASKFY_ENGINE)
+            )
+        ).scalar_one()
+        screener_session.add(
+            CbBasket(
+                slug="a-private-idea",
+                name="A Private Idea",
+                manager_id=manager_id,
+                type="STOCK",
+                access="FREE",
+                visibility="PRIVATE",
+                categories=[],
+                rebalance_frequency="MONTHLY",
+                source="MANUAL",
+            )
+        )
+        await screener_session.flush()
+
+        _, public_id = await make_user(screener_session, "private@example.com")
+        headers = bearer(public_id)
+
+        detail = await api.get(url("/explore/a-private-idea"), headers=headers)
+        assert detail.status_code == 404, (
+            f"a PRIVATE basket was readable on the detail route: {detail.status_code}"
+        )
+
+        listing = await api.get(url("/explore"), headers=headers)
+        if listing.status_code == 200:
+            slugs = [row["slug"] for row in listing.json()["items"]]
+            assert "a-private-idea" not in slugs

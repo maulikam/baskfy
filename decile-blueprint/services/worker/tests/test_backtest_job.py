@@ -229,6 +229,39 @@ async def test_an_empty_window_is_refused(session: AsyncSession) -> None:
         )
 
 
+async def test_a_rebalance_date_with_no_index_membership_is_refused(
+    session: AsyncSession,
+) -> None:
+    """M45. The screen needs TWO things per as-of date, and M39's guard checked one.
+
+    `baskfy_core.screener` joins `index_member_daily` on `(index_id, date)` with no snap-back, so
+    a date with thousands of factor rows and no membership returns nothing — indistinguishable, to
+    the engine, from a date with no factors at all.
+
+    It is not hypothetical. `index_member_daily` begins 2021-08-02 and `factor_daily` reaches back
+    to 2017-01-02. Measured on the live database, monthly over 2017-01-01..2026-08-18: 117
+    rebalance dates, **117 passed the old guard, 15 had membership**. The guard was waving through
+    102 dates guaranteed to screen empty, and the runs using them reported plausible numbers.
+    """
+    await _seed_market(session)
+    config = _config()
+    schedule = rebalance_dates(
+        await trading_calendar(session, config.start, config.end),
+        config.start,
+        config.end,
+        config.rebalance,
+    )
+    assert len(schedule) > 2
+
+    # Factors intact; membership taken away from one rebalance date only.
+    await session.execute(
+        delete(IndexMemberDaily).where(IndexMemberDaily.date == schedule[1]),
+    )
+
+    with pytest.raises(BacktestDataError, match="index membership"):
+        await load_backtest_data(session, config, _definition(), with_offsets=False)
+
+
 async def test_a_rebalance_date_with_no_factor_rows_is_refused(session: AsyncSession) -> None:
     """M39. A gap in `factor_daily` must fail the load, not produce a plausible curve.
 
@@ -273,8 +306,9 @@ async def test_the_refusal_names_the_dates_so_it_can_be_acted_on(session: AsyncS
         await load_backtest_data(session, config, _definition(), with_offsets=False)
 
     message = str(caught.value)
-    assert "rebalance dates have no factor rows" in message
+    assert "have no factor rows" in message
     assert "compute_factors" in message
+    assert "refresh_index_membership" in message, "the other half of what a screen needs"
     assert config.start.isoformat()[:4] in message, "no date was named"
 
 

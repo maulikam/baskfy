@@ -143,7 +143,7 @@ def _fixture_holdings() -> list[HoldingRow]:
     return rows
 
 
-def holdings_for_broker(broker_id: str) -> list[HoldingRow]:
+def holdings_for_broker(broker_id: str) -> list[HoldingRow]:  # noqa: PLR0911 - a guard ladder
     """Sync (or safely stub) holdings for ``broker_id``.
 
     Never raises for a missing live broker — empty / fixture only. Does not reach the

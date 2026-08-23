@@ -100,3 +100,4 @@ Decided BEFORE fan-out. Everything a leaf could get wrong about its neighbors:
 - 2026-08-23T00:28Z leaf-1.8.2 tenant (5), 1.8.3 perf (3), 1.8.4 memory (METRICS_BASKET_CHUNK=50); 1.8.1 still 2; uncommitted
 - 2026-08-23T00:25Z leaf-1.5.1-ui-investor + 1.5.2-handoff green — `/investments*`, `/watchlist`, `/fees`; PlanHandoff/MarketClosed wired; uncommitted
 - 2026-08-23T00:25Z leaf-1.6.1-sip + 1.6.2-create green — `curated_sip` 19 tests [100%]; `/create` PRIVATE form; gates + DECISIONS-SC; uncommitted (no commit)
+- 2026-08-23T00:41Z SC12 SC-FINAL-REPORT; gates leaf-1.9 + node-1 closed; unchecked gates=0; checked=45

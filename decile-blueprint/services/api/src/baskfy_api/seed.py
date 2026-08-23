@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime as dt
+import hashlib
 import os
 import sys
 from collections.abc import Sequence
@@ -38,6 +39,7 @@ from baskfy_core.breadth import breadth_query
 from baskfy_core.models import (
     AppUser,
     CorporateAction,
+    CuratedManager,
     Exchange,
     FactorDaily,
     IndexDef,
@@ -70,6 +72,83 @@ from baskfy_core.universes import (
     slugify_index,
 )
 from baskfy_providers.fixtures import FixtureProvider
+
+CURATED_MANAGER_ROWS: Final[tuple[dict[str, object], ...]] = (
+    {
+        "slug": "baskfy-engine",
+        "name": "Baskfy Momentum Engine",
+        "kind": "ENGINE",
+        "sebi_reg_no": None,
+        "bio": (
+            "Baskfy's rules-based momentum engine turns the documented D1-D6 rankings and "
+            "MomentumScan outputs into model baskets for Maulik's own account."
+        ),
+        "strategies": ["D1", "D2", "D3", "D4", "D5", "D6", "MomentumScan"],
+        "disclosures_md": (
+            "Model output for Maulik's own research and account. It is not investment advice. "
+            "Market investments are subject to risk; past performance does not guarantee "
+            "future returns."
+        ),
+    },
+    {
+        "slug": "maulik",
+        "name": "Maulik",
+        "kind": "HUMAN",
+        "sebi_reg_no": None,
+        "bio": (
+            "Maulik's hand-curated baskets for his own account, maintained separately from the "
+            "rules-based Baskfy engine."
+        ),
+        "strategies": ["Hand-curated baskets"],
+        "disclosures_md": (
+            "Personal model baskets for Maulik's own research and account. They are not "
+            "investment advice. Market investments are subject to risk; past performance does "
+            "not guarantee future returns."
+        ),
+    },
+)
+
+
+def _sole_user_email(public_id: str) -> str:
+    """Derive a stable, non-routable address without embedding an operator-supplied identifier."""
+    # 48 hex characters retain 192 bits of collision resistance while keeping the local part
+    # well below RFC 5321's 64-octet ceiling (`sole-` + digest = 53 ASCII octets).
+    digest = hashlib.sha256(public_id.encode("utf-8")).hexdigest()[:48]
+    return f"sole-{digest}@users.invalid"
+
+
+async def seed_curated_product_reference(session: AsyncSession) -> dict[str, int]:
+    """Seed the sole operator and the two first-party manager profiles.
+
+    The operator upsert deliberately does nothing on conflict: a seed must never reset a name,
+    address, or credential that the operator has subsequently chosen. Manager copy is reference
+    data, so it converges on every run. No auth, subscription, payment, or broker-token table is
+    touched here.
+    """
+    settings = get_settings()
+    operator = insert(AppUser).values(
+        public_id=settings.sole_user_id,
+        email=_sole_user_email(settings.sole_user_id),
+        name="Maulik",
+        password_hash=None,
+    )
+    await session.execute(operator.on_conflict_do_nothing(index_elements=[AppUser.public_id]))
+
+    managers = insert(CuratedManager).values(list(CURATED_MANAGER_ROWS))
+    await session.execute(
+        managers.on_conflict_do_update(
+            index_elements=[CuratedManager.slug],
+            set_={
+                "name": managers.excluded.name,
+                "kind": managers.excluded.kind,
+                "sebi_reg_no": managers.excluded.sebi_reg_no,
+                "bio": managers.excluded.bio,
+                "strategies": managers.excluded.strategies,
+                "disclosures_md": managers.excluded.disclosures_md,
+            },
+        )
+    )
+    return {"app_user": 1, "cb_manager": len(CURATED_MANAGER_ROWS)}
 
 
 async def seed_exchange(session: AsyncSession) -> int:
@@ -649,12 +728,16 @@ async def seed_published_run(
 
 
 async def seed_reference(session: AsyncSession) -> dict[str, int]:
-    return {
-        "exchange": await seed_exchange(session),
-        "index_def": await seed_universes(session),
-        "plan": await seed_plans(session),
-        "screen": await seed_example_screens(session),
-    }
+    counts = await seed_curated_product_reference(session)
+    counts.update(
+        {
+            "exchange": await seed_exchange(session),
+            "index_def": await seed_universes(session),
+            "plan": await seed_plans(session),
+            "screen": await seed_example_screens(session),
+        }
+    )
+    return counts
 
 
 async def _run(command: str, database_url: str | None) -> dict[str, int]:

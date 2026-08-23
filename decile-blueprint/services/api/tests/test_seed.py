@@ -18,6 +18,8 @@ from baskfy_api.seed import (
     seed_trading_days,
 )
 from baskfy_core.models import (
+    AppUser,
+    CuratedManager,
     FactorDaily,
     IndexDef,
     IndexMemberDaily,
@@ -63,13 +65,24 @@ async def test_reference_seed_lands_the_documented_rows(
 ) -> None:
     async with async_sessionmaker(engine)() as session, session.begin():
         counts = await seed_reference(session)
-    assert counts == {"exchange": 1, "index_def": 14, "plan": 3, "screen": 6}
+    assert counts == {
+        "app_user": 1,
+        "cb_manager": 2,
+        "exchange": 1,
+        "index_def": 14,
+        "plan": 3,
+        "screen": 6,
+    }
 
     async with async_sessionmaker(engine)() as session:
+        users = (await session.execute(select(func.count()).select_from(AppUser))).scalar_one()
+        managers = (
+            await session.execute(select(func.count()).select_from(CuratedManager))
+        ).scalar_one()
         universes = (await session.execute(select(func.count()).select_from(IndexDef))).scalar_one()
         plans = (await session.execute(select(func.count()).select_from(Plan))).scalar_one()
         screens = (await session.execute(select(func.count()).select_from(Screen))).scalar_one()
-    assert (universes, plans, screens) == (14, 3, 6)
+    assert (users, managers, universes, plans, screens) == (1, 2, 14, 3, 6)
 
 
 @pytest.mark.asyncio
@@ -79,6 +92,10 @@ async def test_reference_seed_is_idempotent(engine: AsyncEngine, migrated: None)
         async with async_sessionmaker(engine)() as session, session.begin():
             await seed_reference(session)
     async with async_sessionmaker(engine)() as session:
+        assert (await session.execute(select(func.count()).select_from(AppUser))).scalar_one() == 1
+        assert (
+            await session.execute(select(func.count()).select_from(CuratedManager))
+        ).scalar_one() == 2
         assert (
             await session.execute(select(func.count()).select_from(IndexDef))
         ).scalar_one() == 14

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { NAV_GROUPS, NAV_ITEMS, PRIMARY_NAV, SECTION_TABS } from "@/lib/nav";
+import {
+  LEGACY_REDIRECTS,
+  NAV_GROUPS,
+  NAV_ITEMS,
+  PRIMARY_NAV,
+  SECTION_TABS,
+} from "@/lib/nav";
 import { PAGES } from "@/lib/vocabulary";
 
 /**
@@ -43,6 +49,10 @@ describe("the primary consumer IA", () => {
       "Portfolios",
       "Watchlist",
     ]);
+  });
+
+  it("documents thirteen legacy permanent redirects for Tree 6", () => {
+    expect(LEGACY_REDIRECTS).toHaveLength(13);
   });
 });
 

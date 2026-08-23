@@ -30,6 +30,7 @@ export function BottomTabBar() {
   return (
     <nav
       aria-label="Primary"
+      data-testid="bottom-tab-bar"
       className="fixed inset-x-0 bottom-0 z-30 border-t border-border/70 bg-background/95 backdrop-blur-md md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >

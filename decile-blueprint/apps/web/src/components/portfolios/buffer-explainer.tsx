@@ -46,8 +46,7 @@ export function BufferExplainer({ topN, holdBuffer, result }: BufferExplainerPro
       </p>
       {result ? (
         <p className="mt-3 text-xs text-muted-foreground">
-          Computed against {result.screen_result_count} screened names as of {result.as_of}, on
-          data version {result.data_version}.
+          Computed against {result.screen_result_count} screened names as of {result.as_of}.
           {result.delisted_count > 0
             ? ` ${result.delisted_count} holding${result.delisted_count === 1 ? " is" : "s are"} delisted and must be exited regardless of rank.`
             : ""}

@@ -44,4 +44,12 @@ describe("consumer jargon ban (Tree 6)", () => {
       expect(src, file).not.toMatch(/title:\s*["']Rebalance Tracker["']/);
     }
   });
+
+  it("backtest detail leaves the SEBI Disclaimer to AppShell", () => {
+    // AppShell already mounts one per app page; a second on /backtests/[id] is a double-render.
+    // The assumptions panel's run-honesty sentence is a different string and stays.
+    const file = join(process.cwd(), "src/components/backtests/backtest-result.tsx");
+    const src = readFileSync(file, "utf8");
+    expect(src).not.toMatch(/import \{ Disclaimer \}/);
+  });
 });

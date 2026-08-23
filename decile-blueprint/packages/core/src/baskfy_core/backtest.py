@@ -984,6 +984,14 @@ class BacktestResult:
     #: completely different things. The engine cannot tell them apart; it can count them, so the
     #: caller that does know can decide whether the run means anything.
     blind_rebalances: tuple[dt.date, ...] = ()
+    #: Fill days where a decision was taken and **nothing at all** could be traded (M45).
+    #:
+    #: Distinct from `blind_rebalances`, which is about the *screen* returning nothing. Here the
+    #: screen was full and the market was not open enough to act on it — NSE's Muhurat and
+    #: Budget-day sessions print 1-18% of a normal day's instruments. Before M45 this was a bare
+    #: `continue`: a complete 30-name decision could execute none of itself and every honesty
+    #: counter on the result would still read clean.
+    unexecuted_fills: tuple[dt.date, ...] = ()
     notes: tuple[str, ...] = ()
     data_version: int | None = None
 
@@ -1061,6 +1069,8 @@ def run_backtest(  # noqa: PLR0912, PLR0915 - the execution model is a sequence;
         )
 
     blind: list[dt.date] = []
+    #: Fill days on which a decision existed and produced not one trade — see `_execute`.
+    unexecuted: list[dt.date] = []
     reader = PointInTimeReader(data)
     panel = data.prices
     days = [day for day in data.calendar if config.start <= day <= config.end]
@@ -1117,12 +1127,35 @@ def run_backtest(  # noqa: PLR0912, PLR0915 - the execution model is a sequence;
 
         # --- Step 4: fill yesterday's decision at today's open ----------------
         if pending is not None and day in fills_due:
-            cash, filled = _execute(
+            cash, filled, unfillable = _execute(
                 pending, day, position_index, panel, positions, cash, config, data
             )
             for trade in filled:
                 trades.append(trade)
                 total_costs += trade.cost
+            if unfillable:
+                # A thin session is not a strategy outcome and must not read like one. When a
+                # rebalance can fill nothing at all, the day is recorded as unexecuted so the
+                # result carries it rather than looking like a deliberate hold.
+                shown = sorted(data.symbol_for(key) for key in unfillable)
+                names = ", ".join(shown[:_SYMBOLS_IN_NOTE])
+                more = (
+                    f" and {len(shown) - _SYMBOLS_IN_NOTE} more"
+                    if len(shown) > _SYMBOLS_IN_NOTE
+                    else ""
+                )
+                notes.append(
+                    f"{len(unfillable)} of the {len(pending.instruments)} names decided on "
+                    f"{pending.decided_on.isoformat()} had no opening price on "
+                    f"{day.isoformat()} and could not be filled ({names}{more}). "
+                    + (
+                        "NOTHING was filled that day; the book is unchanged."
+                        if not filled
+                        else "The rest were filled."
+                    )
+                )
+                if not filled:
+                    unexecuted.append(day)
             holdings.extend(_snapshot(pending, day, positions, panel, position_index, data, cash))
             pending = None
 
@@ -1193,6 +1226,7 @@ def run_backtest(  # noqa: PLR0912, PLR0915 - the execution model is a sequence;
         dividends_credited=dividends_credited,
         rebalance_dates=tuple(dates),
         blind_rebalances=tuple(blind),
+        unexecuted_fills=tuple(unexecuted),
         notes=tuple(dict.fromkeys(notes)),
         data_version=data.data_version,
     )
@@ -1202,6 +1236,10 @@ def run_backtest(  # noqa: PLR0912, PLR0915 - the execution model is a sequence;
 #: which is roughly fifteen frames over docs/10's headline run — often enough for a progress bar
 #: to move, rare enough that publishing them is not the expensive part of the backtest.
 _PROGRESS_EVERY: Final = 250
+
+#: How many symbols an unfillable-day note names before summarising. Enough to recognise the
+#: session, few enough that a thin day does not produce a note listing two thousand tickers.
+_SYMBOLS_IN_NOTE: Final = 6
 
 
 def _benchmark_levels(data: BacktestData) -> dict[dt.date, Decimal]:
@@ -1417,8 +1455,19 @@ def _execute(  # noqa: PLR0913, PLR0917 - a fill needs the book, the prices and 
     cash: Decimal,
     config: BacktestConfig,
     data: BacktestData,
-) -> tuple[Decimal, list[Trade]]:
+) -> tuple[Decimal, list[Trade], tuple[int, ...]]:
     """docs/10 steps 4-5: fill at today's open, whole shares, costs on traded notional.
+
+    The third return value is every name the decision covered that had **no opening print that
+    morning**, so nothing could be filled for it (M45).
+
+    This used to be a bare `continue`. A name that does not trade cannot be traded, so skipping is
+    the right *action* — but it was silent, and on a thin session it is not one name. NSE holds
+    seven sessions in this dataset (Diwali Muhurat, Budget-day Saturdays, 2024's special
+    Saturdays) that print 1-18% of a normal day's instruments. A rebalance whose fill day lands on
+    one of them executes **none** of itself: measured, a full 30-name decision on 2026-01-30 with
+    a 2026-02-01 fill day produced zero trades, and the run's own honesty counters reported it
+    clean, because `blind_rebalances` counts an empty *screen* and this screen was full.
 
     Sells settle first. Buying before the sale that funds it would let the book spend money it
     does not have, which is the second most common way a backtest flatters itself.
@@ -1430,9 +1479,13 @@ def _execute(  # noqa: PLR0913, PLR0917 - a fill needs the book, the prices and 
     fills: list[Trade] = []
     equity = cash + _open_value(positions, panel, position_index)
     wanted: dict[int, int] = {}
+    #: Names the decision covered that could not be filled, because they did not trade that
+    #: morning. Counted rather than dropped in silence — see the note the caller attaches.
+    unfillable: list[int] = []
     for instrument_id in decision.instruments:
         price = panel.open_on(instrument_id, position_index)
         if price is None or price <= 0:
+            unfillable.append(instrument_id)
             continue
         wanted[instrument_id] = _target_quantity(decision.targets.get(instrument_id), equity, price)
 
@@ -1466,7 +1519,7 @@ def _execute(  # noqa: PLR0913, PLR0917 - a fill needs the book, the prices and 
                 data,
             )
             fills.append(trade)
-    return cash, fills
+    return cash, fills, tuple(unfillable)
 
 
 def _open_value(

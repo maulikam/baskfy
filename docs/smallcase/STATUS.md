@@ -3,11 +3,9 @@
 The status page for the smallcase-layer run. Updated at the end of every module, loud
 about what is NOT done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: SC12 + AC-closure + D3 unlock (Tree 3) green, Tree 4 backlog closed — and then
-independently audited and found not green.** Started 23 Aug 2026.
-See `SC-FINAL-REPORT.md`, `SC-AC-REPORT.md`, `D3-UNLOCK-REPORT.md`, `TREE4-BACKLOG-REPORT.md`,
-and the section "Independent verification" below — which is the part those reports could not
-contain, because each was written by the run it grades.
+**Run state: SC12 green, then independently audited and found not green.** Started 23 Aug 2026.
+See `SC-FINAL-REPORT.md`, `SC-AC-REPORT.md`, and the section
+"Independent verification" below, which is the part those two reports could not contain.
 
 ## Module ledger
 
@@ -212,7 +210,7 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 
 ## Open items / things a future session must know
 
-1. **D3 written (Tree 3)** — posture B; OAuth unlocked. Web execute still forbidden. Track B flags still false pending D7.
+1. **D3 still unanswered** (`NEEDS-MAULIK` item 13). Track C stays forbidden: no web execute, no third-party broker OAuth, no payment collection.
 2. **M41 was uncommitted when SC0 started**; commit it before SC1 so the working tree only carries SC work.
 3. Full screener suite was not re-timed this session — treat desk green + M41/nav green as the SC0 safety bar; expand before SC12.
 4. ~~`docs/smallcase/03` `cb_*` schema does not exist in Alembic yet — SC1's job.~~ **Done (0014).**
@@ -340,22 +338,25 @@ really a 500. `test_explore_http.py` asserts at the boundary instead.
 ### Still open
 
 - The pre-existing red listed under "Open items" below.
-- The fragility probe reports **false fragility** on 98.7% of guard-passing rebalance dates
-  (measured against the live database): the coverage guard checks the schedule but not the ±1
-  offsets, an uncovered offset yields an empty screen, and an empty screen liquidates to cash.
-  `docs/10` primes the reader to expect fragility, so a data artefact is camouflaged as the
-  documented expected outcome. The data to detect it (`blind_fraction`) is computed per run and
-  never serialised. Owner: the backtesting tree, not this one.
+- The fragility probe reports **false fragility**. `_require_screen_coverage` checks the
+  schedule and not the ±1 offsets the probe screens on; an uncovered offset yields an empty
+  screen, and an empty screen liquidates to cash, so the offset runs diverge for a reason that
+  has nothing to do with the strategy. `docs/10` primes the reader to expect fragility — "Most
+  won't. That is the point." — so a data artefact is camouflaged as the documented expected
+  outcome and nobody investigates it.
 
+  **Two corrections to an earlier draft of this line, both from the backtesting session:**
 
-## Tree 3 / D3 unlock (23 Aug 2026)
+  1. It said `blind_fraction` was "never serialised". Wrong: M43 put `blind_pct` in the
+     fragility payload. What is missing is the wire and the template — it appears in neither
+     `packages/api-client/src/generated/schema.ts` nor `fragility-panel.tsx` (0 occurrences in
+     each, checked), so it still does not reach a human.
+  2. It quoted **98.7%**, measured against the pre-M45 guard. M45 found that guard was checking
+     one of the two tables a screen needs — `factor_daily` reaches 2017 while
+     `index_member_daily` starts 2021-08-02 — so the passing population changed. Re-measured
+     against the new guard on the live database, monthly over 2021-08-02→2026-08-19: 61
+     rebalance dates, **7** pass the guard, and **7 of 7** have a −1 or +1 day missing factors
+     or membership. **100% of runnable dates, on a much smaller population.** The finding is
+     stronger, not weaker.
 
-- Posture **B** written in `docs/DECISIONS-MERGE.md` §D3 ⚠ UNREVIEWED
-- `BROKER_OAUTH_REVIEW.signed_off=True` — callback + holdings sync + create→API + `cb-dividends`
-- Web execute still forbidden; Track B flags still false pending D7
-- **No git `origin` on this clone** — push blocked until remote URL is added (`NEEDS-MAULIK`)
-
-## Tree 4 backlog (in flight)
-
-Engineering: live Zerodha holdings fetch, peer authorize URLs, e2e harden, chart wire, SC3 loop test, customize, Friday runbook.
-Human: D7/D10/counsel recorded without flipping product flags.
+  Owner: the backtesting tree, not this one, and it is on that session's list.

@@ -19,6 +19,12 @@ const METRICS: ExploreMetrics = {
   since_inception_pct: "0.22",
   headline_label: "1Y",
   headline_pct: "0.15",
+  // Every catalog return is a price return (M39.3). Required on the type so a surface
+  // cannot render a number without the sentence that qualifies it.
+  return_convention: "PRICE_RETURN",
+  dividends_included: false,
+  return_convention_note:
+    "Returns are price returns computed from split- and bonus-adjusted closes.",
 };
 
 describe("performanceSeriesFromMetrics", () => {

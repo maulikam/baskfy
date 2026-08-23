@@ -884,6 +884,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cb/investments/{investment_id}/customize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Customize Investment
+         * @description Return a CUSTOMIZE plan preview from holdings vs target weights. Never executes.
+         */
+        post: operations["customizeInvestment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cb/paywall": {
         parameters: {
             query?: never;
@@ -3519,6 +3539,26 @@ export interface components {
             op: ">=" | "<=" | "=";
             /** Right */
             right: string;
+        };
+        /**
+         * CustomizeBody
+         * @description Weight-diff inputs. *investment_id* in the path is the scoping key (ledger later).
+         */
+        CustomizeBody: {
+            /** Amount */
+            amount: number | string;
+            /** Holdings */
+            holdings: {
+                [key: string]: number;
+            };
+            /** Prices */
+            prices: {
+                [key: string]: number | string;
+            };
+            /** Target Weights */
+            target_weights: {
+                [key: string]: number | string;
+            };
         };
         /**
          * DataExportOut
@@ -10921,6 +10961,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnabledStubOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    customizeInvestment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                investment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomizeBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Invalid screen definition */

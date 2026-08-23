@@ -175,6 +175,8 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # A catalog write with no broker path -- argued for in `test_baskets_readonly.py`'s
     # `DELIBERATE_MUTATING_BASKET_ROUTES`, which is where the order gate is decided.
     "/cb/baskets": {"post"},
+    # SC Tree 4: manage constituents on an existing investment (CUSTOMIZE batch, no order path).
+    "/cb/investments/{investment_id}/customize": {"post"},
     # SC3: desk-shaped plan PREVIEWS. Producing a plan is not placing an order
     # (docs/smallcase/02, Track A); outside NSE hours they return the closed-market payload.
     # The desk console remains the only thing that can turn a plan into orders.

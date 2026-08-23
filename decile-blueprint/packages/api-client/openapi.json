@@ -2668,6 +2668,69 @@
         "title": "CustomFilter",
         "type": "object"
       },
+      "CustomizeBody": {
+        "description": "Weight-diff inputs. *investment_id* in the path is the scoping key (ledger later).",
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Amount"
+          },
+          "holdings": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Holdings",
+            "type": "object"
+          },
+          "prices": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ]
+            },
+            "title": "Prices",
+            "type": "object"
+          },
+          "target_weights": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                }
+              ]
+            },
+            "title": "Target Weights",
+            "type": "object"
+          }
+        },
+        "required": [
+          "holdings",
+          "target_weights",
+          "prices",
+          "amount"
+        ],
+        "title": "CustomizeBody",
+        "type": "object"
+      },
       "DataExportOut": {
         "additionalProperties": false,
         "description": "docs/11 §Compliance: \"DPDP Act: ... **data export** and deletion endpoints\".\n\nEverything the account owns, in one JSON document. `screens` and `consents` are lists of\nobjects rather than typed models because their shapes are already defined elsewhere and a\nsecond copy here would be a second thing to keep in step.",
@@ -15958,6 +16021,137 @@
         "summary": "Fee Collect",
         "tags": [
           "track-b"
+        ]
+      }
+    },
+    "/api/v1/cb/investments/{investment_id}/customize": {
+      "post": {
+        "description": "Return a CUSTOMIZE plan preview from holdings vs target weights. Never executes.",
+        "operationId": "customizeInvestment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investment_id",
+            "required": true,
+            "schema": {
+              "title": "Investment Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomizeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Customize Investment",
+        "tags": [
+          "curated-customize"
         ]
       }
     },

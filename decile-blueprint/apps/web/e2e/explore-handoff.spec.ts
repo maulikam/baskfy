@@ -140,7 +140,7 @@ test.describe("explore → invest hand-off", () => {
   }) => {
     await installExploreRouteMocks(page);
 
-    let usedFixture = false;
+    let usedFixture: boolean;
 
     if (baseURL) {
       await page.goto("/explore");
@@ -169,12 +169,14 @@ test.describe("explore → invest hand-off", () => {
     expect(usedFixture).toBe(true);
     await mountHandoffFixture(page);
     // Touch a mocked explore URL so page.route is exercised even on the fixture path.
-    const listed = await page.evaluate(async () => {
+    // Typed rather than `any`: res.json() is Promise<any>, and every access off it was an
+    // unsafe-member-access. The shape asserted below is the only part this test needs.
+    const listed = await page.evaluate<{ total: number; items: { slug: string }[] }>(async () => {
       const res = await fetch("/api/v1/explore");
-      return res.json();
+      return (await res.json()) as { total: number; items: { slug: string }[] };
     });
     expect(listed.total).toBe(1);
-    expect(listed.items[0].slug).toBe(MOCK_SLUG);
+    expect(listed.items[0]?.slug).toBe(MOCK_SLUG);
 
     await page.getByRole("button", { name: "Invest now" }).click();
     const handoff = page.getByRole("complementary", { name: "Plan hand-off" });

@@ -10,6 +10,7 @@ import pytest
 from baskfy_core.curated_plans import (
     PLAN_TTL,
     build_apply_plan,
+    build_customize_plan,
     build_exit_plan,
     build_invest_plan,
 )
@@ -67,6 +68,22 @@ class TestBuildApplyPlan:
         assert by_sym["BBB"]["quantity"] == 5
         assert by_sym["CCC"]["side"] == "SELL"
         assert by_sym["CCC"]["quantity"] == 5
+
+
+class TestBuildCustomizePlan:
+    def test_kind_is_customize_not_rebalance(self) -> None:
+        plan = build_customize_plan(
+            holdings={"AAA": 10, "BBB": 0},
+            target_weights={"AAA": _d("0.5"), "BBB": _d("0.5")},
+            prices={"AAA": _d("100"), "BBB": _d("100")},
+            amount=_d("1000"),
+            now=NOW,
+        )
+        assert plan["kind"] == "CUSTOMIZE"
+        assert plan["expires_at_hint"] == NOW + PLAN_TTL
+        assert plan["legs"]
+        sides = {leg["side"] for leg in plan["legs"]}
+        assert "BUY" in sides or "SELL" in sides
 
 
 class TestBuildExitPlan:

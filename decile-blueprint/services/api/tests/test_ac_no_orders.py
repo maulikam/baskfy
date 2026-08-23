@@ -15,12 +15,8 @@ FORBIDDEN = ("OrderGateway", "place_order", "confirm=true")
 # Resolved from this test file so the check does not depend on cwd.
 # .../services/api/tests/this.py → parents[2] == services/
 _SERVICES = Path(__file__).resolve().parents[2]
-CREATE_ROUTER = (
-    _SERVICES / "api" / "src" / "baskfy_api" / "routers" / "curated_create.py"
-)
-SIP_TASK = (
-    _SERVICES / "worker" / "src" / "baskfy_worker" / "tasks" / "curated_sip.py"
-)
+CREATE_ROUTER = _SERVICES / "api" / "src" / "baskfy_api" / "routers" / "curated_create.py"
+SIP_TASK = _SERVICES / "worker" / "src" / "baskfy_worker" / "tasks" / "curated_sip.py"
 
 
 @pytest.mark.parametrize(

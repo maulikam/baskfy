@@ -423,12 +423,53 @@ the operator still has to apply on a Friday through the desk. Drift / apply-prev
 `baskfy_core.curated_versions`; the web Invest CTA only opens `PlanHandoffPanel` ("Plan #" /
 desk / expires) and points at the desk console.
 
-**Friday apply — desk only, not web execute.** Generate or upload the plan on the desk, review,
-then `POST /execute` with `confirm=true` and the `plan_id` from `/analyze`, under
-`DRY_RUN=true` until you mean it. The web app has no execute control for curated baskets; do not
-look for one on `/explore` or `/basket/[slug]`.
+**Friday apply — desk only, not web execute.** The web app has no execute control for curated
+baskets; do not look for one on `/explore`, `/basket/[slug]`, or investments. Execution is only
+on the desk console with `confirm=true`.
 
-**Track B flags stay false.** Until D3 / D7 are written answers in `docs/DECISIONS-MERGE.md`:
+### Friday operator checklist
+
+Exact steps for a curated rebalance Friday. Stay in order.
+
+1. **Confirm `DRY_RUN` / desk session.**
+   - On the desk box (or local desk tree): `grep DRY_RUN .env` — keep `DRY_RUN=true` until you
+     deliberately mean live orders.
+   - Confirm a live desk session (Kite login / token bridge) so holdings and quotes are real for
+     the session. Agents never flip to live; operator does that by hand outside market hours only
+     when ready.
+
+2. **Publish or confirm basket version (curated).**
+   - Ensure the target curated version is the one you intend (GENESIS / CHANGED / NO_CHANGE).
+   - Publishing appends an immutable version and may raise `REBALANCE_AVAILABLE` — it does **not**
+     place orders. Confirm the version / pending rebalance on the basket before applying.
+
+3. **Generate apply plan** via `POST /api/v1/cb/plans/apply` **or** the UI Invest →
+   `PlanHandoffPanel` hand-off.
+   - API: `POST /api/v1/cb/plans/apply` with holdings, target weights, prices, and amount (NSE
+     session open; outside hours returns closed-market, no plan).
+   - UI: Invest CTA opens the hand-off panel (`Plan #…` / desk / expires) and links to the desk
+     console — still preview / hand-off only.
+   - This step never calls the execution gateway.
+
+4. **Open desk console — execute only there.**
+   - Open `https://desk.modelbasket.in` (or `NEXT_PUBLIC_DESK_URL`).
+   - On the desk: `/analyze` (or upload / adopt the hand-off) → review legs →
+     `POST /execute` with `confirm=true` and the desk `plan_id`.
+   - **Do not instruct or attempt web execute.** There is no web `/execute` for curated baskets.
+
+5. **Plan expiry — 30 minutes.**
+   - Desk non-negotiable #1: the `plan_id` from `/analyze` expires in **30 minutes**. After that,
+     re-analyze; do not re-POST a stale plan. The hand-off copy says the same (`expires` /
+     `expires_at_hint`).
+
+6. **After fills — sync holdings / drift check.**
+   - Sync broker holdings: `POST /api/v1/brokers/{broker_id}/sync-holdings` or the `/brokers` UI
+     sync (qty + T1 + collateral).
+   - Confirm the book vs curated target (investments / pending `DRIFT` or `REBALANCE_AVAILABLE`
+     actions). Fix drift only through another desk-confirmed plan if needed — never from the web.
+
+**Track B flags stay false.** D7 is recorded in `docs/DECISIONS-MERGE.md` as UNREVIEWED engineering
+continuity — **do not flip** these without counsel + Maulik amounts:
 
 | Flag | Default | While false |
 |---|---|---|
@@ -436,7 +477,7 @@ look for one on `/explore` or `/basket/[slug]`.
 | `BASKFY_FEE_COLLECTION_ENABLED` | false | ledger math only; no collection call sites |
 | `BASKFY_PUBLIC_SIGNUP_ENABLED` | false | signup-shaped routes 404 |
 
-Flipping them is a deliberate deploy, not a byproduct of seeding the catalog.
+Flipping them is a deliberate deploy, not a byproduct of seeding the catalog or a Friday apply.
 
 **`DRY_RUN`.** Same rule as §1 and §7: every agent environment and every Friday drill keeps
 `DRY_RUN=true`. Curated plan previews and hand-offs are read-only by construction; the desk is

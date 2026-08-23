@@ -145,6 +145,15 @@ export default async function InvestmentDetailPage({
             </Link>{" "}
             — read-only basket weights
           </li>
+          <li>
+            <Link
+              href={`/investments/${detail.id}/customize`}
+              className="text-foreground underline-offset-4 hover:underline"
+            >
+              Customize
+            </Link>{" "}
+            — weight-diff plan preview (CUSTOMIZE); no execute
+          </li>
           <li>SIP — reminders land in SC7; no auto-debit here</li>
           <li>
             <Link

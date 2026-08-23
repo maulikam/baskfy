@@ -245,9 +245,7 @@ async def compute_basket_metrics(  # noqa: PLR0913 - published_count/peers for P
         cagr_5y = cagr(nav_start=navs[-WINDOW_5Y], nav_end=navs[-1], years=Decimal("5"))
 
     vol_slice = (
-        daily_returns[-WINDOW_1Y:]
-        if len(daily_returns) >= MIN_BASKET_VOL_DAYS
-        else daily_returns
+        daily_returns[-WINDOW_1Y:] if len(daily_returns) >= MIN_BASKET_VOL_DAYS else daily_returns
     )
     vol_value = annualized_volatility(vol_slice)
     vol_bucket = (
@@ -296,9 +294,7 @@ async def compute_all_metrics(
     basket_ids = list(
         (
             await session.execute(
-                select(CbBasket.id)
-                .where(CbBasket.archived_at.is_(None))
-                .order_by(CbBasket.id)
+                select(CbBasket.id).where(CbBasket.archived_at.is_(None)).order_by(CbBasket.id)
             )
         )
         .scalars()

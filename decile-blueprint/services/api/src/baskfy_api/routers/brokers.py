@@ -43,8 +43,14 @@ from baskfy_core.broker_connections import (
 router = APIRouter(prefix="/brokers", tags=["brokers"])
 
 #: Brokers whose authorize URL shape is known in this codebase today.
+#: HDFC / Kotak / ICICI / Groww stay unwired until their partner apps publish a stable
+#: public authorize URL we can register (Tree-4 leaf 4.3).
 _WIRED_AUTHORIZE: dict[str, str] = {
     "zerodha": "https://kite.zerodha.com/connect/login",
+    "upstox": "https://api.upstox.com/v2/login/authorization/dialog",
+    "angelone": "https://smartapi.angelbroking.com/publisher-login",
+    "fyers": "https://api-t1.fyers.in/api/v3/generate-authcode",
+    "dhan": "https://auth.dhan.co/login/consentApp-login",
 }
 
 

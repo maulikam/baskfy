@@ -10,6 +10,7 @@ import { ReturnStat } from "@/components/explore/return-stat";
 import { VolatilityChip } from "@/components/explore/volatility-chip";
 import { PageHeader } from "@/components/shell/page-header";
 import { ExploreUnavailable, fetchExploreBasket } from "@/lib/explore/fetch";
+import { resolveBasketPerformanceSeries } from "@/lib/explore/performance";
 import { EMPTY_CELL, formatNumber, formatPercent, formatTradeDate } from "@/lib/format";
 
 /**
@@ -62,6 +63,9 @@ export default async function BasketDetailPage({
     metrics !== null &&
     metrics.headline_label !== null &&
     (metrics.cagr_3y === null || metrics.cagr_5y === null);
+
+  // Leaf 4.5: attempt API/metrics series before the chart's stub fallback.
+  const performance = await resolveBasketPerformanceSeries(basket.slug, metrics);
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
@@ -121,11 +125,11 @@ export default async function BasketDetailPage({
 
       <div className="space-y-3">
         <PerformanceChart
-          series={[]}
+          series={performance.points}
           basketLabel={basket.name}
           benchmarkLabel="NIFTY 50"
           defaultRange="1Y"
-          incompleteHistory={young}
+          incompleteHistory={young || performance.source === "empty"}
         />
         <DisclosureBlock variant="performance-not-verified" />
         {young ? <DisclosureBlock variant="history-caveat" /> : null}

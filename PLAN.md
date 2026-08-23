@@ -184,3 +184,49 @@ User instruction 23 Aug 2026: do not stay blocked on D3 — decide, record, unlo
 - 2026-08-23T01:15Z leaf-3.2-oauth green — `GET /api/v1/brokers/callback` (state + Fernet via AccessTokenStore; DRY_RUN stub `exchange_request_token_stub`); 7 tests [100%]; OpenAPI ok; uncommitted
 - 2026-08-23T01:15Z leaf-3.3-holdings green — `POST /api/v1/brokers/{id}/sync-holdings` HoldingRow shape (qty+t1+collateral); DRY_RUN empty/fixture; 6 tests [100%]; `/brokers` copy updated for open gate; uncommitted
 - 2026-08-23T01:18Z Tree 3 parent verified; D3 unlocked; D3-UNLOCK-REPORT.md
+
+---
+
+# Tree 4 — Backlog closure (tree-11 intent, depth 5)
+
+User backlog 23 Aug 2026 items 1–15. Engineering leaves ship; human/counsel leaves
+get written UNREVIEWED decisions or ABANDON with NEEDS-MAULIK — never silent.
+
+## Contract
+- No web execute / OrderGateway.
+- DRY_RUN default true; live Kite path exists when secret+token and DRY_RUN=false.
+- D7/D10/counsel: do not flip Track B flags; write decision stubs or NEEDS only.
+- Remote push: ABANDON if no origin URL available (do not invent a remote).
+
+## Ownership
+| Leaf | Owns |
+|---|---|
+| 4.1 ops | delete junk, STATUS refresh, remote ABANDON note |
+| 4.2 kite holdings | broker_holdings live Zerodha fetch + tests |
+| 4.3 peer brokers | authorize URL map for peers where shape known |
+| 4.4 e2e | harden explore-handoff; reduce skip |
+| 4.5 chart | wire PerformanceChart to metrics series fetch |
+| 4.6 sc3 loop | integration test dry-run plan loop |
+| 4.7 customize | customize UI/API for constituents |
+| 4.8 runbook | Friday operator steps in RUN-AND-TEST |
+| 4.9 human | D7/D10/counsel NEEDS + optional UNREVIEWED stubs |
+| 4.10 integrity | no-order + fee remasure |
+
+## Tree
+- 4 Backlog ................................ gates/node-4.md
+  - 4.1 Ops hygiene ......................... gates/leaf-4.1-ops.md
+  - 4.2 Live Zerodha holdings ............... gates/leaf-4.2-holdings-live.md
+  - 4.3 Peer broker wiring .................. gates/leaf-4.3-peers.md
+  - 4.4 Playwright harden ................... gates/leaf-4.4-e2e.md
+  - 4.5 Chart metrics wire .................. gates/leaf-4.5-chart.md
+  - 4.6 SC3 dry-run loop .................... gates/leaf-4.6-sc3-loop.md
+  - 4.7 Customize ........................... gates/leaf-4.7-customize.md
+  - 4.8 Runbook Friday ...................... gates/leaf-4.8-runbook.md
+  - 4.9 Human decisions ..................... gates/leaf-4.9-human.md
+  - 4.10 Integrity .......................... gates/leaf-4.10-integrity.md
+
+- 2026-08-23T01:31Z Tree 4 backlog plan+gates written; dispatching
+- 2026-08-23T01:40Z leaves 4.4–4.7 green (uncommitted): explore-handoff page.route mocks;
+  `lib/explore/performance.ts` + basket chart wire; `test_sc3_dry_run_loop.py` [100%];
+  CUSTOMIZE preview API + `/investments/[id]/customize`; gates 4.4–4.7 checked
+- 2026-08-23T04:07Z Tree 4 parent verified; TREE4-BACKLOG-REPORT; push ABANDON #14

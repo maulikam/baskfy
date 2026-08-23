@@ -19,11 +19,12 @@ __all__ = [
     "PLAN_TTL",
     "PlanKind",
     "build_apply_plan",
+    "build_customize_plan",
     "build_exit_plan",
     "build_invest_plan",
 ]
 
-PlanKind = Literal["BUY", "REBALANCE", "EXIT"]
+PlanKind = Literal["BUY", "REBALANCE", "EXIT", "CUSTOMIZE"]
 
 #: Desk non-negotiable #1 — plans expire thirty minutes after issue.
 PLAN_TTL: Final = dt.timedelta(minutes=30)
@@ -126,6 +127,35 @@ def build_apply_plan(
         "legs": legs,
         "requested_amount": amount,
         "expires_at_hint": _expires_at_hint(now),
+    }
+
+
+def build_customize_plan(
+    *,
+    holdings: Mapping[str, int],
+    target_weights: Mapping[str, Decimal],
+    prices: Mapping[str, Decimal],
+    amount: Decimal,
+    now: dt.datetime,
+) -> dict:
+    """Investor-driven constituent weight edit (kind CUSTOMIZE).
+
+    Same leg arithmetic as :func:`build_apply_plan` (diff holdings vs target weights), but
+    labelled ``CUSTOMIZE`` so fee / history paths treat it as a zero-platform-fee manage
+    action rather than an ENGINE rebalance (docs/smallcase/04 §1, §7).
+    """
+    plan = build_apply_plan(
+        holdings=holdings,
+        target_weights=target_weights,
+        prices=prices,
+        amount=amount,
+        now=now,
+    )
+    return {
+        "kind": "CUSTOMIZE",
+        "legs": plan["legs"],
+        "requested_amount": plan["requested_amount"],
+        "expires_at_hint": plan["expires_at_hint"],
     }
 
 

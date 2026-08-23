@@ -29,7 +29,9 @@ blocker in the project.
 | **11** | 231 instruments absent from Kite's master — a decision about whether it is worth filling them from the NSE archive. |
 | **12** | Historical breadth is survivorship-biased. The page says so now; the fix needs NSE's index-change announcements. |
 | **2, 5, 7** | Housekeeping — strangle collectors, two credential items, and a scratch directory to delete. |
-| **13** | ✅ **D3 written** (posture B in `docs/DECISIONS-MERGE.md` §D3, 23 Aug 2026). OAuth gate flipped. Counsel follow-ups (algo ID / RA filing) remain open but **non-blocking**. |
+| **14** | **Git remote URL** so local SC/D3 commits can be pushed. |
+| **13** | ✅ **D3 written** (posture B in `docs/DECISIONS-MERGE.md` §D3, 23 Aug 2026). OAuth gate flipped. Counsel checklist C1–C3 (algo ID, research vs advice, RA/empanelment) remains open but **non-blocking** — see §13 below. |
+| **D7 / D10** | ⚠ UNREVIEWED stubs in `docs/DECISIONS-MERGE.md` (Track B flags stay false; no public market-data API). Amounts + licensing opinion still need Maulik / counsel before any flag flip. |
 
 ---
 
@@ -456,8 +458,16 @@ is what lets a backtest exclude the uncertain period.
 **Written answer:** posture **B** in `docs/DECISIONS-MERGE.md` §D3 ⚠ UNREVIEWED.
 `BROKER_OAUTH_REVIEW.signed_off=True` with `decision_reference="DECISIONS-MERGE.md §D3"`.
 
-**Still for Maulik / counsel (non-blocking):** confirm algo-registration tagging and research-vs-advice
-characterisation for personalised baskets. Those filings do not gate OAuth redirects.
+**Still for Maulik / counsel (non-blocking) — counsel checklist (D3 follow-ups):**
+
+| # | Ask counsel | Why it matters | Blocks engineering? |
+|---|---|---|---|
+| C1 | **Algo ID / exchange registration** when Baskfy supplies order *plans* to a third-party Kite app (vs personal algo in own account at <10 orders/sec) | Per-order tagging / broker empanelment if B lands on the “algo supplied to others” side | No — OAuth + encrypted token store already unlocked |
+| C2 | **Research vs advice** for ranked baskets; what changes when personalised to existing holdings | Marketing claims, disclaimers, RA paperwork | No — does not gate connect redirects |
+| C3 | Whether posture B needs **RA registration** and/or **Kite-Publisher / empanelment** beyond the engineering unlock already taken | Product claims and SEBI filing path | No for sole-tenant operator desk; yes before multi-tenant paid |
+
+Those filings do not gate OAuth redirects. See also `docs/DECISIONS-MERGE.md` §D3 (posture B) and
+§D7 / §D10 (Track B flags and display licensing remain UNREVIEWED continuity stubs).
 
 #### (original entry — superseded)
 **Status:** open · **Raised:** M41, 23 Aug 2026
@@ -473,3 +483,13 @@ peers, and the rest of Phase 4.
 **What was done meanwhile (M41):** the ten-broker connect catalog, `/brokers` UI, gated
 `POST /brokers/{id}/connect` (always `oauth_available: false` until the gate flips), and the
 normalized holdings row shape. CSV import on `/portfolios` remains the way to load a book.
+
+
+### 14. Git remote / push — **blocks publishing local commits**
+**Status:** open · **Raised:** Tree 4, 23 Aug 2026
+
+**What is needed:** a Git remote URL for this umbrella repo (`git remote add origin <url>`). This clone has **no remotes**; SC/D3 commits through `a7007b1` / later are local only.
+
+**What it blocks:** `git push`.
+
+**What was done meanwhile:** Tree 4 continues all non-push work; ABANDON recorded on the push gate.

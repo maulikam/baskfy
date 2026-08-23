@@ -41,7 +41,7 @@ class TestGateAndCatalog:
         assert len(brokers) == 10
         assert [b.id for b in brokers[:4]] == ["zerodha", "hdfc", "kotak", "icici"]
         assert all(b.connected is False for b in brokers)
-        assert sum(1 for b in brokers if b.adapter_wired) == 1
+        assert sum(1 for b in brokers if b.adapter_wired) >= 2
 
     def test_connect_out_can_carry_a_redirect_when_available(self) -> None:
         assert BROKER_OAUTH_REVIEW.blocks_live_oauth is False

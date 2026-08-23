@@ -109,3 +109,59 @@ class TestNoOrderGateway:
             source = inspect.getsource(module)
             for forbidden in ("OrderGateway", "place_order", "confirm=true", "kc.place"):
                 assert forbidden not in source, f"{module.__name__} names {forbidden}"
+
+
+class TestParseKiteHoldings:
+    def test_parse_envelope_maps_qty_t1_collateral(self) -> None:
+        rows = broker_holdings.parse_kite_holdings_payload(
+            {
+                "data": [
+                    {
+                        "tradingsymbol": "RELIANCE",
+                        "exchange": "NSE",
+                        "quantity": 5,
+                        "t1_quantity": 1,
+                        "collateral_quantity": 2,
+                        "average_price": 2500.0,
+                        "last_price": 2510.0,
+                        "product": "CNC",
+                    }
+                ]
+            }
+        )
+        assert len(rows) == 1
+        assert rows[0].symbol == "RELIANCE"
+        assert total_quantity(rows[0]) == Decimal("8")
+
+    def test_fetch_kite_holdings_uses_httpx(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class _Resp:
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self) -> dict:
+                return {
+                    "data": [
+                        {
+                            "tradingsymbol": "TCS",
+                            "exchange": "NSE",
+                            "quantity": 3,
+                            "t1_quantity": 0,
+                            "collateral_quantity": 0,
+                            "average_price": 3500,
+                        }
+                    ]
+                }
+
+        calls: list[object] = []
+
+        def _get(url: str, **kwargs: object) -> _Resp:
+            calls.append((url, kwargs))
+            return _Resp()
+
+        monkeypatch.setattr("httpx.get", _get)
+        rows = broker_holdings.fetch_kite_holdings(api_key="k", access_token="t")
+        assert len(rows) == 1
+        assert rows[0].symbol == "TCS"
+        assert calls and "portfolio/holdings" in str(calls[0][0])

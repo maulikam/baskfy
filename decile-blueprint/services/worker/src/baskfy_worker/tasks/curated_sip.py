@@ -80,7 +80,9 @@ async def run_curated_sip_reminders(
     Idempotent per ``(plan_id, YYYY-MM)`` via ``fire_key`` in the pending payload. Non-REMINDER
     modes are never selected. Returns counts only — never opens a broker path.
     """
-    dates = trading_dates if trading_dates is not None else await _load_trading_dates(session, as_of)
+    dates = (
+        trading_dates if trading_dates is not None else await _load_trading_dates(session, as_of)
+    )
     if not dates:
         return {
             "as_of": as_of.isoformat(),

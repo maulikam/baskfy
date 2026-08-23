@@ -340,6 +340,42 @@ Three, which is why the suite stayed green through all of it:
 
 All three were rewritten to assert the spec, per house rule 2. None was deleted.
 
+### What "green" turned out to mean
+
+Four ways a check said yes without answering the question. The first three were found by
+grading somebody else's work; the fourth was found by two sessions grading each other's, and
+it is the one neither had.
+
+1. **A gate you did not run.** "Gates green" meant `ruff` and `mypy`, and not
+   `test_no_escape_hatches`, which is the test that enforces house rule 3. Three commits
+   accumulated `# type: ignore`s under commit messages saying green — written by the session
+   that had just cited house rule 2 at somebody else's test.
+
+2. **A test that asserts the bug.** `test_scoped_sole_collapses_foreign_principal` passed
+   because it pinned the defect by name. A suite is only as honest as its assertions, and a
+   green suite full of those is worse than no suite, because it certifies.
+
+3. **A tree that is not the one that will ship.** Both sessions auditing this run reported the
+   other's tree as broken while the other had already fixed it, in opposite directions, within
+   an hour — each reading a real tree accurately, just not the one the other was standing in.
+   And a rebase that reports no conflict can still silently revert an open item from "D3
+   written" to "D3 still unanswered": *no conflict markers is not nothing was lost.*
+
+4. **A gate that ran, passed, and could not see.** `pnpm run lint` is `tsc --noEmit && eslint .`
+   and it reported clean on a tree where `tsc` had nothing to check against, because
+   `.next/types` had not been generated yet. The route-union error it later caught was already
+   present; the gate simply could not ask the question. **A green from a check that cannot see
+   is worse than a red**, because a red stops you and that green actively certifies.
+
+   This one reaches backwards. M42's `queued` invariant was declared green against a suite that
+   passed, and four strandings were proved against it afterwards — not because the module graded
+   itself, but because the tests could not see commit ordering. They passed on a question they
+   were unable to ask.
+
+The discipline in one line each: run the scanner instead of trusting "gates green"; diff the
+result instead of trusting "resolved"; read the tree instead of trusting someone's picture of
+it; and check what the gate can see instead of trusting that it passed.
+
 ### The structural gap
 
 `test_explore_catalog.py` invoked handlers as plain coroutines — `await list_explore_baskets(...)`.

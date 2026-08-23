@@ -63,7 +63,22 @@ async def test_reference_seed_lands_the_documented_rows(
 ) -> None:
     async with async_sessionmaker(engine)() as session, session.begin():
         counts = await seed_reference(session)
-    assert counts == {"exchange": 1, "index_def": 14, "plan": 3, "screen": 6}
+    # SC1 added the two curated-basket managers to `seed_reference`, and SC2 added the SCAN
+    # basket; the expected dict was never widened, so this assertion has been red since 8f0f9be
+    # for every run that had a database to fail against.
+    #
+    # `cb_momentum_scan` is 0 on purpose and is asserted as 0 rather than dropped:
+    # `seed_momentum_scan_basket` returns 0 when fewer than `top_n` of its fixture symbols exist
+    # in `instrument`, and a reference-only seed has no instruments. If this ever becomes 1 here,
+    # the seed order changed and the number is worth noticing.
+    assert counts == {
+        "exchange": 1,
+        "index_def": 14,
+        "plan": 3,
+        "screen": 6,
+        "cb_manager": 2,
+        "cb_momentum_scan": 0,
+    }
 
     async with async_sessionmaker(engine)() as session:
         universes = (await session.execute(select(func.count()).select_from(IndexDef))).scalar_one()

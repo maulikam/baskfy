@@ -425,3 +425,30 @@ assert M43.4's contract.
 tenant. Nothing reaches it that way because every handler on the router calls
 `principal.require_user()` first. A test ties the two together, so removing the `require_user`
 calls fails loudly instead of silently reopening the hole.
+
+## Audit / 4 — `POST /cb/baskets` is a deliberate exemption from the read-only basket rule · ⚠ UNREVIEWED
+
+**Context.** `test_baskets_readonly.py::test_every_basket_route_is_a_get` guards M22's rule that
+the basket surface is read-only — "execution stays in the desk console, so nothing here crosses
+the SEBI gate". SC8 added `POST /api/v1/cb/baskets` (create a PRIVATE basket) and the invariant
+went red and stayed red through SC9–SC12 and the final report.
+
+**Choice taken.** The route belongs; the test's list was widened **deliberately**, not
+re-baselined. `02-scope-and-gating.md` puts the create/customize builder in **Track A — build
+now, fully live**, and says the no-order-route test "stays green and is extended to the new
+routes". Extending it is what was required. The gate this file guards is *execution*, not the
+HTTP verb: the route writes one `cb_basket` row plus its GENESIS version and constituents for
+the sole tenant, and moves no shares, no money and no broker state.
+
+**Why this is not a silent widening.** A named `DELIBERATE_MUTATING_BASKET_ROUTES` table carries
+the exemption, and two new tests make the invariant *stronger* than before it went red: one fails
+if an exemption names a route that no longer exists, so a stale hole cannot linger unwatched; the
+other fails if the exempted router can reach `baskfy_execution`, `OrderGateway`, `place_order` or
+`kiteconnect`, so the exemption is only valid while the route genuinely cannot execute. Any other
+mutating basket route still fails the original assertion.
+
+**Rejected.** (a) Leaving it red — an invariant nobody can distinguish from a real breach stops
+being an invariant. (b) Deleting the assertion — the same, with the evidence removed.
+
+**How to reverse.** Remove the entry from `DELIBERATE_MUTATING_BASKET_ROUTES` and the route fails
+the original assertion again.

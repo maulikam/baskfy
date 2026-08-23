@@ -32,7 +32,7 @@ Scope: Playwright coverage for Tree 6 IA; legacy redirect table; remaining "data
   EXPECT: passed
   EVIDENCE: 21 tests passed (14 nav + 5 jargon + 2 materialize)
 
-- [ ] G7: Full nav e2e against production build
-  CHECK: cd decile-blueprint/apps/web && pnpm run e2e -- e2e/nav.spec.ts 2>&1 | tail -20
+- [x] G7: Full nav e2e against production build
+  CHECK: cd decile-blueprint/apps/web && pnpm exec playwright test e2e/nav.spec.ts 2>&1 | tail -20
   EXPECT: passed OR ABANDON with reason
-  EVIDENCE: pending — requires `make up` + baskfy_e2e DB
+  EVIDENCE: 2026-08-23 — `pnpm run build` (~19s) then `pnpm exec playwright test e2e/nav.spec.ts`: 19 passed (26.4s). Spec fix: h1-level heading for Investing 001 (strict mode).

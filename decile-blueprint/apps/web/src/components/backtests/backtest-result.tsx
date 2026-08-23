@@ -13,7 +13,6 @@ import { HoldingsPanel } from "@/components/backtests/holdings-panel";
 import { MetricsTable } from "@/components/backtests/metrics-table";
 import { ProgressPanel } from "@/components/backtests/progress-panel";
 import { TradeLog } from "@/components/backtests/trade-log";
-import { Disclaimer } from "@/components/data/disclaimer";
 import { ErrorState } from "@/components/data/error-state";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,6 +56,11 @@ const DrawdownChart = dynamic(
  * progress panel), failed (the error the worker recorded, verbatim), and done — and it moves
  * between them without a reload, because `useBacktest` polls while the run is not terminal and
  * the SSE stream nudges it the moment the worker finishes.
+ *
+ * No `<Disclaimer/>` here: `AppShell` renders one into every page of the application frame, and a
+ * second copy of the same regulatory sentence on the same screen reads as a bug rather than as
+ * emphasis. The assumptions panel still carries the *run's* honesty disclaimer (past results do
+ * not predict future results) — that is a different sentence, from the API.
  */
 export interface BacktestResultProps {
   publicId: string;
@@ -133,7 +137,6 @@ export function BacktestResult({ publicId, initial, error }: BacktestResultProps
         assumptions={backtest.assumptions ?? []}
         disclaimer={backtest.disclaimer}
       />
-      <Disclaimer variant="block" />
     </div>
   );
 }

@@ -392,3 +392,52 @@ at 18:30 on the next deploy. The local `.env` opts in; rolling back is that one 
    app cannot reach it at all.
 3. **`DRY_RUN` defaults to true.** Every gate in `ProductGates` is fail-closed: dry-run on,
    intraday off, options off. A missing environment variable makes the desk safer, never riskier.
+
+---
+
+## 8. Curated baskets — explore, publish, Friday apply
+
+The smallcase-shaped layer (`cb_*`) is Track A for a single operator. It does not add a web
+execute path. Cold bring-up for the catalog:
+
+```bash
+cd decile-blueprint
+make up && make migrate && make seed   # managers + Momentum Scan basket when instruments exist
+make api                               # GET /api/v1/explore
+make web                               # http://127.0.0.1:3000/explore
+```
+
+`make seed` upserts the two curated managers (Baskfy Engine, Maulik) and, when enough instruments
+are present, the SCAN projection basket. Re-running is idempotent. Without that seed, `/explore`
+renders an empty catalog — that is missing data, not a broken route.
+
+**Catalog metrics.** Beat entry `cb-eod-metrics` fires `baskfy.cb.compute_metrics` Mon–Fri at
+**20:20 IST** (after the 20:15 publish SLO, before 20:30 alerts). Idempotent upsert on
+`(basket_id, as_of_date)`. Cards on `/explore` and `/basket/[slug]` read the latest row; an empty
+metrics join means min-amount / returns show as em dashes until the job has run once.
+
+**Publish version mental model.** A curated basket version is an immutable cut of weights
+(GENESIS / CHANGED / NO_CHANGE). Publishing appends a version and may raise
+`REBALANCE_AVAILABLE` — it does **not** place orders. SC publish is "the target book changed";
+the operator still has to apply on a Friday through the desk. Drift / apply-preview maths live in
+`baskfy_core.curated_versions`; the web Invest CTA only opens `PlanHandoffPanel` ("Plan #" /
+desk / expires) and points at the desk console.
+
+**Friday apply — desk only, not web execute.** Generate or upload the plan on the desk, review,
+then `POST /execute` with `confirm=true` and the `plan_id` from `/analyze`, under
+`DRY_RUN=true` until you mean it. The web app has no execute control for curated baskets; do not
+look for one on `/explore` or `/basket/[slug]`.
+
+**Track B flags stay false.** Until D3 / D7 are written answers in `docs/DECISIONS-MERGE.md`:
+
+| Flag | Default | While false |
+|---|---|---|
+| `BASKFY_SUBSCRIPTIONS_ENABLED` | false | every basket is Free Access; paywall routes 404 |
+| `BASKFY_FEE_COLLECTION_ENABLED` | false | ledger math only; no collection call sites |
+| `BASKFY_PUBLIC_SIGNUP_ENABLED` | false | signup-shaped routes 404 |
+
+Flipping them is a deliberate deploy, not a byproduct of seeding the catalog.
+
+**`DRY_RUN`.** Same rule as §1 and §7: every agent environment and every Friday drill keeps
+`DRY_RUN=true`. Curated plan previews and hand-offs are read-only by construction; the desk is
+where a simulated (or live) execute can happen, and only with `confirm=true`.

@@ -67,6 +67,7 @@ from baskfy_api.routers import (
     baskets,
     billing,
     brokers,
+    curated_create,
     curated_engage,
     curated_plans,
     desk,
@@ -542,5 +543,7 @@ def _mount_routers(versioned: APIRouter) -> None:
     versioned.include_router(curated_plans.router)
     # SC9: pending actions + update posts for the sole user (dismiss/resolve; no orders).
     versioned.include_router(curated_engage.router)
+    # SC8 / leaf 2.2: create PRIVATE STOCK baskets (GENESIS version; no broker path).
+    versioned.include_router(curated_create.router)
     # SC10: Track B dark surfaces — 404 while subscriptions/fee-collection/public-signup stay off.
     versioned.include_router(track_b.router)

@@ -1,0 +1,17 @@
+# Gates: node-2
+
+Scope: AC-closure tree integrated; Track C held
+
+- [x] G1: all leaf-2.* gates checked (no pending evidence)
+  CHECK: rg -c 'EVIDENCE: pending' gates/leaf-2.*.md; echo exit:$?
+  EXPECT: exit:1
+  EVIDENCE: parent — no pending on leaf-2.* after verify
+
+- [x] G2: OpenAPI still clean of execute routes
+  CHECK: cd decile-blueprint && uv run python -c "from baskfy_api.app import create_app; p=create_app().openapi()['paths']; bad=[(m,x) for x,o in p.items() for m in o if m in ('post','put','patch','delete') and any(w in x.lower() for w in ('execute','place_order','/order'))]; print('clean' if not bad else bad)"
+  EXPECT: clean
+  EVIDENCE: clean (parent re-check)
+
+ABANDON: broker-oauth Live multi-user broker OAuth remains blocked on D3 (NEEDS-MAULIK / DECISIONS-MERGE). Not an AC-closure leaf failure.
+
+<!-- integrity: security, performance, memory, accuracy required -->

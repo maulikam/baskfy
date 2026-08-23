@@ -3,7 +3,7 @@
 The status page for the smallcase-layer run. Updated at the end of every module, loud
 about what is NOT done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: SC12 green — see `SC-FINAL-REPORT.md`.** Started 23 Aug 2026.
+**Run state: SC12 green + Tree 2 AC-closure — see `SC-FINAL-REPORT.md` + `SC-AC-REPORT.md`.** Started 23 Aug 2026.
 
 ## Module ledger
 
@@ -283,3 +283,8 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 
 - Plan generation / desk `plan_id` (1.2.2); market-hours guard (1.2.3)
 - Router wiring (parent); full DRY_RUN invest→publish→diff→apply loop (SC3 AC end-to-end)
+
+
+## Tree 2 AC-closure (23 Aug 2026)
+
+See `SC-AC-REPORT.md`. SIP Beat `cb-sip-reminders`, `POST /api/v1/cb/baskets`, pure dividends, basket PerformanceChart, explore-handoff Playwright spec, RUN-AND-TEST §8. OAuth still D3-blocked.

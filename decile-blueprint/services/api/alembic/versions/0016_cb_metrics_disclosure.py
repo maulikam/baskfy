@@ -16,8 +16,8 @@ The two measurement columns are nullable because a basket with no version, or wi
 two priced days, genuinely has no basis and no measured span — and ``NULL`` says that, where
 a zero would claim a measurement of zero months.
 
-Revision ID: 0015_cb_metrics_disclosure
-Revises: 0014_curated_baskets
+Revision ID: 0016_cb_metrics_disclosure
+Revises: 0015_backtest_started_at
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0015_cb_metrics_disclosure"
-down_revision: str | None = "0014_curated_baskets"
+revision: str = "0016_cb_metrics_disclosure"
+down_revision: str | None = "0015_backtest_started_at"
 branch_labels: str | None = None
 depends_on: str | None = None
 

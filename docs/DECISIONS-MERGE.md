@@ -3011,3 +3011,162 @@ the Beat until lot writers exist (would leave Tree-3 remnant open).
 **Reversal.** Swap the loader for real lot windows when a holdings-history writer lands;
 Beat key and task name stay.
 
+
+---
+
+## M45 / the backtest execution path — six defects on one path · ⚠ UNREVIEWED
+
+Recorded together because they are one investigation, and because five of them were found by
+somebody auditing work that had already been declared green — including mine.
+
+### M45.3 `drain()` cancelled without awaiting, and `CancelledError` is not an `Exception`
+
+**Context.** `BacktestRunner.drain` called `task.cancel()` and returned. `Task.cancel()` only
+*schedules* a `CancelledError` at the task's next suspension point. Measured: `in_flight` was still
+1 when `drain` returned, and the job's handler had not run even after another pass of the loop.
+Separately, `run_backtest_inline` guarded its out-of-band failure write with `except Exception`,
+and `asyncio.CancelledError` inherits from `BaseException` — `issubclass(CancelledError, Exception)`
+is `False`. So the clean-shutdown path, the one `drain` exists to handle well, was the one that
+left rows `running` forever.
+
+**Taken.** `drain` cancels and then awaits, bounded by `cleanup_timeout`, cancelling a second time
+only for tasks that will not stop and logging them by name. The job catches `CancelledError`
+explicitly, records the failure in a fresh transaction with shutdown-specific wording, and
+re-raises.
+
+**Rejected.** Giving the runner an `on_cancelled` callback — it would have to know what a backtest
+is, which the module's whole design refuses. Shielding the cleanup write — unnecessary, because
+`cancel()` is not called twice inside the cleanup window, and it would have hidden a hang.
+
+**Reversal.** Revert both hunks; the test names which half went.
+
+### M45.4 A reaper, on the POST path rather than in a beat task
+
+**Context.** `capacity_check` counts rows, which is the right design and is also why a row reality
+has moved past keeps counting. Per-user cap 1, so one stranded `running` row locks that user out
+permanently; at the global cap of 8 the service stops taking backtests from anybody. No cancel
+route, nothing sweeping. Measured: with one such row, every POST answered 429 indefinitely.
+
+**Taken.** `reap_stale_runs` on the POST path — 15 minutes for `running` on `started_at`, 1 hour
+for `queued` on `created_at` — using `RETURNING` so the log names what it killed.
+
+**Rejected.** A Celery beat task, which is what `baskfy.ops.reap_abandoned_runs` already does for
+*pipeline* runs. It would work, and it adds a scheduler that must be up for recovery to happen —
+to a subsystem that had just removed one. Not exclusive: a beat sweep can be added later without
+undoing this.
+
+**Why the thresholds are so loose.** They are not tuned to reclaim capacity. They are set so a
+*live* run can never be reaped by a second process that cannot see it: 15 minutes against a job
+measured at about two seconds. Being wrong in that direction throws away a user's result; being
+wrong in the other is a wait.
+
+**Reversal.** Delete the call in `capacity_check`; the function is inert without it.
+
+### M45.5 The producer's routing table is a copy, enforced by a test
+
+**Context.** `task_routes` resolves in the **producer**, not the consumer. `baskfy_api.queue`
+published with no table, on a premise written into its own docstring. Measured: all 18 registered
+task names resolved to `celery`, which nothing consumes.
+
+**Taken.** `PRODUCER_TASK_ROUTES` in `baskfy_api.queue`, plus a worker-suite test that imports both
+sides and asserts every registered name resolves identically through either table.
+
+**Rejected.** Moving one shared table into `packages/core` (Law 1 says core touches nothing, and
+queue topology is not domain vocabulary) or into `baskfy_api` for the worker to import (legal —
+the arrow runs worker → api — but it puts the worker's queue layout in the API package). A copy
+with a test that fails on drift keeps ownership where it belongs. The test earned itself
+immediately: it caught a transcription error in its own commit.
+
+**Reversal.** Delete `PRODUCER_TASK_ROUTES` and the test class together, or promote the table.
+
+### M45.6 Idempotency is a reservation; the refusal is 429, not a new 409 type
+
+**Context.** `replay` then `remember` is a check followed by a write with the whole request in
+between. Measured: two concurrent `replay` calls both returned `None`.
+
+**Taken.** `reserve` (`SET NX`) + `release` (compare-and-delete). A held key answers **429 with
+`Retry-After`**.
+
+**Rejected.** A new `ProblemType.IDEMPOTENCY_IN_FLIGHT` at 409. Conventional, and it would widen
+docs/07's error catalogue, which that document owns. More importantly the correct client behaviour
+here is to retry in a moment and collect the replay — which is what `Retry-After` says and what a
+conflict says not to do.
+
+**Scope.** `/screens` and `/portfolios` still use the old shape and are still exposed. Their
+duplicates are deletable; a duplicate backtest takes the user's concurrency cap and runs a
+simulation. `reserve`/`release` are there for them.
+
+**Reversal.** Both functions are additive; the router change is one block.
+
+### M45.7 A blind variant is excluded from the fragility spread, not merely marked
+
+**Context.** A variant whose screen returned nothing diverges wildly from the base run and rendered
+as a wide CAGR spread. docs/10 primes the reader to expect exactly that, so a hole in the data was
+camouflaged as the documented finding.
+
+**Measured, independently, 23 Aug 2026, monthly over 2021-08-02..2026-12-31:** 66 rebalance dates,
+15 pass the M45 coverage guard, and **100% of those have BOTH `+1` and `-1` offsets blind**. The
+cause is not a coverage gap: `factor_daily` and `index_member_daily` are **weekly** series — the
+dominant gap between sampled dates is five sessions, 143 and 175 occurrences — so a neighbouring
+trading day has no factor rows by construction. docs/10's `+/-1` trading-day probe needs daily
+factors and cannot mean anything until it has them.
+
+**Taken.** Blind variants are marked, given a "saw nothing" figure with a denominator, and **left
+out of the spread**. With fewer than two comparable runs the panel refuses to state a spread.
+
+**Rejected.** Showing the spread with a footnote. A spread computed over runs that saw nothing is
+not a weaker finding, it is a wrong number, and the footnote would be read after the number.
+
+**Also corrected.** M45's own commit message implied it had addressed the offset probe. It had not:
+`wanted = list(schedule)` and the offsets are not in the schedule. M45 shrank the population and
+left the gap total inside it.
+
+**Reversal.** One predicate, `sawEverything`.
+
+### M45.8 A maximum run size, enforced before anything is read
+
+**Context.** The loader materialised every price row as SQLAlchemy `Row`s and copied them into four
+Python lists before Polars saw any. Measured, 500 instruments x 9 years, 809,807 rows: **444 MB
+peak for a 21.6 MB panel, 20.5x**. Streamed: **52.8 MB, 2.4x**. And nothing bounded run size at
+all — `MAX_REBALANCE_DATES` bounds screens, not history, and `top_n` reaches 500 with no maximum
+window.
+
+**Taken.** Partitioned streaming, plus `MAX_BAR_ROWS = 3,000,000` checked by one indexed `COUNT`
+before a row is read.
+
+**Rejected.** Making the ceiling a setting. It is a property of the process's memory limit, not of
+a deployment's taste, and a knob invites raising it instead of fixing the loader.
+
+**Reversal.** The bound is one call; the streaming is one function, and a test compares it row for
+row against the materialised frame.
+
+### M45.9 A published correction, not a silent rewrite
+
+**Context.** Seven surfaces still asserted that cash dividends are folded into the adjusted series
+and that factors are total-return. M27/M28 measured the opposite. M39 fixed the engine; the product
+kept saying the old thing for months, and `docs/DECISIONS.md` §15.1 had the two policy sets exactly
+backwards.
+
+**Taken.** Corrected everywhere, with a **dated correction note** on both blog posts and the
+superseded §15.1 text kept in a `<details>` block.
+
+**Rejected.** Rewriting the posts in place. Someone read the original and made a decision on it.
+
+**Reversal.** Not desirable, but the original text is preserved in both places.
+
+### M45.x What "gates green" had been covering, and what it had not · ⚠ UNREVIEWED
+
+**Context.** Every module in this run reported "gates green" meaning **ruff and mypy**. Running
+`packages/core/tests/test_no_escape_hatches.py` — the test that enforces house rule 3 — surfaced
+four offenders, **three of them mine**, two committed forty minutes earlier in the same session in
+which I had cited house rule 2 at somebody else's test.
+
+**Taken.** All of mine removed (typed the Celery app, typed the `add_task` recorder, replaced
+`Select[Any]` with a concrete row type). The scanner is part of "gates green" from here.
+
+**The generalisation, which is the point.** The gate you do not run is the gate that catches you,
+and a green report is only as wide as the checks behind it. The two nights this repository has
+caught real defects are the two nights a *different* session was reading. Recorded because the
+lesson is about the phrase, not about three comments.
+
+**Reversal.** None wanted.

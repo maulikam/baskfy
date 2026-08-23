@@ -523,3 +523,38 @@ token. That is Track C in `docs/smallcase/02` and Phase 4 in `docs/05`.
 
 **NOT done:** live redirects, per-user token encryption, holdings sync from any broker, official
 logo licences, HDFC/Kotak/ICICI app registration. Queued as NEEDS-MAULIK item 13.
+
+### M45 — the backtest execution path, six defects on one path ✅
+
+Every one of these was on a path already declared green, and five were found by an audit rather
+than by the module that shipped them. Each fix is reverted and re-run before it is claimed.
+
+| | What was wrong | Measured |
+|---|---|---|
+| M45.2 | `running` was never committed — a live run showed `queued` for its whole duration, and started-then-died was byte-identical to never-started | migration 0015 adds `started_at`, indexed `(status, started_at)` |
+| M45.3 | `drain()` cancelled without awaiting, and the job's `except Exception` never sees `CancelledError` (a `BaseException`) | `in_flight` still 1 after `drain` returned; handler never ran |
+| M45.4 | one stranded `running` row locked a user out permanently — cap 1, no reaper, no cancel route | every POST answered 429, indefinitely |
+| M45.5 | `task_routes` resolves in the **producer**, and the producer had none | all 18 task names → `celery`, which nothing consumes |
+| M45.6 | `Idempotency-Key` was a check-then-write, not a reservation | two concurrent `replay` calls both returned `None` |
+| M45.7 | a variant that screened empty rendered as a wide CAGR spread | **100%** of guard-passing dates have BOTH offsets blind |
+| M45.8 | the loader cost 20x the panel it built, and nothing bounded run size | 444 MB peak for a 21.6 MB panel → 52.8 MB |
+| M45.9 | seven surfaces still said factors are total-return | corrected; grep returns one hit, inside the correction note |
+
+**The finding worth carrying forward.** The `+/-1` rebalance-day fragility probe docs/10 specifies
+**cannot mean anything on this data plant**, and not because of a coverage gap. `factor_daily` and
+`index_member_daily` are *weekly* series — the dominant gap between sampled dates is five sessions
+— so a neighbouring trading day has no factor rows by construction. The panel now says so instead
+of rendering the hole as fragility. It becomes meaningful only when factors are computed daily.
+
+**NOT done, and load-bearing:**
+
+- **Only 15 of 66 monthly rebalance dates in the membership span are runnable at all.**
+  `index_member_daily` starts 2021-08-02 while `factor_daily` reaches 2017. The M45 guard refuses
+  the rest instead of running them blind, which makes honest runs *scarcer*, not better. That was
+  already true; it was only invisible.
+- `/screens` and `/portfolios` still use the old check-then-write idempotency shape (M45.6).
+- The GTT gateway gap (non-negotiable 6's documented exception) is still M16's.
+- `packages/api-client` is stale against the concurrent session's endpoints; regeneration is on
+  that branch, not this one.
+- The memory measurement is due again after D5's 2011 backfill, before `BACKTEST_CONCURRENCY` is
+  raised above 2 (`docs/11` §Memory budgets).

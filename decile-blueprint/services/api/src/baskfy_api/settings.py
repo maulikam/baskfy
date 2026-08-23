@@ -142,6 +142,14 @@ class Settings(BaseSettings):
     #: behind a feature flag." docs/11 §Reliability: "Feature flags for anything touching money".
     free_tier_enabled: bool = False
 
+    # --- Track B (docs/smallcase/02) — dark until D3 / SC10 -------------------
+    #: Subscription plans, entitlement locks, paywall. Default OFF — every basket is Free Access.
+    subscriptions_enabled: bool = False
+    #: Fee *collection* (vs ledger computation). Default OFF; no payment call sites while false.
+    fee_collection_enabled: bool = False
+    #: Public sign-up / onboarding. Default OFF — signup-shaped routes 404 while false.
+    public_signup_enabled: bool = False
+
     # --- GST invoicing (docs/11 §"Compliance & legal (India)") ---------------
     #: 18% for an online information service. A setting because the rate is Parliament's to
     #: change, and an issued invoice keeps the rate it was raised at (`payment.gst_rate`).

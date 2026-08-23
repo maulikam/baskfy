@@ -1,10 +1,28 @@
 """Handing work to Celery from the API (Prompt 15 deliverable 4).
 
 ``baskfy_worker`` imports ``baskfy_api``, so this service cannot import the worker back to reach
-its task functions — and it does not need to. Celery routes by **task name**: the API publishes
-``baskfy.backtest.run`` to the broker and ``baskfy_worker.celery_app.TASK_ROUTES`` puts it on the
-``backtest`` queue. The producer needs the broker URL and nothing else, which is why this module
-is twenty lines rather than a shared task package.
+its task functions — and it does not need to. Celery routes by **task name**, so the producer
+needs the broker URL and a routing table, which is why this module is short rather than a shared
+task package.
+
+.. warning::
+
+   This docstring used to say that the API publishes ``baskfy.backtest.run`` and
+   ``baskfy_worker.celery_app.TASK_ROUTES`` "puts it on the ``backtest`` queue". **That is not how
+   Celery works and it was never true.** ``task_routes`` is resolved by the *producer*, at
+   ``send_task`` time, from the config of the app doing the publishing. The worker's table governs
+   what the worker publishes; it has no say over what this app publishes.
+
+   Measured against the real producer before M45.5, resolving each name this service actually
+   sends::
+
+       baskfy.backtest.run                  -> celery   (worker consumes: backtest)
+       baskfy.pipeline.nightly              -> celery   (worker consumes: default)
+       baskfy.compute.reprocess_instrument  -> celery   (worker consumes: compute)
+
+   Every one of them, not just the backtest — the two admin routes were misrouted the same way.
+   Nothing consumes ``celery``, so with a broker configured and a worker running, all three would
+   have been accepted, published, and never executed.
 
 Celery itself is already the locked choice (docs/02 §"The decision in one table": "Jobs — Celery
 + Celery Beat"). What is new is that ``baskfy-api`` now depends on the library directly, as a
@@ -24,7 +42,30 @@ from baskfy_api.settings import Settings
 
 log = logging.getLogger(__name__)
 
-__all__ = ["TaskQueue", "build_task_queue"]
+__all__ = ["PRODUCER_TASK_ROUTES", "TaskQueue", "build_task_queue"]
+
+#: Where this producer publishes each task name.
+#:
+#: Deliberately a copy of ``baskfy_worker.celery_app.TASK_ROUTES`` rather than an import: the
+#: dependency runs worker -> api, and inverting it to share one dict would close a cycle. The copy
+#: is not left to discipline — ``services/worker/tests/test_celery_config.py`` imports both and
+#: asserts that every task name the worker registers resolves to the same queue through either
+#: table, so drift fails the build rather than silently misrouting work.
+PRODUCER_TASK_ROUTES: dict[str, dict[str, str]] = {
+    "baskfy.ingest.*": {"queue": "ingest"},
+    "baskfy.compute.*": {"queue": "compute"},
+    "baskfy.backtest.*": {"queue": "backtest"},
+    "baskfy.pipeline.*": {"queue": "default"},
+    "baskfy.ops.*": {"queue": "default"},
+    "baskfy.alerts.*": {"queue": "default"},
+    "baskfy.desk.*": {"queue": "default"},
+    "baskfy.cb.*": {"queue": "compute"},
+}
+
+#: The queue an unrouted name lands on. Must match the worker's ``task_default_queue``, which is
+#: ``default`` and not Celery's own ``celery`` — that difference is what turned a missing routing
+#: table into silence rather than into a slow queue.
+DEFAULT_QUEUE: str = "default"
 
 
 class TaskQueue(Protocol):
@@ -44,7 +85,13 @@ class CeleryTaskQueue:
     def __init__(self, broker_url: str) -> None:
         self._app = Celery("baskfy-api-producer", broker=broker_url)
         self._app.conf.update(
-            task_serializer="json", accept_content=["json"], result_serializer="json"
+            task_serializer="json",
+            accept_content=["json"],
+            result_serializer="json",
+            # Both of these are the M45.5 fix. Without `task_routes` every name went to `celery`;
+            # without `task_default_queue` a name this table misses would still go there.
+            task_routes=PRODUCER_TASK_ROUTES,
+            task_default_queue=DEFAULT_QUEUE,
         )
 
     def send_task(self, name: str, args: Sequence[object]) -> object:

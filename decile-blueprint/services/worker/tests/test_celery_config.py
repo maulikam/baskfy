@@ -12,6 +12,8 @@ import datetime as dt
 
 from celery.schedules import crontab
 
+from baskfy_api.admin import NIGHTLY_TASK_NAME, REPROCESS_TASK_NAME
+from baskfy_api.queue import CeleryTaskQueue
 from baskfy_worker.celery_app import (
     BEAT_SCHEDULE,
     IST_NAME,
@@ -52,7 +54,21 @@ class TestQueues:
         assert build_celery(settings()).conf.task_default_queue == QUEUE_DEFAULT
 
     def test_ingest_work_is_routed_away_from_everything_else(self) -> None:
-        assert TASK_ROUTES["baskfy.comgest.*"]["queue"] == QUEUE_INGEST
+        """The pattern read ``baskfy.comgest.*`` until M45.5, and so did this assertion.
+
+        M2's namespace pass rewrote the domain ``decile.in`` -> ``baskfy.com``, and the routing
+        pattern was ``decile.ingest.*``, so the substitution cut the word in half. The test then
+        pinned the result — which is house rule 2 exactly: it asserted what the code happened to
+        do rather than what the spec says, so the one check that could have caught the mangling
+        was the thing that made it permanent.
+
+        Nothing is misrouted by it today because no task is named ``baskfy.ingest.*`` yet. The
+        first one added would have been, silently, onto ``default``.
+        """
+        assert TASK_ROUTES["baskfy.ingest.*"]["queue"] == QUEUE_INGEST
+        assert not any("comgest" in pattern for pattern in TASK_ROUTES), (
+            "the mangled pattern must not come back"
+        )
 
     def test_compute_and_backtest_have_their_own_queues(self) -> None:
         """docs/03 §"Scaling plan" step 4 moves backtest fan-out to its own pool; the queue is
@@ -149,3 +165,61 @@ class TestRegisteredTasks:
     def test_results_expire(self) -> None:
         """Result rows for a nightly job are useful for a week, not forever."""
         assert build_celery(settings()).conf.result_expires == dt.timedelta(days=7)
+
+
+class TestTheProducerRoutesWhereTheWorkerListens:
+    """M45.5. ``task_routes`` is resolved by the PRODUCER, not by the consumer.
+
+    ``baskfy_api.queue`` published with a bare Celery app and no routing table, on the stated
+    premise that ``baskfy_worker.celery_app.TASK_ROUTES`` would place the message. It does not:
+    Celery resolves routes at ``send_task`` time from the config of the app doing the publishing,
+    and the worker's table governs only what the worker publishes.
+
+    Measured before the fix, against the real producer::
+
+        baskfy.backtest.run                  -> celery   (worker consumes: backtest)
+        baskfy.pipeline.nightly              -> celery   (worker consumes: default)
+        baskfy.compute.reprocess_instrument  -> celery   (worker consumes: compute)
+
+    All three, not only the backtest — both admin publish routes were misrouted the same way.
+    Nothing consumes ``celery``, so with a broker configured and a worker running, every one of
+    them would have been accepted, published, and never executed. The API would have answered 202.
+
+    These tests live in the worker suite because it is the one place allowed to import both sides.
+    """
+
+    def test_every_registered_task_routes_to_the_queue_the_worker_gives_it(self) -> None:
+        """The anti-drift check that lets the producer keep its own copy of the table."""
+        producer = CeleryTaskQueue("redis://localhost:6380/0")
+        worker = build_celery(settings())
+        registered = sorted(name for name in worker.tasks if name.startswith("baskfy."))
+        assert registered, "no baskfy tasks were registered, so this would prove nothing"
+
+        mismatched = []
+        for name in registered:
+            here = _routed_queue(producer._app, name)
+            there = _routed_queue(worker, name)
+            if here != there:
+                mismatched.append(f"{name}: producer -> {here}, worker -> {there}")
+        assert not mismatched, "\n".join(mismatched)
+
+    def test_the_three_names_the_api_actually_publishes_reach_a_consumed_queue(self) -> None:
+        """Named explicitly, because the general check would still pass if both sides agreed on a
+        queue nobody consumes — which is precisely the state this fixes."""
+        producer = CeleryTaskQueue("redis://localhost:6380/0")._app
+        expected = {
+            "baskfy.backtest.run": QUEUE_BACKTEST,
+            NIGHTLY_TASK_NAME: QUEUE_DEFAULT,
+            REPROCESS_TASK_NAME: QUEUE_COMPUTE,
+        }
+        actual = {name: _routed_queue(producer, name) for name in expected}
+        assert actual == expected
+        assert set(actual.values()) <= set(QUEUES), "published onto a queue no worker consumes"
+
+
+def _routed_queue(app: object, task_name: str) -> str:
+    """Where ``app`` would actually publish ``task_name``, resolving as Celery does."""
+    options = app.amqp.router.route({}, task_name)  # type: ignore[attr-defined]
+    queue = options.get("queue")
+    name = getattr(queue, "name", queue)
+    return str(name or app.conf.task_default_queue)  # type: ignore[attr-defined]

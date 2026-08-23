@@ -145,9 +145,7 @@ class TestLedgers:
 class TestRealizedPnl:
     def test_partial_exit_at_a_loss(self) -> None:
         # Bought 100 @ 200; sold 40 @ 180 -> realized = 40 * (180 - 200) = -800.
-        pnl = realized_pnl(
-            [SellFill(qty=_d("40"), sell_price=_d("180"), avg_cost=_d("200"))]
-        )
+        pnl = realized_pnl([SellFill(qty=_d("40"), sell_price=_d("180"), avg_cost=_d("200"))])
         assert pnl == _d("-800.00")
 
     def test_mixed_fills_net(self) -> None:

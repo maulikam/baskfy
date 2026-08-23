@@ -60,9 +60,7 @@ def next_session_open(now: dt.datetime, trading_dates: set[dt.date]) -> dt.datet
 
     candidates = sorted(d for d in trading_dates if d > today)
     if not candidates:
-        raise ValueError(
-            f"no trading day after {today.isoformat()} in the provided calendar"
-        )
+        raise ValueError(f"no trading day after {today.isoformat()} in the provided calendar")
     return dt.datetime.combine(candidates[0], SESSION_OPEN, tzinfo=IST)
 
 

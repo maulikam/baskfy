@@ -78,16 +78,13 @@ def assert_reminder_mode(mode: str) -> None:
             "(desk non-negotiable #1)"
         )
     if mode != SIP_MODE_REMINDER:
-        raise ValueError(
-            f"SIP write path accepts {SIP_MODE_REMINDER!r} only; got {mode!r}"
-        )
+        raise ValueError(f"SIP write path accepts {SIP_MODE_REMINDER!r} only; got {mode!r}")
 
 
 def _validate_day_of_month(day_of_month: int) -> None:
     if not (_DAY_OF_MONTH_MIN <= day_of_month <= _DAY_OF_MONTH_MAX):
         raise ValueError(
-            f"day_of_month must be in {_DAY_OF_MONTH_MIN}..{_DAY_OF_MONTH_MAX}, "
-            f"got {day_of_month}"
+            f"day_of_month must be in {_DAY_OF_MONTH_MIN}..{_DAY_OF_MONTH_MAX}, got {day_of_month}"
         )
 
 

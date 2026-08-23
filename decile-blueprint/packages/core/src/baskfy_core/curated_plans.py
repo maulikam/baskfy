@@ -107,7 +107,9 @@ def build_apply_plan(
 
     pos_weights = [target_weights[s] for s in positive]
     pos_prices = [prices[s] for s in positive]
-    target_qtys = dict(zip(positive, shares_at_amount(amount, pos_prices, pos_weights), strict=True))
+    target_qtys = dict(
+        zip(positive, shares_at_amount(amount, pos_prices, pos_weights), strict=True)
+    )
 
     legs: list[dict] = []
     for symbol in symbols:

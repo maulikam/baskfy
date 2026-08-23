@@ -726,6 +726,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Explore curated baskets */
+        get: operations["catalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Curated basket detail */
+        get: operations["basketDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/checkout/session": {
         parameters: {
             query?: never;
@@ -740,6 +774,23 @@ export interface paths {
          * @description docs/07: `POST /checkout/session { plan_code } -> Razorpay order/subscription payload`.
          */
         post: operations["createCheckoutSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/collections/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Curated basket collection */
+        get: operations["collectionDetail"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1124,6 +1175,23 @@ export interface paths {
          * @description docs/07: "NSE listings, newest first"; Prompt 11 adds the search box.
          */
         get: operations["getListings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/managers/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Curated basket manager */
+        get: operations["managerDetail"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1785,6 +1853,41 @@ export interface paths {
          */
         post: operations["sendSupportMessage"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/watchlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sole operator watchlist */
+        get: operations["watchlist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/watchlist/{basket_slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Watch a curated basket */
+        put: operations["watch"];
+        post?: never;
+        /** Stop watching a curated basket */
+        delete: operations["unwatch"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2462,6 +2565,49 @@ export interface components {
             /** Weighting */
             weighting: string;
         };
+        /** BasketDetailOut */
+        BasketDetailOut: {
+            /**
+             * Access
+             * @constant
+             */
+            access: "FREE";
+            /** Benchmark Instrument Id */
+            benchmark_instrument_id: number | null;
+            /** Categories */
+            categories: string[];
+            /** Constituents */
+            constituents: components["schemas"]["ConstituentOut"][];
+            /** Description Md */
+            description_md: string;
+            headline_return: components["schemas"]["HeadlineReturnOut"] | null;
+            latest_version: components["schemas"]["VersionSummaryOut"] | null;
+            /**
+             * Launched At
+             * Format: date
+             */
+            launched_at: string;
+            manager: components["schemas"]["ManagerSummaryOut"];
+            metrics: components["schemas"]["MetricsOut"] | null;
+            /** Name */
+            name: string;
+            /** Next Review At */
+            next_review_at: string | null;
+            /** Pitch */
+            pitch: string;
+            /** Rationale Md */
+            rationale_md: string;
+            /** Rebalance Frequency */
+            rebalance_frequency: string;
+            /** Slug */
+            slug: string;
+            /** Source */
+            source: string;
+            /** Type */
+            type: string;
+            /** Watched */
+            watched: boolean;
+        };
         /** BasketOut */
         BasketOut: {
             /** As Of */
@@ -2544,6 +2690,73 @@ export interface components {
          * @enum {string}
          */
         CashPolicy: "hold_cash" | "benchmark";
+        /** CatalogBasketOut */
+        CatalogBasketOut: {
+            /**
+             * Access
+             * @constant
+             */
+            access: "FREE";
+            /** Categories */
+            categories: string[];
+            headline_return: components["schemas"]["HeadlineReturnOut"] | null;
+            latest_version: components["schemas"]["VersionSummaryOut"] | null;
+            /**
+             * Launched At
+             * Format: date
+             */
+            launched_at: string;
+            manager: components["schemas"]["ManagerSummaryOut"];
+            metrics: components["schemas"]["MetricsOut"] | null;
+            /** Name */
+            name: string;
+            /** Next Review At */
+            next_review_at: string | null;
+            /** Pitch */
+            pitch: string;
+            /** Rebalance Frequency */
+            rebalance_frequency: string;
+            /** Slug */
+            slug: string;
+            /** Source */
+            source: string;
+            /** Type */
+            type: string;
+            /** Watched */
+            watched: boolean;
+        };
+        /** CatalogOut */
+        CatalogOut: {
+            /** Baskets */
+            baskets: components["schemas"]["CatalogBasketOut"][];
+            query: components["schemas"]["CatalogQueryOut"];
+            /** Total */
+            total: number;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** CatalogQueryOut */
+        CatalogQueryOut: {
+            /** Access */
+            access: ("FREE" | "FEE") | null;
+            /** Category */
+            category: string[];
+            /** Include New */
+            include_new: boolean;
+            /** Max Min Amount */
+            max_min_amount: string | null;
+            /** Rebalance Frequency */
+            rebalance_frequency: ("WEEKLY" | "MONTHLY" | "QUARTERLY" | "ANNUAL" | "NEED_BASIS") | null;
+            /**
+             * Sort
+             * @enum {string}
+             */
+            sort: "popular" | "returns" | "min_amount" | "newest";
+            /** Type */
+            type: ("STOCK" | "MF" | "US") | null;
+            /** Volatility */
+            volatility: ("LOW" | "MED" | "HIGH") | null;
+        };
         /**
          * CellOut
          * @description One number with the context that makes it mean something.
@@ -2646,6 +2859,21 @@ export interface components {
              */
             m9: number;
         };
+        /** CollectionOut */
+        CollectionOut: {
+            /** Baskets */
+            baskets: components["schemas"]["CatalogBasketOut"][];
+            /** Curated Meta */
+            curated_meta: {
+                [key: string]: unknown;
+            };
+            /** Slug */
+            slug: string;
+            /** Subtitle */
+            subtitle: string;
+            /** Title */
+            title: string;
+        };
         /**
          * ColumnOut
          * @description docs/07: "the 34 selectable result columns" — docs/01 §4 in fact enumerates 36.
@@ -2659,6 +2887,19 @@ export interface components {
             label: string;
             /** Unit */
             unit: string;
+        };
+        /** ConstituentOut */
+        ConstituentOut: {
+            /** Instrument Id */
+            instrument_id: number;
+            /** Name */
+            name: string;
+            /** Segment */
+            segment: string;
+            /** Symbol */
+            symbol: string;
+            /** Weight */
+            weight: string;
         };
         /**
          * CorporateActionOut
@@ -3165,6 +3406,16 @@ export interface components {
             /** Value */
             value?: string | number | null;
         };
+        /**
+         * HeadlineReturnOut
+         * @description The age-selected card statistic; SC5 displays it without choosing a window again.
+         */
+        HeadlineReturnOut: {
+            /** Label */
+            label: string;
+            /** Value */
+            value: string | null;
+        };
         /** HistoryPointOut */
         HistoryPointOut: {
             /**
@@ -3502,6 +3753,36 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** ManagerOut */
+        ManagerOut: {
+            /** Baskets */
+            baskets: components["schemas"]["CatalogBasketOut"][];
+            /** Bio */
+            bio: string;
+            /** Disclosures Md */
+            disclosures_md: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Sebi Reg No */
+            sebi_reg_no: string | null;
+            /** Slug */
+            slug: string;
+            /** Strategies */
+            strategies: string[];
+        };
+        /** ManagerSummaryOut */
+        ManagerSummaryOut: {
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Sebi Reg No */
+            sebi_reg_no: string | null;
+            /** Slug */
+            slug: string;
+        };
         /**
          * MarketHealthHistoryOut
          * @description docs/07: `GET /market-health/history?universe=&from=&to=`.
@@ -3638,6 +3919,32 @@ export interface components {
             observations: number;
             /** Value */
             value?: string | number | null;
+        };
+        /** MetricsOut */
+        MetricsOut: {
+            /**
+             * As Of Date
+             * Format: date
+             */
+            as_of_date: string;
+            /** Cagr 3Y */
+            cagr_3y: string | null;
+            /** Cagr 5Y */
+            cagr_5y: string | null;
+            /** Min Amount */
+            min_amount: string;
+            /** Ret 1M */
+            ret_1m: string | null;
+            /** Ret 1Y */
+            ret_1y: string | null;
+            /** Ret 6M */
+            ret_6m: string | null;
+            /** Since Inception Pct */
+            since_inception_pct: string | null;
+            /** Volatility Bucket */
+            volatility_bucket: string;
+            /** Volatility Value */
+            volatility_value: string;
         };
         /**
          * MonthlyReturnOut
@@ -5220,6 +5527,48 @@ export interface components {
              * Format: email
              */
             email: string;
+        };
+        /** VersionSummaryOut */
+        VersionSummaryOut: {
+            /** Added Count */
+            added_count: number;
+            /**
+             * Effective Date
+             * Format: date
+             */
+            effective_date: string;
+            /** Label */
+            label: string;
+            /** Removed Count */
+            removed_count: number;
+            /** Version No */
+            version_no: number;
+        };
+        /** WatchlistItemOut */
+        WatchlistItemOut: {
+            basket: components["schemas"]["CatalogBasketOut"];
+            /** Daily Change Pct */
+            daily_change_pct: string | null;
+            /** Moved Pct */
+            moved_pct: string;
+            /** Nav At Watch */
+            nav_at_watch: string;
+            /** Nav Today */
+            nav_today: string;
+            /**
+             * Watched At
+             * Format: date-time
+             */
+            watched_at: string;
+        };
+        /** WatchlistOut */
+        WatchlistOut: {
+            /** Count */
+            count: number;
+            /** Items */
+            items: components["schemas"]["WatchlistItemOut"][];
+            /** Truncated */
+            truncated: boolean;
         };
         /**
          * WebhookAck
@@ -9284,6 +9633,219 @@ export interface operations {
             };
         };
     };
+    catalog: {
+        parameters: {
+            query?: {
+                category?: string[];
+                volatility?: ("LOW" | "MED" | "HIGH") | null;
+                max_min_amount?: number | string | null;
+                rebalance_frequency?: ("WEEKLY" | "MONTHLY" | "QUARTERLY" | "ANNUAL" | "NEED_BASIS") | null;
+                type?: ("STOCK" | "MF" | "US") | null;
+                include_new?: boolean;
+                access?: ("FREE" | "FEE") | null;
+                sort?: "popular" | "returns" | "min_amount" | "newest";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    basketDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BasketDetailOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     createCheckoutSession: {
         parameters: {
             query?: never;
@@ -9304,6 +9866,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckoutSessionOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    collectionDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionOut"];
                 };
             };
             /** @description Invalid screen definition */
@@ -11378,6 +12043,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ListingsPage"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    managerDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagerOut"];
                 };
             };
             /** @description Invalid screen definition */
@@ -15443,6 +16211,311 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AcceptedOut"];
                 };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    watchlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchlistOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    watch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                basket_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchlistItemOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    unwatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                basket_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Invalid screen definition */
             400: {

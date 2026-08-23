@@ -111,6 +111,14 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=20, minute=15, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT},
     },
+    "curated-basket-metrics": {
+        # SC2: materialize the product catalog only after the nightly publish deadline. The task
+        # independently checks both the trading calendar and the published run, so a late/failed
+        # pipeline produces no partial or stale metrics row.
+        "task": "baskfy.compute.curated_metrics",
+        "schedule": crontab(hour=20, minute=20, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
     "kite-token-expiry": {
         # docs/09: token expiry is "the #1 pipeline failure". Hourly, and it makes no network
         # call — the expiry is computed from the stored issue time.

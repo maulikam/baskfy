@@ -66,6 +66,7 @@ from baskfy_api.routers import (
     backtests,
     baskets,
     billing,
+    curated_catalog,
     desk,
     instruments,
     market_data,
@@ -299,7 +300,7 @@ def register_middleware(app: FastAPI, settings: Settings) -> None:
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=[
             "Authorization",
             "Content-Type",
@@ -406,7 +407,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     versioned.include_router(backtests.router)
     # M22: read-only basket surfaces. No POST, no PUT, no DELETE -- execution stays in the desk
     # console, so nothing here crosses the SEBI gate. `test_baskets_readonly.py` asserts it.
-    versioned.include_router(baskets.router)
+    # SC2 adds only sole-user catalog reads and PUT/DELETE of watch metadata; no order route.
+    for basket_router in (baskets.router, curated_catalog.router):
+        versioned.include_router(basket_router)
     # M26: the desk's read-only surfaces -- performance, holdings, tradebook, regime, reconcile.
     # Same rule and the same reason as the line above; `test_desk_readonly.py` asserts it.
     versioned.include_router(desk.router)

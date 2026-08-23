@@ -28,7 +28,8 @@ from baskfy_core.models.base import JsonObject
 from baskfy_providers.errors import TransientProviderError
 from baskfy_worker import ops
 from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
-from baskfy_worker.celery_app import IST, QUEUES
+from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
+from baskfy_worker.curated_metrics import compute_curated_metrics
 from baskfy_worker.db import run_in_session
 from baskfy_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
 from baskfy_worker.providers import build_cache, build_pipeline_dependencies
@@ -95,6 +96,7 @@ def nightly_pipeline(trade_date: str | None = None) -> JsonObject:
     alert = ops.alert_for_outcome(outcome)
     if alert is not None:
         _raise_alert(alert)
+    curated_metrics_task_id = enqueue_curated_metrics_after_publish(outcome)
     return {
         "run_id": outcome.run_id,
         "trade_date": outcome.trade_date.isoformat(),
@@ -104,6 +106,7 @@ def nightly_pipeline(trade_date: str | None = None) -> JsonObject:
         "error": outcome.error,
         "steps_completed": [s.value for s in outcome.steps_completed],
         "alert": alert.name.value if alert else None,
+        "curated_metrics_task_id": curated_metrics_task_id,
     }
 
 
@@ -261,6 +264,29 @@ def warm_screen_cache_task(limit: int = WARM_CACHE_SCREEN_LIMIT) -> JsonObject:
         "skipped": result.skipped,
         "failures": list(result.failures),
     }
+
+
+@shared_task(name="baskfy.compute.curated_metrics", acks_late=True)
+def curated_metrics_task(trade_date: str | None = None) -> JsonObject:
+    """Materialize the exact SC2 catalog metrics after a successful nightly publish.
+
+    No automatic retry is needed: a redelivery is a content no-op, while incomplete market
+    coverage is a data-quality failure that must remain visible instead of being hammered.
+    """
+    day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
+    result = run_in_session(lambda session: compute_curated_metrics(session, day))
+    return result.as_dict()
+
+
+def enqueue_curated_metrics_after_publish(outcome: PipelineOutcome) -> str | None:
+    """Causally enqueue SC2 metrics only after the exact nightly date committed publish."""
+    if not outcome.published:
+        return None
+    queued = curated_metrics_task.apply_async(
+        args=[outcome.trade_date.isoformat()],
+        queue=QUEUE_COMPUTE,
+    )
+    return str(queued.id)
 
 
 @shared_task(name="baskfy.backtest.run", acks_late=True)

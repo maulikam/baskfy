@@ -12,10 +12,10 @@ Scope: Deliver every commissioned SC module in order, safely, with one green com
   EXPECT: /^SC1: green — /
   EVIDENCE: SC1: green — establish exact curated-basket foundations
 
-- [ ] G2: SC2 catalog computation/API module is green
+- [x] G2: SC2 catalog computation/API module is green
   CHECK: git log --format='%s' --grep='^SC2: green — ' -1
   EXPECT: /^SC2: green — /
-  EVIDENCE: pending
+  EVIDENCE: SC2: green — compute and serve the bounded curated catalog
 
 - [ ] G3: SC3 versions/rebalance/plans module is green
   CHECK: git log --format='%s' --grep='^SC3: green — ' -1

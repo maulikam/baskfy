@@ -1304,6 +1304,149 @@
         "title": "BacktestSummaryOut",
         "type": "object"
       },
+      "BasketDetailOut": {
+        "properties": {
+          "access": {
+            "const": "FREE",
+            "title": "Access",
+            "type": "string"
+          },
+          "benchmark_instrument_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Instrument Id"
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "constituents": {
+            "items": {
+              "$ref": "#/components/schemas/ConstituentOut"
+            },
+            "title": "Constituents",
+            "type": "array"
+          },
+          "description_md": {
+            "title": "Description Md",
+            "type": "string"
+          },
+          "headline_return": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeadlineReturnOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSummaryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "launched_at": {
+            "format": "date",
+            "title": "Launched At",
+            "type": "string"
+          },
+          "manager": {
+            "$ref": "#/components/schemas/ManagerSummaryOut"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_review_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Review At"
+          },
+          "pitch": {
+            "title": "Pitch",
+            "type": "string"
+          },
+          "rationale_md": {
+            "title": "Rationale Md",
+            "type": "string"
+          },
+          "rebalance_frequency": {
+            "title": "Rebalance Frequency",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "watched": {
+            "title": "Watched",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "manager",
+          "type",
+          "access",
+          "categories",
+          "pitch",
+          "rebalance_frequency",
+          "launched_at",
+          "next_review_at",
+          "source",
+          "latest_version",
+          "metrics",
+          "headline_return",
+          "watched",
+          "description_md",
+          "rationale_md",
+          "benchmark_instrument_id",
+          "constituents"
+        ],
+        "title": "BasketDetailOut",
+        "type": "object"
+      },
       "BasketOut": {
         "properties": {
           "as_of": {
@@ -1528,6 +1671,263 @@
         "title": "CashPolicy",
         "type": "string"
       },
+      "CatalogBasketOut": {
+        "properties": {
+          "access": {
+            "const": "FREE",
+            "title": "Access",
+            "type": "string"
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "headline_return": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeadlineReturnOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionSummaryOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "launched_at": {
+            "format": "date",
+            "title": "Launched At",
+            "type": "string"
+          },
+          "manager": {
+            "$ref": "#/components/schemas/ManagerSummaryOut"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_review_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Review At"
+          },
+          "pitch": {
+            "title": "Pitch",
+            "type": "string"
+          },
+          "rebalance_frequency": {
+            "title": "Rebalance Frequency",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "watched": {
+            "title": "Watched",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "manager",
+          "type",
+          "access",
+          "categories",
+          "pitch",
+          "rebalance_frequency",
+          "launched_at",
+          "next_review_at",
+          "source",
+          "latest_version",
+          "metrics",
+          "headline_return",
+          "watched"
+        ],
+        "title": "CatalogBasketOut",
+        "type": "object"
+      },
+      "CatalogOut": {
+        "properties": {
+          "baskets": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogBasketOut"
+            },
+            "title": "Baskets",
+            "type": "array"
+          },
+          "query": {
+            "$ref": "#/components/schemas/CatalogQueryOut"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "query",
+          "total",
+          "truncated",
+          "baskets"
+        ],
+        "title": "CatalogOut",
+        "type": "object"
+      },
+      "CatalogQueryOut": {
+        "properties": {
+          "access": {
+            "anyOf": [
+              {
+                "enum": [
+                  "FREE",
+                  "FEE"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access"
+          },
+          "category": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Category",
+            "type": "array"
+          },
+          "include_new": {
+            "title": "Include New",
+            "type": "boolean"
+          },
+          "max_min_amount": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Min Amount"
+          },
+          "rebalance_frequency": {
+            "anyOf": [
+              {
+                "enum": [
+                  "WEEKLY",
+                  "MONTHLY",
+                  "QUARTERLY",
+                  "ANNUAL",
+                  "NEED_BASIS"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rebalance Frequency"
+          },
+          "sort": {
+            "enum": [
+              "popular",
+              "returns",
+              "min_amount",
+              "newest"
+            ],
+            "title": "Sort",
+            "type": "string"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "STOCK",
+                  "MF",
+                  "US"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          },
+          "volatility": {
+            "anyOf": [
+              {
+                "enum": [
+                  "LOW",
+                  "MED",
+                  "HIGH"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volatility"
+          }
+        },
+        "required": [
+          "category",
+          "volatility",
+          "max_min_amount",
+          "rebalance_frequency",
+          "type",
+          "include_new",
+          "access",
+          "sort"
+        ],
+        "title": "CatalogQueryOut",
+        "type": "object"
+      },
       "CellOut": {
         "additionalProperties": false,
         "description": "One number with the context that makes it mean something.\n\n``percentile`` is docs/08 §\"Instrument factsheet\"'s improvement over the reference product:\n\"a small bar behind each cell showing that value's percentile within the current universe\".\n``null`` where the value is null — an unknown number has no rank.",
@@ -1734,6 +2134,43 @@
         "title": "CircuitsFilter",
         "type": "object"
       },
+      "CollectionOut": {
+        "properties": {
+          "baskets": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogBasketOut"
+            },
+            "title": "Baskets",
+            "type": "array"
+          },
+          "curated_meta": {
+            "additionalProperties": true,
+            "title": "Curated Meta",
+            "type": "object"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "subtitle": {
+            "title": "Subtitle",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "title",
+          "subtitle",
+          "curated_meta",
+          "baskets"
+        ],
+        "title": "CollectionOut",
+        "type": "object"
+      },
       "ColumnOut": {
         "additionalProperties": false,
         "description": "docs/07: \"the 34 selectable result columns\" — docs/01 §4 in fact enumerates 36.",
@@ -1762,6 +2199,40 @@
           "is_factor"
         ],
         "title": "ColumnOut",
+        "type": "object"
+      },
+      "ConstituentOut": {
+        "properties": {
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "segment": {
+            "title": "Segment",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "weight": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Weight",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "symbol",
+          "name",
+          "segment",
+          "weight"
+        ],
+        "title": "ConstituentOut",
         "type": "object"
       },
       "CorporateActionOut": {
@@ -2988,6 +3459,33 @@
         "title": "GaugeOut",
         "type": "object"
       },
+      "HeadlineReturnOut": {
+        "description": "The age-selected card statistic; SC5 displays it without choosing a window again.",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "HeadlineReturnOut",
+        "type": "object"
+      },
       "HistoryPointOut": {
         "additionalProperties": false,
         "properties": {
@@ -4088,6 +4586,102 @@
         "title": "LoginIn",
         "type": "object"
       },
+      "ManagerOut": {
+        "properties": {
+          "baskets": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogBasketOut"
+            },
+            "title": "Baskets",
+            "type": "array"
+          },
+          "bio": {
+            "title": "Bio",
+            "type": "string"
+          },
+          "disclosures_md": {
+            "title": "Disclosures Md",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sebi_reg_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sebi Reg No"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "strategies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Strategies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "kind",
+          "sebi_reg_no",
+          "bio",
+          "strategies",
+          "disclosures_md",
+          "baskets"
+        ],
+        "title": "ManagerOut",
+        "type": "object"
+      },
+      "ManagerSummaryOut": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sebi_reg_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sebi Reg No"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "kind",
+          "sebi_reg_no"
+        ],
+        "title": "ManagerSummaryOut",
+        "type": "object"
+      },
       "MarketHealthHistoryOut": {
         "additionalProperties": false,
         "description": "docs/07: `GET /market-health/history?universe=&from=&to=`.\n\n\"The four series for charting\", plus the overlay docs/08 §\"Market Health\" asks for.",
@@ -4563,6 +5157,115 @@
           "observations"
         ],
         "title": "MetricCardOut",
+        "type": "object"
+      },
+      "MetricsOut": {
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "cagr_3y": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cagr 3Y"
+          },
+          "cagr_5y": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cagr 5Y"
+          },
+          "min_amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Min Amount",
+            "type": "string"
+          },
+          "ret_1m": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ret 1M"
+          },
+          "ret_1y": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ret 1Y"
+          },
+          "ret_6m": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ret 6M"
+          },
+          "since_inception_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since Inception Pct"
+          },
+          "volatility_bucket": {
+            "title": "Volatility Bucket",
+            "type": "string"
+          },
+          "volatility_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Volatility Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "as_of_date",
+          "min_amount",
+          "volatility_bucket",
+          "volatility_value",
+          "ret_1m",
+          "ret_6m",
+          "ret_1y",
+          "cagr_3y",
+          "cagr_5y",
+          "since_inception_pct"
+        ],
+        "title": "MetricsOut",
         "type": "object"
       },
       "MonthlyReturnOut": {
@@ -8565,6 +9268,115 @@
           "code"
         ],
         "title": "VerifyOtpIn",
+        "type": "object"
+      },
+      "VersionSummaryOut": {
+        "properties": {
+          "added_count": {
+            "title": "Added Count",
+            "type": "integer"
+          },
+          "effective_date": {
+            "format": "date",
+            "title": "Effective Date",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "removed_count": {
+            "title": "Removed Count",
+            "type": "integer"
+          },
+          "version_no": {
+            "title": "Version No",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version_no",
+          "effective_date",
+          "label",
+          "added_count",
+          "removed_count"
+        ],
+        "title": "VersionSummaryOut",
+        "type": "object"
+      },
+      "WatchlistItemOut": {
+        "properties": {
+          "basket": {
+            "$ref": "#/components/schemas/CatalogBasketOut"
+          },
+          "daily_change_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Change Pct"
+          },
+          "moved_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Moved Pct",
+            "type": "string"
+          },
+          "nav_at_watch": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nav At Watch",
+            "type": "string"
+          },
+          "nav_today": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Nav Today",
+            "type": "string"
+          },
+          "watched_at": {
+            "format": "date-time",
+            "title": "Watched At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "basket",
+          "watched_at",
+          "nav_at_watch",
+          "nav_today",
+          "moved_pct",
+          "daily_change_pct"
+        ],
+        "title": "WatchlistItemOut",
+        "type": "object"
+      },
+      "WatchlistOut": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WatchlistItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "count",
+          "truncated",
+          "items"
+        ],
+        "title": "WatchlistOut",
         "type": "object"
       },
       "WebhookAck": {
@@ -13681,6 +14493,388 @@
         ]
       }
     },
+    "/api/v1/catalog": {
+      "get": {
+        "operationId": "catalog",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Category",
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "volatility",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "LOW",
+                    "MED",
+                    "HIGH"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Volatility"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_min_amount",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Min Amount"
+            }
+          },
+          {
+            "in": "query",
+            "name": "rebalance_frequency",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "WEEKLY",
+                    "MONTHLY",
+                    "QUARTERLY",
+                    "ANNUAL",
+                    "NEED_BASIS"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rebalance Frequency"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "STOCK",
+                    "MF",
+                    "US"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_new",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Include New",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "access",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "FREE",
+                    "FEE"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "popular",
+              "enum": [
+                "popular",
+                "returns",
+                "min_amount",
+                "newest"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Explore curated baskets",
+        "tags": [
+          "curated-catalog"
+        ]
+      }
+    },
+    "/api/v1/catalog/{slug}": {
+      "get": {
+        "operationId": "basketDetail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "maxLength": 160,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BasketDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Curated basket detail",
+        "tags": [
+          "curated-catalog"
+        ]
+      }
+    },
     "/api/v1/checkout/session": {
       "post": {
         "description": "docs/07: `POST /checkout/session { plan_code } -> Razorpay order/subscription payload`.",
@@ -13800,6 +14994,131 @@
         "summary": "Start a Razorpay checkout",
         "tags": [
           "billing"
+        ]
+      }
+    },
+    "/api/v1/collections/{slug}": {
+      "get": {
+        "operationId": "collectionDetail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "maxLength": 160,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Curated basket collection",
+        "tags": [
+          "curated-catalog"
         ]
       }
     },
@@ -16423,6 +17742,131 @@
         "summary": "The NSE listings register",
         "tags": [
           "market-data"
+        ]
+      }
+    },
+    "/api/v1/managers/{slug}": {
+      "get": {
+        "operationId": "managerDetail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "maxLength": 160,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagerOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Curated basket manager",
+        "tags": [
+          "curated-catalog"
         ]
       }
     },
@@ -21407,6 +22851,358 @@
         "summary": "Send a support message",
         "tags": [
           "support"
+        ]
+      }
+    },
+    "/api/v1/watchlist": {
+      "get": {
+        "operationId": "watchlist",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Sole operator watchlist",
+        "tags": [
+          "curated-catalog"
+        ]
+      }
+    },
+    "/api/v1/watchlist/{basket_slug}": {
+      "delete": {
+        "operationId": "unwatch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "basket_slug",
+            "required": true,
+            "schema": {
+              "maxLength": 160,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Basket Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Stop watching a curated basket",
+        "tags": [
+          "curated-catalog"
+        ]
+      },
+      "put": {
+        "operationId": "watch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "basket_slug",
+            "required": true,
+            "schema": {
+              "maxLength": 160,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Basket Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchlistItemOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Watch a curated basket",
+        "tags": [
+          "curated-catalog"
         ]
       }
     },

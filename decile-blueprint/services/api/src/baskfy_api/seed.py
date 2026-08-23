@@ -26,6 +26,7 @@ import hashlib
 import os
 import sys
 from collections.abc import Sequence
+from decimal import Decimal
 from typing import Final
 
 from sqlalchemy import func, select
@@ -36,9 +37,13 @@ from baskfy_api.db import session_scope
 from baskfy_api.security import hash_password
 from baskfy_api.settings import get_settings
 from baskfy_core.breadth import breadth_query
+from baskfy_core.curated_baskets import ConstituentDraft, VersionDraft
 from baskfy_core.models import (
     AppUser,
+    BasketConstituent,
+    BasketVersion,
     CorporateAction,
+    CuratedBasket,
     CuratedManager,
     Exchange,
     FactorDaily,
@@ -52,10 +57,13 @@ from baskfy_core.models import (
     PipelineRunStep,
     Plan,
     Screen,
+    ScreenRun,
     Subscription,
     TradingDay,
 )
+from baskfy_core.momentum_scan import MomentumScan
 from baskfy_core.reference_export import ReferenceRows, to_rows
+from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.seed_data import (
     ALL_PLANS,
     EXAMPLE_SCREENS,
@@ -107,6 +115,321 @@ CURATED_MANAGER_ROWS: Final[tuple[dict[str, object], ...]] = (
         ),
     },
 )
+
+CURATED_SCAN_BASKET_SLUG: Final = "baskfy-momentum-scan"
+CURATED_SCAN_SCREEN_PUBLIC_ID: Final = "curated-momentum-scan"
+MAX_CURATED_SCAN_CONSTITUENTS: Final = 50
+_WEIGHT_UNITS: Final = 10_000
+
+
+class CuratedScanProjectionError(ValueError):
+    """A scan cannot be projected without losing identity or determinism."""
+
+
+def _equal_four_decimal_weights(symbols: Sequence[str]) -> dict[str, Decimal]:
+    """Allocate exactly 10,000 weight units with a stable largest-remainder tie break."""
+    ordered = sorted(symbols)
+    count = len(ordered)
+    if count == 0:
+        raise CuratedScanProjectionError("a curated scan must contain at least one symbol")
+    if count > MAX_CURATED_SCAN_CONSTITUENTS:
+        raise CuratedScanProjectionError(
+            f"a curated scan is capped at {MAX_CURATED_SCAN_CONSTITUENTS} constituents"
+        )
+
+    base, remainder = divmod(_WEIGHT_UNITS, count)
+    return {
+        symbol: Decimal(base + (position < remainder)) / Decimal(_WEIGHT_UNITS)
+        for position, symbol in enumerate(ordered)
+    }
+
+
+def _validated_scan_symbols(scan: MomentumScan) -> tuple[str, ...]:
+    if type(scan.as_of) is not dt.date:
+        raise CuratedScanProjectionError("scan.as_of must be a date")
+    if scan.universe != "nse_cash":
+        raise CuratedScanProjectionError("curated MomentumScan universe must be nse_cash")
+    if type(scan.data_version) is not int or scan.data_version <= 0:
+        raise CuratedScanProjectionError("scan.data_version must be a positive integer")
+    if not scan.screen_run_id or not scan.screen_run_id.strip():
+        raise CuratedScanProjectionError("scan.screen_run_id must be non-empty")
+    if "symbol" not in scan.frame.columns:
+        raise CuratedScanProjectionError("scan.frame must contain symbol")
+    raw_symbols = scan.frame.get_column("symbol").to_list()
+    if any(not isinstance(symbol, str) or not symbol.strip() for symbol in raw_symbols):
+        raise CuratedScanProjectionError("every scan symbol must be a non-empty string")
+    symbols = tuple(str(symbol).strip().upper() for symbol in raw_symbols)
+    if len(set(symbols)) != len(symbols):
+        raise CuratedScanProjectionError("scan symbols must be unique")
+    return symbols
+
+
+async def _resolve_scan_instruments(
+    session: AsyncSession, symbols: tuple[str, ...]
+) -> dict[str, int]:
+    resolved_rows = (
+        (
+            await session.execute(
+                select(Instrument.symbol, Instrument.id)
+                .join(Exchange, Exchange.id == Instrument.exchange_id)
+                .where(
+                    Exchange.code == "NSE",
+                    Instrument.symbol.in_(symbols),
+                    Instrument.series == "EQ",
+                    Instrument.is_active.is_(True),
+                )
+            )
+        )
+        .tuples()
+        .all()
+    )
+    by_symbol: dict[str, int] = {}
+    ambiguous: set[str] = set()
+    for symbol, instrument_id in resolved_rows:
+        if symbol in by_symbol:
+            ambiguous.add(symbol)
+        by_symbol[symbol] = instrument_id
+    missing = sorted(set(symbols) - by_symbol.keys())
+    if missing or ambiguous:
+        detail = []
+        if missing:
+            detail.append(f"missing NSE EQ instruments: {missing}")
+        if ambiguous:
+            detail.append(f"ambiguous NSE EQ instruments: {sorted(ambiguous)}")
+        raise CuratedScanProjectionError("; ".join(detail))
+    return by_symbol
+
+
+async def _curated_scan_manager(session: AsyncSession) -> CuratedManager:
+    manager = await session.scalar(
+        select(CuratedManager).where(CuratedManager.slug == "baskfy-engine")
+    )
+    if manager is None:
+        await seed_curated_product_reference(session)
+        manager = await session.scalar(
+            select(CuratedManager).where(CuratedManager.slug == "baskfy-engine")
+        )
+    if manager is None:  # pragma: no cover - protects against future seed refactors
+        raise CuratedScanProjectionError("the baskfy-engine manager could not be seeded")
+    return manager
+
+
+async def _curated_scan_owner_id(session: AsyncSession) -> int:
+    owner = await session.scalar(
+        select(AppUser).where(AppUser.public_id == get_settings().sole_user_id)
+    )
+    if owner is None:  # pragma: no cover - manager seeding immediately precedes this lookup
+        raise CuratedScanProjectionError("the sole curated-scan owner could not be resolved")
+    return owner.id
+
+
+def _curated_scan_definition() -> ScreenDefinition:
+    return ScreenDefinition(
+        index="nifty-total-market",
+        sort_by="avg_sharpe_12_6_3_1",
+        sort_direction="desc",
+        series=["EQ", "BE"],
+    )
+
+
+async def _curated_scan_source_run(
+    session: AsyncSession,
+    scan: MomentumScan,
+    symbols: tuple[str, ...],
+    by_symbol: dict[str, int],
+    owner_id: int,
+) -> tuple[ScreenRun, bool]:
+    definition = _curated_scan_definition()
+    definition_payload = definition.model_dump(mode="json", by_alias=True)
+    screen = await session.scalar(
+        select(Screen).where(Screen.public_id == CURATED_SCAN_SCREEN_PUBLIC_ID)
+    )
+    if screen is None:
+        screen = Screen(
+            public_id=CURATED_SCAN_SCREEN_PUBLIC_ID,
+            user_id=owner_id,
+            name="Baskfy MomentumScan projection",
+            definition=definition_payload,
+            columns=["symbol"],
+            is_example=False,
+        )
+        session.add(screen)
+        await session.flush()
+    elif screen.user_id != owner_id or screen.definition != definition_payload:
+        raise CuratedScanProjectionError(
+            "the reserved MomentumScan source screen has conflicting ownership or definition"
+        )
+
+    scan_results = [
+        {"rank": rank, "instrument_id": by_symbol[symbol], "factor_value": None}
+        for rank, symbol in enumerate(symbols, start=1)
+    ]
+    source_run = await session.scalar(
+        select(ScreenRun).where(
+            ScreenRun.screen_id == screen.id,
+            ScreenRun.as_of == scan.as_of,
+            ScreenRun.definition_hash == definition.definition_hash(),
+        )
+    )
+    if source_run is None:
+        source_run = ScreenRun(
+            screen_id=screen.id,
+            as_of=scan.as_of,
+            definition_hash=definition.definition_hash(),
+            result_count=len(scan_results),
+            results=scan_results,
+        )
+        session.add(source_run)
+        await session.flush()
+        return source_run, True
+    if source_run.result_count != len(scan_results) or source_run.results != scan_results:
+        raise CuratedScanProjectionError(
+            "the persisted source scan differs from this scan under the same identity"
+        )
+    return source_run, False
+
+
+async def _curated_scan_basket(
+    session: AsyncSession, launched_at: dt.date, manager: CuratedManager
+) -> tuple[CuratedBasket, bool]:
+    basket = await session.scalar(
+        select(CuratedBasket).where(CuratedBasket.slug == CURATED_SCAN_BASKET_SLUG)
+    )
+    if basket is None:
+        basket = CuratedBasket(
+            slug=CURATED_SCAN_BASKET_SLUG,
+            name="Baskfy Momentum Scan",
+            manager_id=manager.id,
+            type="STOCK",
+            access="FREE",
+            visibility="PUBLISHED",
+            categories=["Momentum", "Quantitative"],
+            description_md="A rules-based projection of Baskfy's selected MomentumScan output.",
+            rationale_md=(
+                "Constituents come from the documented MomentumScan pipeline and are allocated "
+                "equally at four-decimal precision."
+            ),
+            rebalance_frequency="WEEKLY",
+            benchmark_instrument_id=None,
+            launched_at=launched_at,
+            next_review_at=None,
+            source="SCAN",
+            scan_strategy_key="MomentumScan",
+            archived_at=None,
+        )
+        session.add(basket)
+        await session.flush()
+        return basket, True
+    if (
+        basket.manager_id != manager.id
+        or basket.source != "SCAN"
+        or basket.scan_strategy_key != "MomentumScan"
+    ):
+        raise CuratedScanProjectionError(
+            f"existing {CURATED_SCAN_BASKET_SLUG} basket is not the MomentumScan projection"
+        )
+    return basket, False
+
+
+async def _curated_scan_genesis(
+    session: AsyncSession,
+    scan: MomentumScan,
+    basket: CuratedBasket,
+    source_run: ScreenRun,
+    constituents: tuple[ConstituentDraft, ...],
+) -> bool:
+    expected_notes = (
+        f"Genesis projection from MomentumScan {scan.screen_run_id}; "
+        f"data version {scan.data_version}."
+    )
+    existing = await session.scalar(
+        select(BasketVersion)
+        .where(BasketVersion.basket_id == basket.id)
+        .order_by(BasketVersion.version_no)
+        .limit(1)
+    )
+    if existing is None:
+        from baskfy_api.curated_baskets import CuratedBasketRepository  # noqa: PLC0415
+
+        await CuratedBasketRepository(session).create_version(
+            basket.id,
+            VersionDraft(
+                effective_date=scan.as_of,
+                constituents=constituents,
+                notes_md=expected_notes,
+                source_scan_run_id=source_run.id,
+            ),
+        )
+        return True
+
+    stored = (
+        (
+            await session.execute(
+                select(BasketConstituent.instrument_id, BasketConstituent.weight).where(
+                    BasketConstituent.version_id == existing.id
+                )
+            )
+        )
+        .tuples()
+        .all()
+    )
+    expected = {(row.instrument_id, row.weight) for row in constituents}
+    if (
+        existing.version_no != 1
+        or existing.effective_date != scan.as_of
+        or existing.source_scan_run_id != source_run.id
+        or existing.notes_md != expected_notes
+        or set(stored) != expected
+    ):
+        raise CuratedScanProjectionError(
+            "existing MomentumScan genesis differs; immutable versions are never reseeded"
+        )
+    return False
+
+
+async def seed_curated_momentum_scan(
+    session: AsyncSession,
+    scan: MomentumScan,
+) -> dict[str, int]:
+    """Project one already-selected MomentumScan output into an immutable genesis version.
+
+    The caller owns strategy ranking and passes only its selected top-N rows. This boundary owns
+    persistence: it resolves every symbol in one query, records the source scan in the existing
+    ``screen_run`` audit model, and creates the product projection exactly once. A later scan is
+    a publish operation, not a seed, so an existing but different genesis is refused rather than
+    silently rewritten.
+    """
+    symbols = _validated_scan_symbols(scan)
+    weights = _equal_four_decimal_weights(symbols)
+    by_symbol = await _resolve_scan_instruments(session, symbols)
+    manager = await _curated_scan_manager(session)
+    owner_id = await _curated_scan_owner_id(session)
+    source_run, source_created = await _curated_scan_source_run(
+        session, scan, symbols, by_symbol, owner_id
+    )
+    basket, basket_created = await _curated_scan_basket(session, scan.as_of, manager)
+    constituents = tuple(
+        ConstituentDraft(
+            instrument_id=by_symbol[symbol],
+            segment="Equity",
+            weight=weight,
+        )
+        for symbol, weight in weights.items()
+    )
+    version_created = await _curated_scan_genesis(
+        session,
+        scan,
+        basket,
+        source_run,
+        constituents,
+    )
+
+    return {
+        "screen_run": int(source_created),
+        "cb_basket": int(basket_created),
+        "cb_basket_version": int(version_created),
+        "cb_constituent": len(symbols) if version_created else 0,
+    }
 
 
 def _sole_user_email(public_id: str) -> str:

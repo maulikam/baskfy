@@ -24,10 +24,10 @@ import { PAGES } from "@/lib/vocabulary";
  * The test got *stronger* in one respect: pinning routes rather than strings means a future
  * rename cannot silently point an item somewhere else, which the old string assertions allowed.
  *
- * **Baskets is one addition to docs/08's list, and it is deliberate.** docs/08 predates the merge:
- * it describes the screener alone, which had no basket to show. MERGE-PROMPTS.md §M22 adds the
- * desk's output as a read-only surface, and it sits directly after the rebalance tracker because
- * that is the item it belongs beside — what the strategy wants, next to what was actually traded.
+ * **Explore and Baskets are deliberate additions to docs/08's list.** docs/08 predates the merge
+ * and the curated-basket catalog. SC5 adds `/explore` (public catalog). M22's `/baskets` remains
+ * the desk MomentumScan operator view; they soft-coexist (DECISIONS-SC SC5). Explore sits before
+ * Baskets so discovery comes first; Baskets still sits beside the rebalance tracker.
  *
  * **The "Real money" group is M26's addition, renamed by M36.** Five of the desk console's own
  * pages moved onto the web app, and they are grouped rather than scattered through the primary
@@ -47,6 +47,7 @@ describe("the sidebar IA", () => {
       "/market-health",
       "/screens",
       "/portfolios",
+      "/explore",
       "/baskets",
       "/backtests",
       "/listings",

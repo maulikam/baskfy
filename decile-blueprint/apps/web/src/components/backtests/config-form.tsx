@@ -250,7 +250,13 @@ export function ConfigForm({
             type="number"
             min="0.1"
             max="100"
-            step="0.5"
+            /*
+             * 0.1, not 0.5. `step` counts from `min`, so a 0.5 step off a 0.1 floor makes the
+             * valid values 0.1, 0.6, 1.1 … 9.6, 10.1 — and this field's own default is 10. The
+             * form could not be submitted without the user first noticing a native tooltip and
+             * changing a value that looked correct. See `config-form-constraints.test.ts`.
+             */
+            step="0.1"
             value={maxWeight}
             onChange={(event) => setMaxWeight(event.target.value)}
           />
@@ -262,7 +268,7 @@ export function ConfigForm({
             type="number"
             min="0"
             max="100"
-            step="0.5"
+            step="0.1"
             value={minWeight}
             onChange={(event) => setMinWeight(event.target.value)}
           />
@@ -290,7 +296,7 @@ export function ConfigForm({
             id="bt-brokerage"
             type="number"
             min="0"
-            step="0.5"
+            step="0.1"
             value={brokerage}
             onChange={(event) => setBrokerage(event.target.value)}
           />
@@ -300,7 +306,7 @@ export function ConfigForm({
             id="bt-stt"
             type="number"
             min="0"
-            step="0.5"
+            step="0.1"
             value={stt}
             onChange={(event) => setStt(event.target.value)}
           />
@@ -310,7 +316,7 @@ export function ConfigForm({
             id="bt-slippage"
             type="number"
             min="0"
-            step="0.5"
+            step="0.1"
             value={slippage}
             onChange={(event) => setSlippage(event.target.value)}
           />

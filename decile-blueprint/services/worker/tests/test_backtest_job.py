@@ -21,10 +21,11 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Final
 
+import helpers
 import pytest
 from helpers import requires_db
 from sqlalchemy import delete, insert, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from baskfy_api.backtests import artefact_key, build_payload, new_public_id
 from baskfy_core.backtest import (
@@ -52,7 +53,7 @@ from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_core.universes import UNIVERSE_BY_SLUG
 from baskfy_providers.archive import LocalRawArchive
 from baskfy_worker.backtest import execute_backtest, load_backtest_data, trading_calendar
-from baskfy_worker.tasks.backtests import BacktestNotRunnable, run_backtest_job
+from baskfy_worker.tasks.backtests import BacktestNotRunnable, _claim, run_backtest_job
 
 pytestmark = [requires_db, pytest.mark.db]
 
@@ -601,3 +602,48 @@ async def test_a_fifteen_year_monthly_run_over_twenty_names_is_under_ten_seconds
     # facts about whether this design has room in it.
     print(f"\n15y monthly / top 20 / {PERF_INSTRUMENTS} names, end to end: {elapsed:.2f}s")
     assert elapsed < 10.0, f"the 15-year run took {elapsed:.2f}s; docs/11 budgets 10s"
+
+
+async def test_a_claimed_run_is_durably_running_with_a_start_time(
+    session: AsyncSession,
+) -> None:
+    """M45.2. `running` must be visible outside the run's own transaction.
+
+    Before this, the claim and the simulation shared one transaction, so `running` was never
+    committed. Two consequences, both measured by an audit:
+
+    * a successful run showed `queued` on `GET /backtests/{id}` for its entire duration, while the
+      SSE frames said `running` — so `queued` already meant "currently running" in the happy path;
+    * a process killed mid-simulation left a row identical in every column to one that had never
+      been picked up (`status='queued' error=None finished_at=None metrics=None`), so no operator
+      query and no reaper could separate "abandoned" from "waiting behind the concurrency cap".
+
+    `created_at` cannot substitute: it records the POST, not the start.
+    """
+    await _seed_market(session)
+    row = await _queued(session, _config())
+    public_id = row.public_id
+    await session.commit()
+
+    engine = create_async_engine(helpers.database_url())
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as claiming:
+        claimed = await _claim(claiming, public_id)
+        assert claimed.status == "running"
+        assert claimed.started_at is not None
+        await claiming.commit()
+
+    # A DIFFERENT transaction — which is the whole point.
+    async with factory() as observer:
+        status, started_at, created_at = (
+            await observer.execute(
+                select(Backtest.status, Backtest.started_at, Backtest.created_at).where(
+                    Backtest.public_id == public_id
+                )
+            )
+        ).one()
+
+    assert status == "running", "an in-flight run must say so outside its own transaction"
+    assert started_at is not None, "started-then-died would be identical to never-started"
+    assert started_at >= created_at
+    await engine.dispose()

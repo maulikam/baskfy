@@ -30,10 +30,13 @@ class TestIsNseSessionOpen:
 
     def test_open_at_bell_and_at_close(self) -> None:
         assert is_nse_session_open(_ist(2026, 8, 24, 9, 15), TRADING) is True
-        assert is_nse_session_open(
-            dt.datetime.combine(dt.date(2026, 8, 24), SESSION_CLOSE, tzinfo=IST),
-            TRADING,
-        ) is True
+        assert (
+            is_nse_session_open(
+                dt.datetime.combine(dt.date(2026, 8, 24), SESSION_CLOSE, tzinfo=IST),
+                TRADING,
+            )
+            is True
+        )
 
     def test_closed_before_open(self) -> None:
         assert is_nse_session_open(_ist(2026, 8, 24, 9, 14), TRADING) is False

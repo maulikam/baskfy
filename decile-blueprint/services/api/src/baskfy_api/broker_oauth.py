@@ -30,8 +30,8 @@ __all__ = [
     "exchange_request_token_stub",
     "register_oauth_state",
     "token_encryption_key",
-    "token_store_path",
     "token_store_for",
+    "token_store_path",
 ]
 
 #: Default TTL for pending OAuth ``state`` values (seconds).
@@ -188,7 +188,7 @@ def exchange_request_token_stub(
     Deterministic for a given ``(api_key, request_token, user_id)`` so re-running the
     callback with the same inputs yields the same encrypted blob contents.
     """
-    material = f"{api_key}|{request_token}|{user_id}|baskfy-oauth-stub".encode("utf-8")
+    material = f"{api_key}|{request_token}|{user_id}|baskfy-oauth-stub".encode()
     digest = hashlib.sha256(material).hexdigest()[:40]
     return f"sim_{digest}"
 
@@ -213,7 +213,7 @@ def exchange_request_token(
     # Live path — kept for operator sole-tenant login; network-blocked suites never reach here.
     import httpx  # noqa: PLC0415
 
-    checksum = hashlib.sha256(f"{api_key}{request_token}{secret}".encode("utf-8")).hexdigest()
+    checksum = hashlib.sha256(f"{api_key}{request_token}{secret}".encode()).hexdigest()
     response = httpx.post(
         "https://api.kite.trade/session/token",
         data={"api_key": api_key, "request_token": request_token, "checksum": checksum},

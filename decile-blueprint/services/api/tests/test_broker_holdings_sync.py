@@ -9,12 +9,12 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from baskfy_execution.broker_ports import normalize_holding, total_quantity
 
 from baskfy_api import broker_holdings
 from baskfy_api.app import create_app
 from baskfy_api.routers import brokers as brokers_router
 from baskfy_api.routers.brokers import sync_holdings
-from baskfy_execution.broker_ports import normalize_holding, total_quantity
 
 
 @pytest.fixture(autouse=True)

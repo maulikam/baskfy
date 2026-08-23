@@ -2,10 +2,10 @@
 
 Scope: First SCAN basket seeded idempotently; STATUS SC2
 
-- [ ] G1: seed creates SCAN basket path
+- [x] G1: seed creates SCAN basket path
   CHECK: rg -n 'SCAN|seed_scan|scan_basket' decile-blueprint/services/api/src/baskfy_api/curated_seed.py
   EXPECT: SCAN|scan
-  EVIDENCE: pending
+  EVIDENCE: curated_seed SCAN seed path; STATUS SC2 ✅ in 5673e10
 
 - [x] G2: STATUS SC2 marked
   CHECK: rg -n 'SC2' docs/smallcase/STATUS.md

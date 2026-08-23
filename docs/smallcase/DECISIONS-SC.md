@@ -102,11 +102,152 @@ Inferring "the only user" implicitly in queries (forbidden by docs/smallcase/03 
 
 **Reversal.** Delete `curated_seed.resolve_sole_user_id`; callers pass explicit ids in tests only.
 
-## SC2 — explore API prefix and transcendental float boundary ⚠ UNREVIEWED
+## SC2 — catalog at `/api/v1/explore`, not `/cb/baskets` · ⚠ UNREVIEWED
 
-**Taken.** Catalog lives at `/api/v1/explore` (and watchlist routes on the same router), matching
-docs/smallcase/05 route names rather than `/cb/baskets`. CAGR uses `math.log`/`math.exp` at the
-fractional-power boundary then immediately re-enters `Decimal` and quantizes to 2 dp; volatility
-uses `Decimal.sqrt()`. Rejected: pure-Decimal CAGR via series expansion (complexity, no gain at
-2 dp). Reversal: rename routes in one router file; swap CAGR implementation behind the same
-signature.
+**Context.** Module plan allowed `/api/v1/explore` or `/api/v1/cb/baskets`. UI spec routes are
+`/explore`, `/manager`, `/collections`, `/watchlist`. M22 already owns `/api/v1/baskets` (live
+scan). Paths containing the substring `basket` are asserted GET-only by
+`test_baskets_readonly.py`.
+
+**Taken.** Prefix **`/api/v1/explore`** for list/detail/managers/collections; watchlist at
+**`/api/v1/watchlist`** (mutating verbs allowed; not under M22's `basket` substring gate).
+Documented list query params (05 chips/dialog mapped): `max_min_amount`, `access`, `volatility`,
+`category`, `rebalance_frequency`, `basket_type`, `include_new`, `sort`, `order`, `q`.
+`sort` ∈ {min_amount, ret_1y, cagr_3y, cagr_5y, name, launched_at, volatility}.
+
+**Rejected.** `/api/v1/cb/baskets` (diverges from UI paths). Putting watchlist under
+`/explore/baskets/...` (would break M22's GET-only assertion without narrowing that test).
+
+**Reversal.** Rename routes in `routers/explore.py` and regenerate the client; keep M22 paths.
+
+## SC2 — float only at the annualisation / CAGR boundary · ⚠ UNREVIEWED
+
+**Context.** House rule 9: money is Decimal. Sample std-dev and fractional powers are not money.
+
+**Taken.** Prices, weights, min-amount, NAV steps, and stored return percents stay `Decimal`
+(half-up at write). `annualized_volatility` and `cagr` convert to float only for `math.sqrt` /
+`** (1/years)`, then immediately re-enter `Decimal` and quantize (10 dp for vol fraction, 2 dp
+for percent returns).
+
+**Rejected.** Pure-Decimal series expansion for CAGR (complexity, no gain at 2 dp). Storing
+float in `cb_metrics` (violates schema Numeric columns).
+
+**Reversal.** Swap the two helpers behind the same signatures; re-run the metrics job.
+
+## SC2 — EOD metrics Beat at 20:20 IST · ⚠ UNREVIEWED
+
+**Context.** Metrics need published closes; publish SLO is 20:15; alerts fire at 20:30.
+
+**Taken.** `cb-eod-metrics` → `baskfy.cb.compute_metrics` Mon–Fri **20:20** IST on the compute
+queue. Idempotent upsert on `(basket_id, as_of_date)`.
+
+**Rejected.** Bundling into `pipeline.nightly` (alerts/publish failure modes differ). Running
+before 20:15 (risk of incomplete bars).
+
+**Reversal.** Change one Beat entry; task name stays.
+
+## SC5 — Explore is public catalog; `/baskets` stays desk MomentumScan · ⚠ UNREVIEWED
+
+**Context.** SC1 deferred the M22 `/baskets` vs curated-catalog collision to SC5. UI spec
+(`05`) said merge-or-redirect so two competing catalogs do not remain. Soft redirect was
+preferred over a hard HTTP redirect so desk operators keep a Friday MomentumScan surface.
+
+**Taken.** **Explore is the public catalog; `/baskets` remains the desk MomentumScan operator
+view.** `/explore` + `/basket/[slug]` (+ constituents stub) read `GET /api/v1/explore`. Nav gains
+Explore. `/baskets` is **not** hard-redirected: a notice + primary CTA to `/explore` soft-steers
+product discovery while the live scan table and `/baskets/plan` stay for operators. Aligns with
+SC1 "extend, don't duplicate" — `basket_snapshot` / `GET /api/v1/baskets` unchanged. Web still has
+**no order route**; Invest CTAs open `PlanHandoffPanel` (or `MarketClosedModal`).
+
+**Rejected.** Hard redirect `/baskets` → `/explore` (breaks desk Friday workflow and M22 plan
+page adjacency). Deleting `/baskets` (throws away the live scan UI before SC3 versions fully
+replace the operator need). Merging both into one page (confuses catalog cards with today's
+ranked scan).
+
+**Reversal.** Remove the `/baskets` banner and Explore nav entry; leave `/explore` routes as
+orphans or delete them in a follow-up. Hard redirect can replace the soft notice later if
+operators no longer need the scan table.
+
+## SC4 — Fee rounding order and XIRR day-count · ⚠ UNREVIEWED
+
+**Context.** docs/smallcase/04 §1 says `base = min(₹100, 1.5% × amount)` then 18% GST, round
+half-up to 2 dp at write. Boundary fixtures ₹6,666 / ₹7,000 straddle the cap
+(`6666 × 0.015 = 99.99`, `7000 × 0.015 = 105 → 100`). XIRR must match a hand fixture to 4 dp;
+display only when first investment is **>365** calendar days old.
+
+**Taken.** Quantize the uncapped `amount × 1.5%` with `money()` *before* applying the cap, then
+GST on the capped base, then `money(base + gst)`. XIRR is ACT/365 Newton + bisection,
+quantized to 4 dp; sign convention invest-negative / redeem-positive (Excel XIRR). Pure module
+`baskfy_core.curated_accounting` — services journal `collected=false`; no collection this run.
+Drift shortfall → `DRIFT` pending-action shape in `baskfy_core.curated_drift`; fix archives a
+synthetic EXIT at ledger avg cost then re-bases qty to broker (04 §7). Excess → CUSTOMIZE ids
+only (not a DRIFT action). Dividend row derivation from corporate actions stays in the API/worker
+service (needs holdings history + CA table) — not invented in core.
+
+**Rejected.** Cap-then-round without quantizing the rate product first (paisa drift on odd
+amounts). Float XIRR (house rule 9). Showing XIRR at exactly 365 days (spec is strictly greater).
+
+**Reversal.** Change the two fee lines and the day-count constant; re-run
+`test_curated_accounting.py` / `test_curated_drift.py`. Fee ledger rows already stored keep their
+written numbers (no rewrite).
+
+## SC3 — apply-preview diffs holdings (not prior version); value-delta floor · ⚠ UNREVIEWED
+
+**Context.** docs/smallcase/04 §5: apply preview diffs *intended holdings* against the new
+version's target weights at current prices → buy/sell child list; sells fund buys; residual
+cash line; top-up may be required for new min-amount. Two whole-share algorithms are plausible:
+(a) qty-first `floor(V × w / p)` then delta vs held qty; (b) value-delta
+`floor(|target_value − current_value| / p)` capped by held qty.
+
+**Taken.** **(b) value-delta floor** in `baskfy_core.curated_versions.diff_holdings_vs_weights`.
+`top_up = max(0, −residual, min_amount − portfolio_value)` so a negative residual (sells under-fund
+buys after flooring) and a min-amount shortfall are both covered. Version numbers are strictly
+sequential (`assert_next_version_no`); publish side-effects are a pure `PublishSideEffects`
+description (ENGINE post + `REBALANCE_AVAILABLE` + `PENDING`) persisted by
+`baskfy_api.curated_versions` — no desk plan / no gateway. API unit tests live in
+`test_curated_versions_service.py` (basename collision with core under pytest import mode).
+
+**Rejected.** Qty-first target allocation (changes sell qty on the hand fixture B leg 2→3 and
+hides residual under-funding). Top-up = min-amount gap only (leaves negative residual unfunded
+in the preview). Plan generation in this leaf (owned by 1.2.2).
+
+**Reversal.** Swap the floor loop in `diff_holdings_vs_weights`; re-run
+`packages/core/tests/test_curated_versions.py`. Persisted versions/posts unchanged.
+
+## SC3 — Plans are preview-only with synthetic desk_plan_id · ⚠ UNREVIEWED
+
+**Context.** docs/smallcase/02 Track C + PACK.2: the web app may generate invest/apply/exit
+plans but must never execute. Desk non-negotiable #1: plans expire in 30 minutes. Leaf 1.2.2
+owns plan generation; the versions sibling owns publish/diff.
+
+**Taken.** Pure builders in `baskfy_core.curated_plans` (`build_invest_plan` / `build_apply_plan` /
+`build_exit_plan`) produce desk-shaped legs + `expires_at_hint = now + 30m`. API
+`POST /api/v1/cb/plans/{invest,apply,exit}` stamps synthetic `desk_plan_id = cb-sim-{uuid}` and
+status `PLANNED` while the cash session is open. Weights/prices travel in the request body for
+this leaf (no live quote fetch). **No `/execute`, no `OrderGateway`, no `place_order`.**
+
+**Rejected.** Calling the live desk `/analyze` from the web API (couples Track A to desk
+credentials and blurs the hand-off). Persisting `cb_order_batch` rows in this leaf (versions +
+accounting siblings own ledger writes). Returning 4xx when the market is closed (UI needs the
+next-open payload for `MarketClosedModal`).
+
+**Reversal.** Delete `curated_plans` core + router modules and the `include_router` line in
+`app.py`; OpenAPI loses the three preview routes. Swap synthetic ids for real desk plan ids only
+after a written D3 path exists.
+
+## SC3 — Market-hours guard is pure + calendar-injected · ⚠ UNREVIEWED
+
+**Context.** docs/smallcase/04 §5: plan generation outside NSE 09:15–15:30 IST on a trading day
+returns the closed-market response with next open — never a plan.
+
+**Taken.** `baskfy_core.market_hours_cb` is clock-pure (`now` + `trading_dates` in). Session
+bounds inclusive. `closed_market_payload` → `{market_open: false, next_open_ist}`. The plans
+router loads NSE dates from `trading_day` and short-circuits to that payload before any builder
+runs.
+
+**Rejected.** Reading wall-clock inside core (breaks house rule 1). Hard-coding a holiday list
+inside the hours module (calendar already lives in `trading_day` / trading_calendar). Blocking
+with HTTP 403 (UI needs structured next-open for notify-me).
+
+**Reversal.** Replace the guard call sites; keep the pure module for other surfaces (SIP, SC6
+handoff).

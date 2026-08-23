@@ -128,14 +128,40 @@ class BacktestRunner:
                 # where it could not.
                 log.exception("backtest run failed", extra={"public_id": public_id})
 
-    async def drain(self, timeout: float = 30.0) -> None:
-        """Let in-flight runs finish on shutdown, so a two-second job is not thrown away."""
+    async def drain(self, timeout: float = 30.0, cleanup_timeout: float = 5.0) -> None:
+        """Let in-flight runs finish on shutdown, so a two-second job is not thrown away.
+
+        Anything still going when ``timeout`` expires is cancelled **and then awaited**. The
+        second half is the part that matters and the part this method did not do until M45.3.
+
+        ``Task.cancel()` only *schedules* a ``CancelledError`` at the task's next suspension
+        point; it does not deliver it, and it certainly does not run the task's cleanup. Measured:
+        a run cancelled by this method was still in flight when ``drain`` returned, and its
+        ``except`` block had not executed even after another pass of the event loop. So a clean
+        shutdown — the case ``drain`` exists to handle well — left the row ``running`` forever,
+        which is precisely the state a broker was supposed to be protecting us from.
+
+        Awaiting the cancelled tasks gives each one its single delivery of ``CancelledError`` and
+        lets it record a terminal state before the loop closes. ``cancel()`` is not called twice
+        here, so a cleanup ``await`` inside the job runs normally rather than being cut short.
+
+        A cleanup that hangs is bounded too: after ``cleanup_timeout`` the tasks are cancelled a
+        second time, which does break the cleanup, and the survivors are logged by name. Shutdown
+        that never finishes is worse than a row nobody could mark.
+        """
         if not self._running:
             return
         done, pending = await asyncio.wait(set(self._running), timeout=timeout)
         for task in pending:
             task.cancel()
+        stranded = 0
+        if pending:
+            _, stubborn = await asyncio.wait(pending, timeout=cleanup_timeout)
+            stranded = len(stubborn)
+            for task in stubborn:
+                task.cancel()
+                log.error("backtest task would not stop", extra={"task": task.get_name()})
         log.info(
             "backtest runner drained",
-            extra={"finished": len(done), "cancelled": len(pending)},
+            extra={"finished": len(done), "cancelled": len(pending), "stranded": stranded},
         )

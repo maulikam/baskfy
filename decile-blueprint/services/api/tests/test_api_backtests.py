@@ -1206,10 +1206,14 @@ async def test_a_request_whose_key_is_held_is_told_to_retry_not_duplicated(
         assert response.status_code == 429, response.text
         assert "Idempotency-Key" in response.json()["detail"]
         created = (
-            await session.execute(
-                select(Backtest).where(Backtest.user_id == user_id, Backtest.status != "failed")
+            (
+                await session.execute(
+                    select(Backtest).where(Backtest.user_id == user_id, Backtest.status != "failed")
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert created == [], "the held key must not have produced a run"
     finally:
         await cache.delete(redis_key)
@@ -1217,9 +1221,7 @@ async def test_a_request_whose_key_is_held_is_told_to_retry_not_duplicated(
 
 
 @pytest.mark.redis
-async def test_a_refused_request_gives_its_key_back(
-    session: AsyncSession, tmp_path: Path
-) -> None:
+async def test_a_refused_request_gives_its_key_back(session: AsyncSession, tmp_path: Path) -> None:
     """A reservation taken by a request that then fails must not burn the key.
 
     The reservation lives two minutes. Without `release`, a POST refused after reserving — for the

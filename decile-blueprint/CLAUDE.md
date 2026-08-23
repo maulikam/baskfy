@@ -473,11 +473,25 @@ The Prometheus + Grafana stack is behind a compose profile, so `make up` does no
   reason as §13 and §14: the overnight run could append to `DECISIONS.md` and change nothing else
   under `docs/`. Note that `docs/10a` is currently the *instrument factsheet* notes, so the
   backtest file needs a different number.
-- **`dividends: "cash"` and `dividends: "ignore"` are refused, not implemented-and-wrong.**
-  `docs/09`'s adjustment folds cash dividends into `adj_factor`, so `ohlcv_daily.close` is already
-  a total-return series and crediting the dividend again would double count. `reinvest` is exact
-  and is the default; the other two need a dividend-stripped price series nothing builds yet, and
-  the engine raises rather than quietly serving `reinvest` (`docs/DECISIONS.md` §15.1).
+- **`dividends: "cash"` and `dividends: "reinvest"` are refused, not implemented-and-wrong.**
+  This bullet said the opposite until M43, and every clause of it was false. `docs/09`'s algorithm
+  *would* fold cash dividends into `adj_factor`, making `ohlcv_daily.close` a total-return series —
+  but **it does not run**. M27 put the question to the reference corpus and measured the answer: the
+  price convention won 42 of 45 deciding symbol-windows and matched all 25 dividend-paying symbols
+  exactly at stored precision on the three windows that reproduce. M28 then applied the 47
+  share-count actions and deliberately **not** the 38 dividend-shaped ones
+  (`reconciliation/RECOVERED-ACTIONS.md`, "VERDICT: PRICE RETURN").
+
+  So `ohlcv_daily.close` is a **price-return** series: splits and bonuses are inside it, cash
+  dividends are not. `ignore` is therefore exact, needs no extra data, and is the default — it is
+  what the engine has always actually computed, and until M39 it was mislabelled `reinvest`. The
+  two that need a dividend schedule are `cash` and `reinvest`, because both have to *add* a
+  dividend back; the engine raises rather than quietly serving a price return under a
+  total-return name (`docs/DECISIONS-MERGE.md` §M39.3, §M43).
+
+  **Every return this product publishes is a price return, and is lower than a total return by
+  roughly the dividend yield — about 1.2% a year on NSE, compounding.** The backtest assumptions
+  panel says so; any new surface that shows a return owes the reader the same sentence.
 - **The backtest's risk-free rate is a flat annual rate defaulting to 0.** `docs/10` §Outputs asks
   for "rf from a configurable T-bill series" and `docs/04` has no T-bill table. Every Sharpe and
   Sortino on the page is therefore an *excess-over-zero* figure until one exists

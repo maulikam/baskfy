@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+from celery import Celery
 from celery.schedules import crontab
 
 from baskfy_api.admin import NIGHTLY_TASK_NAME, REPROCESS_TASK_NAME
@@ -217,9 +218,9 @@ class TestTheProducerRoutesWhereTheWorkerListens:
         assert set(actual.values()) <= set(QUEUES), "published onto a queue no worker consumes"
 
 
-def _routed_queue(app: object, task_name: str) -> str:
+def _routed_queue(app: Celery, task_name: str) -> str:
     """Where ``app`` would actually publish ``task_name``, resolving as Celery does."""
-    options = app.amqp.router.route({}, task_name)  # type: ignore[attr-defined]
+    options = app.amqp.router.route({}, task_name)
     queue = options.get("queue")
     name = getattr(queue, "name", queue)
-    return str(name or app.conf.task_default_queue)  # type: ignore[attr-defined]
+    return str(name or app.conf.task_default_queue)

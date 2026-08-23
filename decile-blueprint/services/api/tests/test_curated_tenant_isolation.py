@@ -8,7 +8,7 @@ sole-tenant rows; foreign principals collapse to the sole id.
 from __future__ import annotations
 
 import inspect
-from typing import Any, cast
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -16,12 +16,12 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import Select
 
 from baskfy_api import curated_tenant
-from baskfy_api.problems import Problem
 from baskfy_api.curated_tenant import (
     investments_for_user_stmt,
     scoped_sole_user_id,
     watchlist_items_for_user_stmt,
 )
+from baskfy_api.problems import Problem
 from baskfy_api.routers import explore
 from baskfy_core.curated_baskets import SOLE_USER_ENV
 
@@ -144,7 +144,7 @@ async def test_a_foreign_principal_never_reaches_a_query_at_all(
     out = await explore.list_watchlist(session, principal)
     assert out.count == 0
     assert len(captured) == 1
-    stmt = cast(Select[Any], captured[0])
+    stmt = cast("Select[tuple[object]]", captured[0])
     sql = str(stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
     assert "user_id" in sql
     assert "42" in sql

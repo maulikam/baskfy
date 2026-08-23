@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import json
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from decimal import Decimal
 from pathlib import Path
 from typing import Final
@@ -37,6 +37,7 @@ from sqlalchemy import select
 from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api import idempotency
 from baskfy_api.backtests import (
     ARTEFACTS,
     DownloadSigningUnavailable,
@@ -334,9 +335,14 @@ async def test_the_inline_executor_starts_the_run_without_a_broker(
     scheduled: list[str] = []
     original = BackgroundTasks.add_task
 
-    def _record(self: BackgroundTasks, func: object, *args: object, **kwargs: object) -> None:
+    def _record(
+        self: BackgroundTasks,
+        func: Callable[..., object],
+        *args: object,
+        **kwargs: object,
+    ) -> None:
         scheduled.append(getattr(func, "__name__", repr(func)))
-        original(self, func, *args, **kwargs)  # type: ignore[arg-type]
+        original(self, func, *args, **kwargs)
 
     monkeypatch.setattr(BackgroundTasks, "add_task", _record)
 
@@ -1107,3 +1113,137 @@ async def test_a_queued_run_nothing_ever_took_is_reaped_too(
     assert status == "failed"
     assert error is not None
     assert "never started" in error, error
+
+
+async def _redis_or_skip(api_settings: Settings) -> Redis:
+    client: Redis = Redis.from_url(api_settings.redis_url)
+    try:
+        await client.ping()
+    except RedisError:  # pragma: no cover - guarded by the redis marker
+        pytest.skip("no Redis; run `make up`")
+    return client
+
+
+@pytest.mark.redis
+async def test_two_concurrent_requests_with_one_key_cannot_both_win_it(
+    tmp_path: Path,
+) -> None:
+    """M45.6. `replay` then `remember` is a check followed by a write, and the request sits in
+    between.
+
+    Measured here, in the order the router used to run: two concurrent `replay` calls both return
+    `None`, so both callers proceed to create a run, and the second `remember` overwrites the
+    first — leaving one key naming one of the two backtests it produced. The guarantee the header
+    exists to give never held under the only condition it is for.
+
+    `reserve` is `SET … NX`, which is atomic, so exactly one caller wins and the other is told the
+    request is already in flight. A duplicate backtest is not a duplicate the user can delete: it
+    takes their concurrency cap and runs a simulation.
+    """
+    settings = _settings(tmp_path)
+    cache = await _redis_or_skip(settings)
+    scope = "backtest:create:test"
+    key = f"concurrent-{new_public_id()}"
+    try:
+        # The old shape, run against the same Redis, to show what it permitted.
+        both = await asyncio.gather(
+            idempotency.replay(cache, scope, key),
+            idempotency.replay(cache, scope, key),
+        )
+        assert list(both) == [None, None], "the check-then-write shape lets both through"
+
+        outcomes = await asyncio.gather(
+            idempotency.reserve(cache, scope, key),
+            idempotency.reserve(cache, scope, key),
+        )
+        winners = [r for r in outcomes if r.outcome is idempotency.Outcome.RESERVED]
+        losers = [r for r in outcomes if r.outcome is idempotency.Outcome.IN_FLIGHT]
+        assert len(winners) == 1, f"exactly one caller may own the key, got {outcomes}"
+        assert len(losers) == 1
+        assert losers[0].public_id is None, "a pending marker must never read back as a resource"
+
+        # Once the winner records what it made, the loser's retry replays instead of refusing.
+        await idempotency.remember(cache, scope, key, "abc123")
+        again = await idempotency.reserve(cache, scope, key)
+        assert again.outcome is idempotency.Outcome.REPLAY
+        assert again.public_id == "abc123"
+    finally:
+        await cache.delete(f"{idempotency.KEY_PREFIX}{scope}:{key}")
+        await cache.aclose()
+
+
+@pytest.mark.redis
+async def test_a_request_whose_key_is_held_is_told_to_retry_not_duplicated(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """The router half: a key another request is still holding refuses rather than creating.
+
+    429 with `Retry-After` rather than a new 409 type, because the correct client behaviour is to
+    come back in a moment and collect the replay — which is what `Retry-After` says and what a
+    conflict does not. docs/07's catalogue is unchanged.
+    """
+    user_id, public_id = await make_user(session, "held.backtest@example.com", subscribed=True)
+    screen = await _screen(session, user_id)
+    payload = {"config": json.loads(_config(screen_public_id=screen.public_id).model_dump_json())}
+    settings = _settings(tmp_path)
+    cache = await _redis_or_skip(settings)
+    key = f"held-{new_public_id()}"
+    redis_key = f"{idempotency.KEY_PREFIX}backtest:create:{user_id}:{key}"
+    await cache.set(redis_key, idempotency.PENDING, ex=60)
+
+    try:
+        async with running_app(settings, session, task_queue=RecordingQueue()) as client:
+            response = await client.post(
+                url("/backtests"),
+                json=payload,
+                headers={**bearer(public_id), idempotency.HEADER: key},
+            )
+        assert response.status_code == 429, response.text
+        assert "Idempotency-Key" in response.json()["detail"]
+        created = (
+            await session.execute(
+                select(Backtest).where(Backtest.user_id == user_id, Backtest.status != "failed")
+            )
+        ).scalars().all()
+        assert created == [], "the held key must not have produced a run"
+    finally:
+        await cache.delete(redis_key)
+        await cache.aclose()
+
+
+@pytest.mark.redis
+async def test_a_refused_request_gives_its_key_back(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """A reservation taken by a request that then fails must not burn the key.
+
+    The reservation lives two minutes. Without `release`, a POST refused after reserving — for the
+    concurrency cap, an entitlement, anything — would make the client's retry, the entire reason
+    it sent the header, refuse too for those two minutes, and the user would see a failure they
+    had already fixed.
+    """
+    user_id, public_id = await make_user(session, "released.backtest@example.com", subscribed=True)
+    screen = await _screen(session, user_id)
+    # Young enough that the M45.4 reaper leaves it alone, so the cap genuinely refuses.
+    await _stranded(session, user_id, screen, age_minutes=1)
+    payload = {"config": json.loads(_config(screen_public_id=screen.public_id).model_dump_json())}
+    settings = _settings(tmp_path)
+    cache = await _redis_or_skip(settings)
+    key = f"released-{new_public_id()}"
+    redis_key = f"{idempotency.KEY_PREFIX}backtest:create:{user_id}:{key}"
+
+    try:
+        async with running_app(settings, session, task_queue=RecordingQueue()) as client:
+            refused = await client.post(
+                url("/backtests"),
+                json=payload,
+                headers={**bearer(public_id), idempotency.HEADER: key},
+            )
+        assert refused.status_code == 429
+        assert "already have a backtest running" in refused.json()["detail"]
+        assert await cache.get(redis_key) is None, (
+            "a refused request must give the key back, or the retry it is asking for cannot work"
+        )
+    finally:
+        await cache.delete(redis_key)
+        await cache.aclose()

@@ -147,3 +147,40 @@ without Phase 4 / D3 (OAuth ABANDON).
 - 2026-08-23T00:44Z leaf-2.5-e2e + leaf-2.6-runbook green — explore-handoff.spec.ts; RUN-AND-TEST §8 SC; gates checked; uncommitted (no commit)
 - 2026-08-23T01:02Z leaf-2.1-sip-beat green — `cb-sip-reminders` Beat + `baskfy.cb.sip_reminders` (4 tests [100%]); leaf-2.2-create-api green — `POST /cb/baskets` PRIVATE/STOCK/GENESIS (5 tests [100%]); no OrderGateway; uncommitted
 - 2026-08-23T01:05Z Tree 2 parent verified all leaf-2 + node-2; integrity G1 closed after sibling race; SC-AC-REPORT written
+
+---
+
+# Tree 3 — Unblock D3 and finish remaining ACs (depth 4)
+
+User instruction 23 Aug 2026: do not stay blocked on D3 — decide, record, unlock.
+
+## Contract
+- Write D3 as posture B (docs/06 recommendation) in DECISIONS-MERGE.md ⚠ UNREVIEWED.
+- Flip BROKER_OAUTH_REVIEW.signed_off with decision_reference.
+- Sole-tenant OAuth for Zerodha first; encrypted token at rest; holdings sync via execution ports.
+- Web STILL never executes orders (desk non-negotiable #1). DRY_RUN=true.
+- Counsel paperwork (algo ID / RA filing) becomes non-blocking NEEDS-MAULIK follow-up, not a gate.
+- Also close SC-AC remnants: create form→API, dividend worker job.
+
+## Ownership
+| Leaf | Owns |
+|---|---|
+| 3.1 D3 write + gate flip | DECISIONS-MERGE, broker_connections.py, tests that asserted False |
+| 3.2 OAuth callback + token | brokers router callback, token helper, tests |
+| 3.3 Holdings sync | sync endpoint using HoldingRow; DRY_RUN safe |
+| 3.4 Create UI + dividend job | create form fetch; worker dividends task |
+| 3.5 Integrity | no execute; oauth signed with reference; node-1 G3 rewritten |
+
+## Tree
+- 3 Unblock ................................ gates/node-3.md
+  - 3.1 D3 posture B + flip ................ gates/leaf-3.1-d3.md
+  - 3.2 OAuth callback + encrypt ........... gates/leaf-3.2-oauth.md
+  - 3.3 Holdings sync ...................... gates/leaf-3.3-holdings.md
+  - 3.4 Create wire + dividend job ......... gates/leaf-3.4-remnants.md
+  - 3.5 Integrity .......................... gates/leaf-3.5-integrity.md
+
+- 2026-08-23T01:08Z Tree 3: unblock D3 per user; gates leaf-3.* written
+- 2026-08-23T01:15Z leaf-3.4-remnants green — create form → `POST /api/v1/cb/baskets` (`lib/create/fetch.ts`); Beat `cb-dividends` + `baskfy.cb.derive_dividends` (4 tests [100%]); uncommitted (no commit)
+- 2026-08-23T01:15Z leaf-3.2-oauth green — `GET /api/v1/brokers/callback` (state + Fernet via AccessTokenStore; DRY_RUN stub `exchange_request_token_stub`); 7 tests [100%]; OpenAPI ok; uncommitted
+- 2026-08-23T01:15Z leaf-3.3-holdings green — `POST /api/v1/brokers/{id}/sync-holdings` HoldingRow shape (qty+t1+collateral); DRY_RUN empty/fixture; 6 tests [100%]; `/brokers` copy updated for open gate; uncommitted
+- 2026-08-23T01:18Z Tree 3 parent verified; D3 unlocked; D3-UNLOCK-REPORT.md

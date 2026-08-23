@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  CreateBasketError,
+  createPrivateBasket,
+} from "@/lib/create/fetch";
+import {
   assertWeightsSumToOne,
   equalWeights,
   normalizeWeights,
@@ -13,7 +17,7 @@ import {
 
 /**
  * SC8 create form — private basket, ≥2 instruments, equal/custom weights normalize to 1.0.
- * Preview is stubbed; save frames the result as PRIVATE (docs/smallcase/05 `/create`).
+ * Saves via `POST /api/v1/cb/baskets` (leaf 3.4). Preview stubbed.
  * No order route — invest later via the SC3 plan path.
  */
 
@@ -27,8 +31,10 @@ interface Row {
 }
 
 export interface SavedPrivateBasket {
+  id: number;
+  slug: string;
   name: string;
-  visibility: "PRIVATE";
+  visibility: "PRIVATE" | string;
   constituents: { symbol: string; weight: number }[];
 }
 
@@ -36,11 +42,16 @@ function blankRows(n: number): Row[] {
   return Array.from({ length: n }, () => ({ symbol: "", weightInput: "" }));
 }
 
+function weightAsNumber(value: string | number): number {
+  return typeof value === "number" ? value : Number.parseFloat(value);
+}
+
 export function CreateBasketForm() {
   const [name, setName] = useState("");
   const [scheme, setScheme] = useState<WeightScheme>("equal");
   const [rows, setRows] = useState<Row[]>(blankRows(MIN_INSTRUMENTS));
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<SavedPrivateBasket | null>(null);
   const [previewNote] = useState(
     "Backtest preview is stubbed for this leaf — point-in-time preview wires in with the screener path.",
@@ -69,7 +80,7 @@ export function CreateBasketForm() {
     return normalizeWeights(raw);
   }
 
-  function onSave(event: React.FormEvent) {
+  async function onSave(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
     const trimmed = name.trim();
@@ -86,19 +97,43 @@ export function CreateBasketForm() {
       setError("Each symbol can appear only once.");
       return;
     }
+
+    let weights: number[];
     try {
-      const weights = resolvedWeights(symbols);
+      weights = resolvedWeights(symbols);
       assertWeightsSumToOne(weights);
-      setSaved({
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not normalize weights.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const result = await createPrivateBasket({
         name: trimmed,
-        visibility: "PRIVATE",
         constituents: symbols.map((symbol, i) => ({
           symbol,
           weight: weights[i]!,
         })),
       });
+      setSaved({
+        id: result.id,
+        slug: result.slug,
+        name: result.name,
+        visibility: result.visibility,
+        constituents: result.constituents.map((c) => ({
+          symbol: c.symbol,
+          weight: weightAsNumber(c.weight),
+        })),
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not normalize weights.");
+      if (err instanceof CreateBasketError) {
+        setError(err.message);
+      } else {
+        setError(err instanceof Error ? err.message : "Could not save basket.");
+      }
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -212,16 +247,22 @@ export function CreateBasketForm() {
         </p>
       ) : null}
 
-      <Button type="submit">Save as private basket</Button>
+      <Button type="submit" disabled={saving}>
+        {saving ? "Saving…" : "Save as private basket"}
+      </Button>
 
       {saved ? (
         <div
           className="rounded-md border border-border bg-muted/30 px-3 py-3 text-sm"
           data-visibility={saved.visibility}
+          data-basket-id={saved.id}
         >
           <p className="font-medium">
             Saved · {saved.name}{" "}
             <span className="text-muted-foreground">({saved.visibility})</span>
+          </p>
+          <p className="mt-1 font-mono text-xs text-muted-foreground">
+            id {saved.id} · {saved.slug}
           </p>
           <ul className="mt-2 space-y-1 font-mono text-xs">
             {saved.constituents.map((c) => (

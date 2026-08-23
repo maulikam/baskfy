@@ -1,4 +1,4 @@
-"""Broker connection catalog and the D3 gate — M41."""
+"""Broker connection catalog and the D3 gate — M41 / D3 unlock."""
 
 from __future__ import annotations
 
@@ -11,20 +11,21 @@ from baskfy_core.broker_connections import (
 
 
 class TestTheD3Gate:
-    def test_live_oauth_is_not_signed_off(self) -> None:
-        """**If this fails, someone flipped the Phase-4 / Track-C gate.**
+    def test_live_oauth_is_signed_off_with_d3_reference(self) -> None:
+        """D3 posture B is written in DECISIONS-MERGE.md; the source gate must match.
 
-        docs/05, docs/06 D3 and docs/smallcase/02 require a written regulatory posture before
-        per-user broker OAuth. The constant is a source value so turning it on is a reviewable
-        commit.
+        Reversal: set signed_off=False and clear decision_reference.
         """
-        assert BROKER_OAUTH_REVIEW.signed_off is False
-        assert BROKER_OAUTH_REVIEW.blocks_live_oauth is True
-        assert BROKER_OAUTH_REVIEW.decision_reference == ""
+        assert BROKER_OAUTH_REVIEW.signed_off is True
+        assert BROKER_OAUTH_REVIEW.blocks_live_oauth is False
+        assert "D3" in BROKER_OAUTH_REVIEW.decision_reference
+        assert BROKER_OAUTH_REVIEW.decision_reference.startswith("DECISIONS-MERGE")
 
-    def test_the_requirement_names_d3(self) -> None:
-        assert "D3" in BROKER_OAUTH_REVIEW.requirement
-        assert "Phase 4" in BROKER_OAUTH_REVIEW.requirement
+    def test_the_requirement_names_posture_b_and_no_web_execute(self) -> None:
+        assert "Posture B" in BROKER_OAUTH_REVIEW.requirement
+        assert "never places orders" in BROKER_OAUTH_REVIEW.requirement.lower() or (
+            "never place" in BROKER_OAUTH_REVIEW.requirement.lower()
+        )
 
 
 class TestTheCatalog:

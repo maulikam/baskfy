@@ -1,17 +1,11 @@
-"""Broker connection catalog and the D3 gate that holds live OAuth shut (M41).
+"""Broker connection catalog and the D3 gate that unlocks live OAuth (M41 / D3).
 
     docs/05 P4.2 / P5.8: per-user broker connection, encrypted token, daily re-auth in the UI.
-    docs/06 D3: the regulatory posture that **blocks all of Phase 4**.
+    docs/06 D3: written 23 Aug 2026 as posture B in ``docs/DECISIONS-MERGE.md`` §D3.
 
-Live OAuth, token storage and holdings sync for *end users* are Phase-4 work. They stay off
-until a human records a written D3 answer and flips :data:`BROKER_OAUTH_REVIEW` in a reviewable
-commit — the same pattern as :data:`baskfy_core.public_api.DATA_REDISTRIBUTION_REVIEW`.
-
-What this module *does* ship
-----------------------------
-The catalog of brokers Baskfy intends to connect, their display identity, and the capabilities
-each adapter claims. The UI renders that catalog today. Clicking Connect never starts a broker
-login while the gate is shut; the API answers with ``oauth_available: false`` and the reason.
+Live OAuth and holdings sync for the sole tenant are allowed when
+:data:`BROKER_OAUTH_REVIEW`.``signed_off`` is True. The web app still never places orders —
+desk non-negotiable #1 / packages/execution only.
 """
 
 from __future__ import annotations
@@ -62,15 +56,19 @@ class BrokerOauthReview:
         }
 
 
-#: **THE GATE.** docs/06 D3 and docs/05 Phase 4's opening line, as one constant.
+#: **THE GATE.** docs/06 D3 — written 23 Aug 2026 as posture B (DECISIONS-MERGE.md §D3).
+#: Web execute remains forbidden (desk non-negotiable #1); this gate only unlocks OAuth +
+#: holdings sync. Flip back to False to reverse.
 BROKER_OAUTH_REVIEW: Final = BrokerOauthReview(
     requirement=(
-        "Do not start Phase 4 without a written answer to docs/06 D3 (SEBI / RA posture). "
-        "Per-user broker OAuth, encrypted tokens and holdings sync place orders and account "
-        "data for other people — that is Phase 4, not a personal tool. "
-        "(docs/05-merge-plan.md Phase 4; docs/06-decisions-required.md D3; CLAUDE.md.)"
+        "Posture B (DECISIONS-MERGE.md §D3): publish baskets; user executes in their own "
+        "broker account after confirm. OAuth + encrypted holdings sync are allowed. "
+        "The web app still never places orders — packages/execution only."
     ),
-    signed_off=False,
+    signed_off=True,
+    decision_reference="DECISIONS-MERGE.md §D3",
+    signed_off_on="2026-08-23",
+    signed_off_by="autonomy-charter (⚠ UNREVIEWED until Maulik clears)",
 )
 
 

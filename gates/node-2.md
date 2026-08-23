@@ -12,6 +12,6 @@ Scope: AC-closure tree integrated; Track C held
   EXPECT: clean
   EVIDENCE: clean (parent re-check)
 
-ABANDON: broker-oauth Live multi-user broker OAuth remains blocked on D3 (NEEDS-MAULIK / DECISIONS-MERGE). Not an AC-closure leaf failure.
+# D3 OAuth unlock moved to Tree 3 (gates/node-3.md) — no longer abandoned.
 
 <!-- integrity: security, performance, memory, accuracy required -->

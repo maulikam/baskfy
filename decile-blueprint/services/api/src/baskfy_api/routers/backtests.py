@@ -41,7 +41,7 @@ from collections.abc import AsyncGenerator, Awaitable, Mapping, Sequence
 from typing import Annotated, Final, Protocol
 
 import anyio
-from fastapi import APIRouter, Header, Path, Query, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Header, Path, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from redis.asyncio import Redis
@@ -267,6 +267,7 @@ def _json_value(metrics: object) -> JsonObject | None:
 )
 async def create_backtest(  # noqa: PLR0913, PLR0917 - FastAPI injects one parameter per dependency
     request: Request,
+    background: BackgroundTasks,
     body: BacktestCreate,
     session: SessionDep,
     principal: AuthenticatedDep,
@@ -330,9 +331,18 @@ async def create_backtest(  # noqa: PLR0913, PLR0917 - FastAPI injects one param
     await session.flush()
     await idempotency.remember(_cache(request), scope, idempotency_key, row.public_id)
 
-    # M42. If nothing can run it, say so on the row before answering. A 202 whose row then sits at
-    # `queued` for ever is the one outcome this endpoint must not produce.
-    reason = _dispatch(request, row.public_id, fragility=body.fragility)
+    # M42: if nothing can run it, the row fails in this request rather than waiting for ever.
+    # M44: but the *start* moved after the commit, and the two are now separate steps.
+    #
+    # `get_session` commits in dependency teardown, after this handler returns. Starting the run
+    # here scheduled an asyncio task that raced that COMMIT: when the task's `SELECT ... FOR
+    # UPDATE` reached Postgres first the row did not exist yet, `_claim` raised
+    # `BacktestNotRunnable`, the runner treated it as "somebody else took it" and dropped it, and
+    # the row committed at `queued` with nothing running. Measured window: dispatch to
+    # claim-select 3.9-9.0 ms against a COMMIT of 0.5-3.4 ms on a loopback socket — on RDS with a
+    # synchronous commit the ordering is luck. A background task runs after the response, which is
+    # after teardown, which is after the COMMIT.
+    reason = _why_it_cannot_start(request)
     if reason is not None:
         row.status = "failed"
         row.error = reason
@@ -342,7 +352,23 @@ async def create_backtest(  # noqa: PLR0913, PLR0917 - FastAPI injects one param
             "backtest could not be started",
             extra={"public_id": row.public_id, "reason": reason},
         )
+        return _accepted(row)
+
+    background.add_task(_start_after_commit, request, row.public_id, body.fragility)
     return _accepted(row)
+
+
+async def _start_after_commit(request: Request, public_id: str, fragility: bool) -> None:
+    """Hand the run to whatever executes it, once the row is durably visible (M44).
+
+    **Async on purpose.** FastAPI runs a synchronous background task in a threadpool, where there
+    is no running event loop, and `BacktestRunner.submit` calls `asyncio.create_task`. A sync
+    version of this raises `RuntimeError: no running event loop` and the run never starts — the
+    same outcome M44 exists to remove, arrived at from the other direction.
+    """
+    reason = _dispatch(request, public_id, fragility=fragility)
+    if reason is not None:
+        log.error("backtest could not be started", extra={"public_id": public_id, "reason": reason})
 
 
 def _accepted(row: Backtest) -> BacktestAcceptedOut:
@@ -425,6 +451,24 @@ def _runner(request: Request) -> BacktestRunner | None:
     )
     request.app.state.backtest_runner = runner
     return runner
+
+
+def _why_it_cannot_start(request: Request) -> str | None:
+    """Whether anything in this process can run a backtest at all. Cheap, and does not start one.
+
+    Split from the start itself in M44, because the two have to happen on opposite sides of the
+    request's COMMIT. See `_start_after_commit`.
+    """
+    if _runner(request) is not None:
+        return None
+    sender = getattr(_queue(request), "send_task", None)
+    if not callable(sender):
+        return (
+            "this deployment runs backtests on a Celery worker "
+            "(BASKFY_BACKTEST_EXECUTOR=celery) and no message broker is reachable, so there is "
+            "nothing to run it."
+        )
+    return None
 
 
 def _dispatch(request: Request, public_id: str, *, fragility: bool) -> str | None:

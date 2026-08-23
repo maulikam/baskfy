@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.backtests import (
     ARTEFACTS,
+    DownloadSigningUnavailable,
     artefact_bytes,
     artefact_key,
     build_payload,
@@ -45,6 +46,7 @@ from baskfy_api.backtests import (
     progress_frame,
     progress_key,
     sign_download,
+    verify_download,
 )
 from baskfy_api.routers.backtests import event_stream
 from baskfy_api.settings import Settings
@@ -830,3 +832,121 @@ async def test_anonymous_callers_are_refused(session: AsyncSession, tmp_path: Pa
     async with running_app(_settings(tmp_path), session) as client:
         response: httpx.Response = await client.get(url("/backtests"))
     assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# M43: the signed download link, hardened
+# ---------------------------------------------------------------------------
+
+
+async def test_deleting_a_backtest_revokes_its_download_links(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """The DELETE handler promises "nothing can read them once the row is gone". It must be true.
+
+    A signed link is a stateless bearer capability: it carries no user, no nonce and no server
+    state, so before M43 it stayed redeemable for the rest of its fifteen minutes after the row
+    was deleted. Executed then: mint, DELETE -> 204, redeem anonymously -> 200 with the full CSV.
+    """
+    user_id, public_id = await make_user(session, "revoke.backtest@example.com", subscribed=True)
+    row = await _completed(session, user_id, tmp_path)
+    settings = _settings(tmp_path)
+
+    async with running_app(settings, session, task_queue=RecordingQueue()) as client:
+        minted = await client.get(
+            url(f"/backtests/{row.public_id}/export"), headers=bearer(public_id)
+        )
+        assert minted.status_code == 200
+        link = minted.json()["url"]
+
+        before = await client.get(link)
+        assert before.status_code == 200, "the link must work while the run exists"
+
+        removed = await client.delete(url(f"/backtests/{row.public_id}"), headers=bearer(public_id))
+        assert removed.status_code == 204
+
+        after = await client.get(link)
+        assert after.status_code == 404, (
+            "a link that outlives the row it names contradicts the DELETE guarantee"
+        )
+
+
+async def test_a_non_ascii_token_is_refused_rather_than_crashing(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """`hmac.compare_digest` raises TypeError on a non-ASCII str.
+
+    The download route is reachable by anyone on the internet, so that was an unauthenticated 500
+    and a logged stack trace from a query string. A token that cannot be a signature is wrong,
+    not exceptional.
+    """
+    async with running_app(_settings(tmp_path), session, task_queue=RecordingQueue()) as client:
+        response = await client.get(
+            url("/backtests/aaaaaaaaaaaaaaaaaaaaaaaa/download/trades"),
+            params={"expires": 9999999999, "token": "\u00e9\u00e9\u00e9"},
+        )
+
+    assert response.status_code == 404, f"got {response.status_code}, expected a refusal"
+
+
+def test_an_unconfigured_secret_refuses_to_sign_rather_than_using_a_public_key(
+    tmp_path: Path,
+) -> None:
+    """The fallback key was a constant published in this repository.
+
+    `require_configured` refuses an empty secret only in production, so staging and any developer
+    box serving real artefacts were signing with a key anybody could read out of the source.
+    """
+    settings = _settings(tmp_path).model_copy(update={"jwt_secret": ""})
+
+    with pytest.raises(DownloadSigningUnavailable):
+        sign_download(settings, "deadbeef1234", "trades")
+
+    # And verification refuses rather than raising, so the route answers 404 and not 500.
+    assert not verify_download(settings, "deadbeef1234", "trades", 9999999999, "anything")
+
+
+@pytest.mark.parametrize(
+    ("method", "suffix"),
+    [
+        ("GET", ""),
+        ("GET", "/trades"),
+        ("GET", "/holdings"),
+        ("GET", "/export"),
+        ("GET", "/events"),
+        ("DELETE", ""),
+    ],
+)
+async def test_every_backtest_route_is_a_404_for_somebody_else(
+    session: AsyncSession, tmp_path: Path, method: str, suffix: str
+) -> None:
+    """M43. The module had exactly one cross-tenant test, and it covered only `GET /{id}`.
+
+    The router is correct on all six — an audit executed every one of them against two real
+    accounts and got 404 each time. Nothing in the suite would have caught a regression on the
+    other five, which matters more than usual right now: a sibling router in this same service
+    shipped a tenancy guard that computes a mismatch and then returns the same value in both arms.
+
+    404 and not 403, deliberately: a 403 confirms the id exists.
+    """
+    owner_id, owner_token = await make_user(
+        session, f"owner{suffix or 'x'}@example.com", subscribed=True
+    )
+    _, intruder_token = await make_user(
+        session, f"intruder{suffix or 'x'}@example.com", subscribed=True
+    )
+    row = await _completed(session, owner_id, tmp_path)
+
+    async with running_app(_settings(tmp_path), session, task_queue=RecordingQueue()) as client:
+        response = await client.request(
+            method,
+            url(f"/backtests/{row.public_id}{suffix}"),
+            headers=bearer(intruder_token),
+        )
+        assert response.status_code == 404, (
+            f"{method} {suffix or '/'} leaked another account's run: {response.status_code}"
+        )
+
+        # And it is still there for its owner — the intruder's DELETE must not have landed.
+        still = await client.get(url(f"/backtests/{row.public_id}"), headers=bearer(owner_token))
+        assert still.status_code == 200

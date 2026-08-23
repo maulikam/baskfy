@@ -97,6 +97,11 @@ BACKTEST_TASK: Final = "baskfy.backtest.run"
 
 #: How long the SSE endpoint waits for a frame before sending a comment to keep the connection
 #: alive. Proxies commonly close an idle stream at 60 seconds.
+#: How long a caller is told to wait when another request holds their Idempotency-Key.
+#: A backtest takes about two seconds, so the reservation it is waiting on is nearly always gone
+#: by the time the retry lands.
+IN_FLIGHT_RETRY_SECONDS: Final = 2
+
 SSE_HEARTBEAT_SECONDS: Final = 15.0
 
 #: A backstop on the stream: a run that has not finished in this long has a bigger problem than a
@@ -283,82 +288,117 @@ async def create_backtest(  # noqa: PLR0913, PLR0917 - FastAPI injects one param
     if body.data_version is not None and body.data_version != current:
         raise stale_data_version(body.data_version, current)
 
+    # M45.6: reserve the key, do not merely look it up. `replay` then `remember` is a check
+    # followed by a write with the whole request in between, so two requests carrying one key that
+    # arrive together both find nothing and both create a run. Measured against a live Redis: two
+    # concurrent `replay` calls both returned None, and the second `remember` overwrote the first,
+    # leaving one key naming one of the two backtests it had made. A duplicate here is not a
+    # duplicate the user can delete — it consumes their concurrency cap and runs a simulation.
     scope = f"backtest:create:{user_id}"
-    replayed = await idempotency.replay(_cache(request), scope, idempotency_key)
-    if replayed is not None:
+    reservation = await idempotency.reserve(_cache(request), scope, idempotency_key)
+    if reservation.public_id is not None:
         existing = (
-            await session.execute(select(Backtest).where(Backtest.public_id == replayed))
+            await session.execute(
+                select(Backtest).where(Backtest.public_id == reservation.public_id)
+            )
         ).scalar_one_or_none()
         if existing is not None and existing.user_id == user_id:
             return _accepted(existing)
-
-    screen = await _resolve_screen(session, config, principal)
-    # The ₹0 tier's universe restriction (Prompt 13 §5) applies to the definition the backtest
-    # will run, whether that came from a saved screen or was posted inline. Checking only the
-    # saved-screen branch would leave the inline one as a way around the restriction.
-    definition = screen.definition if screen is not None else config.screen_definition
-    universe = _definition_index(definition)
-    if universe is not None:
-        entitlements.require_universe(universe)
-
-    try:
-        await service.capacity_check(
-            session,
-            user_id,
-            per_user=settings_for(request).backtest_user_concurrency,
-            global_limit=settings_for(request).backtest_global_concurrency,
-        )
-    except service.ConcurrencyExceeded as exc:
-        # docs/07's catalogue has no "busy" type; 429 with `Retry-After` is the row that means
-        # "come back later", and the detail names which cap was hit. `docs/DECISIONS.md` §15.
-        problem = rate_limited(exc.retry_after_seconds, exc.limit)
-        # "or cancel it" was in this sentence until M45.4 and there has never been a cancel
-        # route, so the one instruction offered to a user who could not proceed was for a button
-        # that does not exist. A run takes about two seconds, so waiting is the whole answer.
+    if reservation.outcome is idempotency.Outcome.IN_FLIGHT:
+        # 429 rather than a new 409 type: the correct client behaviour is to retry in a moment and
+        # collect the replay, which is what `Retry-After` says and what a conflict does not.
+        # docs/07's catalogue is unchanged. `docs/DECISIONS-MERGE.md` M45.6.
+        problem = rate_limited(IN_FLIGHT_RETRY_SECONDS, 1)
         problem.detail = (
-            f"You already have a backtest running. The {exc.scope} limit is {exc.limit}; "
-            "it should finish in a few seconds."
-            if exc.scope == "per-user"
-            else f"The service is running its maximum of {exc.limit} backtests. Try again shortly."
+            "Another request with this Idempotency-Key is still being processed. Retry in a "
+            "moment and you will get that run rather than a second one."
         )
-        raise problem from exc
+        raise problem
 
-    row = Backtest(
-        public_id=service.new_public_id(),
-        user_id=user_id,
-        screen_id=screen.id if screen is not None else None,
-        config=json.loads(config.model_dump_json()),
-        status="queued",
-    )
-    session.add(row)
-    await session.flush()
-    await idempotency.remember(_cache(request), scope, idempotency_key, row.public_id)
+    # Everything from here can still refuse the request, and a refusal must give the key back:
+    # the reservation is held for two minutes, and the retry the client is about to make is the
+    # entire reason it sent the header. `release` is a compare-and-delete against the pending
+    # marker, so on the success path — where `remember` has already replaced it — it does
+    # nothing, and there is no branch where a completed record can be thrown away.
+    try:
+        screen = await _resolve_screen(session, config, principal)
+        # The ₹0 tier's universe restriction (Prompt 13 §5) applies to the definition the backtest
+        # will run, whether that came from a saved screen or was posted inline. Checking only the
+        # saved-screen branch would leave the inline one as a way around the restriction.
+        definition = screen.definition if screen is not None else config.screen_definition
+        universe = _definition_index(definition)
+        if universe is not None:
+            entitlements.require_universe(universe)
 
-    # M42: if nothing can run it, the row fails in this request rather than waiting for ever.
-    # M44: but the *start* moved after the commit, and the two are now separate steps.
-    #
-    # `get_session` commits in dependency teardown, after this handler returns. Starting the run
-    # here scheduled an asyncio task that raced that COMMIT: when the task's `SELECT ... FOR
-    # UPDATE` reached Postgres first the row did not exist yet, `_claim` raised
-    # `BacktestNotRunnable`, the runner treated it as "somebody else took it" and dropped it, and
-    # the row committed at `queued` with nothing running. Measured window: dispatch to
-    # claim-select 3.9-9.0 ms against a COMMIT of 0.5-3.4 ms on a loopback socket — on RDS with a
-    # synchronous commit the ordering is luck. A background task runs after the response, which is
-    # after teardown, which is after the COMMIT.
-    reason = _why_it_cannot_start(request)
-    if reason is not None:
-        row.status = "failed"
-        row.error = reason
-        row.finished_at = dt.datetime.now(tz=dt.UTC)
+        try:
+            await service.capacity_check(
+                session,
+                user_id,
+                per_user=settings_for(request).backtest_user_concurrency,
+                global_limit=settings_for(request).backtest_global_concurrency,
+            )
+        except service.ConcurrencyExceeded as exc:
+            # docs/07's catalogue has no "busy" type; 429 with `Retry-After` is the row that means
+            # "come back later", and the detail names which cap was hit. `docs/DECISIONS.md` §15.
+            problem = rate_limited(exc.retry_after_seconds, exc.limit)
+            # "or cancel it" was in this sentence until M45.4 and there has never been a cancel
+            # route, so the one instruction offered to a user who could not proceed was for a button
+            # that does not exist. A run takes about two seconds, so waiting is the whole answer.
+            problem.detail = (
+                f"You already have a backtest running. The {exc.scope} limit is {exc.limit}; "
+                "it should finish in a few seconds."
+                if exc.scope == "per-user"
+                else (
+                    f"The service is running its maximum of {exc.limit} backtests. "
+                    "Try again shortly."
+                )
+            )
+            raise problem from exc
+
+        row = Backtest(
+            public_id=service.new_public_id(),
+            user_id=user_id,
+            screen_id=screen.id if screen is not None else None,
+            config=json.loads(config.model_dump_json()),
+            status="queued",
+        )
+        session.add(row)
         await session.flush()
-        log.error(
-            "backtest could not be started",
-            extra={"public_id": row.public_id, "reason": reason},
-        )
-        return _accepted(row)
+        await idempotency.remember(_cache(request), scope, idempotency_key, row.public_id)
 
-    background.add_task(_start_after_commit, request, row.public_id, body.fragility)
-    return _accepted(row)
+        # M42: if nothing can run it, the row fails in this request rather than waiting for ever.
+        # M44: but the *start* moved after the commit, and the two are now separate steps.
+        #
+        # `get_session` commits in dependency teardown, after this handler returns. Starting
+        # the run
+        # here scheduled an asyncio task that raced that COMMIT: when the task's `SELECT ...
+        # FOR
+        # UPDATE` reached Postgres first the row did not exist yet, `_claim` raised
+        # `BacktestNotRunnable`, the runner treated it as "somebody else took it" and dropped
+        # it, and
+        # the row committed at `queued` with nothing running. Measured window: dispatch to
+        # claim-select 3.9-9.0 ms against a COMMIT of 0.5-3.4 ms on a loopback socket — on RDS
+        # with a
+        # synchronous commit the ordering is luck. A background task runs after the response,
+        # which is
+        # after teardown, which is after the COMMIT.
+        reason = _why_it_cannot_start(request)
+        if reason is not None:
+            row.status = "failed"
+            row.error = reason
+            row.finished_at = dt.datetime.now(tz=dt.UTC)
+            await session.flush()
+            log.error(
+                "backtest could not be started",
+                extra={"public_id": row.public_id, "reason": reason},
+            )
+            return _accepted(row)
+
+        background.add_task(_start_after_commit, request, row.public_id, body.fragility)
+        return _accepted(row)
+    except BaseException:
+        await idempotency.release(_cache(request), scope, idempotency_key)
+        raise
 
 
 async def _start_after_commit(request: Request, public_id: str, fragility: bool) -> None:

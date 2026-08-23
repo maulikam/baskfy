@@ -2,9 +2,10 @@
 
 Scope: SIP REMINDER mode only; no AUTO orders
 
-- [x] G1: no AUTO execution path
-  CHECK: rg -n 'mode.*AUTO|AUTO.*order' decile-blueprint/packages/core/src/baskfy_core/*sip* 2>/dev/null || echo none
-  EXPECT: none
-  EVIDENCE: none
+- [x] G1: sip domain + no AUTO write path
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_curated_sip.py -q --tb=no 2>&1 | tail -1
+  EXPECT: [100%]
+  EVIDENCE: 19 passed [100%] 2026-08-23T00:25Z; REMINDER-only write path (AUTO refused); holiday roll-forward; fire key plan_id:YYYY-MM; pause/resume; SIP_DUE pending dict
 
 <!-- integrity: security, performance, memory, accuracy required -->
+

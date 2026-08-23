@@ -370,6 +370,24 @@ def fragility_payload(report: FragilityReport | None) -> list[JsonObject]:
     Each variant reports the three numbers that decide whether a result survives: what it earned,
     what it gave back, and how the compounded rate moved. A user comparing five CAGRs can see the
     dispersion without doing arithmetic.
+
+    ## `blind_pct`, and why a spread is meaningless without it (M43)
+
+    The `+/-1 rebalance-day` variants screen on dates the coverage guard never checked — the guard
+    protects the schedule, not its neighbours. A date with no `factor_daily` rows produces an
+    **empty** screen, not a missing one, so the engine selects nothing and liquidates the book to
+    cash. That is a huge divergence from the base run, and the panel renders it as a wide CAGR
+    spread: the run reads as **fragile**.
+
+    Which is the worse direction to be wrong in, because docs/10 primes the reader to expect
+    exactly that — "Most won't [survive]. That is the point." A spread caused entirely by missing
+    data is camouflaged as the documented expected outcome and nobody investigates it. Measured
+    against this database on 2026-08-23: of the 79 month-end rebalance dates the guard currently
+    passes, **78 have a neighbouring offset with no factor rows at all**.
+
+    The engine has always counted this (`BacktestResult.blind_rebalances`, M39). It simply never
+    left the engine — nothing serialised it and nothing rendered it, so a variant computed 98%
+    blind presented its CAGR as a comparable number. It is on the wire now.
     """
     if report is None:
         return []
@@ -385,6 +403,10 @@ def fragility_payload(report: FragilityReport | None) -> list[JsonObject]:
                 "max_drawdown": metrics.as_dict()["max_drawdown"],
                 "final_equity": str(run.result.final_equity),
                 "trades": len(run.result.trades),
+                # What share of this variant's rebalances decided with an empty screen. A variant
+                # above zero is not a perturbation of the strategy, it is a hole in the data.
+                "blind_pct": float(run.result.blind_fraction) * 100.0,
+                "rebalances": len(run.result.rebalance_dates),
             }
         )
     return rows

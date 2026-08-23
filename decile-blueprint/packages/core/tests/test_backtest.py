@@ -56,6 +56,7 @@ from baskfy_core.backtest import (
     run_backtest,
     run_fragility,
     shift_schedule,
+    year_fraction,
 )
 from baskfy_core.backtest_metrics import (
     compute_metrics,
@@ -962,3 +963,116 @@ class TestTheBookAddsUp:
         assert result.delistings
         for equity, cash, invested in zip(result.equity, result.cash, result.invested, strict=True):
             assert equity == cash + invested
+
+
+# ---------------------------------------------------------------------------
+# M43: metrics that were confidently wrong
+# ---------------------------------------------------------------------------
+
+
+def _result_with_benchmark(benchmark: tuple[Decimal | None, ...]) -> BacktestResult:
+    """A three-day run with a benchmark supplied by the caller. Nothing else varies."""
+    _, data, _ = _market_and_data()
+    result = run_backtest(_config(), data)
+    days = len(result.dates)
+    padded = benchmark + (benchmark[-1],) * (days - len(benchmark))
+    return replace(result, benchmark=padded[:days])
+
+
+class TestAMissingBenchmarkIsNotAResult:
+    """With no benchmark, the benchmark metrics must be absent — not the portfolio's own numbers.
+
+    `_benchmark_returns` used to fill every gap with a flat day and return an array of zeros when
+    there was no benchmark at all. `active = portfolio - 0` is `portfolio`, so the page published
+    the portfolio's **own volatility** labelled "tracking error" and its **own Sharpe** labelled
+    "information ratio" — against a benchmark that did not exist. It is reachable in production:
+    `_benchmark_frame` returns nothing whenever the slug is unknown or the index has no rows in
+    the window.
+    """
+
+    def test_tracking_error_is_not_the_portfolios_own_volatility(self) -> None:
+        metrics = compute_metrics(_result_with_benchmark((None, None, None)))
+
+        assert metrics.tracking_error is None
+        assert metrics.information_ratio is None
+        assert metrics.annualised_volatility is not None, "the portfolio's own vol still computes"
+
+    def test_a_benchmark_that_exists_still_produces_the_metrics(self) -> None:
+        """The guard must not swallow the working case."""
+        _, data, _ = _market_and_data()
+        result = run_backtest(_config(), data)
+        metrics = compute_metrics(result)
+
+        assert metrics.tracking_error is not None
+        assert metrics.beta is not None
+
+
+class TestTheBenchmarkIsAnnualisedOverItsOwnSpan:
+    """`benchmark_cagr` divided a partial span's return by the *portfolio's* elapsed years.
+
+    The error is one-directional — it always understates the benchmark, so it always flatters the
+    strategy, which is the direction a backtest must never be wrong in. Measured before the fix on
+    a 4.742-year run: a quarter of the benchmark missing reported 1.3380%/yr against 1.7879% true.
+    """
+
+    def test_a_late_starting_benchmark_is_not_stretched(self) -> None:
+        _, data, _ = _market_and_data()
+        result = run_backtest(_config(), data)
+        days = len(result.dates)
+        # The benchmark only exists for the final quarter of the run, doubling over that span.
+        start = (days * 3) // 4
+        levels: list[Decimal | None] = [None] * start
+        levels += [Decimal(100) + Decimal(index) for index in range(days - start)]
+
+        metrics = compute_metrics(replace(result, benchmark=tuple(levels)))
+        assert metrics.benchmark_cagr is not None
+
+        covered_years = float(year_fraction(result.dates[start], result.dates[-1]))
+        observed = [value for value in levels if value is not None]
+        expected = float(observed[-1] / observed[0]) ** (1.0 / covered_years) - 1.0
+        assert metrics.benchmark_cagr == pytest.approx(expected, rel=1e-9)
+
+
+class TestRatiosRefuseNoiseAsADenominator:
+    """A volatility of 6e-08 is rounding noise, and dividing by it published a Sharpe of -4.29e6."""
+
+    def test_a_constant_drift_with_rounding_noise_has_no_sharpe(self) -> None:
+        """The measured case: a fixed daily decay, stored at 2 dp.
+
+        Every return is -0.1% to within storage precision, so the *spread* is rounding noise —
+        about 6e-08 annualised — while the mean is large. Dividing one by the other published
+        `sharpe = -4292786.11`, a number with no meaning that the page renders without comment.
+        """
+        _, data, _ = _market_and_data()
+        result = run_backtest(_config(), data)
+        decayed: list[Decimal] = [Decimal("1000000.00")]
+        for _ in range(len(result.dates) - 1):
+            decayed.append((decayed[-1] * Decimal("0.999")).quantize(Decimal("0.01")))
+        series = tuple(decayed)
+
+        metrics = compute_metrics(replace(result, equity=series, benchmark=(None,) * len(series)))
+
+        assert metrics.annualised_volatility is not None
+        assert metrics.annualised_volatility < 1e-4, (
+            "the fixture must be near-constant to be a test"
+        )
+        assert metrics.sharpe is None, f"published sharpe={metrics.sharpe} on rounding noise"
+        # Sortino is NOT None here and should not be: it divides by the magnitude of the downside
+        # (0.0158 annualised), not by its dispersion, and a book losing 0.1% every day really does
+        # have a Sortino near -16. Only the ratio whose denominator collapsed is refused.
+        assert metrics.sortino is not None
+        assert metrics.sortino < 0
+
+
+class TestATotalLossHasACompoundRate:
+    """A portfolio that went to zero compounded at -100% a year. It is not undefined."""
+
+    def test_zero_final_equity_reports_minus_one(self) -> None:
+        _, data, _ = _market_and_data()
+        result = run_backtest(_config(), data)
+        wiped = tuple(result.equity[:-1]) + (Decimal(0),)
+        metrics = compute_metrics(replace(result, equity=wiped))
+
+        assert metrics.total_return == pytest.approx(-1.0)
+        assert metrics.cagr == pytest.approx(-1.0), "cagr was None on the least ambiguous run"
+        assert metrics.calmar is not None

@@ -31,12 +31,13 @@ import datetime as dt
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.settings import Settings
@@ -59,11 +60,15 @@ from baskfy_core.backtest_metrics import (
 from baskfy_core.models import Backtest
 from baskfy_core.models.base import JsonObject
 
+log = logging.getLogger(__name__)
+
 __all__ = [
     "ACTIVE_STATUSES",
     "ARTEFACTS",
     "BACKTEST_GLOBAL_CONCURRENCY",
     "BACKTEST_USER_CONCURRENCY",
+    "STALE_QUEUED_SECONDS",
+    "STALE_RUNNING_SECONDS",
     "ArtefactName",
     "ConcurrencyExceeded",
     "artefact_key",
@@ -72,6 +77,7 @@ __all__ = [
     "events_channel",
     "new_public_id",
     "progress_key",
+    "reap_stale_runs",
     "sign_download",
     "verify_download",
 ]
@@ -89,6 +95,30 @@ BACKTEST_GLOBAL_CONCURRENCY: Final = 8
 
 #: The statuses that occupy a slot. docs/04: ``queued|running|done|failed``.
 ACTIVE_STATUSES: Final[tuple[str, ...]] = ("queued", "running")
+
+#: How long a run may say `running` before it is presumed dead (M45.4).
+#:
+#: The longest run this product can produce is about two seconds (M42's measurement, docs/11
+#: budgets ten). Fifteen minutes is four hundred times that, so no live run is ever at risk of
+#: being reaped by a second API process — which is the only way this could take a run away from
+#: something still working on it.
+STALE_RUNNING_SECONDS: Final = 15 * 60
+
+#: How long a run may sit `queued` before nothing is going to pick it up.
+#:
+#: Longer, because `queued` legitimately means "waiting" when a Celery worker is configured and
+#: briefly down. An hour is past the point where a user would still call it waiting.
+STALE_QUEUED_SECONDS: Final = 60 * 60
+
+#: What the user reads on a reaped row. Not "unknown error": they should be able to tell that
+#: nothing was wrong with their backtest and that re-running it is the whole fix.
+STALE_RUNNING_ERROR: Final = (
+    "the server stopped while this run was in flight and never came back to it. "
+    "Nothing was wrong with the backtest itself — run it again."
+)
+STALE_QUEUED_ERROR: Final = (
+    "nothing ever picked this run up, so it never started. Run it again."
+)
 
 #: docs/10 §Artefacts. ``trades`` is the one docs/04 gives a column to.
 ARTEFACTS: Final[tuple[str, ...]] = ("trades", "holdings", "equity")
@@ -138,6 +168,77 @@ def events_channel(public_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+async def reap_stale_runs(
+    session: AsyncSession,
+    *,
+    now: dt.datetime | None = None,
+    running_after: int = STALE_RUNNING_SECONDS,
+    queued_after: int = STALE_QUEUED_SECONDS,
+) -> int:
+    """Fail runs that cannot still be alive, and return how many (M45.4).
+
+    ## Why this has to exist
+
+    `capacity_check` counts rows, and the count is the truth by construction — which is the right
+    design and also the reason a dead row is not merely untidy. A per-user cap of 1 means **one**
+    row stuck at `running` locks that user out of backtesting permanently, and eight lock out the
+    whole service. There is no cancel route and nothing else clears the state, so before this the
+    only exit was an operator with a SQL prompt.
+
+    M45.3 closed the clean-shutdown path into that state. It cannot close the rest: SIGKILL, an
+    OOM kill, a container eviction and a power cut all stop the process between the claim and the
+    finish, and no amount of exception handling runs afterwards. Something has to notice from the
+    outside, and `started_at` (M45.2) is what makes noticing possible — before it, a dead run was
+    byte-identical to one that had never begun.
+
+    ## Why here rather than in a beat task
+
+    This runs on the path where the wedge is actually felt: the next `POST /backtests` from
+    anybody. That makes recovery self-healing with no new infrastructure to deploy, no scheduler
+    to be down, and no window in which the fix exists but is not running. It costs two indexed
+    UPDATEs on a route that already writes.
+
+    A periodic sweep would also be fine and is not exclusive with this; it is simply not needed
+    for correctness, and the piece of infrastructure this whole subsystem just removed was a
+    scheduler.
+
+    ## Why the thresholds are so generous
+
+    They are not tuned to reclaim capacity quickly. They are set so that a *live* run can never be
+    reaped by a second process that cannot see it — fifteen minutes against a two-second job. The
+    cost of being wrong in that direction is a user's result thrown away; the cost of being wrong
+    in the other is a wait.
+    """
+    moment = now or dt.datetime.now(tz=dt.UTC)
+    reaped = 0
+    for status, column, seconds, message in (
+        ("running", Backtest.started_at, running_after, STALE_RUNNING_ERROR),
+        ("queued", Backtest.created_at, queued_after, STALE_QUEUED_ERROR),
+    ):
+        cutoff = moment - dt.timedelta(seconds=seconds)
+        # `returning` rather than `rowcount`: the ids are what makes the log line worth reading,
+        # and a reap nobody can attribute afterwards is how you end up distrusting the reaper.
+        killed = (
+            await session.execute(
+                update(Backtest)
+                .where(
+                    Backtest.status == status,
+                    column.is_not(None),
+                    column < cutoff,
+                )
+                .values(status="failed", error=message, finished_at=moment)
+                .returning(Backtest.public_id)
+            )
+        ).scalars().all()
+        if killed:
+            log.warning(
+                "reaped stale backtests",
+                extra={"status": status, "count": len(killed), "public_ids": list(killed)},
+            )
+        reaped += len(killed)
+    return reaped
+
+
 async def capacity_check(
     session: AsyncSession,
     user_id: int,
@@ -151,6 +252,7 @@ async def capacity_check(
     existing, and a counter that can drift from it would eventually either wedge a user out of
     their own queue or let the global cap be exceeded. The count is the truth by construction.
     """
+    await reap_stale_runs(session)
     mine = (
         await session.execute(
             select(func.count())

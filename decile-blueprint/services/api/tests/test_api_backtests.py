@@ -34,6 +34,7 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from screener_helpers import requires_db
 from sqlalchemy import select
+from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.backtests import (
@@ -357,9 +358,7 @@ async def test_the_inline_executor_starts_the_run_without_a_broker(
         )
     ).scalar_one()
     assert row.status == "queued", "the row is recorded and left for the scheduled task"
-    assert row.error is None, (
-        f"the inline path must not report a broker problem; got {row.error!r}"
-    )
+    assert row.error is None, f"the inline path must not report a broker problem; got {row.error!r}"
     # The real assertion: the endpoint scheduled the start rather than doing nothing. Without the
     # inline runner this list is empty and the row would be failed by `_why_it_cannot_start`.
     assert scheduled, "no background task was scheduled, so nothing would ever start this run"
@@ -976,3 +975,135 @@ async def test_every_backtest_route_is_a_404_for_somebody_else(
         # And it is still there for its owner — the intruder's DELETE must not have landed.
         still = await client.get(url(f"/backtests/{row.public_id}"), headers=bearer(owner_token))
         assert still.status_code == 200
+
+
+async def _stranded(
+    session: AsyncSession, user_id: int, screen: Screen, *, age_minutes: int
+) -> str:
+    """A row left `running` by a process that died, aged by ``age_minutes``."""
+    row = Backtest(
+        public_id=new_public_id(),
+        user_id=user_id,
+        screen_id=screen.id,
+        config=json.loads(_config(screen_public_id=screen.public_id).model_dump_json()),
+        status="running",
+        started_at=dt.datetime.now(tz=dt.UTC) - dt.timedelta(minutes=age_minutes),
+    )
+    session.add(row)
+    await session.commit()
+    return row.public_id
+
+
+async def test_a_dead_run_does_not_wedge_the_user_out_forever(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """M45.4. One row stuck at `running` is a permanent lockout, and nothing cleared it.
+
+    The per-user cap is 1 and `capacity_check` counts rows, which is the right design — the count
+    cannot drift from reality. It also means a row that reality has moved past keeps counting.
+    There is no cancel route and no reaper, so before this the only exit from the state was an
+    operator with a SQL prompt, and at the global cap of 8 the whole service stopped taking
+    backtests from anybody.
+
+    M45.3 closed the clean-shutdown path into this state. It cannot close SIGKILL, an OOM kill, a
+    container eviction or a power cut: those stop the process between the claim and the finish and
+    nothing runs afterwards. Something has to notice from outside, which is what `started_at`
+    (M45.2) made possible — before it, a dead run was byte-identical to one never begun.
+
+    Proved by execution before the fix: with one such row present, every POST answered 429 with
+    "You already have a backtest running", indefinitely.
+    """
+    user_id, public_id = await make_user(session, "wedged.backtest@example.com", subscribed=True)
+    screen = await _screen(session, user_id)
+    dead = await _stranded(session, user_id, screen, age_minutes=90)
+    payload = {"config": json.loads(_config(screen_public_id=screen.public_id).model_dump_json())}
+
+    async with running_app(_settings(tmp_path), session, task_queue=RecordingQueue()) as client:
+        response = await client.post(url("/backtests"), json=payload, headers=bearer(public_id))
+
+    assert response.status_code == 202, (
+        f"a dead run must not hold the cap; got {response.status_code} {response.text}"
+    )
+
+    status, error, finished_at = (
+        await session.execute(
+            select(Backtest.status, Backtest.error, Backtest.finished_at).where(
+                Backtest.public_id == dead
+            )
+        )
+    ).one()
+    assert status == "failed"
+    assert finished_at is not None
+    assert error is not None
+    # The user should be able to tell nothing was wrong with their backtest.
+    assert "run it again" in error.lower(), error
+
+
+async def test_a_run_that_could_still_be_alive_is_never_reaped(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """The safety half, and the one worth being strict about.
+
+    A reaper that takes work away from a process still doing it is worse than the wedge it fixes:
+    the user loses a result and is told it failed. The thresholds are set against that — fifteen
+    minutes for a job measured at about two seconds — so this asserts the cap still holds for a
+    run young enough to be real, which is also what proves the reaper is bounded rather than
+    clearing `running` wholesale.
+    """
+    user_id, public_id = await make_user(session, "alive.backtest@example.com", subscribed=True)
+    screen = await _screen(session, user_id)
+    live = await _stranded(session, user_id, screen, age_minutes=1)
+    payload = {"config": json.loads(_config(screen_public_id=screen.public_id).model_dump_json())}
+
+    async with running_app(_settings(tmp_path), session, task_queue=RecordingQueue()) as client:
+        response = await client.post(url("/backtests"), json=payload, headers=bearer(public_id))
+
+    assert response.status_code == 429, "a live run must still hold the cap"
+    status = (
+        await session.execute(select(Backtest.status).where(Backtest.public_id == live))
+    ).scalar_one()
+    assert status == "running", "the reaper must not touch a run that could still be working"
+
+
+async def test_a_queued_run_nothing_ever_took_is_reaped_too(
+    session: AsyncSession, tmp_path: Path
+) -> None:
+    """`queued` wedges the cap exactly as hard, and in-process execution never retries.
+
+    A row reaches `queued` and stays there if the process died between the commit and the
+    dispatch, or if `RunnerBusy` refused it. Nothing sweeps it up afterwards: the runner is not
+    durable by design (M42), so `queued` with nobody holding it means never.
+    """
+    user_id, public_id = await make_user(session, "orphan.backtest@example.com", subscribed=True)
+    screen = await _screen(session, user_id)
+    row = Backtest(
+        public_id=new_public_id(),
+        user_id=user_id,
+        screen_id=screen.id,
+        config=json.loads(_config(screen_public_id=screen.public_id).model_dump_json()),
+        status="queued",
+    )
+    session.add(row)
+    await session.flush()
+    orphan = row.public_id
+    # `created_at` is server-set, so age it explicitly rather than hoping.
+    await session.execute(
+        sa_update(Backtest)
+        .where(Backtest.public_id == orphan)
+        .values(created_at=dt.datetime.now(tz=dt.UTC) - dt.timedelta(hours=3))
+    )
+    await session.commit()
+
+    payload = {"config": json.loads(_config(screen_public_id=screen.public_id).model_dump_json())}
+    async with running_app(_settings(tmp_path), session, task_queue=RecordingQueue()) as client:
+        response = await client.post(url("/backtests"), json=payload, headers=bearer(public_id))
+
+    assert response.status_code == 202, response.text
+    status, error = (
+        await session.execute(
+            select(Backtest.status, Backtest.error).where(Backtest.public_id == orphan)
+        )
+    ).one()
+    assert status == "failed"
+    assert error is not None
+    assert "never started" in error, error

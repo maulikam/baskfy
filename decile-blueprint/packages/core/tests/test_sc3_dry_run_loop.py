@@ -11,7 +11,7 @@ import datetime as dt
 import uuid
 from decimal import Decimal
 
-from baskfy_core.curated_plans import build_apply_plan, build_invest_plan
+from baskfy_core.curated_plans import PlanLeg, build_apply_plan, build_invest_plan
 from baskfy_core.curated_versions import (
     VERSION_LABEL_CHANGED,
     VERSION_LABEL_GENESIS,
@@ -58,7 +58,7 @@ def _weights_by_symbol(constituents: tuple[ConstituentDraft, ...]) -> dict[str, 
     return {SYMBOLS[c.instrument_id]: c.weight for c in constituents}
 
 
-def _holdings_from_invest_legs(legs: list[dict]) -> dict[str, int]:
+def _holdings_from_invest_legs(legs: list[PlanLeg]) -> dict[str, int]:
     out: dict[str, int] = {}
     for leg in legs:
         assert leg["side"] == "BUY"

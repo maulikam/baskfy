@@ -132,14 +132,12 @@ class TestParseKiteHoldings:
         assert rows[0].symbol == "RELIANCE"
         assert total_quantity(rows[0]) == Decimal("8")
 
-    def test_fetch_kite_holdings_uses_httpx(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_fetch_kite_holdings_uses_httpx(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class _Resp:
             def raise_for_status(self) -> None:
                 return None
 
-            def json(self) -> dict:
+            def json(self) -> dict[str, object]:
                 return {
                     "data": [
                         {
@@ -153,7 +151,9 @@ class TestParseKiteHoldings:
                     ]
                 }
 
-        calls: list[object] = []
+        # The recorded shape is (url, kwargs); `list[object]` said nothing and then the
+        # assertion below indexed it anyway.
+        calls: list[tuple[str, dict[str, object]]] = []
 
         def _get(url: str, **kwargs: object) -> _Resp:
             calls.append((url, kwargs))

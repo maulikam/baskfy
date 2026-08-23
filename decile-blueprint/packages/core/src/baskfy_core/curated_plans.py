@@ -161,7 +161,7 @@ def build_customize_plan(
     prices: Mapping[str, Decimal],
     amount: Decimal,
     now: dt.datetime,
-) -> dict:
+) -> DeskPlan:
     """Investor-driven constituent weight edit (kind CUSTOMIZE).
 
     Same leg arithmetic as :func:`build_apply_plan` (diff holdings vs target weights), but

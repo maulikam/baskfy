@@ -42,6 +42,7 @@ from baskfy_worker.tasks.backtests import (
     run_backtest_job,
 )
 from baskfy_worker.tasks.curated_metrics import run_curated_metrics
+from baskfy_worker.tasks.curated_sip import run_curated_sip_reminders
 from baskfy_worker.tasks.purge_accounts import run_purge_accounts
 
 #: docs/09 §"Kite specifics" — a rate-limited or flaky upstream is worth retrying; a malformed
@@ -330,3 +331,14 @@ def compute_curated_metrics_task(trade_date: str | None = None) -> JsonObject:
     """
     day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
     return run_in_session(lambda session: run_curated_metrics(session, day))
+
+
+@shared_task(name="baskfy.cb.sip_reminders", acks_late=True)
+def curated_sip_reminders_task(as_of: str | None = None) -> JsonObject:
+    """SC7: raise ``SIP_DUE`` pending actions for ACTIVE REMINDER plans due on *as_of*.
+
+    Idempotent per ``(plan_id, YYYY-MM)``. Never places an order; AUTO plans are not selected.
+    Defaults to today in IST when Beat fires without an argument.
+    """
+    day = dt.date.fromisoformat(as_of) if as_of else dt.datetime.now(tz=IST).date()
+    return run_in_session(lambda session: run_curated_sip_reminders(session, day))

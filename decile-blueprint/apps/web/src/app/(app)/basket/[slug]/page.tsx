@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { AccessBadge } from "@/components/explore/access-badge";
 import { DisclosureBlock } from "@/components/explore/disclosure-block";
 import { InvestCta } from "@/components/explore/invest-cta";
+import { PerformanceChart } from "@/components/explore/performance-chart";
 import { ReturnStat } from "@/components/explore/return-stat";
 import { VolatilityChip } from "@/components/explore/volatility-chip";
 import { PageHeader } from "@/components/shell/page-header";
@@ -118,6 +119,18 @@ export default async function BasketDetailPage({
         </Link>
       </nav>
 
+      <div className="space-y-3">
+        <PerformanceChart
+          series={[]}
+          basketLabel={basket.name}
+          benchmarkLabel="NIFTY 50"
+          defaultRange="1Y"
+          incompleteHistory={young}
+        />
+        <DisclosureBlock variant="performance-not-verified" />
+        {young ? <DisclosureBlock variant="history-caveat" /> : null}
+      </div>
+
       <section className="space-y-2 rounded-xl border border-border/70 bg-card p-4">
         <h2 className="text-sm font-semibold">About the manager</h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
@@ -128,11 +141,6 @@ export default async function BasketDetailPage({
           <DisclosureBlock variant="registration-pending" />
         ) : null}
       </section>
-
-      <div className="space-y-3">
-        <DisclosureBlock variant="performance-not-verified" />
-        {young ? <DisclosureBlock variant="history-caveat" /> : null}
-      </div>
 
       <p className="text-xs text-muted-foreground">
         This page is read-only — nothing on it can buy or sell anything. Invest opens a plan

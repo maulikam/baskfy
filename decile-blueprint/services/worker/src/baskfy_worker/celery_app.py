@@ -152,6 +152,14 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=20, minute=20, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_COMPUTE},
     },
+    # --- SC7 / leaf 2.1: SIP REMINDER pending actions (no AUTO, no orders) -----
+    "cb-sip-reminders": {
+        # Pre-open IST so the sole user sees SIP_DUE before the cash session.
+        # Idempotent per (plan_id, YYYY-MM) via fire_key; REMINDER mode only.
+        "task": "baskfy.cb.sip_reminders",
+        "schedule": crontab(hour=9, minute=0, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
 }
 
 

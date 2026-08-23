@@ -336,3 +336,35 @@ routes unmounted (404-when-off is the documented shape and keeps OpenAPI honest 
 surface name).
 
 **Reversal.** Delete `track_b` router + helpers; keep flag fields at False until a D3 flip.
+
+## Tree2 / 2.3 — Holdings windows are closed intervals · ⚠ UNREVIEWED
+
+**Context.** Leaf 2.3 derives `cb_dividend` from holdings history
+`{instrument_id: [(from_date, to_date, qty), …]}` × cash CA. The pack does not say whether
+`to_date` is exclusive.
+
+**Taken.** Closed `[from_date, to_date]`: qty on ex-date sums every window with
+`from_date ≤ ex_date ≤ to_date`. Matches “qty held on ex-date” wording and NSE seller-on-ex
+entitlement (seller still gets the cash). `total = money(amount_per_share × qty_held)`.
+
+**Rejected.** Half-open `[from, to)` (would drop a sell-on-ex lot unless writers shift
+`to_date` by one day). Inventing ₹ amounts from RECOVERED-ACTIONS factors (factors are not
+₹/share; tests pin ex-dates from that file and supply cash fixtures).
+
+**Reversal.** Flip `qty_held_on` to half-open and rebaseline the sold-before / bought-on-ex
+tests; writers adjust window ends.
+
+## Tree2 / 2.4 — Chart uses visx stubs until series API · ⚠ UNREVIEWED
+
+**Context.** SC5 asked for SIP + benchmark on the detail page; catalog does not yet serve a
+chain-linked EOD series.
+
+**Taken.** Client `PerformanceChart` with real controls (range pills, SIP, benchmark) and
+`series` props; empty series falls back to `stubPerformanceSeries(range)` so the SVG is not
+blank. DisclosureBlock stays beside the chart. No order CTAs on the chart.
+
+**Rejected.** Blocking on a metrics time-series endpoint (other Tree-2 leaves own API). Adding
+a second chart library (docs/02 locks visx).
+
+**Reversal.** Pass real points from fetch once the explore basket payload grows a series;
+delete stub path when fixtures always have ≥2 points.

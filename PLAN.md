@@ -101,3 +101,49 @@ Decided BEFORE fan-out. Everything a leaf could get wrong about its neighbors:
 - 2026-08-23T00:25Z leaf-1.5.1-ui-investor + 1.5.2-handoff green — `/investments*`, `/watchlist`, `/fees`; PlanHandoff/MarketClosed wired; uncommitted
 - 2026-08-23T00:25Z leaf-1.6.1-sip + 1.6.2-create green — `curated_sip` 19 tests [100%]; `/create` PRIVATE form; gates + DECISIONS-SC; uncommitted (no commit)
 - 2026-08-23T00:41Z SC12 SC-FINAL-REPORT; gates leaf-1.9 + node-1 closed; unchecked gates=0; checked=45
+
+---
+
+# Tree 2 — AC closure (module-plan gaps after SC12)
+
+Depth: 4 · Mode: orchestrated · Integrity on every leaf
+Prior SC0–SC12 closed leaf gates but deferred real ACs. This tree finishes those
+without Phase 4 / D3 (OAuth ABANDON).
+
+## Contract (Tree 2)
+
+- No OrderGateway / web execute / OAuth flip.
+- Sole user + Decimal money rules unchanged.
+- File ownership disjoint per leaf below.
+- Commits: `SC-AC<N>:` or append to STATUS as AC1–AC7.
+
+### Ownership
+| Leaf | Owns |
+|---|---|
+| 2.1 SIP Beat | `worker/tasks/curated_sip.py`, beat key in celery_app, tests |
+| 2.2 Create API | `routers/curated_create.py`, tests; wire create form to API |
+| 2.3 Dividends | `core/curated_dividends.py` + tests (pure from CA×holdings) |
+| 2.4 Chart | `apps/web` basket performance chart SIP+benchmark components |
+| 2.5 E2E | playwright explore→handoff smoke (or ABANDON if env blocks) |
+| 2.6 Runbook | `RUN-AND-TEST.md` SC section |
+| 2.7 Integrity | no-order on new routers; chunk/fee accuracy spot-checks |
+
+## Tree
+
+- 2 AC closure ..................................... gates/node-2.md
+  - 2.1 SIP Beat persist ........................... gates/leaf-2.1-sip-beat.md
+  - 2.2 Create API ................................. gates/leaf-2.2-create-api.md
+  - 2.3 Dividend derivation ........................ gates/leaf-2.3-dividends.md
+  - 2.4 Performance chart .......................... gates/leaf-2.4-chart.md
+  - 2.5 Playwright E2E ............................. gates/leaf-2.5-e2e.md
+  - 2.6 Runbook .................................... gates/leaf-2.6-runbook.md
+  - 2.7 Integrity sweep ............................ gates/leaf-2.7-integrity.md
+
+- 2026-08-23T00:44Z Tree 2 AC-closure planned; dispatching leaves 2.1–2.7
+- 2026-08-23T00:47Z leaf-2.7-integrity: G2 fee accuracy green (11 tests [100%]). G1 **ABANDON** — after ~3 min poll, `curated_create.py` + `worker/.../tasks/curated_sip.py` still absent (siblings 2.1/2.2); wrote `test_ac_no_orders.py` (4 fail clear, not faked green). Gate evidence in `gates/leaf-2.7-integrity.md`.
+- 2026-08-23T00:47Z **ABANDON (not a leaf fail):** live broker OAuth remains blocked on D3 / `BROKER_OAUTH_REVIEW.signed_off` (Tree-2 contract + Phase-4 hold). No OAuth flip attempted; Track C stays shut. Unblocks nothing in 2.1–2.7 product leaves — counsel/Zerodha only.
+- 2026-08-23T00:44Z leaf-2.3-dividends green — `curated_dividends.derive_dividends` 11 tests [100%]; closed [from,to] windows × cash CA; RECOVERED-ACTIONS TATASTEEL ex-dates; uncommitted
+- 2026-08-23T00:44Z leaf-2.4-chart green — `PerformanceChart` visx + range/SIP/benchmark on `/basket/[slug]`; DisclosureBlock kept adjacent; uncommitted
+- 2026-08-23T00:44Z leaf-2.5-e2e + leaf-2.6-runbook green — explore-handoff.spec.ts; RUN-AND-TEST §8 SC; gates checked; uncommitted (no commit)
+- 2026-08-23T01:02Z leaf-2.1-sip-beat green — `cb-sip-reminders` Beat + `baskfy.cb.sip_reminders` (4 tests [100%]); leaf-2.2-create-api green — `POST /cb/baskets` PRIVATE/STOCK/GENESIS (5 tests [100%]); no OrderGateway; uncommitted
+- 2026-08-23T01:05Z Tree 2 parent verified all leaf-2 + node-2; integrity G1 closed after sibling race; SC-AC-REPORT written

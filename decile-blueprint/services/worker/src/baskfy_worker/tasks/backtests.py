@@ -342,8 +342,21 @@ def run_backtest_inline(
                 )
                 await session.commit()
             except BacktestNotRunnable:
-                # Somebody else claimed it, or it is not queued any more. Not an error.
+                # Not always benign, and treating it as such is how a run was lost (M44).
+                #
+                # Two causes reach here. One is harmless: another worker took the row, or it is
+                # already terminal. The other is that the row is **not visible yet** — before M44
+                # the POST dispatched before its own transaction committed, so this SELECT could
+                # arrive first, find nothing, and land here. Swallowing it silently left the row
+                # at `queued` with nothing running and no trace anywhere.
+                #
+                # The race is fixed at the source (the dispatch moved after the commit), so this
+                # is now a backstop. It logs, because a run that vanished should not do so quietly.
                 await session.rollback()
+                log.warning(
+                    "backtest was not runnable when the runner reached it",
+                    extra={"public_id": public_id},
+                )
             except Exception:
                 await session.rollback()
                 # The job records failures on the row inside its own transaction, and that

@@ -29,6 +29,7 @@ import pytest
 import pytest_asyncio
 import screener_helpers
 from api_helpers import bearer, make_user, running_app, url
+from fastapi import BackgroundTasks
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from screener_helpers import requires_db
@@ -302,13 +303,22 @@ async def test_a_run_nothing_can_execute_fails_rather_than_waiting(
 
 
 async def test_the_inline_executor_starts_the_run_without_a_broker(
-    session: AsyncSession, tmp_path: Path
+    session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The default path: no broker anywhere, and the run still leaves `queued`.
+    """The default path: no broker anywhere, and the endpoint still schedules the run.
 
-    What is asserted is that it *started* — the runner took it — not that it finished, because the
-    fixture database has no bars to simulate against. Finishing is covered end to end by
-    `services/worker/tests/test_backtest_job.py`.
+    ## This test used to assert nothing (M44)
+
+    Its assertion was `row.status != "failed" or "no message broker" not in (row.error or "")`,
+    which is `True` for **any** non-failed status — including `queued`. So a test named "the
+    inline executor starts the run" passed when the run never started, which is house rule 2's
+    exact prohibition: it locked in current behaviour rather than the spec.
+
+    It could not have asserted more, either. `running_app` overrides `get_session` with a
+    generator that never commits, so the runner's own transaction cannot see the row by
+    construction — the same commit boundary that produced the real race. What is assertable here
+    is that the endpoint took the inline path and scheduled the work; that it *runs* is covered
+    against a committed row in `services/worker/tests/test_backtest_job.py`.
     """
     user_id, public_id = await make_user(session, "inline.backtest@example.com", subscribed=True)
     screen = await _screen(session, user_id)
@@ -316,6 +326,18 @@ async def test_the_inline_executor_starts_the_run_without_a_broker(
 
     class NoBroker:
         """Deliberately has no `send_task`."""
+
+    # Capture what the endpoint scheduled. `BackgroundTasks` runs after the response, which is
+    # after the request transaction commits — that ordering is the whole point of M44's fix, and
+    # it is what this records.
+    scheduled: list[str] = []
+    original = BackgroundTasks.add_task
+
+    def _record(self: BackgroundTasks, func: object, *args: object, **kwargs: object) -> None:
+        scheduled.append(getattr(func, "__name__", repr(func)))
+        original(self, func, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(BackgroundTasks, "add_task", _record)
 
     async with running_app(
         _settings(tmp_path, executor="inline"), session, task_queue=NoBroker()
@@ -334,9 +356,13 @@ async def test_the_inline_executor_starts_the_run_without_a_broker(
             select(Backtest).where(Backtest.public_id == response.json()["public_id"])
         )
     ).scalar_one()
-    assert row.status != "failed" or "no message broker" not in (row.error or ""), (
-        "the inline runner should have taken this, not reported a missing broker"
+    assert row.status == "queued", "the row is recorded and left for the scheduled task"
+    assert row.error is None, (
+        f"the inline path must not report a broker problem; got {row.error!r}"
     )
+    # The real assertion: the endpoint scheduled the start rather than doing nothing. Without the
+    # inline runner this list is empty and the row would be failed by `_why_it_cannot_start`.
+    assert scheduled, "no background task was scheduled, so nothing would ever start this run"
 
 
 async def test_a_second_concurrent_run_is_refused(session: AsyncSession, tmp_path: Path) -> None:

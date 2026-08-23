@@ -26,7 +26,12 @@ def test_cb_metrics_beat_entry_exists() -> None:
     schedule = cast(crontab, entry["schedule"])
     assert schedule.hour == {20}
     assert schedule.minute == {20}
-    assert entry["options"]["queue"] == QUEUE_COMPUTE
+    # `BEAT_SCHEDULE` is `dict[str, dict[str, object]]`, so `entry["options"]` is `object`.
+    # Narrowing it is the assertion that the entry has an options mapping at all — the
+    # alternative was a `cast`, which would assert the shape instead of checking it.
+    options = entry["options"]
+    assert isinstance(options, dict), "the beat entry must carry an options mapping"
+    assert options["queue"] == QUEUE_COMPUTE
 
 
 def test_cb_metrics_task_is_registered_and_routed() -> None:

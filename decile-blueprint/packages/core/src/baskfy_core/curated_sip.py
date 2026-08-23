@@ -249,6 +249,25 @@ def raise_sip_due(  # noqa: PLR0913 - one arg per pending-action field
     }
 
 
+def _plan_int(plan: Mapping[str, object], key: str) -> int:
+    """Read an integer column out of a ``Mapping[str, object]`` plan row.
+
+    ``evaluate_plan_for_fire`` takes a mapping rather than an ORM row so core stays I/O-free,
+    which means every cell arrives as ``object``. Widening the annotation to ``Any`` to make
+    ``int(...)`` type-check would hide a real failure mode — a ``None`` id, a ``date`` where a
+    count belongs — behind a ``TypeError`` raised deep inside the arithmetic. This names the
+    conversion and refuses anything that is not integral.
+    """
+    value = plan[key]
+    if isinstance(value, bool):
+        raise TypeError(f"{key} must be an integer, got a bool")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, Decimal | str):
+        return int(value)
+    raise TypeError(f"{key} must be an integer, got {type(value).__name__}")
+
+
 def should_fire(
     *,
     status: str,
@@ -286,9 +305,9 @@ def evaluate_plan_for_fire(
         amount = Decimal(str(amount))
 
     action = raise_sip_due(
-        plan_id=int(plan["id"]),
-        investment_id=int(plan["investment_id"]),
-        user_id=int(plan["user_id"]),
+        plan_id=_plan_int(plan, "id"),
+        investment_id=_plan_int(plan, "investment_id"),
+        user_id=_plan_int(plan, "user_id"),
         amount=amount,
         fire_date=next_fire,
         mode=mode,
@@ -297,7 +316,7 @@ def evaluate_plan_for_fire(
     if action is None:
         return None, None
 
-    day_of_month = int(plan["day_of_month"])
+    day_of_month = _plan_int(plan, "day_of_month")
     advanced = advance_next_fire_date(
         day_of_month=day_of_month,
         fired_on=next_fire,

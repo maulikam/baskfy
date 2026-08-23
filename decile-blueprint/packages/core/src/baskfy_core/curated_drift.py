@@ -140,20 +140,20 @@ def detect_drift(
     ``customize_instrument_ids`` for CUSTOMIZE-kind history - not a DRIFT action.
     """
     ledger_map: dict[int, LedgerHolding] = {}
-    for row in ledger:
-        if row.qty < 0 or row.avg_price < 0:
+    for ledger_row in ledger:
+        if ledger_row.qty < 0 or ledger_row.avg_price < 0:
             raise ValueError("ledger qty/avg_price cannot be negative")
-        if row.instrument_id in ledger_map:
-            raise ValueError(f"duplicate ledger instrument_id {row.instrument_id}")
-        ledger_map[row.instrument_id] = row
+        if ledger_row.instrument_id in ledger_map:
+            raise ValueError(f"duplicate ledger instrument_id {ledger_row.instrument_id}")
+        ledger_map[ledger_row.instrument_id] = ledger_row
 
     broker_map: dict[int, Decimal] = {}
-    for row in broker:
-        if row.qty < 0:
+    for broker_row in broker:
+        if broker_row.qty < 0:
             raise ValueError("broker qty cannot be negative")
-        if row.instrument_id in broker_map:
-            raise ValueError(f"duplicate broker instrument_id {row.instrument_id}")
-        broker_map[row.instrument_id] = row.qty
+        if broker_row.instrument_id in broker_map:
+            raise ValueError(f"duplicate broker instrument_id {broker_row.instrument_id}")
+        broker_map[broker_row.instrument_id] = broker_row.qty
 
     instrument_ids = sorted(set(ledger_map) | set(broker_map))
     deltas: list[DriftDelta] = []

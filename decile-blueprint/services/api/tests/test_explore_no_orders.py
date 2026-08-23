@@ -12,13 +12,17 @@ from baskfy_api.routers import explore
 MUTATING = ("post", "put", "patch", "delete")
 ORDER_SHAPED = ("execute", "place_order", "/order", "gtt", "trade/place")
 
+#: What `app.openapi()` returns, to the depth these tests read it — the same alias
+#: `test_baskets_readonly.py` uses, so the two order-gate tests read the spec identically.
+OpenApiSpec = dict[str, dict[str, dict[str, object]]]
+
 
 @pytest.fixture(scope="module")
-def spec() -> dict:
+def spec() -> OpenApiSpec:
     return create_app().openapi()
 
 
-def test_explore_and_watchlist_have_no_order_shaped_routes(spec: dict) -> None:
+def test_explore_and_watchlist_have_no_order_shaped_routes(spec: OpenApiSpec) -> None:
     offenders: list[str] = []
     for path, ops in spec["paths"].items():
         if "explore" not in path and "watchlist" not in path:

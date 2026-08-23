@@ -10,13 +10,13 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.curated_versions import (
     ConstituentDraft,
+    DeskOrderLine,
     HoldingsDiff,
     PublishedVersionDraft,
     PublishSideEffects,
@@ -38,6 +38,7 @@ from baskfy_core.models import (
 )
 
 __all__ = [
+    "RowMapping",
     "holdings_to_qty_map",
     "persist_published_version",
     "preview_holdings_diff",
@@ -47,15 +48,42 @@ __all__ = [
 ]
 
 
+#: A version/holding row as a plain mapping rather than an ORM instance. The values are
+#: ``object`` and not ``Any`` on purpose (CLAUDE.md house rule 3): a cell read out of an
+#: untyped dict is genuinely unknown, and :func:`_cell_int` / :func:`_cell_decimal` are where
+#: that unknown is checked instead of being asserted away.
+RowMapping = Mapping[str, object]
+
+
+def _cell_int(value: object, *, field: str) -> int:
+    """Coerce one mapping cell to ``int``, naming the field when it is not numeric."""
+    if isinstance(value, bool):
+        raise TypeError(f"{field} must be an integer, got a bool")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, Decimal | str):
+        return int(value)
+    raise TypeError(f"{field} must be an integer, got {type(value).__name__}")
+
+
+def _cell_decimal(value: object, *, field: str) -> Decimal:
+    """Coerce one mapping cell to ``Decimal`` (house rule 9: money is never a float)."""
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, int | str):
+        return Decimal(str(value))
+    raise TypeError(f"{field} must be a Decimal, got {type(value).__name__}")
+
+
 def weights_from_constituents(
-    rows: Sequence[CbConstituent] | Sequence[Mapping[str, Any]],
+    rows: Sequence[CbConstituent] | Sequence[RowMapping],
 ) -> dict[int, Decimal]:
     """Build ``instrument_id → weight`` from ORM rows or plain dicts."""
     out: dict[int, Decimal] = {}
     for row in rows:
         if isinstance(row, Mapping):
-            iid = int(row["instrument_id"])
-            weight = Decimal(str(row["weight"]))
+            iid = _cell_int(row["instrument_id"], field="instrument_id")
+            weight = _cell_decimal(row["weight"], field="weight")
         else:
             iid = int(row.instrument_id)
             weight = Decimal(row.weight)
@@ -64,14 +92,14 @@ def weights_from_constituents(
 
 
 def holdings_to_qty_map(
-    rows: Sequence[CbInvestmentHolding] | Sequence[Mapping[str, Any]],
+    rows: Sequence[CbInvestmentHolding] | Sequence[RowMapping],
 ) -> dict[int, Decimal]:
     """Qty map from intended holdings (Decimal; domain floors to whole shares)."""
     out: dict[int, Decimal] = {}
     for row in rows:
         if isinstance(row, Mapping):
-            iid = int(row["instrument_id"])
-            qty = Decimal(str(row["qty"]))
+            iid = _cell_int(row["instrument_id"], field="instrument_id")
+            qty = _cell_decimal(row["qty"], field="qty")
         else:
             iid = int(row.instrument_id)
             qty = Decimal(row.qty)
@@ -298,7 +326,7 @@ async def desk_order_preview(
     investment_id: int,
     version_id: int,
     prices: Mapping[int, Decimal],
-) -> tuple[HoldingsDiff, tuple[Any, ...]]:
+) -> tuple[HoldingsDiff, tuple[DeskOrderLine, ...]]:
     """Diff + desk-shaped order lines (symbol/side/qty/weight). Still no execute."""
     diff = await preview_apply_for_investment(
         session,

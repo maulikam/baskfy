@@ -8,7 +8,6 @@ Dismiss and resolve stamp ``dismissed_at`` / ``resolved_at``; they never place o
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -35,7 +34,10 @@ class PendingActionOut(BaseModel):
     type: str
     title: str
     body: str | None = None
-    payload: dict[str, Any] = Field(default_factory=dict)
+    # ``object``, not ``Any`` (CLAUDE.md house rule 3): this mirrors the JSONB
+    # ``cb_pending_action.payload`` verbatim, and its cells are genuinely unknown here —
+    # each action type documents its own keys. Nothing in this router indexes into them.
+    payload: dict[str, object] = Field(default_factory=dict)
     created_at: dt.datetime
 
 

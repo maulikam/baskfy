@@ -20,7 +20,18 @@ Three things this service deliberately does not do any more (SC-hardening):
 Cost note: since-inception is anchored at ``launched_at``, so the price fetch reaches back to
 the basket's first version rather than to a fixed five-year window. An eleven-year basket costs
 an eleven-year read once a day; truncating it to five years and calling the answer
-"since inception" is the alternative, and it is a lie.
+"since inception" is the alternative, and it is a lie. What the job does instead is pay that
+read **once per chunk** rather than once per basket: a chunk's price history is one query for
+the union of its constituents, bounded below by the earliest anchor in the chunk and sliced per
+basket in memory (:func:`_slice_history`). Catalogs overlap heavily — the same large-caps sit in
+most baskets — so the union is a fraction of the sum.
+
+Transaction shape: one transaction per chunk of reads and one per written basket, never one for
+the whole catalog. A single long transaction pins the xmin horizon for its whole duration, which
+stops TimescaleDB compressing ``ohlcv_daily`` chunks while the job runs. Committing per basket
+also makes a partial run resumable: the upsert is idempotent per ``(basket_id, as_of_date)`` and
+the basket cursor is ordered by id, so a re-run redoes finished work as a no-op and finishes the
+rest.
 """
 
 from __future__ import annotations
@@ -37,7 +48,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.curated_metrics import (
     CARD_WINDOW_MONTHS,
+    DIVIDENDS_INCLUDED,
     MIN_BASKET_VOL_DAYS,
+    RETURN_CONVENTION,
     BasketVersion,
     CatalogVolatility,
     catalog_volatility,
@@ -61,8 +74,17 @@ from baskfy_core.models import (
     OhlcvDaily,
 )
 
-#: SC11 / leaf-1.8.4 - process baskets in bounded chunks (no unbounded ORM load).
+#: SC11 / leaf-1.8.4 - process baskets in bounded chunks (no unbounded ORM load). It is also the
+#: unit of the shared price load below, so it bounds how much history is held in memory at once.
 METRICS_BASKET_CHUNK: Final = 50
+
+#: How far back the "latest close_raw on or before as_of" lookup may scan. ``ohlcv_daily`` is a
+#: TimescaleDB hypertable with one-year chunks: an unbounded ``date <= as_of`` makes the planner
+#: consider every chunk of every year, and that per-statement planning - not the row count - is
+#: what made this lookup cost 19.24ms per basket. A calendar month covers any run of exchange
+#: holidays; an instrument with no print for a month has no current price worth putting on a
+#: card, and ``min_amount`` is then NULL rather than a stale number presented as today's.
+CLOSE_RAW_LOOKBACK_DAYS: Final = 30
 
 
 async def upsert_metrics_row(  # noqa: PLR0913 - one kwarg per cb_metrics column
@@ -80,14 +102,27 @@ async def upsert_metrics_row(  # noqa: PLR0913 - one kwarg per cb_metrics column
     cagr_5y: Decimal | None,
     since_inception_pct: Decimal | None,
     computed_at: dt.datetime,
+    vol_basis: str | None = None,
+    months_available: int | None = None,
+    return_convention: str = RETURN_CONVENTION,
+    dividends_included: bool = DIVIDENDS_INCLUDED,
 ) -> None:
-    """Insert or update one ``cb_metrics`` row. Re-running the same inputs is a no-op."""
+    """Insert or update one ``cb_metrics`` row. Re-running the same inputs is a no-op.
+
+    Every column the row has is written, including the four the compute used to drop on the
+    floor: an UPDATE that leaves ``volatility_basis`` at yesterday's value while replacing
+    ``volatility_value`` publishes a number labelled with the wrong measurement.
+    """
     values = {
         "basket_id": basket_id,
         "as_of_date": as_of,
         "min_amount": min_amt,
         "volatility_bucket": vol_bucket,
         "volatility_value": vol_value,
+        "volatility_basis": vol_basis,
+        "months_available": months_available,
+        "return_convention": return_convention,
+        "dividends_included": dividends_included,
         "ret_1m": ret_1m,
         "ret_6m": ret_6m,
         "ret_1y": ret_1y,
@@ -104,6 +139,10 @@ async def upsert_metrics_row(  # noqa: PLR0913 - one kwarg per cb_metrics column
                 "min_amount": stmt.excluded.min_amount,
                 "volatility_bucket": stmt.excluded.volatility_bucket,
                 "volatility_value": stmt.excluded.volatility_value,
+                "volatility_basis": stmt.excluded.volatility_basis,
+                "months_available": stmt.excluded.months_available,
+                "return_convention": stmt.excluded.return_convention,
+                "dividends_included": stmt.excluded.dividends_included,
                 "ret_1m": stmt.excluded.ret_1m,
                 "ret_6m": stmt.excluded.ret_6m,
                 "ret_1y": stmt.excluded.ret_1y,
@@ -116,25 +155,81 @@ async def upsert_metrics_row(  # noqa: PLR0913 - one kwarg per cb_metrics column
     )
 
 
-async def _versions_through(
-    session: AsyncSession, basket_id: int, as_of: dt.date
-) -> list[CbBasketVersion]:
-    """Every version effective on or before *as_of*, oldest first.
+@dataclass(frozen=True, slots=True)
+class BasketRef:
+    """The three ``cb_basket`` columns the metrics compute actually reads.
+
+    A value, not a ``CbBasket``: the job commits between baskets, and a commit expires every ORM
+    instance in the session — reading ``launched_at`` off one afterwards silently re-SELECTs the
+    row, which is the N+1 this refactor exists to remove. Values survive a commit; ORM rows do
+    not.
+    """
+
+    id: int
+    visibility: str
+    launched_at: dt.date | None
+
+    @classmethod
+    def of(cls, basket: CbBasket) -> BasketRef:
+        return cls(id=basket.id, visibility=basket.visibility, launched_at=basket.launched_at)
+
+
+@dataclass(frozen=True, slots=True)
+class _VersionRow:
+    """One ``cb_basket_version``, reduced to what the chain-link needs."""
+
+    id: int
+    effective_date: dt.date
+
+
+@dataclass(frozen=True, slots=True)
+class _ChunkInputs:
+    """Every row a chunk of baskets needs — four queries, however many baskets are in it.
+
+    ``history`` is the union over the chunk's constituents; each basket takes its own slice of
+    it in memory (:func:`_slice_history`) instead of issuing its own read.
+    """
+
+    versions: Mapping[int, tuple[_VersionRow, ...]]
+    constituents: Mapping[int, list[tuple[int, Decimal, str]]]
+    history: Mapping[dt.date, Mapping[str, Decimal]]
+    close_raw: Mapping[int, Decimal]
+
+
+async def _versions_by_basket(
+    session: AsyncSession, basket_ids: Sequence[int], as_of: dt.date
+) -> dict[int, tuple[_VersionRow, ...]]:
+    """``{basket_id: (versions effective on or before as_of, oldest first)}`` in one query.
 
     All of them, not the latest one: the basket's history is the history of the weights it
     actually held, and the ones it no longer holds are most of it.
     """
+    if not basket_ids:
+        return {}
     rows = (
         await session.execute(
-            select(CbBasketVersion)
+            select(
+                CbBasketVersion.basket_id,
+                CbBasketVersion.id,
+                CbBasketVersion.effective_date,
+            )
             .where(
-                CbBasketVersion.basket_id == basket_id,
+                CbBasketVersion.basket_id.in_(list(basket_ids)),
                 CbBasketVersion.effective_date <= as_of,
             )
-            .order_by(CbBasketVersion.effective_date, CbBasketVersion.version_no)
+            .order_by(
+                CbBasketVersion.basket_id,
+                CbBasketVersion.effective_date,
+                CbBasketVersion.version_no,
+            )
         )
-    ).scalars()
-    return list(rows)
+    ).all()
+    out: dict[int, list[_VersionRow]] = {}
+    for basket_id, version_id, effective_date in rows:
+        out.setdefault(int(basket_id), []).append(
+            _VersionRow(id=int(version_id), effective_date=effective_date)
+        )
+    return {basket_id: tuple(versions) for basket_id, versions in out.items()}
 
 
 async def _constituents_by_version(
@@ -166,22 +261,29 @@ async def _constituents_by_version(
 async def _close_raw_map(
     session: AsyncSession, instrument_ids: Sequence[int], as_of: dt.date
 ) -> dict[int, Decimal]:
+    """Latest ``close_raw`` on or before *as_of* per instrument — ONE bounded query.
+
+    Two things make this cheap and neither is enough alone. ``DISTINCT ON (instrument_id)``
+    turns what was a statement per instrument into a statement per chunk; the
+    :data:`CLOSE_RAW_LOOKBACK_DAYS` floor keeps the planner off every year-chunk of the
+    hypertable. Batching without the floor measured no better than the loop it replaced.
+    """
     if not instrument_ids:
         return {}
-    # Latest close_raw on or before as_of for each instrument.
-    out: dict[int, Decimal] = {}
-    for iid in instrument_ids:
-        row = (
-            await session.execute(
-                select(OhlcvDaily.close_raw)
-                .where(OhlcvDaily.instrument_id == iid, OhlcvDaily.date <= as_of)
-                .order_by(OhlcvDaily.date.desc())
-                .limit(1)
+    floor = as_of - dt.timedelta(days=CLOSE_RAW_LOOKBACK_DAYS)
+    rows = (
+        await session.execute(
+            select(OhlcvDaily.instrument_id, OhlcvDaily.close_raw)
+            .distinct(OhlcvDaily.instrument_id)
+            .where(
+                OhlcvDaily.instrument_id.in_(list(instrument_ids)),
+                OhlcvDaily.date >= floor,
+                OhlcvDaily.date <= as_of,
             )
-        ).scalar_one_or_none()
-        if row is not None:
-            out[iid] = Decimal(row)
-    return out
+            .order_by(OhlcvDaily.instrument_id, OhlcvDaily.date.desc())
+        )
+    ).all()
+    return {int(instrument_id): Decimal(close_raw) for instrument_id, close_raw in rows}
 
 
 async def _price_history(
@@ -210,6 +312,61 @@ async def _price_history(
     for trade_date, symbol, close in rows:
         by_date.setdefault(trade_date, {})[str(symbol)] = Decimal(close)
     return by_date
+
+
+def _slice_history(
+    history: Mapping[dt.date, Mapping[str, Decimal]],
+    symbols: frozenset[str],
+    start: dt.date,
+) -> dict[dt.date, dict[str, Decimal]]:
+    """One basket's view of the chunk-wide load: its symbols, from its own anchor.
+
+    Exactly the rows its own ``WHERE instrument_id IN (...) AND date >= start`` would have
+    returned — a date on which none of *symbols* printed is dropped, as the query would have
+    dropped it, so a peer basket's trading day cannot invent a day for this one.
+    """
+    sliced: dict[dt.date, dict[str, Decimal]] = {}
+    for trade_date, closes in history.items():
+        if trade_date < start:
+            continue
+        row = {symbol: close for symbol, close in closes.items() if symbol in symbols}
+        if row:
+            sliced[trade_date] = row
+    return sliced
+
+
+async def _load_chunk(
+    session: AsyncSession, refs: Sequence[BasketRef], as_of: dt.date
+) -> _ChunkInputs:
+    """Load a whole chunk of baskets in four queries.
+
+    The price read is bounded below by the EARLIEST version date in the chunk (leaf 2d): the
+    anchoring fix means an eleven-year basket needs eleven years, and paying that once for the
+    chunk is the price of it. Constituents overlap heavily between baskets, so the union is far
+    smaller than the sum — that duplication is what this removes.
+    """
+    versions = await _versions_by_basket(session, [ref.id for ref in refs], as_of)
+    version_ids = [row.id for rows in versions.values() for row in rows]
+    constituents = await _constituents_by_version(session, version_ids)
+
+    instrument_ids = sorted(
+        {instrument_id for rows in constituents.values() for instrument_id, _, _ in rows}
+    )
+    starts = [rows[0].effective_date for rows in versions.values() if rows]
+    history = await _price_history(session, instrument_ids, min(starts), as_of) if starts else {}
+
+    latest_instrument_ids = sorted(
+        {
+            instrument_id
+            for rows in versions.values()
+            if rows
+            for instrument_id, _, _ in constituents.get(rows[-1].id, [])
+        }
+    )
+    close_raw = await _close_raw_map(session, latest_instrument_ids, as_of)
+    return _ChunkInputs(
+        versions=versions, constituents=constituents, history=history, close_raw=close_raw
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,10 +407,12 @@ def _min_amount_for(
     return money(min_amount(ordered_prices, ordered_weights))
 
 
-async def _metric_values(
-    session: AsyncSession, basket: CbBasket, as_of: dt.date
-) -> BasketMetricValues:
-    """Compute one basket's numbers. No peers, no bucket, no write."""
+def _metric_values(basket: BasketRef, inputs: _ChunkInputs, as_of: dt.date) -> BasketMetricValues:
+    """Compute one basket's numbers. No peers, no bucket, no write — and no query.
+
+    Every row it reads was loaded once for the whole chunk, so this is pure arithmetic over
+    memory: 750 round-trips per job became four per chunk.
+    """
     empty = BasketMetricValues(
         basket_id=basket.id,
         visibility=basket.visibility,
@@ -268,14 +427,12 @@ async def _metric_values(
         months_available=None,
         status="no_version",
     )
-    versions = await _versions_through(session, basket.id, as_of)
+    versions = inputs.versions.get(basket.id, ())
     if not versions:
         return empty
 
-    constituents = await _constituents_by_version(session, [v.id for v in versions])
-    latest = versions[-1]
-    latest_constituents = constituents.get(latest.id, [])
-    prices = await _close_raw_map(session, [c[0] for c in latest_constituents], as_of)
+    constituents = inputs.constituents
+    latest_constituents = constituents.get(versions[-1].id, [])
 
     history_versions = [
         BasketVersion(
@@ -285,9 +442,10 @@ async def _metric_values(
         for version in versions
         if constituents.get(version.id)
     ]
-    all_instrument_ids = sorted({iid for rows in constituents.values() for iid, _, _ in rows})
-    inception = versions[0].effective_date
-    history = await _price_history(session, all_instrument_ids, inception, as_of)
+    symbols = frozenset(
+        symbol for version in versions for _, _, symbol in constituents.get(version.id, [])
+    )
+    history = _slice_history(inputs.history, symbols, versions[0].effective_date)
     nav = version_aware_nav(history, history_versions)
 
     latest_weights = _weights_by_symbol(latest_constituents)
@@ -313,7 +471,7 @@ async def _metric_values(
     return BasketMetricValues(
         basket_id=basket.id,
         visibility=basket.visibility,
-        min_amount=_min_amount_for(latest_constituents, prices),
+        min_amount=_min_amount_for(latest_constituents, inputs.close_raw),
         volatility=volatility,
         ret_1m=window_return(nav.points, months=CARD_WINDOW_MONTHS["1m"]),
         ret_6m=window_return(nav.points, months=CARD_WINDOW_MONTHS["6m"]),
@@ -356,6 +514,8 @@ async def _write_metric_values(
         min_amt=values.min_amount,
         vol_bucket=bucket,
         vol_value=values.volatility.value if values.volatility is not None else None,
+        vol_basis=values.volatility.basis if values.volatility is not None else None,
+        months_available=values.months_available,
         ret_1m=values.ret_1m,
         ret_6m=values.ret_6m,
         ret_1y=values.ret_1y,
@@ -394,8 +554,24 @@ async def compute_basket_metrics(  # noqa: PLR0913 - published_count/peers for P
         peer_vols=tuple(peer_vols) if peer_vols is not None else None,
         computed_at=now or dt.datetime.now(tz=dt.UTC),
     )
-    values = await _metric_values(session, basket, as_of)
-    return await _write_metric_values(session, values, as_of, context)
+    ref = BasketRef.of(basket)
+    inputs = await _load_chunk(session, [ref], as_of)
+    return await _write_metric_values(session, _metric_values(ref, inputs, as_of), as_of, context)
+
+
+async def _basket_refs(session: AsyncSession, basket_ids: Sequence[int]) -> list[BasketRef]:
+    """The chunk's baskets as values, ordered by id so a resumed run has a stable cursor."""
+    rows = (
+        await session.execute(
+            select(CbBasket.id, CbBasket.visibility, CbBasket.launched_at)
+            .where(CbBasket.id.in_(list(basket_ids)))
+            .order_by(CbBasket.id)
+        )
+    ).all()
+    return [
+        BasketRef(id=int(basket_id), visibility=str(visibility), launched_at=launched_at)
+        for basket_id, visibility, launched_at in rows
+    ]
 
 
 async def compute_all_metrics(
@@ -408,10 +584,18 @@ async def compute_all_metrics(
 
     Two passes. The first computes each basket's numbers, loading baskets in
     ``METRICS_BASKET_CHUNK``-sized batches so a large catalog cannot pin an unbounded ORM set in
-    memory (SC11 / leaf-1.8.4); only the small value objects are kept. The second assigns the
-    volatility bucket, which needs the terciles of the PUBLISHED catalog and therefore cannot be
-    known until the first pass is done - before SC-hardening ``peer_vols`` was never passed at
-    all and the tercile branch was dead code.
+    memory (SC11 / leaf-1.8.4); only the small value objects are kept. Each chunk's rows -
+    versions, constituents, the union of their prices, the closing prints - are read in four
+    queries and then sliced per basket in memory. The second pass assigns the volatility bucket,
+    which needs the terciles of the PUBLISHED catalog and therefore cannot be known until the
+    first pass is done - before SC-hardening ``peer_vols`` was never passed at all and the
+    tercile branch was dead code.
+
+    The transaction is per chunk while reading and per basket while writing, never one for the
+    whole run: a job-long transaction holds the xmin horizon down and blocks ``ohlcv_daily``
+    compression for as long as it runs. Because the upsert is idempotent per
+    ``(basket_id, as_of_date)`` and the cursor is ordered by ``cb_basket.id``, a run that dies
+    half-way leaves the finished baskets committed and a re-run rewrites them identically.
     """
     computed_at = now or dt.datetime.now(tz=dt.UTC)
     basket_ids = list(
@@ -440,17 +624,12 @@ async def compute_all_metrics(
     chunk_size = METRICS_BASKET_CHUNK
     for offset in range(0, len(basket_ids), chunk_size):
         chunk_ids = basket_ids[offset : offset + chunk_size]
-        baskets = (
-            (
-                await session.execute(
-                    select(CbBasket).where(CbBasket.id.in_(chunk_ids)).order_by(CbBasket.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        for basket in baskets:
-            computed.append(await _metric_values(session, basket, as_of))
+        refs = await _basket_refs(session, chunk_ids)
+        inputs = await _load_chunk(session, refs, as_of)
+        # The chunk's reads are done and its rows are values now, so end the transaction rather
+        # than hold one snapshot across the whole catalog.
+        await session.commit()
+        computed.extend(_metric_values(ref, inputs, as_of) for ref in refs)
 
     peer_vols = [
         values.volatility.value
@@ -464,12 +643,10 @@ async def compute_all_metrics(
         computed_at=computed_at,
     )
     results: list[dict[str, object]] = []
-    for index, values in enumerate(computed, start=1):
+    for values in computed:
         results.append(await _write_metric_values(session, values, as_of, context))
-        if index % chunk_size == 0:
-            await session.flush()
-    await session.flush()
-    await session.commit()
+        # Per basket, so a run that dies has finished baskets on disk and resumes from the next.
+        await session.commit()
     summary: dict[str, object] = {
         "as_of": as_of.isoformat(),
         "baskets": len(results),

@@ -11,13 +11,15 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Mapping
 from decimal import Decimal
-from typing import Final, Literal
+from typing import Final, Literal, TypedDict
 
 from baskfy_core.curated_metrics import shares_at_amount
 
 __all__ = [
     "PLAN_TTL",
+    "DeskPlan",
     "PlanKind",
+    "PlanLeg",
     "build_apply_plan",
     "build_customize_plan",
     "build_exit_plan",
@@ -25,6 +27,28 @@ __all__ = [
 ]
 
 PlanKind = Literal["BUY", "REBALANCE", "EXIT", "CUSTOMIZE"]
+
+
+class PlanLeg(TypedDict):
+    """One desk-shaped leg. Named keys, not a bare ``dict`` — the API layer reads them.
+
+    ``ref_price`` is a reference price for sizing only; nothing here becomes an order.
+    """
+
+    symbol: str
+    side: Literal["BUY", "SELL"]
+    quantity: int
+    ref_price: Decimal
+
+
+class DeskPlan(TypedDict):
+    """A plan preview. ``expires_at_hint`` is the caller's ``now`` + :data:`PLAN_TTL`."""
+
+    kind: PlanKind
+    legs: list[PlanLeg]
+    requested_amount: Decimal
+    expires_at_hint: dt.datetime
+
 
 #: Desk non-negotiable #1 — plans expire thirty minutes after issue.
 PLAN_TTL: Final = dt.timedelta(minutes=30)
@@ -34,7 +58,7 @@ def _expires_at_hint(now: dt.datetime) -> dt.datetime:
     return now + PLAN_TTL
 
 
-def _leg(symbol: str, side: Literal["BUY", "SELL"], quantity: int, ref_price: Decimal) -> dict:
+def _leg(symbol: str, side: Literal["BUY", "SELL"], quantity: int, ref_price: Decimal) -> PlanLeg:
     return {
         "symbol": symbol,
         "side": side,
@@ -49,7 +73,7 @@ def build_invest_plan(
     prices: Mapping[str, Decimal],
     amount: Decimal,
     now: dt.datetime,
-) -> dict:
+) -> DeskPlan:
     """Lump-sum buy into a basket at *target_weights* for *amount* (kind BUY)."""
     if amount <= 0:
         raise ValueError("amount must be positive")
@@ -84,7 +108,7 @@ def build_apply_plan(
     prices: Mapping[str, Decimal],
     amount: Decimal,
     now: dt.datetime,
-) -> dict:
+) -> DeskPlan:
     """Diff current holdings vs *target_weights* sized to *amount* (kind REBALANCE).
 
     *amount* is the book the investor wants the basket sized to after the apply (typically
@@ -112,7 +136,7 @@ def build_apply_plan(
         zip(positive, shares_at_amount(amount, pos_prices, pos_weights), strict=True)
     )
 
-    legs: list[dict] = []
+    legs: list[PlanLeg] = []
     for symbol in symbols:
         current = int(holdings.get(symbol, 0))
         target = int(target_qtys.get(symbol, 0))
@@ -165,7 +189,7 @@ def build_exit_plan(
     prices: Mapping[str, Decimal],
     now: dt.datetime,
     requested_amount: Decimal | None = None,
-) -> dict:
+) -> DeskPlan:
     """Sell all (or a notional *requested_amount* of) holdings (kind EXIT)."""
     if not holdings:
         raise ValueError("holdings cannot be empty")

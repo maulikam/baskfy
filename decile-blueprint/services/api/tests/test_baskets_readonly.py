@@ -17,12 +17,34 @@ import pytest
 
 from baskfy_api import baskets as basket_data
 from baskfy_api.app import create_app
-from baskfy_api.routers import baskets
+from baskfy_api.routers import baskets, curated_create
 
 MUTATING = ("post", "put", "patch", "delete")
 
 #: What `app.openapi()` returns, to the depth these tests read it.
 OpenApiSpec = dict[str, dict[str, dict[str, object]]]
+
+#: Paths matching "basket" that serve a non-GET verb **on purpose**, with the reason each one
+#: does not cross the order gate this file guards. A mutating basket route that is not listed
+#: here still fails `test_every_basket_route_is_a_get`, so adding one stays a deliberate act.
+#:
+#: SC8 added `POST /api/v1/cb/baskets` and this invariant went red. It is scoped rather than
+#: deleted because the gate is about *execution*, not about the HTTP verb: `docs/smallcase/
+#: 02-scope-and-gating.md` puts "the create/customize builder and private baskets" in **Track
+#: A — build now, fully live**, and puts web-app execution in Track C with the instruction
+#: that "the M23-era test (no order route reachable from the web app) stays green and is
+#: extended to the new routes". Extending it is what this table does.
+#:
+#: `POST /api/v1/cb/baskets` writes one PRIVATE/STOCK `cb_basket` row plus its GENESIS version
+#: and constituents for the sole tenant. It moves no shares, no money and no broker state; its
+#: router imports no gateway (`test_curated_create.py::test_create_router_has_no_broker_path`
+#: asserts `OrderGateway`, `place_order` and `/execute` are absent from that source, and
+#: `test_the_whole_api_has_no_order_route` below still covers it by path). Naming a basket for
+#: yourself is not the regulated activity in the module docstring above — placing an order for
+#: a logged-in user is, and nothing here can.
+DELIBERATE_MUTATING_BASKET_ROUTES: dict[str, set[str]] = {
+    "/api/v1/cb/baskets": {"post"},
+}
 
 
 @pytest.fixture(scope="module")
@@ -35,7 +57,22 @@ class TestNoOrderPlacingRouteIsReachable:
         routes = {p: sorted(spec["paths"][p]) for p in spec["paths"] if "basket" in p}
         assert routes, "M22's routes are not registered at all"
         for path, methods in routes.items():
-            assert methods == ["get"], f"{path} exposes {methods}"
+            allowed = {"get"} | DELIBERATE_MUTATING_BASKET_ROUTES.get(path, set())
+            assert set(methods) <= allowed, f"{path} exposes {methods}"
+
+    def test_the_mutating_exemptions_are_still_real_routes(self, spec: OpenApiSpec) -> None:
+        """A stale exemption is a hole nobody is watching; it must fail loudly, not linger."""
+        for path, verbs in DELIBERATE_MUTATING_BASKET_ROUTES.items():
+            assert path in spec["paths"], f"{path} is exempted but no longer served"
+            assert verbs <= set(spec["paths"][path]), (
+                f"{path} is exempted for {sorted(verbs)} but serves {sorted(spec['paths'][path])}"
+            )
+
+    def test_the_exempted_routers_cannot_reach_the_execution_package(self) -> None:
+        """The exemption is only defensible while the router behind it has no order path."""
+        source = inspect.getsource(curated_create)
+        for forbidden in ("baskfy_execution", "OrderGateway", "place_order", "kiteconnect"):
+            assert forbidden not in source, f"curated_create.py references {forbidden}"
 
     def test_the_whole_api_has_no_order_route(self, spec: OpenApiSpec) -> None:
         """Not just the basket router — the entire surface the web app can reach.

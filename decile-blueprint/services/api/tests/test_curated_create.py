@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 from decimal import Decimal
+from typing import Protocol
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -17,6 +18,18 @@ from baskfy_api.routers.curated_create import (
     CreateBasketOut,
     create_private_basket,
 )
+
+
+class _HasPrimaryKey(Protocol):
+    """What ``AsyncSession.refresh`` fills in on the rows this router flushes.
+
+    The fake below stands in for the database's identity assignment. Typing the parameter as
+    ``object`` and reaching for ``obj.id`` needs an ``attr-defined`` type-ignore comment, which
+    CLAUDE.md house rule 3 forbids; the structural type says the honest thing instead — this
+    callback only ever sees rows that have a nullable integer primary key.
+    """
+
+    id: int | None
 
 
 def test_openapi_exposes_create_basket() -> None:
@@ -76,9 +89,9 @@ async def test_create_persists_private_genesis(monkeypatch: pytest.MonkeyPatch) 
     scalar_result.all = MagicMock(return_value=[inst_a, inst_b])
     session.scalars = AsyncMock(return_value=scalar_result)
 
-    async def _refresh(obj: object) -> None:
-        if getattr(obj, "id", None) is None:
-            obj.id = 1  # type: ignore[attr-defined]
+    async def _refresh(obj: _HasPrimaryKey) -> None:
+        if obj.id is None:
+            obj.id = 1
 
     session.refresh = AsyncMock(side_effect=_refresh)
 

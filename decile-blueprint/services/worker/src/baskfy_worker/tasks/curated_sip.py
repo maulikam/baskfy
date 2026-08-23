@@ -8,7 +8,6 @@ broker path; REMINDER only.
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -120,7 +119,7 @@ async def run_curated_sip_reminders(
         if action is None or advanced is None:
             skipped += 1
             continue
-        payload: dict[str, Any] = dict(action["payload"])
+        payload: dict[str, object] = dict(action["payload"])
         session.add(
             CbPendingAction(
                 user_id=int(action["user_id"]),

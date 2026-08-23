@@ -312,9 +312,12 @@ async def create_backtest(  # noqa: PLR0913, PLR0917 - FastAPI injects one param
         # docs/07's catalogue has no "busy" type; 429 with `Retry-After` is the row that means
         # "come back later", and the detail names which cap was hit. `docs/DECISIONS.md` §15.
         problem = rate_limited(exc.retry_after_seconds, exc.limit)
+        # "or cancel it" was in this sentence until M45.4 and there has never been a cancel
+        # route, so the one instruction offered to a user who could not proceed was for a button
+        # that does not exist. A run takes about two seconds, so waiting is the whole answer.
         problem.detail = (
             f"You already have a backtest running. The {exc.scope} limit is {exc.limit}; "
-            "wait for it to finish, or cancel it."
+            "it should finish in a few seconds."
             if exc.scope == "per-user"
             else f"The service is running its maximum of {exc.limit} backtests. Try again shortly."
         )

@@ -67,6 +67,7 @@ from baskfy_api.routers import (
     baskets,
     billing,
     brokers,
+    curated_plans,
     desk,
     explore,
     instruments,
@@ -535,3 +536,5 @@ def _mount_routers(versioned: APIRouter) -> None:
     versioned.include_router(brokers.router)
     # SC2: curated-basket catalog (/explore) + watchlist CRUD. No order/execute routes.
     versioned.include_router(explore.router)
+    # SC3: invest/apply/exit plan previews only — synthetic desk_plan_id, never execution.
+    versioned.include_router(curated_plans.router)

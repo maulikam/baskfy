@@ -2,9 +2,9 @@
 
 Scope: Publish version + diff holdings vs target
 
-- [ ] G1: version domain tests
+- [x] G1: version domain tests
   CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_curated_versions.py -q --tb=no 2>&1 | tail -1
   EXPECT: [100%]
-  EVIDENCE: pending
+  EVIDENCE: ........................                                                 [100%]
 
 <!-- integrity: security, performance, memory, accuracy required -->

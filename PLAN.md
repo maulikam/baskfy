@@ -90,3 +90,9 @@ Decided BEFORE fan-out. Everything a leaf could get wrong about its neighbors:
 ## Status log
 
 - 2026-08-23 plan written, contract fixed; SC0–SC1 already green on main; SC2 WIP in working tree
+- 2026-08-23T00:04Z SC2 verified (metrics/scan/explore/beat tests [100%]); committed; dispatching SC3–SC5 leaves
+- 2026-08-23T00:06Z leaf-1.8.1-sec-orders verified (2 tests); SC3/SC4/SC5 agents running
+- 2026-08-23T00:13Z leaf-1.2.3-hours green (14 tests [100%]); leaf-1.2.2-plans green (6 API + 4 core [100%]); curated_plans router mounted, no execute
+- 2026-08-23T00:07Z leaf-1.4.1-ui-explore + 1.4.2 legacy soft-redirect: `/explore`, `/basket/[slug]`, SC5 DECISIONS; uncommitted
+- 2026-08-23T00:15Z leaf-1.3.1-accounting green (21 tests [100%], fee -k 11); leaf-1.3.2-drift green (9 tests [100%]); curated_accounting + curated_drift pure core; uncommitted
+- 2026-08-23T00:18Z leaf-1.2.1-versions agent done — 24 tests

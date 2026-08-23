@@ -3,7 +3,7 @@
 The status page for the smallcase-layer run. Updated at the end of every module, loud
 about what is NOT done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: SC2 green · unlazy tree active · continuing to SC3.** Started 23 Aug 2026.
+**Run state: SC2 green · SC3 leaves 1.2.1–1.2.3 green (module AC open) · SC4/SC5 in flight.** Started 23 Aug 2026.
 
 ## Module ledger
 
@@ -11,10 +11,10 @@ about what is NOT done. A fresh session resumes from the first module not marked
 |---|---|---|
 | SC0 — Baseline and read-in | ✅ | Baselines recorded; desk 1328 passed; DRY_RUN=true; M41 catalog uncommitted at start |
 | SC1 — Schema and domain objects | ✅ | 18 `cb_*` tables + migration 0014; domain asserts; manager seed; tests green |
-| SC2 — Catalog computation and API | ✅ | metrics + explore API + Beat job + SCAN seed; gates/leaf-1.1.* |
-| SC3 — Versions, rebalance engine, plans | ⬜ | |
-| SC4 — Investment accounting | ⬜ | |
-| SC5 — Web UI: discovery and detail | ⬜ | |
+| SC2 — Catalog computation and API | ✅ | Pure metrics + `/explore` API + Beat `cb-eod-metrics` + SCAN seed; 26 tests green |
+| SC3 — Versions, rebalance engine, plans | 🔄 | Leaves 1.2.1–1.2.3 green: versions publish/diff + `/cb/plans/{invest,apply,exit}` + `market_hours_cb`; module glue/AC loop still open |
+| SC4 — Investment accounting | 🔄 | Core pure math green: fees/XIRR/ledgers (21) + drift (9); service/job/dividends still open |
+| SC5 — Web UI: discovery and detail | 🔄 | `/explore` + `/basket/[slug]` + soft `/baskets` banner; SC5 DECISIONS ⚠ UNREVIEWED |
 | SC6 — Web UI: investor surfaces | ⬜ | |
 | SC7 — SIP reminders | ⬜ | |
 | SC8 — Create and customize | ⬜ | |
@@ -92,8 +92,7 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 | queue-backlog | `baskfy.ops.check_queue_backlog` | */10 min |
 | dispatch-screen-alerts | `baskfy.alerts.dispatch` | Mon–Fri 20:30 |
 | sweep-webhook-deliveries | `baskfy.alerts.sweep_webhooks` | */2 min |
-
-**No curated-basket / metrics Beat entry yet** — SC2 adds the EOD `cb_metrics` job.
+| cb-eod-metrics | `baskfy.cb.compute_metrics` | Mon–Fri 20:20 |
 
 ## SC1 deliverables (23 Aug 2026)
 
@@ -113,22 +112,104 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 - Track B flags and unreachable-surface tests (SC10)
 - `BASKFY_SOLE_USER_ID` resolver exists but no `cb_*` user rows written until SC4
 
+## SC2 deliverables (23 Aug 2026)
+
+**Built**
+
+- `baskfy_core.curated_metrics` — `min_amount` / `shares_at_amount` (04 §2), PACK.1 volatility
+  buckets, absolute return / CAGR / chain-link NAV / headline picker
+- `baskfy_core.scan_projection` — deterministic MomentumScan top-N → genesis version
+- Catalog API at `/api/v1/explore` (+ managers, collections) and `/api/v1/watchlist` CRUD;
+  **no order/execute routes**
+- Celery task `baskfy.cb.compute_metrics` + Beat `cb-eod-metrics` (Mon–Fri 20:20 IST) upserting
+  `cb_metrics` idempotently
+- First SCAN basket seed (`momentum-scan`) via `curated_seed.seed_momentum_scan_basket`
+- Tests: core property + golden NAV; API filter params (OpenAPI + handler); metrics re-run noop;
+  SCAN seed idempotent; Beat registration. DB tests skip without `BASKFY_TEST_DATABASE_URL`.
+
+**NOT done (by design — later modules)**
+
+- Web `/explore` UI (SC5); version publishing / plans (SC3); investor ledgers / XIRR (SC4)
+- Full multi-version chain-linked history over real 2011→now bars (job computes from latest
+  version weights + available closes; thin history leaves return windows null)
+- Collections content seed (SC9); watchlist `moved_pct` needs live NAV (SC4)
+- ~~Legacy `/baskets` merge-or-redirect (SC5)~~ soft-coexist recorded in DECISIONS-SC SC5
+- Unlazy / gates tree if present beside this run is out of band for the SC2 commit message
+
+## SC5 deliverables (23 Aug 2026) — in progress / leaf green
+
+**Built**
+
+- `/explore` catalog page (URL filter chips → `GET /api/v1/explore`)
+- `/basket/[slug]` overview + `/basket/[slug]/constituents` stub
+- Shared components: BasketCard, VolatilityChip, AccessBadge, ReturnStat, DisclosureBlock
+- `PlanHandoffPanel` + `MarketClosedModal` stubs; Invest CTA never posts an order
+- Nav Explore entry; soft `/baskets` notice linking to Explore
+- DECISIONS-SC SC5 ⚠ UNREVIEWED; gates leaf-1.4.1 / 1.4.2 / node-1.4 checked
+
+**NOT done (later SC5 polish / SC3+)**
+
+- Performance chart (SIP + benchmark), manager/collections routes, watchlist toggle on cards
+- Full constituents timeline (needs SC3 versions)
+- E2E Playwright journey for filter → card → detail
+
+
+## SC3 plans + hours deliverables (23 Aug 2026) — leaves 1.2.2 / 1.2.3
+
+**Built**
+
+- `baskfy_core.market_hours_cb` — pure NSE session guard + closed-market payload
+- `baskfy_core.curated_plans` — invest / apply / exit desk-shaped builders (30m TTL hint)
+- `POST /api/v1/cb/plans/{invest,apply,exit}` — `PLANNED` + synthetic `cb-sim-…` desk_plan_id when open;
+  closed-market payload when shut; **no execute / OrderGateway**
+- Wired in `app.py` via import + `include_router` only
+- Tests: `test_market_hours_cb.py` [100%] · `test_curated_plans.py` [100%]
+
+**NOT done (sibling / later)**
+
+- Full SC3 AC loop (seed → invest → simulated fill → publish v2 → apply) across services
+- Persisting `cb_order_batch` / journal sync to EXECUTED
+- Web PlanHandoff / MarketClosed UI (leaf 1.5.2)
+
 ## Open items / things a future session must know
 
 1. **D3 still unanswered** (`NEEDS-MAULIK` item 13). Track C stays forbidden: no web execute, no third-party broker OAuth, no payment collection.
 2. **M41 was uncommitted when SC0 started**; commit it before SC1 so the working tree only carries SC work.
 3. Full screener suite was not re-timed this session — treat desk green + M41/nav green as the SC0 safety bar; expand before SC12.
 4. ~~`docs/smallcase/03` `cb_*` schema does not exist in Alembic yet — SC1's job.~~ **Done (0014).**
-5. Legacy `/baskets` vs explore catalog collision is deferred to SC5 (do not invent a second MomentumScan basket page in SC1–SC2 without recording the mapping).
+5. ~~Legacy `/baskets` vs explore catalog collision is deferred to SC5~~ **SC5 soft-coexist:** Explore = public catalog; `/baskets` = desk MomentumScan (banner + CTA, no hard redirect). See DECISIONS-SC SC5.
+6. Explore list filter params are documented in `DOCUMENTED_LIST_PARAMS` / DECISIONS-SC SC2 (05-ui-spec chips mapped to query names).
 
-## SC2 deliverables (23 Aug 2026)
 
-- `baskfy_core.curated_metrics` — min_amount, vol buckets (PACK.1), returns/CAGR, chain-link NAV
-- `baskfy_core.scan_projection` — deterministic SCAN → genesis version
-- `GET /api/v1/explore*` + watchlist CRUD (`routers/explore.py`); **no execute**
-- Celery Beat `curated_metrics` EOD upsert into `cb_metrics`
-- Fixture SCAN basket seed via `curated_seed`
-- Unlazy plan: `PLAN.md` + `gates/` (tree covering SC2–SC12 + integrity)
+## SC4 core accounting (leaf 1.3.1 / 1.3.2 / 1.8.5) — 23 Aug 2026
 
-**NOT done:** SC3–SC12; full CAGR history over real bars in metrics job may be stubbed to
-min_amount+vol from constituents where history is thin; web `/explore` UI is SC5.
+**Built (pure core only; no commit this leaf)**
+
+- `baskfy_core.curated_accounting` — platform fees (04 §1), money-put-in / current investment /
+  value / returns, realized PnL, ACT/365 XIRR + >365d display gate
+- `baskfy_core.curated_drift` — shortfall → DRIFT action shape; fix → synthetic EXIT + rebase
+- Tests: `test_curated_accounting.py` **21 passed**; `test_curated_drift.py` **9 passed**
+- Fee fixtures verified: BUY 6666 → 99.99+18.00=117.99; BUY 7000 → 100.00+18.00=118.00
+- XIRR hand fixtures: 0.1500 (1y); 0.0826 (irregular 3-flow)
+
+**NOT done**
+
+- API/worker fee journal writer, dividend derivation from CA × holdings, Celery drift job
+- Investor UI (SC6); Track B collection still off
+
+## SC3 versions (leaf 1.2.1) — 23 Aug 2026
+
+**Built**
+
+- `baskfy_core.curated_versions` — sequential immutable publish draft, classify
+  GENESIS/CHANGED/NO_CHANGE, `diff_holdings_vs_weights` (04 §5 value-delta floor),
+  residual cash + top-up, desk-shaped order lines, `PublishSideEffects` description
+- `baskfy_api.curated_versions` — persist version+constituents; ENGINE post +
+  `REBALANCE_AVAILABLE` + `PENDING` rebalance state; apply-preview helpers (no plan/execute)
+- Tests: core **24 passed** (`test_curated_versions.py`); API service **4 passed**
+  (`test_curated_versions_service.py`)
+
+**NOT done (sibling leaves)**
+
+- Plan generation / desk `plan_id` (1.2.2); market-hours guard (1.2.3)
+- Router wiring (parent); full DRY_RUN invest→publish→diff→apply loop (SC3 AC end-to-end)

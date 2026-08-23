@@ -91,7 +91,7 @@ test.describe("screen results materialize as basket view", () => {
 
     await expect(page.getByTestId("result-count")).toHaveText("271 matches", { timeout: 20_000 });
     await expect(page.getByTestId("view-mode-basket")).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("heading", { name: "Investing 001" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Investing 001" })).toBeVisible();
     await expect(page.getByText("Kept as cash")).toBeVisible();
   });
 });

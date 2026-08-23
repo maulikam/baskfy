@@ -754,9 +754,7 @@ class TestTheLoaderDoesNotCostTwentyTimesWhatItBuilds:
         included, because the simulation reads the panel positionally.
         """
         await _seed_market(session)
-        ids = (
-            await session.execute(select(Instrument.id).order_by(Instrument.id))
-        ).scalars().all()
+        ids = (await session.execute(select(Instrument.id).order_by(Instrument.id))).scalars().all()
         streamed = await _bar_frame(session, list(ids), START, END)
 
         statement = (
@@ -802,9 +800,7 @@ class TestTheLoaderDoesNotCostTwentyTimesWhatItBuilds:
         can change. An eviction names nothing.
         """
         await _seed_market(session)
-        ids = (
-            await session.execute(select(Instrument.id).order_by(Instrument.id))
-        ).scalars().all()
+        ids = (await session.execute(select(Instrument.id).order_by(Instrument.id))).scalars().all()
 
         # Refuses above the ceiling...
         with pytest.raises(BacktestDataError) as refused:

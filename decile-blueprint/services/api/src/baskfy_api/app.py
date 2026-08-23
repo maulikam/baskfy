@@ -67,6 +67,7 @@ from baskfy_api.routers import (
     baskets,
     billing,
     brokers,
+    curated_engage,
     curated_plans,
     desk,
     explore,
@@ -78,6 +79,7 @@ from baskfy_api.routers import (
     screens,
     sleeves,
     support,
+    track_b,
     webhook_endpoints,
 )
 from baskfy_api.schemas import HealthOut, ProblemOut
@@ -538,3 +540,7 @@ def _mount_routers(versioned: APIRouter) -> None:
     versioned.include_router(explore.router)
     # SC3: invest/apply/exit plan previews only — synthetic desk_plan_id, never execution.
     versioned.include_router(curated_plans.router)
+    # SC9: pending actions + update posts for the sole user (dismiss/resolve; no orders).
+    versioned.include_router(curated_engage.router)
+    # SC10: Track B dark surfaces — 404 while subscriptions/fee-collection/public-signup stay off.
+    versioned.include_router(track_b.router)

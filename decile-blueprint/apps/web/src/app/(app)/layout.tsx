@@ -44,8 +44,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         banner={
           bannerDismissed ? null : (
             <AnnouncementBanner id={ANNOUNCEMENT_ID} action={{ label: "Read the December 2026 update", href: "/blog" }}>
-              <strong className="font-medium">December 2026 update:</strong> dividend-adjusted
-              history, a longer backfill, and backtests are on the way.
+              <strong className="font-medium">December 2026 update:</strong> split- and
+              bonus-adjusted history, a longer backfill, and backtests are on the way.
             </AnnouncementBanner>
           )
         }

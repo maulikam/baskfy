@@ -40,6 +40,17 @@ For each rebalance date `d`:
 6. Between rebalances, mark to market daily on adjusted closes.
 7. Corporate actions are already in the adjusted series; cash dividends are optionally credited
    as cash (`dividends: "reinvest" | "cash" | "ignore"`).
+
+   > **What is actually built (M45.9).** Only the *share-count* actions are in the adjusted
+   > series: M28 applied the 47 split- and bonus-shaped ones and deliberately not the 38
+   > dividend-shaped ones, after M27 measured the convention against the reference corpus (the
+   > price convention won 42 of 45 deciding symbol-windows). `ohlcv_daily.close` is therefore a
+   > **price return**, and `ignore` — the default — is exact rather than approximate. `cash` and
+   > `reinvest` both have to add a payment back, so both need a dividend schedule that does not
+   > exist, and both are refused rather than serving a price return under a total-return name.
+   >
+   > Consequence for every number this spec produces: it is lower than the total return by roughly
+   > the dividend yield, about 1.2% a year on NSE, compounding. The assumptions panel says so.
 8. Delisting: liquidate at the last available close, credit cash, log the event. Never
    forward-fill a dead instrument (this is exactly how survivorship bias sneaks in).
 

@@ -296,20 +296,51 @@ overnight instructions permit appending to this file and no other change under `
 are collected here. **A human should move §15.1–§15.20 into that numbered file** and leave a
 pointer, so `CLAUDE.md`'s "Where things live" table can name it.
 
-### 15.1 The dividend policy default is `reinvest`, and `cash`/`ignore` are refused today
+### 15.1 The dividend policy default is `ignore`, and `cash`/`reinvest` are refused today
+
+> **Reversed at M39, and this entry was left standing for months after it stopped being true.**
+> Corrected 23 August 2026 (M45.9). The original text is preserved below the rule, because it is
+> the premise four user-facing surfaces were written from and a reader who finds one of those
+> should be able to see where it came from.
 
 `docs/10` §"Execution model" step 7 offers `dividends: "reinvest" | "cash" | "ignore"` and says
 "Corporate actions are already in the adjusted series; cash dividends are optionally credited as
-cash". Those two sentences cannot both be acted on with the series this repository stores.
-`docs/09`'s adjustment algorithm — implemented in `decile_core.adjustments` — folds **cash
-dividends** into `adj_factor` alongside splits and bonuses, so `ohlcv_daily.close` is already a
-*total-return* series. Crediting the dividend as cash on top of it counts it twice.
+cash". What the series actually contains was an open question until it was measured.
 
-**Chosen:** `reinvest` marks to the adjusted series as-is, which is exactly what back-adjustment
-models, and is the default. `cash` and `ignore` are implemented in the engine against a
-dividend-stripped price series (`price_open`/`price_close` on the panel) and are **refused with a
-`BacktestConfigError`** until a loader supplies one, rather than being silently served as
-`reinvest`. `decile_worker.backtest` does not build that series today. See `DividendPolicy`.
+M27 put it to the reference corpus: the **price** convention won 42 of 45 deciding symbol-windows
+and matched all 25 dividend-paying symbols exactly at stored precision. M28 then applied the 47
+share-count actions and deliberately **not** the 38 dividend-shaped ones
+(`reconciliation/RECOVERED-ACTIONS.md`, "VERDICT: PRICE RETURN").
+
+So `ohlcv_daily.close` is a **price-return** series: splits and bonuses are inside it, cash
+dividends are not.
+
+**Chosen:** `ignore` is the default. It is exact, needs no extra data, and is what the engine has
+always actually computed — until M39 it was doing precisely this under the name `reinvest`, which
+is why the pre-M39 read shim rewrites the label and the arithmetic is bit-identical. `cash` and
+`reinvest` both have to *add* a dividend back, so both need a dividend schedule, and both are
+**refused with a `BacktestConfigError`** rather than quietly serving a price return under a
+total-return name. See `DividendPolicy`, and `docs/DECISIONS-MERGE.md` §M39.3 and §M43.
+
+Every return this product publishes is therefore a price return, and is lower than a total return
+by roughly the dividend yield — about 1.2% a year on NSE, compounding. Any new surface that shows
+a return owes the reader that sentence.
+
+<details><summary>Superseded original (pre-M39)</summary>
+
+> Those two sentences cannot both be acted on with the series this repository stores. `docs/09`'s
+> adjustment algorithm — implemented in `decile_core.adjustments` — folds **cash dividends** into
+> `adj_factor` alongside splits and bonuses, so `ohlcv_daily.close` is already a *total-return*
+> series. Crediting the dividend as cash on top of it counts it twice.
+>
+> **Chosen:** `reinvest` marks to the adjusted series as-is, which is exactly what back-adjustment
+> models, and is the default. `cash` and `ignore` are implemented in the engine against a
+> dividend-stripped price series (`price_open`/`price_close` on the panel) and are **refused with
+> a `BacktestConfigError`** until a loader supplies one.
+
+The measurement that overturned it is M27/M28; the belief was never tested when it was written.
+
+</details>
 
 ### 15.2 Prices are float for lookup, `Decimal` for every rupee that moves
 
@@ -452,8 +483,9 @@ estimates") and **does not exist yet**.
 
 ### 15.20 What is **not** built
 
-* **No `price_open`/`price_close` loader**, so `dividends: "cash"` and `dividends: "ignore"` are
-  refused end to end (§15.1). Only `reinvest` runs.
+* **No dividend schedule**, so `dividends: "cash"` and `dividends: "reinvest"` are refused end to
+  end (§15.1). Only `ignore` runs — which is exact, because the stored series is a price return.
+  Corrected at M45.9; this line had the two sets of policies the wrong way round since M39.
 * **No Parquet export.** `docs/07` offers "CSV/Parquet"; only CSV is served (§15.15).
 * **No artefact retention sweeper** (§15.19).
 * **No Playwright coverage.** The engine, the loader, the job, the endpoints and the React

@@ -12,9 +12,9 @@ about what is NOT done. A fresh session resumes from the first module not marked
 | SC0 — Baseline and read-in | ✅ | Baselines recorded; desk 1328 passed; DRY_RUN=true; M41 catalog uncommitted at start |
 | SC1 — Schema and domain objects | ✅ | 18 `cb_*` tables + migration 0014; domain asserts; manager seed; tests green |
 | SC2 — Catalog computation and API | ✅ | Pure metrics + `/explore` API + Beat `cb-eod-metrics` + SCAN seed; 26 tests green |
-| SC3 — Versions, rebalance engine, plans | 🔄 | Leaves 1.2.1–1.2.3 green: versions publish/diff + `/cb/plans/{invest,apply,exit}` + `market_hours_cb`; module glue/AC loop still open |
-| SC4 — Investment accounting | 🔄 | Core pure math green: fees/XIRR/ledgers (21) + drift (9); service/job/dividends still open |
-| SC5 — Web UI: discovery and detail | 🔄 | `/explore` + `/basket/[slug]` + soft `/baskets` banner; SC5 DECISIONS ⚠ UNREVIEWED |
+| SC3 — Versions, rebalance engine, plans | ✅ | Diff/versions + market hours + plan preview API (`cb-sim-*`); no OrderGateway |
+| SC4 — Investment accounting | ✅ | Fees 6666/7000, XIRR 4dp, ledgers, drift rebase; pure core |
+| SC5 — Web UI: discovery and detail | ✅ | `/explore`, `/basket/[slug]`, PlanHandoff stubs; `/baskets` soft-coexist |
 | SC6 — Web UI: investor surfaces | ⬜ | |
 | SC7 — SIP reminders | ⬜ | |
 | SC8 — Create and customize | ⬜ | |

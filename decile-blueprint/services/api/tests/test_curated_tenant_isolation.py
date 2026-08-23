@@ -16,6 +16,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import Select
 
 from baskfy_api import curated_tenant
+from baskfy_api.problems import Problem
 from baskfy_api.curated_tenant import (
     investments_for_user_stmt,
     scoped_sole_user_id,
@@ -64,10 +65,23 @@ def test_watchlist_and_investment_stmts_always_filter_user_id() -> None:
 
 
 @pytest.mark.asyncio
-async def test_scoped_sole_collapses_foreign_principal(
+async def test_scoped_sole_refuses_a_foreign_principal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Another authenticated user_id still resolves to the sole tenant (Track A)."""
+    """A principal that is not the sole tenant is refused, not promoted to it (M43.4).
+
+    This test asserted the opposite until M43.4 — that a foreign principal "still resolves to
+    the sole tenant" — and that assertion was the vulnerability written down as a specification.
+    `POST /auth/register` is ungated, so anybody who could reach the API could create an account
+    and be collapsed onto the operator.
+
+    Proved by execution before the change: sole tenant 43, a freshly registered account 44,
+    `scoped_sole_user_id(session, 44) -> 43`, and `GET /watchlist` with that account's token
+    answering 200 with the operator's rows. After: 404 on both the read and the delete.
+
+    Sole-tenant means one tenant. Refusing is the honest expression of that, and it is what Law
+    2's multi-tenant clause says to do with a mismatch.
+    """
     sole = 7
     foreign = 1001
 
@@ -76,16 +90,30 @@ async def test_scoped_sole_collapses_foreign_principal(
 
     monkeypatch.setattr(curated_tenant, "resolve_sole_user_id", _fake_resolve)
     session = AsyncMock()
-    assert await scoped_sole_user_id(session, foreign) == sole
+
+    with pytest.raises(Problem) as refused:
+        await scoped_sole_user_id(session, foreign)
+    assert refused.value.status == 404, "a 403 would confirm the surface holds somebody's data"
+
+    # The sole tenant itself, and an unauthenticated internal caller, are unaffected.
     assert await scoped_sole_user_id(session, sole) == sole
     assert await scoped_sole_user_id(session, None) == sole
 
 
 @pytest.mark.asyncio
-async def test_another_user_id_cannot_see_sole_watchlist_rows(
+async def test_a_foreign_principal_never_reaches_a_query_at_all(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """List path scopes to sole_user; foreign principal never queries another user's rows."""
+    """M43.4 strengthened this from "scopes to sole_user" to "never runs".
+
+    It used to assert that a foreign principal's list query compiled with ``user_id = 42`` and
+    returned nothing. That reads as isolation and is the opposite: the query WAS the sole
+    tenant's, and it came back empty only because the mock had no rows. Against a real database
+    it returned the operator's watchlist — measured, 200 with their rows.
+
+    The stronger property is that the handler refuses before it builds a statement, so there is
+    no query to inspect and nothing that could return the wrong rows.
+    """
     sole = 42
     foreign = 99
     captured: list[object] = []
@@ -106,6 +134,13 @@ async def test_another_user_id_cannot_see_sole_watchlist_rows(
     principal = MagicMock()
     principal.user_id = foreign
 
+    with pytest.raises(Problem) as refused:
+        await explore.list_watchlist(session, principal)
+    assert refused.value.status == 404
+    assert captured == [], "the handler must refuse before it queries anything"
+
+    # And the sole tenant itself still gets a properly scoped statement.
+    principal.user_id = sole
     out = await explore.list_watchlist(session, principal)
     assert out.count == 0
     assert len(captured) == 1

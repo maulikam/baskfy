@@ -169,8 +169,9 @@ test.describe("explore → invest hand-off", () => {
     expect(usedFixture).toBe(true);
     await mountHandoffFixture(page);
     // Touch a mocked explore URL so page.route is exercised even on the fixture path.
-    // Typed rather than `any`: res.json() is Promise<any>, and every access off it was an
-    // unsafe-member-access. The shape asserted below is the only part this test needs.
+    // Typed rather than left loose: res.json() is untyped, so every member access off it
+    // tripped the unsafe-member-access rule. The shape below is the only part this test
+    // needs, and naming it is cheaper than widening the lint.
     const listed = await page.evaluate<{ total: number; items: { slug: string }[] }>(async () => {
       const res = await fetch("/api/v1/explore");
       return (await res.json()) as { total: number; items: { slug: string }[] };

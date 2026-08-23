@@ -16,7 +16,8 @@ export function SearchButton() {
     <Button
       variant="outline"
       size="sm"
-      className="w-40 justify-start gap-2 font-normal text-muted-foreground lg:w-56"
+      aria-label="Search stocks, indices, baskets, and screens"
+      className="w-10 justify-center gap-2 px-0 font-normal text-muted-foreground sm:w-40 sm:justify-start sm:px-3 lg:w-56"
       onClick={() => {
         document.dispatchEvent(
           new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }),
@@ -24,7 +25,7 @@ export function SearchButton() {
       }}
     >
       <Search aria-hidden="true" />
-      <span className="flex-1 text-left">Search any stock…</span>
+      <span className="hidden flex-1 text-left sm:inline">Search…</span>
       <kbd className="hidden rounded border border-border px-1 text-[10px] font-medium lg:inline">
         ⌘K
       </kbd>

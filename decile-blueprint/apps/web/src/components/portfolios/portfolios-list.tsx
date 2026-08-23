@@ -6,11 +6,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { Disclaimer } from "@/components/data/disclaimer";
 import { EmptyState } from "@/components/data/empty-state";
 import { ErrorState } from "@/components/data/error-state";
 import { UploadCard } from "@/components/portfolios/upload-card";
 import { PageHeader } from "@/components/shell/page-header";
+import { SectionTabs } from "@/components/shell/section-tabs";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -59,9 +59,10 @@ export function PortfoliosList({ initial, error }: PortfoliosListProps) {
 
   return (
     <div className="space-y-8">
+      <SectionTabs section="me" />
       <PageHeader
-        title={PAGES["/portfolios"].title}
-        blurb={PAGES["/portfolios"].blurb}
+        title={PAGES["/me/portfolios"].title}
+        blurb={PAGES["/me/portfolios"].blurb}
         actions={
           <Button
             variant={showUpload ? "outline" : "primary"}
@@ -197,8 +198,6 @@ export function PortfoliosList({ initial, error }: PortfoliosListProps) {
           </div>
         </DialogContent>
       </Dialog>
-
-      <Disclaimer />
     </div>
   );
 }

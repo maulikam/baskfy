@@ -41,9 +41,10 @@ export interface UserMenuProps {
   isStaff?: boolean;
 }
 
-/** docs/08's Account and Help groups, drawn here since M36 rather than in a rail. */
-const ACCOUNT_AND_HELP = NAV_GROUPS.filter(
-  (group) => group.label === "Account" || group.label === "Help",
+/** Real money (desk read-only) + Account + Help — secondary chrome since Tree 6. */
+const MENU_GROUPS = NAV_GROUPS.filter(
+  (group) =>
+    group.label === "Real money" || group.label === "Account" || group.label === "Help",
 );
 
 export function UserMenu({ email, name, isStaff = false }: UserMenuProps) {
@@ -72,7 +73,7 @@ export function UserMenu({ email, name, isStaff = false }: UserMenuProps) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="my-1 h-px bg-border" />
 
-        {ACCOUNT_AND_HELP.map((group) => (
+        {MENU_GROUPS.map((group) => (
           <div key={group.label}>
             <DropdownMenuLabel className="pt-1 text-[11px] font-medium tracking-[0.04em]">
               {group.label}

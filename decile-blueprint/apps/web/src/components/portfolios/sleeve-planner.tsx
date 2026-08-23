@@ -5,7 +5,6 @@ import { Plus, Trash2 } from "lucide-react";
 import { parseAsBoolean, useQueryState } from "nuqs";
 import { useState } from "react";
 
-import { Disclaimer } from "@/components/data/disclaimer";
 import { ErrorState } from "@/components/data/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -389,9 +388,7 @@ export function SleevePlanner({
 
       <p className="text-xs text-muted-foreground">
         Amounts and target weights only — no share counts, and nothing here places an order.
-        Execution is in the desk console.
       </p>
-      <Disclaimer />
     </div>
   );
 }

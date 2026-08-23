@@ -12,6 +12,7 @@ import {
   type ColumnMeta,
   type ResultRow,
 } from "@/components/screens/result-columns";
+import { ScreenBasketView } from "@/components/screens/screen-basket-view";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -47,6 +48,10 @@ export interface ResultsPanelProps {
   onLoosenFilters: (() => void) | undefined;
   actions?: React.ReactNode;
   className?: string;
+  /** Basket view title — defaults to "Screen basket". */
+  screenName?: string;
+  /** Top-N for materialization (screen setting / default 20). */
+  topN?: number;
 }
 
 const TABLE_HEIGHT = 560;
@@ -62,6 +67,8 @@ export function ResultsPanel({
   onLoosenFilters,
   actions,
   className,
+  screenName = "Screen basket",
+  topN = 20,
 }: ResultsPanelProps) {
   const [density, setDensity] = useState<Density>("comfortable");
   const [peeked, setPeeked] = useState<ResultRow | null>(null);
@@ -96,7 +103,7 @@ export function ResultsPanel({
           Results are shown for {formatTradeDate(result?.as_of ?? null)}
         </p>
         <p className="text-sm text-muted-foreground" data-testid="sorting-factor">
-          Sorting Factor Column&rsquo;s Value = {result?.sorting_factor.label ?? "—"}
+          Ranked by {result?.sorting_factor.label ?? "—"}
         </p>
         {isFetching && !isPending ? (
           <Badge variant="accent" data-testid="updating-pill">
@@ -128,6 +135,24 @@ export function ResultsPanel({
               : undefined
           }
         />
+      ) : result && !isPending ? (
+        <ScreenBasketView
+          result={result}
+          screenName={screenName}
+          topN={topN}
+          table={
+            <DataTable
+              data={rows}
+              columns={columns}
+              label={`Screen results, ${result.result_count} rows`}
+              density={density}
+              loading={false}
+              height={TABLE_HEIGHT}
+              repeatHeaderEvery={0}
+              onRowActivate={setPeeked}
+            />
+          }
+        />
       ) : (
         <DataTable
           data={rows}
@@ -136,6 +161,7 @@ export function ResultsPanel({
           density={density}
           loading={isPending}
           height={TABLE_HEIGHT}
+          repeatHeaderEvery={0}
           onRowActivate={setPeeked}
         />
       )}

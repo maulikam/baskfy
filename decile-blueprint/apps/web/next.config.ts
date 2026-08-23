@@ -67,6 +67,27 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   /*
+   * Tree 6 IA: old consumer paths → Market · Baskets · Build · Me hubs.
+   * `/baskets` itself is the new catalog (no redirect); featured lives at `/baskets/featured`.
+   */
+  async redirects() {
+    return [
+      { source: "/dashboard", destination: "/market/today", permanent: true },
+      { source: "/market-health", destination: "/market/mood", permanent: true },
+      { source: "/listings", destination: "/market/listings", permanent: true },
+      { source: "/explore", destination: "/baskets", permanent: true },
+      { source: "/screens", destination: "/build", permanent: true },
+      { source: "/screens/:id", destination: "/build/:id", permanent: true },
+      { source: "/screens/:id/columns", destination: "/build/:id/columns", permanent: true },
+      { source: "/backtests", destination: "/build/backtests", permanent: true },
+      { source: "/backtests/:id", destination: "/build/backtests/:id", permanent: true },
+      { source: "/investments", destination: "/me/investments", permanent: true },
+      { source: "/investments/:path*", destination: "/me/investments/:path*", permanent: true },
+      { source: "/portfolios", destination: "/me/portfolios", permanent: true },
+      { source: "/watchlist", destination: "/me/watchlist", permanent: true },
+    ];
+  },
+  /*
    * The package's own imports are written with the `.js` extensions that NodeNext resolution
    * requires of ESM. The files on disk are `.ts`, so webpack is told the mapping explicitly.
    */

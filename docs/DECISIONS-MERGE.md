@@ -3213,3 +3213,30 @@ caught real defects are the two nights a *different* session was reading. Record
 lesson is about the phrase, not about three comments.
 
 **Reversal.** None wanted.
+
+### Tree6.1 Nav IA collapse + path reuse · ⚠ UNREVIEWED
+
+**Context.** `baskfynavrefactorreport.md` asks for `/baskets` as the catalog and a permanent
+redirect from old `/baskets` (MomentumScan) to `/baskets/featured`. Those two cannot both be true
+for the same path.
+
+**Taken.** `/baskets` is the catalog; featured lives at `/baskets/featured`. `/explore` 301s to
+`/baskets`. No 301 from `/baskets`→`/featured`. Section tabs make Featured one click away.
+
+**Rejected.** Keeping MomentumScan at `/baskets` forever (fails the IA collapse). A cookie-based
+redirect for “old bookmarks” (fragile, surprising).
+
+**Reversal.** Add a time-boxed redirect middleware if analytics show old bookmarks still dominate.
+
+### Tree6.2 Screen→basket persistence is a UI projection · ⚠ UNREVIEWED
+
+**Context.** Report §5.2 wants `basket.source = screen:{id}` on save. That needs a curated-basket
+API field and worker job.
+
+**Taken.** Saved screens render as `BasketCard`s on `/build` and under “Auto — from your screens”
+on `/baskets`. Run materializes equal-weight + 5% cash in the UI (`materializeBasket`). No new
+order path.
+
+**Rejected.** Blocking Tree 6 on a new DB column/migration in this session.
+
+**Reversal.** Add `source` on curated baskets and upsert on screen save; keep the same card UI.

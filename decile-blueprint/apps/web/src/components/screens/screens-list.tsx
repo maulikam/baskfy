@@ -6,10 +6,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { Disclaimer } from "@/components/data/disclaimer";
+import { BasketCard } from "@/components/basket/basket-card";
 import { EmptyState } from "@/components/data/empty-state";
 import { ErrorState } from "@/components/data/error-state";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,6 +27,7 @@ import {
 import { defaultDefinition } from "@/lib/screens/defaults";
 import { parseDefinition } from "@/lib/screens/url-state";
 import { PageHeader } from "@/components/shell/page-header";
+import { SectionTabs } from "@/components/shell/section-tabs";
 import { PAGES } from "@/lib/vocabulary";
 
 /**
@@ -79,13 +79,13 @@ export function ScreensList({ initial, error }: ScreensListProps) {
       definition: defaultDefinition(),
     });
     setScreens((current) => [...current, created]);
-    router.push(`/screens/${created.public_id}` as never);
+    router.push(`/build/${created.public_id}` as never);
   }
 
   async function duplicateScreen(screen: ScreenOut) {
     const copy = await duplicate.mutateAsync(screen.public_id);
     setScreens((current) => [...current, copy]);
-    router.push(`/screens/${copy.public_id}` as never);
+    router.push(`/build/${copy.public_id}` as never);
   }
 
   async function confirmDelete(screen: ScreenOut) {
@@ -96,9 +96,10 @@ export function ScreensList({ initial, error }: ScreensListProps) {
 
   return (
     <div className="space-y-10">
+      <SectionTabs section="build" />
       <PageHeader
-        title={PAGES["/screens"].title}
-        blurb={PAGES["/screens"].blurb}
+        title={PAGES["/build"].title}
+        blurb={PAGES["/build"].blurb}
         actions={
           <Button
             variant="primary"
@@ -111,7 +112,7 @@ export function ScreensList({ initial, error }: ScreensListProps) {
             New search
           </Button>
         }
-        meta="Six ready-made searches you can copy and change, plus every one you save."
+        meta="Saved screens show as baskets. Open one to run it — the result is an investable basket by default."
       />
 
       {create.error ? <ErrorState error={create.error} /> : null}
@@ -119,12 +120,12 @@ export function ScreensList({ initial, error }: ScreensListProps) {
       {remove.error ? <ErrorState error={remove.error} /> : null}
 
       <Section
-        title="Your searches"
+        title="Your baskets"
         testId="your-screens"
         empty={
           <EmptyState
             title="Nothing saved yet"
-            reason="Anything you save shows up here. The quickest start is to copy one of the ready-made searches below — you get the same rules, in a copy that is yours to change."
+            reason="Anything you save shows up here as a basket. The quickest start is to copy one of the ready-made templates below."
           />
         }
         screens={mine}
@@ -136,7 +137,7 @@ export function ScreensList({ initial, error }: ScreensListProps) {
       />
 
       <Section
-        title="Ready-made searches"
+        title="Templates"
         testId="example-screens"
         screens={examples}
         factorLabel={factorLabel}
@@ -173,8 +174,6 @@ export function ScreensList({ initial, error }: ScreensListProps) {
           </div>
         </DialogContent>
       </Dialog>
-
-      <Disclaimer />
     </div>
   );
 }
@@ -255,68 +254,48 @@ function ScreenCard({
   onDelete,
 }: ScreenCardProps) {
   const definition = parseDefinition(screen.definition);
+  const thesis = `${universeName(definition.index)} · ranked by ${factorLabel(definition.sort_by)} · ${directionLabel(definition)}`;
 
   return (
-    <article
-      data-testid="screen-card"
-      data-screen={screen.public_id}
-      className="flex h-full flex-col gap-3 rounded-md border border-border bg-card p-4"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="font-medium leading-tight">
-          <Link
-            href={`/screens/${screen.public_id}`}
-            className="underline-offset-4 hover:underline"
-          >
-            {screen.name}
-          </Link>
-        </h3>
-        {screen.is_example ? <Badge>Template</Badge> : null}
-      </div>
-
-      <dl className="space-y-1 text-xs text-muted-foreground">
-        <div className="flex gap-2">
-          <dt className="w-[5.5rem] shrink-0">Stock list</dt>
-          <dd className="truncate text-foreground">{universeName(definition.index)}</dd>
-        </div>
-        <div className="flex gap-2">
-          <dt className="w-[5.5rem] shrink-0">Ranked by</dt>
-          {/* Sentence case: the registry stores these shouted, and a card of three ALL-CAPS
-              values reads as an error message rather than as a description. */}
-          <dd className="truncate text-foreground first-letter:uppercase lowercase">
-            {factorLabel(definition.sort_by)}
-          </dd>
-        </div>
-        <div className="flex gap-2">
-          <dt className="w-[5.5rem] shrink-0">Best first</dt>
-          <dd className="truncate text-foreground">{directionLabel(definition)}</dd>
-        </div>
-      </dl>
-
-      <div className="mt-auto flex flex-wrap gap-2 pt-1">
-        <Button variant="outline" size="sm" asChild>
-          <Link href={`/screens/${screen.public_id}`}>
-            <Play aria-hidden="true" />
-            Run
-          </Link>
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => onDuplicate(screen)}>
-          <Copy aria-hidden="true" />
-          Duplicate
-        </Button>
-        {screen.editable ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-negative hover:bg-negative-muted"
-            data-testid="delete-screen"
-            onClick={() => onDelete(screen)}
-          >
-            <Trash2 aria-hidden="true" />
-            Delete
-          </Button>
-        ) : null}
-      </div>
-    </article>
+    <div data-testid="screen-card" data-screen={screen.public_id}>
+      <BasketCard
+        basket={{
+          name: screen.name,
+          thesis,
+          href: `/build/${screen.public_id}`,
+          badge: screen.is_example ? "Template" : "Auto — from your screens",
+          minAmount: null,
+        }}
+        actions={
+          <>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/build/${screen.public_id}` as never}>
+                <Play aria-hidden="true" />
+                View
+              </Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href={`/build/backtests?screen=${screen.public_id}` as never}>Backtest</Link>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => onDuplicate(screen)}>
+              <Copy aria-hidden="true" />
+              Duplicate
+            </Button>
+            {screen.editable ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-negative hover:bg-negative-muted"
+                data-testid="delete-screen"
+                onClick={() => onDelete(screen)}
+              >
+                <Trash2 aria-hidden="true" />
+                Delete
+              </Button>
+            ) : null}
+          </>
+        }
+      />
+    </div>
   );
 }

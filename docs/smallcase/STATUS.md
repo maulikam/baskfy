@@ -351,12 +351,26 @@ really a 500. `test_explore_http.py` asserts at the boundary instead.
      fragility payload. What is missing is the wire and the template — it appears in neither
      `packages/api-client/src/generated/schema.ts` nor `fragility-panel.tsx` (0 occurrences in
      each, checked), so it still does not reach a human.
-  2. It quoted **98.7%**, measured against the pre-M45 guard. M45 found that guard was checking
-     one of the two tables a screen needs — `factor_daily` reaches 2017 while
-     `index_member_daily` starts 2021-08-02 — so the passing population changed. Re-measured
-     against the new guard on the live database, monthly over 2021-08-02→2026-08-19: 61
-     rebalance dates, **7** pass the guard, and **7 of 7** have a −1 or +1 day missing factors
-     or membership. **100% of runnable dates, on a much smaller population.** The finding is
-     stronger, not weaker.
+  2. It quoted **98.7%**, measured against the pre-M45 guard, and then **100% of 7** after I
+     re-measured against the new one. Both are superseded. The backtesting session re-measured
+     independently, checking *each* neighbour rather than whether either was missing, monthly
+     over 2021-08-02→2026-12-31 on the live database:
+
+     | | |
+     |---|---|
+     | monthly rebalance dates in span | 66 |
+     | pass the M45 guard | 15 |
+     | of those, at least one offset blind | **15 (100%)** |
+     | of those, **both** offsets blind | **15 (100%)** |
+
+     Not one neighbour missing — both, on every runnable date. My measurement could not have
+     told those apart, because I only asked whether either was missing. Their figure stands.
+
+  **And the cause changes what this is.** `factor_daily` and `index_member_daily` are **weekly**
+  series; the dominant gap between sampled dates is five sessions. A neighbouring trading day has
+  no factor rows *by construction*. So `docs/10`'s ±1 trading-day probe is asking the data plant
+  for something it does not produce, and no widening of the coverage guard can satisfy it. This
+  is a `docs/10` problem, not a `backtest.py` one, and it does not close when the backfill
+  finishes.
 
   Owner: the backtesting tree, not this one, and it is on that session's list.

@@ -47,36 +47,86 @@ export interface PageVocabulary {
  * default.
  */
 export const PAGES = {
+  /* —— Tree 6 canonical hubs (label = route section = tab title) —— */
+  "/market/today": {
+    title: "Today · Market",
+    blurb: "Every NSE index, and how each one moved.",
+    formerly: "Dashboard",
+  },
+  "/market/mood": {
+    title: "Mood · Market",
+    blurb: "Is the whole market rising, or only the headline names?",
+    formerly: "Market Health",
+  },
+  "/market/listings": {
+    title: "Listings · Market",
+    blurb: "Companies that have recently joined the exchange.",
+    formerly: "Listings",
+  },
+  "/baskets": {
+    title: "Explore · Baskets",
+    blurb: "Browse curated baskets by cost, swing, and how they have moved so far.",
+    formerly: "Explore",
+  },
+  "/baskets/featured": {
+    title: "Featured · Baskets",
+    blurb: "The names the strategy ranks highest right now, and the weight each would carry.",
+    formerly: "Today's basket",
+  },
+  "/build": {
+    title: "Screens · Build",
+    blurb: "Set the rules you care about, and see which stocks meet them.",
+    formerly: "Screens",
+  },
+  "/build/backtests": {
+    title: "Backtests · Build",
+    blurb: "Run a set of rules against the past and see how it would have gone.",
+    formerly: "Backtests",
+  },
+  "/me/investments": {
+    title: "Investments · Me",
+    blurb: "Baskets you hold, what they are worth, and what still needs a decision.",
+  },
+  "/me/portfolios": {
+    title: "Portfolios · Me",
+    blurb: "What you hold, and what would change if you rebalanced today.",
+    formerly: "Rebalance Tracker",
+  },
+  "/me/watchlist": {
+    title: "Watchlist · Me",
+    blurb: "Baskets you are keeping an eye on, and how they have moved since you added them.",
+  },
+  /* —— Legacy path keys kept so redirects and residual imports still resolve —— */
   "/dashboard": {
-    title: "Market today",
+    title: "Today · Market",
     blurb: "Every NSE index, and how each one moved.",
     formerly: "Dashboard",
   },
   "/market-health": {
-    title: "Market mood",
+    title: "Mood · Market",
     blurb: "Is the whole market rising, or only the headline names?",
     formerly: "Market Health",
   },
   "/screens": {
-    title: "Stock finder",
+    title: "Screens · Build",
     blurb: "Set the rules you care about, and see which stocks meet them.",
     formerly: "Screens",
   },
   "/portfolios": {
-    title: "My portfolios",
+    title: "Portfolios · Me",
     blurb: "What you hold, and what would change if you rebalanced today.",
     formerly: "Rebalance Tracker",
   },
   "/explore": {
-    title: "Explore",
+    title: "Explore · Baskets",
     blurb: "Browse curated baskets by cost, swing, and how they have moved so far.",
   },
   "/investments": {
-    title: "Investments",
+    title: "Investments · Me",
     blurb: "Baskets you hold, what they are worth, and what still needs a decision.",
   },
   "/watchlist": {
-    title: "Watchlist",
+    title: "Watchlist · Me",
     blurb: "Baskets you are keeping an eye on, and how they have moved since you added them.",
   },
   "/fees": {
@@ -87,18 +137,13 @@ export const PAGES = {
     title: "Create a basket",
     blurb: "Pick at least two stocks, set weights, and save a private basket only you can see.",
   },
-  "/baskets": {
-    title: "Today's basket",
-    blurb: "The names the strategy ranks highest right now, and the weight each would carry.",
-    formerly: "Baskets",
-  },
   "/backtests": {
-    title: "Time machine",
+    title: "Backtests · Build",
     blurb: "Run a set of rules against the past and see how it would have gone.",
     formerly: "Backtests",
   },
   "/listings": {
-    title: "New listings",
+    title: "Listings · Market",
     blurb: "Companies that have recently joined the exchange.",
     formerly: "Listings",
   },

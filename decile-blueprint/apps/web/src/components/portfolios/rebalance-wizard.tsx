@@ -5,7 +5,6 @@ import { History, Play } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
-import { Disclaimer } from "@/components/data/disclaimer";
 import { ErrorState } from "@/components/data/error-state";
 import { BufferExplainer } from "@/components/portfolios/buffer-explainer";
 import { ResultColumn } from "@/components/portfolios/result-column";
@@ -214,8 +213,6 @@ export function RebalanceWizard({ portfolioId, initial }: RebalanceWizardProps) 
         rows={history.data?.data ?? []}
         loading={history.isLoading}
       />
-
-      <Disclaimer />
     </div>
   );
 }

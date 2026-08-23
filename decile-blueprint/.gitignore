@@ -9,6 +9,9 @@ __pycache__/
 htmlcov/
 dist/
 build/
+# Tree 6: App Router hub `/build` must not match the Python `build/` ignore.
+!apps/web/src/app/(app)/build/
+!apps/web/src/app/(app)/build/**
 *.egg-info/
 .next/
 .turbo/

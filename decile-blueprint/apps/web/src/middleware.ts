@@ -36,7 +36,9 @@ const GATED_PREFIXES = [
   "/profile",
   "/change-password",
   "/portfolios",
+  "/me/portfolios",
   "/backtests",
+  "/build/backtests",
   "/invoices",
   // Prompt 17 §4. This only checks that *a* session cookie exists; whether it is a **staff**
   // session is decided by `require_staff` on the API, which answers 404. So a signed-in

@@ -232,3 +232,38 @@ get written UNREVIEWED decisions or ABANDON with NEEDS-MAULIK — never silent.
 - 2026-08-23T04:07Z Tree 4 parent verified; TREE4-BACKLOG-REPORT; push ABANDON #14
 - 2026-08-23T08:55Z Tree 5 RSC perf: gates written; implementing timed server fetch
 - 2026-08-23T09:02Z Tree 5 / tree-6 worker: `server-fetch.ts` (2500ms) + timed explore/investments/basket/desk/`fetchMe`/`serverApi`; API baskets `wait_for` 3s; Suspense in `(app)/layout`; warm curl explore/investments/watchlist/baskets ≤0.52s; gates leaf-5.* + node-5 + GATES.md checked 7/7 leaves; ledger 7 of 7
+
+---
+
+# Tree 6 — Nav / product IA refactor (Market · Baskets · Build · Me)
+
+Depth: 4 · Mode: orchestrated (driver implements leaves sequentially; ownership below)
+Spec: `baskfynavrefactorreport.md`
+
+## Contract
+
+- No web execute / OrderGateway.
+- Preserve desk operator paths under Real money (user menu); primary consumer IA is 4 items.
+- Design: keep existing `--brand` filled pill; sliding pill via CSS (no new framer-motion dep — docs/02 locked stack).
+- `/baskets` becomes catalog; featured MomentumScan moves to `/baskets/featured`. **No permanent redirect from `/baskets`→`/featured`** (path reuse); `/explore` 301s to `/baskets`. Recorded UNREVIEWED in DECISIONS-MERGE.
+- Screen→linked basket persistence is **UI projection** (saved screens render as BasketCards; materialize on run). Full `basket.source=screen:{id}` API deferred — UNREVIEWED.
+- Commits: `UI: green — Market·Baskets·Build·Me nav and basket-first screens` when node-6 green.
+
+### Ownership
+| Leaf | Owns |
+|---|---|
+| 6.1 nav shell | `nav.ts`, `top-nav.tsx`, `bottom-tab-bar.tsx`, `app-shell.tsx`, `nav.test.ts` |
+| 6.2 routes/titles | `vocabulary.ts`, `next.config.ts` redirects, new `market/` `build/` `me/` `baskets/featured` pages + section-tabs, page metadata |
+| 6.3 double-render/jargon | remove page-level Disclaimer dups; featured/jargon copy; `jargon-ban.test.ts` |
+| 6.4 basket materialize | `components/basket/*`, `lib/basket/materialize.ts`, results-panel toggle, build list cards, auto section |
+
+## Tree
+- 6 Nav IA ........................................ gates/node-6.md
+  - 6.1 Nav shell + IA ............................ gates/leaf-6.1-nav-shell.md
+  - 6.2 Routes + titles ........................... gates/leaf-6.2-routes-titles.md
+  - 6.3 Double-render + jargon .................... gates/leaf-6.3-double-render-jargon.md
+  - 6.4 Basket materialize ........................ gates/leaf-6.4-basket-materialize.md
+
+## Status log
+- 2026-08-23T10:10Z Tree 6 plan+gates written; implementing leaves 6.1–6.4
+- 2026-08-23T10:55Z Tree 6 leaves 6.1–6.4 implemented; vitest nav+jargon+materialize+read-only 24 passed; committing UI: green

@@ -7,10 +7,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ConfigForm } from "@/components/backtests/config-form";
-import { Disclaimer } from "@/components/data/disclaimer";
 import { EmptyState } from "@/components/data/empty-state";
 import { ErrorState } from "@/components/data/error-state";
 import { PageHeader } from "@/components/shell/page-header";
+import { SectionTabs } from "@/components/shell/section-tabs";
 import { PAGES } from "@/lib/vocabulary";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,9 +57,10 @@ export function BacktestsList({
 
   return (
     <div className="space-y-8">
+      <SectionTabs section="build" />
       <PageHeader
-        title={PAGES["/backtests"].title}
-        blurb={PAGES["/backtests"].blurb}
+        title={PAGES["/build/backtests"].title}
+        blurb={PAGES["/build/backtests"].blurb}
         actions={
           <Button
             variant={showForm ? "outline" : "primary"}
@@ -164,8 +165,6 @@ export function BacktestsList({
           </table>
         </div>
       )}
-
-      <Disclaimer variant="block" />
     </div>
   );
 }

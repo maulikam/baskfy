@@ -277,7 +277,7 @@ export function CreateBasketForm() {
             ))}
           </ul>
           <p className="mt-2 text-muted-foreground">
-            Weights sum to 1.0. Invest later via the desk plan hand-off — this page never
+            Weights sum to 1.0. Invest later via the order-plan hand-off — this page never
             places an order.
           </p>
         </div>

@@ -125,7 +125,7 @@ export default async function PlanPage() {
       </nav>
 
       <p className="text-xs text-muted-foreground">
-        This page is read-only. Orders are placed from the desk console and nowhere else.
+        This page is read-only. Orders are placed elsewhere — nothing here can buy or sell.
       </p>
     </div>
   );

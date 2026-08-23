@@ -1,24 +1,25 @@
 "use client";
 
 import type { ScreenOut, StatusOut } from "@baskfy/api-client";
-import { CalendarClock, Loader2, Save } from "lucide-react";
+import { CalendarClock, Columns3, Copy, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { parseAsString, useQueryState } from "nuqs";
 import { useCallback, useMemo } from "react";
 
-import { Disclaimer } from "@/components/data/disclaimer";
 import { ErrorState } from "@/components/data/error-state";
+import { ApplyFiltersPill } from "@/components/screens/apply-filters-pill";
 import { ExportButton } from "@/components/screens/export-button";
 import { FilterForm } from "@/components/screens/filter-form";
 import { ResultsPanel } from "@/components/screens/results-panel";
 import type { ColumnMeta } from "@/components/screens/result-columns";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatTradeDate } from "@/lib/format";
+import { countDefinitionChanges } from "@/lib/screens/change-count";
 import { defaultDefinition } from "@/lib/screens/defaults";
 import {
   useColumns,
+  useDuplicateScreen,
   useFactors,
   usePreview,
   useSaveScreen,
@@ -30,22 +31,6 @@ import { PREVIEW_DEBOUNCE_MS, useDebounced } from "@/lib/screens/use-debounced";
 import { STATE_PARAM, decodeState, definitionsEqual, encodeState, parseDefinition } from "@/lib/screens/url-state";
 import { CUSTOM_FILTER_OPERAND_KEYS, OPERAND_LABELS } from "@/lib/screens/operands";
 
-/**
- * The screen editor — docs/08 §"Screen editor" and §"Results panel".
- *
- * Three pieces of state, and it matters which is which:
- *
- * * **The saved definition** (`screen.definition`) — what the server holds.
- * * **The working definition** — the saved one plus whatever the URL carries. It lives in the URL
- *   rather than in React state, which is what makes docs/08's "shareable, back-button-correct"
- *   true: the browser's history *is* the undo stack, and a copied address bar reproduces the form
- *   exactly (`src/lib/screens/url-state.ts`).
- * * **The debounced definition** — the working one, 400 ms after it stops changing. This is what
- *   the preview runs on, and what TanStack Query keys its cache by.
- *
- * "Unsaved changes" is therefore not a flag anyone has to remember to set: it is
- * `saved !== working`, computed.
- */
 export interface ScreenEditorProps {
   screen: ScreenOut;
   status: StatusOut | null;
@@ -53,15 +38,8 @@ export interface ScreenEditorProps {
 
 export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
   const router = useRouter();
-  // The live copy, seeded from the server render — see `useScreen` for why the prop is not enough.
   const { data: screen } = useScreen(initial.public_id, initial);
   const saved = useMemo(() => parseDefinition(screen.definition), [screen.definition]);
-  /*
-   * `history: "push"` is what makes docs/08's "back-button-correct" true: each change becomes a
-   * history entry, so Back undoes it rather than leaving the editor. `throttleMs` keeps that from
-   * becoming one entry per keystroke — it is the same 400 ms the preview debounces by, so the URL
-   * and the results settle together.
-   */
   const [raw, setRaw] = useQueryState(
     STATE_PARAM,
     parseAsString.withOptions({ history: "push", throttleMs: PREVIEW_DEBOUNCE_MS }),
@@ -74,6 +52,7 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
   const columns = useColumns();
   const universes = useUniverses();
   const save = useSaveScreen();
+  const duplicate = useDuplicateScreen();
 
   const tradingDays = useTradingDays(status?.data_start_date ?? null, status?.as_of ?? null);
 
@@ -84,6 +63,10 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
   });
 
   const dirty = !definitionsEqual(saved, working);
+  const changeCount = useMemo(
+    () => (dirty ? countDefinitionChanges(saved, working) : 0),
+    [dirty, saved, working],
+  );
 
   const patch = useCallback(
     (partial: Partial<typeof working>) => {
@@ -93,10 +76,20 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
   );
 
   const reset = useCallback(() => {
-    // Reset to the *defaults*, not to the saved screen: docs/08 lists "Reset to defaults" and
-    // "Duplicate screen" as separate actions, and a user who wants the saved state can discard.
     void setRaw(encodeState(saved, { ...defaultDefinition(), index: working.index, sort_by: working.sort_by }));
   }, [saved, working.index, working.sort_by, setRaw]);
+
+  const apply = useCallback(() => {
+    save.mutate(
+      { publicId: screen.public_id, definition: working },
+      {
+        onSuccess: () => {
+          void setRaw(null);
+          router.refresh();
+        },
+      },
+    );
+  }, [save, screen.public_id, working, setRaw, router]);
 
   const columnMeta = useMemo<ReadonlyMap<string, ColumnMeta>>(
     () => new Map((columns.data ?? []).map((column) => [column.key, column])),
@@ -120,6 +113,7 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
   );
 
   const historical = working.historical_date;
+  const readOnly = !screen.editable;
 
   return (
     <div className="flex min-h-0 flex-col gap-4">
@@ -128,50 +122,44 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
           <h1 className="truncate text-xl font-semibold tracking-tight">{savedName}</h1>
           <p className="text-xs text-muted-foreground">
             {screen.is_example
-              ? "A read-only example. Duplicate it to make changes you can save."
+              ? "A read-only template. Duplicate it to make changes you can save."
               : `Last updated ${formatTradeDate(screen.updated_at.slice(0, 10))}`}
           </p>
         </div>
-        {dirty ? (
-          <Badge variant="warning" data-testid="unsaved-badge">
-            Unsaved changes
-          </Badge>
-        ) : null}
-        <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/screens/${screen.public_id}/columns`}>Edit Columns</Link>
+
+        <div className="ml-auto flex items-center gap-1.5">
+          {readOnly ? (
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={duplicate.isPending}
+              onClick={() =>
+                duplicate.mutate(screen.public_id, {
+                  onSuccess: (copy) => router.push(`/build/${copy.public_id}` as never),
+                })
+              }
+            >
+              {duplicate.isPending ? (
+                <Loader2 aria-hidden="true" className="animate-spin" />
+              ) : (
+                <Copy aria-hidden="true" />
+              )}
+              Duplicate &amp; make it yours
+            </Button>
+          ) : null}
+
+          <Button variant="outline" size="icon" asChild aria-label="Edit columns">
+            <Link href={`/build/${screen.public_id}/columns`}>
+              <Columns3 aria-hidden="true" />
+            </Link>
           </Button>
+
           <ExportButton
             publicId={screen.public_id}
             screenName={screen.name}
             asOf={preview.data?.as_of ?? null}
+            iconOnly
           />
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={!dirty || !screen.editable || save.isPending}
-            data-testid="apply-filters"
-            onClick={() =>
-              save.mutate(
-                { publicId: screen.public_id, definition: working },
-                {
-                  onSuccess: () => {
-                    // Clear the URL diff — it is now the saved state — and invalidate the RSC
-                    // payload so a reload reads the new definition rather than the cached one.
-                    void setRaw(null);
-                    router.refresh();
-                  },
-                },
-              )
-            }
-          >
-            {save.isPending ? (
-              <Loader2 aria-hidden="true" className="animate-spin" />
-            ) : (
-              <Save aria-hidden="true" />
-            )}
-            Update &amp; Apply Filters
-          </Button>
         </div>
       </header>
 
@@ -190,16 +178,16 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
         </div>
       ) : null}
 
-      {screen.editable ? null : (
+      {readOnly ? (
         <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
           Example screens are read-only. Your edits preview live but cannot be saved — duplicate the
-          screen from the list to keep them.
+          screen to keep them.
         </p>
-      )}
+      ) : null}
 
       {save.error ? <ErrorState error={save.error} onRetry={() => save.reset()} /> : null}
 
-      <div className="grid min-h-0 gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-start">
         <FilterForm
           definition={working}
           patch={patch}
@@ -210,7 +198,7 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
           dataStartDate={status?.data_start_date ?? null}
           latestDate={status?.as_of ?? null}
           onReset={reset}
-          className="lg:max-h-[calc(100dvh-16rem)]"
+          disabled={readOnly}
         />
 
         <ResultsPanel
@@ -222,10 +210,24 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
           error={preview.error}
           onRetry={() => void preview.refetch()}
           onLoosenFilters={reset}
+          screenName={screen.name}
         />
       </div>
 
-      <Disclaimer />
+      {readOnly ? (
+        <Button data-testid="apply-filters" disabled className="sr-only" tabIndex={-1}>
+          Apply
+        </Button>
+      ) : null}
+
+      {!readOnly && dirty ? (
+        <ApplyFiltersPill
+          changeCount={changeCount}
+          saving={save.isPending}
+          onApply={apply}
+          onReset={reset}
+        />
+      ) : null}
     </div>
   );
 }

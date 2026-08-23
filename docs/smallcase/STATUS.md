@@ -386,3 +386,31 @@ really a 500. `test_explore_http.py` asserts at the boundary instead.
   finishes.
 
   Owner: the backtesting tree, not this one, and it is on that session's list.
+
+- **`GET /brokers/{id}/holdings` labels real holdings as fixture.** Found by the backtesting
+  session while checking an attribution of mine, and it is worse than the "two bare excepts" I
+  had written down.
+
+  `routers/brokers.py` sets the provenance note with `if holdings:` — a **constant** for every
+  non-empty response:
+
+  | | `dry_run` | Kite fetch | note says | true? |
+  |---|---|---|---|---|
+  | 1 | true | — | "fixture holdings" | correct |
+  | 2 | **false** | **succeeds** | "fixture holdings" | **wrong — that is the user's real portfolio** |
+  | 3 | false | fails → fixture | "fixture holdings" | correct only because the string never varies |
+
+  `holdings_for_broker` has **seven** `return _fixture_holdings()` paths and only **one** is the
+  `dry_run_enabled()` branch. The other five fire in a live deployment: no API key, no token
+  store, a stale token, any exception from the store, any exception from Kite. All seven return
+  the same `list[HoldingRow]`, so the router *cannot* tell real from stubbed — the note is not
+  wrong by oversight, it is unknowable at that call site.
+
+  The one field whose job is to separate measured from fixture separates nothing, on the surface
+  where a wrong answer costs money. It is the same shape as M45.1 — a full decision executing
+  zero trades while every counter read clean — with the label welded shut instead of the counter.
+
+  Fixing it properly means `holdings_for_broker` returning provenance alongside the rows, which
+  is a change to its contract, not a note edit. **Owner: the SC tree** (`git log` on
+  `broker_holdings.py` is 3fa5a62 D3 and eeee57a Tree 4 — I had attributed it to the backtesting
+  session and was wrong).

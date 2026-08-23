@@ -19,7 +19,6 @@ import json
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
 
 from baskfy_execution.broker_ports import HoldingRow, normalize_holding
 
@@ -55,14 +54,16 @@ def holding_row_to_dict(row: HoldingRow) -> dict[str, object]:
     }
 
 
-def parse_kite_holdings_payload(payload: Mapping[str, Any] | list[Any]) -> list[HoldingRow]:
+def parse_kite_holdings_payload(
+    payload: Mapping[str, object] | list[object],
+) -> list[HoldingRow]:
     """Map a Kite holdings JSON body to :class:`HoldingRow` list.
 
     Accepts either the full ``{"data": [...]}`` envelope or a bare list of holding dicts.
     Unknown / malformed rows are skipped rather than failing the whole sync.
     """
     if isinstance(payload, list):
-        items: list[Any] = payload
+        items: list[object] = payload
     else:
         raw = payload.get("data", payload)
         items = raw if isinstance(raw, list) else []

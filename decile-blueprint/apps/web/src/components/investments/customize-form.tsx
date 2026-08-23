@@ -116,7 +116,10 @@ export function CustomizeForm({ investmentId, basketName }: CustomizeFormProps) 
           onChange={(e) => setAmount(e.target.value)}
         />
       </label>
-      <Button type="button" variant="primary" size="sm" disabled={pending} onClick={onPreview}>
+      <Button type="button" variant="primary" size="sm" disabled={pending} onClick={() => {
+          // async handler: the attribute expects void, not a Promise.
+          void onPreview();
+        }}>
         {pending ? "Building preview…" : "Preview customize plan"}
       </Button>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

@@ -29,7 +29,7 @@ blocker in the project.
 | **11** | 231 instruments absent from Kite's master — a decision about whether it is worth filling them from the NSE archive. |
 | **12** | Historical breadth is survivorship-biased. The page says so now; the fix needs NSE's index-change announcements. |
 | **2, 5, 7** | Housekeeping — strangle collectors, two credential items, and a scratch directory to delete. |
-| **13** | **D3 regulatory posture** (written answer in `docs/DECISIONS-MERGE.md`). Blocks live multi-user broker OAuth and holdings sync (M41 / P4.2). Catalog UI is ready; redirects stay off. |
+| **13** | ✅ **D3 written** (posture B in `docs/DECISIONS-MERGE.md` §D3, 23 Aug 2026). OAuth gate flipped. Counsel follow-ups (algo ID / RA filing) remain open but **non-blocking**. |
 
 ---
 
@@ -450,7 +450,16 @@ is what lets a backtest exclude the uncertain period.
 
 **Blocks:** nothing.
 
-### 13. D3 — regulatory posture (SEBI / RA) — **blocks live broker connect**
+### 13. D3 — regulatory posture (SEBI / RA) — **CLEARED 23 Aug 2026** ✅
+**Status:** done (engineering unlock) · **Raised:** M41, 23 Aug 2026 · **Cleared:** Tree 3
+
+**Written answer:** posture **B** in `docs/DECISIONS-MERGE.md` §D3 ⚠ UNREVIEWED.
+`BROKER_OAUTH_REVIEW.signed_off=True` with `decision_reference="DECISIONS-MERGE.md §D3"`.
+
+**Still for Maulik / counsel (non-blocking):** confirm algo-registration tagging and research-vs-advice
+characterisation for personalised baskets. Those filings do not gate OAuth redirects.
+
+#### (original entry — superseded)
 **Status:** open · **Raised:** M41, 23 Aug 2026
 
 **What is needed:** a written answer to `docs/06-decisions-required.md` D3 in

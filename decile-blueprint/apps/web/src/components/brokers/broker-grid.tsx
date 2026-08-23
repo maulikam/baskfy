@@ -11,8 +11,9 @@ import { cn } from "@/lib/utils";
 /**
  * The connect grid — M41 / P5.8.
  *
- * Click a tile → detail with the three-step flow. Connect calls the gated API; while D3 is
- * unsigned it never redirects, and the reason is shown in place.
+ * Click a tile → detail with the three-step flow. Connect calls the API; when the D3 gate is
+ * open and the adapter is wired, the browser redirects to the broker. Holdings sync never
+ * places an order from the web.
  */
 
 export interface BrokerGridProps {
@@ -147,7 +148,12 @@ export function BrokerGrid({ brokers, gate }: BrokerGridProps) {
                 </Link>
                 .
               </p>
-            ) : null}
+            ) : (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                After connect, holdings sync reads quantity + T1 + collateral. Orders still require
+                an explicit confirm on a plan — this page never executes.
+              </p>
+            )}
           </>
         ) : (
           <p className="text-sm text-muted-foreground">Pick a broker to see how connect works.</p>

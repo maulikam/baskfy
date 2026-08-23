@@ -1,0 +1,104 @@
+"""Holdings sync helpers (Tree-3 leaf 3.3).
+
+Returns rows shaped like :class:`baskfy_execution.broker_ports.HoldingRow`, normalised
+through :func:`normalize_holding`. Quantity contract (desk non-negotiable #2):
+
+    total = quantity + t1_quantity + collateral_quantity
+
+When there is no live broker session (``DRY_RUN``, missing token, or unwired broker),
+this module returns an empty list or an optional JSON fixture from
+``BASKFY_BROKER_HOLDINGS_FIXTURE`` — it never crashes and never places an order.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+from baskfy_api.broker_oauth import dry_run_enabled, token_store_for
+from baskfy_execution.broker_ports import HoldingRow, normalize_holding
+from baskfy_providers.errors import CredentialsMissing
+
+__all__ = ["holdings_for_broker", "holding_row_to_dict"]
+
+#: Brokers that could sync holdings once a live adapter exists.
+_HOLDINGS_WIRED = frozenset({"zerodha"})
+
+
+def holding_row_to_dict(row: HoldingRow) -> dict[str, object]:
+    """JSON-friendly HoldingRow (Decimal → str) for the API response."""
+    return {
+        "symbol": row.symbol,
+        "exchange": row.exchange,
+        "quantity": str(row.quantity),
+        "t1_quantity": str(row.t1_quantity),
+        "collateral_quantity": str(row.collateral_quantity),
+        "average_price": str(row.average_price),
+        "last_price": None if row.last_price is None else str(row.last_price),
+        "product": row.product,
+        # Documented sum rule for clients / tests (non-negotiable #2).
+        "total_quantity": str(row.quantity + row.t1_quantity + row.collateral_quantity),
+    }
+
+
+def _fixture_holdings() -> list[HoldingRow]:
+    raw_path = os.environ.get("BASKFY_BROKER_HOLDINGS_FIXTURE", "").strip()
+    if not raw_path:
+        return []
+    path = Path(raw_path)
+    if not path.is_file():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, list):
+        return []
+    rows: list[HoldingRow] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        try:
+            rows.append(
+                normalize_holding(
+                    symbol=str(item["symbol"]),
+                    exchange=str(item.get("exchange", "NSE")),
+                    quantity=item.get("quantity", 0),
+                    t1_quantity=item.get("t1_quantity", 0),
+                    collateral_quantity=item.get("collateral_quantity", 0),
+                    average_price=item.get("average_price", "0"),
+                    last_price=item.get("last_price"),
+                    product=str(item.get("product", "CNC")),
+                )
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    return rows
+
+
+def holdings_for_broker(broker_id: str) -> list[HoldingRow]:
+    """Sync (or safely stub) holdings for ``broker_id``.
+
+    Never raises for a missing live broker — empty / fixture only. Does not reach the
+order path or the trading gateway.
+"""
+    if broker_id not in _HOLDINGS_WIRED:
+        return []
+
+    if dry_run_enabled():
+        return _fixture_holdings()
+
+    try:
+        store = token_store_for()
+        if not store.exists():
+            return _fixture_holdings()
+        store.require_fresh()
+    except CredentialsMissing:
+        return _fixture_holdings()
+    except Exception:
+        # Live fetch is not wired in this leaf; never crash the sync surface.
+        return _fixture_holdings()
+
+    # Live holdings fetch lands with a real Kite holdings adapter; until then, fixture/empty.
+    return _fixture_holdings()

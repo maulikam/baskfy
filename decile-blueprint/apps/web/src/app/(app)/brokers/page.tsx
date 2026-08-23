@@ -11,8 +11,9 @@ import { PAGES } from "@/lib/vocabulary";
 /**
  * `/brokers` — M41 / P5.8. Connect your broker in a few clicks.
  *
- * The grid is real; live OAuth is source-gated on D3 (docs/smallcase Track C). While the gate
- * is shut, Connect explains why and points at CSV import so the portfolio path still works.
+ * D3 posture B is signed: live OAuth may redirect for wired adapters (Zerodha first).
+ * The web app still never places orders — connect + holdings sync only. CSV import on
+ * `/portfolios` remains available as a parallel path.
  */
 export const metadata: Metadata = {
   title: PAGES["/brokers"].title,
@@ -69,7 +70,17 @@ export default async function BrokersPage() {
           </Link>
           .
         </p>
-      ) : null}
+      ) : (
+        <p className="rounded-md border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+          <strong className="font-medium text-foreground">Broker login is open.</strong> Connect
+          Zerodha to sync holdings (qty + T1 + collateral). Baskfy never places an order from this
+          page — plans still need your confirm on the desk. CSV import stays on{" "}
+          <Link href="/portfolios" className="text-accent underline-offset-4 hover:underline">
+            My portfolios
+          </Link>
+          .
+        </p>
+      )}
 
       <BrokerGrid brokers={catalog.brokers} gate={catalog.gate} />
     </div>

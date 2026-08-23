@@ -30,11 +30,11 @@ class TestBrokerRoutesAreRegistered:
 
 
 class TestGateAndCatalog:
-    def test_gate_is_closed(self) -> None:
-        assert BROKER_OAUTH_REVIEW.signed_off is False
+    def test_gate_is_open_after_d3(self) -> None:
+        assert BROKER_OAUTH_REVIEW.signed_off is True
         gate = _gate_out()
-        assert gate.live_oauth_enabled is False
-        assert "D3" in gate.requirement
+        assert gate.live_oauth_enabled is True
+        assert "D3" in gate.decision_reference or "Posture B" in gate.requirement
 
     def test_catalog_is_ten_and_leads_with_the_named_four(self) -> None:
         brokers = [_broker_out(b) for b in broker_catalog()]
@@ -43,7 +43,14 @@ class TestGateAndCatalog:
         assert all(b.connected is False for b in brokers)
         assert sum(1 for b in brokers if b.adapter_wired) == 1
 
-    def test_gated_connect_never_carries_a_redirect(self) -> None:
-        assert BROKER_OAUTH_REVIEW.blocks_live_oauth is True
-        out = ConnectOut(broker_id="zerodha", oauth_available=False, reason="gated")
-        assert out.redirect_url is None
+    def test_connect_out_can_carry_a_redirect_when_available(self) -> None:
+        assert BROKER_OAUTH_REVIEW.blocks_live_oauth is False
+        out = ConnectOut(
+            broker_id="zerodha",
+            oauth_available=True,
+            redirect_url="https://kite.zerodha.com/connect/login?v=3",
+            state="test-state",
+            reason="",
+        )
+        assert out.redirect_url is not None
+        assert out.state == "test-state"

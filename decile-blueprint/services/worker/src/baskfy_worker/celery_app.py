@@ -160,6 +160,14 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=9, minute=0, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_COMPUTE},
     },
+    # --- SC4 / leaf 3.4: cash dividends from CA × holdings (no orders) ---------
+    "cb-dividends": {
+        # After EOD metrics (20:20); before alert dispatch (20:30). Idempotent per
+        # (investment_id, instrument_id, ex_date); derive_dividends is pure.
+        "task": "baskfy.cb.derive_dividends",
+        "schedule": crontab(hour=20, minute=25, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
 }
 
 

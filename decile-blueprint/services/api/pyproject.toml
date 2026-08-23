@@ -5,6 +5,7 @@ description = "Baskfy FastAPI service and Alembic migrations."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "baskfy-core",
+    "baskfy-execution",
     "baskfy-providers",
     "alembic>=1.14",
     "asyncpg>=0.30",
@@ -77,4 +78,5 @@ packages = ["src/baskfy_api"]
 
 [tool.uv.sources]
 baskfy-core = { workspace = true }
+baskfy-execution = { workspace = true }
 baskfy-providers = { workspace = true }

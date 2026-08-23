@@ -41,6 +41,7 @@ from baskfy_worker.tasks.backtests import (
     build_publisher,
     run_backtest_job,
 )
+from baskfy_worker.tasks.curated_dividends import run_curated_dividends
 from baskfy_worker.tasks.curated_metrics import run_curated_metrics
 from baskfy_worker.tasks.curated_sip import run_curated_sip_reminders
 from baskfy_worker.tasks.purge_accounts import run_purge_accounts
@@ -342,3 +343,14 @@ def curated_sip_reminders_task(as_of: str | None = None) -> JsonObject:
     """
     day = dt.date.fromisoformat(as_of) if as_of else dt.datetime.now(tz=IST).date()
     return run_in_session(lambda session: run_curated_sip_reminders(session, day))
+
+
+@shared_task(name="baskfy.cb.derive_dividends", acks_late=True)
+def curated_dividends_task(as_of: str | None = None) -> JsonObject:
+    """SC4: derive ``cb_dividend`` from cash corporate actions × ACTIVE holdings.
+
+    Idempotent per ``(investment_id, instrument_id, ex_date)``. Never places an order.
+    Defaults to today in IST when Beat fires without an argument.
+    """
+    day = dt.date.fromisoformat(as_of) if as_of else dt.datetime.now(tz=IST).date()
+    return run_in_session(lambda session: run_curated_dividends(session, day))

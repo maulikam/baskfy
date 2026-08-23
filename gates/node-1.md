@@ -12,9 +12,9 @@ Scope: Root: SC2–SC12 shipped with integrity; Track C held
   EXPECT: clean
   EVIDENCE: clean (re-measured SC12)
 
-- [x] G3: BROKER_OAUTH_REVIEW still unsigned
-  CHECK: cd decile-blueprint && uv run python -c "from baskfy_core.broker_connections import BROKER_OAUTH_REVIEW; print(BROKER_OAUTH_REVIEW.signed_off)"
-  EXPECT: False
-  EVIDENCE: False (re-measured SC12)
+- [x] G3: BROKER_OAUTH_REVIEW signed after D3 (Tree 3)
+  CHECK: cd decile-blueprint && uv run python -c "from baskfy_core.broker_connections import BROKER_OAUTH_REVIEW; print(BROKER_OAUTH_REVIEW.signed_off, bool(BROKER_OAUTH_REVIEW.decision_reference))"
+  EXPECT: True True
+  EVIDENCE: True True — DECISIONS-MERGE.md §D3 posture B (Tree 3)
 
 <!-- integrity: security, performance, memory, accuracy required -->

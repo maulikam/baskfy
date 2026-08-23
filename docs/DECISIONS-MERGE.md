@@ -2971,3 +2971,43 @@ licence terms allow.
 `baskfy_execution.broker_ports.HoldingRow` normalises quantity + t1 + collateral (non-negotiable
 #2) as Decimal. No adapter fetches yet; the type is the contract future syncs must meet so a
 second broker cannot invent a second holdings shape.
+
+## D3 — regulatory posture: B · publish baskets, users execute ⚠ UNREVIEWED
+
+**Date.** 23 Aug 2026. **Raised by.** User instruction: do not stay blocked on D3 — decide and unlock.
+
+**Context.** `docs/06-decisions-required.md` D3 offered postures A (screener only), B (publish baskets; user executes in their own broker via OAuth), C (PMS). CLAUDE.md already named **B intended**. M41 held `BROKER_OAUTH_REVIEW.signed_off=False` until a written answer existed here. NEEDS-MAULIK #13 blocked live connect.
+
+**Taken — Posture B.**
+1. Baskfy publishes curated baskets and plans; it does **not** hold client funds or securities.
+2. Orders fire only in the **user's own** broker account, after explicit confirm, through `packages/execution` (desk non-negotiable #1). The **web app never gains an execute route**.
+3. Per-user (today: sole-tenant) broker OAuth for **holdings sync and plan hand-off** is allowed. Zerodha is the first wired adapter; peers stay catalogued until their apps are registered.
+4. This decision is the written answer D3 required. `BROKER_OAUTH_REVIEW.signed_off` flips to `True` in the same change set, with `decision_reference="DECISIONS-MERGE.md §D3"`.
+
+**Still for counsel (non-blocking engineering).** Confirm (a) algo-registration / tagging when Baskfy supplies order plans to a third-party Kite app, and (b) whether ranked baskets are research vs advice once personalised. Those filings do not gate the OAuth redirect or encrypted token store; they gate marketing claims and SEBI paperwork.
+
+**Rejected.** A (too small for the product ask). C (PMS — different business). Leaving the gate shut forever after the user ordered it opened. Flipping OAuth *and* web execute together (would break non-negotiable #1).
+
+**Reversal.** Set `signed_off=False`, revert this section, restore NEEDS-MAULIK #13. Tokens already issued must be wiped from the store.
+
+**D7 note.** Fee collection / public signup remain off until a separate written D7; Track B flags stay false by default.
+
+## Tree3 / 3.4 — Dividend Beat uses current-ledger windows · ⚠ UNREVIEWED
+
+**Context.** Leaf 3.4 registers `cb-dividends` / `baskfy.cb.derive_dividends`. Pure
+`derive_dividends` wants holdings-history windows; the schema has only
+`cb_investment_holding` (current ledger), not lot history.
+
+**Taken.** For each ACTIVE investment, treat every positive ledger qty as held from
+`investment.created_at.date()` through Beat `as_of` (closed). Cash CAs
+(`corporate_action.action_type == dividend` with amount) drive rows; persist idempotently
+on `(investment_id, instrument_id, ex_date)`. Create UI posts `POST /api/v1/cb/baskets`
+via `lib/create/fetch.ts` (Bearer), keeps client weight normalize, shows server `id`+`slug`
+on success.
+
+**Rejected.** Inventing a holdings-history table in this leaf (SC4 scope creep). Blocking
+the Beat until lot writers exist (would leave Tree-3 remnant open).
+
+**Reversal.** Swap the loader for real lot windows when a holdings-history writer lands;
+Beat key and task name stay.
+

@@ -50,4 +50,4 @@ Scope: Parent verification that Market·Baskets·Build·Me nav, naming, double-r
 - [x] G10: Commit message when green
   CHECK: git -C /Users/maulikdave/Documents/projects/baskfy log -1 --format=%s
   EXPECT: UI: green
-  EVIDENCE: pending-until-commit
+  EVIDENCE: commit 1d6a90a "UI: green — Market·Baskets·Build·Me nav and basket-first screens"

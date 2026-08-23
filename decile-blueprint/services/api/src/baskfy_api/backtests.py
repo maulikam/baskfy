@@ -174,9 +174,28 @@ async def capacity_check(
 # ---------------------------------------------------------------------------
 
 
+class DownloadSigningUnavailable(RuntimeError):
+    """No signing key. Raised rather than falling back to a key anybody can read (M43)."""
+
+
 def _signature(settings: Settings, public_id: str, artefact: str, expires: int) -> str:
+    """HMAC over every input the link asserts: the run, the artefact and the expiry.
+
+    An empty `jwt_secret` used to fall back to ``b"baskfy-unconfigured"`` — a constant published
+    in this repository, which makes every download link forgeable by anyone who can read the
+    source. `require_configured` refuses an empty secret only in production, so staging and any
+    developer box serving real artefacts were covered by nothing.
+
+    Refusing costs nothing: a deployment with no signing key cannot authenticate anybody anyway,
+    so there is no working configuration this turns away.
+    """
+    key = settings.jwt_secret.encode("utf-8")
+    if not key:
+        raise DownloadSigningUnavailable(
+            "no BASKFY_JWT_SECRET is configured, so a download link cannot be signed. Refusing "
+            "rather than signing with a key that is published in the source."
+        )
     message = f"{public_id}:{artefact}:{expires}".encode()
-    key = settings.jwt_secret.encode("utf-8") or b"baskfy-unconfigured"
     return (
         base64.urlsafe_b64encode(hmac.new(key, message, hashlib.sha256).digest())
         .decode("ascii")
@@ -219,11 +238,25 @@ def verify_download(  # noqa: PLR0913 - the signature covers four independent in
     *,
     now: dt.datetime | None = None,
 ) -> bool:
-    """Constant-time comparison, and the expiry checked *after* it, so neither leaks the other."""
+    """Constant-time comparison, and the expiry checked *after* it, so neither leaks the other.
+
+    `token` arrives from an unauthenticated query string and is not trusted to be ASCII.
+    `hmac.compare_digest` raises `TypeError` on a `str` containing a non-ASCII character, which
+    turned `?token=eee` with accents into an unhandled 500 and a logged stack trace on a route
+    anybody on the internet can reach. A token that cannot be a signature is simply wrong (M43).
+
+    A missing signing key is a refusal too, not a crash: `_signature` raises rather than falling
+    back to a published constant, and a deployment in that state can verify nothing.
+    """
     moment = now or dt.datetime.now(tz=dt.UTC)
     if artefact not in ARTEFACTS:
         return False
-    expected = _signature(settings, public_id, artefact, expires)
+    if not token.isascii():
+        return False
+    try:
+        expected = _signature(settings, public_id, artefact, expires)
+    except DownloadSigningUnavailable:
+        return False
     if not hmac.compare_digest(expected, token):
         return False
     return expires >= int(moment.timestamp())

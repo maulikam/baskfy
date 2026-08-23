@@ -675,8 +675,9 @@ def _artefact_literal(artefact: str) -> str:
     response_class=Response,
     summary="Redeem a signed download link",
 )
-async def download_artefact(
+async def download_artefact(  # noqa: PLR0913, PLR0917 - four are the signed link's own fields
     request: Request,
+    session: SessionDep,
     public_id: str,
     artefact: Annotated[str, Path(pattern="^(trades|holdings|equity)$")],
     expires: Annotated[int, Query()],
@@ -687,9 +688,28 @@ async def download_artefact(
     That is what makes the link usable from a download manager or a spreadsheet's "open from
     URL", which is the whole reason docs/07 asks for a signed URL rather than an authenticated
     stream. It carries no bearer token, expires in fifteen minutes, and names exactly one object.
+
+    ## Why a stateless capability is not enough here (M43)
+
+    The signature proves the link was minted by us for this artefact and has not expired. It
+    proves nothing about *now* — it carries no user, no nonce and no server state, so it stayed
+    redeemable after the backtest row was deleted. That directly contradicted the guarantee the
+    DELETE handler makes in as many words: "nothing can read them once the row is gone". Executed
+    before this change: mint, `DELETE` -> 204, redeem anonymously -> **200 with the full CSV**.
+
+    So the row is checked. It is the cheapest possible revocation — one indexed lookup on a
+    primary key, reached only by a caller who already presented a valid signature — and it makes
+    delete mean delete for up to the fifteen minutes a link would otherwise outlive its subject.
+    Cross-account and anonymous redemption *within* the window stay deliberate: that is what a
+    shareable link is, and it is argued above.
     """
     settings: Settings = settings_for(request)
     if not service.verify_download(settings, public_id, artefact, expires, token):
+        raise not_found("backtest artefact", f"{public_id}/{artefact}")
+    still_there = (
+        await session.execute(select(Backtest.id).where(Backtest.public_id == public_id))
+    ).scalar_one_or_none()
+    if still_there is None:
         raise not_found("backtest artefact", f"{public_id}/{artefact}")
     payload = await anyio.to_thread.run_sync(
         lambda: _bytes(_archive(request), service.artefact_key(public_id, artefact))

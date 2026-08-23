@@ -3929,6 +3929,11 @@ export interface components {
          * @description docs/10 §"honesty features": one of the five runs in the fragility readout.
          */
         FragilityRunOut: {
+            /**
+             * Blind Pct
+             * @default 0
+             */
+            blind_pct: number;
             /** Cagr */
             cagr?: number | null;
             /** Description */
@@ -3939,6 +3944,11 @@ export interface components {
             label: string;
             /** Max Drawdown */
             max_drawdown?: number | null;
+            /**
+             * Rebalances
+             * @default 0
+             */
+            rebalances: number;
             /** Total Return */
             total_return?: number | null;
             /** Trades */

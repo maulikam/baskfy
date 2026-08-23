@@ -6,7 +6,7 @@ from decimal import Decimal
 from functools import lru_cache
 from typing import Final, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 #: docs/07: "Base: `/api/v1`".
@@ -39,6 +39,21 @@ class Settings(BaseSettings):
     test_database_url: str | None = None
 
     environment: Literal["local", "test", "staging", "production"] = "local"
+
+    # --- Curated-basket operator identity (docs/smallcase/02) ---------------
+    #: SC runs as one operator and one broker account. These are public/internal identifiers,
+    #: never credentials, and no request is allowed to choose a different tenant identity.
+    sole_user_id: str = Field(default="baskfy-sole-user", min_length=1, max_length=255)
+    sole_broker_account_id: str = Field(default="operator-kite", min_length=1, max_length=255)
+
+    @field_validator("sole_user_id", "sole_broker_account_id")
+    @classmethod
+    def strip_operator_identifier(cls, value: str) -> str:
+        """Do not let blank or accidentally padded identities enter ownership columns."""
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("operator identifiers must not be blank")
+        return stripped
 
     # --- Auth (docs/07 §header, docs/11 §Security) ---------------------------
     #: Shared with the Next.js app, which mints the access tokens (docs/07). Empty in `local`

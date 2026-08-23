@@ -10,7 +10,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Float, Numeric
+from sqlalchemy import CheckConstraint, Float, Numeric, UniqueConstraint
 
 from baskfy_core.models import Base
 
@@ -94,7 +94,50 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # docs/DECISIONS.md §17.
     "entitlement_override": ("id",),
     "admin_action": ("id",),
+    # Smallcase-shaped product layer — docs/smallcase/03-data-model.md. Track-B tables are
+    # storage-only until SC10's default-off flags make their surfaces reachable.
+    "cb_manager": ("id",),
+    "cb_basket": ("id",),
+    "cb_basket_version": ("id",),
+    "cb_constituent": ("id",),
+    "cb_metrics": ("basket_id", "as_of_date"),
+    "cb_collection": ("id",),
+    "cb_watchlist_item": ("id",),
+    "cb_investment": ("id",),
+    "cb_investment_holding": ("id",),
+    "cb_order_batch": ("id",),
+    "cb_fee_ledger": ("id",),
+    "cb_dividend": ("id",),
+    "cb_sip_plan": ("id",),
+    "cb_pending_action": ("id",),
+    "cb_update_post": ("id",),
+    "cb_user_rebalance_state": ("user_id", "version_id"),
+    "cb_plan": ("id",),
+    "cb_subscription": ("id",),
 }
+
+CURATED_BASKET_TABLES: frozenset[str] = frozenset(
+    {
+        "cb_manager",
+        "cb_basket",
+        "cb_basket_version",
+        "cb_constituent",
+        "cb_metrics",
+        "cb_collection",
+        "cb_watchlist_item",
+        "cb_investment",
+        "cb_investment_holding",
+        "cb_order_batch",
+        "cb_fee_ledger",
+        "cb_dividend",
+        "cb_sip_plan",
+        "cb_pending_action",
+        "cb_update_post",
+        "cb_user_rebalance_state",
+        "cb_plan",
+        "cb_subscription",
+    }
+)
 
 #: docs/04 opening paragraph: "Money in numeric, never float."
 #: docs/02 rule: prices, quantities and money are exact. Every column whose name matches one of
@@ -191,6 +234,71 @@ def test_no_float_columns_anywhere() -> None:
         if isinstance(column.type, Float)
     ]
     assert offenders == []
+
+
+def test_exactly_the_documented_curated_basket_tables_are_registered() -> None:
+    actual = {name for name in Base.metadata.tables if name.startswith("cb_")}
+    assert actual == CURATED_BASKET_TABLES
+
+
+@pytest.mark.parametrize(
+    ("table_name", "column_names"),
+    [
+        ("cb_constituent", ("weight",)),
+        (
+            "cb_metrics",
+            (
+                "min_amount",
+                "volatility_value",
+                "ret_1m",
+                "ret_6m",
+                "ret_1y",
+                "cagr_3y",
+                "cagr_5y",
+                "since_inception_pct",
+            ),
+        ),
+        ("cb_watchlist_item", ("nav_at_watch",)),
+        ("cb_investment_holding", ("qty", "avg_price")),
+        ("cb_order_batch", ("requested_amount",)),
+        ("cb_fee_ledger", ("base_fee", "gst", "total")),
+        ("cb_dividend", ("amount_per_share", "qty_held", "total")),
+        ("cb_sip_plan", ("amount",)),
+        ("cb_plan", ("price",)),
+    ],
+)
+def test_curated_basket_math_columns_are_exact_numeric(
+    table_name: str, column_names: tuple[str, ...]
+) -> None:
+    table = Base.metadata.tables[table_name]
+    assert all(isinstance(table.columns[name].type, Numeric) for name in column_names)
+
+
+def test_order_batch_carries_mandatory_execution_identity_without_an_execution_fk() -> None:
+    table = Base.metadata.tables["cb_order_batch"]
+    assert table.columns["user_id"].nullable is False
+    assert table.columns["broker_account_id"].nullable is False
+    assert table.columns["desk_plan_id"].nullable is True
+    assert list(table.columns["desk_plan_id"].foreign_keys) == []
+
+
+def test_version_intervals_and_constituent_weights_are_unambiguous() -> None:
+    version = Base.metadata.tables["cb_basket_version"]
+    unique_sets = {
+        tuple(column.name for column in constraint.columns)
+        for constraint in version.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+    assert ("basket_id", "version_no") in unique_sets
+    assert ("basket_id", "effective_date") in unique_sets
+
+    constituent = Base.metadata.tables["cb_constituent"]
+    weight_checks = {
+        str(constraint.sqltext)
+        for constraint in constituent.constraints
+        if isinstance(constraint, CheckConstraint)
+    }
+    assert "weight > 0 AND weight <= 1" in weight_checks
 
 
 def test_monetary_columns_are_exact_numerics_or_integers() -> None:

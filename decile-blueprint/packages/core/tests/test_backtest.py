@@ -1070,7 +1070,7 @@ class TestATotalLossHasACompoundRate:
     def test_zero_final_equity_reports_minus_one(self) -> None:
         _, data, _ = _market_and_data()
         result = run_backtest(_config(), data)
-        wiped = tuple(result.equity[:-1]) + (Decimal(0),)
+        wiped = (*result.equity[:-1], Decimal(0))
         metrics = compute_metrics(replace(result, equity=wiped))
 
         assert metrics.total_return == pytest.approx(-1.0)

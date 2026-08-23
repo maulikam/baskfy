@@ -14,6 +14,35 @@
 
 Client: JS on the screens route < 250 KB gzip after code-splitting the table and charts.
 
+### Memory budgets (added M45.8)
+
+This table priced every surface in **time** and none in **memory**, which was defensible while
+backtests ran in a 4 GB Celery worker and indefensible after M42 moved them into the API process.
+A run that costs two seconds of CPU can still evict every other request in flight, and nothing
+about a latency budget would have caught it.
+
+| Surface | Target | Measured |
+|---|---|---|
+| Backtest price panel, peak resident | < 4x the panel it builds | 2.4x (52.8 MB for a 21.6 MB panel, 500 instruments x 9y, 809,807 rows) |
+| Backtest, largest run permitted | `MAX_BAR_ROWS` = 3,000,000 bars | refused with a message before a row is read |
+| API process, `BACKTEST_CONCURRENCY` = 2 | peak < 50% of the task's limit | 2 x ~53 MB against a 2 GB task |
+
+**Why a multiple rather than an absolute.** The panel scales with the user's dates and universe,
+so the number that matters is the *overhead*, and overhead is where the defect was: before M45.8
+the loader materialised the whole result as SQLAlchemy `Row` objects and then copied it into four
+Python lists before Polars saw any of it — **444 MB peak, 20.5x**, for that same 21.6 MB panel.
+
+**Why there is now a maximum run.** There was none. `MAX_REBALANCE_DATES` bounds how many screens
+a run issues and says nothing about the price history it then pulls; `top_n` reaches 500 and no
+maximum window exists, so the size of a backtest was whatever dates the user typed. The ceiling is
+a little over three times the largest run measured here — past anything this document contemplates
+and far from the task limit — and it is enforced by one indexed `COUNT` before any row is read,
+because a refusal names what the user can change and an eviction names nothing.
+
+**Still open.** D5's backfill to 2011 roughly doubles the available history, so the same
+configuration will load about twice the rows. The measurement above should be re-run against the
+backfilled database before the concurrency default is raised above 2.
+
 ## Security
 
 - Argon2id password hashing; OTP login as the default path, password optional.

@@ -96,3 +96,26 @@ with a per-user concurrency cap of 1 and a global cap; stream progress over SSE.
   says this and it is both ethically right and legally necessary.
 - A "fragility" readout: the same config re-run with ±1 rebalance-day offset and ±25% costs, so
   users can see whether the result survives small perturbations. Most won't. That is the point.
+
+  > **The ±1 offset half of this cannot be satisfied by the current data plant (M45.7).** It asks
+  > for a screen on the trading day either side of each rebalance, and `factor_daily` and
+  > `index_member_daily` are **weekly** series — measured 23 Aug 2026, the dominant gap between
+  > sampled dates is five sessions (143 and 175 occurrences respectively). A neighbouring trading
+  > day therefore has no factor rows *by construction*, and the screen returns empty rather than
+  > missing: the engine selects nothing, liquidates to cash, and the variant lands far from the
+  > base run.
+  >
+  > Measured over the membership span: **15 of 66 monthly rebalance dates pass the coverage guard,
+  > and 100% of those have BOTH offsets blind.** Every offset variant this product can currently
+  > produce is entirely blind.
+  >
+  > This is not a coverage gap that D5's backfill closes on its way past, and it is not something a
+  > wider guard can fix — the guard checks the schedule, and no amount of checking makes a row
+  > exist. It is a mismatch between what this document asks for and what `docs/09`'s pipeline
+  > computes. **Either factors become daily, or this sentence should ask for a perturbation the
+  > plant can actually serve** (the nearest *sampled* date either side would be one candidate, and
+  > is a different question about the strategy).
+  >
+  > Until then the panel reports each variant's blind share and leaves blind variants out of the
+  > spread, because a spread computed over runs that saw nothing is not a weaker finding, it is a
+  > wrong number. The ±25% cost half is unaffected and remains meaningful.

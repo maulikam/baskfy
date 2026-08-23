@@ -41,6 +41,7 @@ from baskfy_worker.tasks.backtests import (
     build_publisher,
     run_backtest_job,
 )
+from baskfy_worker.tasks.curated_metrics import run_curated_metrics
 from baskfy_worker.tasks.purge_accounts import run_purge_accounts
 
 #: docs/09 §"Kite specifics" — a rate-limited or flaky upstream is worth retrying; a malformed
@@ -318,3 +319,14 @@ def sweep_webhooks_task(limit: int = SWEEP_BATCH) -> JsonObject:
     late one. The row survives a restart; the sweep picks it up.
     """
     return run_in_session(lambda session: run_webhook_sweep(session, limit=limit))
+
+
+@shared_task(name="baskfy.cb.compute_metrics", acks_late=True)
+def compute_curated_metrics_task(trade_date: str | None = None) -> JsonObject:
+    """SC2: upsert ``cb_metrics`` for every curated basket on a trading day.
+
+    Idempotent per ``(basket_id, as_of_date)``. Defaults to today in IST when Beat fires without
+    an argument.
+    """
+    day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
+    return run_in_session(lambda session: run_curated_metrics(session, day))

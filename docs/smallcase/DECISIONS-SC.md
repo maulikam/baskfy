@@ -101,3 +101,12 @@ SC1 seeds managers only — no `cb_investment` rows until SC4.
 Inferring "the only user" implicitly in queries (forbidden by docs/smallcase/03 rule 1).
 
 **Reversal.** Delete `curated_seed.resolve_sole_user_id`; callers pass explicit ids in tests only.
+
+## SC2 — explore API prefix and transcendental float boundary ⚠ UNREVIEWED
+
+**Taken.** Catalog lives at `/api/v1/explore` (and watchlist routes on the same router), matching
+docs/smallcase/05 route names rather than `/cb/baskets`. CAGR uses `math.log`/`math.exp` at the
+fractional-power boundary then immediately re-enters `Decimal` and quantizes to 2 dp; volatility
+uses `Decimal.sqrt()`. Rejected: pure-Decimal CAGR via series expansion (complexity, no gain at
+2 dp). Reversal: rename routes in one router file; swap CAGR implementation behind the same
+signature.

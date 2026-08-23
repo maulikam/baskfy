@@ -18,9 +18,7 @@ from baskfy_core.models import Base, CbManager
 ENV_VAR = "BASKFY_TEST_DATABASE_URL"
 API_DIR = Path(__file__).resolve().parents[1]
 
-CB_TABLES = frozenset(
-    name for name in Base.metadata.tables if name.startswith("cb_")
-)
+CB_TABLES = frozenset(name for name in Base.metadata.tables if name.startswith("cb_"))
 
 pytestmark = [
     pytest.mark.db,
@@ -50,9 +48,7 @@ def migrated(clean_database: object) -> None:
 
 
 @pytest.mark.asyncio
-async def test_migration_creates_all_cb_tables(
-    engine: AsyncEngine, migrated: None
-) -> None:
+async def test_migration_creates_all_cb_tables(engine: AsyncEngine, migrated: None) -> None:
     async with engine.connect() as conn:
         rows = await conn.execute(
             text(
@@ -109,10 +105,7 @@ async def test_cb_manager_kind_check_rejects_invalid(engine: AsyncEngine, migrat
     async with engine.begin() as conn:
         with pytest.raises(Exception):  # noqa: B017 — DB raises on check violation
             await conn.execute(
-                text(
-                    "INSERT INTO cb_manager (slug, name, kind) "
-                    "VALUES ('bad', 'Bad', 'ROBOT')"
-                )
+                text("INSERT INTO cb_manager (slug, name, kind) VALUES ('bad', 'Bad', 'ROBOT')")
             )
 
 

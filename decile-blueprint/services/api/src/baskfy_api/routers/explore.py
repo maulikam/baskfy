@@ -17,7 +17,7 @@ from sqlalchemy import asc, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import AuthenticatedDep
-from baskfy_api.curated_seed import resolve_sole_user_id
+from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
 from baskfy_api.problems import not_found
 from baskfy_core.curated_metrics import headline_return
@@ -220,12 +220,18 @@ async def list_explore_baskets(  # noqa: PLR0913, PLR0917 - one query param per 
     order: Annotated[SortDir, Query()] = "asc",
     q: Annotated[str | None, Query(max_length=80)] = None,
 ) -> BasketListOut:
-    """Catalog list - filters/sorts match docs/smallcase/05 (DECISIONS-SC SC2)."""
+    """Catalog list - filters/sorts match docs/smallcase/05 (DECISIONS-SC SC2).
+
+    Perf (SC11 / leaf-1.8.3): single query joining basket + manager + latest metrics —
+    N+1 avoided (no per-card follow-up SELECTs). Budget: catalog p95 < 1s on dev hardware
+    (docs/smallcase/06 SC11).
+    """
     latest = (
         select(CbMetrics.basket_id, func.max(CbMetrics.as_of_date).label("as_of_date"))
         .group_by(CbMetrics.basket_id)
         .subquery()
     )
+    # One JOINed SELECT for the card grid — N+1 avoided; p95 budget < 1s (leaf-1.8.3).
     stmt = (
         select(CbBasket, CbManager, CbMetrics)
         .join(CbManager, CbManager.id == CbBasket.manager_id)
@@ -368,7 +374,8 @@ async def get_explore_basket(slug: str, session: SessionDep) -> BasketCardOut:
 
 @router.get("/watchlist", response_model=WatchlistOut)
 async def list_watchlist(session: SessionDep, principal: AuthenticatedDep) -> WatchlistOut:
-    user_id = await _scoped_user_id(session, principal.user_id)
+    # Sole-tenant: always filter user_id == sole_user (leaf-1.8.2); never raw principal.
+    user_id = await scoped_sole_user_id(session, principal.user_id)
     items_rows = (
         await session.execute(
             select(CbWatchlistItem, CbBasket)
@@ -396,7 +403,7 @@ async def add_watchlist(
     session: SessionDep,
     principal: AuthenticatedDep,
 ) -> WatchlistItemOut:
-    user_id = await _scoped_user_id(session, principal.user_id)
+    user_id = await scoped_sole_user_id(session, principal.user_id)
     basket = (
         await session.execute(select(CbBasket).where(CbBasket.slug == body.basket_slug))
     ).scalar_one_or_none()
@@ -440,7 +447,7 @@ async def remove_watchlist(
     session: SessionDep,
     principal: AuthenticatedDep,
 ) -> None:
-    user_id = await _scoped_user_id(session, principal.user_id)
+    user_id = await scoped_sole_user_id(session, principal.user_id)
     basket = (
         await session.execute(select(CbBasket).where(CbBasket.slug == slug))
     ).scalar_one_or_none()
@@ -458,11 +465,3 @@ async def remove_watchlist(
         raise not_found(f"watchlist item for {slug!r} not found")
     await session.delete(item)
     await session.commit()
-
-
-async def _scoped_user_id(session: AsyncSession, principal_user_id: int | None) -> int:
-    """Track A: every user-scoped row uses the sole tenant id."""
-    sole = await resolve_sole_user_id(session)
-    if principal_user_id is not None and principal_user_id != sole:
-        return sole
-    return sole

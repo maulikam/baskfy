@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from decimal import Decimal
 from typing import Final
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +42,8 @@ WINDOW_5Y: Final = 1260
 #: docs/smallcase/04 section 3: below 60 trading days, fall back to constituent-weighted vol.
 MIN_BASKET_VOL_DAYS: Final = 60
 MIN_NAV_POINTS: Final = 2
+#: SC11 / leaf-1.8.4 — process baskets in bounded chunks (no unbounded ORM load).
+METRICS_BASKET_CHUNK: Final = 50
 
 
 async def upsert_metrics_row(  # noqa: PLR0913 - one kwarg per cb_metrics column
@@ -286,23 +288,57 @@ async def compute_all_metrics(
     *,
     now: dt.datetime | None = None,
 ) -> dict[str, object]:
-    """EOD job body: upsert metrics for every non-archived basket on *as_of*."""
-    baskets = (
-        (await session.execute(select(CbBasket).where(CbBasket.archived_at.is_(None))))
+    """EOD job body: upsert metrics for every non-archived basket on *as_of*.
+
+    Baskets are loaded in ``METRICS_BASKET_CHUNK``-sized batches so a large catalog
+    cannot pin an unbounded ORM set in memory (SC11 / leaf-1.8.4).
+    """
+    basket_ids = list(
+        (
+            await session.execute(
+                select(CbBasket.id)
+                .where(CbBasket.archived_at.is_(None))
+                .order_by(CbBasket.id)
+            )
+        )
         .scalars()
         .all()
     )
-    published_count = sum(1 for b in baskets if b.visibility == "PUBLISHED")
-    results: list[dict[str, object]] = []
-    for basket in baskets:
-        results.append(
-            await compute_basket_metrics(
-                session,
-                basket,
-                as_of,
-                published_count=published_count,
-                now=now,
+    published_count = int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(CbBasket)
+                .where(
+                    CbBasket.archived_at.is_(None),
+                    CbBasket.visibility == "PUBLISHED",
+                )
             )
+        ).scalar_one()
+    )
+    results: list[dict[str, object]] = []
+    chunk_size = METRICS_BASKET_CHUNK
+    for offset in range(0, len(basket_ids), chunk_size):
+        chunk_ids = basket_ids[offset : offset + chunk_size]
+        baskets = (
+            (
+                await session.execute(
+                    select(CbBasket).where(CbBasket.id.in_(chunk_ids)).order_by(CbBasket.id)
+                )
+            )
+            .scalars()
+            .all()
         )
+        for basket in baskets:
+            results.append(
+                await compute_basket_metrics(
+                    session,
+                    basket,
+                    as_of,
+                    published_count=published_count,
+                    now=now,
+                )
+            )
+        await session.flush()
     await session.commit()
     return {"as_of": as_of.isoformat(), "baskets": len(results), "results": results}

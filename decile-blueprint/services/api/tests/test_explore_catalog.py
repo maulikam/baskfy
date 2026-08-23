@@ -6,6 +6,7 @@ DB tests skip without ``BASKFY_TEST_DATABASE_URL``. Pure filter-param documentat
 from __future__ import annotations
 
 import datetime as dt
+import inspect
 import os
 import subprocess
 from decimal import Decimal
@@ -17,6 +18,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from baskfy_api.app import create_app
+from baskfy_api.auth import Principal, PrincipalKind
 from baskfy_api.curated_metrics_service import compute_all_metrics, upsert_metrics_row
 from baskfy_api.curated_seed import seed_curated_managers, seed_momentum_scan_basket
 from baskfy_api.routers import explore
@@ -89,8 +91,6 @@ def test_openapi_lists_every_documented_explore_query_param() -> None:
 
 def test_explore_list_avoids_n_plus_one_and_documents_p95_budget() -> None:
     """SC11 / leaf-1.8.3: catalog is one JOIN (N+1 avoided); p95 budget < 1s."""
-    import inspect
-
     src = inspect.getsource(list_explore_baskets)
     mod = inspect.getsource(explore)
     assert "N+1 avoided" in src or "N+1 avoided" in mod
@@ -282,6 +282,7 @@ async def test_explore_filter_params_round_trip(engine: AsyncEngine, migrated: N
 
         result = await list_explore_baskets(
             session,
+            _principal(),
             max_min_amount=Decimal("25000"),
             access="FREE",
             volatility="MED",
@@ -298,3 +299,9 @@ async def test_explore_filter_params_round_trip(engine: AsyncEngine, migrated: N
         card = next(i for i in result.items if i.slug == MOMENTUM_SCAN_BASKET_SLUG)
         assert card.metrics is not None
         assert card.metrics.min_amount == Decimal("5000.00")
+
+
+def _principal() -> Principal:
+    """The coroutine-level tests drive handlers directly, so they must supply the principal
+    the route now requires. The HTTP-level assertions live in ``test_explore_http.py``."""
+    return Principal(kind=PrincipalKind.USER, user_id=1, public_id="testuser0001")

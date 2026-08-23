@@ -347,7 +347,7 @@ def curated_sip_reminders_task(as_of: str | None = None) -> JsonObject:
 
 @shared_task(name="baskfy.cb.derive_dividends", acks_late=True)
 def curated_dividends_task(as_of: str | None = None) -> JsonObject:
-    """SC4: derive ``cb_dividend`` from cash corporate actions × ACTIVE holdings.
+    """SC4: derive ``cb_dividend`` from cash corporate actions x ACTIVE holdings.
 
     Idempotent per ``(investment_id, instrument_id, ex_date)``. Never places an order.
     Defaults to today in IST when Beat fires without an argument.

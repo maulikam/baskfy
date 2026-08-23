@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.problems import pipeline_degraded
 from baskfy_core.curated_baskets import (
     MANAGER_SLUG_BASKFY_ENGINE,
     MANAGER_SLUG_MAULIK,
@@ -58,21 +59,37 @@ FIXTURE_SCAN_RUN_ID = "fixture-momentum-scan-sc2"
 
 
 async def resolve_sole_user_id(session: AsyncSession) -> int:
-    """Return the sole tenant's ``app_user.id`` for user-scoped ``cb_*`` rows.
+    """Return the sole tenant's ``app_user.id``. **Reads only — never creates an account.**
 
-    Prefers ``BASKFY_SOLE_USER_ID`` from the environment. When unset, ensures the e2e account
-    exists and returns its id - the same account the browser suite signs in as.
+    Prefers ``BASKFY_SOLE_USER_ID``; otherwise looks the seeded account up by public id.
+
+    ## Why this no longer seeds
+
+    It used to call ``seed_e2e_account`` when the variable was unset, and it was reachable from
+    request handlers. So a plain ``GET /watchlist`` created an ``app_user`` whose password is a
+    constant this repository publishes on purpose, with a pre-verified email and an active
+    subscription — and, because the seed is an upsert, *reset that password on every call*. It
+    also spent ~205 ms of Argon2id and wrote to ``app_user`` on a read.
+
+    ``seed.py`` says it plainly: ``seed e2e`` "is not a command anything but a test database
+    should ever be pointed at". Seeding belongs in ``make seed``. A request path may look the
+    account up; it must not conjure it.
     """
     env_val = os.environ.get(SOLE_USER_ENV)
     if env_val is not None:
         return int(env_val)
-    # Local import breaks ``seed`` ↔ ``curated_seed`` circular dependency.
-    from baskfy_api.seed import E2E_PUBLIC_ID, seed_e2e_account  # noqa: PLC0415
+    # Local import breaks ``seed`` <-> ``curated_seed`` circular dependency.
+    from baskfy_api.seed import E2E_PUBLIC_ID  # noqa: PLC0415
 
-    await seed_e2e_account(session)
-    return (
+    found = (
         await session.execute(select(AppUser.id).where(AppUser.public_id == E2E_PUBLIC_ID))
-    ).scalar_one()
+    ).scalar_one_or_none()
+    if found is None:
+        raise pipeline_degraded(
+            "The sole-tenant account is not configured on this deployment. Set "
+            f"{SOLE_USER_ENV}, or run `make seed` to create the development account."
+        )
+    return found
 
 
 async def seed_curated_managers(session: AsyncSession) -> int:

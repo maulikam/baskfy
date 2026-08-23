@@ -3,7 +3,11 @@
 The status page for the smallcase-layer run. Updated at the end of every module, loud
 about what is NOT done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: SC12 + AC-closure + D3 unlock (Tree 3) green — see `SC-FINAL-REPORT.md`, `SC-AC-REPORT.md`, `D3-UNLOCK-REPORT.md`. Tree 4 backlog closed — see `TREE4-BACKLOG-REPORT.md`.** Started 23 Aug 2026.
+**Run state: SC12 + AC-closure + D3 unlock (Tree 3) green, Tree 4 backlog closed — and then
+independently audited and found not green.** Started 23 Aug 2026.
+See `SC-FINAL-REPORT.md`, `SC-AC-REPORT.md`, `D3-UNLOCK-REPORT.md`, `TREE4-BACKLOG-REPORT.md`,
+and the section "Independent verification" below — which is the part those reports could not
+contain, because each was written by the run it grades.
 
 ## Module ledger
 
@@ -287,7 +291,61 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 
 ## Tree 2 AC-closure (23 Aug 2026)
 
-See `SC-AC-REPORT.md` + `D3-UNLOCK-REPORT.md`. SIP Beat, create API, dividends Beat, chart, OAuth callback/holdings. Tree 4 closes remaining backlog leaves.
+See `SC-AC-REPORT.md`. SIP Beat `cb-sip-reminders`, `POST /api/v1/cb/baskets`, pure dividends, basket PerformanceChart, explore-handoff Playwright spec, RUN-AND-TEST §8. OAuth still D3-blocked.
+
+
+## Independent verification (session `baskfy-11`, 23 Aug 2026)
+
+Every module above was marked ✅ by the session that wrote it. A second session, holding no
+stake in the outcome, graded the same code from outside. It found defects that were **live at
+`babcd0e`**, after SC12 had been declared green and a final report written.
+
+That is the finding worth keeping, and it outlives every item under it: **green was produced by
+the party being graded.** `M43.4` and `M44` both exist because somebody else went looking.
+
+### What was live after the run declared itself finished
+
+| | Defect | Where it stood |
+|---|---|---|
+| S1 | `scoped_sole_user_id` returned the sole tenant to every caller — both arms of the branch returned the same value, and `POST /auth/register` is ungated, so any registered account read, overwrote and deleted the operator's watchlist | Shipped by **SC11** under the message *"tenant isolation"*, with `test_scoped_sole_collapses_foreign_principal` asserting it. Fixed by `M43.4` |
+| S2 | `resolve_sole_user_id` seeded the e2e account from the **request path** — an upsert, so a `GET /watchlist` created an `app_user` whose password is a published repo constant and reset it on every call, at ~205 ms of Argon2id | Fixed on `fix/sc-hardening` |
+| S3 | All six `not_found` sites passed one argument to a two-argument helper, so every 404 on the catalog was a **500**. mypy had reported all six the entire time, in a lint gate that was red while the module was called green | Fixed on `fix/sc-hardening` |
+| S4 | `visibility == "PUBLISHED"` appeared at exactly one line in the router. `cb_basket` has no owner column, so a PRIVATE basket was readable by slug, anonymously | Fixed on `fix/sc-hardening` |
+| S5 | Six catalog `GET`s carried no authentication at all, against `02-scope-and-gating.md`'s "web login only" | Fixed on `fix/sc-hardening` |
+| A1 | One version's weights were replayed across the whole window, so a momentum basket's published record was today's winners run over history they were never held through. Measured: **+15.6pp** median 5Y CAGR overstatement across 300 simulated baskets, overstated in 292 of them | Fixed on `fix/sc-hardening` |
+| A2 | Two observations were enough to publish a **LOW** risk label — two consecutive +2% days read as calm, because a sample standard deviation measures dispersion, not magnitude | Fixed on `fix/sc-hardening` |
+| A3 | Windows were bar counts indexed off whatever dates existed: "1Y" landed 378 calendar days back, "5Y" spanned 5.12 years while `cagr()` was passed exactly 5. The repo's own `baskfy_core.windows` was never imported | Fixed on `fix/sc-hardening` |
+| A4 | `money()` quantised NAV inside the daily loop — rounding at compute time on a number never stored — drifting up to ~41 bps over 1260 days | Fixed on `fix/sc-hardening` |
+| A6 | Every catalog return is a **price** return (M39.3) and the cards said nothing | Fixed on `fix/sc-hardening` |
+
+### Tests that asserted the bug
+
+Three, which is why the suite stayed green through all of it:
+
+- `test_scoped_sole_collapses_foreign_principal` pinned S1 by name.
+- `test_another_user_id_cannot_see_sole_watchlist_rows` drove the handler as principal 99 and
+  required the SQL to contain `42` and not `99` — the opposite of what its name says.
+- `test_golden_nav_from_fixture_returns` asserted the per-day rounding intermediates, locking in
+  the house-rule-8 violation rather than the spec.
+
+All three were rewritten to assert the spec, per house rule 2. None was deleted.
+
+### The structural gap
+
+`test_explore_catalog.py` invoked handlers as plain coroutines — `await list_explore_baskets(...)`.
+A router tested without an HTTP path cannot see its own dependency graph, so it cannot see that a
+route has no authentication; and it never takes an error path, so it cannot see a 404 that is
+really a 500. `test_explore_http.py` asserts at the boundary instead.
+
+### Still open
+
+- The pre-existing red listed under "Open items" below.
+- The fragility probe reports **false fragility** on 98.7% of guard-passing rebalance dates
+  (measured against the live database): the coverage guard checks the schedule but not the ±1
+  offsets, an uncovered offset yields an empty screen, and an empty screen liquidates to cash.
+  `docs/10` primes the reader to expect fragility, so a data artefact is camouflaged as the
+  documented expected outcome. The data to detect it (`blind_fraction`) is computed per run and
+  never serialised. Owner: the backtesting tree, not this one.
 
 
 ## Tree 3 / D3 unlock (23 Aug 2026)

@@ -368,3 +368,60 @@ a second chart library (docs/02 locks visx).
 
 **Reversal.** Pass real points from fetch once the explore basket payload grows a series;
 delete stub path when fixtures always have ≥2 points.
+
+## Audit / 1 — a basket has no returns before its first version existed · ⚠ UNREVIEWED
+
+**Context.** Fixing A1 (one version's weights replayed across all history) made the NAV series
+version-aware: each day uses the weights of the version effective that day, and the series starts
+on the first priced day at or after the earliest version's `effective_date`.
+
+**Consequence, which is visible to a user.** A basket now reports `NULL` returns for any window
+that reaches back before it existed. The SCAN-seeded `momentum-scan` basket has a single GENESIS
+version effective at seed time, so its card shows no returns at all until history accrues.
+
+**Choice taken.** Ship the empty card. A basket that did not exist has no track record, and the
+alternative — a number computed from a portfolio nobody held — is the defect that was just fixed,
+reintroduced one layer down. House rule 5 says no look-ahead, ever, and this is what that costs.
+
+**Rejected.** (a) Backfill a synthetic version at the basket's `launched_at` — invents holdings
+nobody chose. (b) Keep the old whole-window replay for SCAN baskets only — the same lie, scoped.
+(c) Show the number with a caveat — a caveat does not make a backtest a record.
+
+**How to reverse.** Seed backdated versions from the strategy's real historical scan output, which
+is a genuine record because the scan actually produced those constituents on those dates. That is
+work for the SCAN seeder, not for the metrics job, and it is the honest version of what (a) was
+trying to do.
+
+## Audit / 2 — the disclosure is a component on the surface, not a field on the card · ⚠ UNREVIEWED
+
+**Context.** Every return the catalog publishes is a price return: `ohlcv_daily.close` carries
+splits and bonuses, not cash dividends (`DECISIONS-MERGE.md` M39.3). CLAUDE.md now states the
+rule — any new surface showing a return owes the reader the same sentence.
+
+**Choice taken.** `MetricsOut` carries `return_convention`, `dividends_included` and
+`return_convention_note`, and the web renders one `ReturnConventionNote` per surface, beside the
+existing `DisclosureBlock`.
+
+**Rejected.** One note per card. Repeated across twenty cards it becomes wallpaper, and wallpaper
+is not a disclosure — it is the shape of a disclosure with none of the function.
+
+**Also.** `dividends_included` is a real boolean, not the string `"false"` it was first written
+as. Every non-empty string is truthy in JavaScript, so a UI writing the natural
+`if (metrics.dividends_included)` would have rendered "dividends included" on a series that
+excludes them: a disclosure asserting the opposite of the truth.
+
+## Audit / 3 — S1 resolved in favour of M43.4, not the audit branch · ⚠ UNREVIEWED
+
+**Context.** Two fixes for the same defect landed independently. `M43.4` **refuses** a principal
+that is not the sole tenant; the audit branch **scoped to the caller**, returning the caller's own
+id so a second account simply owns no rows.
+
+**Choice taken.** `M43.4`. It shipped first, and it reads Law 2's multi-tenant clause literally —
+the gateway refuses a mismatch. The audit branch dropped its version and rewrote its tests to
+assert M43.4's contract.
+
+**Residual, recorded rather than left implicit.** `M43.4` guards on
+`principal_user_id is not None`, so a principal carrying no user id still receives the sole
+tenant. Nothing reaches it that way because every handler on the router calls
+`principal.require_user()` first. A test ties the two together, so removing the `require_user`
+calls fails loudly instead of silently reopening the hole.

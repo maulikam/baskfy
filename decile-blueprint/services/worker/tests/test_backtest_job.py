@@ -14,6 +14,7 @@ the suite slower.
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import json
 import time
@@ -27,7 +28,9 @@ from helpers import requires_db
 from sqlalchemy import delete, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from baskfy_api.backtest_runner import BacktestRunner
 from baskfy_api.backtests import artefact_key, build_payload, new_public_id
+from baskfy_api.settings import Settings
 from baskfy_core.backtest import (
     BacktestConfig,
     BacktestDataError,
@@ -53,6 +56,7 @@ from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_core.universes import UNIVERSE_BY_SLUG
 from baskfy_providers.archive import LocalRawArchive
 from baskfy_worker.backtest import execute_backtest, load_backtest_data, trading_calendar
+from baskfy_worker.tasks import backtests as job_module
 from baskfy_worker.tasks.backtests import BacktestNotRunnable, _claim, run_backtest_job
 
 pytestmark = [requires_db, pytest.mark.db]
@@ -647,3 +651,74 @@ async def test_a_claimed_run_is_durably_running_with_a_start_time(
     assert started_at is not None, "started-then-died would be identical to never-started"
     assert started_at >= created_at
     await engine.dispose()
+
+
+async def test_a_run_cancelled_at_shutdown_lands_terminal(
+    session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """M45.3. A clean shutdown must not strand a row at `running` forever.
+
+    Two defects, one path, both measured before the fix:
+
+    * `BacktestRunner.drain` called `task.cancel()` and returned. `cancel()` only *schedules* a
+      `CancelledError` at the task's next suspension point — it does not deliver it and it does
+      not run the task's cleanup. Measured: `in_flight` was still 1 when `drain` returned, and the
+      job's handler had not executed even after another pass of the event loop.
+    * `run_backtest_inline` guarded its out-of-band failure write with `except Exception`, and
+      `asyncio.CancelledError` inherits from `BaseException`, not `Exception`. Measured: with the
+      cancellation fully delivered and awaited, the handler that fires is the `BaseException` one.
+
+    So the shutdown path — the case `drain` exists to handle *well* — was the one that lost runs.
+    `drain` cancelling meant `running` forever, which is exactly the state in-process execution
+    was supposed to be honest about.
+
+    This drives the real `run_backtest_inline` through the real `BacktestRunner`; only the
+    simulation is replaced, with something slow enough to be caught in flight. It fails if either
+    half is reverted.
+    """
+    await _seed_market(session)
+    row = await _queued(session, _config())
+    public_id = row.public_id
+    await session.commit()
+
+    started = asyncio.Event()
+
+    async def _never_finishes(*_args: object, **_kwargs: object) -> None:
+        started.set()
+        await asyncio.sleep(60)
+
+    monkeypatch.setattr(job_module, "run_backtest_job", _never_finishes)
+    monkeypatch.setattr(job_module, "build_publisher", lambda _s: None)
+
+    engine = create_async_engine(helpers.database_url())
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    settings = Settings(invoice_local_dir=str(tmp_path))
+    runner = BacktestRunner(job_module.run_backtest_inline(factory, settings), concurrency=1)
+
+    runner.submit(public_id, fragility=False)
+    await asyncio.wait_for(started.wait(), timeout=5.0)
+
+    async with factory() as observer:
+        in_flight = (
+            await observer.execute(select(Backtest.status).where(Backtest.public_id == public_id))
+        ).scalar_one()
+    assert in_flight == "running", "the claim must be committed before the work (M45.2)"
+
+    await runner.drain(timeout=0.0)
+
+    assert runner.in_flight == 0, "drain must await the cancellation, not merely request it"
+
+    async with factory() as observer:
+        status, error, finished_at = (
+            await observer.execute(
+                select(Backtest.status, Backtest.error, Backtest.finished_at).where(
+                    Backtest.public_id == public_id
+                )
+            )
+        ).one()
+    await engine.dispose()
+
+    assert status == "failed", f"a cancelled run must land terminal, not stay {status!r}"
+    assert finished_at is not None
+    assert error is not None
+    assert "shut down" in error, f"the user should be told what happened, not {error!r}"

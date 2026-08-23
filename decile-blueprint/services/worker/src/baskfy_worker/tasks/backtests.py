@@ -22,6 +22,7 @@ publishes over a fifteen-year run is not a latency budget worth restructuring th
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import logging
 from collections.abc import Awaitable, Callable, Mapping
@@ -404,6 +405,24 @@ def run_backtest_inline(
                     "backtest was not runnable when the runner reached it",
                     extra={"public_id": public_id},
                 )
+            except asyncio.CancelledError:
+                # Cancellation is NOT an Exception (M45.3). `asyncio.CancelledError` inherits
+                # from `BaseException`, so the `except Exception` below never sees it and the
+                # out-of-band write never fired — a run cancelled at shutdown stayed `running`
+                # forever, and `BacktestRunner.drain` cancels every run still in flight when the
+                # process stops. The clean-shutdown path was the one that stranded rows.
+                #
+                # Rolling back and recording is safe here because the cancellation has already
+                # been delivered; nothing cancels this task a second time before `drain`'s
+                # cleanup window expires. Then re-raise, because swallowing a cancellation is how
+                # a shutdown hangs.
+                await session.rollback()
+                await _mark_failed_out_of_band(
+                    session_factory,
+                    public_id,
+                    error="the server shut down while this run was in flight",
+                )
+                raise
             except Exception:
                 await session.rollback()
                 # The job records failures on the row inside its own transaction, and that
@@ -416,9 +435,15 @@ def run_backtest_inline(
 
 
 async def _mark_failed_out_of_band(
-    session_factory: async_sessionmaker[AsyncSession], public_id: str
+    session_factory: async_sessionmaker[AsyncSession],
+    public_id: str,
+    error: str = "the run stopped unexpectedly and nothing was recorded",
 ) -> None:
-    """Last resort: record the failure in its own transaction."""
+    """Last resort: record the failure in its own transaction.
+
+    ``error`` is what the user reads, so the shutdown case says so rather than borrowing the
+    wording for a crash. Both are failures; only one of them is a bug.
+    """
     try:
         async with session_factory() as session:
             row = (
@@ -426,7 +451,7 @@ async def _mark_failed_out_of_band(
             ).scalar_one_or_none()
             if row is not None and row.status in {STATUS_QUEUED, STATUS_RUNNING}:
                 row.status = STATUS_FAILED
-                row.error = "the run stopped unexpectedly and nothing was recorded"
+                row.error = error
                 row.finished_at = dt.datetime.now(tz=dt.UTC)
             await session.commit()
     except Exception:  # pragma: no cover - the database itself is gone

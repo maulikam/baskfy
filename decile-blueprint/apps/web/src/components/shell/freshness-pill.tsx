@@ -91,8 +91,8 @@ export function FreshnessPill({ className }: { className?: string }) {
       </TooltipTrigger>
       <TooltipContent>
         {degraded
-          ? `The last pipeline run did not publish. You are seeing data version ${data.data_version}, from ${formatTradeDate(data.as_of)}.`
-          : `Data version ${data.data_version}, published for the ${formatTradeDate(data.as_of)} trading session.`}
+          ? `The last pipeline run did not publish. You are seeing the ${formatTradeDate(data.as_of)} trading session.`
+          : `Published for the ${formatTradeDate(data.as_of)} trading session.`}
       </TooltipContent>
     </Tooltip>
   );

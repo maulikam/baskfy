@@ -140,6 +140,26 @@ export const SECTION_TABS = {
   ],
 } as const;
 
+/**
+ * Permanent redirects from Tree 6 — mirrored in `next.config.ts` `redirects()`.
+ * E2e and vitest import this list so the route table cannot drift silently.
+ */
+export const LEGACY_REDIRECTS = [
+  { source: "/dashboard", destination: "/market/today" },
+  { source: "/market-health", destination: "/market/mood" },
+  { source: "/listings", destination: "/market/listings" },
+  { source: "/explore", destination: "/baskets" },
+  { source: "/screens", destination: "/build" },
+  { source: "/screens/exmpl0000001", destination: "/build/exmpl0000001" },
+  { source: "/screens/exmpl0000001/columns", destination: "/build/exmpl0000001/columns" },
+  { source: "/backtests", destination: "/build/backtests" },
+  { source: "/backtests/000000000001", destination: "/build/backtests/000000000001" },
+  { source: "/investments", destination: "/me/investments" },
+  { source: "/investments/foo/bar", destination: "/me/investments/foo/bar" },
+  { source: "/portfolios", destination: "/me/portfolios" },
+  { source: "/watchlist", destination: "/me/watchlist" },
+] as const;
+
 export type SectionKey = keyof typeof SECTION_TABS;
 
 /** Which primary nav item is active for a pathname. */

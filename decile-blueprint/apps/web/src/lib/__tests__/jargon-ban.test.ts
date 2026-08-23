@@ -52,4 +52,14 @@ describe("consumer jargon ban (Tree 6)", () => {
     const src = readFileSync(file, "utf8");
     expect(src).not.toMatch(/import \{ Disclaimer \}/);
   });
+
+  it("consumer chrome does not say data version to users", () => {
+    for (const rel of [
+      "src/components/shell/freshness-pill.tsx",
+      "src/components/portfolios/buffer-explainer.tsx",
+    ]) {
+      const src = readFileSync(join(process.cwd(), rel), "utf8");
+      expect(src, rel).not.toMatch(/data version/i);
+    }
+  });
 });

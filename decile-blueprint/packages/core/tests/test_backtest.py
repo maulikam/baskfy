@@ -28,6 +28,7 @@ from decimal import Decimal
 from itertools import pairwise
 
 import backtest_fixtures as fixtures
+import numpy as np
 import polars as pl
 import pytest
 from benchmarks.budgets import record
@@ -44,6 +45,7 @@ from baskfy_core.backtest import (
     LookAheadError,
     PointInTimeReader,
     PositionLimits,
+    PricePanel,
     RebalanceDay,
     RebalanceFrequency,
     RebalanceSpec,
@@ -1076,3 +1078,49 @@ class TestATotalLossHasACompoundRate:
         assert metrics.total_return == pytest.approx(-1.0)
         assert metrics.cagr == pytest.approx(-1.0), "cagr was None on the least ambiguous run"
         assert metrics.calmar is not None
+
+
+class TestAThinSessionIsNotAHold:
+    """A fill day the market barely opened on must not read like a deliberate decision (M45).
+
+    NSE holds sessions — Diwali Muhurat, Budget-day Saturdays, 2024's special Saturdays — that
+    print between 1% and 18% of a normal day's instruments. Seven of them are in this dataset.
+    `_execute` used to skip a name with no opening print with a bare `continue`, which is the
+    right *action* (a name that did not trade cannot be traded) and was silent.
+
+    Measured on live data before the fix: a full 30-name decision on 2026-01-30, filling on
+    2026-02-01, produced **zero** trades — and `blind_rebalances` was empty, because that counts
+    an empty *screen* and this screen was full. Every honesty counter on the result read clean
+    while none of the strategy had happened.
+    """
+
+    def _panel_without_opens_on(self, data: BacktestData, day: dt.date) -> BacktestData:
+        """The same panel with every opening price on `day` removed."""
+        position = data.prices.calendar.index(day)
+        panel = data.prices
+        opens = panel._open.copy()  # noqa: SLF001 - constructing a fixture, not reading state
+        opens[position, :] = np.nan
+        clone = object.__new__(PricePanel)
+        clone.__dict__.update(panel.__dict__)
+        object.__setattr__(clone, "_open", opens)
+        return replace(data, prices=clone)
+
+    def test_a_day_that_fills_nothing_is_recorded(self) -> None:
+        _, data, schedule = _market_and_data()
+        calendar = list(data.calendar)
+        fill_day = calendar[calendar.index(schedule[2]) + 1]
+
+        result = run_backtest(_config(), self._panel_without_opens_on(data, fill_day))
+
+        assert fill_day in result.unexecuted_fills, (
+            "a rebalance that filled nothing at all was not recorded anywhere"
+        )
+        assert any("could not be filled" in note for note in result.notes)
+        assert any("NOTHING was filled" in note for note in result.notes)
+
+    def test_an_ordinary_run_records_none(self) -> None:
+        _, data, _ = _market_and_data()
+        result = run_backtest(_config(), data)
+
+        assert result.unexecuted_fills == ()
+        assert not any("could not be filled" in note for note in result.notes)

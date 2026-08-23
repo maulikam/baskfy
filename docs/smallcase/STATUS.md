@@ -3,7 +3,7 @@
 The status page for the smallcase-layer run. Updated at the end of every module, loud
 about what is NOT done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: SC1 green · continuing to SC2.** Started 23 Aug 2026.
+**Run state: SC2 green · unlazy tree active · continuing to SC3.** Started 23 Aug 2026.
 
 ## Module ledger
 
@@ -11,7 +11,7 @@ about what is NOT done. A fresh session resumes from the first module not marked
 |---|---|---|
 | SC0 — Baseline and read-in | ✅ | Baselines recorded; desk 1328 passed; DRY_RUN=true; M41 catalog uncommitted at start |
 | SC1 — Schema and domain objects | ✅ | 18 `cb_*` tables + migration 0014; domain asserts; manager seed; tests green |
-| SC2 — Catalog computation and API | ⬜ | |
+| SC2 — Catalog computation and API | ✅ | metrics + explore API + Beat job + SCAN seed; gates/leaf-1.1.* |
 | SC3 — Versions, rebalance engine, plans | ⬜ | |
 | SC4 — Investment accounting | ⬜ | |
 | SC5 — Web UI: discovery and detail | ⬜ | |
@@ -120,3 +120,15 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 3. Full screener suite was not re-timed this session — treat desk green + M41/nav green as the SC0 safety bar; expand before SC12.
 4. ~~`docs/smallcase/03` `cb_*` schema does not exist in Alembic yet — SC1's job.~~ **Done (0014).**
 5. Legacy `/baskets` vs explore catalog collision is deferred to SC5 (do not invent a second MomentumScan basket page in SC1–SC2 without recording the mapping).
+
+## SC2 deliverables (23 Aug 2026)
+
+- `baskfy_core.curated_metrics` — min_amount, vol buckets (PACK.1), returns/CAGR, chain-link NAV
+- `baskfy_core.scan_projection` — deterministic SCAN → genesis version
+- `GET /api/v1/explore*` + watchlist CRUD (`routers/explore.py`); **no execute**
+- Celery Beat `curated_metrics` EOD upsert into `cb_metrics`
+- Fixture SCAN basket seed via `curated_seed`
+- Unlazy plan: `PLAN.md` + `gates/` (tree covering SC2–SC12 + integrity)
+
+**NOT done:** SC3–SC12; full CAGR history over real bars in metrics job may be stubbed to
+min_amount+vol from constituents where history is thin; web `/explore` UI is SC5.

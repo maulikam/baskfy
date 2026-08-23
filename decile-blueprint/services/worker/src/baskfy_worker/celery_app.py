@@ -57,6 +57,8 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # M19 §1. The desk's collection jobs: short, idempotent, and blocked on a Kite token rather
     # than on CPU. They must not queue behind a backfill chunk, so they take the default queue.
     "baskfy.desk.*": {"queue": QUEUE_DEFAULT},
+    # SC2: curated-basket EOD metrics. Compute-bound over price history; same queue as factors.
+    "baskfy.cb.*": {"queue": QUEUE_COMPUTE},
 }
 
 #: docs/09 §Schedule (IST), weekdays. Times are the doc's; the task names are docs/03's.
@@ -141,6 +143,14 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "task": "baskfy.alerts.sweep_webhooks",
         "schedule": crontab(minute="*/2"),
         "options": {"queue": QUEUE_DEFAULT},
+    },
+    # --- SC2: curated-basket catalog metrics ---------------------------------
+    "cb-eod-metrics": {
+        # After the nightly ingest/publish window (20:15 SLO), before alert dispatch at 20:30.
+        # Idempotent per (basket_id, as_of_date); re-runs are no-ops.
+        "task": "baskfy.cb.compute_metrics",
+        "schedule": crontab(hour=20, minute=20, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
     },
 }
 

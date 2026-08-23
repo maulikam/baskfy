@@ -31,7 +31,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_api.curated_seed import seed_curated_managers
+from baskfy_api.curated_seed import seed_curated_managers, seed_momentum_scan_basket
 from baskfy_api.db import session_scope
 from baskfy_api.security import hash_password
 from baskfy_api.settings import get_settings
@@ -656,6 +656,8 @@ async def seed_reference(session: AsyncSession) -> dict[str, int]:
         "plan": await seed_plans(session),
         "screen": await seed_example_screens(session),
         "cb_manager": await seed_curated_managers(session),
+        # Returns 0 until instruments for the fixture ranking exist (after fixture/bars).
+        "cb_momentum_scan": await seed_momentum_scan_basket(session),
     }
 
 
@@ -671,6 +673,7 @@ async def _run(command: str, database_url: str | None) -> dict[str, int]:
         if command in ("all", "fixture"):
             await seed_exchange(session)
             counts["factor_daily"] = await seed_reference_fixture(session)
+            counts["cb_momentum_scan"] = await seed_momentum_scan_basket(session)
         if command in ("all", "bars"):
             await seed_exchange(session)
             counts["ohlcv_daily"] = await seed_fixture_bars(session)
@@ -684,6 +687,7 @@ async def _run(command: str, database_url: str | None) -> dict[str, int]:
             counts["factor_daily"] = await seed_reference_fixture(session)
             # The factsheet's sparklines, own-history medians and regime distances all read bars.
             counts["ohlcv_daily"] = await seed_fixture_bars(session)
+            counts["cb_momentum_scan"] = await seed_momentum_scan_basket(session)
             # The dashboard, the breadth gauges and the listings register (Prompt 11).
             counts["index_snapshot_daily"] = await seed_index_snapshots(session)
             counts["market_health_daily"] = await seed_market_health(session, to_rows().as_of)

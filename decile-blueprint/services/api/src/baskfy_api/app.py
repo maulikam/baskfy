@@ -68,6 +68,7 @@ from baskfy_api.routers import (
     billing,
     brokers,
     desk,
+    explore,
     instruments,
     market_data,
     meta,
@@ -355,6 +356,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # only — see `baskfy_api.queue` for why it publishes by task name rather than importing the
     # worker.
     app.state.task_queue = build_task_queue(settings)
+
+    # M42. The composition root is the one place allowed to know about everything, which is why
+    # this import is here rather than at module scope: `baskfy_worker` imports `baskfy_api`, so a
+    # top-level import would close a cycle. By the time the lifespan runs both packages are
+    # loaded, and the module-level graph is unchanged.
+    app.state.backtest_runner = None
+    if settings.backtest_executor == "inline":
+        from baskfy_api.backtest_runner import BacktestRunner  # noqa: PLC0415
+        from baskfy_worker.tasks.backtests import run_backtest_inline  # noqa: PLC0415
+
+        app.state.backtest_runner = BacktestRunner(
+            run_backtest_inline(app.state.session_factory, settings),
+            concurrency=settings.backtest_concurrency,
+        )
     app.state.rate_limiter = (
         RateLimiter(cache, settings) if cache is not None and settings.rate_limit_enabled else None
     )
@@ -366,6 +381,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        # Finish what is in flight before the engine goes: a two-second job thrown away on
+        # shutdown becomes a row that never finished, for no reason.
+        runner = getattr(app.state, "backtest_runner", None)
+        if runner is not None:
+            await runner.drain()
         if cache is not None:
             await cache.aclose()
         await engine.dispose()
@@ -397,35 +417,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_middleware(app, resolved)
 
     versioned = APIRouter(prefix=API_PREFIX, dependencies=[Depends(enforce_rate_limit)])
-    versioned.include_router(meta.router)
-    versioned.include_router(screens.router)
-    versioned.include_router(instruments.router)
-    versioned.include_router(market_data.router)
-    versioned.include_router(auth.router)
-    versioned.include_router(billing.router)
-    versioned.include_router(portfolios.router)
-    versioned.include_router(backtests.router)
-    # M22: read-only basket surfaces. No POST, no PUT, no DELETE -- execution stays in the desk
-    # console, so nothing here crosses the SEBI gate. `test_baskets_readonly.py` asserts it.
-    versioned.include_router(baskets.router)
-    # M26: the desk's read-only surfaces -- performance, holdings, tradebook, regime, reconcile.
-    # Same rule and the same reason as the line above; `test_desk_readonly.py` asserts it.
-    versioned.include_router(desk.router)
-    # M34: sleeves -- a portfolio divided across several screens plus a slice run by hand.
-    # Amounts and weights only; no share counts, so nothing here is an order list.
-    versioned.include_router(sleeves.router)
-    # PROMPTS.md Prompt 18 §2's contact form. Not in docs/07 (`docs/DECISIONS.md` §18.5).
-    versioned.include_router(support.router)
-    # docs/09 §Observability: "`pipeline_run_step` is the operator UI; expose it at
-    # `/admin/pipeline` behind staff auth." Every route on it depends on `require_staff`.
-    versioned.include_router(admin.router)
-    # PROMPTS.md Prompt 20 §1, §3 and §4. Not in docs/07 — see each router's docstring.
-    versioned.include_router(api_keys.router)
-    versioned.include_router(alerts.router)
-    versioned.include_router(webhook_endpoints.router)
-    # M41: broker connect catalog. Live OAuth is source-gated on BROKER_OAUTH_REVIEW (D3 /
-    # docs/smallcase Track C); the list itself is always served so the UI can be complete.
-    versioned.include_router(brokers.router)
+    _mount_routers(versioned)
     app.include_router(versioned)
 
     # PROMPTS.md Prompt 20 §2: "Gate the entire feature behind a flag that stays OFF until the
@@ -503,3 +495,43 @@ _DOCUMENTED_ERRORS: dict[int | str, dict[str, object]] = {
 def get_app() -> FastAPI:
     """Entry point for ``uvicorn baskfy_api.app:get_app --factory``."""
     return create_app()
+
+
+def _mount_routers(versioned: APIRouter) -> None:
+    """Every router the versioned API exposes, in one place.
+
+    Extracted from `create_app` in M42. The factory had grown past fifty statements — half of
+    them this list — and a function that long stops being readable as a sequence. It is also the
+    part most likely to gain a line, so it is the part worth having its own home.
+    """
+    versioned.include_router(meta.router)
+    versioned.include_router(screens.router)
+    versioned.include_router(instruments.router)
+    versioned.include_router(market_data.router)
+    versioned.include_router(auth.router)
+    versioned.include_router(billing.router)
+    versioned.include_router(portfolios.router)
+    versioned.include_router(backtests.router)
+    # M22: read-only basket surfaces. No POST, no PUT, no DELETE -- execution stays in the desk
+    # console, so nothing here crosses the SEBI gate. `test_baskets_readonly.py` asserts it.
+    versioned.include_router(baskets.router)
+    # M26: the desk's read-only surfaces -- performance, holdings, tradebook, regime, reconcile.
+    # Same rule and the same reason as the line above; `test_desk_readonly.py` asserts it.
+    versioned.include_router(desk.router)
+    # M34: sleeves -- a portfolio divided across several screens plus a slice run by hand.
+    # Amounts and weights only; no share counts, so nothing here is an order list.
+    versioned.include_router(sleeves.router)
+    # PROMPTS.md Prompt 18 §2's contact form. Not in docs/07 (`docs/DECISIONS.md` §18.5).
+    versioned.include_router(support.router)
+    # docs/09 §Observability: "`pipeline_run_step` is the operator UI; expose it at
+    # `/admin/pipeline` behind staff auth." Every route on it depends on `require_staff`.
+    versioned.include_router(admin.router)
+    # PROMPTS.md Prompt 20 §1, §3 and §4. Not in docs/07 — see each router's docstring.
+    versioned.include_router(api_keys.router)
+    versioned.include_router(alerts.router)
+    versioned.include_router(webhook_endpoints.router)
+    # M41: broker connect catalog. Live OAuth is source-gated on BROKER_OAUTH_REVIEW (D3 /
+    # docs/smallcase Track C); the list itself is always served so the UI can be complete.
+    versioned.include_router(brokers.router)
+    # SC2: curated-basket catalog (/explore) + watchlist CRUD. No order/execute routes.
+    versioned.include_router(explore.router)

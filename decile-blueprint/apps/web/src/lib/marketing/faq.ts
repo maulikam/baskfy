@@ -86,7 +86,7 @@ export const FAQ_SECTIONS: readonly FaqSection[] = [
         id: "adjusted",
         question: "Are prices adjusted for splits and bonuses?",
         answer: [
-          "Yes, and by default. Splits, bonuses and cash dividends are folded into an adjustment factor, so every factor is computed on a total-return series. The exchange print is stored alongside it and is what the price column and the price filter use, because that is the number you see on your broker's screen.",
+          "Yes, and by default \u2014 for splits and bonuses. Those are folded into an adjustment factor, so a 1:10 split is not a 90% fall. Cash dividends are deliberately not, so every return here is a price return: about 1.2% a year lower than a total return on NSE, compounding. The exchange print is stored alongside the adjusted series and is what the price column and the price filter use, because that is the number you see on your broker's screen.",
           "Rights issues are the exception: pricing them needs the subscription price, which the exchange's free-text notice usually omits. Rather than guess, those actions are left unadjusted and are reported in the pipeline's own audit trail.",
         ],
       },

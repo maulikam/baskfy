@@ -53,7 +53,7 @@ const POINTS = [
   },
   {
     title: "Adjusted by default, raw on request",
-    body: "Splits, bonuses and dividends are folded into an adjustment factor, so a return is a return and not a corporate action. The exchange print is kept alongside it and is what the price column shows.",
+    body: "Splits and bonuses are folded into an adjustment factor, so a return is a return and not a corporate action. Cash dividends are not: every return here is a price return, roughly 1.2% a year below a total return. The exchange print is kept alongside it and is what the price column shows.",
   },
 ] as const;
 

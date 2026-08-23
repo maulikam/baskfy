@@ -13,10 +13,20 @@ truncating to whatever exists.
 export are all built and tested. They currently run against a synthetic market because there is no
 real history to run them against. The backfill is what turns them on.
 
-**Dividend-adjusted totals throughout.** Cash dividends are already folded into the adjustment
-factor, which makes every factor a total-return figure. What is not built is a dividend-stripped
-series, which is why the backtest engine refuses `dividends: "cash"` and `dividends: "ignore"`
-rather than quietly serving the reinvested variant under a different name.
+**Price-return figures, and a dividend series that is not built.** Splits and bonuses are folded
+into the adjustment factor. Cash dividends are not, so every factor and every backtest here is a
+*price return* — on NSE that is roughly 1.2% a year below a total return, and it compounds. The
+backtest engine's default policy is `ignore`, which is exactly what the stored series already
+computes; `cash` and `reinvest` both need a dividend schedule to add the payment back, and they
+are refused rather than quietly serving a price return under a total-return name.
+
+> **Correction, 23 August 2026.** This section originally said the opposite: that cash dividends
+> were already folded in, that every factor was therefore a total-return figure, and that `ignore`
+> was the refused policy. That was wrong on all three counts. M27 put the question to the
+> reference corpus and measured it — the price convention won 42 of 45 deciding symbol-windows —
+> and M28 applied the 47 share-count actions and deliberately not the 38 dividend-shaped ones. The
+> engine had always computed a price return; only the label was wrong. Left visible rather than
+> quietly rewritten, because anyone who read the original made a decision on it.
 
 ## What the prices become
 

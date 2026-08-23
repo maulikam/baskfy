@@ -114,12 +114,14 @@ export function ConfigForm({
       cash_policy: cashPolicy,
       benchmark,
       risk_overlay: { enabled: overlay, rule: "index_above_200dma" },
-      // Both are docs/10 §Config keys the form does not expose. `reinvest` is the only dividend
+      // Both are docs/10 §Config keys the form does not expose. `ignore` is the only dividend
       // policy this service can serve (see `DividendPolicy` in `baskfy_core.backtest`), and the
       // risk-free rate has no T-bill series behind it, so offering either as a control would be
       // offering a choice that is not there. Sent explicitly rather than left to the server's
       // default, so the stored config says what the run actually used.
-      // M39: the stored close is a price-return series, so this is the only exact policy.
+      //
+      // The first sentence said `reinvest` until M45.9, one line above the code sending
+      // `ignore` — M39 reversed which policies are refused and this comment kept the old pair.
       dividends: "ignore",
       risk_free_rate: "0",
     });

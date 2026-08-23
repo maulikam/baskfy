@@ -16,8 +16,10 @@ date. On the reference date this build was verified against, the five windows re
 
 ## The price series is adjusted, and the price column is not
 
-Every factor reads an adjusted close: splits, bonuses and cash dividends folded into a single
-multiplicative factor, so a 1:10 split is not a 90% drawdown and a dividend is not a gap down. The
+Every factor reads an adjusted close: splits and bonuses folded into a single multiplicative
+factor, so a 1:10 split is not a 90% drawdown. Cash dividends are deliberately *not* folded in, so
+every number here is a price return — about 1.2% a year below a total return on NSE, compounding,
+and a dividend does show as a small gap down on its ex-date. The
 price you see in the price column, and the price the CMP filter compares against, is the exchange
 print — because that is the number on your broker's screen and a filter that disagreed with it
 would be useless.

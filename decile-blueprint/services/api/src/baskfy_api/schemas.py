@@ -1095,6 +1095,19 @@ class FragilityRunOut(_Out):
     max_drawdown: float | None = None
     final_equity: Decimal
     trades: int
+    #: What share of this variant's rebalances decided with an **empty screen** (M43, wired M45.7).
+    #:
+    #: Without it the panel renders a variant that saw nothing as a comparable CAGR, and a spread
+    #: caused entirely by missing data reads as the fragility docs/10 primes the user to expect
+    #: — "Most won't [survive]. That is the point." Camouflage in the worse direction.
+    #:
+    #: Measured on this database, 2026-08-23: of the rebalance dates the coverage guard passes,
+    #: **100% have BOTH +/-1 offsets blind**, because `factor_daily` and `index_member_daily` are
+    #: weekly series (dominant gap 5 sessions), not daily ones. So the offset probe cannot see
+    #: anything here at all, and this field is how a reader finds that out.
+    blind_pct: float = 0.0
+    #: How many rebalances the variant made, so `blind_pct` has a denominator on the page.
+    rebalances: int = 0
 
 
 class BacktestOut(_Out):

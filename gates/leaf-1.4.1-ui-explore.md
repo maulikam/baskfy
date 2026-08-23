@@ -2,9 +2,9 @@
 
 Scope: Explore + basket detail + disclosures
 
-- [ ] G1: basket slug page exists
+- [x] G1: basket slug page exists
   CHECK: test -f decile-blueprint/apps/web/src/app/\(app\)/basket/\[slug\]/page.tsx && echo yes
   EXPECT: yes
-  EVIDENCE: pending
+  EVIDENCE: yes (also explore/page.tsx; vitest nav + explore read-only)
 
 <!-- integrity: security, performance, memory, accuracy required -->

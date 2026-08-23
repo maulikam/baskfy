@@ -88,7 +88,8 @@ export type NavIconName =
   | "arrow-left-right"
   | "gauge"
   | "check-check"
-  | "plug";
+  | "plug"
+  | "compass";
 
 /**
  * Build a ready item from its route, so the label, the blurb and the professional name can never
@@ -114,6 +115,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       page("/market-health", "activity"),
       page("/screens", "table-2"),
       page("/portfolios", "scale"),
+      // SC5. Public curated-basket catalog (`/api/v1/explore`). Soft-coexists with M22
+      // `/baskets` (desk MomentumScan operator view) — DECISIONS-SC SC5.
+      page("/explore", "compass"),
       // M22. The desk's output, read-only: what the strategy wants today and what was last
       // planned. Not in docs/08's IA, which predates the merge -- see MERGE-PROMPTS.md §M22.
       page("/baskets", "briefcase"),

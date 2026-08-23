@@ -40,6 +40,17 @@ export default async function BasketsPage() {
     return (
       <>
         <PageHeader title={PAGES["/baskets"].title} blurb={PAGES["/baskets"].blurb} />
+        <p
+          role="status"
+          className="mb-4 rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm leading-relaxed text-muted-foreground"
+        >
+          <strong className="font-medium text-foreground">Looking for the product catalog?</strong>{" "}
+          Browse curated baskets on{" "}
+          <Link href="/explore" className="text-accent underline-offset-4 hover:underline">
+            Explore
+          </Link>
+          .
+        </p>
         <div className="grid place-items-center rounded-xl border border-dashed border-border bg-card/50 px-6 py-16 text-center">
           <p className="max-w-[52ch] text-sm leading-relaxed text-muted-foreground">
             There is no basket to show yet. Building one needs daily prices in the pipeline and one
@@ -66,6 +77,22 @@ export default async function BasketsPage() {
           </>
         }
       />
+
+      {/*
+        SC5 soft redirect (DECISIONS-SC): Explore is the public catalog; this page stays the
+        desk MomentumScan operator view. Banner + CTA, not a hard redirect.
+      */}
+      <p
+        role="status"
+        className="rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm leading-relaxed text-muted-foreground"
+      >
+        <strong className="font-medium text-foreground">Looking for the product catalog?</strong>{" "}
+        Browse curated baskets on{" "}
+        <Link href="/explore" className="text-accent underline-offset-4 hover:underline">
+          Explore
+        </Link>
+        . This page remains the live MomentumScan view for the desk.
+      </p>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="How many stocks" value={String(basket.rows.length)} />
@@ -151,6 +178,7 @@ export default async function BasketsPage() {
         <span className="text-muted-foreground">See also</span>
         {(
           [
+            ["/explore", PAGES["/explore"].title],
             ["/baskets/plan", "The last plan"],
             ["/portfolios", PAGES["/portfolios"].title],
             ["/backtests", PAGES["/backtests"].title],

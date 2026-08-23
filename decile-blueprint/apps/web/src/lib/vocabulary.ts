@@ -67,6 +67,10 @@ export const PAGES = {
     blurb: "What you hold, and what would change if you rebalanced today.",
     formerly: "Rebalance Tracker",
   },
+  "/explore": {
+    title: "Explore",
+    blurb: "Browse curated baskets by cost, swing, and how they have moved so far.",
+  },
   "/baskets": {
     title: "Today's basket",
     blurb: "The names the strategy ranks highest right now, and the weight each would carry.",

@@ -1098,7 +1098,9 @@ class TestAThinSessionIsNotAHold:
         """The same panel with every opening price on `day` removed."""
         position = data.prices.calendar.index(day)
         panel = data.prices
-        opens = panel._open.copy()  # noqa: SLF001 - constructing a fixture, not reading state
+        # Reaching into the panel deliberately: this constructs a fixture market, it does not
+        # read production state. There is no public way to say "this day did not trade".
+        opens = panel._open.copy()
         opens[position, :] = np.nan
         clone = object.__new__(PricePanel)
         clone.__dict__.update(panel.__dict__)

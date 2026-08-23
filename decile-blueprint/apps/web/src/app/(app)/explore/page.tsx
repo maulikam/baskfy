@@ -5,7 +5,11 @@ import { BasketCard } from "@/components/explore/basket-card";
 import { ExploreFilters, type ExploreFilterState } from "@/components/explore/explore-filters";
 import { DisclosureBlock } from "@/components/explore/disclosure-block";
 import { PageHeader } from "@/components/shell/page-header";
-import { ExploreUnavailable, fetchExploreList } from "@/lib/explore/fetch";
+import {
+  ExploreUnavailable,
+  definedParams,
+  fetchExploreList,
+} from "@/lib/explore/fetch";
 import { PAGES } from "@/lib/vocabulary";
 
 /**
@@ -32,25 +36,18 @@ export default async function ExplorePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const state: ExploreFilterState = {
+  const state: ExploreFilterState = definedParams({
     max_min_amount: first(params.max_min_amount),
     access: first(params.access),
     volatility: first(params.volatility),
     sort: first(params.sort),
     order: first(params.order),
     q: first(params.q),
-  };
+  });
 
   let catalog;
   try {
-    catalog = await fetchExploreList({
-      max_min_amount: state.max_min_amount,
-      access: state.access,
-      volatility: state.volatility,
-      sort: state.sort,
-      order: state.order,
-      q: state.q,
-    });
+    catalog = await fetchExploreList(definedParams(state));
   } catch (error) {
     if (!(error instanceof ExploreUnavailable)) throw error;
     return (

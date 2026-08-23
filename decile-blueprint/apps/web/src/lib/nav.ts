@@ -89,7 +89,10 @@ export type NavIconName =
   | "gauge"
   | "check-check"
   | "plug"
-  | "compass";
+  | "compass"
+  | "bookmark"
+  | "landmark"
+  | "percent";
 
 /**
  * Build a ready item from its route, so the label, the blurb and the professional name can never
@@ -118,6 +121,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       // SC5. Public curated-basket catalog (`/api/v1/explore`). Soft-coexists with M22
       // `/baskets` (desk MomentumScan operator view) — DECISIONS-SC SC5.
       page("/explore", "compass"),
+      // SC6. Investor surfaces — investments / watchlist; fees sits in Account.
+      page("/investments", "landmark"),
+      page("/watchlist", "bookmark"),
       // M22. The desk's output, read-only: what the strategy wants today and what was last
       // planned. Not in docs/08's IA, which predates the merge -- see MERGE-PROMPTS.md §M22.
       page("/baskets", "briefcase"),
@@ -151,6 +157,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       page("/pricing", "tag"),
       page("/invoices", "receipt"),
+      page("/fees", "percent"),
       page("/profile", "user"),
       // M41: broker connect grid (P5.8). Live OAuth stays D3-gated; the page itself is ready.
       page("/brokers", "plug"),

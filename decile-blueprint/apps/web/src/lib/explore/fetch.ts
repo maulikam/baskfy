@@ -67,14 +67,14 @@ export interface ExploreListParams {
 }
 
 /** Drop keys whose values are undefined — required under `exactOptionalPropertyTypes`. */
-export function definedParams<T extends Record<string, string | undefined>>(
+export function definedParams<T extends object>(
   input: T,
-): { [K in keyof T]?: string } {
-  const out: { [K in keyof T]?: string } = {};
+): { [K in keyof T]?: Exclude<T[K], undefined> } {
+  const out = {} as { [K in keyof T]?: Exclude<T[K], undefined> };
   for (const key of Object.keys(input) as (keyof T)[]) {
     const value = input[key];
     if (value !== undefined && value !== "") {
-      out[key] = value;
+      out[key] = value as Exclude<T[typeof key], undefined>;
     }
   }
   return out;

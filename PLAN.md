@@ -96,3 +96,7 @@ Decided BEFORE fan-out. Everything a leaf could get wrong about its neighbors:
 - 2026-08-23T00:07Z leaf-1.4.1-ui-explore + 1.4.2 legacy soft-redirect: `/explore`, `/basket/[slug]`, SC5 DECISIONS; uncommitted
 - 2026-08-23T00:15Z leaf-1.3.1-accounting green (21 tests [100%], fee -k 11); leaf-1.3.2-drift green (9 tests [100%]); curated_accounting + curated_drift pure core; uncommitted
 - 2026-08-23T00:18Z leaf-1.2.1-versions agent done — 24 tests
+- 2026-08-23T00:21Z parent verified SC3–SC5; commits 32f839e SC3, 4f204cf SC4, 707e63e SC5; dispatching SC6–SC11
+- 2026-08-23T00:28Z leaf-1.8.2 tenant (5), 1.8.3 perf (3), 1.8.4 memory (METRICS_BASKET_CHUNK=50); 1.8.1 still 2; uncommitted
+- 2026-08-23T00:25Z leaf-1.5.1-ui-investor + 1.5.2-handoff green — `/investments*`, `/watchlist`, `/fees`; PlanHandoff/MarketClosed wired; uncommitted
+- 2026-08-23T00:25Z leaf-1.6.1-sip + 1.6.2-create green — `curated_sip` 19 tests [100%]; `/create` PRIVATE form; gates + DECISIONS-SC; uncommitted (no commit)

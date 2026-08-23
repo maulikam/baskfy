@@ -3,7 +3,7 @@
 The status page for the smallcase-layer run. Updated at the end of every module, loud
 about what is NOT done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: SC2 green · SC3 leaves 1.2.1–1.2.3 green (module AC open) · SC4/SC5 in flight.** Started 23 Aug 2026.
+**Run state: SC9+SC10 green · SC11–SC12 remaining (SC11 integrity leaves already in progress).** Started 23 Aug 2026.
 
 ## Module ledger
 
@@ -15,12 +15,12 @@ about what is NOT done. A fresh session resumes from the first module not marked
 | SC3 — Versions, rebalance engine, plans | ✅ | Diff/versions + market hours + plan preview API (`cb-sim-*`); no OrderGateway |
 | SC4 — Investment accounting | ✅ | Fees 6666/7000, XIRR 4dp, ledgers, drift rebase; pure core |
 | SC5 — Web UI: discovery and detail | ✅ | `/explore`, `/basket/[slug]`, PlanHandoff stubs; `/baskets` soft-coexist |
-| SC6 — Web UI: investor surfaces | ⬜ | |
-| SC7 — SIP reminders | ⬜ | |
-| SC8 — Create and customize | ⬜ | |
-| SC9 — Engagement | ⬜ | |
-| SC10 — Gating and Track-B dark machinery | ⬜ | |
-| SC11 — Hardening and safety proof | ⬜ | |
+| SC6 — Web UI: investor surfaces | ✅ | `/investments*`, `/watchlist`, `/fees`; handoff CTAs; read-only tests |
+| SC7 — SIP reminders | ✅ | Pure `curated_sip`: REMINDER-only, holiday next_fire, fire key, SIP_DUE dict; 19 tests |
+| SC8 — Create and customize | ✅ | `/create` PRIVATE form; ≥2 instruments; weights normalize to 1.0; preview stubbed |
+| SC9 — Engagement | ✅ | `/cb/pending-actions` + `/cb/updates` + dismiss/resolve; `PendingActionCard`; tests green |
+| SC10 — Gating and Track-B dark machinery | ✅ | Track B flags default false; paywall/signup/fee-collect 404; Free Access helper |
+| SC11 — Hardening and safety proof | 🔄 | integrity leaves 1.8.1–1.8.5 tests green; runbook/bring-up still open |
 | SC12 — Verification and final report | ⬜ | |
 
 States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked.
@@ -109,7 +109,7 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 - No catalog API, metrics job, or web UI (SC2–SC5)
 - No basket rows seeded beyond managers — baskets/versions/constituents are SC2/SC3
 - `/baskets` (M22 `basket_snapshot`) unchanged; mapping to explore catalog deferred to SC5
-- Track B flags and unreachable-surface tests (SC10)
+- ~~Track B flags and unreachable-surface tests (SC10)~~ **done SC10**
 - `BASKFY_SOLE_USER_ID` resolver exists but no `cb_*` user rows written until SC4
 
 ## SC2 deliverables (23 Aug 2026)
@@ -154,6 +154,40 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 - E2E Playwright journey for filter → card → detail
 
 
+## SC7 SIP + SC8 create deliverables (23 Aug 2026) — leaves 1.6.1 / 1.6.2
+
+**Built**
+
+- `baskfy_core.curated_sip` — next_fire holiday snap, pause/resume, fire key, SIP_DUE pending dict;
+  AUTO refused on write; no OrderGateway
+- `packages/core/tests/test_curated_sip.py` — 19 passed [100%]
+- `/create` page + `CreateBasketForm` — PRIVATE framing, ≥2 instruments, equal/custom normalize
+- `lib/create/weights.ts` mirrors domain weight sum contract; preview stubbed
+- DECISIONS-SC SC7/SC8 ⚠ UNREVIEWED; gates leaf-1.6.1 / 1.6.2 / node-1.6 G1 checked
+
+**NOT done (later)**
+
+- Celery Beat SIP due job + DB persistence of pending actions
+- Create API router + catalog PRIVATE visibility E2E
+- Customize-flow on existing investments (CUSTOMIZE batches)
+
+
+## SC9 engage + SC10 Track B (23 Aug 2026) — leaves 1.6.3 / 1.7
+
+**Built**
+
+- `GET/POST /api/v1/cb/pending-actions` (+ dismiss/resolve) and `GET /cb/updates` for the sole user
+- `PendingActionCard` on `/investments`; wired in `app.py` via `curated_engage` + `track_b` routers
+- Track B settings default false: `subscriptions_enabled`, `fee_collection_enabled`, `public_signup_enabled`
+- Dark surfaces `/cb/paywall`, `/cb/public-signup`, `/cb/fees/collect` → 404 while flags off; Free Access helper
+- Tests: `test_curated_engage.py` + `test_track_b_gates.py` green; gates leaf-1.6.3 / 1.7 checked
+
+**NOT done (later)**
+
+- Trending jobs / collections seed / unread-dot persistence (broader SC9 AC)
+- Flag-on (test-env only) lock UI on a FEE fixture; broker-session guard matrix (rest of SC10)
+
+
 ## SC3 plans + hours deliverables (23 Aug 2026) — leaves 1.2.2 / 1.2.3
 
 **Built**
@@ -169,7 +203,8 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 
 - Full SC3 AC loop (seed → invest → simulated fill → publish v2 → apply) across services
 - Persisting `cb_order_batch` / journal sync to EXECUTED
-- Web PlanHandoff / MarketClosed UI (leaf 1.5.2)
+- Web PlanHandoff / MarketClosed UI (leaf 1.5.2) — **done in SC6** (reuse of SC5 stubs +
+  InvestmentActions wiring)
 
 ## Open items / things a future session must know
 
@@ -195,7 +230,42 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 **NOT done**
 
 - API/worker fee journal writer, dividend derivation from CA × holdings, Celery drift job
-- Investor UI (SC6); Track B collection still off
+- ~~Investor UI (SC6)~~ **done SC6**; Track B collection still off
+
+## SC6 investor UI (leaf 1.5.1 / 1.5.2) — 23 Aug 2026
+
+**Built**
+
+- `/investments`, `/investments/[id]`, `/investments/[id]/orders`, `/watchlist`, `/fees`
+- `ShowDetailsModal` (SC4 accounting labels), `NetWorthHeader`, `InvestmentActions`, `FeeFaq`
+- Reuses SC5 `PlanHandoffPanel` + `MarketClosedModal` on Invest more / Exit / Rebalance
+- Nav + vocabulary; graceful empty when ledger APIs absent; watchlist hits `GET /watchlist`
+- Vitest: `lib/investments/__tests__/read-only.test.ts` — no execute / place_order
+- Gates leaf-1.5.1 / 1.5.2 / node-1.5 checked; DECISIONS-SC SC6 ⚠ UNREVIEWED
+
+**NOT done**
+
+- Live investment/fee list APIs (fetch returns empty until routers land)
+- ~~Pending-actions carousel polish / home modules (SC9)~~ API + card landed SC9; home modules / trending still open
+- Watchlist toggle on Explore cards; moved_pct needs NAV (SC4 service)
+- E2E Playwright against DRY_RUN fixtures equal to SC4 ledgers
+
+## SC11 integrity hardening (leaves 1.8.1–1.8.4) — 23 Aug 2026
+
+**Built (tests + hardening only; uncommitted)**
+
+- 1.8.1 no-order: `test_explore_no_orders.py` **2 passed**
+- 1.8.2 tenant: `curated_tenant.py` + `test_curated_tenant_isolation.py` **5 passed**
+  (sole-tenant `user_id` filter; foreign principal cannot see cross-user rows)
+- 1.8.3 perf: explore list documents N+1 avoided + p95 < 1s; **3 passed**
+  (`test_explore_perf.py` 2 + catalog budget assert 1)
+- 1.8.4 memory: `METRICS_BASKET_CHUNK = 50` chunked `compute_all_metrics`
+- 1.8.5 accuracy: already green (21 accounting)
+
+**NOT done (SC11 AC remainder)**
+
+- Runbook publish/apply/drift/Track-B flip; cold bring-up proof for `/explore`
+- Full load measurement over 2011→now history
 
 ## SC3 versions (leaf 1.2.1) — 23 Aug 2026
 

@@ -71,6 +71,22 @@ export const PAGES = {
     title: "Explore",
     blurb: "Browse curated baskets by cost, swing, and how they have moved so far.",
   },
+  "/investments": {
+    title: "Investments",
+    blurb: "Baskets you hold, what they are worth, and what still needs a decision.",
+  },
+  "/watchlist": {
+    title: "Watchlist",
+    blurb: "Baskets you are keeping an eye on, and how they have moved since you added them.",
+  },
+  "/fees": {
+    title: "Fees",
+    blurb: "Platform fees accrued on invest batches — journaled, not collected this run.",
+  },
+  "/create": {
+    title: "Create a basket",
+    blurb: "Pick at least two stocks, set weights, and save a private basket only you can see.",
+  },
   "/baskets": {
     title: "Today's basket",
     blurb: "The names the strategy ranks highest right now, and the weight each would carry.",

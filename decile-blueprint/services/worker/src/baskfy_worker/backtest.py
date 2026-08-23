@@ -152,8 +152,16 @@ async def _require_factor_coverage(session: AsyncSession, schedule: Sequence[dt.
     Nothing downstream can recover from that, so it fails here, where the database is in reach and
     the message can say which dates are missing and what would fill them.
 
-    Only the schedule is checked, not the +/-1 offsets the fragility probe uses: a probe date with
-    no factors degrades the probe, which already reports its own coverage, rather than the result.
+    Only the schedule is checked, not the +/-1 offsets the fragility probe screens on. Extending
+    the guard to them would refuse runs that are otherwise sound, so instead each probe variant
+    now **reports how blind it was**: `BacktestResult.blind_fraction` is serialised as `blind_pct`
+    in `fragility_payload` and rendered beside the variant's CAGR.
+
+    That wiring is M43's, and it corrects a false claim this comment used to make. It said the
+    probe "already reports its own coverage" — the engine had counted it since M39, but nothing
+    serialised it and nothing rendered it, so a variant computed 98% blind presented its CAGR as
+    if it were comparable. Measured on 2026-08-23: 78 of the 79 month-end rebalance dates this
+    guard passes have a neighbouring offset with no factor rows.
     """
     if not schedule:
         return

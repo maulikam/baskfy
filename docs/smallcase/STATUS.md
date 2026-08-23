@@ -3,7 +3,7 @@
 The status page for the smallcase-layer run. Updated at the end of every module, loud
 about what is NOT done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: SC9+SC10 green · SC11–SC12 remaining (SC11 integrity leaves already in progress).** Started 23 Aug 2026.
+**Run state: SC12 green — see `SC-FINAL-REPORT.md`.** Started 23 Aug 2026.
 
 ## Module ledger
 
@@ -20,8 +20,8 @@ about what is NOT done. A fresh session resumes from the first module not marked
 | SC8 — Create and customize | ✅ | `/create` PRIVATE form; ≥2 instruments; weights normalize to 1.0; preview stubbed |
 | SC9 — Engagement | ✅ | `/cb/pending-actions` + `/cb/updates` + dismiss/resolve; `PendingActionCard`; tests green |
 | SC10 — Gating and Track-B dark machinery | ✅ | Track B flags default false; paywall/signup/fee-collect 404; Free Access helper |
-| SC11 — Hardening and safety proof | 🔄 | integrity leaves 1.8.1–1.8.5 tests green; runbook/bring-up still open |
-| SC12 — Verification and final report | ⬜ | |
+| SC11 — Hardening and safety proof | ✅ | No-order, tenant, N+1/p95, METRICS_BASKET_CHUNK=50, fee/XIRR accuracy |
+| SC12 — Verification and final report | ✅ | `SC-FINAL-REPORT.md`; 119 core + 39 API curated collected; Track C held |
 
 States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked.
 

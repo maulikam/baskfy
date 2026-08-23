@@ -3642,6 +3642,11 @@
         "additionalProperties": false,
         "description": "docs/10 §\"honesty features\": one of the five runs in the fragility readout.",
         "properties": {
+          "blind_pct": {
+            "default": 0.0,
+            "title": "Blind Pct",
+            "type": "number"
+          },
           "cagr": {
             "anyOf": [
               {
@@ -3676,6 +3681,11 @@
               }
             ],
             "title": "Max Drawdown"
+          },
+          "rebalances": {
+            "default": 0,
+            "title": "Rebalances",
+            "type": "integer"
           },
           "total_return": {
             "anyOf": [

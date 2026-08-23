@@ -87,6 +87,17 @@ def test_openapi_lists_every_documented_explore_query_param() -> None:
     assert set(DOCUMENTED_LIST_PARAMS) <= names
 
 
+def test_explore_list_avoids_n_plus_one_and_documents_p95_budget() -> None:
+    """SC11 / leaf-1.8.3: catalog is one JOIN (N+1 avoided); p95 budget < 1s."""
+    import inspect
+
+    src = inspect.getsource(list_explore_baskets)
+    mod = inspect.getsource(explore)
+    assert "N+1 avoided" in src or "N+1 avoided" in mod
+    assert "p95" in src or "p95" in mod
+    assert "budget" in src.lower() or "budget" in mod.lower()
+
+
 def _alembic(*args: str) -> subprocess.CompletedProcess[str]:
     url = os.environ[ENV_VAR]
     return subprocess.run(

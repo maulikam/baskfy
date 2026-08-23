@@ -2,9 +2,9 @@
 
 Scope: PlanHandoffPanel + MarketClosedModal; no order button
 
-- [ ] G1: handoff component exists
+- [x] G1: handoff component exists
   CHECK: rg -l 'PlanHandoff|MarketClosed' decile-blueprint/apps/web/src/components -g '*.tsx' | head -1
   EXPECT: tsx
-  EVIDENCE: pending
+  EVIDENCE: decile-blueprint/apps/web/src/components/cb/plan-handoff-panel.tsx (+ market-closed-modal.tsx; wired from investments/investment-actions.tsx and explore/invest-cta.tsx)
 
 <!-- integrity: security, performance, memory, accuracy required -->

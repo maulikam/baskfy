@@ -2,9 +2,9 @@
 
 Scope: Investments, watchlist, fees pages
 
-- [ ] G1: fees page exists
+- [x] G1: fees page exists
   CHECK: test -f decile-blueprint/apps/web/src/app/\(app\)/fees/page.tsx && echo yes
   EXPECT: yes
-  EVIDENCE: pending
+  EVIDENCE: yes (2026-08-23) — also `/investments`, `/investments/[id]`, `/investments/[id]/orders`, `/watchlist`; ShowDetailsModal + InvestmentActions; nav + vocabulary; vitest read-only suite
 
 <!-- integrity: security, performance, memory, accuracy required -->

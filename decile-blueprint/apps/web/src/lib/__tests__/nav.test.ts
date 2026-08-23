@@ -24,10 +24,11 @@ import { PAGES } from "@/lib/vocabulary";
  * The test got *stronger* in one respect: pinning routes rather than strings means a future
  * rename cannot silently point an item somewhere else, which the old string assertions allowed.
  *
- * **Explore and Baskets are deliberate additions to docs/08's list.** docs/08 predates the merge
- * and the curated-basket catalog. SC5 adds `/explore` (public catalog). M22's `/baskets` remains
- * the desk MomentumScan operator view; they soft-coexist (DECISIONS-SC SC5). Explore sits before
- * Baskets so discovery comes first; Baskets still sits beside the rebalance tracker.
+ * **Explore, Investments, Watchlist, and Baskets are deliberate additions to docs/08's list.**
+ * docs/08 predates the merge and the curated-basket catalog. SC5 adds `/explore` (public catalog).
+ * SC6 adds `/investments` and `/watchlist` (investor surfaces); `/fees` lands in Account.
+ * M22's `/baskets` remains the desk MomentumScan operator view; they soft-coexist (DECISIONS-SC
+ * SC5). Explore → Investments → Watchlist sit before Baskets so discovery and holdings come first.
  *
  * **The "Real money" group is M26's addition, renamed by M36.** Five of the desk console's own
  * pages moved onto the web app, and they are grouped rather than scattered through the primary
@@ -48,6 +49,8 @@ describe("the sidebar IA", () => {
       "/screens",
       "/portfolios",
       "/explore",
+      "/investments",
+      "/watchlist",
       "/baskets",
       "/backtests",
       "/listings",
@@ -64,13 +67,13 @@ describe("the sidebar IA", () => {
     ]);
   });
 
-  it("lists the account group with M41's brokers page beside profile", () => {
-    // docs/08 named Pricing, Invoices, Profile, Change Password. Brokers is the P5.8 surface
-    // the merge plan already scheduled; it sits next to Profile because connecting a book is
-    // account setup, not a market-analysis destination.
+  it("lists the account group with fees and M41's brokers page", () => {
+    // docs/08 named Pricing, Invoices, Profile, Change Password. SC6 Fees sits beside
+    // Invoices (accrued ledger). Brokers is the P5.8 surface next to Profile.
     expect(NAV_GROUPS[2]?.items.map((item) => item.href)).toEqual([
       "/pricing",
       "/invoices",
+      "/fees",
       "/profile",
       "/brokers",
       "/change-password",

@@ -75,8 +75,8 @@ export default async function BasketDetailPage({
           <span className="flex flex-wrap items-center gap-2">
             <AccessBadge access={basket.access} />
             <span>
-              {basket.manager.name} · {basket.rebalance_frequency.toLowerCase().replace(/_/g, " ")}{" "}
-              rebalance
+              {basket.manager.name} ·{" "}
+              {basket.rebalance_frequency.toLowerCase().replace(/_/g, " ")} rebalance
               {basket.launched_at ? ` · since ${formatTradeDate(basket.launched_at)}` : ""}
             </span>
           </span>

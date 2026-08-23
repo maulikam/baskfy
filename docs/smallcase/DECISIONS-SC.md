@@ -251,3 +251,88 @@ with HTTP 403 (UI needs structured next-open for notify-me).
 
 **Reversal.** Replace the guard call sites; keep the pure module for other surfaces (SIP, SC6
 handoff).
+
+## SC7 — SIP REMINDER calendar is pure; AUTO refused on write · ⚠ UNREVIEWED
+
+**Context.** SC7 AC: holiday-aware next_fire, idempotent fire per (plan, month), no order path;
+AUTO must stay off the write path until D3.
+
+**Taken.** `baskfy_core.curated_sip`: caller injects `as_of` + `trading_dates`; nominal
+`day_of_month` (1–28) snaps forward to the next trading day; `fire_idempotency_key` =
+`{plan_id}:{YYYY-MM}`; `raise_sip_due` returns a pure `SIP_DUE` pending-action dict or
+`None` when the key was already consumed; `assert_reminder_mode` refuses `AUTO` and any
+non-REMINDER mode. Beat/DB wire deferred — pure evaluate helper is ready for the worker leaf.
+
+**Rejected.** Embedding AUTO in the write enum "for later" (would fail the AC and the desk
+non-negotiable). Reading wall-clock inside core. Calling OrderGateway from SIP fire.
+
+**Reversal.** Delete `curated_sip.py` + tests; reintroduce AUTO only behind D3 and a separate
+write guard.
+
+## SC8 — Create UI saves PRIVATE locally with normalize; preview stubbed · ⚠ UNREVIEWED
+
+**Context.** Gate leaf-1.6.2 only requires `/create/page.tsx`. Full E2E (persist + catalog
+visibility) needs an API router the leaf marked optional.
+
+**Taken.** Client form: ≥2 symbols, equal/custom weights via `lib/create/weights.ts`
+(4 dp, residual on last, assert sum 1.0 mirroring `assert_weights_sum_to_one`); PRIVATE
+framing on the page; preview copy stubbed; save is client-side confirmation until
+`curated_create` API lands. No execute route.
+
+**Rejected.** Shipping a half-wired create API that writes without visibility tests.
+Instrument search against live `/instruments` in this leaf (adds API coupling; symbols typed
+for now).
+
+**Reversal.** Replace client save with POST to a create router; keep the weight helpers.
+
+## SC6 — Investor routes empty until ledger APIs; fees in Account · ⚠ UNREVIEWED
+
+**Context.** 05-ui-spec maps `/investments`, `/watchlist`, `/fees`. Watchlist list API exists
+(`GET /api/v1/watchlist`); investments and fee-ledger list endpoints do not yet (SC4 pure math
+only). Nav must stay honest; empty states beat invented fixture ledgers that look live.
+
+**Taken.** Pages call `lib/investments/fetch` which prefers real GETs and returns empty shapes
+on miss/error. Fees sit in **Account** (next to Invoices) with accrued-not-collected framing +
+04 §1 FAQ. Investments + Watchlist sit in the primary nav after Explore. Order-shaped CTAs use
+existing `PlanHandoffPanel` / `MarketClosedModal` via `InvestmentActions`. ShowDetailsModal
+labels match SC4 `InvestorSnapshot` fields. Grep/vitest read-only suite extended to new routes.
+
+**Rejected.** Shipping hard-coded mock investment rows as if they were live (misleading money
+UI). Putting `/fees` in primary (it is account math, not a daily destination). Adding a web
+`/execute` or form post for Invest more / Exit / Rebalance.
+
+**Reversal.** Point fetch helpers at real `/cb/investments` and `/cb/fees` when those routers
+land; remove empty-state copy. Move fees into primary if product IA changes.
+
+## SC9 — Engagement API is sole-tenant list + dismiss/resolve; no orders · ⚠ UNREVIEWED
+
+**Context.** SC9 AC wants updates + pending actions for the home/investments slots. Publish
+already writes `CbUpdatePost` + `CbPendingAction` in `curated_versions`; the missing piece was
+the read/mutate API.
+
+**Taken.** `curated_engage` router: `GET /cb/pending-actions`, `GET /cb/updates`,
+`POST …/dismiss`, `POST …/resolve`, scoped via `scoped_sole_user_id`. Thin
+`PendingActionCard` on `/investments`. No execute paths.
+
+**Rejected.** Building trending/collections/unread-dot in this leaf (broader SC9; can land
+later without blocking the engage gate). Persisting dismiss in a separate notifications table
+(model already has `dismissed_at` / `resolved_at`).
+
+**Reversal.** Remove `curated_engage` include + router; investments falls back to inline card
+markup; publish side-effects stay.
+
+## SC10 — Track B flags default off; dark routes 404; Free Access while off · ⚠ UNREVIEWED
+
+**Context.** docs/smallcase/02: subscriptions / fee collection / public signup stay dark until
+D3. Gate leaf-1.7 only requires the subscriptions flag default false; the pack names all three.
+
+**Taken.** `subscriptions_enabled`, `fee_collection_enabled`, `public_signup_enabled` default
+`False` in settings. Mounted dark routes (`/cb/paywall`, `/cb/public-signup`, `/cb/fees/collect`)
+raise `not_found` while off. `track_b.free_access` treats every basket as Free Access while
+subscriptions are off (FEE labels may still say FEE).
+
+**Rejected.** Gating existing `/auth/register` (would break sole-user auth). Leaving paywall
+routes unmounted (404-when-off is the documented shape and keeps OpenAPI honest about the
+surface name).
+
+**Reversal.** Delete `track_b` router + helpers; keep flag fields at False until a D3 flip.

@@ -2990,7 +2990,7 @@ second broker cannot invent a second holdings shape.
 
 **Reversal.** Set `signed_off=False`, revert this section, restore NEEDS-MAULIK #13. Tokens already issued must be wiped from the store.
 
-**D7 note.** Fee collection / public signup remain off until a separate written D7; Track B flags stay false by default.
+**D7 note.** Full entry now at §D7 below (23 Aug 2026). Fee collection / public signup remain off; Track B flags stay false by default.
 
 ## Tree3 / 3.4 — Dividend Beat uses current-ledger windows · ⚠ UNREVIEWED
 
@@ -3010,6 +3010,49 @@ the Beat until lot writers exist (would leave Tree-3 remnant open).
 
 **Reversal.** Swap the loader for real lot windows when a holdings-history writer lands;
 Beat key and task name stay.
+
+## D7 — Free vs paid ⚠ UNREVIEWED
+
+**Date.** 23 Aug 2026. **Raised by.** Tree-4 leaf 4.9 (autonomy: decide UNREVIEWED; do not flip
+product flags).
+
+**Context.** `docs/06-decisions-required.md` D7 asks free vs paid and what gates execution.
+Track B scaffolding already exists (SC10): `BASKFY_SUBSCRIPTIONS_ENABLED`,
+`BASKFY_FEE_COLLECTION_ENABLED`, `BASKFY_PUBLIC_SIGNUP_ENABLED` default **false**. Fee *ledger*
+math exists (SC4) with `collected=false`; fee-collection routes stay 404 while the collection
+flag is off. CLAUDE.md lists D7 pricing *amounts* as human-track — not for agents to invent.
+
+**Taken for engineering continuity:** Keep Track B flags **false**. Provisional pricing posture:
+operator sole-tenant **Free Access** until counsel + Maulik set amounts. Ledger rows may accrue;
+nothing collects. `BASKFY_SUBSCRIPTIONS_ENABLED` stays `false` in every environment this leaf
+touches.
+
+**Rejected:** Flipping subscriptions / fee collection / public signup on without written amounts
+and counsel. Treating SC4 ledger presence as permission to charge.
+
+**Reversal.** When Maulik writes amounts (and counsel signs off), flip the relevant Track B flag
+in a deliberate deploy, update this section, and remove the Free-Access-everywhere provisional
+posture. Cheap to reverse until the first real charge.
+
+## D10 — Market-data display licensing ⚠ UNREVIEWED
+
+**Date.** 23 Aug 2026. **Raised by.** Tree-4 leaf 4.9 (autonomy: decide UNREVIEWED).
+
+**Context.** CLAUDE.md / merge human-track: market-data *display* licensing is not for agents to
+guess. House rule 6 already separates `close` (adjusted, factors) from `close_raw` (exchange
+print, display). D9 / public-API locks keep redistribution shut
+(`BASKFY_PUBLIC_API_ENABLED` + `DATA_REDISTRIBUTION_REVIEW.signed_off=False`).
+
+**Taken:** Continue showing exchange prints (`close_raw`) and adjusted factors under existing
+house rules; do **not** redistribute a public market-data API (already shut). Display remains
+operator console (`desk.modelbasket.in`) + sole-tenant app. No change to public-API source
+constants in this leaf.
+
+**Rejected:** Opening the public market-data API; serving raw bars or priced fields to anonymous
+callers; treating display-in-app as redistribution clearance.
+
+**Reversal.** After a written licensing / redistribution opinion, flip the public-API locks as a
+deliberate commit (not config alone — see `test_public_api_policy.py`), and amend this section.
 
 
 ---

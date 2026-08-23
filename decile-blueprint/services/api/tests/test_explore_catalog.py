@@ -165,10 +165,14 @@ async def test_scan_basket_seed_is_deterministic_and_idempotent(
             )
         ).scalar_one()
         versions = (
-            await session.execute(
-                select(CbBasketVersion).where(CbBasketVersion.basket_id == basket.id)
+            (
+                await session.execute(
+                    select(CbBasketVersion).where(CbBasketVersion.basket_id == basket.id)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         constituents = (
             await session.execute(
                 select(func.count())

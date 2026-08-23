@@ -35,9 +35,7 @@ async def run_curated_dividends(
     history is a later writer; this job never invents qty from CA factors.
     """
     investments = list(
-        (
-            await session.scalars(select(CbInvestment).where(CbInvestment.status == "ACTIVE"))
-        ).all()
+        (await session.scalars(select(CbInvestment).where(CbInvestment.status == "ACTIVE"))).all()
     )
     if not investments:
         return {
@@ -86,9 +84,7 @@ async def run_curated_dividends(
 
     existing = list(
         (
-            await session.scalars(
-                select(CbDividend).where(CbDividend.investment_id.in_(inv_ids))
-            )
+            await session.scalars(select(CbDividend).where(CbDividend.investment_id.in_(inv_ids)))
         ).all()
     )
     existing_keys = {
@@ -114,9 +110,7 @@ async def run_curated_dividends(
             )
 
         relevant_actions = {
-            iid: actions
-            for iid in holdings_history
-            if (actions := cash_actions.get(iid))
+            iid: actions for iid in holdings_history if (actions := cash_actions.get(iid))
         }
         if not relevant_actions:
             continue

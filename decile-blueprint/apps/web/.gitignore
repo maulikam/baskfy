@@ -4,3 +4,7 @@ playwright-report/
 test-results/
 next-env.d.ts
 *.tsbuildinfo
+
+# local diagnostic scratch
+.diag.mjs
+.e2ebt.mjs

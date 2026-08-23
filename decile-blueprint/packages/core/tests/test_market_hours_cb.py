@@ -55,10 +55,10 @@ class TestIsNseSessionOpen:
 
     def test_utc_input_converted_to_ist(self) -> None:
         # 10:00 IST = 04:30 UTC
-        utc = dt.datetime(2026, 8, 24, 4, 30, tzinfo=dt.timezone.utc)
+        utc = dt.datetime(2026, 8, 24, 4, 30, tzinfo=dt.UTC)
         assert is_nse_session_open(utc, TRADING) is True
         # 08:00 IST = 02:30 UTC — still closed
-        early = dt.datetime(2026, 8, 24, 2, 30, tzinfo=dt.timezone.utc)
+        early = dt.datetime(2026, 8, 24, 2, 30, tzinfo=dt.UTC)
         assert is_nse_session_open(early, TRADING) is False
 
 

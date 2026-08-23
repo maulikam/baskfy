@@ -74,7 +74,9 @@ def token_encryption_key() -> str:
 
 
 def token_store_for(*, path: Path | None = None, key: str | None = None) -> AccessTokenStore:
-    return AccessTokenStore(path or token_store_path(), key if key is not None else token_encryption_key())
+    return AccessTokenStore(
+        path or token_store_path(), key if key is not None else token_encryption_key()
+    )
 
 
 def _state_file() -> Path | None:
@@ -206,9 +208,13 @@ def exchange_request_token(
     missing. A live POST to ``api.kite.trade`` runs only when both are configured for a
     real session — never from the default agent / unit-test environment.
     """
-    secret = (api_secret if api_secret is not None else os.environ.get("BASKFY_KITE_API_SECRET", "")).strip()
+    secret = (
+        api_secret if api_secret is not None else os.environ.get("BASKFY_KITE_API_SECRET", "")
+    ).strip()
     if dry_run_enabled() or not secret:
-        return exchange_request_token_stub(api_key=api_key, request_token=request_token, user_id=user_id)
+        return exchange_request_token_stub(
+            api_key=api_key, request_token=request_token, user_id=user_id
+        )
 
     # Live path — kept for operator sole-tenant login; network-blocked suites never reach here.
     import httpx  # noqa: PLC0415

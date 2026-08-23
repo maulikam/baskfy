@@ -3,9 +3,9 @@
 The status page for the smallcase-layer run. Updated at the end of every module, loud
 about what is NOT done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: SC12 green, then independently audited and found not green.** Started 23 Aug 2026.
-See `SC-FINAL-REPORT.md`, `SC-AC-REPORT.md`, and the section
-"Independent verification" below, which is the part those two reports could not contain.
+**Run state: SC12 + AC-closure + D3 unlock (Tree 3) green — see `SC-FINAL-REPORT.md`, `SC-AC-REPORT.md`, `D3-UNLOCK-REPORT.md`. Tree 4 backlog closed — see `TREE4-BACKLOG-REPORT.md`.** Started 23 Aug 2026.
+
+**Independently audited after that, and found not green** — see "Independent verification" below. Each report above was written by the run it grades; that section is the part they could not contain.
 
 ## Module ledger
 
@@ -210,7 +210,7 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 
 ## Open items / things a future session must know
 
-1. **D3 still unanswered** (`NEEDS-MAULIK` item 13). Track C stays forbidden: no web execute, no third-party broker OAuth, no payment collection.
+1. **D3 written (Tree 3)** — posture B; OAuth unlocked. Web execute still forbidden. Track B flags still false pending D7.
 2. **M41 was uncommitted when SC0 started**; commit it before SC1 so the working tree only carries SC work.
 3. Full screener suite was not re-timed this session — treat desk green + M41/nav green as the SC0 safety bar; expand before SC12.
 4. ~~`docs/smallcase/03` `cb_*` schema does not exist in Alembic yet — SC1's job.~~ **Done (0014).**
@@ -289,8 +289,20 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 
 ## Tree 2 AC-closure (23 Aug 2026)
 
-See `SC-AC-REPORT.md`. SIP Beat `cb-sip-reminders`, `POST /api/v1/cb/baskets`, pure dividends, basket PerformanceChart, explore-handoff Playwright spec, RUN-AND-TEST §8. OAuth still D3-blocked.
+See `SC-AC-REPORT.md` + `D3-UNLOCK-REPORT.md`. SIP Beat, create API, dividends Beat, chart, OAuth callback/holdings. Tree 4 closes remaining backlog leaves.
 
+
+## Tree 3 / D3 unlock (23 Aug 2026)
+
+- Posture **B** written in `docs/DECISIONS-MERGE.md` §D3 ⚠ UNREVIEWED
+- `BROKER_OAUTH_REVIEW.signed_off=True` — callback + holdings sync + create→API + `cb-dividends`
+- Web execute still forbidden; Track B flags still false pending D7
+- **No git `origin` on this clone** — push blocked until remote URL is added (`NEEDS-MAULIK`)
+
+## Tree 4 backlog (in flight)
+
+Engineering: live Zerodha holdings fetch, peer authorize URLs, e2e harden, chart wire, SC3 loop test, customize, Friday runbook.
+Human: D7/D10/counsel recorded without flipping product flags.
 
 ## Independent verification (session `baskfy-11`, 23 Aug 2026)
 

@@ -1,6 +1,8 @@
 import "server-only";
 
 import { apiOrigin } from "@/lib/api/config";
+import { ServerFetchTimeoutError, serverFetchJson } from "@/lib/api/server-fetch";
+import { auth } from "@/lib/auth";
 
 /**
  * Server-side reads for the basket surfaces — M22.
@@ -67,9 +69,30 @@ export interface Plan {
 }
 
 async function readJson(path: string): Promise<unknown> {
-  const response = await fetch(`${apiOrigin()}/api/v1${path}`, { cache: "no-store" });
-  if (!response.ok) throw new BasketUnavailable(`${path} responded ${response.status}`);
-  return response.json();
+  const session = await auth();
+  const token = session?.accessToken;
+  /** Basket snapshot/build budget — env override `BASKFY_BASKET_FETCH_TIMEOUT_MS`. */
+  const basketTimeoutMs: number = (() => {
+    const raw = process.env.BASKFY_BASKET_FETCH_TIMEOUT_MS?.trim();
+    if (!raw) return 4000;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 4000;
+  })();
+  try {
+    return await serverFetchJson({
+      url: `${apiOrigin()}/api/v1${path}`,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      // Live basket build can be heavy (M30); still hard-cap so RSC never hangs.
+      timeoutMs: basketTimeoutMs,
+    });
+  } catch (error) {
+    if (error instanceof ServerFetchTimeoutError) {
+      throw new BasketUnavailable(`${path} timed out after ${error.timeoutMs}ms`);
+    }
+    throw new BasketUnavailable(
+      error instanceof Error ? error.message : `${path} unavailable`,
+    );
+  }
 }
 
 export async function fetchBasket(): Promise<Basket> {

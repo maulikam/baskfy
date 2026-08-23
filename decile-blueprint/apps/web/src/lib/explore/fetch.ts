@@ -1,6 +1,8 @@
 import "server-only";
 
 import { apiOrigin } from "@/lib/api/config";
+import { ServerFetchTimeoutError, serverFetchJson } from "@/lib/api/server-fetch";
+import { auth } from "@/lib/auth";
 
 /**
  * Server-side reads for `/explore` and `/basket/[slug]` — SC5.
@@ -90,9 +92,21 @@ export function definedParams<T extends object>(
 }
 
 async function readJson(path: string): Promise<unknown> {
-  const response = await fetch(`${apiOrigin()}/api/v1${path}`, { cache: "no-store" });
-  if (!response.ok) throw new ExploreUnavailable(`${path} responded ${response.status}`);
-  return response.json();
+  const session = await auth();
+  const token = session?.accessToken;
+  try {
+    return await serverFetchJson({
+      url: `${apiOrigin()}/api/v1${path}`,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  } catch (error) {
+    if (error instanceof ServerFetchTimeoutError) {
+      throw new ExploreUnavailable(`${path} timed out after ${error.timeoutMs}ms`);
+    }
+    throw new ExploreUnavailable(
+      error instanceof Error ? error.message : `${path} unavailable`,
+    );
+  }
 }
 
 function toQuery(params: ExploreListParams): string {

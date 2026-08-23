@@ -1,6 +1,7 @@
 import "server-only";
 
 import { apiOrigin } from "@/lib/api/config";
+import { ServerFetchTimeoutError, serverFetchJson } from "@/lib/api/server-fetch";
 
 /**
  * Server-side reads for the desk surfaces — M26.
@@ -119,9 +120,14 @@ export interface Reconcile {
 }
 
 async function readJson(path: string): Promise<unknown> {
-  const response = await fetch(`${apiOrigin()}/api/v1${path}`, { cache: "no-store" });
-  if (!response.ok) throw new DeskUnavailable(`${path} responded ${response.status}`);
-  return response.json();
+  try {
+    return await serverFetchJson({ url: `${apiOrigin()}/api/v1${path}` });
+  } catch (error) {
+    if (error instanceof ServerFetchTimeoutError) {
+      throw new DeskUnavailable(`${path} timed out after ${error.timeoutMs}ms`);
+    }
+    throw new DeskUnavailable(error instanceof Error ? error.message : `${path} unavailable`);
+  }
 }
 
 export async function fetchPerformance(): Promise<Performance> {

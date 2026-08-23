@@ -230,3 +230,5 @@ get written UNREVIEWED decisions or ABANDON with NEEDS-MAULIK — never silent.
   `lib/explore/performance.ts` + basket chart wire; `test_sc3_dry_run_loop.py` [100%];
   CUSTOMIZE preview API + `/investments/[id]/customize`; gates 4.4–4.7 checked
 - 2026-08-23T04:07Z Tree 4 parent verified; TREE4-BACKLOG-REPORT; push ABANDON #14
+- 2026-08-23T08:55Z Tree 5 RSC perf: gates written; implementing timed server fetch
+- 2026-08-23T09:02Z Tree 5 / tree-6 worker: `server-fetch.ts` (2500ms) + timed explore/investments/basket/desk/`fetchMe`/`serverApi`; API baskets `wait_for` 3s; Suspense in `(app)/layout`; warm curl explore/investments/watchlist/baskets ≤0.52s; gates leaf-5.* + node-5 + GATES.md checked 7/7 leaves; ledger 7 of 7

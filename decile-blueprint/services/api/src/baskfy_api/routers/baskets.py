@@ -27,6 +27,7 @@ to. Nothing is duplicated or re-implemented; if the desk's answer changes, so do
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import json
 from decimal import Decimal
@@ -138,7 +139,18 @@ async def current_basket(
     if stored is not None:
         return BasketOut.model_validate(stored)
 
-    resolved = await build_current_basket(session, date)
+    # Live build can take tens of seconds on deep history (M30: ~67s at nine years). Cap it so
+    # the web RSC navigation never hangs; callers should rely on the nightly snapshot.
+    try:
+        resolved = await asyncio.wait_for(build_current_basket(session, date), timeout=3.0)
+    except TimeoutError as exc:
+        raise Problem(
+            ProblemType.NOT_FOUND,
+            detail=(
+                "no basket snapshot is ready yet, and the live rebuild exceeded the 3s page "
+                "budget. Wait for the nightly basket_snapshot job, or retry later."
+            ),
+        ) from exc
     if resolved is None:
         raise Problem(
             ProblemType.NOT_FOUND,

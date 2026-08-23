@@ -7,6 +7,9 @@ import { serverApi } from "@/lib/api/server";
  * `/portfolios` — docs/08 §Routes marks it client, and docs/01 §8 is the feature: the rebalance
  * tracker. The list itself is fetched on the server so the first paint is not a spinner; every
  * action after that is the client component's.
+ *
+ * Tree-5: `serverApi()` uses `timedFetch` (AbortSignal.timeout ≤ SERVER_FETCH_TIMEOUT_MS) so a
+ * slow/unreachable API cannot stall this RSC flight for tens of seconds.
  */
 export const metadata: Metadata = {
   title: "Rebalance Tracker",

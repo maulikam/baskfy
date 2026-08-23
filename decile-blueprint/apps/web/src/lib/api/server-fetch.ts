@@ -1,0 +1,100 @@
+/**
+ * Timed server-side fetch for RSC pages — Tree 5 / RSC perf.
+ *
+ * RSC navigations were hanging 5–20s when the API was slow or unreachable because
+ * `fetch(..., { cache: "no-store" })` had no AbortSignal. List/shell pages must fail
+ * fast into empty/error UI rather than block the whole flight.
+ *
+ * Default budget: 2500ms (under the ~1–2s user-facing target once the API is warm;
+ * cold starts still abort so the shell paints).
+ */
+import "server-only";
+
+/** Default RSC→API hop budget (ms). Overridable via `BASKFY_SERVER_FETCH_TIMEOUT_MS`. */
+export const SERVER_FETCH_TIMEOUT_MS: number = (() => {
+  const raw = process.env.BASKFY_SERVER_FETCH_TIMEOUT_MS?.trim();
+  if (!raw) return 2500;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 2500;
+})();
+
+export class ServerFetchTimeoutError extends Error {
+  readonly path: string;
+  readonly timeoutMs: number;
+
+  constructor(path: string, timeoutMs: number) {
+    super(`Timed out after ${timeoutMs}ms fetching ${path}`);
+    this.name = "ServerFetchTimeoutError";
+    this.path = path;
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+export type ServerFetchJsonOptions = {
+  /** Absolute or origin-relative URL. */
+  url: string;
+  headers?: HeadersInit;
+  /** Override default timeout. */
+  timeoutMs?: number;
+  /** Passed to fetch; default `no-store` for trading-sensitive pages. */
+  cache?: RequestCache;
+};
+
+/**
+ * GET JSON with AbortSignal.timeout. Throws on non-OK, abort, or network error.
+ */
+export async function serverFetchJson(options: ServerFetchJsonOptions): Promise<unknown> {
+  const timeoutMs = options.timeoutMs ?? SERVER_FETCH_TIMEOUT_MS;
+  const signal = AbortSignal.timeout(timeoutMs);
+  let response: Response;
+  try {
+    response = await fetch(options.url, {
+      method: "GET",
+      headers: options.headers,
+      cache: options.cache ?? "no-store",
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new ServerFetchTimeoutError(options.url, timeoutMs);
+    }
+    throw error;
+  }
+  if (!response.ok) {
+    throw new Error(`${options.url} responded ${response.status}`);
+  }
+  return response.json();
+}
+
+/**
+ * Same as {@link serverFetchJson} but returns `null` on timeout / network / non-OK —
+ * for investor surfaces that prefer empty states over throwing.
+ */
+export async function serverFetchJsonOrNull(
+  options: ServerFetchJsonOptions,
+): Promise<unknown | null> {
+  try {
+    return await serverFetchJson(options);
+  } catch {
+    return null;
+  }
+}
+
+/** Wrap undici/global fetch with a default timeout for openapi-fetch clients. */
+export function timedFetch(
+  timeoutMs: number = SERVER_FETCH_TIMEOUT_MS,
+): (request: Request) => Promise<Response> {
+  return (request: Request): Promise<Response> => {
+    const parent = request.signal;
+    const budget = AbortSignal.timeout(timeoutMs);
+    // AbortSignal.any is Node 20+ / modern browsers; fall back to budget-only if missing.
+    const anyFactory = (
+      AbortSignal as typeof AbortSignal & {
+        any?: (signals: AbortSignal[]) => AbortSignal;
+      }
+    ).any;
+    const signal =
+      parent && typeof anyFactory === "function" ? anyFactory([parent, budget]) : budget;
+    return fetch(new Request(request, { signal }));
+  };
+}

@@ -2,6 +2,7 @@ import "server-only";
 
 import { auth } from "@/lib/auth";
 import { apiOrigin } from "@/lib/api/config";
+import { serverFetchJsonOrNull } from "@/lib/api/server-fetch";
 
 /**
  * Server-side reads for SC6 investor surfaces (`/investments`, `/watchlist`, `/fees`).
@@ -108,16 +109,10 @@ async function authHeaders(): Promise<HeadersInit> {
 }
 
 async function tryJson(path: string): Promise<unknown> {
-  try {
-    const response = await fetch(`${apiOrigin()}/api/v1${path}`, {
-      cache: "no-store",
-      headers: await authHeaders(),
-    });
-    if (!response.ok) return null;
-    return response.json();
-  } catch {
-    return null;
-  }
+  return serverFetchJsonOrNull({
+    url: `${apiOrigin()}/api/v1${path}`,
+    headers: await authHeaders(),
+  });
 }
 
 const EMPTY_INVESTMENTS: InvestmentList = {

@@ -13,6 +13,8 @@ export default defineConfig({
       "@baskfy/api-client": fileURLToPath(
         new URL("../../packages/api-client/src/index.ts", import.meta.url),
       ),
+      /* Next's `server-only` package has no Node entry; vitest needs a stub. */
+      "server-only": fileURLToPath(new URL("./src/test/empty-module.ts", import.meta.url)),
     },
   },
   test: {

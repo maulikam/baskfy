@@ -1,10 +1,11 @@
 import { cookies, headers } from "next/headers";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { Providers } from "@/app/providers";
 import { cookieName } from "@/components/shell/announcement";
 import { AnnouncementBanner } from "@/components/shell/announcement-banner";
 import { AppShell } from "@/components/shell/app-shell";
+import { RscListFallback } from "@/components/shell/rsc-list-fallback";
 import { auth } from "@/lib/auth";
 import { fetchMe } from "@/lib/auth/me";
 
@@ -50,7 +51,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           )
         }
       >
-        {children}
+        {/* Tree-5: stream page RSC after shell — page data hops are timeout-capped. */}
+        <Suspense fallback={<RscListFallback label="Loading page…" />}>{children}</Suspense>
       </AppShell>
     </Providers>
   );

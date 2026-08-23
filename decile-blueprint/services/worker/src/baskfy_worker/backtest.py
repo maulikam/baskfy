@@ -59,6 +59,7 @@ from baskfy_core.backtest import (
 from baskfy_core.models import (
     FactorDaily,
     IndexDef,
+    IndexMemberDaily,
     IndexSnapshotDaily,
     Instrument,
     OhlcvDaily,
@@ -66,6 +67,7 @@ from baskfy_core.models import (
 )
 from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
+from baskfy_core.universes import UNIVERSE_BY_SLUG
 
 log = logging.getLogger(__name__)
 
@@ -133,62 +135,95 @@ async def trading_calendar(
 _DATES_IN_MESSAGE: Final = 5
 
 
-async def _require_factor_coverage(session: AsyncSession, schedule: Sequence[dt.date]) -> None:
-    """Refuse a run whose rebalance dates have no factor rows behind them (M39).
+async def _require_screen_coverage(
+    session: AsyncSession, definition: ScreenDefinition, schedule: Sequence[dt.date]
+) -> None:
+    """Refuse a run whose rebalance dates cannot produce a screen (M39, corrected in M45).
 
     ## Why this is a refusal and not a note
 
-    A screen that selects nothing is a legitimate outcome — every filter can exclude every name —
-    and the engine handles it correctly by going to cash. **A rebalance date with no
-    `factor_daily` rows produces exactly the same empty frame**, and from inside the engine the
-    two are indistinguishable.
+    An empty screen frame has two causes and one appearance. Either every filter excluded every
+    name — a real outcome, and the engine correctly goes to cash — or the screen was never able to
+    ask its question, in which case the run is a simulation of being blindfolded. From inside the
+    engine they are identical, which is how a monthly 2022-2026 test reported +13.8% having sat in
+    cash on 42 of its 57 rebalances.
 
-    That is how a backtest returns a confident number that means nothing. Run against this
-    database before M39, a monthly 2022-2026 test found factor rows on 15 of its 57 rebalance
-    dates: on the other 42 the book was liquidated to cash because the screen "selected nothing",
-    and the run reported +13.8% as though it had simulated a strategy. It had simulated a strategy
-    being blindfolded three months in four.
+    ## The table this used to check was the wrong one
 
-    Nothing downstream can recover from that, so it fails here, where the database is in reach and
-    the message can say which dates are missing and what would fill them.
+    M39 checked `factor_daily` alone. The screen needs **two** things on an as-of date
+    (`baskfy_core.screener`): factor rows, and point-in-time index membership joined on
+    `(index_id, date)` with no snap-back. `index_member_daily` begins on 2021-08-02 while
+    `factor_daily` reaches back to 2017-01-02, so a date can carry thousands of factor rows and no
+    membership at all — and the screen returns nothing, exactly as if the factors were missing.
+
+    Measured on 2026-08-23, monthly over 2017-01-01..2026-08-18: **117 rebalance dates, 117 passed
+    the old guard, and only 15 also had nifty-500 membership.** The guard was waving through 102
+    dates that were guaranteed to screen empty, and a run using them reported a plausible number.
+    A guard that passes what it exists to catch is worse than no guard, because it is trusted.
+
+    Both tables are checked now, against the universe the screen will actually query.
 
     Only the schedule is checked, not the +/-1 offsets the fragility probe screens on. Extending
-    the guard to them would refuse runs that are otherwise sound, so instead each probe variant
-    now **reports how blind it was**: `BacktestResult.blind_fraction` is serialised as `blind_pct`
-    in `fragility_payload` and rendered beside the variant's CAGR.
-
-    That wiring is M43's, and it corrects a false claim this comment used to make. It said the
-    probe "already reports its own coverage" — the engine had counted it since M39, but nothing
-    serialised it and nothing rendered it, so a variant computed 98% blind presented its CAGR as
-    if it were comparable. Measured on 2026-08-23: 78 of the 79 month-end rebalance dates this
-    guard passes have a neighbouring offset with no factor rows.
+    it there would refuse runs that are otherwise sound; instead each probe variant reports its own
+    `blind_fraction` as `blind_pct` (M43).
     """
     if not schedule:
         return
-    covered = set(
+
+    wanted = list(schedule)
+    covered_factors = set(
         (
             await session.execute(
-                select(FactorDaily.date).where(FactorDaily.date.in_(list(schedule))).distinct()
+                select(FactorDaily.date).where(FactorDaily.date.in_(wanted)).distinct()
             )
         )
         .scalars()
         .all()
     )
-    missing = [day for day in schedule if day not in covered]
-    if not missing:
+    universe = UNIVERSE_BY_SLUG.get(definition.index)
+    covered_members: set[dt.date] = set()
+    if universe is not None:
+        covered_members = set(
+            (
+                await session.execute(
+                    select(IndexMemberDaily.date)
+                    .where(
+                        IndexMemberDaily.index_id == universe.index_id,
+                        IndexMemberDaily.date.in_(wanted),
+                    )
+                    .distinct()
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    missing_factors = [day for day in wanted if day not in covered_factors]
+    missing_members = [day for day in wanted if day not in covered_members]
+    if not missing_factors and not missing_members:
         return
 
-    shown = ", ".join(day.isoformat() for day in missing[:_DATES_IN_MESSAGE])
-    more = (
-        f" and {len(missing) - _DATES_IN_MESSAGE} more" if len(missing) > _DATES_IN_MESSAGE else ""
-    )
+    parts: list[str] = []
+    if missing_factors:
+        parts.append(f"{len(missing_factors)} have no factor rows ({_dates(missing_factors)})")
+    if missing_members:
+        parts.append(
+            f"{len(missing_members)} have no {definition.index!r} index membership "
+            f"({_dates(missing_members)})"
+        )
     raise BacktestDataError(
-        f"{len(missing)} of {len(schedule)} rebalance dates have no factor rows, so the screen "
-        f"would select nothing on them and the simulated book would sit in cash: {shown}{more}. "
-        "Factors are computed per date by the nightly pipeline; a backtest needs them on every "
-        "rebalance date in its window. Run `compute_factors` for the missing dates, or choose a "
-        "window and rebalance frequency the computed dates cover."
+        f"of {len(wanted)} rebalance dates, " + " and ".join(parts) + ". The screen needs both on "
+        "every rebalance date: factors to rank by, and point-in-time membership to rank within. "
+        "Without them it selects nothing and the simulated book sits in cash, which is not a "
+        "result. Run `compute_factors` and `refresh_index_membership` for the missing dates, or "
+        "choose a window the computed dates cover."
     )
+
+
+def _dates(days: Sequence[dt.date]) -> str:
+    shown = ", ".join(day.isoformat() for day in days[:_DATES_IN_MESSAGE])
+    more = f" and {len(days) - _DATES_IN_MESSAGE} more" if len(days) > _DATES_IN_MESSAGE else ""
+    return shown + more
 
 
 async def _screen_frames(  # noqa: PLR0913 - the screen, the dates and the version are separate
@@ -393,7 +428,7 @@ async def load_backtest_data(
             "a single backtest may issue. Use a longer rebalance interval or a shorter window."
         )
 
-    await _require_factor_coverage(session, schedule)
+    await _require_screen_coverage(session, definition, schedule)
 
     data_version = await current_data_version(session)
     limit = config.selection.top_n + config.selection.hold_buffer

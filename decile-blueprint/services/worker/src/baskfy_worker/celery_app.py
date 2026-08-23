@@ -44,7 +44,11 @@ QUEUES: Final[tuple[str, ...]] = (QUEUE_INGEST, QUEUE_COMPUTE, QUEUE_BACKTEST, Q
 #: Task name -> queue. Routing lives here rather than on each task so the whole topology is
 #: readable in one place, which is what an operator needs when a queue backs up.
 TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
-    "baskfy.comgest.*": {"queue": QUEUE_INGEST},
+    # "comgest" until M45.5, which is not a word. M2's namespace pass rewrote the domain
+    # `decile.in` -> `baskfy.com` and this pattern read `decile.ingest.*`, so the sed cut it in
+    # half. No task is named `baskfy.ingest.*` yet, so nothing was misrouted by it; the first one
+    # added would have been, silently, onto the default queue.
+    "baskfy.ingest.*": {"queue": QUEUE_INGEST},
     "baskfy.compute.*": {"queue": QUEUE_COMPUTE},
     "baskfy.backtest.*": {"queue": QUEUE_BACKTEST},
     "baskfy.pipeline.*": {"queue": QUEUE_DEFAULT},

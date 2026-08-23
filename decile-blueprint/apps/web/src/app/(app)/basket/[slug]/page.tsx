@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ReturnConventionNote } from "@/components/explore/return-convention-note";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -131,6 +132,7 @@ export default async function BasketDetailPage({
           defaultRange="1Y"
           incompleteHistory={young || performance.source === "empty"}
         />
+        <ReturnConventionNote metrics={basket.metrics ?? null} />
         <DisclosureBlock variant="performance-not-verified" />
         {young ? <DisclosureBlock variant="history-caveat" /> : null}
       </div>

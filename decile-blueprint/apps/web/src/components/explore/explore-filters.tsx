@@ -24,7 +24,7 @@ function hrefFor(next: ExploreFilterState): Route {
     if (value) query.set(key, value);
   }
   const encoded = query.toString();
-  return (encoded ? `/explore?${encoded}` : "/explore") as Route;
+  return encoded ? `/explore?${encoded}` : "/explore";
 }
 
 function Chip({

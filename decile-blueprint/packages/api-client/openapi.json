@@ -1705,6 +1705,73 @@
         "title": "BrokerGateOut",
         "type": "object"
       },
+      "BrokerHoldingOut": {
+        "description": "A holding as the broker reports it.",
+        "properties": {
+          "average_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Average Price",
+            "type": "string"
+          },
+          "collateral_quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Collateral Quantity",
+            "type": "string"
+          },
+          "exchange": {
+            "title": "Exchange",
+            "type": "string"
+          },
+          "last_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Price"
+          },
+          "product": {
+            "default": "CNC",
+            "title": "Product",
+            "type": "string"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "t1_quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "T1 Quantity",
+            "type": "string"
+          },
+          "total_quantity": {
+            "description": "quantity + t1_quantity + collateral_quantity (desk non-negotiable #2).",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Quantity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "exchange",
+          "quantity",
+          "t1_quantity",
+          "collateral_quantity",
+          "average_price",
+          "total_quantity"
+        ],
+        "title": "BrokerHoldingOut",
+        "type": "object"
+      },
       "BrokerListOut": {
         "properties": {
           "adapters_wired": {
@@ -3779,6 +3846,72 @@
         "title": "HoldingIn",
         "type": "object"
       },
+      "HoldingOut": {
+        "additionalProperties": false,
+        "properties": {
+          "added_on": {
+            "format": "date",
+            "title": "Added On",
+            "type": "string"
+          },
+          "avg_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Price"
+          },
+          "delisted_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delisted On"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "symbol",
+          "name",
+          "added_on"
+        ],
+        "title": "HoldingOut",
+        "type": "object"
+      },
       "HoldingPage": {
         "additionalProperties": false,
         "properties": {
@@ -5401,6 +5534,10 @@
             ],
             "title": "Cagr 5Y"
           },
+          "dividends_included": {
+            "title": "Dividends Included",
+            "type": "boolean"
+          },
           "headline_label": {
             "anyOf": [
               {
@@ -5472,6 +5609,14 @@
             ],
             "title": "Ret 6M"
           },
+          "return_convention": {
+            "title": "Return Convention",
+            "type": "string"
+          },
+          "return_convention_note": {
+            "title": "Return Convention Note",
+            "type": "string"
+          },
           "since_inception_pct": {
             "anyOf": [
               {
@@ -5508,6 +5653,11 @@
             "title": "Volatility Value"
           }
         },
+        "required": [
+          "return_convention",
+          "dividends_included",
+          "return_convention_note"
+        ],
         "title": "MetricsOut",
         "type": "object"
       },
@@ -6292,7 +6442,7 @@
           },
           "holdings": {
             "items": {
-              "$ref": "#/components/schemas/baskfy_api__schemas__HoldingOut"
+              "$ref": "#/components/schemas/HoldingOut"
             },
             "title": "Holdings",
             "type": "array"
@@ -9217,7 +9367,7 @@
           },
           "holdings": {
             "items": {
-              "$ref": "#/components/schemas/baskfy_api__routers__brokers__HoldingOut"
+              "$ref": "#/components/schemas/BrokerHoldingOut"
             },
             "title": "Holdings",
             "type": "array"
@@ -9731,6 +9881,8 @@
         "type": "object"
       },
       "WatchlistAddIn": {
+        "additionalProperties": false,
+        "description": "docs/07 conventions: unknown keys are rejected.\n\n``nav_at_watch`` is bounded to the column it lands in (``PRICE`` is ``Numeric(18, 2)``).\nUnbounded, a value like ``1e100000`` passed Pydantic, reached Postgres, raised *numeric\nfield overflow* and surfaced as a 500 rather than a 422 — and a negative NAV stored\nsilently, waiting for whichever module first divides by it.",
         "properties": {
           "basket_slug": {
             "maxLength": 120,
@@ -9741,10 +9893,11 @@
           "nav_at_watch": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0.0,
                 "type": "number"
               },
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
                 "type": "string"
               },
               {
@@ -10187,139 +10340,6 @@
         ],
         "title": "Weighting",
         "type": "string"
-      },
-      "baskfy_api__routers__brokers__HoldingOut": {
-        "description": "Wire shape mirroring ``baskfy_execution.broker_ports.HoldingRow`` (+ documented total).",
-        "properties": {
-          "average_price": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Average Price",
-            "type": "string"
-          },
-          "collateral_quantity": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Collateral Quantity",
-            "type": "string"
-          },
-          "exchange": {
-            "title": "Exchange",
-            "type": "string"
-          },
-          "last_price": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Price"
-          },
-          "product": {
-            "default": "CNC",
-            "title": "Product",
-            "type": "string"
-          },
-          "quantity": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Quantity",
-            "type": "string"
-          },
-          "symbol": {
-            "title": "Symbol",
-            "type": "string"
-          },
-          "t1_quantity": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "T1 Quantity",
-            "type": "string"
-          },
-          "total_quantity": {
-            "description": "quantity + t1_quantity + collateral_quantity (desk non-negotiable #2).",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Total Quantity",
-            "type": "string"
-          }
-        },
-        "required": [
-          "symbol",
-          "exchange",
-          "quantity",
-          "t1_quantity",
-          "collateral_quantity",
-          "average_price",
-          "total_quantity"
-        ],
-        "title": "HoldingOut",
-        "type": "object"
-      },
-      "baskfy_api__schemas__HoldingOut": {
-        "additionalProperties": false,
-        "properties": {
-          "added_on": {
-            "format": "date",
-            "title": "Added On",
-            "type": "string"
-          },
-          "avg_price": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Avg Price"
-          },
-          "delisted_on": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Delisted On"
-          },
-          "instrument_id": {
-            "title": "Instrument Id",
-            "type": "integer"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "quantity": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Quantity"
-          },
-          "symbol": {
-            "title": "Symbol",
-            "type": "string"
-          }
-        },
-        "required": [
-          "instrument_id",
-          "symbol",
-          "name",
-          "added_on"
-        ],
-        "title": "HoldingOut",
-        "type": "object"
       }
     }
   },
@@ -18419,6 +18439,8 @@
             "name": "slug",
             "required": true,
             "schema": {
+              "maxLength": 120,
+              "minLength": 1,
               "title": "Slug",
               "type": "string"
             }
@@ -18652,6 +18674,8 @@
             "name": "slug",
             "required": true,
             "schema": {
+              "maxLength": 120,
+              "minLength": 1,
               "title": "Slug",
               "type": "string"
             }
@@ -18774,6 +18798,8 @@
             "name": "slug",
             "required": true,
             "schema": {
+              "maxLength": 120,
+              "minLength": 1,
               "title": "Slug",
               "type": "string"
             }
@@ -26164,6 +26190,8 @@
             "name": "slug",
             "required": true,
             "schema": {
+              "maxLength": 120,
+              "minLength": 1,
               "title": "Slug",
               "type": "string"
             }

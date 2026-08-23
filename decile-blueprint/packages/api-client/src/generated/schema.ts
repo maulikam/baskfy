@@ -3108,6 +3108,36 @@ export interface components {
             /** Signed Off */
             signed_off: boolean;
         };
+        /**
+         * BrokerHoldingOut
+         * @description A holding as the broker reports it.
+         */
+        BrokerHoldingOut: {
+            /** Average Price */
+            average_price: string;
+            /** Collateral Quantity */
+            collateral_quantity: string;
+            /** Exchange */
+            exchange: string;
+            /** Last Price */
+            last_price?: string | null;
+            /**
+             * Product
+             * @default CNC
+             */
+            product: string;
+            /** Quantity */
+            quantity: string;
+            /** Symbol */
+            symbol: string;
+            /** T1 Quantity */
+            t1_quantity: string;
+            /**
+             * Total Quantity
+             * @description quantity + t1_quantity + collateral_quantity (desk non-negotiable #2).
+             */
+            total_quantity: string;
+        };
         /** BrokerListOut */
         BrokerListOut: {
             /** Adapters Wired */
@@ -3955,6 +3985,26 @@ export interface components {
             /** Symbol */
             symbol: string;
         };
+        /** HoldingOut */
+        HoldingOut: {
+            /**
+             * Added On
+             * Format: date
+             */
+            added_on: string;
+            /** Avg Price */
+            avg_price?: string | null;
+            /** Delisted On */
+            delisted_on?: string | null;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Name */
+            name: string;
+            /** Quantity */
+            quantity?: string | null;
+            /** Symbol */
+            symbol: string;
+        };
         /** HoldingPage */
         HoldingPage: {
             /** Data */
@@ -4439,6 +4489,8 @@ export interface components {
             cagr_3y?: string | null;
             /** Cagr 5Y */
             cagr_5y?: string | null;
+            /** Dividends Included */
+            dividends_included: boolean;
             /** Headline Label */
             headline_label?: string | null;
             /** Headline Pct */
@@ -4451,6 +4503,10 @@ export interface components {
             ret_1y?: string | null;
             /** Ret 6M */
             ret_6m?: string | null;
+            /** Return Convention */
+            return_convention: string;
+            /** Return Convention Note */
+            return_convention_note: string;
             /** Since Inception Pct */
             since_inception_pct?: string | null;
             /** Volatility Bucket */
@@ -4773,7 +4829,7 @@ export interface components {
              */
             created_at: string;
             /** Holdings */
-            holdings: components["schemas"]["baskfy_api__schemas__HoldingOut"][];
+            holdings: components["schemas"]["HoldingOut"][];
             /** Id */
             id: number;
             /** Name */
@@ -5906,7 +5962,7 @@ export interface components {
             /** Dry Run */
             dry_run: boolean;
             /** Holdings */
-            holdings: components["schemas"]["baskfy_api__routers__brokers__HoldingOut"][];
+            holdings: components["schemas"]["BrokerHoldingOut"][];
             /**
              * Note
              * @description How the list was produced (live / fixture / empty). Never an order path.
@@ -6119,7 +6175,15 @@ export interface components {
              */
             email: string;
         };
-        /** WatchlistAddIn */
+        /**
+         * WatchlistAddIn
+         * @description docs/07 conventions: unknown keys are rejected.
+         *
+         *     ``nav_at_watch`` is bounded to the column it lands in (``PRICE`` is ``Numeric(18, 2)``).
+         *     Unbounded, a value like ``1e100000`` passed Pydantic, reached Postgres, raised *numeric
+         *     field overflow* and surfaced as a 500 rather than a 422 — and a negative NAV stored
+         *     silently, waiting for whichever module first divides by it.
+         */
         WatchlistAddIn: {
             /** Basket Slug */
             basket_slug: string;
@@ -6264,56 +6328,6 @@ export interface components {
          * @enum {string}
          */
         Weighting: "equal" | "inverse_volatility" | "rank" | "marketcap";
-        /**
-         * HoldingOut
-         * @description Wire shape mirroring ``baskfy_execution.broker_ports.HoldingRow`` (+ documented total).
-         */
-        baskfy_api__routers__brokers__HoldingOut: {
-            /** Average Price */
-            average_price: string;
-            /** Collateral Quantity */
-            collateral_quantity: string;
-            /** Exchange */
-            exchange: string;
-            /** Last Price */
-            last_price?: string | null;
-            /**
-             * Product
-             * @default CNC
-             */
-            product: string;
-            /** Quantity */
-            quantity: string;
-            /** Symbol */
-            symbol: string;
-            /** T1 Quantity */
-            t1_quantity: string;
-            /**
-             * Total Quantity
-             * @description quantity + t1_quantity + collateral_quantity (desk non-negotiable #2).
-             */
-            total_quantity: string;
-        };
-        /** HoldingOut */
-        baskfy_api__schemas__HoldingOut: {
-            /**
-             * Added On
-             * Format: date
-             */
-            added_on: string;
-            /** Avg Price */
-            avg_price?: string | null;
-            /** Delisted On */
-            delisted_on?: string | null;
-            /** Instrument Id */
-            instrument_id: number;
-            /** Name */
-            name: string;
-            /** Quantity */
-            quantity?: string | null;
-            /** Symbol */
-            symbol: string;
-        };
     };
     responses: never;
     parameters: never;

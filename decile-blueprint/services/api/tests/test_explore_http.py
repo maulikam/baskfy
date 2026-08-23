@@ -22,12 +22,14 @@ from __future__ import annotations
 import ast
 import inspect
 import pathlib
+from decimal import Decimal
 from typing import cast
 
 import httpx
 import pytest
 from api_helpers import assert_problem, bearer, make_user, url
 from fastapi.routing import APIRoute
+from pydantic import ValidationError
 from screener_helpers import requires_db
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +40,7 @@ from baskfy_api.curated_seed import seed_curated_managers
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.problems import Problem, not_found
 from baskfy_api.routers import explore
+from baskfy_api.routers.explore import WatchlistAddIn
 from baskfy_core.curated_baskets import MANAGER_SLUG_BASKFY_ENGINE, SOLE_USER_ENV
 from baskfy_core.models import AppUser, CbBasket, CbManager
 
@@ -388,3 +391,42 @@ class TestEndToEnd:
         if listing.status_code == 200:
             slugs = [row["slug"] for row in listing.json()["items"]]
             assert "a-private-idea" not in slugs
+
+
+class TestWatchlistInputIsBounded:
+    """S6 — the body model was a bare BaseModel with an unbounded Decimal."""
+
+    def test_unknown_keys_are_rejected(self) -> None:
+        """docs/07 conventions. The bare BaseModel silently accepted them."""
+        with pytest.raises(ValidationError):
+            # model_validate rather than a kwarg, so asserting the rejection does not itself
+            # need a type: ignore — house rule 3 forbids them, including in tests.
+            WatchlistAddIn.model_validate({"basket_slug": "x", "user_id": 1})
+
+    def test_an_absurd_nav_is_a_validation_error_not_a_database_overflow(self) -> None:
+        """1e100000 used to pass Pydantic, reach Postgres and surface as a 500.
+
+        The column is PRICE = Numeric(18, 2), so the bound belongs in the model.
+        """
+        with pytest.raises(ValidationError):
+            WatchlistAddIn(basket_slug="x", nav_at_watch=Decimal("1e100000"))
+
+    def test_a_negative_nav_is_refused(self) -> None:
+        with pytest.raises(ValidationError):
+            WatchlistAddIn(basket_slug="x", nav_at_watch=Decimal("-1"))
+
+    def test_a_sane_nav_is_accepted(self) -> None:
+        assert WatchlistAddIn(basket_slug="x", nav_at_watch=Decimal("123.45")).nav_at_watch == (
+            Decimal("123.45")
+        )
+
+    def test_slug_path_params_are_bounded(self) -> None:
+        """An unbounded path param is an arbitrarily long allocation handed to the driver."""
+        for route in explore.router.routes:
+            if not isinstance(route, APIRoute) or "{slug}" not in route.path:
+                continue
+            params = inspect.signature(route.endpoint).parameters
+            annotation = str(params["slug"].annotation)
+            assert "SlugPath" in annotation or "max_length" in annotation, (
+                f"{route.path} takes an unbounded slug"
+            )

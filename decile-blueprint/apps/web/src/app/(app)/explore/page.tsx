@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { BasketCard } from "@/components/explore/basket-card";
+import { ReturnConventionNote } from "@/components/explore/return-convention-note";
 import { ExploreFilters, type ExploreFilterState } from "@/components/explore/explore-filters";
 import { DisclosureBlock } from "@/components/explore/disclosure-block";
 import { PageHeader } from "@/components/shell/page-header";
@@ -104,6 +105,7 @@ export default async function ExplorePage({
         </ul>
       )}
 
+      <ReturnConventionNote metrics={catalog.items[0]?.metrics ?? null} />
       <DisclosureBlock variant="performance-not-verified" />
     </div>
   );

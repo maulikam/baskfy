@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Final
 
 import helpers
+import polars as pl
 import pytest
 from helpers import requires_db
 from sqlalchemy import delete, insert, select
@@ -55,7 +56,13 @@ from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_core.universes import UNIVERSE_BY_SLUG
 from baskfy_providers.archive import LocalRawArchive
-from baskfy_worker.backtest import execute_backtest, load_backtest_data, trading_calendar
+from baskfy_worker.backtest import (
+    _bar_frame,
+    _require_a_loadable_size,
+    execute_backtest,
+    load_backtest_data,
+    trading_calendar,
+)
 from baskfy_worker.tasks import backtests as job_module
 from baskfy_worker.tasks.backtests import BacktestNotRunnable, _claim, run_backtest_job
 
@@ -722,3 +729,89 @@ async def test_a_run_cancelled_at_shutdown_lands_terminal(
     assert finished_at is not None
     assert error is not None
     assert "shut down" in error, f"the user should be told what happened, not {error!r}"
+
+
+class TestTheLoaderDoesNotCostTwentyTimesWhatItBuilds:
+    """M45.8. The price panel was materialised three times over before Polars saw any of it.
+
+    `_bar_frame` called `.all()`, which holds every row as a SQLAlchemy `Row` carrying `Decimal`s,
+    and then copied all of them into four Python lists, and only then built the frame — so the
+    asyncpg buffer, the Rows, the lists and the answer were live together.
+
+    Measured against the live database, 500 instruments over 2017-01-01..2026-08-19, 809,807 rows:
+    **444 MB peak for a 21.6 MB frame, 20.5x**. Streamed in partitions: **52.8 MB, 2.4x**.
+
+    That arithmetic was tolerable when backtests ran in a 4 GB worker. M42 moved them into the API
+    process, where a peak like that evicts every other request as well as the run.
+    """
+
+    async def test_streaming_returns_exactly_what_materialising_did(
+        self, session: AsyncSession
+    ) -> None:
+        """The point of the change is that it is invisible in the output.
+
+        Built the old way here, in the same transaction, and compared frame to frame — ordering
+        included, because the simulation reads the panel positionally.
+        """
+        await _seed_market(session)
+        ids = (
+            await session.execute(select(Instrument.id).order_by(Instrument.id))
+        ).scalars().all()
+        streamed = await _bar_frame(session, list(ids), START, END)
+
+        statement = (
+            select(OhlcvDaily.date, OhlcvDaily.instrument_id, OhlcvDaily.open, OhlcvDaily.close)
+            .where(
+                OhlcvDaily.instrument_id.in_(list(ids)),
+                OhlcvDaily.date >= START,
+                OhlcvDaily.date <= END,
+            )
+            .order_by(OhlcvDaily.instrument_id, OhlcvDaily.date)
+        )
+        rows = (await session.execute(statement)).all()
+        materialised = pl.DataFrame(
+            {
+                "date": [row[0] for row in rows],
+                "instrument_id": [int(row[1]) for row in rows],
+                "open": [float(row[2]) for row in rows],
+                "close": [float(row[3]) for row in rows],
+            },
+            schema={
+                "date": pl.Date,
+                "instrument_id": pl.Int64,
+                "open": pl.Float64,
+                "close": pl.Float64,
+            },
+        )
+
+        assert streamed.height > 0, "an empty panel would make this prove nothing"
+        assert streamed.schema == materialised.schema
+        assert streamed.equals(materialised)
+
+    async def test_a_run_too_large_to_hold_is_refused_rather_than_loaded(
+        self, session: AsyncSession
+    ) -> None:
+        """Nothing bounded the size of a run.
+
+        `MAX_REBALANCE_DATES` bounds how many screens a run issues and says nothing about the
+        price history it then pulls. `top_n` reaches 500 and no maximum window exists, so the size
+        of a run was whatever dates the user typed — in the process that also serves every other
+        request.
+
+        One indexed COUNT before anything is read, and the refusal names the two things the user
+        can change. An eviction names nothing.
+        """
+        await _seed_market(session)
+        ids = (
+            await session.execute(select(Instrument.id).order_by(Instrument.id))
+        ).scalars().all()
+
+        # Refuses above the ceiling...
+        with pytest.raises(BacktestDataError) as refused:
+            await _require_a_loadable_size(session, list(ids), START, END, maximum=1)
+        assert "Shorten the window" in str(refused.value)
+        assert "daily bars" in str(refused.value)
+
+        # ...and is silent at the real one, which no fixture is anywhere near.
+        await _require_a_loadable_size(session, list(ids), START, END)
+        await _require_a_loadable_size(session, [], START, END)

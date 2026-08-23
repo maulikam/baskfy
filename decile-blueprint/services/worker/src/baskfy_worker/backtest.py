@@ -38,7 +38,7 @@ from decimal import Decimal
 from typing import Final
 
 import polars as pl
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.screener import current_data_version, execute_screen
@@ -88,6 +88,34 @@ BACKTEST_SCREEN_COLUMNS: tuple[str, ...] = ("marketcap_cr", "vol_12m")
 #: fifteen years is ~780; anything past this is a configuration mistake, and finding out by
 #: running 5,000 screen queries is an expensive way to learn it.
 MAX_REBALANCE_DATES = 1_000
+
+#: The shape of the price panel, in one place so the empty frame and the streamed chunks cannot
+#: disagree about it.
+_BAR_SCHEMA: Final[dict[str, pl.DataType]] = {
+    "date": pl.Date(),
+    "instrument_id": pl.Int64(),
+    "open": pl.Float64(),
+    "close": pl.Float64(),
+}
+
+#: How many bar rows are converted to Polars at a time.
+#:
+#: Large enough that the per-chunk overhead is irrelevant against a million-row read, small enough
+#: that the transient is a few megabytes rather than a multiple of the answer. Not a tuning knob
+#: worth exposing: the only thing it trades is peak memory against a negligible constant.
+_BAR_CHUNK_ROWS: Final = 50_000
+
+#: The most bar rows one backtest may load.
+#:
+#: There was no bound at all. `MAX_REBALANCE_DATES` bounds how many screens a run issues and says
+#: nothing about how much price history it then pulls, and `top_n` reaches 500 with no maximum
+#: window — so the size of a run was whatever the user's dates implied. Measured: 500 instruments
+#: over nine years is 809,807 rows and a 21.6 MB panel; the ceiling here is a little over three
+#: times that, which is past anything docs/11 contemplates and still far from a 2 GB process.
+#:
+#: Refusing costs one indexed COUNT and turns an eviction — which takes every other request in the
+#: process down with it — into a sentence the user can act on.
+MAX_BAR_ROWS: Final = 3_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -285,6 +313,45 @@ def _number(value: object) -> float | None:
     raise BacktestDataError(f"{value!r} is not a number a weighting scheme can use")
 
 
+async def _require_a_loadable_size(
+    session: AsyncSession,
+    instrument_ids: Sequence[int],
+    start: dt.date,
+    end: dt.date,
+    *,
+    maximum: int = MAX_BAR_ROWS,
+) -> None:
+    """Refuse a run whose price panel would not fit, before any of it is read (M45.8).
+
+    Nothing bounded this. `MAX_REBALANCE_DATES` bounds how many screens a run issues and says
+    nothing about the history it then pulls; `top_n` reaches 500 and no maximum window exists. So
+    the size of a run was whatever dates the user typed, in a process that also serves every other
+    request — and since M42 that process is the API.
+
+    One indexed COUNT, and the refusal names the two things the user can change. An eviction names
+    nothing and takes the rest of the process with it.
+    """
+    if not instrument_ids:
+        return
+    rows = (
+        await session.execute(
+            select(func.count())
+            .select_from(OhlcvDaily)
+            .where(
+                OhlcvDaily.instrument_id.in_(instrument_ids),
+                OhlcvDaily.date >= start,
+                OhlcvDaily.date <= end,
+            )
+        )
+    ).scalar_one()
+    if int(rows) > maximum:
+        raise BacktestDataError(
+            f"this configuration would load {int(rows):,} daily bars for "
+            f"{len(instrument_ids):,} instruments, above the {maximum:,} a single backtest "
+            "may hold in memory. Shorten the window, or select fewer names."
+        )
+
+
 async def _bar_frame(
     session: AsyncSession, instrument_ids: Sequence[int], start: dt.date, end: dt.date
 ) -> pl.DataFrame:
@@ -295,14 +362,7 @@ async def _bar_frame(
     backtest that marked to raw prices would show a split as a 90% loss.
     """
     if not instrument_ids:
-        return pl.DataFrame(
-            schema={
-                "date": pl.Date,
-                "instrument_id": pl.Int64,
-                "open": pl.Float64,
-                "close": pl.Float64,
-            }
-        )
+        return pl.DataFrame(schema=_BAR_SCHEMA)
     statement: Select[tuple[dt.date, int, Decimal, Decimal]] = (
         select(OhlcvDaily.date, OhlcvDaily.instrument_id, OhlcvDaily.open, OhlcvDaily.close)
         .where(
@@ -312,21 +372,38 @@ async def _bar_frame(
         )
         .order_by(OhlcvDaily.instrument_id, OhlcvDaily.date)
     )
-    rows = (await session.execute(statement)).all()
-    return pl.DataFrame(
-        {
-            "date": [row[0] for row in rows],
-            "instrument_id": [int(row[1]) for row in rows],
-            "open": [float(row[2]) for row in rows],
-            "close": [float(row[3]) for row in rows],
-        },
-        schema={
-            "date": pl.Date,
-            "instrument_id": pl.Int64,
-            "open": pl.Float64,
-            "close": pl.Float64,
-        },
-    )
+
+    # Streamed in partitions rather than `.all()` (M45.8). The whole result used to be
+    # materialised at once as SQLAlchemy `Row` objects holding `Decimal`s, and then copied again
+    # into four Python lists, and only then handed to Polars — so the asyncpg buffer, the Rows,
+    # the lists and the frame were all live together.
+    #
+    # Measured against the live database, 500 instruments over 2017-01-01..2026-08-19, 809,807
+    # rows: **444 MB peak to build a 21.6 MB frame, 20.5x**. That is the whole reason a run that
+    # costs two seconds of CPU could evict a 2 GB API process, and it moved into the web process
+    # at M42.
+    #
+    # Each partition is converted and released before the next is fetched, so the peak is one
+    # chunk plus the frames accumulated so far, which is bounded by the answer rather than by a
+    # multiple of it.
+    chunks: list[pl.DataFrame] = []
+    result = await session.stream(statement.execution_options(yield_per=_BAR_CHUNK_ROWS))
+    async for partition in result.partitions(_BAR_CHUNK_ROWS):
+        chunks.append(
+            pl.DataFrame(
+                {
+                    "date": [row[0] for row in partition],
+                    "instrument_id": [int(row[1]) for row in partition],
+                    "open": [float(row[2]) for row in partition],
+                    "close": [float(row[3]) for row in partition],
+                },
+                schema=_BAR_SCHEMA,
+            )
+        )
+        del partition
+    if not chunks:
+        return pl.DataFrame(schema=_BAR_SCHEMA)
+    return pl.concat(chunks, rechunk=True)
 
 
 async def _benchmark_frame(
@@ -436,6 +513,7 @@ async def load_backtest_data(
         session, definition, wanted, data_version=data_version, limit=limit, progress=progress
     )
 
+    await _require_a_loadable_size(session, sorted(candidates), config.start, config.end)
     bars = await _bar_frame(session, sorted(candidates), config.start, config.end)
     if not bars.height:
         raise BacktestDataError(

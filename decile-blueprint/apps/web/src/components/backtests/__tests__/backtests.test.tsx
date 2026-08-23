@@ -61,8 +61,8 @@ describe("the drawdown chart", () => {
 
 describe("the fragility readout", () => {
   const runs = [
-    { label: "base", description: "the configuration as submitted", cagr: 0.18, total_return: 1.2, max_drawdown: -0.3, final_equity: "2200000", trades: 400 },
-    { label: "costs_plus_25pct", description: "every cost component +25%", cagr: 0.15, total_return: 1.0, max_drawdown: -0.31, final_equity: "2000000", trades: 400 },
+    { label: "base", description: "the configuration as submitted", cagr: 0.18, total_return: 1.2, max_drawdown: -0.3, final_equity: "2200000", trades: 400, blind_pct: 0, rebalances: 57 },
+    { label: "costs_plus_25pct", description: "every cost component +25%", cagr: 0.15, total_return: 1.0, max_drawdown: -0.31, final_equity: "2000000", trades: 400, blind_pct: 0, rebalances: 57 },
   ];
 
   it("states the spread in words, not only in a table", () => {
@@ -73,6 +73,39 @@ describe("the fragility readout", () => {
   it("says plainly when the probe was not run", () => {
     render(<FragilityPanel runs={[]} />);
     expect(screen.getByText(/without the fragility probe/i)).toBeTruthy();
+  });
+
+  /**
+   * M45.7. A variant whose screen returned nothing also diverges wildly from the base run — the
+   * engine picks no names and the book sits in cash — and this panel rendered that as a wide CAGR
+   * spread. docs/10 primes the reader to expect exactly that ("Most won't [survive]. That is the
+   * point."), so a hole in the data was camouflaged as the documented finding.
+   *
+   * Measured against the live database on 2026-08-23: of the rebalance dates the coverage guard
+   * passes, 100% have BOTH offsets blind, because factor_daily and index_member_daily are weekly
+   * series. Every offset variant this product can currently produce is in this state.
+   */
+  it("does not let a variant that saw nothing into the spread", () => {
+    const withBlind = [
+      ...runs,
+      { label: "offset_minus_1", description: "every rebalance -1 trading day", cagr: -0.4, total_return: -0.9, max_drawdown: -0.9, final_equity: "100000", trades: 0, blind_pct: 100, rebalances: 57 },
+    ];
+    render(<FragilityPanel runs={withBlind} />);
+
+    // The number reaches a person, which it never did before this.
+    expect(screen.getByText(/decided with an empty screen/i)).toBeTruthy();
+    expect(screen.getByText(/not comparable/i)).toBeTruthy();
+    // And the spread is still the one over the two runs that saw a full screen: 18% - 15% = 3pp.
+    // Including the blind variant would have made it 58pp and called the strategy fragile.
+    expect(screen.getByText(/Across the 2 runs that saw a full screen/i)).toBeTruthy();
+    expect(screen.getByText(/3\.00%/)).toBeTruthy();
+  });
+
+  it("refuses to state a spread when nothing is comparable", () => {
+    const allBlind = runs.map((run) => ({ ...run, blind_pct: 100 }));
+    render(<FragilityPanel runs={allBlind} />);
+    expect(screen.getByText(/no honest spread to state/i)).toBeTruthy();
+    expect(screen.queryByText(/CAGR spans/i)).toBeNull();
   });
 });
 

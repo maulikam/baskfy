@@ -20,7 +20,7 @@ from baskfy_api.auth import AuthenticatedDep
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
 from baskfy_api.problems import not_found
-from baskfy_core.curated_metrics import headline_return
+from baskfy_core.curated_metrics import headline_return, whole_months_between
 from baskfy_core.models import (
     CbBasket,
     CbCollection,
@@ -145,15 +145,20 @@ class WatchlistAddIn(BaseModel):
 def _metrics_out(row: CbMetrics | None, launched_at: dt.date | None) -> MetricsOut | None:
     if row is None:
         return None
-    age_years = Decimal("0")
-    if launched_at is not None:
-        age_years = Decimal((row.as_of_date - launched_at).days) / Decimal("365.25")
+    # The label and the number must describe the same span. Passing the months the basket has
+    # actually existed lets `headline_return` choose both from one row of its table, which is
+    # what stops a card reading "6M returns" over the 21-day figure.
+    months_available = (
+        whole_months_between(launched_at, row.as_of_date) if launched_at is not None else 0
+    )
     headline = headline_return(
-        age_years=age_years,
+        months_available=months_available,
         ret_1m=row.ret_1m,
+        ret_6m=row.ret_6m,
         ret_1y=row.ret_1y,
         cagr_3y=row.cagr_3y,
         cagr_5y=row.cagr_5y,
+        since_inception_pct=row.since_inception_pct,
     )
     return MetricsOut(
         as_of_date=row.as_of_date,

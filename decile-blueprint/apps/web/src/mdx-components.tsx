@@ -79,7 +79,7 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
            system. A broken internal link therefore shows up as a 404, which is why every one of
            them points at a route in `lib/marketing/routes`. */
         return (
-          <Link className="underline underline-offset-2" href={target as never}>
+          <Link className="underline underline-offset-2" href={target}>
             {children}
           </Link>
         );

@@ -29,7 +29,8 @@ export interface InvestmentRow {
   id: string;
   basket_slug: string;
   basket_name: string;
-  status: "ACTIVE" | "EXITED" | string;
+  /** "ACTIVE" | "EXITED" today; string because the API owns the enum. */
+  status: string;
   invested_at: string | null;
   last_invested_at: string | null;
   days_since_last_investment: number | null;
@@ -106,7 +107,7 @@ async function authHeaders(): Promise<HeadersInit> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function tryJson(path: string): Promise<unknown | null> {
+async function tryJson(path: string): Promise<unknown> {
   try {
     const response = await fetch(`${apiOrigin()}/api/v1${path}`, {
       cache: "no-store",

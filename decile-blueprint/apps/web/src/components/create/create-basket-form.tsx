@@ -34,7 +34,8 @@ export interface SavedPrivateBasket {
   id: number;
   slug: string;
   name: string;
-  visibility: "PRIVATE" | string;
+  /** Always "PRIVATE" today; typed as string because the API may add values. */
+  visibility: string;
   constituents: { symbol: string; weight: number }[];
 }
 
@@ -138,7 +139,11 @@ export function CreateBasketForm() {
   }
 
   return (
-    <form onSubmit={onSave} className="flex max-w-xl flex-col gap-6">
+    <form
+      onSubmit={(event) => {
+        // onSave is async; the handler must not return a Promise (no-misused-promises).
+        void onSave(event);
+      }} className="flex max-w-xl flex-col gap-6">
       <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
         This basket stays <span className="font-medium text-foreground">PRIVATE</span> — only you
         see it. It never appears in the public Explore catalog.

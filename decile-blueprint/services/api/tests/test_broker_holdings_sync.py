@@ -97,7 +97,7 @@ class TestSyncHoldingsRoute:
 
 class TestSumQtyRuleDocumented:
     def test_total_quantity_field_documents_non_negotiable_two(self) -> None:
-        source = inspect.getsource(brokers_router.HoldingOut)
+        source = inspect.getsource(brokers_router.BrokerHoldingOut)
         assert "quantity + t1_quantity + collateral_quantity" in source
         assert "non-negotiable" in source.lower() or "#2" in source
 

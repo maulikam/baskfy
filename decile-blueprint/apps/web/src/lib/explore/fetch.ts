@@ -30,6 +30,15 @@ export interface ExploreMetrics {
   since_inception_pct: string | number | null;
   headline_label: string | null;
   headline_pct: string | number | null;
+  /**
+   * Every figure above is a PRICE return. `ohlcv_daily.close` carries splits and bonuses but
+   * not cash dividends (docs/DECISIONS-MERGE.md M39.3), so a total-return series would be
+   * higher by roughly the dividend yield — about 1.2% a year on NSE, compounding.
+   * CLAUDE.md: "any new surface that shows a return owes the reader the same sentence."
+   */
+  return_convention: string;
+  dividends_included: boolean;
+  return_convention_note: string;
 }
 
 export interface ExploreBasketCard {
@@ -88,7 +97,7 @@ async function readJson(path: string): Promise<unknown> {
 
 function toQuery(params: ExploreListParams): string {
   const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
+  for (const [key, value] of Object.entries(params) as [string, string | undefined][]) {
     if (value === undefined || value === "") continue;
     query.set(key, value);
   }

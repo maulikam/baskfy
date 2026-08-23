@@ -11,7 +11,7 @@ import datetime as dt
 from decimal import Decimal
 from typing import Annotated, Final, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Path, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import ColumnExpressionArgument, asc, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,12 @@ from baskfy_api.auth import AuthenticatedDep
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
 from baskfy_api.problems import not_found
-from baskfy_core.curated_metrics import headline_return, whole_months_between
+from baskfy_api.schemas import _In
+from baskfy_core.curated_metrics import (
+    headline_return,
+    return_convention_fields,
+    whole_months_between,
+)
 from baskfy_core.models import (
     CbBasket,
     CbCollection,
@@ -30,6 +35,11 @@ from baskfy_core.models import (
 )
 
 router = APIRouter(tags=["explore"])
+
+#: ``cb_basket.slug``/``cb_manager.slug`` are indexed text; 120 matches WatchlistAddIn's bound.
+#: Unbounded path params were reaching the driver as arbitrarily long allocations.
+SLUG_MAX_LENGTH: Final = 120
+SlugPath = Annotated[str, Path(min_length=1, max_length=SLUG_MAX_LENGTH)]
 
 SortField = Literal[
     "min_amount",
@@ -70,6 +80,14 @@ class MetricsOut(BaseModel):
     since_inception_pct: Decimal | None = None
     headline_label: str | None = None
     headline_pct: Decimal | None = None
+    #: Every number above is a PRICE return. docs/DECISIONS-MERGE.md M39.3 measured the
+    #: convention against the reference corpus: splits and bonuses are inside `ohlcv_daily.close`,
+    #: cash dividends are not. CLAUDE.md now states the rule plainly -- "any new surface that
+    #: shows a return owes the reader the same sentence" -- and this is how the catalog pays it.
+    #: The backtest assumptions panel already says it; the cards said nothing at all.
+    return_convention: str
+    dividends_included: bool
+    return_convention_note: str
 
 
 class ManagerBriefOut(BaseModel):
@@ -137,9 +155,17 @@ class WatchlistOut(BaseModel):
     count: int
 
 
-class WatchlistAddIn(BaseModel):
-    basket_slug: str = Field(min_length=1, max_length=120)
-    nav_at_watch: Decimal | None = None
+class WatchlistAddIn(_In):
+    """docs/07 conventions: unknown keys are rejected.
+
+    ``nav_at_watch`` is bounded to the column it lands in (``PRICE`` is ``Numeric(18, 2)``).
+    Unbounded, a value like ``1e100000`` passed Pydantic, reached Postgres, raised *numeric
+    field overflow* and surfaced as a 500 rather than a 422 — and a negative NAV stored
+    silently, waiting for whichever module first divides by it.
+    """
+
+    basket_slug: str = Field(min_length=1, max_length=SLUG_MAX_LENGTH)
+    nav_at_watch: Annotated[Decimal, Field(gt=0, max_digits=18, decimal_places=2)] | None = None
 
 
 def _metrics_out(row: CbMetrics | None, launched_at: dt.date | None) -> MetricsOut | None:
@@ -160,7 +186,11 @@ def _metrics_out(row: CbMetrics | None, launched_at: dt.date | None) -> MetricsO
         cagr_5y=row.cagr_5y,
         since_inception_pct=row.since_inception_pct,
     )
+    disclosure = return_convention_fields()
     return MetricsOut(
+        return_convention=str(disclosure["return_convention"]),
+        dividends_included=bool(disclosure["dividends_included"]),
+        return_convention_note=str(disclosure["return_convention_note"]),
         as_of_date=row.as_of_date,
         min_amount=row.min_amount,
         volatility_bucket=row.volatility_bucket,
@@ -321,7 +351,9 @@ async def list_managers(session: SessionDep, principal: AuthenticatedDep) -> Man
 
 
 @router.get("/explore/managers/{slug}", response_model=ManagerOut)
-async def get_manager(slug: str, session: SessionDep, principal: AuthenticatedDep) -> ManagerOut:
+async def get_manager(
+    slug: SlugPath, session: SessionDep, principal: AuthenticatedDep
+) -> ManagerOut:
     principal.require_user()
     row = (
         await session.execute(select(CbManager).where(CbManager.slug == slug))
@@ -359,7 +391,7 @@ async def list_collections(session: SessionDep, principal: AuthenticatedDep) -> 
 
 @router.get("/explore/collections/{slug}", response_model=CollectionOut)
 async def get_collection(
-    slug: str, session: SessionDep, principal: AuthenticatedDep
+    slug: SlugPath, session: SessionDep, principal: AuthenticatedDep
 ) -> CollectionOut:
     principal.require_user()
     row = (
@@ -390,7 +422,7 @@ async def _collection_out(session: AsyncSession, row: CbCollection) -> Collectio
 
 @router.get("/explore/{slug}", response_model=BasketCardOut)
 async def get_explore_basket(
-    slug: str, session: SessionDep, principal: AuthenticatedDep
+    slug: SlugPath, session: SessionDep, principal: AuthenticatedDep
 ) -> BasketCardOut:
     principal.require_user()
     row = (
@@ -487,7 +519,7 @@ async def add_watchlist(
 
 @router.delete("/watchlist/{slug}", status_code=204)
 async def remove_watchlist(
-    slug: str,
+    slug: SlugPath,
     session: SessionDep,
     principal: AuthenticatedDep,
 ) -> None:

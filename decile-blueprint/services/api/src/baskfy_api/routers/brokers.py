@@ -108,7 +108,12 @@ class CallbackOut(BaseModel):
     )
 
 
-class HoldingOut(BaseModel):
+# Named for the broker deliberately: `baskfy_api.schemas` already defines a `HoldingOut`, and
+# two response models sharing a name make the OpenAPI generator emit qualified keys, which
+# silently breaks the hand-written client the moment the document is regenerated.
+class BrokerHoldingOut(BaseModel):
+    """A holding as the broker reports it."""
+
     """Wire shape mirroring ``baskfy_execution.broker_ports.HoldingRow`` (+ documented total)."""
 
     symbol: str
@@ -126,7 +131,7 @@ class HoldingOut(BaseModel):
 
 class SyncHoldingsOut(BaseModel):
     broker_id: str
-    holdings: list[HoldingOut]
+    holdings: list[BrokerHoldingOut]
     dry_run: bool
     note: str = Field(
         description="How the list was produced (live / fixture / empty). Never an order path."
@@ -316,7 +321,7 @@ async def sync_holdings(
         raise Problem(ProblemType.NOT_FOUND, f"No broker with id {broker_id!r}.")
 
     rows = holdings_for_broker(broker_id)
-    holdings = [HoldingOut.model_validate(holding_row_to_dict(row)) for row in rows]
+    holdings = [BrokerHoldingOut.model_validate(holding_row_to_dict(row)) for row in rows]
     dry = dry_run_enabled()
     if holdings:
         note = "fixture holdings (DRY_RUN or BASKFY_BROKER_HOLDINGS_FIXTURE)"

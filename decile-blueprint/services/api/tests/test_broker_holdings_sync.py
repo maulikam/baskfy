@@ -13,6 +13,7 @@ from baskfy_execution.broker_ports import normalize_holding, total_quantity
 
 from baskfy_api import broker_holdings
 from baskfy_api.app import create_app
+from baskfy_api.problems import Problem
 from baskfy_api.routers import brokers as brokers_router
 from baskfy_api.routers.brokers import sync_holdings
 
@@ -87,8 +88,6 @@ class TestSyncHoldingsRoute:
         assert total_quantity(expected) == row.total_quantity
 
     async def test_unknown_broker_404(self) -> None:
-        from baskfy_api.problems import Problem
-
         principal = MagicMock()
         principal.require_user.return_value = 1
         with pytest.raises(Problem) as caught:

@@ -13,7 +13,7 @@ from typing import Annotated, Final, Literal
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import asc, desc, func, or_, select
+from sqlalchemy import ColumnExpressionArgument, asc, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import AuthenticatedDep
@@ -188,26 +188,52 @@ def _card(basket: CbBasket, manager: CbManager, metrics: CbMetrics | None) -> Ba
     )
 
 
-def _sort_column(sort: SortField) -> object:
-    mapping: dict[SortField, object] = {
-        "min_amount": CbMetrics.min_amount,
-        "ret_1y": CbMetrics.ret_1y,
-        "cagr_3y": CbMetrics.cagr_3y,
-        "cagr_5y": CbMetrics.cagr_5y,
-        "name": CbBasket.name,
-        "launched_at": CbBasket.launched_at,
-        "volatility": CbMetrics.volatility_value,
-    }
-    return mapping[sort]
+def _visible() -> tuple[ColumnExpressionArgument[bool], ...]:
+    """The predicate that decides a basket may be shown at all.
+
+    One helper, used by every route that reaches ``cb_basket``, because this used to be spelled
+    out at the list route and *nowhere else*: the detail route, the watchlist writes and the
+    collection expansion each selected by slug or id alone. ``cb_basket`` has no owner column,
+    so ``visibility`` is the only thing standing between a PRIVATE basket and the caller, and
+    three of the four places that needed it did not have it.
+    """
+    return (CbBasket.archived_at.is_(None), CbBasket.visibility == "PUBLISHED")
+
+
+_SORT_COLUMNS: dict[SortField, ColumnExpressionArgument[object]] = {
+    "min_amount": CbMetrics.min_amount,
+    "ret_1y": CbMetrics.ret_1y,
+    "cagr_3y": CbMetrics.cagr_3y,
+    "cagr_5y": CbMetrics.cagr_5y,
+    "name": CbBasket.name,
+    "launched_at": CbBasket.launched_at,
+    "volatility": CbMetrics.volatility_value,
+}
+
+
+def _order_by(sort: SortField, order: SortDir) -> ColumnExpressionArgument[object]:
+    """The catalog ordering, with NULLs last in **both** directions.
+
+    Five of the seven sort fields are ``cb_metrics`` columns reached through an outer join, so
+    every one of them can be NULL. Postgres puts NULLs first on ``DESC``, which meant
+    ``?sort=cagr_5y&order=desc`` -- the "best five-year performers" view -- opened with every
+    basket that has no metrics row at all. A basket we could not measure is not the best
+    performer. ``cb_basket.id`` breaks ties so the order is stable between requests, which
+    also has to hold before any pagination is added.
+    """
+    column = _SORT_COLUMNS[sort]
+    ordered = desc(column) if order == "desc" else asc(column)
+    return ordered.nullslast()
 
 
 @router.get("/explore", response_model=BasketListOut)
 async def list_explore_baskets(  # noqa: PLR0913, PLR0917 - one query param per documented facet
     session: SessionDep,
+    principal: AuthenticatedDep,
     max_min_amount: Annotated[Decimal | None, Query(description="Under INR N chip")] = None,
     access: Annotated[str | None, Query(pattern="^(FREE|FEE)$")] = None,
     volatility: Annotated[str | None, Query(pattern="^(LOW|MED|HIGH)$")] = None,
-    category: Annotated[str | None, Query()] = None,
+    category: Annotated[str | None, Query(max_length=60)] = None,
     rebalance_frequency: Annotated[
         str | None,
         Query(pattern="^(WEEKLY|MONTHLY|QUARTERLY|ANNUAL|NEED_BASIS)$"),
@@ -226,6 +252,7 @@ async def list_explore_baskets(  # noqa: PLR0913, PLR0917 - one query param per 
     N+1 avoided (no per-card follow-up SELECTs). Budget: catalog p95 < 1s on dev hardware
     (docs/smallcase/06 SC11).
     """
+    principal.require_user()
     latest = (
         select(CbMetrics.basket_id, func.max(CbMetrics.as_of_date).label("as_of_date"))
         .group_by(CbMetrics.basket_id)
@@ -240,7 +267,7 @@ async def list_explore_baskets(  # noqa: PLR0913, PLR0917 - one query param per 
             CbMetrics,
             (CbMetrics.basket_id == CbBasket.id) & (CbMetrics.as_of_date == latest.c.as_of_date),
         )
-        .where(CbBasket.archived_at.is_(None), CbBasket.visibility == "PUBLISHED")
+        .where(*_visible())
     )
     if max_min_amount is not None:
         stmt = stmt.where(CbMetrics.min_amount.is_not(None), CbMetrics.min_amount <= max_min_amount)
@@ -249,7 +276,7 @@ async def list_explore_baskets(  # noqa: PLR0913, PLR0917 - one query param per 
     if volatility is not None:
         stmt = stmt.where(CbMetrics.volatility_bucket == volatility)
     if category is not None:
-        stmt = stmt.where(CbBasket.categories.any(category))
+        stmt = stmt.where(CbBasket.categories.contains([category]))
     if rebalance_frequency is not None:
         stmt = stmt.where(CbBasket.rebalance_frequency == rebalance_frequency)
     if basket_type is not None:
@@ -261,8 +288,7 @@ async def list_explore_baskets(  # noqa: PLR0913, PLR0917 - one query param per 
         pattern = f"%{q.strip()}%"
         stmt = stmt.where(or_(CbBasket.name.ilike(pattern), CbBasket.slug.ilike(pattern)))
 
-    col = _sort_column(sort)
-    stmt = stmt.order_by(desc(col) if order == "desc" else asc(col))
+    stmt = stmt.order_by(_order_by(sort, order), CbBasket.id.asc())
 
     rows = (await session.execute(stmt)).all()
     items = [_card(b, m, met) for b, m, met in rows]
@@ -270,7 +296,8 @@ async def list_explore_baskets(  # noqa: PLR0913, PLR0917 - one query param per 
 
 
 @router.get("/explore/managers", response_model=ManagerListOut)
-async def list_managers(session: SessionDep) -> ManagerListOut:
+async def list_managers(session: SessionDep, principal: AuthenticatedDep) -> ManagerListOut:
+    principal.require_user()
     rows = (await session.execute(select(CbManager).order_by(CbManager.slug))).scalars().all()
     return ManagerListOut(
         items=[
@@ -289,12 +316,13 @@ async def list_managers(session: SessionDep) -> ManagerListOut:
 
 
 @router.get("/explore/managers/{slug}", response_model=ManagerOut)
-async def get_manager(slug: str, session: SessionDep) -> ManagerOut:
+async def get_manager(slug: str, session: SessionDep, principal: AuthenticatedDep) -> ManagerOut:
+    principal.require_user()
     row = (
         await session.execute(select(CbManager).where(CbManager.slug == slug))
     ).scalar_one_or_none()
     if row is None:
-        raise not_found(f"manager {slug!r} not found")
+        raise not_found("manager", slug)
     return ManagerOut(
         slug=row.slug,
         name=row.name,
@@ -307,7 +335,8 @@ async def get_manager(slug: str, session: SessionDep) -> ManagerOut:
 
 
 @router.get("/explore/collections", response_model=CollectionListOut)
-async def list_collections(session: SessionDep) -> CollectionListOut:
+async def list_collections(session: SessionDep, principal: AuthenticatedDep) -> CollectionListOut:
+    principal.require_user()
     rows = (
         (
             await session.execute(
@@ -324,12 +353,15 @@ async def list_collections(session: SessionDep) -> CollectionListOut:
 
 
 @router.get("/explore/collections/{slug}", response_model=CollectionOut)
-async def get_collection(slug: str, session: SessionDep) -> CollectionOut:
+async def get_collection(
+    slug: str, session: SessionDep, principal: AuthenticatedDep
+) -> CollectionOut:
+    principal.require_user()
     row = (
         await session.execute(select(CbCollection).where(CbCollection.slug == slug))
     ).scalar_one_or_none()
     if row is None:
-        raise not_found(f"collection {slug!r} not found")
+        raise not_found("collection", slug)
     return await _collection_out(session, row)
 
 
@@ -337,7 +369,9 @@ async def _collection_out(session: AsyncSession, row: CbCollection) -> Collectio
     by_id: dict[int, str] = {}
     if row.basket_ids:
         for basket in (
-            await session.execute(select(CbBasket).where(CbBasket.id.in_(list(row.basket_ids))))
+            await session.execute(
+                select(CbBasket).where(CbBasket.id.in_(list(row.basket_ids)), *_visible())
+            )
         ).scalars():
             by_id[basket.id] = basket.slug
     return CollectionOut(
@@ -350,16 +384,19 @@ async def _collection_out(session: AsyncSession, row: CbCollection) -> Collectio
 
 
 @router.get("/explore/{slug}", response_model=BasketCardOut)
-async def get_explore_basket(slug: str, session: SessionDep) -> BasketCardOut:
+async def get_explore_basket(
+    slug: str, session: SessionDep, principal: AuthenticatedDep
+) -> BasketCardOut:
+    principal.require_user()
     row = (
         await session.execute(
             select(CbBasket, CbManager)
             .join(CbManager, CbManager.id == CbBasket.manager_id)
-            .where(CbBasket.slug == slug, CbBasket.archived_at.is_(None))
+            .where(CbBasket.slug == slug, *_visible())
         )
     ).one_or_none()
     if row is None:
-        raise not_found(f"basket {slug!r} not found")
+        raise not_found("basket", slug)
     basket, manager = row
     metrics = (
         await session.execute(
@@ -380,7 +417,7 @@ async def list_watchlist(session: SessionDep, principal: AuthenticatedDep) -> Wa
         await session.execute(
             select(CbWatchlistItem, CbBasket)
             .join(CbBasket, CbBasket.id == CbWatchlistItem.basket_id)
-            .where(CbWatchlistItem.user_id == user_id)
+            .where(CbWatchlistItem.user_id == user_id, *_visible())
             .order_by(CbWatchlistItem.watched_at.desc())
         )
     ).all()
@@ -405,10 +442,12 @@ async def add_watchlist(
 ) -> WatchlistItemOut:
     user_id = await scoped_sole_user_id(session, principal.user_id)
     basket = (
-        await session.execute(select(CbBasket).where(CbBasket.slug == body.basket_slug))
+        await session.execute(
+            select(CbBasket).where(CbBasket.slug == body.basket_slug, *_visible())
+        )
     ).scalar_one_or_none()
     if basket is None:
-        raise not_found(f"basket {body.basket_slug!r} not found")
+        raise not_found("basket", body.basket_slug)
     existing = (
         await session.execute(
             select(CbWatchlistItem).where(
@@ -449,10 +488,10 @@ async def remove_watchlist(
 ) -> None:
     user_id = await scoped_sole_user_id(session, principal.user_id)
     basket = (
-        await session.execute(select(CbBasket).where(CbBasket.slug == slug))
+        await session.execute(select(CbBasket).where(CbBasket.slug == slug, *_visible()))
     ).scalar_one_or_none()
     if basket is None:
-        raise not_found(f"basket {slug!r} not found")
+        raise not_found("basket", slug)
     item = (
         await session.execute(
             select(CbWatchlistItem).where(
@@ -462,6 +501,6 @@ async def remove_watchlist(
         )
     ).scalar_one_or_none()
     if item is None:
-        raise not_found(f"watchlist item for {slug!r} not found")
+        raise not_found("watchlist item", slug)
     await session.delete(item)
     await session.commit()

@@ -116,9 +116,7 @@ STALE_RUNNING_ERROR: Final = (
     "the server stopped while this run was in flight and never came back to it. "
     "Nothing was wrong with the backtest itself — run it again."
 )
-STALE_QUEUED_ERROR: Final = (
-    "nothing ever picked this run up, so it never started. Run it again."
-)
+STALE_QUEUED_ERROR: Final = "nothing ever picked this run up, so it never started. Run it again."
 
 #: docs/10 §Artefacts. ``trades`` is the one docs/04 gives a column to.
 ARTEFACTS: Final[tuple[str, ...]] = ("trades", "holdings", "equity")
@@ -219,17 +217,21 @@ async def reap_stale_runs(
         # `returning` rather than `rowcount`: the ids are what makes the log line worth reading,
         # and a reap nobody can attribute afterwards is how you end up distrusting the reaper.
         killed = (
-            await session.execute(
-                update(Backtest)
-                .where(
-                    Backtest.status == status,
-                    column.is_not(None),
-                    column < cutoff,
+            (
+                await session.execute(
+                    update(Backtest)
+                    .where(
+                        Backtest.status == status,
+                        column.is_not(None),
+                        column < cutoff,
+                    )
+                    .values(status="failed", error=message, finished_at=moment)
+                    .returning(Backtest.public_id)
                 )
-                .values(status="failed", error=message, finished_at=moment)
-                .returning(Backtest.public_id)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if killed:
             log.warning(
                 "reaped stale backtests",

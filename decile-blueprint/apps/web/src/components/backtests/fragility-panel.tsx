@@ -31,27 +31,13 @@ import { formatPercent } from "@/lib/format";
  * So the panel does not average across variants that saw nothing. A spread computed over them is
  * not a weaker finding, it is a wrong number.
  */
-/**
- * `blind_pct` and `rebalances` are served by the API (`fragility_payload`, M43) and declared on
- * `FragilityRunOut` in `schemas.py` (M45.7), but `packages/api-client/src/generated/schema.ts` is
- * regenerated on the concurrent SC branch and not here — running `make client` against this
- * working tree would sweep that session's in-progress endpoints into this commit.
- *
- * So the type is widened locally rather than hand-edited into a generated file. Once the client
- * is regenerated the intersection is a no-op and this alias can go.
- */
-type FragilityRun = FragilityRunOut & {
-  blind_pct?: number;
-  rebalances?: number;
-};
-
 export interface FragilityPanelProps {
-  runs: readonly FragilityRun[];
+  runs: readonly FragilityRunOut[];
 }
 
 /** A variant that missed even one rebalance is not a perturbation of the strategy. */
-function sawEverything(run: FragilityRun): boolean {
-  return (run.blind_pct ?? 0) === 0;
+function sawEverything(run: FragilityRunOut): boolean {
+  return run.blind_pct === 0;
 }
 
 export function FragilityPanel({ runs }: FragilityPanelProps) {
@@ -113,7 +99,7 @@ export function FragilityPanel({ runs }: FragilityPanelProps) {
           </thead>
           <tbody>
             {runs.map((run) => {
-              const blindPct = run.blind_pct ?? 0;
+              const blindPct = run.blind_pct;
               const usable = blindPct === 0;
               return (
                 <tr

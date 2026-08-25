@@ -175,6 +175,34 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # A catalog write with no broker path -- argued for in `test_baskets_readonly.py`'s
     # `DELIBERATE_MUTATING_BASKET_ROUTES`, which is where the order gate is decided.
     "/cb/baskets": {"post"},
+    # SB1: save a screen as a basket. A catalog write like `/cb/baskets`, and inside the same
+    # order gate -- `test_baskets_readonly.py`'s `DELIBERATE_MUTATING_BASKET_ROUTES`. Listed here
+    # because it is served: the route runs the named screen server-side and stores what that
+    # screen returned, so `source = 'SCREEN'` is a fact rather than a caller's claim.
+    "/cb/baskets/from-screen": {"post"},
+    # T8.1: mark-as-invested records a broker book the user already traded. GET list/detail
+    # and the accrued fee ledger. No execute — batch status on mark is always PLANNED.
+    "/cb/investments": {"get"},
+    "/cb/investments/mark": {"post"},
+    "/cb/investments/{investment_id}": {"get"},
+    # Tree-5 leaf B3: an investment may be filed inside a portfolio, or sit outside every
+    # portfolio. Records the filing only -- there is no order path on either verb.
+    "/cb/investments/{investment_id}/portfolio": {"put", "delete"},
+    # Tree-3 managers: a manager identity a person can hold, apply for, be reviewed against,
+    # and publish under. Publishing sets `cb_basket.visibility` and places nothing;
+    # `/revenue-share` is a dark Track-B surface that 404s while fee collection is off.
+    "/managers/me": {"get", "post"},
+    "/managers/{slug}": {"patch"},
+    "/managers/me/baskets/{basket_slug}/publish": {"post", "delete"},
+    "/managers/me/revenue-share": {"get"},
+    "/cb/fees": {"get"},
+    # T8.4: SIP reminder plan on an investment. REMINDER only; AUTO is refused in-router.
+    "/cb/investments/{investment_id}/sip": {"get", "post"},
+    # T8.5: costs after accrued (uncollected) fees. GET only — collection stays off.
+    "/cb/investments/{investment_id}/costs": {"get"},
+    # T8.6: drift scan + ledger rebase. No order path.
+    "/cb/investments/{investment_id}/drift/scan": {"post"},
+    "/cb/investments/{investment_id}/drift/fix": {"post"},
     # SC Tree 4: manage constituents on an existing investment (CUSTOMIZE batch, no order path).
     "/cb/investments/{investment_id}/customize": {"post"},
     # SC3: desk-shaped plan PREVIEWS. Producing a plan is not placing an order
@@ -189,6 +217,9 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/cb/pending-actions/{action_id}/dismiss": {"post"},
     "/cb/pending-actions/{action_id}/resolve": {"post"},
     "/cb/updates": {"get"},
+    # SC9 trending. Read-only ranked lists; the aggregates are platform-wide and the pure
+    # layer's MIN_POPULATION floor is what keeps a thin one from being published at all.
+    "/cb/trending": {"get"},
     # SC10 Track-B surfaces (docs/smallcase/02 §"Track B -- build dark"). Mounted so this
     # document and the UI can name them, which is the point of listing them here: a route that
     # is served and not written down is a surface nobody agreed to.

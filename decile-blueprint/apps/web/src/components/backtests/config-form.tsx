@@ -124,6 +124,11 @@ export function ConfigForm({
       // `ignore` — M39 reversed which policies are refused and this comment kept the old pair.
       dividends: "ignore",
       risk_free_rate: "0",
+      // The T-bill series the Sharpe denominator reads. The service attaches the bundled
+      // OECD IR3TIB series at execute time (T9.5); an empty curve here says "use that",
+      // and `risk_free_rate` above is the flat fallback when the series does not overlap
+      // the window. Sent explicitly for the same reason the two keys above are.
+      risk_free_curve: [],
     });
   }
 

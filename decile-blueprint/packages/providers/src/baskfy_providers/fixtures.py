@@ -15,6 +15,7 @@ Parquet files for exactly which parts are real and which are synthetic.
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from functools import cached_property
 from pathlib import Path
@@ -33,6 +34,7 @@ from baskfy_providers.records import (
     BHAVCOPY_SCHEMA,
     DAILY_BARS_SCHEMA,
     CorporateAction,
+    EquityFundamental,
     IndexSnapshot,
     InstrumentRecord,
     ListingRecord,
@@ -203,6 +205,17 @@ class FixtureProvider:
         if frame.height == 0:
             return empty_frame(BHAVCOPY_SCHEMA)
         return conform(frame.sort("symbol"), BHAVCOPY_SCHEMA)
+
+    def equity_fundamentals(
+        self,
+        on: dt.date,
+        symbols: Sequence[str],
+        *,
+        series_by_symbol: Mapping[str, str] | None = None,
+    ) -> list[EquityFundamental]:
+        """Fixtures carry no issued-capital series. NULL is the honest local-dev answer."""
+        del on, symbols, series_by_symbol
+        return []
 
     # --- internals ------------------------------------------------------
 

@@ -17,7 +17,7 @@ import pytest
 
 from baskfy_api import baskets as basket_data
 from baskfy_api.app import create_app
-from baskfy_api.routers import baskets, curated_create
+from baskfy_api.routers import baskets, curated_create, curated_from_screen
 
 MUTATING = ("post", "put", "patch", "delete")
 
@@ -42,8 +42,15 @@ OpenApiSpec = dict[str, dict[str, dict[str, object]]]
 #: `test_the_whole_api_has_no_order_route` below still covers it by path). Naming a basket for
 #: yourself is not the regulated activity in the module docstring above — placing an order for
 #: a logged-in user is, and nothing here can.
+#: `POST /api/v1/cb/baskets/from-screen` (SB1) is the same kind of write for the same reason: one
+#: PRIVATE/STOCK row, its GENESIS version and its constituents, with `source = 'SCREEN'` and a
+#: `source_screen_id` pointing at the rule that produced them. It differs from the route above in
+#: being *less* trusting, not more — it takes no symbol list at all, and runs the named screen
+#: itself to find out what the constituents are. Nothing about it reaches a broker, and
+#: `test_the_exempted_routers_cannot_reach_the_execution_package` scans its source too.
 DELIBERATE_MUTATING_BASKET_ROUTES: dict[str, set[str]] = {
     "/api/v1/cb/baskets": {"post"},
+    "/api/v1/cb/baskets/from-screen": {"post"},
 }
 
 
@@ -70,9 +77,10 @@ class TestNoOrderPlacingRouteIsReachable:
 
     def test_the_exempted_routers_cannot_reach_the_execution_package(self) -> None:
         """The exemption is only defensible while the router behind it has no order path."""
-        source = inspect.getsource(curated_create)
-        for forbidden in ("baskfy_execution", "OrderGateway", "place_order", "kiteconnect"):
-            assert forbidden not in source, f"curated_create.py references {forbidden}"
+        for module in (curated_create, curated_from_screen):
+            source = inspect.getsource(module)
+            for forbidden in ("baskfy_execution", "OrderGateway", "place_order", "kiteconnect"):
+                assert forbidden not in source, f"{module.__name__} references {forbidden}"
 
     def test_the_whole_api_has_no_order_route(self, spec: OpenApiSpec) -> None:
         """Not just the basket router — the entire surface the web app can reach.

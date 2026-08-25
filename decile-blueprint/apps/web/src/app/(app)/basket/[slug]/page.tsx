@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Route } from "next";
 import { ReturnConventionNote } from "@/components/explore/return-convention-note";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -69,7 +69,7 @@ export default async function BasketDetailPage({
   const performance = await resolveBasketPerformanceSeries(basket.slug, metrics);
 
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
+    <div className="flex w-full min-w-0 flex-col gap-6">
       <PageHeader
         title={basket.name}
         blurb={
@@ -81,13 +81,19 @@ export default async function BasketDetailPage({
           <span className="flex flex-wrap items-center gap-2">
             <AccessBadge access={basket.access} />
             <span>
-              {basket.manager.name} ·{" "}
+              <Link
+                href={`/manager/${basket.manager.slug}` as Route}
+                className="underline-offset-4 hover:underline"
+              >
+                {basket.manager.name}
+              </Link>{" "}
+              ·{" "}
               {basket.rebalance_frequency.toLowerCase().replace(/_/g, " ")} rebalance
               {basket.launched_at ? ` · since ${formatTradeDate(basket.launched_at)}` : ""}
             </span>
           </span>
         }
-        actions={<InvestCta basketName={basket.name} />}
+        actions={<InvestCta basketName={basket.name} basketSlug={slug} />}
       />
 
       <section
@@ -140,10 +146,15 @@ export default async function BasketDetailPage({
       <section className="space-y-2 rounded-xl border border-border/70 bg-card p-4">
         <h2 className="text-sm font-semibold">About the manager</h2>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          {basket.manager.name} ({basket.manager.kind.toLowerCase().replace(/_/g, " ")}). Full
-          profile and SEBI line land with the manager route in a later module.
+          <Link
+            href={`/manager/${basket.manager.slug}` as Route}
+            className="font-medium text-foreground underline-offset-4 hover:underline"
+          >
+            {basket.manager.name}
+          </Link>{" "}
+          ({basket.manager.kind.toLowerCase().replace(/_/g, " ")}).
         </p>
-        {basket.manager.kind === "PERSON" ? (
+        {basket.manager.kind === "HUMAN" ? (
           <DisclosureBlock variant="registration-pending" />
         ) : null}
       </section>

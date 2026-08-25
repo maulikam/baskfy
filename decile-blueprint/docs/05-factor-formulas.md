@@ -273,6 +273,28 @@ name.
 From `fundamental_daily`; sourced from NSE. `pe` is nullable and the P/E range filter must
 exclude NULLs when enabled (matching the reference product's documented behaviour).
 
+**Source, as built.** NSE's `GetQuoteApi` (`functionName=getSymbolData`), one request per symbol,
+archived per `(symbol, series, date)` before it is parsed. `/api/quote-equity`, which this section
+originally implied, was retired in NSE's Next.js migration and now answers 403 at the Akamai edge;
+the retired payload shape still parses out of the archive but is never fetched
+(`DECISIONS-MERGE.md` §T3F.1).
+
+* `marketcap_cr` = `tradeInfo.issuedSize` × that date's `close_raw` ÷ 1e7, rounded half-up to an
+  integer rupee-crore. The exchange print wins over the quote's `lastPrice`; NSE's own
+  `tradeInfo.totalMarketCap` is the fallback when issued size is absent.
+* `pe` = `secInfo.pdSymbolPe`, **re-priced onto the target date**: `quoted_pe × close_raw ÷
+  lastPrice`. The quote carries no history, so storing it verbatim into a past date's row would
+  put the fetch day's price inside that date — look-ahead, forbidden by house rule 5. Measured
+  over the 2026-08-18 fill, the largest error this avoids is 3.58%. The EPS vintage is still the
+  fetch day's and cannot be otherwise: NSE publishes no point-in-time EPS series
+  (`DECISIONS-MERGE.md` §T3F.3).
+* `pb` and `div_yield` are **not in this payload** and are always NULL. They are kept as columns
+  because the schema documents them, not because anything fills them.
+
+**Scope.** The instruments with a bar on the date, not the whole listing register: NSE is fetched
+at 1 req/s, so 2,540 traded names cost ~40 minutes where 10,481 listings would cost most of a
+night, and a name with no bar has no `close_raw` to price against.
+
 ## 15. Wasserstein regime — INFERRED design
 
 The instrument page shows `Market Quality → Wasserstein Regime: BULL`. Specify it as:

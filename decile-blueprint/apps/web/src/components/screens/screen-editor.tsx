@@ -1,22 +1,26 @@
 "use client";
 
 import type { ScreenOut, StatusOut } from "@baskfy/api-client";
-import { CalendarClock, Columns3, Copy, Loader2 } from "lucide-react";
+import { CalendarClock, Columns3, Copy, Loader2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { parseAsString, useQueryState } from "nuqs";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { ErrorState } from "@/components/data/error-state";
 import { ApplyFiltersPill } from "@/components/screens/apply-filters-pill";
 import { ExportButton } from "@/components/screens/export-button";
+import { FilterChipBar } from "@/components/screens/filter-chip-bar";
 import { FilterForm } from "@/components/screens/filter-form";
 import { ResultsPanel } from "@/components/screens/results-panel";
 import type { ColumnMeta } from "@/components/screens/result-columns";
+import { ShareButton } from "@/components/screens/share-button";
+import { StoryStrip } from "@/components/screens/story-strip";
 import { Button } from "@/components/ui/button";
 import { formatTradeDate } from "@/lib/format";
 import { countDefinitionChanges } from "@/lib/screens/change-count";
 import { defaultDefinition } from "@/lib/screens/defaults";
+import { screenChipFiltersEnabled } from "@/lib/screens/feature-flags";
 import {
   useColumns,
   useDuplicateScreen,
@@ -27,6 +31,7 @@ import {
   useTradingDays,
   useUniverses,
 } from "@/lib/screens/queries";
+import { buildStorySentence } from "@/lib/screens/story";
 import { PREVIEW_DEBOUNCE_MS, useDebounced } from "@/lib/screens/use-debounced";
 import { STATE_PARAM, decodeState, definitionsEqual, encodeState, parseDefinition } from "@/lib/screens/url-state";
 import { CUSTOM_FILTER_OPERAND_KEYS, OPERAND_LABELS } from "@/lib/screens/operands";
@@ -38,6 +43,7 @@ export interface ScreenEditorProps {
 
 export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
   const router = useRouter();
+  const chipFilters = screenChipFiltersEnabled();
   const { data: screen } = useScreen(initial.public_id, initial);
   const saved = useMemo(() => parseDefinition(screen.definition), [screen.definition]);
   const [raw, setRaw] = useQueryState(
@@ -53,6 +59,7 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
   const universes = useUniverses();
   const save = useSaveScreen();
   const duplicate = useDuplicateScreen();
+  const [demoDismissed, setDemoDismissed] = useState(false);
 
   const tradingDays = useTradingDays(status?.data_start_date ?? null, status?.as_of ?? null);
 
@@ -68,12 +75,17 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
     [dirty, saved, working],
   );
 
+  const previousWorking = useRef(working);
   const patch = useCallback(
     (partial: Partial<typeof working>) => {
+      previousWorking.current = working;
       void setRaw(encodeState(saved, { ...working, ...partial }));
     },
     [saved, working, setRaw],
   );
+  const undoLastFilter = useCallback(() => {
+    void setRaw(encodeState(saved, previousWorking.current));
+  }, [saved, setRaw]);
 
   const reset = useCallback(() => {
     void setRaw(encodeState(saved, { ...defaultDefinition(), index: working.index, sort_by: working.sort_by }));
@@ -112,26 +124,53 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
     [columnMeta, factors.data],
   );
 
+  const storySentence = useMemo(
+    () =>
+      buildStorySentence({
+        definition: settled,
+        resultCount: preview.data?.result_count,
+        universes: universes.data ?? [],
+        factors: factors.data ?? [],
+      }),
+    [settled, preview.data?.result_count, universes.data, factors.data],
+  );
+
   const historical = working.historical_date;
   const readOnly = !screen.editable;
+  const showDemoBanner = readOnly && screen.is_example && !demoDismissed;
+
+  const filterProps = {
+    definition: working,
+    patch,
+    factors: factors.data ?? [],
+    universes: universes.data ?? [],
+    operands,
+    tradingDays: tradingDays.data?.dates ?? [],
+    dataStartDate: status?.data_start_date ?? null,
+    latestDate: status?.as_of ?? null,
+    onReset: reset,
+    disabled: readOnly && !screen.is_example,
+  };
 
   return (
-    <div className="flex min-h-0 flex-col gap-4">
-      <header className="flex flex-wrap items-center gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate text-xl font-semibold tracking-tight">{savedName}</h1>
-          <p className="text-xs text-muted-foreground">
+    <div className="vaaya-surface vaaya-shell flex min-h-0 flex-col gap-6 rounded-[28px] px-1 py-2 sm:px-2">
+      <header className="flex flex-wrap items-start gap-4 pt-1">
+        <div className="min-w-0 space-y-2">
+          <p className="vaaya-eyebrow">Your screen</p>
+          <h1 className="vaaya-display truncate text-3xl sm:text-4xl">{savedName}</h1>
+          <p className="max-w-2xl text-sm font-light text-muted-foreground">
             {screen.is_example
               ? "A read-only template. Duplicate it to make changes you can save."
               : `Last updated ${formatTradeDate(screen.updated_at.slice(0, 10))}`}
           </p>
         </div>
 
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {readOnly ? (
             <Button
-              variant="primary"
+              variant="secondary"
               size="sm"
+              className="rounded-full px-5"
               disabled={duplicate.isPending}
               onClick={() =>
                 duplicate.mutate(screen.public_id, {
@@ -144,15 +183,28 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
               ) : (
                 <Copy aria-hidden="true" />
               )}
-              Duplicate &amp; make it yours
+              Duplicate & make it yours
             </Button>
           ) : null}
 
-          <Button variant="outline" size="icon" asChild aria-label="Edit columns">
+          <Button
+            variant="outline"
+            size="icon"
+            asChild
+            aria-label="Edit columns"
+            className="vaaya-pill size-9 rounded-full border-border bg-card shadow-none"
+          >
             <Link href={`/build/${screen.public_id}/columns`}>
               <Columns3 aria-hidden="true" />
             </Link>
           </Button>
+
+          <ShareButton
+            screenName={screen.name}
+            storySentence={storySentence}
+            asOf={preview.data?.as_of ?? null}
+            rows={preview.data?.rows ?? []}
+          />
 
           <ExportButton
             publicId={screen.public_id}
@@ -162,6 +214,27 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
           />
         </div>
       </header>
+
+      {showDemoBanner ? (
+        <div
+          role="status"
+          data-testid="demo-banner"
+          className="vaaya-card flex items-start gap-3 px-4 py-3 text-sm font-light text-muted-foreground"
+        >
+          <p className="flex-1">
+            This is a demo screen — look, poke, sort. Duplicate it to make it yours.
+          </p>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 shrink-0"
+            aria-label="Dismiss demo banner"
+            onClick={() => setDemoDismissed(true)}
+          >
+            <X aria-hidden="true" className="size-3.5" />
+          </Button>
+        </div>
+      ) : null}
 
       {historical ? (
         <div
@@ -178,41 +251,58 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
         </div>
       ) : null}
 
-      {readOnly ? (
+      {readOnly && !screen.is_example ? (
         <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-          Example screens are read-only. Your edits preview live but cannot be saved — duplicate the
-          screen to keep them.
+          This screen is read-only. Your edits preview live but cannot be saved — duplicate it to
+          keep them.
         </p>
       ) : null}
 
       {save.error ? <ErrorState error={save.error} onRetry={() => save.reset()} /> : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-start">
-        <FilterForm
-          definition={working}
-          patch={patch}
-          factors={factors.data ?? []}
-          universes={universes.data ?? []}
-          operands={operands}
-          tradingDays={tradingDays.data?.dates ?? []}
-          dataStartDate={status?.data_start_date ?? null}
-          latestDate={status?.as_of ?? null}
-          onReset={reset}
-          disabled={readOnly}
-        />
+      <StoryStrip
+        definition={settled}
+        result={preview.data}
+        universes={universes.data ?? []}
+        factors={factors.data ?? []}
+        isPending={preview.isPending && !preview.data}
+      />
 
-        <ResultsPanel
-          result={preview.data}
-          columnMeta={columnMeta}
-          sortingFactorUnit={sortingFactorUnit}
-          isPending={preview.isPending}
-          isFetching={preview.isFetching}
-          error={preview.error}
-          onRetry={() => void preview.refetch()}
-          onLoosenFilters={reset}
-          screenName={screen.name}
-        />
-      </div>
+      {chipFilters ? (
+        <div className="flex min-w-0 flex-col gap-5">
+          <FilterChipBar {...filterProps} />
+          <ResultsPanel
+            result={preview.data}
+            columnMeta={columnMeta}
+            sortingFactorUnit={sortingFactorUnit}
+            isPending={preview.isPending}
+            isFetching={preview.isFetching}
+            error={preview.error}
+            onRetry={() => void preview.refetch()}
+            onLoosenFilters={reset}
+            onUndoLastFilter={undoLastFilter}
+            screenName={screen.name}
+            screenPublicId={screen.public_id}
+          />
+        </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-start">
+          <FilterForm {...filterProps} />
+          <ResultsPanel
+            result={preview.data}
+            columnMeta={columnMeta}
+            sortingFactorUnit={sortingFactorUnit}
+            isPending={preview.isPending}
+            isFetching={preview.isFetching}
+            error={preview.error}
+            onRetry={() => void preview.refetch()}
+            onLoosenFilters={reset}
+            onUndoLastFilter={undoLastFilter}
+            screenName={screen.name}
+            screenPublicId={screen.public_id}
+          />
+        </div>
+      )}
 
       {readOnly ? (
         <Button data-testid="apply-filters" disabled className="sr-only" tabIndex={-1}>

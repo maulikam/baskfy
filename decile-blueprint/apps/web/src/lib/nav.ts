@@ -1,7 +1,12 @@
 /**
  * Consumer information architecture (Tree 6 / baskfynavrefactorreport).
  *
- * Primary chrome collapses to four one-word destinations: Market · Baskets · Build · Me.
+ * Primary chrome is five one-word destinations: Home · Market · Baskets · Build · Me.
+ *
+ * Tree 6 collapsed it to four and deliberately had no landing surface; SC9 added one, and a
+ * `/home` reachable only through the wordmark is a page most people never find. Five is what the
+ * observed product's bottom bar carries too, and it still fits the 768px tab bar. The argument
+ * and how to reverse it are `docs/DECISIONS-MERGE.md` HOME1.
  * Section tabs inside each hub carry the old ten flat links. Desk "Real money" pages and
  * Account/Help stay in the user menu — they are operator surfaces, not the Gen Z consumer IA.
  *
@@ -43,6 +48,7 @@ export interface NavGroup {
 }
 
 export type NavIconName =
+  | "house"
   | "layout-dashboard"
   | "activity"
   | "table-2"
@@ -89,6 +95,13 @@ function page(href: PagePath & Route, icon: NavIconName): ReadyNavItem {
  */
 export const PRIMARY_NAV: readonly ReadyNavItem[] = [
   {
+    href: "/home",
+    label: "Home",
+    blurb: "What you hold, what needs a decision, and what is worth a look.",
+    icon: "house",
+    status: "ready",
+  },
+  {
     href: "/market/today",
     label: "Market",
     blurb: "Indices, mood, and new listings.",
@@ -120,6 +133,9 @@ export const PRIMARY_NAV: readonly ReadyNavItem[] = [
 
 /** Section tabs rendered inside each hub page header — not in the global nav. */
 export const SECTION_TABS = {
+  /* Home is a single surface, not a hub: its modules are sections of one page, so there is
+     nothing for a tab row to switch between. The key exists so `primarySection` can name it. */
+  home: [],
   market: [
     { href: "/market/today" as Route, label: "Today" },
     { href: "/market/mood" as Route, label: "Mood" },
@@ -128,6 +144,7 @@ export const SECTION_TABS = {
   baskets: [
     { href: "/baskets" as Route, label: "Explore" },
     { href: "/baskets/featured" as Route, label: "Featured" },
+    { href: "/create" as Route, label: "Create" },
   ],
   build: [
     { href: "/build" as Route, label: "Screens" },
@@ -150,6 +167,7 @@ export const LEGACY_REDIRECTS = [
   { source: "/listings", destination: "/market/listings" },
   { source: "/explore", destination: "/baskets" },
   { source: "/screens", destination: "/build" },
+  { source: "/screens/new", destination: "/build/new" },
   { source: "/screens/exmpl0000001", destination: "/build/exmpl0000001" },
   { source: "/screens/exmpl0000001/columns", destination: "/build/exmpl0000001/columns" },
   { source: "/backtests", destination: "/build/backtests" },
@@ -164,8 +182,14 @@ export type SectionKey = keyof typeof SECTION_TABS;
 
 /** Which primary nav item is active for a pathname. */
 export function primarySection(pathname: string): SectionKey | null {
+  if (pathname === "/home" || pathname.startsWith("/home/")) return "home";
   if (pathname === "/market" || pathname.startsWith("/market/")) return "market";
-  if (pathname === "/baskets" || pathname.startsWith("/baskets/") || pathname.startsWith("/basket/"))
+  if (
+    pathname === "/baskets" ||
+    pathname.startsWith("/baskets/") ||
+    pathname.startsWith("/basket/") ||
+    pathname === "/create"
+  )
     return "baskets";
   if (pathname === "/build" || pathname.startsWith("/build/")) return "build";
   if (pathname === "/me" || pathname.startsWith("/me/")) return "me";

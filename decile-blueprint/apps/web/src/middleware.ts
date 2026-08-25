@@ -1,15 +1,28 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { isPublicPath } from "@/lib/auth/public-routes";
 import { isStaticPublicPath } from "@/lib/marketing/routes";
 
 /**
  * Two jobs, both from docs/11 §Security (Prompt 12 deliverables 2 and 4).
  *
- * **The gate.** `/profile` and `/change-password` are about one account and mean nothing without
- * one. An unauthenticated visit is redirected to `/login?next=…` rather than rendered empty, and
- * the `next` parameter is what sends the user back where they were going. It is validated as a
- * *relative path* before use: an open redirect is a phishing primitive, and `?next=https://evil`
+ * **The gate, and it is now closed by default.** Every path that is not on the public list in
+ * `@/lib/auth/public-routes` is redirected to `/login?next=…` when the request carries no session
+ * cookie. It used to be the other way round — an enumerated list of gated prefixes, everything
+ * else public — and that list had fallen a year behind the routes: `/build`, `/explore`,
+ * `/create`, `/holdings`, `/me/*`, `/watchlist`, `/baskets/*`, `/instruments/*` and `/screens/*`
+ * all rendered to anybody who typed the URL. A default-open gate cannot be reviewed, because the
+ * diff that adds a page never mentions this file.
+ *
+ * The `next` parameter is what sends the user back where they were going, and it is validated as
+ * a *relative path* before use: an open redirect is a phishing primitive, and `?next=https://evil`
  * is how one gets built.
+ *
+ * **No stored copy of a gated page.** Every gated response carries `Cache-Control: no-store`,
+ * which is what makes the browser's Back button honest after a sign-out: with no stored copy and
+ * no back/forward-cache entry, going back to `/build` is a fresh request, and a fresh request
+ * with no cookie lands on `/login`. Without it the browser would happily re-paint the signed-in
+ * page from memory, and the person looking at the screen would have no way to tell.
  *
  * **The CSP.** docs/11 names "Strict CSP (`default-src 'self'`)". A strict policy and a framework
  * that injects inline scripts only coexist through a nonce, so one is generated per request and
@@ -31,33 +44,55 @@ import { isStaticPublicPath } from "@/lib/marketing/routes";
  * not a claim the server should trust on its own. `docs/12a` §11.
  */
 
-/** Routes that are meaningless without an account. `/screens` is not one: examples read publicly. */
-const GATED_PREFIXES = [
-  "/profile",
-  "/change-password",
-  "/portfolios",
-  "/me/portfolios",
-  "/backtests",
-  "/build/backtests",
-  "/invoices",
-  // Prompt 17 §4. This only checks that *a* session cookie exists; whether it is a **staff**
-  // session is decided by `require_staff` on the API, which answers 404. So a signed-in
-  // non-staff user reaches the page and the page 404s, which is the intended behaviour — the
-  // middleware is a convenience, not the enforcement (docs/12a §11).
-  "/admin",
-];
-
 /** Auth.js v5 sets one of these depending on whether the deployment is on HTTPS. */
 const SESSION_COOKIES = ["authjs.session-token", "__Secure-authjs.session-token"];
 
-function isGated(pathname: string): boolean {
-  return GATED_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+/**
+ * Staff-only routes are gated here exactly as far as *any* session — Prompt 17 §4. Whether it is a
+ * **staff** session is decided by `require_staff` on the API, which answers 404. So a signed-in
+ * non-staff user reaches `/admin` and the page 404s, which is the intended behaviour: the
+ * middleware is a convenience, not the enforcement (docs/12a §11).
+ */
+function hasSession(request: NextRequest): boolean {
+  return SESSION_COOKIES.some((name) => Boolean(request.cookies.get(name)?.value));
+}
+
+/** The two headers Next puts on a `<Link>` prefetch; either one means "not a real navigation". */
+function isPrefetch(request: NextRequest): boolean {
+  return (
+    request.headers.get("next-router-prefetch") === "1" ||
+    request.headers.get("purpose") === "prefetch"
   );
 }
 
-function hasSession(request: NextRequest): boolean {
-  return SESSION_COOKIES.some((name) => Boolean(request.cookies.get(name)?.value));
+/**
+ * Next appends `?_rsc=<hash>` to the RSC request it makes for a client-side navigation. Echoing it
+ * back into `?next=` would send the user, after signing in, to a URL carrying a stale RSC cache
+ * key — so it is stripped, and only it: every other query parameter is part of where they were
+ * going (`/listings?search=CUPID` is a different destination from `/listings`).
+ */
+function destination(pathname: string, searchParams: URLSearchParams): string {
+  return `${pathname}${search(searchParams)}`;
+}
+
+/** The `?…` suffix of that destination, or the empty string. */
+function search(searchParams: URLSearchParams): string {
+  const carried = new URLSearchParams(searchParams);
+  carried.delete("_rsc");
+  const query = carried.toString();
+  return query ? `?${query}` : "";
+}
+
+/**
+ * The headers that stop a gated page from being re-painted from a store the server does not
+ * control — the browser disk cache, and (because `no-store` disqualifies a page from it) the
+ * back/forward cache. `Pragma` and `Expires` are for HTTP/1.0 intermediaries; they cost 30 bytes
+ * and they are what a proxy older than the framework understands.
+ */
+function denyStorage(headers: Headers): void {
+  headers.set("cache-control", "no-store, no-cache, must-revalidate, max-age=0");
+  headers.set("pragma", "no-cache");
+  headers.set("expires", "0");
 }
 
 /** A destination we are willing to send someone back to: same-origin, and not another redirect. */
@@ -123,12 +158,17 @@ export function staticContentSecurityPolicy(isDev: boolean): string {
   ].join("; ");
 }
 
-function contentSecurityPolicy(nonce: string, isDev: boolean): string {
+export function contentSecurityPolicy(nonce: string, isDev: boolean): string {
   const directives = [
-    "default-src 'self'",
     // `strict-dynamic` means "trust what the nonced scripts load"; the hashes and host sources
     // after it are ignored by browsers that understand it and are the fallback for those that do
     // not. `unsafe-eval` only in development, where React's refresh runtime needs it.
+    //
+    // `default-src` is NOT repeated here: `commonDirectives()` already carries it. A policy that
+    // names the same directive twice makes the browser honour the first and log
+    // "Ignoring duplicate Content-Security-Policy directive 'default-src'" on every page load —
+    // console noise that trains a developer to ignore CSP warnings, which is the one class of
+    // warning that must stay legible.
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     ...commonDirectives(),
   ];
@@ -136,12 +176,42 @@ function contentSecurityPolicy(nonce: string, isDev: boolean): string {
 }
 
 export function middleware(request: NextRequest): NextResponse {
-  const { pathname, search } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
+  const gated = !isPublicPath(pathname);
 
-  if (isGated(pathname) && !hasSession(request)) {
+  if (gated && !hasSession(request)) {
     const login = new URL("/login", request.url);
-    login.searchParams.set("next", `${pathname}${search}`);
-    return NextResponse.redirect(login);
+    login.searchParams.set("next", destination(pathname, searchParams));
+    const redirect = NextResponse.redirect(login);
+    // A cached 307 would keep redirecting after the person signs in.
+    denyStorage(redirect.headers);
+    return redirect;
+  }
+
+  /*
+   * A prefetch is where the old matcher stopped short, and it mattered. Next's `<Link>` fetches
+   * the RSC payload of a route *before* it is navigated to; the matcher excluded those requests,
+   * so a prefetch of a gated route was rendered ungated and parked in the client router cache,
+   * and the click that followed was served from that cache without a request ever reaching this
+   * file. The gate above therefore runs on prefetches too — and the CSP work below still does
+   * not, which is the reason the exclusion existed: a nonce is per request, and stamping this
+   * request's nonce into a payload that a *later* document will execute blocks the very scripts
+   * it names.
+   */
+  if (isPrefetch(request)) {
+    /*
+     * The path headers still go down. They are what tells `(app)/layout.tsx` which page it is
+     * rendering, and without them it sees no path at all — which it must read as "gated", or a
+     * missing header would be a way past the gate. That would turn an anonymous prefetch of the
+     * *public* `/pricing` into a redirect to `/login`, parked in the router cache, and the click
+     * that followed would land on the login page for no reason.
+     */
+    const forwarded = new Headers(request.headers);
+    forwarded.set("x-pathname", pathname);
+    forwarded.set("x-search", search(searchParams));
+    const response = NextResponse.next({ request: { headers: forwarded } });
+    if (gated) denyStorage(response.headers);
+    return response;
   }
 
   const isDev = process.env.NODE_ENV !== "production";
@@ -161,9 +231,17 @@ export function middleware(request: NextRequest): NextResponse {
   const headers = new Headers(request.headers);
   headers.set("x-nonce", nonce);
   headers.set("content-security-policy", csp);
+  /*
+   * What the `(app)` layout re-checks the session against. A layout cannot read the URL it is
+   * rendering — `headers()` is the documented way through — and it needs the path to know whether
+   * this render is the public `/pricing` or a gated page. See `src/app/(app)/layout.tsx`.
+   */
+  headers.set("x-pathname", pathname);
+  headers.set("x-search", search(searchParams));
 
   const response = NextResponse.next({ request: { headers } });
   response.headers.set("content-security-policy", csp);
+  if (gated) denyStorage(response.headers);
   return response;
 }
 
@@ -174,12 +252,11 @@ export const config = {
    * the one on the document that loads it.
    */
   matcher: [
-    {
-      source: "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
-      missing: [
-        { type: "header", key: "next-router-prefetch" },
-        { type: "header", key: "purpose", value: "prefetch" },
-      ],
-    },
+    /*
+     * Prefetches are **not** excluded here any more. They used to be, and that hole is what
+     * `isPrefetch` above now closes inside the function instead: excluded at the matcher, a
+     * prefetch of a gated route never reached the gate at all.
+     */
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
   ],
 };

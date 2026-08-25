@@ -67,18 +67,26 @@ from baskfy_api.routers import (
     baskets,
     billing,
     brokers,
+    curated_costs,
     curated_create,
     curated_customize,
+    curated_drift,
     curated_engage,
+    curated_from_screen,
+    curated_investments,
     curated_plans,
+    curated_sip,
+    curated_trending,
     desk,
     explore,
     instruments,
+    managers,
     market_data,
     meta,
     portfolios,
     public,
     screens,
+    search,
     sleeves,
     support,
     track_b,
@@ -512,6 +520,9 @@ def _mount_routers(versioned: APIRouter) -> None:
     versioned.include_router(meta.router)
     versioned.include_router(screens.router)
     versioned.include_router(instruments.router)
+    # M40: the federated ⌘K search. Mounted next to `instruments` because it supersedes
+    # that router's typeahead as the palette's entry point (`baskfynavrefactorreport` F11).
+    versioned.include_router(search.router)
     versioned.include_router(market_data.router)
     versioned.include_router(auth.router)
     versioned.include_router(billing.router)
@@ -540,13 +551,28 @@ def _mount_routers(versioned: APIRouter) -> None:
     versioned.include_router(brokers.router)
     # SC2: curated-basket catalog (/explore) + watchlist CRUD. No order/execute routes.
     versioned.include_router(explore.router)
+    versioned.include_router(managers.router)
     # SC3: invest/apply/exit plan previews only — synthetic desk_plan_id, never execution.
     versioned.include_router(curated_plans.router)
     # Leaf 4.7: CUSTOMIZE plan preview on an investment — weight diffs only, never execution.
     versioned.include_router(curated_customize.router)
     # SC9: pending actions + update posts for the sole user (dismiss/resolve; no orders).
     versioned.include_router(curated_engage.router)
+    # SC9: the ranked lists the home surface shows. Aggregates are platform-wide by nature;
+    # `MIN_POPULATION` in the pure layer is what stops a thin one being published.
+    versioned.include_router(curated_trending.router)
     # SC8 / leaf 2.2: create PRIVATE STOCK baskets (GENESIS version; no broker path).
     versioned.include_router(curated_create.router)
+    # SB1: save a screen as a basket. The server runs the screen itself, so `source = 'SCREEN'`
+    # describes what actually produced the constituents rather than what a caller claimed.
+    versioned.include_router(curated_from_screen.router)
+    # T8.1: mark-as-invested + investment/fee reads. PLANNED batches only; no execute.
+    versioned.include_router(curated_investments.router)
+    # T8.4: SIP REMINDER writer (AUTO refused). Beat still persists SIP_DUE.
+    versioned.include_router(curated_sip.router)
+    # T8.5: costs-and-returns after accrued fees. Collection stays off.
+    versioned.include_router(curated_costs.router)
+    # T8.6: drift scan/fix rebases the ledger; no order path.
+    versioned.include_router(curated_drift.router)
     # SC10: Track B dark surfaces — 404 while subscriptions/fee-collection/public-signup stay off.
     versioned.include_router(track_b.router)

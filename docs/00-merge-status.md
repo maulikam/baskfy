@@ -33,6 +33,17 @@ generated-scan flag **off**. 9M and 12M did not move because their residual is t
 length**, not the adjustment — the seeded calendar is short about nine lunar-calendar holidays a
 year. M27 predicted that before M28 ran.
 
+**Tree 3 Numbers (24 Aug 2026).** T9.1–T9.5: NSE quote-equity → `fundamental_daily` (folded into
+snapshots; live table still empty until a night runs). Nightly calendar reconcile looks back 400
+days so 9M/12M stop resolving long. `SCAN_SOURCE_DEFAULT` stays `upload`. `deep_backfill`
+defaults to 2011-01-01 (data still starts 2017 until the job is run). Backtest Sharpe subtracts
+OECD IR3TIB; factor Sharpe is still `ret/vol`.
+
+**Phase 4 start (24 Aug 2026).** D3 is written (posture B). P4.1: trading-path ORM inventory +
+`broker_account` + tenant columns on `cb_investment` / `cb_order_batch`. P4.3: gateway refuses
+a cross-tenant order (`BLOCKED`, not 500). Desk SQLite is **not** altered. Track B flags stay
+false. Web execute still forbidden. Not done: P4.2 two-token OAuth, P4.4–P4.11, paid launch (C3).
+
 ⚠️ **Do not run `make backfill`.** As built it writes Kite's *adjusted* prices into `close_raw`,
 the column house rule 6 defines as the exchange print (M24.1). `baskfy_worker.deep_backfill` is
 what M29 used instead, and it says what it stores.
@@ -67,7 +78,7 @@ is queued in [`NEEDS-MAULIK.md`](../NEEDS-MAULIK.md) while work continues around
 
 | # | Module | State | Date | Note |
 |---|---|---|---|---|
-| M0 | Preflight, baselines, safety copy | ✅ done | 22 Aug 2026 | Baselines + verified safety copy recorded. Blocker resolved: decile's overnight work committed as `ea5dd0f` (M0.8) |
+| P4.1/P4.3 | Phase 4 start: tenant columns + gateway isolation | ✅ **started** | 24 Aug 2026 | D3 is written (B). `broker_account` + tenant ids on `cb_investment`/`cb_order_batch`. Gateway `BLOCKED` on mismatch. Desk SQLite untouched. Not done: P4.2, P4.4–P4.11, Track B flips, web execute, paid launch (C3) |
 | M1 | Umbrella repo (subtree) | ✅ done | 22 Aug 2026 | One repo at the root; 117 commits; both histories reachable from HEAD. `--follow` does not prove it — see M1.1 for the commands that do |
 | M2 | The rename | ✅ done | 22 Aug 2026 | 425 files, 2347+/2347−. Namespaces are Baskfy's; the D1–D6 vocabulary is kept by design. Enforced by `tools/check-namespace.sh` (M2.1) |
 | M3 | Working agreement + status page | ✅ done | 22 Aug 2026 | Root CLAUDE.md absorbed the screener's nine house rules and the GTT caveat it had dropped; both sub-files marked; status page linked first |
@@ -428,13 +439,17 @@ too (`f93f690`, `DECISIONS-MERGE.md` DB.1).
 To run them:
 
 ```bash
-export BASKFY_TEST_DATABASE_URL="postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_test"
-export BASKFY_REDIS_URL="redis://localhost:6380/0"
+# Credentials and ports come from infra/docker/compose.yml and .env.example -- never inline
+# them here. The simplest correct form is to source the env file the stack already defines:
+set -a && . ./.env && set +a
 uv run pytest -m db
 ```
 
-`uv run` does **not** load `.env`, so exporting these is required — without them every db test
-skips with a message that reads like the stack is down.
+`uv run` does **not** load `.env`, so sourcing it (or exporting `BASKFY_TEST_DATABASE_URL` and
+`BASKFY_REDIS_URL` yourself) is required — without them every db test skips with a message that
+reads like the stack is down. The values live in `.env` / `.env.example` and in
+`infra/docker/compose.yml`; this page deliberately does not repeat a connection string that
+carries a username and password, even a local one (tree 5 G8).
 
 ## Things a future session must know
 
@@ -558,3 +573,400 @@ of rendering the hole as fragility. It becomes meaningful only when factors are 
   that branch, not this one.
 - The memory measurement is due again after D5's 2011 backfill, before `BACKTEST_CONCURRENCY` is
   raised above 2 (`docs/11` §Memory budgets).
+
+### SB1 — a screen becomes a basket ✅ (code green; never run against a real database)
+
+A saved or example screen can now be sized and saved as a `source = 'SCREEN'` basket. The screen
+says *which stocks*; this adds the two numbers it cannot: how much money, across how many names.
+
+| Piece | Where |
+|---|---|
+| Sizing arithmetic, pure | `packages/core/src/baskfy_core/basket_sizing.py` |
+| Holding profiles — Spread out 25 / Balanced 20 / Concentrated 12 | `HoldingProfile` (same file) |
+| Cash share — read off the desk's R1–R4 equity cap, not invented | `cash_pct_for_tier` |
+| `SCREEN` source + `cb_basket.source_screen_id` (`ON DELETE SET NULL`) | Alembic `0017` |
+| `POST /cb/baskets/from-screen` — runs the screen server-side | `routers/curated_from_screen.py` |
+| Amount / profile / count controls + Save | `components/basket/sizing-controls.tsx`, `screen-basket-view.tsx` |
+
+**The two things to know.** R1–R4 set the **cash share only** — the name count is a separate
+`HoldingProfile`, because exposure is a reading of the market and concentration is a fact about the
+person (`DECISIONS-MERGE.md` SB1.1). And the endpoint accepts **no symbols at all**: it re-runs the
+named screen, so `source = 'SCREEN'` is a fact rather than a caller's claim (SB1.3).
+
+**Green:** 19 new API tests, 16 new Vitest, the existing core sizing suite and parity test, the
+whole web suite (829), `tsc --noEmit` clean, OpenAPI + TS client regenerated.
+
+**NOT done:**
+
+- **Migration `0017` has never been applied to a database.** No Postgres was up in this session, so
+  `test_curated_schema.py`'s 20 model-vs-schema assertions skipped. Run `make migrate` and that
+  file before trusting the column.
+- The API tests mock the session and the screener. **No end-to-end save has ever happened** — the
+  first real one may surface a mismatch (e.g. a screen whose symbols have no active `instrument`
+  row, which the route reports as an internal error on purpose).
+- No Playwright coverage of the Save flow, so the browser path is asserted only by unit tests.
+- An anonymous visitor sees the preview, the sizing controls **and** the Save button; clicking it
+  answers "Sign in to save this screen as a basket." That is the pattern `/create` already uses
+  (`lib/create/fetch.ts` checks for a token before the request), not a considered choice for this
+  surface — a disabled button with the reason attached would be better and is not built.
+- The basket is a catalog row. **Nothing here places an order** — turning one into trades is still
+  the desk console's job, and `test_baskets_readonly.py` holds that gate.
+
+### SB2 — `/create` is screen-first ✅ (code green; never clicked in a real browser)
+
+A first login already has the example screens. `/create` now opens on a dropdown of those
+templates (plus anything the investor has saved), then the SB1 amount / profile / count controls,
+then save. The SC8 symbol list is behind "Pick stocks yourself". Create is a Baskets section tab;
+screen cards on `/build` deep-link with `?screen=`.
+
+| Piece | Where |
+|---|---|
+| Default + grouping (templates vs yours) | `apps/web/src/lib/create/screens.ts` |
+| Dropdown, preview, sizing, save | `components/create/create-from-screen.tsx` |
+| Screen vs manual toggle | `components/create/create-workspace.tsx` |
+| `GET /screens` on the page | `app/(app)/create/page.tsx` |
+
+**The two things to know.** The name count is still `HoldingProfile` (Spread out 25 / Balanced 20
+/ Concentrated 12), not R1–R4 — those remain the desk's exposure tier (`DECISIONS-MERGE.md`
+SB2.2). And a first-time account does not need to *create* a screen before it can create a
+basket; the six templates are already in `GET /screens`.
+
+**NOT done:**
+
+- Same as SB1: no Playwright, no live `0017` migration, no end-to-end save against a real
+  database. The new tests mock `usePreview` and `createBasketFromScreen`.
+- An anonymous visitor can still open `/create` and see the templates; Save still answers
+  "Sign in to save this screen as a basket."
+
+### SB3 — create-time health (facts, not a score) ✅
+
+The sized preview now shows what the list already knows: largest name vs the desk's 15% cap,
+median 1-year return and vol of those names, a short-list note, and a link to Replay the screen.
+No new API. The rest of the industry wishlist is inventoried in `DECISIONS-MERGE.md` SB3.1 —
+already built under another name, or blocked.
+
+### SB4 — weight methods on the screen path ✅ (code green; never clicked in a real browser)
+
+Equal / by rank / by the screen's score / inverse-vol, plus a true custom path. The default
+stays equal, so existing baskets do not move. Custom cannot add a name the screen did not
+select — the server still runs the screen (SB1.3). Preview may fall back to equal mid-keystroke;
+save raises on the same inputs.
+
+| Piece | Where |
+|---|---|
+| `WeightMethod` + sizing arithmetic | `packages/core/src/baskfy_core/basket_sizing.py` |
+| TS preview + labels | `apps/web/src/lib/basket/methods.ts`, `materialize.ts` |
+| `method` / `custom_weights` on save | `POST /cb/baskets/from-screen` |
+| Picker + custom inputs | `components/basket/weight-method-controls.tsx` |
+
+**NOT done:** no Playwright, no live save against a real database, OpenAPI / TS client not
+regenerated (the web layer posts through the hand-written `lib/create/fetch.ts`, same as SB1).
+Market-cap weighting stays on the backtest only (`DECISIONS-MERGE.md` SB4.1).
+
+### SB6 — holdings and custom-weight tables show screen facts ✅
+
+The create basket table and the "Your numbers" editor now show market cap, 1-yr return,
+bumpiness, beta, Sharpe, liquidity and P/E when the screen row carries them. Sector is not
+shown — this tree has no sector column (`DECISIONS-MERGE.md` SB6.1). A column with no
+numbers is hidden rather than drawn as dashes.
+
+---
+
+## Tree 5 — Existential (23 Aug 2026)
+
+Priority audit from Maulik's brief. Gates in `gates/tree5-existential.md`.
+
+| Item | State | Evidence |
+|---|---|---|
+| Git remote / push | **blocked — NEEDS-MAULIK #14** | `git remote -v` empty · **243 commits** · **148 uncommitted paths** · no `gh` on this machine |
+| GitHub CI | **never run** | `.github/workflows/ci.yml` exists; blocked until remote |
+| Local CI baseline | **measured** | `tools/ci-local.sh` → **8 pass / 7 fail / 6 skip** (23 Aug 2026) |
+| `portfolio.db` backup | **restore drill green** | `scripts/restore_drill.py` · backup **20260823-233103** · manifest parity · integrity ok |
+| Fresh backup | **taken** | `python -m scripts.backup` 23 Aug 2026 |
+
+**NOT done (existential list, deferred):** fundamentals pipeline (0 rows), backfill to 2011,
+`cb_metrics`, parity test green, counsel/compliance checklist, staging, R2 WAL, route-sweep in CI.
+
+**Note:** live `rebalance_orders` count dropped 259 → 133 between the 22 Aug and 23 Aug backups
+(snapshots/fills/trades unchanged). Restore drill passes against each backup's manifest; investigate
+whether a migration or cleanup removed 126 rows.
+
+---
+
+## Tree 7 — Investment completion (24 Aug 2026)
+
+Plan: `TREE7-PLAN.md`. Sequence: metrics → investment contract → manager/costs → notify.
+
+| Leaf | State | Evidence |
+|---|---|---|
+| 7.1 Populate `cb_metrics` | ✅ | 1 row for `momentum-scan` as_of 2026-08-21 · `ret_1y=-3.71` · bucket LOW · `make cb-metrics` · Celery session bug fixed (T7.1) |
+| 7.2 Investment contract | ✅ built | T8.1 `POST /cb/investments/mark` + form; T8.2 desk-fill `EXECUTED` |
+| 7.3 Manager page | ✅ route | `/manager/[slug]` · API already existed · basket links wired · kind HUMAN disclosure fix |
+| 7.4 Costs & returns | ✅ | T8.5 `GET /cb/investments/{id}/costs` + `/me/investments/[id]/costs` |
+| 7.5 Rebalance notify | ✅ | T8.3 Beat `baskfy.cb.rebalance_notify` stamps `payload.notified_at` |
+| 7.6 Price-return caveat | ⚠ partial | Catalog/detail already use `ReturnConventionNote`; extend sweep later |
+
+**Defining gap:** mark-as-invested now creates `cb_investment` in-product (T8.1). PlanHandoff
+remains the web terminus for *orders* (SC11). Desk fills are recorded `EXECUTED` by Beat, not
+by the web (T8.2).
+
+---
+
+## Auth gate — closed by default (24 Aug 2026)
+
+Maulik's brief: "if not logged in, login is necessary, and if logged out, no back buttons of the
+browser should work or no direct hit of the URL should work." Decision: `DECISIONS-MERGE` T7.3.
+
+| Item | State | Evidence |
+|---|---|---|
+| Default-deny route gate | ✅ | `apps/web/src/lib/auth/public-routes.ts` is the only access list; everything not on it is gated |
+| Middleware redirect + `no-store` | ✅ | `src/middleware.ts` · `src/__tests__/middleware.test.ts` (35 tests) |
+| Server-side re-check with `auth()` | ✅ | `(app)/layout.tsx` — middleware sees cookie *presence*; this opens the token |
+| Prefetch hole closed | ✅ | matcher no longer excludes prefetches; CSP work still skips them |
+| Back button after sign-out | ✅ | `e2e/auth-gate.spec.ts` "after signing out, Back does not bring the app back" |
+| Direct URL hit while signed out | ✅ | 11 gated paths + 5 legacy-redirect bookmarks, all land on `/login?next=…` |
+| bfcache / router-cache guard | ✅ | `components/auth/session-sentinel.tsx` — `pageshow.persisted`, `popstate`, tab focus |
+| `/logout` prefetch footgun | ✅ fixed | the user-menu `<Link>` had no `prefetch={false}`; opening the menu could end the session |
+| Browser suite signs in once | ✅ | `e2e/auth.setup.ts` + a `setup` project; specs that must be signed out say so |
+
+**What this cost, and it is not small.** `/instruments/[symbol]` — `docs/08` §Routes' "organic-traffic
+surface" — is gated with the rest of `(app)`. The sitemap no longer enumerates instruments and
+`robots.txt` no longer allows them. **The product's only public acquisition surface is now the
+landing page, `/pricing`, the blog and the legal pages.** One line in `public-routes.ts` re-opens
+`/instruments` if that is not what was intended.
+
+**One regression this caused and the browser suite caught.** `public/` was never excluded from the
+middleware matcher — nothing had needed it to be — so `/brand/logo.svg` and
+`/images/hero-stepwell.webp` were redirected to `/login`, and the login page's own `img-src 'self'`
+then refused the redirect. A signed-out visitor's marketing pages lost their artwork to an access
+control that was never meant to see them. Fixed by matching a **closed extension list** in
+`public-routes.ts` — not "the last segment contains a dot", which would silently un-gate
+`/instruments/SOME.THING`. Pinned by `public-routes.test.ts`.
+
+**NOT done:** no signed-in-user redirect away from `/login` (visiting it with a session still
+renders the form); the API's own authorisation is unchanged and remains the only enforcement that
+matters (`docs/12a` §11).
+
+### The browser suite, triaged against a measured baseline (24 Aug 2026)
+
+The full suite is **37 failed / 138 passed / 1 skipped**. To separate this change's fallout from
+what the tree was already carrying, the ambiguous specs were re-run with the gate disabled
+(`isPublicPath` → `true`) and the suite-wide sign-in removed — i.e. the exact conditions before
+this change. That baseline: **16 failed / 27 passed** over the same specs.
+
+| Failure | Verdict | How it was settled |
+|---|---|---|
+| `accessibility.spec` × 4 | **pre-existing** | Fails identically in the baseline. The dark footer's `#6f6f6f` on `#141414` misses 4.5:1 (13 nodes) plus one focusless scrollable region — vaaya-redesign debt. `gates/leaf-7.5.1-verify.md` G5 was already "pending" |
+| `static-generation.spec` × 15 | **pre-existing, and vacuous** | Reads `.next/prerender-manifest.json` — the *dev server's* directory, 0 routes — while the suite builds into `.next-e2e`, 22 routes. Every assertion in that file has passed or failed for the wrong reason since `BASKFY_WEB_DIST_DIR` was introduced. **Fixed here**, because it is the check that proves the `marketing/routes.ts` edit did not break SSG |
+| `market.spec` × 7 | **pre-existing** | The baseline fails **nine**, a superset. The `<h1>` reads "Mood · Market — NIFTY 500" where the test wants "Market Health — NIFTY 500" (the Tree-6 rename); "History" heading gone; `getByLabel("Search")` now matches the shell's command-palette button as well as the listings input. A login gate cannot rewrite a heading |
+| `nav.spec`, `screens.spec` | **pre-existing** | Both specs already signed themselves in, so the suite-wide session changed nothing for them. `view-mode-basket` is `aria-pressed="false"`; `filter-chip-bar` is absent. `gates/leaf-7.5.1-verify.md` G4 was already "pending" |
+| `critical-journeys` backtest | **pre-existing** | Fails identically in the baseline (6-minute timeout). Consistent with the standing open item: until a real backfill has run, every queued backtest fails |
+| `explore-handoff` hand-off | **pre-existing** | Fails identically in the baseline |
+| `instrument.spec` 404 → 200 | **pre-existing** | Fails identically in the baseline |
+| `account.spec` × 2 | **mine — fixed** | One was the `public/` asset regression above. The other was a file-level signed-out `test.use` this change added; scoped to the lifecycle block, since the security-headers block loads a gated screen |
+| `billing.spec` × 2 | **mine — fixed** | Two signed-out cases inherited the suite session; marked explicitly |
+| `lighthouse.spec` SEO | **mine — spec repointed** | Lighthouse runs its own Chrome with no cookie, so a gated URL is measured as `/login`. `/instruments/CUPID` scored 58 with `is-crawlable: Page is blocked from indexing` — correct, about the wrong document — and `/kitchen-sink` was passing *vacuously* for the same reason. Both repointed at pages a stranger can reach |
+| `table-performance` 60fps | **unresolved** | p95 53.3ms against a 33.3ms budget. **Passes in the baseline**, but a `next build` was running concurrently during the failing run. Re-checked on the final clean run |
+
+---
+
+## Tree 5 — Portfolio management (25 Aug 2026)
+
+Ten leaves, one migration: `0019_portfolio_graph` on top of `0018_trading_path_tenancy`. Decisions
+in `docs/DECISIONS-MERGE.md` §PM1–PM12; the plan and its full driver-verified status log are
+`TREE-PORTFOLIO-PLAN.md`. Branch `developer`.
+
+### What is now true that was not
+
+| Area | State | Evidence |
+|---|---|---|
+| Portfolios nest | ✅ | `portfolio.parent_id`, nullable self-FK `ON DELETE SET NULL`, check `portfolio_parent_not_self`; cycles + depth in `baskfy_core.portfolio_graph`, `MAX_DEPTH = 6` |
+| A portfolio can name a broker account | ✅ | `portfolio.broker_account_id`, nullable — **NULL means "spans brokers"**, not "unknown" (PM2) |
+| A holding knows where it is held | ✅ | `portfolio_holding` PK is now `(portfolio_id, instrument_id, broker_account_id)`, column NOT NULL, `BEFORE INSERT` trigger `portfolio_holding_attribute_broker_account` keeps it live (PM3) |
+| The migration reverses without data loss | ✅ | `downgrade()` **merges** duplicates — proven on real data: `10@100.0000` + `30@200.0000` → `40.0000 / 175.0000 / 2026-07-01` |
+| The basket half joins the portfolio half | ✅ | `portfolio_sleeve.kind` admits `'basket'` paired with `basket_id`; `cb_investment.portfolio_id` (nullable) + `PUT`/`DELETE /cb/investments/{id}/portfolio` |
+| A momentum basket beside a long-term core | ✅ **expressible** | `routers/sleeves.py:183` `BASKET: Final = "basket"`; constraint at `0019_portfolio_graph.py:327` |
+| Sleeves carry unit counts | ✅ (targets only — see NOT done) | `baskfy_core.portfolio_units`; float prices rejected, missing prices refused loudly |
+| `GET /portfolios` is a forest | ✅ | `PortfolioForestOut` — roots with nested `children`, plus an `orphans` array |
+| Live holdings are never labelled "fixture" | ✅ | `HoldingsResult(rows, source ∈ {live,fixture,empty,unwired}, degraded)`, frozen and validated (PM6) |
+| The broker catalog stopped over-claiming | ✅ | `holdings_sync="ready"` rows: **8 → 1**. Seven were relabelled `"planned"` (PM7) |
+| A live credential leak closed | ✅ | `POST /brokers/upstox/connect` was sending Baskfy's **Zerodha** app key to Upstox's authorize dialog, on a signed-off path. `_OAUTH_COMPLETABLE = {"zerodha"}` (PM8) |
+
+Law 1 re-verified for both new core modules (grep + a socket-patched import of `baskfy_core`).
+Law 2 untouched: no leaf went near `packages/execution`, no order path changed, no web execute
+route, Track B flags unchanged. Non-negotiable #2 re-checked on the wire (10 + 2 + 3 → 15).
+
+### ⛔ NOT done — read this before believing the table above
+
+**1. Nine of ten brokers remain unwired. Only Zerodha has a holdings adapter.**
+`_HOLDINGS_WIRED == {"zerodha"}`. hdfc, kotak, icici, upstox, angelone, groww, fyers, fivepaisa
+and dhan have **no adapter in this codebase**. The catalog is now honest about it
+(`holdings_sync="planned"`), which is a labelling fix, not a capability. Writing the adapters needs
+credentials only Maulik can obtain — `NEEDS-MAULIK.md` §16.
+
+**2. There is no consolidated live net worth, and this tree did not build one.**
+The per-broker roll-up adds up what is *stored*. Only one broker's rows can be refreshed from a
+live feed, so a "total across your brokers" figure would be one live number plus nine stale or
+absent ones presented as if equivalent. Explicitly out of scope: *"consolidated net worth that
+pretends unwired brokers returned data."*
+
+**3. `adapter_wired` and `capabilities.oauth="ready"` still over-claim.** Measured, 25 Aug 2026:
+`GET /brokers` reports `adapter_wired = broker.id in _WIRED_AUTHORIZE` — **true for five brokers**
+(zerodha, upstox, angelone, fyers, dhan) of which only **zerodha** can complete a connection; and
+`capabilities.oauth == "ready"` for **eight** (angelone, dhan, fivepaisa, fyers, icici, kotak,
+upstox, zerodha), of which **kotak and icici have no authorize URL at all** and hdfc is `partner`.
+The credential leak is closed — nothing is sent to the wrong party any more — but the *labels* on
+kotak, icici and hdfc still say more than the code can do. `adapter_wired` is owned by no leaf of
+this tree and was recorded rather than quietly widened into it.
+
+**4. `held_units` is absent from sleeve allocation, deliberately.** `baskfy_core.portfolio_units`
+computes it; the API does not fill it. `portfolio_holding` is keyed by portfolio (and now broker
+account) while a sleeve is not a portfolio, and when two sleeves target the same name **no honest
+attribution rule exists** for splitting the held quantity between them. Allocation therefore
+reports **target** units only. Any number in that field today would be a policy invented at render
+time. See PM11 — the field must not be "fixed" without taking the attribution decision first.
+
+**5. ⚠ The API test suite is non-deterministic on this machine, and this tree makes no claim
+about it.** `uv run pytest services/api` returns a **different failure set every run**. Measured
+across four runs: `test_api_run.py::TestCsvExport::test_the_values_match_the_json_response_exactly`,
+`test_load.py::TestFiftyConcurrentScreenRuns::test_the_pool_is_not_the_bottleneck`,
+`...::test_p95_stays_under_four_hundred_milliseconds_with_no_errors`,
+`test_api_keys.py::TestCreation::test_the_row_stores_a_digest_and_not_the_secret`. **Every one
+passes in isolation** (api_keys 18/18 alone) and greps **0** for portfolio / sleeve / broker /
+investment. It is **not** random ordering: `pytest-randomly` and `xdist` are both absent,
+confirmed. Causes: `baskfy_test` is a single shared database whose `clean_database` fixture runs
+`DROP SCHEMA public CASCADE` between module-scoped fixtures, and the latency budgets are
+load-sensitive on a busy laptop. The csv-export failure is separately proven pre-existing by an
+A/B with 0019 downgraded, and `screener.py` was last modified 2026-08-23, two days before this
+tree began.
+**Consequence, stated plainly: this tree does not claim the API suite is green, and does not claim
+the performance budgets hold.** What it does claim is narrower and verifiable — every suite it
+touched, plus every suite the schema change could plausibly reach, passing **serially**.
+
+**6. Carried forward, pre-existing:** 13 ruff / 15 mypy errors repo-wide in files no tree-5 leaf
+owned (`basket_sizing.py`, `curated_drift_api.py`, `cb_metrics_cli.py`, `test_pipeline_chain.py`).
+Reported rather than silently absorbed.
+
+### What went wrong in the process, and it is worth knowing
+
+Five gate defects were found by **running** the gates rather than reading them, and every one was a
+fault in the measuring instrument: `-qq` suppressing pytest's summary so 39 CHECK lines could never
+match; a `ruff && mypy` conjunction where mypy's "Success" masked ruff's failure; a bare
+`EXPECT: passed` that matches inside `1 failed, 1555 passed` (54 gates, one of them already marked
+met while the suite was red); a CHECK calling `all_brokers`, which never existed; and a
+`-m db -k` filter that deselected the very suite its gate was named after. Three ownership gaps in
+the plan and one wrong `ProblemType` in the contract were found by leaves, not by the plan.
+
+There was also **a bug in the gates runner itself**: `gate-check.mjs:23` drops its first positional
+argument when no `--timeout` flag is given, so a single-file invocation globs every gate file in
+the repo. It flipped 26 boxes across files whose leaves had not started; all were reset with their
+evidence. Workaround for the run: pass `--timeout` **before** the path. The shared script was not
+edited — it is the user's tooling.
+
+**Fixture-path count corrected:** the original brief said `broker_holdings.py` had *seven*
+`return _fixture_holdings()` paths. The measured number at the pre-tree commit was **six**. The
+structural point stood; the count did not.
+
+Every gate hardened during the run made a gate *capable of failing that previously was not*. No
+**A sixth gate defect, found by E1 auditing its own passes rather than trusting them.** E1's G8
+("no secret, token or connection string was written into any doc") ran
+`grep -cE <pattern> docs/ NEEDS-MAULIK.md` — **without `-r`**. Grep on a directory with no
+recursion flag is unspecified: run by hand it reported `SECRET_HITS=1`, run under the gate
+runner's shell it reported `SECRET_HITS=0` and the gate recorded that as evidence. The gate was
+**blind** — it never scanned `docs/` at all and would have passed with a credential in every file.
+The one real hit it should have caught was pre-existing: `docs/00-merge-status.md:442` carried
+an async-Postgres connection URL with an inline username and password for the local test
+database. The line now points at `.env` / `infra/docker/compose.yml` instead of repeating a
+connection string that carries credentials, even local ones. G8's CHECK gained `-r`, gained the 04b addendum to its
+scan set, and gained a bearer-token pattern; G7's CHECK — which matched incidental occurrences of
+"fixture" near "six" elsewhere in the file and would have passed without the correction being
+written at all — now matches the correction sentence itself. Both were reset and re-run, and both
+were proven capable of failing by planting a violation in a scratch copy: `SECRET_HITS=1` and
+`CORRECTED=0` respectively. Stricter in every case; nothing was weakened.
+
+G5's CHECK had the same hole and was audited the same way: `grep -nE "broker|holdings"
+NEEDS-MAULIK.md` passes on the **pre-tree** file (`git show HEAD:NEEDS-MAULIK.md` matches on the
+older §13 OAuth entry), so it proved nothing about the nine-broker list. It now requires all nine
+broker names present **and** the statement of what they block, behind one decisive token —
+measured `GATE_OK BROKERS_NAMED=9` on the current file and `GATE_FAILED BROKERS_NAMED=2` on the
+pre-tree file. G1 and G3 were audited the same way and are sound: both produce no matching output
+against the pre-tree files, so neither could have passed without this tree's work.
+
+gate was weakened, and every previously-met gate whose EXPECT changed was reset and re-run rather
+than grandfathered.
+
+### Two landing-page claims, checked against the code (tree 5 G6)
+
+Both sentences are live: `apps/web/src/lib/marketing/landing-band.ts` → rendered by
+`components/marketing/landing-band.tsx:169` on the public landing page.
+
+**1. "A momentum basket can sit beside a long-term core and still be read as one position."**
+(`landing-band.ts:120`) — **NOW TRUE, and it was not before this tree.** A sleeve can be sourced
+from a curated basket (`routers/sleeves.py:183` `BASKET: Final = "basket"`; constraint at
+`0019_portfolio_graph.py:327`), a portfolio nests inside another (`portfolio.parent_id`), and a
+`cb_investment` can be filed under a portfolio (`cb_investment.portfolio_id`). The three joins the
+sentence needs all exist. No change required.
+
+**2. "Connect the brokers you already use and your holdings sync in."** (`landing-band.ts:124`)
+— **FALSE for nine of the ten brokers, and it should be corrected.** `_HOLDINGS_WIRED ==
+{"zerodha"}`. It is not defensible as aspirational: it is present tense, on the acquisition
+surface, about the specific capability this tree just proved absent — and the same product now
+says `holdings_sync="planned"` for those nine in its own API. The page and the API would be
+contradicting each other.
+
+**Proposed replacement, exact:**
+
+> Connect Zerodha and your holdings sync in; the other nine brokers are listed as planned, not
+> wired. Orders go out as a read-only plan you confirm on the broker's own screen.
+
+It reuses the catalog's own word (`planned`), so the copy and `GET /brokers` say the same thing,
+and it clears the copy lint (no banned phrase, no outcome promised). **Owner: unassigned.**
+`lib/marketing/**` is outside E1's ownership and outside leaf D1's (`(app)/portfolios/**`,
+`components/portfolios/**`, `lib/portfolios/**`), so this is a handoff, not a completed edit.
+`apps/web/src/lib/__tests__/landing-band.test.ts` pins the four card titles and will need reading
+alongside the change.
+
+---
+
+## M40 — catalog search: ⌘K now covers stocks, indices, baskets and screens (25 Aug 2026)
+
+`baskfynavrefactorreport.md` §F11's open item — "full ⌘K search deferred", item 5 on that report's
+own list — is closed. Decisions are `docs/DECISIONS-MERGE.md` §M40–M40.6, all ⚠ UNREVIEWED. Gates:
+`gates/tree3-catalog-search.md`.
+
+**Shipped.**
+
+- `GET /api/v1/search?q=&limit=` — one federated read (`services/api/src/baskfy_api/search.py`,
+  `routers/search.py`, `CatalogHitOut`/`CatalogSearchOut`). `limit` is per kind. Ranking is
+  exact → prefix → contains, per kind. Open to anonymous callers; each kind keeps the visibility
+  rule its own list route already applies.
+- The palette (`apps/web/src/components/shell/command-palette.tsx`) draws five groups — Stocks ·
+  Indices · Baskets · Screens · Go to — from one round trip, plus recent items in `localStorage`.
+- `apps/web/src/lib/search/hrefs.ts` owns kind → route. The API returns identity, never a URL.
+- 16 API contract tests, 29 web unit tests, 6 Playwright tests.
+
+**Not done, and deliberately so.**
+
+- **No index detail page.** An index hit lands on `/market/today?q=<slug>` — the ~145-row dashboard
+  filtered to that row. There is no `/indices/{slug}` anywhere in the app and F11 did not ask for
+  one. `hrefs.test.ts` pins the current answer so replacing it is a visible change (M40.2).
+- **The indices table keeps its own local search box.** F11 says the palette "replaces both
+  existing scoped search boxes **as the primary entry**" — the header's stock-only box is gone,
+  and filtering a table you are already looking at is not a second global search.
+- Recents are per browser and are not synced (M40.3).
+
+**Two pre-existing defects found while doing this, both fixed here because they blocked the work.**
+
+1. **The checked-in `openapi.json` was badly stale** — regenerating produced a 15,000-line diff.
+   Regeneration is mandatory (a served route absent from the document is a surface nobody agreed
+   to), and the fresh document broke both `pnpm run lint` and the production `next build` on
+   `Type 'string[][]' is not assignable to type '[string, string][]'`: `risk_free_curve` had been
+   added to `BacktestConfig` since the artifact was last generated, Pydantic emits `prefixItems`
+   for a tuple, and the value `openapi-fetch` hands back is structurally widened. Measured: 94 web
+   typecheck errors on the stale artifact, 2 on the fresh one, 0 with the `WithJsonSchema`
+   override now in `baskfy_core.backtest`. Validation is unchanged (M40.4).
+2. **The e2e database had never contained a single basket.** `seed_momentum_scan_basket` returns 0
+   when fewer than `top_n` of its fifteen hard-coded large caps (RELIANCE, TCS, INFY, …) exist in
+   `instrument` — and none of them is in the 271-row reference export, so the branch was silently
+   taken on every `seed e2e`. Every catalog surface in the browser suite has been running against
+   an empty catalog. The `e2e` seed now ranks from the export itself (M40.6).

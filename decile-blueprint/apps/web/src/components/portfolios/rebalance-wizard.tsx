@@ -1,6 +1,6 @@
 "use client";
 
-import type { PortfolioOut, RebalanceOut } from "@baskfy/api-client";
+import type { PortfolioDetailOut, RebalanceOut } from "@baskfy/api-client";
 import { History, Play } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -44,7 +44,7 @@ const DEFAULT_HOLD_BUFFER = 10;
 
 export interface RebalanceWizardProps {
   portfolioId: number;
-  initial: PortfolioOut | null;
+  initial: PortfolioDetailOut | null;
 }
 
 export function RebalanceWizard({ portfolioId, initial }: RebalanceWizardProps) {

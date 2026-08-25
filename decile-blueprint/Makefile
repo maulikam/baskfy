@@ -3,7 +3,7 @@ COMPOSE := docker compose -f infra/docker/compose.yml
 UV      := uv run
 
 .DEFAULT_GOAL := help
-.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants token-sync shadow backend-parity friday-drill
+.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants fundamentals refactors token-sync shadow backend-parity friday-drill cb-metrics
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -129,6 +129,9 @@ worker:        ## Run a Celery worker across all queues
 beat:          ## Run Celery Beat (docs/09 §Schedule, IST)
 	$(UV) celery -A baskfy_worker.celery_app:app beat -l info
 
+cb-metrics:    ## Upsert cb_metrics for every basket (Tree 7 / SC2). DATE=YYYY-MM-DD optional
+	$(UV) python -m baskfy_worker.cb_metrics_cli $(if $(DATE),--date $(DATE),)
+
 flower:        ## Inspect queues and tasks (docs/02)
 	$(UV) celery -A baskfy_worker.celery_app:app flower
 
@@ -140,6 +143,12 @@ backfill:      ## Resumable bar backfill: make backfill FROM=2011-01-01 TO=2026-
 
 refdata:       ## Reference-data backfill: make refdata FROM=2018-01-01 TO=2026-08-18
 	$(UV) python -m baskfy_worker.reference_backfill --from $(FROM) --to $(TO)
+
+fundamentals:  ## Resumable NSE marketcap/PE fill for one date: make fundamentals DATE=2026-08-18
+	$(UV) python -m baskfy_worker.fundamentals_cli fill --date $(DATE) --resume
+
+refactors:     ## Rebuild factor_daily for one date from data on disk: make refactors DATE=2026-08-18
+	$(UV) python -m baskfy_worker.factors_cli recompute --date $(DATE)
 
 bhavcopy:      ## Bar backfill from the NSE bhavcopy (no Kite needed): make bhavcopy FROM=2024-01-01 TO=2026-08-18
 	$(UV) python -m baskfy_worker.bhavcopy_backfill --from $(FROM) --to $(TO)

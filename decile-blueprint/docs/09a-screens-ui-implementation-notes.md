@@ -168,3 +168,12 @@ The peek drawer shows what the row already carries rather than fetching the fact
 a peek is that it is instant, and `/instruments/{symbol}` is Prompt 10's. Its "open the full
 factsheet" link is a plain anchor for the same reason: `typedRoutes` would reject a `<Link>` to a
 route that does not exist yet, correctly.
+
+## 11. Screen-page redesign (display layer)
+
+`/screens/:id` still redirects to `/build/:id`. The editor's default chrome is a chip bar
+(`NEXT_PUBLIC_SCREEN_CHIP_FILTERS` on), a story strip, and a dieted table. Human labels live in
+`lib/screens/column-display.ts`; API keys are unchanged. Dead columns are dropped only when
+`buildColumns` is given `rows`. The 7-day sparkline and 1-year peek chart are not built — the
+preview row has no history series (`docs/DECISIONS-MERGE.md` §SP.2). Bumpiness is five dots, not
+three (§SP.1). Global nav is out of scope.

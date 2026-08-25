@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Inter } from "next/font/google";
+import { Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ConsentBanner } from "@/components/consent/consent-banner";
@@ -14,22 +14,20 @@ import "./globals.css";
  * the real font occupy the same space — the layout does not move when the webfont arrives, which
  * is Prompt 8's fourth acceptance criterion applied to type.
  *
- * **Inter, because Kite and Sensibull are Inter.** An earlier pass argued for a display grotesk on
- * the grounds that Inter is the most-used interface face on the web and a product that wants not
- * to look like every other product should not open with it. That reasoning is sound in general and
- * wrong here: Maulik's instruction is that this should feel like the broker screen his user
- * already has open in the next tab, and a characterful display face is precisely what would break
- * that. Headings are Inter at a larger size and a tighter track, which is what Kite does.
+ * **Helvetica Neue, because the whole product wears vaaya.ai's world now** (24 Aug 2026). An
+ * earlier pass set Inter here on the grounds that Kite and Sensibull set Inter and this product's
+ * user is looking at Kite in the next tab. That reasoning stood until Maulik picked a different
+ * world for the landing page and then asked for it across every surface; the face is now declared
+ * once in `globals.css` as `--font-sans`, and no webfont is downloaded for it at all.
+ *
+ * The trade, stated plainly: Helvetica Neue is a system face on Apple platforms and absent on
+ * Windows, where the stack falls to Arial — close in metrics and colour, not the same face.
+ * Self-hosting a Helvetica is a licensing question, not a technical one. `DECISIONS-MERGE` §UI-5.
  *
  * Geist Mono stays. Kite sets its figures in tabular Inter; a real mono is strictly better at the
  * same job and is the one place this departs from the reference, because a column of prices that
  * lines up character-for-character is worth more than the last few percent of resemblance.
  */
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-inter",
-});
 
 const geistMono = Geist_Mono({
   subsets: ["latin"],
@@ -95,7 +93,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
      * markup and the client's first read differ by design. That script is what prevents the
      * light-then-dark flash (Prompt 8 deliverable 6, "a working dark mode with no FOUC").
      */
-    <html lang="en-IN" suppressHydrationWarning className={`${inter.variable} ${geistMono.variable}`}>
+    <html lang="en-IN" suppressHydrationWarning className={geistMono.variable}>
       <body className="antialiased">
         {children}
         <ConsentBanner />

@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -36,12 +37,18 @@ export interface WordmarkProps {
   className?: string;
   /** Hide the word and keep the mark. For a narrow header or a collapsed rail. */
   markOnly?: boolean;
+  /**
+   * Where the lockup leads. Defaults to `/`, the public landing page, which is right for the
+   * marketing header and the sign-in card. The application header passes `/home`: clicking the
+   * logo while signed in should not sign-post the reader back out to the sales pitch.
+   */
+  href?: Route;
 }
 
-export function Wordmark({ className, markOnly = false }: WordmarkProps) {
+export function Wordmark({ className, markOnly = false, href = "/" }: WordmarkProps) {
   return (
     <Link
-      href="/"
+      href={href}
       className={cn(
         "flex shrink-0 items-center gap-2 rounded-md py-0.5 transition-opacity duration-150 hover:opacity-80",
         className,

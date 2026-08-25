@@ -31,7 +31,11 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_api.curated_seed import seed_curated_managers, seed_momentum_scan_basket
+from baskfy_api.curated_seed import (
+    seed_curated_collections,
+    seed_curated_managers,
+    seed_momentum_scan_basket,
+)
 from baskfy_api.db import session_scope
 from baskfy_api.security import hash_password
 from baskfy_api.settings import get_settings
@@ -658,6 +662,9 @@ async def seed_reference(session: AsyncSession) -> dict[str, int]:
         "cb_manager": await seed_curated_managers(session),
         # Returns 0 until instruments for the fixture ranking exist (after fixture/bars).
         "cb_momentum_scan": await seed_momentum_scan_basket(session),
+        # Last, and deliberately so: membership is a predicate over the baskets that exist, so a
+        # shelf seeded before its baskets would come out empty and stay empty until the next run.
+        "cb_collection": await seed_curated_collections(session),
     }
 
 
@@ -687,7 +694,18 @@ async def _run(command: str, database_url: str | None) -> dict[str, int]:
             counts["factor_daily"] = await seed_reference_fixture(session)
             # The factsheet's sparklines, own-history medians and regime distances all read bars.
             counts["ohlcv_daily"] = await seed_fixture_bars(session)
-            counts["cb_momentum_scan"] = await seed_momentum_scan_basket(session)
+            # Ranked from the reference export rather than from
+            # `scan_projection.FIXTURE_SCAN_SYMBOLS`, because none of those fifteen large caps
+            # (RELIANCE, TCS, INFY, …) is in the 271-row export — so the seeder took its
+            # "fewer than top_n symbols exist" branch and the e2e database has, until now,
+            # contained **no basket at all**. Every catalog surface in the browser suite was
+            # therefore being exercised against an empty catalog. The export is already sorted by
+            # AVERAGE SHARPE RETURN 12/6/3/1 desc (docs/13), which is a momentum ranking, so its
+            # head is the honest input for a basket called Momentum Scan.
+            # `docs/DECISIONS-MERGE.md` M40.6.
+            counts["cb_momentum_scan"] = await seed_momentum_scan_basket(
+                session, ranked_symbols=tuple(row.symbol for row in to_rows().instruments)
+            )
             # The dashboard, the breadth gauges and the listings register (Prompt 11).
             counts["index_snapshot_daily"] = await seed_index_snapshots(session)
             counts["market_health_daily"] = await seed_market_health(session, to_rows().as_of)

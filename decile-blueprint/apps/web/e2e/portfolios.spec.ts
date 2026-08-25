@@ -37,7 +37,7 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Email").fill(EMAIL);
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/\/screens/);
+  await page.waitForURL(/\/build/);
 }
 
 async function uploadMessyPortfolio(page: Page): Promise<void> {
@@ -67,6 +67,9 @@ test.describe("the rebalance tracker", () => {
 
     const report = page.getByTestId("import-report");
     await expect(report.getByText("2 imported")).toBeVisible();
+
+    await expect(page.getByTestId("book-overall")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("book-box").filter({ hasText: /holding/i }).first()).toBeVisible();
 
     const problems = page.getByTestId("import-problems");
     await expect(problems.getByText(/532540/)).toBeVisible();

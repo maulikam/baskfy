@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { dismissCookieBanner, showResultsTable } from "./helpers/screen-chips";
+
 /**
  * `/instruments/[symbol]` end to end — Prompt 10 deliverables 4, 5 and 6.
  *
@@ -24,7 +26,8 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Email").fill(EMAIL);
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/\/screens/);
+  await page.waitForURL(/\/build/);
+  await dismissCookieBanner(page);
 }
 
 test.describe("the instrument factsheet", () => {
@@ -102,8 +105,9 @@ test.describe("the instrument factsheet", () => {
   test("is reachable from the results table's peek drawer", async ({ page }) => {
     test.slow();
     await signIn(page);
-    await page.goto("/screens/exmpl0000001");
-    await expect(page.getByTestId("result-count")).toHaveText("271 results", { timeout: 20_000 });
+    await page.goto("/build/exmpl0000001");
+    await expect(page.getByTestId("result-count")).toHaveText("271 matches", { timeout: 20_000 });
+    await showResultsTable(page);
 
     await page.locator('[role="row"][aria-rowindex="2"]').click();
     const link = page.getByRole("link", { name: /Open the full factsheet/ });

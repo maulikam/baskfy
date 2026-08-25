@@ -118,6 +118,24 @@ class ListingRecord(_Record):
     market_lot: int | None = None
 
 
+class EquityFundamental(_Record):
+    """One NSE cash-equity quote distilled onto ``fundamental_daily`` (docs/05 §14).
+
+    ``marketcap_cr`` is issued shares * last price / 1e7, rounded to a rupee-crore integer
+    (docs/13 §2 finding 7). ``pe`` is nullable: the exchange omits it for names without earnings,
+    and the P/E filter must not treat a missing ratio as zero.
+    """
+
+    symbol: str = Field(min_length=1)
+    date: dt.date
+    shares_outstanding: int | None = None
+    last_price: Decimal | None = None
+    marketcap_cr: int | None = None
+    pe: Decimal | None = None
+    pb: Decimal | None = None
+    div_yield: Decimal | None = None
+
+
 # ---------------------------------------------------------------------------
 # Frame schemas
 #

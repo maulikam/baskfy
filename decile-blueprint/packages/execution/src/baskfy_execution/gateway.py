@@ -9,6 +9,7 @@ from .guards import (OvernightOptionError, assert_not_overnight_option,
                      assert_tradeable)
 from .ratelimit import KiteLimits
 from .risk import RiskManager
+from .tenancy import TenantIds, refuse_cross_tenant
 
 log = logging.getLogger("gateway")
 JOURNAL = "data/outputs/orders_journal.jsonl"
@@ -80,7 +81,14 @@ class OrderGateway:
                     order_type: str = "LIMIT", price: float | None = None,
                     exchange: str = "NSE", variety: str = "regular",
                     client_id: str | None = None, gross_exposure: float = 0.0,
-                    series: str | None = None, tick_size: float | None = None) -> dict:
+                    series: str | None = None, tick_size: float | None = None,
+                    tenant: TenantIds, plan_tenant: TenantIds) -> dict:
+        # Law 2 multi-tenant clause (P4.3): refuse a plan built for someone else before
+        # any guard, risk check, or network call. BLOCKED, not an exception — a 500 would
+        # be the wrong answer to a cross-tenant post.
+        mismatch = refuse_cross_tenant(tenant, plan_tenant)
+        if mismatch:
+            return {"symbol": symbol, "status": "BLOCKED", "error": mismatch}
         gates = self._gates()
         assert_tradeable(symbol, series)                       # layer 1: untouchables
         # Same layer: an option under a carry product would still be open tomorrow morning.

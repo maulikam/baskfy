@@ -35,6 +35,12 @@ export type ScreenRunRowOut = Schemas["ScreenRunRowOut"];
 export type ScreenRunPage = Schemas["ScreenRunPage"];
 export type ProblemOut = Schemas["ProblemOut"];
 
+/** The federated ⌘K catalog search (`baskfynavrefactorreport` §F11). */
+export type CatalogHitOut = Schemas["CatalogHitOut"];
+export type CatalogSearchOut = Schemas["CatalogSearchOut"];
+/** `instrument` | `index` | `basket` | `screen` — narrowed, so a kind→href map cannot miss one. */
+export type CatalogKind = CatalogHitOut["kind"];
+
 /** docs/07 §Instruments — the factsheet and its supporting series. */
 export type InstrumentHitOut = Schemas["InstrumentHitOut"];
 export type InstrumentSearchOut = Schemas["InstrumentSearchOut"];
@@ -82,12 +88,22 @@ export type CheckoutSessionOut = Schemas["CheckoutSessionOut"];
 export type InvoiceOut = Schemas["InvoiceOut"];
 export type InvoicePage = Schemas["InvoicePage"];
 
-/** docs/07 §"Portfolios & rebalance" — the tracker (Prompt 14). */
-export type PortfolioOut = Schemas["PortfolioOut"];
-export type PortfolioSummaryOut = Schemas["PortfolioSummaryOut"];
-export type PortfolioListOut = Schemas["PortfolioListOut"];
-export type PortfolioWriteOut = Schemas["PortfolioWriteOut"];
-export type PortfolioCreate = Schemas["PortfolioCreate"];
+/** docs/07 §"Portfolios & rebalance" — the tracker (Prompt 14).
+ *
+ * Migration 0019 made a portfolio a node in a forest rather than a flat row, so the response
+ * models were renamed with it: a listing is now a `PortfolioForestOut` of roots with nested
+ * `children` plus an `orphans` array, and a single portfolio carries `parent_id`,
+ * `broker_account_id`, `depth` and `child_ids`. The old flat names are gone rather than
+ * aliased — an alias would let a caller keep reading a tree as a list and never find out.
+ */
+export type PortfolioDetailOut = Schemas["PortfolioDetailOut"];
+export type PortfolioNodeOut = Schemas["PortfolioNodeOut"];
+export type PortfolioForestOut = Schemas["PortfolioForestOut"];
+export type PortfolioWriteDetailOut = Schemas["PortfolioWriteDetailOut"];
+export type PortfolioCreateIn = Schemas["PortfolioCreateIn"];
+export type PortfolioPatchIn = Schemas["PortfolioPatchIn"];
+export type PortfolioRollupOut = Schemas["PortfolioRollupOut"];
+export type PortfolioLinkBody = Schemas["PortfolioLinkBody"];
 export type HoldingIn = Schemas["HoldingIn"];
 export type HoldingOut = Schemas["HoldingOut"];
 export type HoldingsIn = Schemas["HoldingsIn"];

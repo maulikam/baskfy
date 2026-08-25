@@ -30,6 +30,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from baskfy_core.manager_onboarding import MANAGER_STATES
 from baskfy_core.models.base import (
     INR,
     MONEY,
@@ -43,6 +44,7 @@ from baskfy_core.models.base import (
     JsonObject,
     UpdatedAt,
 )
+from baskfy_core.sebi_registration import REGISTRATION_TYPES
 
 #: ``cb_constituent.weight`` — docs/smallcase/03 specifies numeric(7,4).
 CONSTITUENT_WEIGHT = Numeric(7, 4)
@@ -58,7 +60,12 @@ REBALANCE_FREQUENCIES: tuple[str, ...] = (
     "ANNUAL",
     "NEED_BASIS",
 )
-BASKET_SOURCES: tuple[str, ...] = ("SCAN", "MANUAL")
+#: Where a basket's names came from. ``SCREEN`` is a basket cut from a saved screen — the third
+#: genesis path, alongside the engine's scan and a hand-typed list. It exists as its own source
+#: rather than as ``MANUAL`` because the screen is a *live rule*: the basket can be re-cut from it
+#: later, which a hand-typed list can never be, and ``source_screen_id`` is what makes that
+#: possible (`docs/DECISIONS-MERGE.md` SB1).
+BASKET_SOURCES: tuple[str, ...] = ("SCAN", "MANUAL", "SCREEN")
 VERSION_LABELS: tuple[str, ...] = ("CHANGED", "NO_CHANGE", "GENESIS")
 VOLATILITY_BUCKETS: tuple[str, ...] = ("LOW", "MED", "HIGH")
 #: Which series a published ``volatility_value`` was measured on. Mirrors
@@ -107,19 +114,129 @@ def _in_check(name: str, column: str, values: tuple[str, ...]) -> CheckConstrain
 
 
 class CbManager(Base):
+    """A manager identity, and — since 0020 — optionally the person who holds it.
+
+    Before 0020 this was a seed row: ``curated_seed`` created exactly two (the engine and the
+    operator) and there was no way for anybody else to become one. Three things were missing and
+    are added here.
+
+    **A person.** ``user_id`` is nullable because the two seed managers are not people: the engine
+    is a pipeline and the operator row predates accounts. Nullable-but-unique is the honest shape —
+    at most one manager identity per account, and identities that belong to nobody are still legal.
+
+    **A lifecycle.** ``state`` is the machine in :mod:`baskfy_core.manager_onboarding`; the legal
+    transitions live there rather than here so one function answers for both the API and a test.
+    The database only pins the vocabulary.
+
+    **A registration that can be checked.** ``sebi_reg_no`` alone could not say which registration
+    it was, whether it had lapsed, or whether anyone had looked. The type, the window and the
+    verification stamp make each of those a separate, answerable question — see
+    :mod:`baskfy_core.sebi_registration`, and note that a well-formed number is not a verified one
+    and neither is a statement about compliance, which is D3 and unreviewed.
+    """
+
     __tablename__ = "cb_manager"
-    __table_args__ = (_in_check("cb_manager_kind", "kind", MANAGER_KINDS),)
+    __table_args__ = (
+        _in_check("cb_manager_kind", "kind", MANAGER_KINDS),
+        _in_check("cb_manager_state", "state", MANAGER_STATES),
+        _in_check("cb_manager_sebi_reg_type", "sebi_reg_type", REGISTRATION_TYPES),
+        # A declared type of NONE cannot carry a number, and a number cannot be filed with no
+        # type. The pairing is structural for the same reason `portfolio_sleeve`'s is: a
+        # convention enforced only in the router is a convention the next writer skips.
+        CheckConstraint(
+            "(sebi_reg_type = 'NONE' AND sebi_reg_no IS NULL) OR "
+            "(sebi_reg_type <> 'NONE' AND sebi_reg_no IS NOT NULL)",
+            name="cb_manager_sebi_reg_pairing",
+        ),
+        # An end before a start is not a window.
+        CheckConstraint(
+            "sebi_reg_valid_to IS NULL OR sebi_reg_valid_from IS NULL OR "
+            "sebi_reg_valid_to >= sebi_reg_valid_from",
+            name="cb_manager_sebi_reg_window",
+        ),
+        # At most one manager identity per account. Partial, so the seed managers — and any
+        # future identity that belongs to no one — remain legal.
+        Index(
+            "uq_cb_manager_user_id",
+            "user_id",
+            unique=True,
+            postgresql_where=text("user_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[BigIntPk]
     slug: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     kind: Mapped[str] = mapped_column(String, nullable=False)
+    #: The account holding this identity. NULL for the seeded engine and operator rows.
+    user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("app_user.id"))
+    #: Where this identity sits in :mod:`baskfy_core.manager_onboarding`. New rows start in
+    #: ``DRAFT``; the 0020 migration puts the two pre-existing seed rows in ``APPROVED``,
+    #: because they were already publishing before a lifecycle existed.
+    state: Mapped[str] = mapped_column(String, nullable=False, server_default=text("'DRAFT'"))
     sebi_reg_no: Mapped[str | None] = mapped_column(String)
+    #: Which registration ``sebi_reg_no`` is. ``NONE`` is a real answer.
+    sebi_reg_type: Mapped[str] = mapped_column(
+        String, nullable=False, server_default=text("'NONE'")
+    )
+    sebi_reg_valid_from: Mapped[dt.date | None] = mapped_column(Date)
+    #: NULL means open-ended — SEBI's perpetual registrations have no expiry.
+    sebi_reg_valid_to: Mapped[dt.date | None] = mapped_column(Date)
+    #: When an operator last compared this number against the SEBI register. NULL means nobody
+    #: has. Never written by the pure module; only a human action sets it.
+    sebi_reg_verified_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     bio: Mapped[str | None] = mapped_column(Text)
     strategies: Mapped[list[str]] = mapped_column(
         ARRAY(String), nullable=False, server_default=text("'{}'")
     )
     disclosures_md: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[CreatedAt]
+
+
+class CbManagerRevenueShare(Base):
+    """What a manager is owed, as an agreement with a start and an end.
+
+    Track B, and dark: nothing collects a fee while ``BASKFY_FEE_COLLECTION_ENABLED`` is false,
+    and it is false. This table exists so the shape is settled before the flag is ever flipped —
+    the same order P4.1 followed, where the tenant schema landed while paid launch waited on C3.
+
+    **There is no default rate, and that is deliberate.** ``rate_bps`` has no server default and
+    the column is NOT NULL, so a row cannot be created without somebody stating a number. D7
+    (pricing amounts) is human-track: an agent inventing "the usual 2000 bps" and writing it into
+    a migration would be exactly the guess the working agreement forbids, and a default is how
+    such a guess survives review — it never appears in a diff again.
+
+    **Rates are superseded, not edited.** A renegotiated share is a new row with a new
+    ``effective_from``; the old row gets an ``effective_to``. An UPDATE would rewrite what a
+    manager was owed last quarter, and that is a number somebody may have already been paid on.
+
+    Basis points rather than a percentage: an integer cannot drift the way a float can, and
+    house rule 9 keeps money off floats.
+    """
+
+    __tablename__ = "cb_manager_revenue_share"
+    __table_args__ = (
+        Index("ix_cb_manager_revenue_share_manager_id", "manager_id"),
+        # 0 is legal — a manager may run a basket for nothing. 10000 bps is 100%, the ceiling.
+        CheckConstraint("rate_bps BETWEEN 0 AND 10000", name="cb_manager_revenue_share_rate"),
+        CheckConstraint(
+            "effective_to IS NULL OR effective_to > effective_from",
+            name="cb_manager_revenue_share_window",
+        ),
+    )
+
+    id: Mapped[BigIntPk]
+    manager_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("cb_manager.id", ondelete="CASCADE"), nullable=False
+    )
+    #: Basis points of the fee that go to the manager. NO server default — see the class
+    #: docstring; the amount is D7 and is supplied by a human, never inferred here.
+    rate_bps: Mapped[int] = mapped_column(Integer, nullable=False)
+    effective_from: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    #: NULL means "still in force". Set when a successor row starts.
+    effective_to: Mapped[dt.date | None] = mapped_column(Date)
+    #: Free text: which agreement, signed when, by whom. Not parsed, only displayed.
+    note: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[CreatedAt]
 
 
@@ -154,6 +271,12 @@ class CbBasket(Base):
     next_review_at: Mapped[dt.date | None] = mapped_column(Date)
     source: Mapped[str] = mapped_column(String, nullable=False)
     scan_strategy_key: Mapped[str | None] = mapped_column(String)
+    #: The saved screen this basket was cut from, when ``source = 'SCREEN'``. ``ON DELETE SET
+    #: NULL``, not CASCADE: deleting the rule must not delete the basket somebody is holding —
+    #: it only means the basket can no longer be re-cut, which the NULL says exactly.
+    source_screen_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("screen.id", ondelete="SET NULL")
+    )
     archived_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -278,16 +401,37 @@ class CbWatchlistItem(Base):
 
 
 class CbInvestment(Base):
+    """One user's position in one curated basket, at one broker account.
+
+    ``portfolio_id`` (0019) is the join between the two halves of the product: a basket
+    investment can be reported as one slice of a portfolio instead of a parallel universe of
+    money. It is **nullable on purpose** — an investment may sit outside any portfolio, which is
+    what every row looked like before 0019 and what a user who never builds a portfolio keeps.
+    A non-null value is a claim the user made, never one inferred for them.
+
+    ``ON DELETE SET NULL`` rather than ``CASCADE``: deleting a grouping never deletes money or
+    its history. The investment simply stops being filed under anything.
+    """
+
     __tablename__ = "cb_investment"
     __table_args__ = (
         _in_check("cb_investment_status", "status", INVESTMENT_STATUSES),
         Index("ix_cb_investment_user_id", "user_id"),
         Index("ix_cb_investment_basket_id", "basket_id"),
+        Index("ix_cb_investment_broker_account_id", "broker_account_id"),
+        Index("ix_cb_investment_portfolio_id", "portfolio_id"),
     )
 
     id: Mapped[BigIntPk]
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    broker_account_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("broker_account.id"), nullable=False
+    )
+    #: NULL = this investment is filed under no portfolio. See the class docstring.
+    portfolio_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("portfolio.id", ondelete="SET NULL")
     )
     basket_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("cb_basket.id", ondelete="CASCADE"), nullable=False
@@ -326,9 +470,17 @@ class CbOrderBatch(Base):
         _in_check("cb_order_batch_kind", "kind", ORDER_BATCH_KINDS),
         _in_check("cb_order_batch_status", "status", ORDER_BATCH_STATUSES),
         Index("ix_cb_order_batch_investment_id", "investment_id"),
+        Index("ix_cb_order_batch_user_id", "user_id"),
+        Index("ix_cb_order_batch_broker_account_id", "broker_account_id"),
     )
 
     id: Mapped[BigIntPk]
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    broker_account_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("broker_account.id"), nullable=False
+    )
     investment_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("cb_investment.id", ondelete="CASCADE"), nullable=False
     )

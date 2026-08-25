@@ -24,3 +24,12 @@ asserts the recovered window lengths (22 / 64 / 121 / 185 / 247 trading days as 
 docs/13 §3) — which is the real acceptance test for this calendar.
 
 Until that reconciliation has run, do not use this calendar to compute a published factor.
+
+## `india_tbill.csv`
+
+OECD MEI India IR3TIB — monthly 3-month short-term interest rates, percent per annum.
+Columns: `date,annual_pct`. First observation 2011-11-01, last 2026-06-01 (176 rows).
+Fetched 24 Aug 2026 from the OECD SDMX API (`DSD_STES@DF_FINMARK`). This is a published
+**proxy** for the 91-day T-bill, not the RBI auction cutoff. Worker backtests attach it via
+`baskfy_core.risk_free.attach_tbill_curve`. Refresh by replacing this file; there is no
+runtime OECD provider (house rule: network only through Kite/NSE).

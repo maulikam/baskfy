@@ -20,7 +20,11 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   {
     ignores: [
-      ".next/**",
+      // The glob, not `.next/**`: `BASKFY_WEB_DIST_DIR` (DECISIONS-MERGE UI-1) means a build
+      // directory can be called anything with that prefix — `.next-build`, `.next-e2e` — and
+      // type-checked linting over a gigabyte of generated output exhausts node's heap after a
+      // quarter of an hour rather than reporting anything.
+      ".next*/**",
       "node_modules/**",
       "next-env.d.ts",
       "playwright-report/**",

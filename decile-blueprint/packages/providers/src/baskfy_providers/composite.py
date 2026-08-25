@@ -22,7 +22,7 @@ Routing rules
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Final
 
 import polars as pl
@@ -43,6 +43,7 @@ from baskfy_providers.ports import (
 )
 from baskfy_providers.records import (
     CorporateAction,
+    EquityFundamental,
     IndexSnapshot,
     InstrumentRecord,
     ListingRecord,
@@ -213,6 +214,20 @@ class CompositeProvider:
 
     def bhavcopy(self, on: dt.date) -> pl.DataFrame:
         return self.route(Capability.BHAVCOPY, lambda p: _reference(p).bhavcopy(on))
+
+    def equity_fundamentals(
+        self,
+        on: dt.date,
+        symbols: Sequence[str],
+        *,
+        series_by_symbol: Mapping[str, str] | None = None,
+    ) -> list[EquityFundamental]:
+        return self.route(
+            Capability.EQUITY_FUNDAMENTALS,
+            lambda p: _reference(p).equity_fundamentals(
+                on, symbols, series_by_symbol=series_by_symbol
+            ),
+        )
 
 
 def _safe_check(provider: HealthReporting) -> ProviderHealth:

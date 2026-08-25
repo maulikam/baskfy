@@ -91,7 +91,13 @@ export function definedParams<T extends object>(
   return out;
 }
 
-async function readJson(path: string): Promise<unknown> {
+/**
+ * Read one JSON document from the API with the caller's bearer token and the shared
+ * timeout handling. Exported so `lib/collections` can reuse it: a second copy of the auth
+ * and timeout logic is a second place for it to drift, and the collections surface reaches
+ * the same `/explore/*` namespace anyway.
+ */
+export async function readExploreJson(path: string): Promise<unknown> {
   const session = await auth();
   const token = session?.accessToken;
   try {
@@ -120,9 +126,23 @@ function toQuery(params: ExploreListParams): string {
 }
 
 export async function fetchExploreList(params: ExploreListParams = {}): Promise<ExploreList> {
-  return (await readJson(`/explore${toQuery(params)}`)) as ExploreList;
+  return (await readExploreJson(`/explore${toQuery(params)}`)) as ExploreList;
 }
 
 export async function fetchExploreBasket(slug: string): Promise<ExploreBasketCard> {
-  return (await readJson(`/explore/${encodeURIComponent(slug)}`)) as ExploreBasketCard;
+  return (await readExploreJson(`/explore/${encodeURIComponent(slug)}`)) as ExploreBasketCard;
+}
+
+export interface ExploreManager {
+  slug: string;
+  name: string;
+  kind: string;
+  sebi_reg_no: string | null;
+  bio: string | null;
+  strategies: string[];
+  disclosures_md: string | null;
+}
+
+export async function fetchExploreManager(slug: string): Promise<ExploreManager> {
+  return (await readExploreJson(`/explore/managers/${encodeURIComponent(slug)}`)) as ExploreManager;
 }

@@ -102,7 +102,7 @@ export function ColumnsEditor({ screen, columns }: ColumnsEditorProps) {
         {dirty ? <Badge variant="warning">Unsaved changes</Badge> : null}
         <div className="ml-auto flex gap-2">
           <Button variant="ghost" size="sm" asChild>
-            <Link href={`/screens/${screen.public_id}`}>Back to results</Link>
+            <Link href={`/build/${screen.public_id}`}>Back to results</Link>
           </Button>
           <Button
             variant="primary"
@@ -112,7 +112,7 @@ export function ColumnsEditor({ screen, columns }: ColumnsEditorProps) {
             onClick={() =>
               save.mutate(
                 { publicId: screen.public_id, columns: selected },
-                { onSuccess: () => router.push(`/screens/${screen.public_id}` as never) },
+                { onSuccess: () => router.push(`/build/${screen.public_id}` as never) },
               )
             }
           >

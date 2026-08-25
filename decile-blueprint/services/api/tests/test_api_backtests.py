@@ -18,6 +18,7 @@ import asyncio
 import datetime as dt
 import json
 from collections.abc import AsyncIterator, Callable, Sequence
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from typing import Final
@@ -217,6 +218,32 @@ async def _completed(
     session.add(row)
     await session.flush()
     return row
+
+
+def test_assumptions_state_each_note_once() -> None:
+    """The panel is a list of statements, and a statement is worth making once.
+
+    The two sources genuinely overlap: ``assumptions()`` ends with ``result.notes``, and the
+    worker's ``notes_for()`` hands the same notes back in ``extra_notes`` alongside the loader's.
+    Before this, every run-specific note was stored twice, printed twice in the assumptions panel
+    and collided as a React key in the web app. Order is part of the contract — the panel reads
+    top to bottom — so the first occurrence is the one that survives.
+    """
+    resolved = _config()
+    note = "the screen returned nothing on 2024-11-29; the book went to cash."
+    loader_note = "bars for 3 names start after the requested start date."
+    result = replace(_result(resolved), notes=(note,))
+
+    stored = build_payload(new_public_id(), resolved, result, None, extra_notes=(loader_note, note))
+    lines = stored.metrics["assumptions"]
+
+    assert isinstance(lines, list)
+    assert lines.count(note) == 1, "a run note reached the panel twice"
+    assert len(lines) == len(set(lines)), "the assumptions panel repeats itself"
+    # The loader's own note is additional information, not a duplicate — it must survive.
+    assert loader_note in lines
+    # `assumptions()` puts the run notes after the fixed prose; `extra_notes` follows.
+    assert lines.index(note) < lines.index(loader_note)
 
 
 # ---------------------------------------------------------------------------

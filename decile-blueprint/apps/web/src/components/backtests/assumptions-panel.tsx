@@ -21,6 +21,15 @@ export interface AssumptionsPanelProps {
 }
 
 export function AssumptionsPanel({ assumptions, disclaimer }: AssumptionsPanelProps) {
+  /*
+   * A statement is worth making once. The server deduplicates too (`build_payload`), but rows
+   * written before it did still carry "the screen returned nothing on ..." twice, and a panel
+   * that prints the same sentence twice reads as a rendering fault to anyone looking at it. The
+   * line is also the list key, so a repeat was a React key collision as well — the two failures
+   * have one fix.
+   */
+  const lines = [...new Set(assumptions)];
+
   return (
     <section className="space-y-3" aria-labelledby="assumptions">
       <h2 id="assumptions" className="text-sm font-semibold">
@@ -34,7 +43,7 @@ export function AssumptionsPanel({ assumptions, disclaimer }: AssumptionsPanelPr
         {disclaimer}
       </p>
       <ul className="space-y-2 rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-        {assumptions.map((line) => (
+        {lines.map((line) => (
           <li key={line} className="flex gap-2">
             <span aria-hidden="true" className="text-muted-foreground/60">
               ·

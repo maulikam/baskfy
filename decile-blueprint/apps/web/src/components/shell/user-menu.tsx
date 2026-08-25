@@ -116,8 +116,13 @@ export function UserMenu({ email, name, isStaff = false }: UserMenuProps) {
             </Link>
           </DropdownMenuItem>
         ) : null}
+        {/*
+          `prefetch={false}`, and it is not an optimisation. `/logout` is a route handler whose GET
+          signs the user out; a prefetch is a GET. Left on, opening this menu would arm a request
+          that ends the session before anybody clicked anything.
+        */}
         <DropdownMenuItem asChild>
-          <Link href="/logout">
+          <Link href="/logout" prefetch={false}>
             <LogOut aria-hidden="true" className="size-4" />
             Sign out
           </Link>

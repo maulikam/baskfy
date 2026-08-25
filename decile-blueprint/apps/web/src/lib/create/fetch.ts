@@ -52,16 +52,66 @@ export class CreateBasketError extends Error {
   }
 }
 
-/** Persist a PRIVATE basket. Throws {@link CreateBasketError} on non-2xx. */
-export async function createPrivateBasket(
-  body: CreateBasketRequest,
-): Promise<CreateBasketResponse> {
+export interface CreateFromScreenRequest {
+  screen_public_id: string;
+  amount: number;
+  name?: string | null;
+  /** Suggests the name count. Ignored by the server when `holdings` is given. */
+  profile?: string | null;
+  /** The investor's own count, which beats the profile's suggestion. */
+  holdings?: number | null;
+  /** The desk's exposure tier (R1–R4), which decides the cash share — never the count. */
+  exposure_tier?: string | null;
+  /** Explicit cash percent (0–95). Beats the tier suggestion when set. */
+  cash_pct?: number | null;
+  /** How to split the deployed money. Defaults to equal on the server. */
+  method?: string | null;
+  /**
+   * Only when `method` is CUSTOM. The server still runs the screen; these numbers cannot
+   * add or drop a name. Named `custom_weights` so this is not the caller supplying the basket.
+   */
+  custom_weights?: { symbol: string; weight: number }[] | null;
+}
+
+export interface CreateFromScreenHolding {
+  rank: number;
+  symbol: string;
+  instrument_id: number;
+  weight: string | number;
+  weight_pct_of_amount: string | number;
+  amount: string | number;
+}
+
+export interface CreateFromScreenResponse {
+  id: number;
+  slug: string;
+  name: string;
+  visibility: string;
+  type: string;
+  source: string;
+  version_no: number;
+  label: string;
+  screen_public_id: string;
+  as_of: string;
+  amount: string | number;
+  deployed: string | number;
+  cash: string | number;
+  cash_pct: string | number;
+  profile: string | null;
+  holdings_overridden: boolean;
+  minimum_amount: string | number | null;
+  fundable: boolean;
+  method: string;
+  holdings: CreateFromScreenHolding[];
+}
+
+async function post<T>(path: string, body: unknown, whenAnonymous: string): Promise<T> {
   const token = await accessToken();
   if (!token) {
-    throw new CreateBasketError("Sign in to save a private basket.", 401);
+    throw new CreateBasketError(whenAnonymous, 401);
   }
 
-  const response = await fetch(`${apiOrigin()}/api/v1/cb/baskets`, {
+  const response = await fetch(`${apiOrigin()}${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -79,5 +129,34 @@ export async function createPrivateBasket(
     throw new CreateBasketError(detail, response.status);
   }
 
-  return (await response.json()) as CreateBasketResponse;
+  return (await response.json()) as T;
+}
+
+/** Persist a PRIVATE basket. Throws {@link CreateBasketError} on non-2xx. */
+export async function createPrivateBasket(
+  body: CreateBasketRequest,
+): Promise<CreateBasketResponse> {
+  return post<CreateBasketResponse>(
+    "/api/v1/cb/baskets",
+    body,
+    "Sign in to save a private basket.",
+  );
+}
+
+/**
+ * Save a screen as a basket (SB1).
+ *
+ * Deliberately sends no symbols: the server runs the named screen itself, so what it stores is
+ * the screen's own output rather than whatever this browser happened to be showing. The response
+ * is therefore the authoritative sizing, and can differ from the on-screen preview if the
+ * published data moved in between.
+ */
+export async function createBasketFromScreen(
+  body: CreateFromScreenRequest,
+): Promise<CreateFromScreenResponse> {
+  return post<CreateFromScreenResponse>(
+    "/api/v1/cb/baskets/from-screen",
+    body,
+    "Sign in to save this screen as a basket.",
+  );
 }

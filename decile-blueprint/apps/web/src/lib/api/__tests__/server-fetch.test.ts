@@ -23,9 +23,7 @@ describe("server-fetch", () => {
   it("serverFetchJson returns JSON on ok", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        Response.json({ ok: true }, { status: 200 }),
-      ) as unknown as typeof fetch,
+      vi.fn(() => Promise.resolve(Response.json({ ok: true }, { status: 200 }))),
     );
     await expect(serverFetchJson({ url: "http://example.test/x" })).resolves.toEqual({
       ok: true,
@@ -44,7 +42,7 @@ describe("server-fetch", () => {
             reject(err);
           });
         });
-      }) as unknown as typeof fetch,
+      }),
     );
     await expect(
       serverFetchJsonOrNull({ url: "http://example.test/slow", timeoutMs: 20 }),
@@ -63,7 +61,7 @@ describe("server-fetch", () => {
             reject(err);
           });
         });
-      }) as unknown as typeof fetch,
+      }),
     );
     await expect(serverFetchJson({ url: "http://example.test/slow", timeoutMs: 20 })).rejects.toBeInstanceOf(
       ServerFetchTimeoutError,

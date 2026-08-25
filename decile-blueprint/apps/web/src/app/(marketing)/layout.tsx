@@ -16,9 +16,18 @@ import { SiteHeader } from "@/components/marketing/site-header";
 export default function MarketingLayout({ children }: { children: ReactNode }) {
   return (
     <Providers>
-      <div className="flex min-h-dvh flex-col">
+      {/*
+        `vaaya-surface` carries the ported token set (globals.css) and `vaaya-shell` paints the
+        canvas and sets the face, so every page and every existing component under this layout
+        inherits the world without a parallel component tree.
+
+        The header is `fixed`, so `main` opens below it rather than under it: 96px is the capsule's
+        52px plus its 16px offset plus a rule of air. A page whose first element is full-bleed art
+        can reclaim that space itself.
+      */}
+      <div className="vaaya-surface vaaya-shell flex min-h-dvh flex-col">
         <SiteHeader />
-        <main id="main" className="flex-1">
+        <main id="main" className="flex-1 pt-24">
           {children}
         </main>
         <SiteFooter />

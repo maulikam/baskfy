@@ -36,3 +36,20 @@ class OrderGateway(_CoreOrderGateway):
     def __init__(self, kc, risk, *, gates=None, journal_path: str = JOURNAL) -> None:
         super().__init__(kc, risk, gates=gates or _gates_from_config,
                          journal_path=journal_path)
+
+    async def place(self, *, tenant=None, plan_tenant=None, **kwargs):
+        """Stamp the operator tenant when the console does not pass one.
+
+        The merged gateway requires ``user_id`` + ``broker_account_id`` (P4.3). This
+        console still trades one account; a second tenant is a different caller, not
+        a silent default onto the founder.
+        """
+        from baskfy_execution.tenancy import TenantIds
+
+        sole = TenantIds(user_id=int(C.SOLE_USER_ID),
+                         broker_account_id=int(C.SOLE_BROKER_ACCOUNT_ID))
+        return await super().place(
+            tenant=tenant if tenant is not None else sole,
+            plan_tenant=plan_tenant if plan_tenant is not None else sole,
+            **kwargs,
+        )

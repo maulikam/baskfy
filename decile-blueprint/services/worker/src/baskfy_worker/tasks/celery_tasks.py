@@ -41,8 +41,10 @@ from baskfy_worker.tasks.backtests import (
     build_publisher,
     run_backtest_job,
 )
+from baskfy_worker.tasks.curated_batch_sync import run_curated_batch_sync
 from baskfy_worker.tasks.curated_dividends import run_curated_dividends
 from baskfy_worker.tasks.curated_metrics import run_curated_metrics
+from baskfy_worker.tasks.curated_rebalance_notify import run_curated_rebalance_notify
 from baskfy_worker.tasks.curated_sip import run_curated_sip_reminders
 from baskfy_worker.tasks.purge_accounts import run_purge_accounts
 
@@ -329,9 +331,27 @@ def compute_curated_metrics_task(trade_date: str | None = None) -> JsonObject:
 
     Idempotent per ``(basket_id, as_of_date)``. Defaults to today in IST when Beat fires without
     an argument.
+
+    Uses its own session (no outer ``begin()``): ``compute_all_metrics`` commits per chunk and
+    per basket. Wrapping it in ``run_in_session``'s transaction context closes the transaction
+    on the first commit and raises ``Can't operate on closed transaction``.
     """
     day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
-    return run_in_session(lambda session: run_curated_metrics(session, day))
+
+    async def _run() -> JsonObject:
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+        from baskfy_api.settings import get_settings
+
+        engine = create_async_engine(get_settings().database_url, pool_pre_ping=True)
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            async with maker() as session:
+                return await run_curated_metrics(session, day)
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(_run())
 
 
 @shared_task(name="baskfy.cb.sip_reminders", acks_late=True)
@@ -354,3 +374,18 @@ def curated_dividends_task(as_of: str | None = None) -> JsonObject:
     """
     day = dt.date.fromisoformat(as_of) if as_of else dt.datetime.now(tz=IST).date()
     return run_in_session(lambda session: run_curated_dividends(session, day))
+
+
+@shared_task(name="baskfy.cb.sync_batches", acks_late=True)
+def curated_batch_sync_task() -> JsonObject:
+    """T8.2: promote PLANNED batches to EXECUTED from the desk journal.
+
+    Synthetic ``cb-sim-*`` ids stay PLANNED. Never places an order.
+    """
+    return run_in_session(run_curated_batch_sync)
+
+
+@shared_task(name="baskfy.cb.rebalance_notify", acks_late=True)
+def curated_rebalance_notify_task() -> JsonObject:
+    """T8.3: email once per open REBALANCE_AVAILABLE lacking payload.notified_at."""
+    return run_in_session(run_curated_rebalance_notify)

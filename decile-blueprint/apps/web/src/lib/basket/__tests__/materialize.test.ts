@@ -34,4 +34,17 @@ describe("materializeBasket", () => {
     const total = basket.holdings.reduce((s, h) => s + h.amount, 0);
     expect(total).toBe(95_000);
   });
+
+  it("deploys everything when the investor opts out of a cash sleeve", () => {
+    const basket = materializeBasket({
+      name: "Test",
+      rows,
+      topN: 3,
+      notional: 100_000,
+      cashPct: 0,
+    });
+    expect(basket.cashPct).toBe(0);
+    expect(basket.deployed).toBeGreaterThan(99_000);
+    expect(basket.cash).toBeLessThan(1_000);
+  });
 });

@@ -202,9 +202,13 @@ async def _attach_fundamentals(
 ) -> pl.DataFrame:
     """docs/05 §14 — marketcap and P/E come from ``fundamental_daily``.
 
-    Nothing in docs/03's ten-step pipeline populates that table, so these are NULL until a
-    fundamentals source is chosen (recorded in CLAUDE.md). NULL is the honest value: docs/06
-    §"Step 4" already requires the P/E filter to exclude NULLs when enabled.
+    That table is filled two ways: T9.1 folded a fetch into step 6 for a night that is running,
+    and ``baskfy_worker.fundamentals_cli`` fills a single past date one batch at a time. Both
+    write the same rows, so this join does not care which ran.
+
+    A date with no fundamentals still computes: the frame passes through untouched and marketcap
+    and P/E stay NULL. NULL is the honest value, and docs/06 §"Step 4" already requires the P/E
+    filter to exclude NULLs when enabled.
     """
     fundamentals = await load_fundamentals(session, on)
     if fundamentals.height == 0:

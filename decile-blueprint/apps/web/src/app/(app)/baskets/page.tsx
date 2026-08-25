@@ -6,6 +6,7 @@ import { BasketCard as SharedBasketCard } from "@/components/basket/basket-card"
 import { ReturnConventionNote } from "@/components/explore/return-convention-note";
 import { ExploreFilters, type ExploreFilterState } from "@/components/explore/explore-filters";
 import { DisclosureBlock } from "@/components/explore/disclosure-block";
+import { CollectionShelf } from "@/components/collections/collection-shelf";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
 import {
@@ -13,6 +14,7 @@ import {
   definedParams,
   fetchExploreList,
 } from "@/lib/explore/fetch";
+import { type Collection, fetchCollections } from "@/lib/collections/fetch";
 import { serverApi } from "@/lib/api/server";
 import { PAGES } from "@/lib/vocabulary";
 
@@ -70,6 +72,16 @@ export default async function BasketsCatalogPage({
         </p>
       </div>
     );
+  }
+
+  // Shelves are secondary to the grid. A catalogue that renders without its collections beats a
+  // page that does not render at all, so a failure here degrades to no shelves rather than
+  // taking the whole route down with it.
+  let collections: Collection[] = [];
+  try {
+    collections = (await fetchCollections()).items;
+  } catch (error) {
+    if (!(error instanceof ExploreUnavailable)) throw error;
   }
 
   return (
@@ -133,6 +145,17 @@ export default async function BasketsCatalogPage({
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+
+      {collections.length > 0 ? (
+        <section className="space-y-8" data-testid="browse-collections">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+            Collections
+          </h2>
+          {collections.map((collection) => (
+            <CollectionShelf key={collection.slug} collection={collection} />
+          ))}
         </section>
       ) : null}
 

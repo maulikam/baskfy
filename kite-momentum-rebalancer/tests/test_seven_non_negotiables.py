@@ -40,17 +40,19 @@ def test_non_negotiable_1_execution_requires_explicit_confirmation_and_a_fresh_p
 
 def test_non_negotiable_1b_dry_run_simulates_end_to_end() -> None:
     """DRY_RUN must place nothing and still return a well-formed result."""
-    from baskfy_execution import OrderGateway, ProductGates, RiskManager
+    from baskfy_execution import OrderGateway, ProductGates, RiskManager, TenantIds
 
     class ExplodingKC:
         def place_order(self, **_: object) -> str:
             raise AssertionError("DRY_RUN placed a real order")
 
+    tenant = TenantIds(user_id=1, broker_account_id=1)
     gw = OrderGateway(ExplodingKC(), RiskManager(),
                       gates=lambda: ProductGates(dry_run=True),
                       journal_path="data/outputs/_test_journal.jsonl")
     out = asyncio.run(gw.place(symbol="RELIANCE", qty=1, side="BUY", product="CNC",
-                               order_type="LIMIT", price=100.0, exchange="NSE"))
+                               order_type="LIMIT", price=100.0, exchange="NSE",
+                               tenant=tenant, plan_tenant=tenant))
     assert out["status"] == "DRY_RUN"
     assert out["order_id"].startswith("DRY-")
 
@@ -109,17 +111,19 @@ def test_non_negotiable_4_every_buy_is_stopped_and_the_stop_is_vol_scaled() -> N
 def test_non_negotiable_5_product_gates_block_inside_the_gateway(
     product: str, exchange: str, gates: dict[str, bool], why: str
 ) -> None:
-    from baskfy_execution import OrderGateway, ProductGates, RiskManager
+    from baskfy_execution import OrderGateway, ProductGates, RiskManager, TenantIds
 
     class ExplodingKC:
         def place_order(self, **_: object) -> str:
             raise AssertionError("a gated product reached the broker")
 
+    tenant = TenantIds(user_id=1, broker_account_id=1)
     gw = OrderGateway(ExplodingKC(), RiskManager(),
                       gates=lambda: ProductGates(dry_run=False, **gates),
                       journal_path="data/outputs/_test_journal.jsonl")
     out = asyncio.run(gw.place(symbol="RELIANCE", qty=1, side="BUY", product=product,
-                               order_type="LIMIT", price=100.0, exchange=exchange))
+                               order_type="LIMIT", price=100.0, exchange=exchange,
+                               tenant=tenant, plan_tenant=tenant))
     assert out["status"] == "BLOCKED"
     assert why in out["error"]
 
@@ -187,15 +191,17 @@ def test_non_negotiable_7_an_untouchable_is_refused_before_any_network_call(symb
 
 
 def test_non_negotiable_7b_the_guard_runs_before_the_broker_is_touched() -> None:
-    from baskfy_execution import OrderGateway, ProductGates, RiskManager, UntouchableInstrumentError
+    from baskfy_execution import OrderGateway, ProductGates, RiskManager, TenantIds, UntouchableInstrumentError
 
     class ExplodingKC:
         def place_order(self, **_: object) -> str:
             raise AssertionError("the broker was reached for an untouchable instrument")
 
+    tenant = TenantIds(user_id=1, broker_account_id=1)
     gw = OrderGateway(ExplodingKC(), RiskManager(),
                       gates=lambda: ProductGates(dry_run=False),
                       journal_path="data/outputs/_test_journal.jsonl")
     with pytest.raises(UntouchableInstrumentError):
         asyncio.run(gw.place(symbol="SGBDE31III-GB", qty=1, side="SELL", product="CNC",
-                             order_type="LIMIT", price=7000.0, exchange="NSE"))
+                             order_type="LIMIT", price=7000.0, exchange="NSE",
+                             tenant=tenant, plan_tenant=tenant))

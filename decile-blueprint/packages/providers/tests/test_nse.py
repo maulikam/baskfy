@@ -22,6 +22,7 @@ from baskfy_providers.nse import (
     NSEProvider,
     NSERuntime,
     parse_corporate_action_purpose,
+    parse_equity_quote,
 )
 from baskfy_providers.ports import REFERENCE_CAPABILITIES, Capability
 from baskfy_providers.records import BHAVCOPY_SCHEMA
@@ -355,6 +356,110 @@ class TestCorporateActionPurposes:
         assert parse_corporate_action_purpose(purpose) is None
 
 
+class TestEquityFundamentals:
+    """docs/05 §14. NSE retired ``/api/quote-equity`` in its Next.js migration and now serves
+    ``GetQuoteApi?functionName=getSymbolData``; the retired shape must still parse out of the
+    archive, because archived bytes are permanent (docs/09)."""
+
+    def test_issued_size_times_last_price_is_marketcap_in_crore(self) -> None:
+        record = parse_equity_quote(_get_symbol_data_json(), on=ON, fallback_symbol="INFY")
+        assert record is not None
+        assert record.symbol == "INFY"
+        assert record.shares_outstanding == 4_058_056_597
+        # 4_058_056_597 * 1144 / 1e7, half-up.
+        assert record.marketcap_cr == 464_242
+        assert record.pe == Decimal("15.12")
+
+    def test_the_retired_payload_still_parses_out_of_the_archive(self) -> None:
+        """A pre-migration file must never become unreadable — that is why we archive bytes."""
+        record = parse_equity_quote(_quote_equity_json(), on=ON, fallback_symbol="INFY")
+        assert record is not None
+        assert record.shares_outstanding == 4_148_506_959
+        assert record.marketcap_cr == 767578
+        assert record.pe == Decimal("24.5")
+
+    def test_pb_and_div_yield_are_null_because_the_live_payload_omits_them(self) -> None:
+        """An absent number must look absent. Carrying old field names forward would make a
+        NULL look like a fetched zero."""
+        record = parse_equity_quote(_get_symbol_data_json(), on=ON, fallback_symbol="INFY")
+        assert record is not None
+        assert record.pb is None
+        assert record.div_yield is None
+
+    def test_a_wrong_series_is_not_a_row(self) -> None:
+        """NSE answers a wrong series with 200 and an empty list, not an error."""
+        empty = b'{"equityResponse":[]}'
+        assert parse_equity_quote(empty, on=ON, fallback_symbol="INFY") is None
+
+    def test_nse_total_marketcap_is_used_when_shares_are_missing(self) -> None:
+        payload = (
+            b'{"equityResponse":[{"metaData":{"symbol":"X"},'
+            b'"tradeInfo":{"totalMarketCap":4642416746968},"secInfo":{"pdSymbolPe":"15.12"}}]}'
+        )
+        record = parse_equity_quote(payload, on=ON, fallback_symbol="X")
+        assert record is not None
+        assert record.shares_outstanding is None
+        assert record.marketcap_cr == 464_242
+
+    def test_a_missing_quote_is_skipped_not_zero(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        client = FakeHttpClient(status=404)
+        records = build(settings, archive, client).equity_fundamentals(ON, ["NOSUCH"])
+        assert records == []
+
+    def test_quotes_are_archived_per_symbol_and_series(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        client = FakeHttpClient({"getSymbolData": _get_symbol_data_json()})
+        records = build(settings, archive, client).equity_fundamentals(
+            ON, ["INFY"], series_by_symbol={"INFY": "EQ"}
+        )
+        assert len(records) == 1
+        assert archive.exists(archive_key("equity-fundamentals/INFY-EQ", ON, "json"))
+
+    def test_a_hinted_series_costs_exactly_one_request(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        """The hint exists to avoid a lookup round trip; if it does not, it is pointless."""
+        client = FakeHttpClient({"getSymbolData": _get_symbol_data_json()})
+        build(settings, archive, client).equity_fundamentals(
+            ON, ["INFY"], series_by_symbol={"INFY": "EQ"}
+        )
+        quote_calls = [u for u in client.requests if "GetQuoteApi" in u]
+        assert len(quote_calls) == 1
+        assert "getMetaData" not in quote_calls[0]
+
+    def test_a_stale_hint_falls_back_to_the_series_nse_reports(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        """A wrong hint must cost a round trip, never a NULL row."""
+        client = FakeHttpClient(
+            {
+                "series=EQ": b'{"equityResponse":[]}',
+                "getMetaData": b'{"symbol":"X","activeSeries":["BE"]}',
+                "series=BE": _get_symbol_data_json(),
+            }
+        )
+        records = build(settings, archive, client).equity_fundamentals(
+            ON, ["X"], series_by_symbol={"X": "EQ"}
+        )
+        assert len(records) == 1
+        assert any("getMetaData" in u for u in client.requests)
+
+    def test_no_hint_asks_nse_which_series_it_quotes(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        client = FakeHttpClient(
+            {
+                "getMetaData": b'{"symbol":"X","activeSeries":["BE"]}',
+                "series=BE": _get_symbol_data_json(),
+            }
+        )
+        records = build(settings, archive, client).equity_fundamentals(ON, ["X"])
+        assert len(records) == 1
+
+
 def _listings_csv() -> bytes:
     return (
         b"SYMBOL,NAME OF COMPANY, SERIES, DATE OF LISTING, PAID UP VALUE, MARKET LOT,"
@@ -384,3 +489,23 @@ def _bhavcopy_zip() -> bytes:
     with zipfile.ZipFile(buffer, "w") as bundle:
         bundle.writestr("BhavCopy_NSE_CM_0_0_0_20260818_F_0000.csv", csv)
     return buffer.getvalue()
+
+
+def _get_symbol_data_json() -> bytes:
+    """A trimmed copy of the live ``getSymbolData`` payload for INFY (captured 25 Aug 2026)."""
+    return (
+        b'{"equityResponse":[{"orderBook":{"lastPrice":1144},'
+        b'"metaData":{"symbol":"INFY","series":"EQ","closePrice":1144},'
+        b'"tradeInfo":{"issuedSize":4058056597,"lastPrice":1144,"faceValue":5,'
+        b'"totalMarketCap":4642416746968},'
+        b'"priceInfo":{"yearHigh":1728,"yearLow":982.4},'
+        b'"secInfo":{"secStatus":"Listed","pdSectorPe":"14.69","pdSymbolPe":"15.12"}}],'
+        b'"lastUpdateTime":"25-Aug-2026 16:00:00"}'
+    )
+
+
+def _quote_equity_json() -> bytes:
+    return (
+        b'{"info":{"symbol":"INFY"},"securityInfo":{"issuedSize":4148506959},'
+        b'"priceInfo":{"lastPrice":1850.25,"pE":24.5,"pB":7.1},"metadata":{}}'
+    )

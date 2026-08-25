@@ -69,8 +69,13 @@ Likely a layout component mounted twice (double-wrapped layout or duplicated foo
 - Watchlist's own empty state admits the feature isn't built ("Star a basket from Explore **when the toggle lands**") — yet it holds a permanent top-level slot.
 - New listings shows ~100 companies all "listed" on 17 Aug 2026 — a data-backfill artifact presented as fact. Demote/flag until the data is truthful.
 
-### F11 — Fragmented search
+### F11 — Fragmented search — **CLOSED 25 Aug 2026 (M40)**
 Header search is stock-only ("Search any stock…"); the indices table has its own separate search; baskets and screens aren't searchable at all from the header. One global search should cover stocks, indices, baskets, and screens.
+
+**Shipped.** `GET /api/v1/search?q=&limit=` answers all four kinds in one request, per-kind limits,
+per-kind visibility (`baskfy_api/search.py`). The palette is the primary entry; the indices table
+keeps its in-place filter, which is not a second global search. There is still no index detail
+page, so an index hit lands on `/market/today?q=<slug>` — see `docs/DECISIONS-MERGE.md` §M40.2.
 
 ### F12 — Accessibility gaps in the header
 One icon button has no accessible name; nav links carry no `aria-current="page"` semantics beyond visual pill styling (verify); the overflow (F2) means keyboard users can tab to links that are invisible.
@@ -134,7 +139,7 @@ Every old URL gets a permanent redirect. Document `<title>` must equal the nav l
 **Tablet / mid widths**
 - Nav must never overflow invisibly again: pills compress to icons+tooltips before wrapping; if it still can't fit, last items collapse into a "More" menu. Add a Playwright test asserting all nav items are visible/reachable at 768, 1024, 1280 px.
 
-**Global search (F11)**
+**Global search (F11)** — ✅ shipped 25 Aug 2026 (M40)
 - ⌘K / tap-search opens a command palette searching stocks, indices, baskets, and screens, with recent items. Replaces both existing scoped search boxes as the primary entry.
 
 **Accessibility**
@@ -178,7 +183,10 @@ Detail shows: weights donut + holdings table (rank, symbol, weight %, price, amo
 2. **Route renames + 301 redirects + title normalization** (F3), section-level tab layouts for Market and Me (F4, F5).
 3. **Shared BasketCard/BasketDetail** extracted from the Today's-basket page (F7 groundwork).
 4. **Screen → basket materialization** per §5 (requirement 2; closes F6, F7).
-5. **Global ⌘K search** across stocks/indices/baskets/screens (F11).
+5. ~~**Global ⌘K search** across stocks/indices/baskets/screens (F11).~~ **Shipped 25 Aug 2026**
+   (M40). One federated `GET /api/v1/search`; the palette draws Stocks · Indices · Baskets ·
+   Screens · Go to from a single round trip, with recent items. Six Playwright tests in
+   `apps/web/e2e/search.spec.ts`. Decisions: `docs/DECISIONS-MERGE.md` §M40–M40.6.
 6. **Cleanups**: double-rendered disclaimer/cards (F9), jargon sweep (F8), Watchlist star toggle or demotion, New listings data flag (F10).
 7. **Tests**: Playwright — nav visible at 768/1024/1280, every old route 301s, run-a-template lands on basket view, exactly one disclaimer per page.
 

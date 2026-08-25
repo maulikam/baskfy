@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  House,
   LineChart,
   Store,
   User,
@@ -14,6 +15,7 @@ import { PRIMARY_NAV, primarySection } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
+  Home: House,
   Market: LineChart,
   Baskets: Store,
   Build: Wrench,
@@ -21,7 +23,9 @@ const ICONS: Record<string, LucideIcon> = {
 };
 
 /**
- * App-style bottom tab bar for &lt;768px (Tree 6). Safe-area padded; active tab tinted.
+ * App-style bottom tab bar for &lt;768px (Tree 6, five tabs since SC9's `/home`).
+ * Safe-area padded; active tab tinted. Five is what the observed product carries too — the row
+ * is `justify-around` on a flex track, so the tabs narrow rather than overflow.
  */
 export function BottomTabBar() {
   const pathname = usePathname();
@@ -37,6 +41,7 @@ export function BottomTabBar() {
       <ul className="mx-auto flex h-14 max-w-[104rem] items-stretch justify-around px-2">
         {PRIMARY_NAV.map((item) => {
           const active =
+            (section === "home" && item.label === "Home") ||
             (section === "market" && item.label === "Market") ||
             (section === "baskets" && item.label === "Baskets") ||
             (section === "build" && item.label === "Build") ||
@@ -49,7 +54,11 @@ export function BottomTabBar() {
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex w-full flex-col items-center justify-center gap-0.5 rounded-md text-[11px] font-medium",
-                  active ? "text-brand" : "text-muted-foreground",
+                  // The label is type: --brand measures 3.27:1 on the canvas and type needs
+                  // 4.5:1, so the accent token carries the same hue at 5.31:1
+                  // (src/lib/__tests__/no-brand-as-text.test.ts). The icon's --brand fill below
+                  // is a graphical object at 3:1 and stays as it is.
+                  active ? "text-accent" : "text-muted-foreground",
                 )}
               >
                 <span

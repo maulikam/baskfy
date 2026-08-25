@@ -15,6 +15,7 @@ advertises exactly that.
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
@@ -23,6 +24,7 @@ import polars as pl
 
 from baskfy_providers.records import (
     CorporateAction,
+    EquityFundamental,
     IndexSnapshot,
     InstrumentRecord,
     ListingRecord,
@@ -39,6 +41,7 @@ class Capability(StrEnum):
     CORPORATE_ACTIONS = "corporate_actions"
     LISTINGS = "listings"
     BHAVCOPY = "bhavcopy"
+    EQUITY_FUNDAMENTALS = "equity_fundamentals"
 
 
 #: docs/09's table: KiteProvider provides BarsProvider.
@@ -54,6 +57,7 @@ REFERENCE_CAPABILITIES: frozenset[Capability] = frozenset(
         Capability.CORPORATE_ACTIONS,
         Capability.LISTINGS,
         Capability.BHAVCOPY,
+        Capability.EQUITY_FUNDAMENTALS,
     }
 )
 
@@ -125,4 +129,22 @@ class ReferenceProvider(HealthReporting, Protocol):
 
     def bhavcopy(self, on: dt.date) -> pl.DataFrame:
         """One day's bhavcopy, conforming to ``BHAVCOPY_SCHEMA`` (incl. series, circuit bands)."""
+        ...
+
+    def equity_fundamentals(
+        self,
+        on: dt.date,
+        symbols: Sequence[str],
+        *,
+        series_by_symbol: Mapping[str, str] | None = None,
+    ) -> list[EquityFundamental]:
+        """Issued capital, P/E and derived market cap for cash equities on ``on``.
+
+        docs/05 §14: marketcap and P/E come from NSE. A name the exchange does not quote
+        that day is omitted — the join stores NULL, which the UI renders as an em dash.
+
+        ``series_by_symbol`` is an optional hint: NSE quotes a symbol under a series, and a
+        caller holding ``instrument.series`` can save the adapter a lookup round trip. An
+        adapter is free to ignore it; a wrong hint must never produce a wrong row.
+        """
         ...

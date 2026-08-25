@@ -14,6 +14,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { columnDisplayLabel, columnDisplayTooltip } from "@/lib/screens/column-display";
 import { cn } from "@/lib/utils";
 
 /**
@@ -125,8 +126,11 @@ export function FactorCombobox({
           disabled={disabled}
           className={cn("w-full justify-between font-normal", className)}
         >
-          <span className={cn("truncate", !selected && "text-muted-foreground")}>
-            {selected ? selected.label : "Choose a factor"}
+          <span
+            className={cn("truncate", !selected && "text-muted-foreground")}
+            title={selected ? (columnDisplayTooltip(selected.key) ?? selected.label) : undefined}
+          >
+            {selected ? columnDisplayLabel(selected.key, selected.label) : "Choose a factor"}
           </span>
           <ChevronsUpDown aria-hidden="true" className="shrink-0 opacity-50" />
         </Button>
@@ -158,7 +162,13 @@ export function FactorCombobox({
                         factor.key === value ? "opacity-100" : "opacity-0",
                       )}
                     />
-                    <span className="truncate">{factor.label}</span>
+                    <span
+                      className="truncate"
+                      title={columnDisplayTooltip(factor.key) ?? factor.label}
+                    >
+                      {columnDisplayLabel(factor.key, factor.label)}
+                      <span className="sr-only"> {factor.label}</span>
+                    </span>
                   </CommandItem>
                 ))}
               </CommandGroup>

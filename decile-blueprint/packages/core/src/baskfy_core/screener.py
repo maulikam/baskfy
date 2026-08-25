@@ -84,14 +84,9 @@ IDENTITY_COLUMNS: Final[tuple[str, ...]] = ("symbol", "name", "sorting_factor")
 #: 1Yr Return, 1Yr Sharpe, 1Yr Volatility, Beta, MA 200. "Last Close" is ``close_raw`` — the
 #: exchange print, per CLAUDE.md house rule 6 and docs/07's own example row.
 DEFAULT_RESULT_COLUMNS: Final[tuple[str, ...]] = (
-    "close_raw",
-    "series",
-    "marketcap_cr",
     "ret_12m",
-    "sharpe_12m",
     "vol_12m",
-    "beta_12m",
-    "ma_200",
+    "close_raw",
 )
 
 #: docs/03 §"Request path": "Result rows (<= 4,000)".

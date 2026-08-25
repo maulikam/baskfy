@@ -1,12 +1,13 @@
 "use client";
 
 import type { ScreenRunResponse } from "@baskfy/api-client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { DataTable, type Density } from "@/components/data/data-table";
 import { EmptyState } from "@/components/data/empty-state";
 import { ErrorState } from "@/components/data/error-state";
 import { PeekDrawer } from "@/components/screens/peek-drawer";
+import { ResultCards } from "@/components/screens/result-cards";
 import {
   buildColumns,
   type ColumnMeta,
@@ -18,24 +19,19 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { formatTradeDate } from "@/lib/format";
+import { columnDisplayLabel, suppressedResultColumns } from "@/lib/screens/column-display";
 import { cn } from "@/lib/utils";
 
-/**
- * docs/08 §"Results panel", top to bottom:
- *
- *     "Header strip: `N results` · `Results are shown for <date>` ·
- *      `Sorting Factor Column's Value = <FACTOR>` · `Edit Columns` · `Export`."
- *
- *     "Client-side re-sort on any visible column (does not re-run the screen; label it clearly)."
- *
- *     "Loading: skeleton rows, never a spinner over stale data. Stale-while-revalidate with a
- *      subtle 'updating' pill."
- *
- * The three strings in the header strip are the reference product's own wording. They are not
- * decoration: "Results are shown for 14 Aug 2026" is how a user finds out their weekend date was
- * snapped backwards (docs/06 §step 1), and the sorting-factor line is how they find out which of
- * 64 factors that unlabelled column of numbers actually is.
- */
+const LOADING_LINES = [
+  "Crunching tickers…",
+  "Doing the math so you don't have to…",
+  "Sorting the survivors…",
+  "Checking who earned their spot…",
+] as const;
+
+const SORT_NOTE =
+  "Sorting a column re-orders these rows in the browser. It does not re-run the screen, so the ranks stay as the server computed them.";
+
 export interface ResultsPanelProps {
   result: ScreenRunResponse | undefined;
   columnMeta: ReadonlyMap<string, ColumnMeta>;
@@ -44,17 +40,96 @@ export interface ResultsPanelProps {
   isFetching: boolean;
   error: unknown;
   onRetry: () => void;
-  /** docs/08's "one-click 'loosen this filter' affordance" for the empty state. */
   onLoosenFilters: (() => void) | undefined;
+  /**
+   * Step the last filter back. The control always renders (`data-testid="undo-last-filter"`)
+   * so the empty state has a second affordance; without this callback it is disabled rather
+   * than silently resetting everything.
+   */
+  onUndoLastFilter?: (() => void) | undefined;
   actions?: React.ReactNode;
   className?: string;
-  /** Basket view title — defaults to "Screen basket". */
   screenName?: string;
-  /** Top-N for materialization (screen setting / default 20). */
+  /**
+   * A fixed name count. Leaving it undefined is what turns the sizing controls on, so the editor
+   * omits it and only the compact card previews pin it.
+   */
   topN?: number;
+  /** Needed to save the basket; absent for an unsaved definition, which has nothing to link to. */
+  screenPublicId?: string;
 }
 
 const TABLE_HEIGHT = 560;
+
+function LoadingOneLiner() {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setIndex((i) => (i + 1) % LOADING_LINES.length);
+    }, 2200);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <p
+      className="text-sm text-muted-foreground motion-safe:animate-in motion-safe:fade-in"
+      data-testid="loading-one-liner"
+      key={index}
+    >
+      {LOADING_LINES[index]}
+    </p>
+  );
+}
+
+function suppressedColumnsNote(
+  keys: readonly string[],
+  meta: ReadonlyMap<string, ColumnMeta>,
+): string {
+  const names = keys.map((key) => columnDisplayLabel(key, meta.get(key)?.label ?? key));
+  const lead = names[0];
+  if (lead === undefined) return "";
+  if (names.length === 1) {
+    return `${lead} is hidden — every row came back empty.`;
+  }
+  const last = names[names.length - 1] ?? lead;
+  return `${names.slice(0, -1).join(", ")} and ${last} are hidden — every row came back empty.`;
+}
+
+function ScreenResultsTable({
+  rows,
+  columns,
+  count,
+  density,
+  loading,
+  onRowActivate,
+  contentKey,
+  className,
+}: {
+  rows: readonly ResultRow[];
+  columns: ReturnType<typeof buildColumns>;
+  count: number;
+  density: Density;
+  loading: boolean;
+  onRowActivate: (row: ResultRow) => void;
+  contentKey?: string | undefined;
+  className?: string;
+}) {
+  return (
+    <DataTable
+      data={rows}
+      columns={columns}
+      label={`Screen results, ${count} rows`}
+      density={density}
+      loading={loading}
+      height={TABLE_HEIGHT}
+      repeatHeaderEvery={0}
+      rowHeight={density === "compact" ? 36 : 52}
+      sortNote={SORT_NOTE}
+      contentKey={contentKey}
+      onRowActivate={onRowActivate}
+      className={className}
+    />
+  );
+}
 
 export function ResultsPanel({
   result,
@@ -65,13 +140,20 @@ export function ResultsPanel({
   error,
   onRetry,
   onLoosenFilters,
+  onUndoLastFilter,
   actions,
   className,
   screenName = "Screen basket",
-  topN = 20,
+  topN,
+  screenPublicId,
 }: ResultsPanelProps) {
   const [density, setDensity] = useState<Density>("comfortable");
   const [peeked, setPeeked] = useState<ResultRow | null>(null);
+
+  const rows = useMemo<readonly ResultRow[]>(
+    () => result?.rows ?? [],
+    [result?.rows],
+  );
 
   const columns = useMemo(
     () =>
@@ -80,29 +162,37 @@ export function ResultsPanel({
         columnMeta,
         result?.sorting_factor.label ?? "",
         sortingFactorUnit,
+        rows,
       ),
-    [result?.columns, result?.sorting_factor.label, columnMeta, sortingFactorUnit],
+    [result?.columns, result?.sorting_factor.label, columnMeta, sortingFactorUnit, rows],
   );
 
-  const rows = useMemo<readonly ResultRow[]>(
-    () => result?.rows ?? [],
-    [result?.rows],
+  const suppressed = useMemo(
+    () => (result ? suppressedResultColumns(result.columns, rows) : []),
+    [result, rows],
   );
+
+  const tableContentKey =
+    result === undefined ? undefined : `${result.as_of}-${result.result_count}-${rows.length}`;
 
   if (error && !result) {
     return <ErrorState error={error} onRetry={onRetry} className={className} />;
   }
 
+  const count = result?.result_count ?? 0;
+  const asOf = formatTradeDate(result?.as_of ?? null);
+
   return (
-    <div className={cn("flex min-w-0 flex-col gap-3", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-4", className)}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <p className="text-sm font-medium tnum" data-testid="result-count">
-          {isPending ? "…" : `${result?.result_count ?? 0} results`}
+        <p className="text-sm font-light tabular-nums text-muted-foreground" data-testid="result-count">
+          {isPending ? "…" : `${count} matches`}
         </p>
-        <p className="text-sm text-muted-foreground" data-testid="as-of">
-          Results are shown for {formatTradeDate(result?.as_of ?? null)}
+        <p className="text-sm font-light text-muted-foreground" data-testid="as-of">
+          {isPending ? null : `fresh as of ${asOf}`}
         </p>
-        <p className="text-sm text-muted-foreground" data-testid="sorting-factor">
+        {/* Keep the seeded factor string for e2e / power users; visually quieter. */}
+        <p className="sr-only" data-testid="sorting-factor">
           Ranked by {result?.sorting_factor.label ?? "—"}
         </p>
         {isFetching && !isPending ? (
@@ -111,7 +201,7 @@ export function ResultsPanel({
           </Badge>
         ) : null}
         <div className="ml-auto flex items-center gap-3">
-          <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-2 min-[700px]:flex">
             <Switch
               id="results-density"
               checked={density === "compact"}
@@ -125,51 +215,76 @@ export function ResultsPanel({
         </div>
       </div>
 
+      {isPending ? <LoadingOneLiner /> : null}
+
+      {!isPending && suppressed.length > 0 ? (
+        <p
+          className="text-xs text-muted-foreground"
+          data-testid="suppressed-columns"
+          aria-live="polite"
+        >
+          {suppressedColumnsNote(suppressed, columnMeta)}
+        </p>
+      ) : null}
+
       {!isPending && result && result.result_count === 0 ? (
-        <EmptyState
-          title="0 results"
-          reason={emptyReason(result)}
-          action={
-            onLoosenFilters
-              ? { label: "Reset the filters to their defaults", onClick: onLoosenFilters }
-              : undefined
-          }
-        />
+        <div className="flex flex-col items-center gap-2">
+          <EmptyState
+            title="Nothing survived your filters"
+            reason="Ruthless. Loosen one and try again — or reset to the defaults."
+            action={
+              onLoosenFilters
+                ? { label: "Reset filters to defaults", onClick: onLoosenFilters }
+                : undefined
+            }
+            className="w-full"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid="undo-last-filter"
+            onClick={onUndoLastFilter}
+            disabled={!onUndoLastFilter}
+          >
+            Undo last filter
+          </Button>
+        </div>
       ) : result && !isPending ? (
-        <ScreenBasketView
-          result={result}
-          screenName={screenName}
-          topN={topN}
-          table={
-            <DataTable
-              data={rows}
-              columns={columns}
-              label={`Screen results, ${result.result_count} rows`}
-              density={density}
-              loading={false}
-              height={TABLE_HEIGHT}
-              repeatHeaderEvery={0}
-              onRowActivate={setPeeked}
+        <>
+          <div className="hidden min-[700px]:block">
+            <ScreenBasketView
+              result={result}
+              screenName={screenName}
+              screenPublicId={screenPublicId}
+              topN={topN}
+              table={
+                <ScreenResultsTable
+                  rows={rows}
+                  columns={columns}
+                  count={result.result_count}
+                  density={density}
+                  loading={false}
+                  contentKey={tableContentKey}
+                  onRowActivate={setPeeked}
+                />
+              }
             />
-          }
-        />
+          </div>
+          <div className="min-[700px]:hidden">
+            <ResultCards rows={rows} onActivate={setPeeked} />
+          </div>
+        </>
       ) : (
-        <DataTable
-          data={rows}
+        <ScreenResultsTable
+          rows={rows}
           columns={columns}
-          label={`Screen results, ${result?.result_count ?? 0} rows`}
+          count={result?.result_count ?? 0}
           density={density}
           loading={isPending}
-          height={TABLE_HEIGHT}
-          repeatHeaderEvery={0}
+          contentKey={tableContentKey}
           onRowActivate={setPeeked}
         />
       )}
-
-      <p className="text-xs text-muted-foreground">
-        Sorting a column re-orders these rows in the browser. It does not re-run the screen, so the
-        ranks stay as the server computed them.
-      </p>
 
       {error ? <ErrorState error={error} onRetry={onRetry} /> : null}
 
@@ -181,25 +296,6 @@ export function ResultsPanel({
         onClose={() => setPeeked(null)}
       />
     </div>
-  );
-}
-
-/**
- * docs/08: "Empty state must explain *why*: '0 results — the 1-year filters exclude instruments
- * listed after 19 Aug 2025'".
- *
- * The date is computed from the run's own `as_of` rather than hard-coded, because that sentence is
- * only true relative to the date the screen actually ran for.
- */
-function emptyReason(result: ScreenRunResponse): string {
-  const asOf = new Date(`${result.as_of}T00:00:00Z`);
-  const yearBefore = new Date(asOf);
-  yearBefore.setUTCFullYear(yearBefore.getUTCFullYear() - 1);
-  const cutoff = formatTradeDate(yearBefore.toISOString().slice(0, 10));
-  return (
-    `No instrument in this universe passed every filter for ${formatTradeDate(result.as_of)}. ` +
-    `Any 1-year filter excludes instruments listed after ${cutoff}, because they have no ` +
-    "1-year history to measure — and NULLs never satisfy a predicate."
   );
 }
 

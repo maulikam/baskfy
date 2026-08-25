@@ -63,7 +63,8 @@ cb_watchlist_item(id, user_id, basket_id, watched_at, nav_at_watch numeric,
   -- nav_at_watch = the basket's index value that day, so "moved since watchlisted"
   -- is a pure lookup
 
-cb_investment(id, user_id, basket_id, status[ACTIVE|EXITED],
+cb_investment(id, user_id, broker_account_id → broker_account,
+              basket_id, status[ACTIVE|EXITED],
               version_applied_id → cb_basket_version,
               created_at, exited_at NULL, last_invested_at)
 
@@ -71,12 +72,14 @@ cb_investment_holding(id, investment_id, instrument_id, qty numeric,
                       avg_price numeric, updated_at)
   -- the *intended* ledger; drift = this vs desk holdings snapshot
 
-cb_order_batch(id, investment_id, kind[BUY|INVEST_MORE|SIP|REBALANCE|EXIT|
+cb_order_batch(id, user_id, broker_account_id → broker_account,
+               investment_id, kind[BUY|INVEST_MORE|SIP|REBALANCE|EXIT|
                PARTIAL_EXIT|CUSTOMIZE], requested_amount numeric NULL,
                desk_plan_id NULL  -- set when a desk plan was generated,
                status[DRAFT|PLANNED|EXPIRED|EXECUTED|PARTIAL|CANCELLED],
                fee_entry_id NULL, created_at, executed_at NULL)
   -- DRAFT/PLANNED from the web; EXECUTED only ever set by reading the desk journal
+  -- user_id + broker_account_id are Law 2 (P4.1); they must match the investment's pair
 
 cb_fee_ledger(id, user_id, batch_id, kind, base_fee numeric, gst numeric,
               total numeric, collected boolean DEFAULT false, accrued_at)
@@ -102,13 +105,20 @@ cb_user_rebalance_state(user_id, version_id, state[APPLIED|SKIPPED|PENDING],
 cb_plan(id, basket_id NULL, manager_id NULL, duration[M1|M3|M6|Y1], price numeric)
 cb_subscription(id, user_id, plan_id, start_at, renew_at,
                 status[ACTIVE|CANCELLED|LAPSED], auto_renew boolean)
+
+-- P4.1: the row Law 2's broker_account_id names. Encrypted tokens are P4.2, not here.
+broker_account(id, user_id → app_user, broker_id, label, kite_user_id NULL, created_at,
+               UNIQUE(user_id, broker_id))
 ```
 
 ## Rules that ride the schema
 
-1. **`user_id` everywhere, one value for now.** Every user-scoped row carries `user_id`;
-   the only value written this run is `BASKFY_SOLE_USER_ID` (the two laws' dormant
-   multi-tenant clause). No code path infers "the user" implicitly.
+1. **`user_id` everywhere, plus `broker_account_id` on order-shaped rows.** Every
+   user-scoped row carries `user_id`. Order-shaped rows (`cb_investment`, `cb_order_batch`)
+   also carry `broker_account_id` (Law 2 / P4.1). The gateway refuses a mismatch (P4.3).
+   Until a second tenant is admitted, writers still resolve through `BASKFY_SOLE_USER_ID`.
+   No code path infers "the user" implicitly. Desk SQLite stays sole-operator until the
+   writer flips (`docs/DECISIONS-MERGE.md` §P4.1).
 2. **Versions are immutable, metrics are recomputable.** `cb_basket_version` and
    `cb_constituent` are append-only facts; `cb_metrics` can be dropped and rebuilt from
    prices + versions and a test proves it (idempotent seeding, house rule 7).

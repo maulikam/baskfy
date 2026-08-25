@@ -40,6 +40,8 @@ from baskfy_core.factor_registry import FACTORS, Factor
 from baskfy_core.models import Instrument
 from baskfy_worker.db import run_in_session
 from baskfy_worker.engine import PolarsFactorEngine, load_history
+from baskfy_worker.steps import StepOutcome
+from baskfy_worker.tasks.factors import run_compute_factors
 
 #: How many rows of the underlying price series to show. Enough to see the shape of the window
 #: without burying the answer.
@@ -213,6 +215,18 @@ def render_text(explanation: Explanation) -> str:
     return "\n".join(lines)
 
 
+async def _recompute(session: AsyncSession, on: dt.date) -> int:
+    """Re-run step 7 alone, against data already on disk.
+
+    Step 7 is pure with respect to the network — it reads ``ohlcv_daily`` and
+    ``fundamental_daily`` and writes ``factor_daily``. So after a back-fill of a past date's
+    fundamentals there is no reason to re-run the nine steps around it, and good reason not to:
+    the fetching steps would go back to Kite and NSE for a date whose bars are already correct.
+    """
+    outcome = StepOutcome()
+    return await run_compute_factors(session, outcome, on, PolarsFactorEngine())
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m baskfy_worker.factors_cli", description=__doc__
@@ -224,8 +238,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     explain_cmd.add_argument("--factor", required=True, help="a registry key, or 'all'")
     explain_cmd.add_argument("--json", action="store_true")
 
+    recompute_cmd = subcommands.add_parser(
+        "recompute",
+        help="rebuild factor_daily for one date from the bars and fundamentals already stored",
+    )
+    recompute_cmd.add_argument("--date", required=True, help="ISO trade date")
+
     args = parser.parse_args(argv)
     on = dt.date.fromisoformat(args.date)
+
+    if args.command == "recompute":
+        written = run_in_session(lambda session: _recompute(session, on))
+        print(f"RECOMPUTED date={on.isoformat()} rows={written}")
+        return 0 if written else 1
 
     try:
         explanation = run_in_session(lambda session: explain(session, args.symbol, on, args.factor))

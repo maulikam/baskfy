@@ -50,6 +50,19 @@ const withMdx = createMdx({});
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Next 15.5 enables segment explorer devtools by default; when the dev
+  // manifest drifts (common after large refactors / HMR), SegmentViewNode fails
+  // to resolve and the client webpack runtime throws "reading 'call'".
+  experimental: {
+    devtoolSegmentExplorer: false,
+  },
+  /*
+   * Normally `.next`. `scripts/dev-guard.mjs` reads the same variable so that a second dev server
+   * — a second branch on a second port — gets a build directory of its own. Two dev servers
+   * sharing one directory overwrite each other's chunks and the page dies with
+   * `__webpack_modules__[moduleId] is not a function`, which looks like a source bug and is not.
+   */
+  distDir: process.env.BASKFY_WEB_DIST_DIR ?? ".next",
   /* `.mdx` is only a *page* extension for completeness; every MDX file in this repo is imported
      as a component from a `.tsx` route, so the content and the route metadata stay apart. */
   pageExtensions: ["ts", "tsx", "mdx"],
@@ -70,13 +83,19 @@ const nextConfig: NextConfig = {
    * Tree 6 IA: old consumer paths → Market · Baskets · Build · Me hubs.
    * `/baskets` itself is the new catalog (no redirect); featured lives at `/baskets/featured`.
    */
-  async redirects() {
-    return [
+  redirects() {
+    return Promise.resolve([
       { source: "/dashboard", destination: "/market/today", permanent: true },
       { source: "/market-health", destination: "/market/mood", permanent: true },
       { source: "/listings", destination: "/market/listings", permanent: true },
       { source: "/explore", destination: "/baskets", permanent: true },
+      // Collections shipped under the Tree-6 consumer IA rather than as a second
+      // top-level noun. `/collection/:slug` is the shape the brief asked for, so it
+      // resolves — the same way every other moved path does.
+      { source: "/collection/:slug", destination: "/baskets/collections/:slug", permanent: true },
+      { source: "/collections", destination: "/baskets/collections", permanent: true },
       { source: "/screens", destination: "/build", permanent: true },
+      { source: "/screens/new", destination: "/build/new", permanent: false },
       { source: "/screens/:id", destination: "/build/:id", permanent: true },
       { source: "/screens/:id/columns", destination: "/build/:id/columns", permanent: true },
       { source: "/backtests", destination: "/build/backtests", permanent: true },
@@ -85,7 +104,7 @@ const nextConfig: NextConfig = {
       { source: "/investments/:path*", destination: "/me/investments/:path*", permanent: true },
       { source: "/portfolios", destination: "/me/portfolios", permanent: true },
       { source: "/watchlist", destination: "/me/watchlist", permanent: true },
-    ];
+    ]);
   },
   /*
    * The package's own imports are written with the `.js` extensions that NodeNext resolution

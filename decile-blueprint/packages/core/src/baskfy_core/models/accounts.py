@@ -11,6 +11,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    FetchedValue,
     ForeignKey,
     Index,
     Integer,
@@ -43,6 +44,17 @@ PLAN_INTERVALS: tuple[str, ...] = ("month", "year")
 #: the states we never persist (``authorized`` is transient; we record a charge once captured).
 PAYMENT_STATUSES: tuple[str, ...] = ("created", "captured", "failed", "refunded")
 
+#: ``portfolio_sleeve.kind``. ``basket`` joins ``screen`` and ``manual`` in migration 0019 so the
+#: curated-basket half of the product can be one slice of a portfolio rather than a parallel
+#: universe. Each kind names exactly one source column — see :class:`PortfolioSleeve`.
+SLEEVE_KINDS: tuple[str, ...] = ("screen", "manual", "basket")
+
+#: The deepest a ``portfolio`` chain may run, counting the root as depth 1. The database enforces
+#: only "a portfolio is not its own parent"; the cap and cycle-freedom are graph invariants that
+#: ``baskfy_core.portfolio_graph`` asserts before a write, because neither is expressible as a
+#: row-local ``CHECK``.
+MAX_PORTFOLIO_DEPTH: int = 6
+
 
 class AppUser(Base):
     __tablename__ = "app_user"
@@ -67,6 +79,31 @@ class AppUser(Base):
     is_staff: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false"), default=False
     )
+
+
+class BrokerAccount(Base):
+    """One broker login belonging to one ``app_user`` (docs/05 P4.1 / P4.2 schema).
+
+    The row is the tenant's ``broker_account_id``. Encrypted tokens are P4.2 and are not
+    stored here yet — this table exists so order-shaped rows can name an account without
+    inventing a second identifier. One Zerodha row per user is the founder backfill;
+    a second broker is another row, not a column.
+    """
+
+    __tablename__ = "broker_account"
+    __table_args__ = (
+        UniqueConstraint("user_id", "broker_id", name="uq_broker_account_user_broker"),
+        Index("ix_broker_account_user_id", "user_id"),
+    )
+
+    id: Mapped[BigIntPk]
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id"), nullable=False)
+    #: Catalog id from ``baskfy_core.broker_connections`` (``zerodha``, ``upstox``, …).
+    broker_id: Mapped[str] = mapped_column(String, nullable=False)
+    label: Mapped[str] = mapped_column(String, nullable=False, server_default=text("'primary'"))
+    #: The broker's own user/client id, when known. NULL until the first OAuth sync.
+    kite_user_id: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[CreatedAt]
 
 
 class Plan(Base):
@@ -154,27 +191,96 @@ class Payment(Base):
 
 
 class Portfolio(Base):
+    """A user's portfolio — since migration 0019, a node in that user's portfolio forest.
+
+    **Nesting.** ``parent_id`` is nullable: NULL is a root, non-NULL points at another portfolio.
+    Three invariants govern the forest, and only the first is expressible as a row-local
+    constraint, so the other two live in ``baskfy_core.portfolio_graph`` and are checked before a
+    write:
+
+    1. *no self-parent* — ``ck_portfolio_portfolio_parent_not_self``, enforced by the database;
+    2. *no cycles* — a chain of ``parent_id`` hops must terminate. A ``CHECK`` cannot walk rows;
+    3. *depth ≤* :data:`MAX_PORTFOLIO_DEPTH` — likewise multi-row.
+
+    A parent belongs to the same ``user_id`` as its child. That, too, is a cross-row fact: it is
+    enforced in the API, which answers a foreign parent with ``NOT_FOUND`` rather than
+    ``FORBIDDEN`` so the existence of another tenant's row never leaks.
+
+    ``ON DELETE SET NULL`` on ``parent_id`` is deliberate and follows the reasoning
+    :class:`PortfolioSleeve` already records for ``screen_id``: deleting a grouping node must not
+    silently delete the money underneath it. The children are promoted to roots, visibly
+    detached, rather than cascaded away with their holdings.
+
+    **Broker attribution.** ``broker_account_id`` is nullable, and the two states mean different
+    things — this is the column's whole point, so neither may be collapsed into the other:
+
+    * ``NULL`` — a roll-up node that spans brokers. Its figures are sums over its subtree.
+    * ``NOT NULL`` — everything under this portfolio is attributable to exactly one broker
+      account, so a per-broker view can name it without a join through every holding.
+    """
+
     __tablename__ = "portfolio"
+    __table_args__ = (
+        # (2) and (3) above are not expressible here; (1) is, and is the one a single bad write
+        # can introduce, so the database owns it.
+        CheckConstraint("parent_id IS NULL OR parent_id <> id", name="portfolio_parent_not_self"),
+        Index("ix_portfolio_parent_id", "parent_id"),
+        Index("ix_portfolio_broker_account_id", "broker_account_id"),
+    )
 
     id: Mapped[BigIntPk]
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id"), nullable=False)
+    #: NULL = a root. See the class docstring for why ``ON DELETE SET NULL``.
+    parent_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("portfolio.id", ondelete="SET NULL")
+    )
+    #: NULL = a roll-up spanning brokers; NOT NULL = attributable to one broker account.
+    broker_account_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("broker_account.id", ondelete="SET NULL")
+    )
     name: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[CreatedAt]
 
 
 class PortfolioHolding(Base):
+    """One instrument held in one portfolio **at one broker account** (0019).
+
+    Before 0019 the primary key was ``(portfolio_id, instrument_id)``, which asserted that a
+    portfolio holds a name in exactly one place. That is false the moment a user holds INFY at
+    two brokers: the second row could not be written, and the first silently stood for both.
+    ``broker_account_id`` joins the key so the pair of positions is two rows that a per-broker
+    roll-up can add up, instead of one row that is wrong.
+
+    The column is ``NOT NULL`` because it is in the key, and because a share is always held
+    *somewhere* — "held, broker unknown" is not a position, it is a missing fact. Rows that
+    predate 0019 are attributed by the migration, which reuses the rule 0018 already established
+    for ``cb_investment``: the owner's default broker account. The same rule is kept live by
+    ``portfolio_holding_attribute_broker_account()``, a ``BEFORE INSERT`` trigger installed by
+    0019, so a writer that names no account still produces an attributed row rather than an
+    integrity error. A writer that *does* name one is left untouched by the trigger.
+    """
+
     __tablename__ = "portfolio_holding"
     #: The composite primary key leads on ``portfolio_id``, so it cannot serve a predicate on
     #: ``instrument_id`` alone — which is the direction the rebalance join reads.
     __table_args__ = (
-        PrimaryKeyConstraint("portfolio_id", "instrument_id"),
+        PrimaryKeyConstraint("portfolio_id", "instrument_id", "broker_account_id"),
         Index("ix_portfolio_holding_instrument_id", "instrument_id"),
+        Index("ix_portfolio_holding_broker_account_id", "broker_account_id"),
     )
 
     portfolio_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("portfolio.id", ondelete="CASCADE")
     )
     instrument_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("instrument.id"))
+    #: No ``ON DELETE`` action: a broker account with holdings against it cannot be deleted out
+    #: from under them. ``SET NULL`` is impossible (the column is in the key) and ``CASCADE``
+    #: would destroy positions to tidy up a login, so the database refuses instead.
+    #: ``FetchedValue`` records that the value may arrive from the trigger described above, so
+    #: an INSERT that omits it is legal and the ORM reads the result back.
+    broker_account_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("broker_account.id"), nullable=False, server_default=FetchedValue()
+    )
     quantity: Mapped[Decimal | None] = mapped_column(QUANTITY)
     avg_price: Mapped[Decimal | None] = mapped_column(PRICE_RAW)
     added_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
@@ -293,25 +399,40 @@ class PortfolioSleeve(Base):
     several screens needs the other question answered — how much goes where — and that is what a
     sleeve is.
 
-    ``kind`` is ``screen`` (names come from ``screen_id``) or ``manual`` (capital the owner runs
-    themselves, reported so the totals are honest and never allocated). The check constraints make
-    the pairing structural rather than conventional.
+    ``kind`` is one of :data:`SLEEVE_KINDS`: ``screen`` (names come from ``screen_id``),
+    ``manual`` (capital the owner runs themselves, reported so the totals are honest and never
+    allocated), or — since 0019 — ``basket`` (names come from a curated basket's live version,
+    ``basket_id``). The check constraints make the pairing structural rather than conventional:
+    each kind names exactly one source column and leaves the other NULL, so "where does this
+    sleeve's list come from" is answerable from the row without guessing.
 
     Deleting a screen sets ``screen_id`` to NULL rather than cascading: capital allocated against a
     screen that no longer exists should become visibly unsourced, not silently vanish.
+
+    .. warning::
+
+       That last sentence describes an intention the schema does not currently deliver, and 0019
+       does not repeat the mistake for ``basket_id``. ``ON DELETE SET NULL`` blanks ``screen_id``
+       while ``kind`` stays ``'screen'``, which the pairing constraint forbids — so deleting a
+       screen that a sleeve references raises a check violation instead of unsourcing the sleeve.
+       Making the sleeve genuinely unsourced needs a trigger that also moves ``kind`` to
+       ``'manual'``; until that exists, ``basket_id`` takes no ``ON DELETE`` action, so the
+       database refuses the delete cleanly rather than half-applying it.
     """
 
     __tablename__ = "portfolio_sleeve"
     __table_args__ = (
-        CheckConstraint("kind IN ('screen', 'manual')", name="portfolio_sleeve_kind"),
+        CheckConstraint("kind IN ('screen', 'manual', 'basket')", name="portfolio_sleeve_kind"),
         CheckConstraint("capital >= 0", name="portfolio_sleeve_capital_non_negative"),
         CheckConstraint("top_n BETWEEN 1 AND 100", name="portfolio_sleeve_top_n"),
         CheckConstraint(
-            "(kind = 'screen' AND screen_id IS NOT NULL) OR "
-            "(kind = 'manual' AND screen_id IS NULL)",
+            "(kind = 'screen' AND screen_id IS NOT NULL AND basket_id IS NULL) OR "
+            "(kind = 'manual' AND screen_id IS NULL AND basket_id IS NULL) OR "
+            "(kind = 'basket' AND basket_id IS NOT NULL AND screen_id IS NULL)",
             name="portfolio_sleeve_source",
         ),
         UniqueConstraint("portfolio_id", "name", name="uq_portfolio_sleeve_name"),
+        Index("ix_portfolio_sleeve_basket_id", "basket_id"),
     )
 
     id: Mapped[BigIntPk]
@@ -323,6 +444,9 @@ class PortfolioSleeve(Base):
     screen_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("screen.id", ondelete="SET NULL")
     )
+    #: Set for a ``basket`` sleeve, NULL otherwise. No ``ON DELETE`` action — see the class
+    #: docstring's warning: ``SET NULL`` here would contradict the pairing constraint.
+    basket_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("cb_basket.id"))
     capital: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, server_default="0")
     #: How many of the screen's names this sleeve takes, in rank order.
     top_n: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="15")

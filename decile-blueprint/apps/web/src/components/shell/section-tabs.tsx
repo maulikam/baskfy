@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { Route } from "next";
 
 import { SECTION_TABS, type SectionKey } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -17,10 +16,7 @@ export function SectionTabs({ section }: { section: SectionKey }) {
 
   return (
     <nav aria-label="Section" className="mb-2">
-      <ul
-        className="inline-flex max-w-full flex-wrap gap-1 rounded-lg border border-border/70 bg-muted/40 p-1"
-        role="list"
-      >
+      <ul className="inline-flex max-w-full flex-wrap gap-1 rounded-lg border border-border/70 bg-muted/40 p-1">
         {tabs.map((tab) => {
           const active =
             pathname === tab.href ||
@@ -29,7 +25,7 @@ export function SectionTabs({ section }: { section: SectionKey }) {
           return (
             <li key={tab.href}>
               <Link
-                href={tab.href as Route}
+                href={tab.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "block whitespace-nowrap rounded-md px-3 py-1.5 text-sm transition-colors",

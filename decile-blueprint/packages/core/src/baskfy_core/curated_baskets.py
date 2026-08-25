@@ -8,8 +8,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from decimal import Decimal
 
-#: Environment variable holding the sole tenant's ``app_user.id`` while D3 is unanswered.
-#: Every user-scoped ``cb_*`` row must carry this value; nothing infers "the user".
+#: Environment variable holding the sole tenant's ``app_user.id`` until a second tenant
+#: is admitted. Every user-scoped ``cb_*`` row must carry an explicit ``user_id``; nothing
+#: infers "the user".
 SOLE_USER_ENV: str = "BASKFY_SOLE_USER_ID"
 
 #: Seed rows written by ``baskfy_api.curated_seed`` (docs/smallcase/03).

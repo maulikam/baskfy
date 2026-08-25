@@ -81,8 +81,9 @@ describe("chart code splitting", () => {
     }
   });
 
-  it("the market-health page imports the lazy wrapper, not the chart", () => {
-    const page = read("app/(app)/market-health/page.tsx");
+  it("the market mood page imports the lazy wrapper, not the chart", () => {
+    // Tree 6 moved this page to the Market hub; `/market-health` is now a redirect stub.
+    const page = read("app/(app)/market/mood/page.tsx");
     expect(page).toMatch(/breadth-history-lazy/);
     // The type re-export is fine — types are erased — so only a value import is checked.
     expect(page).not.toMatch(/^import\s+\{\s*BreadthHistory[^}]*\}\s+from\s+"[^"]*breadth-history"/m);

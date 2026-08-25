@@ -2,15 +2,23 @@
 
 import { useState } from "react";
 
+import { MarkInvestedForm } from "@/components/cb/mark-invested-form";
 import { MarketClosedModal } from "@/components/cb/market-closed-modal";
 import { PlanHandoffPanel } from "@/components/cb/plan-handoff-panel";
 import { Button } from "@/components/ui/button";
 
 /**
  * Sticky Invest CTA — never an order route. Opens the hand-off panel; market-closed is
- * available as a parallel state for when SC3 wires session hours.
+ * available as a parallel state for when SC3 wires session hours. Mark-as-invested records
+ * the book after the user has already traded at the broker (T8.1).
  */
-export function InvestCta({ basketName }: { basketName: string }) {
+export function InvestCta({
+  basketName,
+  basketSlug,
+}: {
+  basketName: string;
+  basketSlug: string;
+}) {
   const [showHandoff, setShowHandoff] = useState(false);
   const [marketClosed, setMarketClosed] = useState(false);
 
@@ -24,7 +32,12 @@ export function InvestCta({ basketName }: { basketName: string }) {
           If market closed…
         </Button>
       </div>
-      {showHandoff ? <PlanHandoffPanel basketName={basketName} /> : null}
+      {showHandoff ? (
+        <div className="space-y-3">
+          <PlanHandoffPanel basketName={basketName} />
+          <MarkInvestedForm basketSlug={basketSlug} basketName={basketName} />
+        </div>
+      ) : null}
       <MarketClosedModal open={marketClosed} onOpenChange={setMarketClosed} />
     </div>
   );

@@ -4,14 +4,30 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * What the sleeve planner must and must not put on screen (M34).
+ * What the sleeve planner must and must not put on screen (M34, amended by tree 5).
  *
  * The page divides real money across screens. Two properties decide whether it stays on the right
  * side of the line the desk console draws:
  *
- * 1. **Amounts and weights, never a number of units.** A unit count needs a market quote and turns
- *    a plan into a buy list. The API cannot produce one — `baskfy_core.sleeves` receives no quote —
- *    and the page must not invent one either.
+ * 1. **A count of shares is a description, never an instruction.**
+ *
+ *    ⚠️ **This clause changed, deliberately.** It used to read "amounts and weights, never a
+ *    number of units", on the reasoning that a unit count needs a quote and the allocator received
+ *    none. Tree 5 gave the allocator a price map (`baskfy_core.portfolio_units`) and the API now
+ *    sends `units` and `price` per row, so the premise is gone: "₹5,00,000 of CUPID" is not
+ *    something a reader can check against a demat statement and "1,757 shares" is.
+ *
+ *    What survives from the old rule is the part that was actually about safety — **there is no
+ *    control on this page that could place anything, and there is none anywhere in this app.** A
+ *    count is not an order, and the words that belong to an order path (`quantity`, `qty`, `lot
+ *    size`) stay out of the planner's vocabulary.
+ *
+ *    The second half of the new rule is the one the units feature exists for: an unpriced row's
+ *    count is **`null`, rendered as a blank with a reason — never a `0`.** A zero reads as "buy
+ *    none of this", which is a different and false statement. The rendering is asserted in
+ *    `components/portfolios/__tests__/sleeve-units.test.tsx`; what is asserted here is that the
+ *    source never launders that null into a zero on the way to the cell.
+ *
  * 2. **The stance is stated, not urged.** Baskfy publishes no advice and is not SEBI-registered.
  *    "Under R1 the strategy caps equity at 100%" describes a strategy; telling the reader to
  *    deploy a sum is advice.
@@ -19,17 +35,29 @@ import { describe, expect, it } from "vitest";
  * Asserted over the source because both are prose and markup: a refactor that turns a statement
  * into a suggestion passes every behavioural test there is.
  */
-const PLANNER = readFileSync(
-  join(__dirname, "..", "..", "..", "components", "portfolios", "sleeve-planner.tsx"),
-  "utf8",
-);
+const COMPONENTS = join(__dirname, "..", "..", "..", "components", "portfolios");
+const PLANNER = readFileSync(join(COMPONENTS, "sleeve-planner.tsx"), "utf8");
+const CARD = readFileSync(join(COMPONENTS, "sleeve-allocation-card.tsx"), "utf8");
 
 describe("the sleeve planner is a plan, not a buy list", () => {
-  it("renders no unit count", () => {
+  it("shows a unit count without borrowing an order path's vocabulary", () => {
+    expect(CARD).toMatch(/unitsCell/);
+    expect(CARD).toMatch(/>\s*Units\s*</);
     // `top_n` is how many *names* a sleeve takes, which is not a quantity of anything tradable.
-    const withoutTopN = PLANNER.replace(/top_n/g, "");
-    for (const word of ["quantity", "shares", "qty", "lot size"]) {
-      expect(withoutTopN.toLowerCase(), `the planner mentions ${word}`).not.toContain(word);
+    for (const source of [PLANNER.replace(/top_n/g, ""), CARD]) {
+      for (const word of ["quantity", "qty", "lot size"]) {
+        expect(source.toLowerCase(), `mentions ${word}`).not.toContain(word);
+      }
+    }
+  });
+
+  it("never turns a missing unit count into a zero", () => {
+    for (const source of [PLANNER, CARD]) {
+      for (const laundering of ["units ?? 0", "units || 0", "Number(row.units)", "units: 0"]) {
+        expect(source, `launders a null unit count with \`${laundering}\``).not.toContain(
+          laundering,
+        );
+      }
     }
   });
 
@@ -39,8 +67,10 @@ describe("the sleeve planner is a plan, not a buy list", () => {
   });
 
   it("has no control that could submit an order", () => {
-    for (const word of ["/execute", "place_order", "placeOrder", "confirm=true"]) {
-      expect(PLANNER).not.toContain(word);
+    for (const source of [PLANNER, CARD]) {
+      for (const word of ["/execute", "place_order", "placeOrder", "confirm=true"]) {
+        expect(source).not.toContain(word);
+      }
     }
   });
 });
@@ -76,7 +106,9 @@ describe("the sleeve planner states the stance rather than urging it", () => {
 
 describe("the manual sleeve is presented as the reader's own", () => {
   it("offers it as a source and names it in the reader's terms", () => {
+    // The picker is still the planner's; the allocation card was extracted so the unit cell could
+    // be tested on its own, and the sleeve's own name for a hand-run slice went with it.
     expect(PLANNER).toMatch(/I run this myself/);
-    expect(PLANNER).toMatch(/You run this one/);
+    expect(CARD).toMatch(/You run this one/);
   });
 });

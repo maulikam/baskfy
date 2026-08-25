@@ -21,6 +21,7 @@ __all__ = [
     "BrokerCapability",
     "BrokerDef",
     "BrokerOauthReview",
+    "Capability",
     "broker_catalog",
     "get_broker",
 ]
@@ -108,6 +109,17 @@ class BrokerDef:
 #: Ordered so Zerodha, HDFC, Kotak and ICICI lead — the four the product ask named — then the
 #: six most-used India retail APIs that actually publish a connect flow. Groww is listed for
 #: recognition; its public trading API is still limited, so capabilities stay ``planned``.
+#:
+#: **A capability here is a promise the tile makes to an investor, so it may not run ahead of
+#: the code.** A ``holdings_sync`` of ``"ready"`` is reserved for brokers in
+#: :data:`baskfy_api.broker_holdings._HOLDINGS_WIRED` — today that is Zerodha alone, and every
+#: other id returns ``[]`` from the first line of ``holdings_for_broker``. Until Tree-5 leaf C2
+#: (25 Aug 2026) eight of these ten rows said ``"ready"``; seven of them had no adapter at all.
+#: ``packages/core/tests/test_broker_capability_honesty.py`` now binds label to wiring in both
+#: directions, and holds the blurb to the same standard — the prose is rendered one line above
+#: the capability list, so "sync holdings" in a blurb undoes a label that says "Planned".
+#: Writing an adapter is what earns a ``"ready"``; it needs credentials, which are a
+#: ``NEEDS-MAULIK.md`` item, not a source edit.
 BROKERS: Final[tuple[BrokerDef, ...]] = (
     BrokerDef(
         id="zerodha",
@@ -139,10 +151,10 @@ BROKERS: Final[tuple[BrokerDef, ...]] = (
         short_name="Kotak",
         mark="K",
         color="#ed1c24",
-        blurb="Kotak Neo — OAuth login, holdings and orders in your Kotak account.",
+        blurb="Kotak Neo — planned: holdings sync once a Neo adapter and partner app key exist.",
         api_name="Kotak Neo",
         docs_url="https://www.kotaksecurities.com/markets/trading-platforms/neo/",
-        capabilities=BrokerCapability(oauth="ready", holdings_sync="ready", trading="planned"),
+        capabilities=BrokerCapability(oauth="ready", holdings_sync="planned", trading="planned"),
         sort_order=3,
     ),
     BrokerDef(
@@ -151,10 +163,10 @@ BROKERS: Final[tuple[BrokerDef, ...]] = (
         short_name="ICICI",
         mark="I",
         color="#f58220",
-        blurb="Breeze API — connect ICICI Direct, sync holdings, place confirmed orders.",
+        blurb="Breeze API — planned: holdings sync once a Breeze adapter and app key exist.",
         api_name="Breeze API",
         docs_url="https://www.icicidirect.com/idirectcontent/Markets/MarketOverview.aspx",
-        capabilities=BrokerCapability(oauth="ready", holdings_sync="ready", trading="planned"),
+        capabilities=BrokerCapability(oauth="ready", holdings_sync="planned", trading="planned"),
         sort_order=4,
     ),
     BrokerDef(
@@ -163,10 +175,10 @@ BROKERS: Final[tuple[BrokerDef, ...]] = (
         short_name="Upstox",
         mark="U",
         color="#5a2d82",
-        blurb="Upstox API v2 — OAuth, portfolio and order placement.",
+        blurb="Upstox API v2 — planned: holdings sync once an Upstox adapter and app key exist.",
         api_name="Upstox API",
         docs_url="https://upstox.com/developer/api-documentation/",
-        capabilities=BrokerCapability(oauth="ready", holdings_sync="ready", trading="planned"),
+        capabilities=BrokerCapability(oauth="ready", holdings_sync="planned", trading="planned"),
         sort_order=5,
     ),
     BrokerDef(
@@ -175,10 +187,10 @@ BROKERS: Final[tuple[BrokerDef, ...]] = (
         short_name="Angel",
         mark="A",
         color="#e85d04",
-        blurb="SmartAPI — login, holdings and CNC orders through Angel One.",
+        blurb="SmartAPI — planned: holdings sync once a SmartAPI adapter and app key exist.",
         api_name="SmartAPI",
         docs_url="https://smartapi.angelbroking.com/",
-        capabilities=BrokerCapability(oauth="ready", holdings_sync="ready", trading="planned"),
+        capabilities=BrokerCapability(oauth="ready", holdings_sync="planned", trading="planned"),
         sort_order=6,
     ),
     BrokerDef(
@@ -199,10 +211,10 @@ BROKERS: Final[tuple[BrokerDef, ...]] = (
         short_name="Fyers",
         mark="F",
         color="#1a1a2e",
-        blurb="Fyers API v3 — OAuth, holdings and order placement.",
+        blurb="Fyers API v3 — planned: holdings sync once a Fyers adapter and app key exist.",
         api_name="Fyers API",
         docs_url="https://myapi.fyers.in/docsv3",
-        capabilities=BrokerCapability(oauth="ready", holdings_sync="ready", trading="planned"),
+        capabilities=BrokerCapability(oauth="ready", holdings_sync="planned", trading="planned"),
         sort_order=8,
     ),
     BrokerDef(
@@ -211,10 +223,10 @@ BROKERS: Final[tuple[BrokerDef, ...]] = (
         short_name="5paisa",
         mark="5",
         color="#1d4ed8",
-        blurb="5paisa OpenAPI — login, holdings sync and confirmed orders.",
+        blurb="5paisa OpenAPI — planned: holdings sync once a 5paisa adapter and app key exist.",
         api_name="5paisa OpenAPI",
         docs_url="https://www.5paisa.com/developerapi",
-        capabilities=BrokerCapability(oauth="ready", holdings_sync="ready", trading="planned"),
+        capabilities=BrokerCapability(oauth="ready", holdings_sync="planned", trading="planned"),
         sort_order=9,
     ),
     BrokerDef(
@@ -223,10 +235,10 @@ BROKERS: Final[tuple[BrokerDef, ...]] = (
         short_name="Dhan",
         mark="D",
         color="#0f766e",
-        blurb="DhanHQ — OAuth, holdings and order placement in your Dhan account.",
+        blurb="DhanHQ — planned: holdings sync once a Dhan adapter and access token exist.",
         api_name="DhanHQ",
         docs_url="https://dhanhq.co/docs/",
-        capabilities=BrokerCapability(oauth="ready", holdings_sync="ready", trading="planned"),
+        capabilities=BrokerCapability(oauth="ready", holdings_sync="planned", trading="planned"),
         sort_order=10,
     ),
 )

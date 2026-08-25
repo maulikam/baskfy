@@ -3,7 +3,7 @@
 The status page for the smallcase-layer run. Updated at the end of every module, loud
 about what is NOT done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: SC12 + AC-closure + D3 unlock (Tree 3) green — see `SC-FINAL-REPORT.md`, `SC-AC-REPORT.md`, `D3-UNLOCK-REPORT.md`. Tree 4 backlog closed — see `TREE4-BACKLOG-REPORT.md`.** Started 23 Aug 2026.
+**Run state: SC12 + AC-closure + D3 unlock (Tree 3) green — see `SC-FINAL-REPORT.md`, `SC-AC-REPORT.md`, `D3-UNLOCK-REPORT.md`. Tree 4 backlog closed — see `TREE4-BACKLOG-REPORT.md`. Tree 5 RSC perf + Tree 6 nav IA closed — see `TREE6-NAV-PERF-REPORT.md`.** Started 23 Aug 2026.
 
 **Independently audited after that, and found not green** — see "Independent verification" below. Each report above was written by the run it grades; that section is the part they could not contain.
 
@@ -20,7 +20,7 @@ about what is NOT done. A fresh session resumes from the first module not marked
 | SC6 — Web UI: investor surfaces | ✅ | `/investments*`, `/watchlist`, `/fees`; handoff CTAs; read-only tests |
 | SC7 — SIP reminders | ✅ | Pure `curated_sip`: REMINDER-only, holiday next_fire, fire key, SIP_DUE dict; 19 tests |
 | SC8 — Create and customize | ✅ | `/create` PRIVATE form; ≥2 instruments; weights normalize to 1.0; preview stubbed |
-| SC9 — Engagement | ✅ | `/cb/pending-actions` + `/cb/updates` + dismiss/resolve; `PendingActionCard`; tests green |
+| SC9 — Engagement | ✅ | `/cb/pending-actions` + `/cb/updates` + dismiss/resolve; `/cb/trending` (9 lists, floors, withheld reasons); `/home` renders all four modules; trending EOD snapshot still open |
 | SC10 — Gating and Track-B dark machinery | ✅ | Track B flags default false; paywall/signup/fee-collect 404; Free Access helper |
 | SC11 — Hardening and safety proof | ✅ | No-order, tenant, N+1/p95, METRICS_BASKET_CHUNK=50, fee/XIRR accuracy |
 | SC12 — Verification and final report | ✅ | `SC-FINAL-REPORT.md`; 119 core + 39 API curated collected; Track C held |
@@ -210,7 +210,9 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 
 ## Open items / things a future session must know
 
-1. **D3 written (Tree 3)** — posture B; OAuth unlocked. Web execute still forbidden. Track B flags still false pending D7.
+1. **D3 written; P4.1/P4.3 started (24 Aug 2026)** — posture B; OAuth unlocked; tenant columns
+   on order-shaped ORM rows; gateway mismatch → BLOCKED. Web execute still forbidden. Track B
+   flags still false pending D7. Paid multi-tenant still C3. Desk SQLite still sole-operator.
 2. **M41 was uncommitted when SC0 started**; commit it before SC1 so the working tree only carries SC work.
 3. Full screener suite was not re-timed this session — treat desk green + M41/nav green as the SC0 safety bar; expand before SC12.
 4. ~~`docs/smallcase/03` `cb_*` schema does not exist in Alembic yet — SC1's job.~~ **Done (0014).**
@@ -248,7 +250,7 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 **NOT done**
 
 - Live investment/fee list APIs (fetch returns empty until routers land)
-- ~~Pending-actions carousel polish / home modules (SC9)~~ API + card landed SC9; home modules / trending still open
+- ~~Pending-actions carousel polish / home modules (SC9)~~ **closed** — `/home` carries the carousel (dismiss + terminator), net worth, trending and collections
 - Watchlist toggle on Explore cards; moved_pct needs NAV (SC4 service)
 - E2E Playwright against DRY_RUN fixtures equal to SC4 ledgers
 
@@ -299,10 +301,39 @@ See `SC-AC-REPORT.md` + `D3-UNLOCK-REPORT.md`. SIP Beat, create API, dividends B
 - Web execute still forbidden; Track B flags still false pending D7
 - **No git `origin` on this clone** — push blocked until remote URL is added (`NEEDS-MAULIK`)
 
-## Tree 4 backlog (in flight)
+## Tree 4 backlog (23 Aug 2026)
 
-Engineering: live Zerodha holdings fetch, peer authorize URLs, e2e harden, chart wire, SC3 loop test, customize, Friday runbook.
-Human: D7/D10/counsel recorded without flipping product flags.
+Closed — see `TREE4-BACKLOG-REPORT.md`. Live Zerodha holdings, peer authorize URLs, e2e harden, chart wire, SC3 loop test, customize, Friday runbook; human D7/D10/counsel recorded without flipping product flags.
+
+## Tree 5 RSC performance (23 Aug 2026)
+
+**Built**
+
+- `server-fetch.ts` — `SERVER_FETCH_TIMEOUT_MS` default 2500 ms, `AbortSignal.timeout` on server-side JSON fetch
+- Timed fetch wired into explore, investments, watchlist, basket, desk `fetchMe` / `serverApi`
+- Suspense boundaries on `(app)/layout` list pages; warm curl ≤0.52 s on explore/investments/watchlist/baskets
+- Gates `node-5.md` + seven `leaf-5.*` files — all checked
+
+**NOT done**
+
+- Cold-start measurement on a deployed host; portfolios path is auth-gated (307) in gate evidence
+
+## Tree 6 nav / product IA (23 Aug 2026)
+
+**Built**
+
+- Four-item primary nav (Market · Baskets · Build · Me): desktop sliding pill, mobile bottom tab bar, section tabs
+- Canonical routes under `/market/*`, `/baskets/*`, `/build/*`, `/me/*`; 13 permanent legacy redirects
+- Shared `BasketCard` / `BasketDetail`; screen results default to basket view; `materializeBasket` (equal-weight + 5% cash)
+- Single AppShell disclaimer; jargon-ban vitest; `e2e/nav.spec.ts` (19 passed on production build)
+- Gates `node-6.md` + five `leaf-6.*` files — **37/37 closed**; report `TREE6-NAV-PERF-REPORT.md`
+
+**NOT done (deferred from `baskfynavrefactorreport.md`)**
+
+- Full ⌘K search over baskets/screens/indices (instruments + nav only today)
+- Watchlist star toggle on catalog cards
+- `basket.source=screen:{id}` API persistence (UI projection only — DECISIONS-MERGE Tree6.2 ⚠ UNREVIEWED)
+- Tablet "More" overflow menu; new-listings data-quality banner; full BasketCard sparkline/logo polish
 
 ## Independent verification (session `baskfy-11`, 23 Aug 2026)
 
@@ -450,3 +481,40 @@ really a 500. `test_explore_http.py` asserts at the boundary instead.
   is a change to its contract, not a note edit. **Owner: the SC tree** (`git log` on
   `broker_holdings.py` is 3fa5a62 D3 and eeee57a Tree 4 — I had attributed it to the backtesting
   session and was wrong).
+
+
+## Tree 3 — the home dashboard (25 Aug 2026)
+
+**Built**
+
+- `/home`, the signed-in landing surface. Four modules: net worth (eye-toggle, chevron to
+  `/me/investments`), the pending-actions carousel (dismissible via a server action, terminator
+  card), the updates strip, trending, and the collections grid.
+- `baskfy_core.curated_trending` — nine ranked lists, three population-based; `MIN_ENTRIES = 3`,
+  `MIN_POPULATION = 5`; a list under either floor is **withheld with a named reason** rather than
+  published thin. NULL metrics exclude a basket; ties break on slug; rounding happens once, here.
+- `GET /api/v1/cb/trending` — computes live in six grouped reads, tenant-gated to read, aggregates
+  platform-wide by nature (a popularity number cannot be asked one tenant at a time). PRIVATE and
+  archived baskets cannot appear in a ranking; asserted.
+- IA: `PRIMARY_NAV` is five destinations (Home first), `primarySection("/home")`, the app-shell
+  wordmark points at `/home`, `/home` has a vocabulary entry, e2e walks it.
+- Tests: core **24 passed**, API HTTP **10 passed**, web **46 passed** across `lib/home`,
+  `components/home` and `lib/nav`; the whole web suite **1471 passed** and `tsc --noEmit` clean.
+  `packages/api-client` was regenerated — it was badly stale: typechecking `apps/web` against the
+  checked-in client reported **91 errors**, against the regenerated one **4**, and a concurrent
+  tree closed those four while this one ran.
+
+**NOT done**
+
+- Signing in still lands on `/build`, not `/home` — thirteen Playwright specs wait on `/build`
+  and this sitting could not run Playwright. `docs/DECISIONS-MERGE.md` HOME3 has the exact edit list.
+- The persisted trending snapshot: migration 0020, `cb_trending_snapshot`, the Beat task
+  `baskfy.cb.compute_trending`. `gates/trending-root.md` G5/G6/G9, unclaimed.
+- The Playwright nav spec was extended for `/home` (landing, wordmark, `/dashboard`→Market) but
+  **not executed** — the browser suite needs the app, the API and a database that other sessions
+  held throughout. The spec walks `PRIMARY_NAV`, so the new destination is covered structurally.
+- `services/api/tests/test_api_artifacts.py::test_nothing_undocumented_is_exposed` is red on
+  `/api/v1/search`, a route a concurrent tree mounted without an `EXPECTED_PATHS` entry. Not this
+  tree's; named here so it is not mistaken for fallout from the trending route.
+- The trending module renders no audience tabs (the observed product's All / Stocks / MF row);
+  there is one basket type in the catalog today, so a tab row would switch between one thing.

@@ -5,6 +5,7 @@ import { BasketDetail } from "@/components/basket/basket-detail";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
 import { BasketUnavailable, fetchBasket } from "@/lib/basket/fetch";
+import { EMPTY_FACTS } from "@/lib/basket/holding-facts";
 import type { MaterializedBasket } from "@/lib/basket/materialize";
 import { PAGES } from "@/lib/vocabulary";
 
@@ -49,6 +50,17 @@ export default async function FeaturedBasketPage() {
     );
   }
 
+  const holdings = basket.rows.map((row) => ({
+    rank: row.rank,
+    symbol: row.symbol,
+    name: row.symbol,
+    weight: row.weight / 100,
+    price: row.ref_price,
+    amount: row.value,
+    facts: EMPTY_FACTS,
+  }));
+  const deployed = holdings.reduce((sum, row) => sum + row.amount, 0);
+
   const view: MaterializedBasket = {
     name: "Featured basket",
     thesis: PAGES["/baskets/featured"].blurb,
@@ -57,14 +69,14 @@ export default async function FeaturedBasketPage() {
     notional: basket.capital,
     minInvestment: Math.ceil(basket.capital * 0.05),
     source: "preview",
-    holdings: basket.rows.map((row) => ({
-      rank: row.rank,
-      symbol: row.symbol,
-      name: row.symbol,
-      weight: row.weight / 100,
-      price: row.ref_price,
-      amount: row.value,
-    })),
+    holdings,
+    deployed,
+    cash: basket.capital - deployed,
+    // The desk's own plan, not a profile's suggestion: its weights are score-proportional and
+    // its cash comes from breadth bands, so naming a holding profile here would be a fiction.
+    profile: null,
+    underfunded: false,
+    method: "SCORE",
   };
 
   return (

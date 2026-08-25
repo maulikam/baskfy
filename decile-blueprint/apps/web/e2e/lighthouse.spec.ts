@@ -25,14 +25,35 @@ const MINIMUM_SCORE = 95;
 
 type Category = "accessibility" | "seo" | "performance";
 
+/**
+ * **Lighthouse runs its own Chrome, with no cookie from this suite.** That did not matter while
+ * the whole app rendered to anonymous visitors; since the login gate closed it decides what these
+ * tests are allowed to measure. A gated URL handed to Lighthouse is measured as `/login`, and the
+ * score that comes back is the login page's — a green test asserting nothing about the page it
+ * names. `/kitchen-sink` was exactly that, so it is gone from here.
+ *
+ * Signing Lighthouse in is possible (a headless pass to collect the cookie, then
+ * `extraHeaders`), and it is not worth it: `e2e/accessibility.spec.ts` already runs the same axe
+ * rules on the gated pages *inside* an authenticated browser, in both themes. What is left here
+ * is the half only Lighthouse can do — the real binary, on the pages a stranger can actually
+ * reach.
+ */
 const ACCESSIBILITY_PAGES = [
   { path: "/", name: "landing" },
-  { path: "/kitchen-sink", name: "kitchen-sink" },
+  { path: "/pricing", name: "pricing" },
 ] as const;
 
-/** docs/08 §Routes: "`/instruments/[symbol]` | ISR | SEO-optimised (this is the organic-traffic
- * surface)". CUPID is the instrument the whole specification is worked through. */
-const SEO_PAGES = [{ path: "/instruments/CUPID", name: "instrument factsheet" }] as const;
+/**
+ * docs/08 §Routes calls `/instruments/[symbol]` "SEO-optimised (this is the organic-traffic
+ * surface)", and this test used to measure CUPID's factsheet. **It cannot any more**: the
+ * factsheets are behind the login gate, `robots.txt` no longer allows them and the sitemap no
+ * longer lists them, so Lighthouse scored the login page and reported `is-crawlable: Page is
+ * blocked from indexing` — correctly, and about the wrong document.
+ *
+ * The landing page is the organic-traffic surface now. If `/instruments` is ever re-opened in
+ * `src/lib/auth/public-routes.ts`, put it back here in the same commit.
+ */
+const SEO_PAGES = [{ path: "/", name: "landing" }] as const;
 
 /**
  * Prompt 18's first acceptance criterion:

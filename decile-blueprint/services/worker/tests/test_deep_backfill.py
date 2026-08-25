@@ -49,8 +49,15 @@ class TestChunking:
         windows = deep.chunk_windows(dt.date(1990, 1, 1), dt.date(2001, 1, 1))
         assert windows[0][0] == deep.KITE_EPOCH
 
-    def test_nine_years_is_two_requests(self) -> None:
+    def test_nine_years_from_2017_is_two_requests(self) -> None:
         assert len(deep.chunk_windows(dt.date(2017, 1, 1), dt.date(2026, 8, 21))) == 2
+
+    def test_d5_history_is_three_kite_requests(self) -> None:
+        """D5: backfill from 2011-01-01. Kite's 2000-day cap makes that three windows."""
+        assert deep.DEFAULT_START == dt.date(2011, 1, 1)
+        windows = deep.chunk_windows(deep.DEFAULT_START, dt.date(2026, 8, 21))
+        assert len(windows) == 3
+        assert windows[0][0] == dt.date(2011, 1, 1)
 
 
 class TestSplicing:

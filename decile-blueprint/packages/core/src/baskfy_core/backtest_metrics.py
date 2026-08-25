@@ -51,6 +51,7 @@ from baskfy_core.backtest import (
     month_key,
     year_fraction,
 )
+from baskfy_core.risk_free import annual_rate_on
 
 __all__ = [
     "EQUITY_CURVE_POINTS",
@@ -462,7 +463,7 @@ def compute_metrics(result: BacktestResult) -> Metrics:
     cagr = _cagr(opening, closing, years)
 
     volatility = _annualised_std(portfolio, periods)
-    rf_daily = _daily_rate(config.risk_free_rate, periods)
+    rf_daily = _risk_free_daily(dates, config, periods, n=len(portfolio))
     excess = portfolio - rf_daily if portfolio.size else portfolio
     sharpe = _ratio(excess, _annualised_std(excess, periods), periods)
     sortino = _ratio(excess, _downside_deviation(excess, periods), periods)
@@ -554,6 +555,27 @@ def _daily_rate(annual: Decimal, periods: float | None) -> float:
     if periods is None or periods <= 0 or annual <= 0:
         return 0.0
     return float((1.0 + float(annual)) ** (1.0 / periods)) - 1.0
+
+
+def _risk_free_daily(
+    dates: Sequence[dt.date],
+    config: BacktestConfig,
+    periods: float | None,
+    *,
+    n: int,
+) -> np.ndarray:
+    """One daily rf per portfolio return, forward-filled from ``config.risk_free_curve``."""
+    if n == 0:
+        return np.array([], dtype=np.float64)
+    curve = config.risk_free_curve
+    fallback = config.risk_free_rate
+    if not curve:
+        return np.full(n, _daily_rate(fallback, periods), dtype=np.float64)
+    return_dates = dates[1:] if len(dates) == n + 1 else dates[-n:]
+    return np.array(
+        [_daily_rate(annual_rate_on(day, curve, fallback), periods) for day in return_dates],
+        dtype=np.float64,
+    )
 
 
 def _annualised_std(series: np.ndarray | None, periods: float | None) -> float | None:

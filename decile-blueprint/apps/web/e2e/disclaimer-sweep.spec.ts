@@ -95,7 +95,7 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Email").fill(EMAIL);
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/\/screens/);
+  await page.waitForURL(/\/build/);
 }
 
 async function assertDisclaimer(page: Page, path: string): Promise<void> {
@@ -148,12 +148,10 @@ test("the route table is not empty and covers the analytics surfaces", () => {
   expect(ROUTES.length).toBeGreaterThan(15);
   const analytics = ROUTES.filter((route) => route.analytics).map((route) => route.path);
   for (const required of [
-    "/dashboard",
-    "/market-health",
-    "/screens",
-    "/listings",
-    "/backtests",
-    "/portfolios",
+    "/market/today",
+    "/baskets",
+    "/build",
+    "/me/investments",
     `/instruments/${SAMPLE_SYMBOL}`,
   ]) {
     expect(analytics, `${required} is not in the swept analytics set`).toContain(required);

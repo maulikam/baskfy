@@ -62,11 +62,14 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "webhook_delivery": ("id",),
     # Accounts, billing, portfolios, backtests
     "app_user": ("id",),
+    "broker_account": ("id",),
     "plan": ("id",),
     "subscription": ("id",),
     "payment": ("id",),
     "portfolio": ("id",),
-    "portfolio_holding": ("portfolio_id", "instrument_id"),
+    # M35 / migration 0019: broker_account_id joins the key so the same instrument held at two
+    # brokers is two rows a per-broker roll-up can add up. docs/04b addendum.
+    "portfolio_holding": ("portfolio_id", "instrument_id", "broker_account_id"),
     "backtest": ("id",),
     "pipeline_run": ("id",),
     "pipeline_run_step": ("id",),
@@ -91,6 +94,10 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "portfolio_rebalance": ("id",),
     # Curated-basket product layer — docs/smallcase/03-data-model.md (SC1).
     "cb_manager": ("id",),
+    # Tree-3 managers / migration 0020: what a manager is owed, as an agreement with a
+    # start and an end. Dark Track-B; no default rate, because D7 amounts are human-track.
+    # docs/04b addendum.
+    "cb_manager_revenue_share": ("id",),
     "cb_basket": ("id",),
     "cb_basket_version": ("id",),
     "cb_constituent": ("id",),
@@ -193,6 +200,7 @@ def test_smallcase_tables_are_recorded_in_docs() -> None:
         "cb_watchlist_item",
         "cb_investment",
         "cb_order_batch",
+        "broker_account",
         "cb_plan",
         "cb_subscription",
     ):

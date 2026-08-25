@@ -1,5 +1,6 @@
 "use client";
 
+import type { CatalogHitOut, CatalogKind } from "@baskfy/api-client";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -12,36 +13,59 @@ import {
   CommandList,
   CommandLoading,
 } from "@/components/ui/command";
-import { searchInstruments, type InstrumentSearchOutcome } from "@/lib/api/instruments";
+import { searchCatalog, type CatalogSearchOutcome } from "@/lib/api/search";
 import { NAV_ITEMS, type NavItem } from "@/lib/nav";
+import { hrefFor, KIND_LABELS, KIND_ORDER } from "@/lib/search/hrefs";
+import { readRecents, rememberRecent, type RecentItem } from "@/lib/search/recents";
 
 /**
- * docs/08 §"App shell": "Top bar: global instrument search (`⌘K`)".
+ * The ⌘K palette — one search across the whole catalog.
  *
- * Two sections. **Instruments** comes from `GET /instruments?search=` — an endpoint Prompt 10
- * delivers, so today it reports itself as unavailable rather than showing an empty result set that
- * looks like "no such stock" (`src/lib/api/instruments.ts`). **Go to** is the navigation half,
- * which is what makes the palette useful in the meantime and is standard for a ⌘K anyway.
+ * `baskfynavrefactorreport` §F11 named the defect ("Fragmented search") and §"Global search" named
+ * the fix: "⌘K / tap-search opens a command palette searching stocks, indices, baskets, and
+ * screens, with recent items. Replaces both existing scoped search boxes as the primary entry."
+ * Until now this component searched instruments and filtered `NAV_ITEMS` — two of the five groups
+ * below — and the report carried the rest as deferred.
  *
- * Search is debounced and aborts the in-flight request on each keystroke: a typeahead that races
- * its own responses shows the results for a prefix the user has already finished typing.
+ * Five groups, in the order a person scans them: **Stocks · Indices · Baskets · Screens · Go to**.
+ * The first four come from `GET /search` in one round trip (`baskfy_api.search` explains why one
+ * and not four). **Go to** stays client-side: navigation targets are a compile-time constant in
+ * `lib/nav.ts`, and asking a server which pages this build has would be absurd.
+ *
+ * Search is debounced and aborts the in-flight request on each keystroke, and every rendered
+ * result is stamped with the query that produced it — a typeahead that races its own responses
+ * shows results for a prefix the user has already finished typing.
+ *
+ * With the input empty the palette shows **recent items** and the nav, so it opens onto something
+ * useful rather than onto a blank list.
  */
 const DEBOUNCE_MS = 200;
 const MIN_QUERY_LENGTH = 1;
+
+/** What the palette renders in one group: catalog hits and recents share this shape. */
+type Row = Pick<CatalogHitOut, "kind" | "id" | "title" | "subtitle">;
 
 export function CommandPalette() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [outcome, setOutcome] = useState<{ query: string; result: InstrumentSearchOutcome } | null>(
+  const [outcome, setOutcome] = useState<{ query: string; result: CatalogSearchOutcome } | null>(
     null,
   );
   const [searching, setSearching] = useState(false);
+  const [recents, setRecents] = useState<readonly RecentItem[]>([]);
 
+  /*
+   * Recents are read here, in the event handler, rather than in an effect keyed on `open`:
+   * `localStorage` is unavailable during the server render, and setting state from an effect body
+   * costs a second render for a list of at most five strings. Reading on every ⌘K — including the
+   * press that closes the dialog — is cheaper than the render it saves.
+   */
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
+        setRecents(readRecents());
         setOpen((current) => !current);
       }
     }
@@ -57,12 +81,14 @@ export function CommandPalette() {
    */
   useEffect(() => {
     const trimmed = query.trim();
+    /* An empty box is not a query. Any request already in flight is aborted by the cleanup below
+       and clears `searching` in its own `finally`, so there is nothing to reset here. */
     if (trimmed.length < MIN_QUERY_LENGTH) return;
 
     const controller = new AbortController();
     const timer = setTimeout(() => {
       setSearching(true);
-      void searchInstruments(trimmed, controller.signal)
+      void searchCatalog(trimmed, controller.signal)
         .then((result) => setOutcome({ query: trimmed, result }))
         .finally(() => setSearching(false));
     }, DEBOUNCE_MS);
@@ -79,6 +105,12 @@ export function CommandPalette() {
     return NAV_ITEMS.filter((item) => item.label.toLowerCase().includes(needle));
   }, [query]);
 
+  const dismiss = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+    setOutcome(null);
+  }, []);
+
   /**
    * Only `ready` destinations navigate. A planned item is listed so the palette can say when it
    * arrives, but selecting it would go to a 404 — and `NavItem` types `href` as a real `Route`
@@ -87,20 +119,24 @@ export function CommandPalette() {
   const go = useCallback(
     (item: NavItem) => {
       if (item.status !== "ready") return;
-      setOpen(false);
-      setQuery("");
+      dismiss();
       router.push(item.href);
     },
-    [router],
+    [dismiss, router],
   );
 
-  const goToInstrument = useCallback(
-    (symbol: string) => {
-      setOpen(false);
-      setQuery("");
-      router.push(`/instruments/${symbol}`);
+  const openHit = useCallback(
+    (hit: Row) => {
+      // Remembered *before* navigating: the route change unmounts this component, and a write
+      // scheduled after `router.push` is a race with React's own teardown.
+      setRecents(rememberRecent(hit));
+      dismiss();
+      // `hrefFor` builds `/market/today?q=…` for an index, so this is not always a bare pathname.
+      // `push` takes a string; the typed `Route` guarantee belongs to `lib/nav.ts`'s constants,
+      // and `lib/search/hrefs.ts` is where these four are checked instead.
+      router.push(hrefFor(hit));
     },
-    [router],
+    [dismiss, router],
   );
 
   const trimmed = query.trim();
@@ -108,19 +144,34 @@ export function CommandPalette() {
     outcome && outcome.query === trimmed && trimmed.length >= MIN_QUERY_LENGTH
       ? outcome.result
       : null;
-  const instruments = current?.status === "ok" ? current.hits : [];
+  const grouped = useMemo(() => {
+    const hits: readonly Row[] = current?.status === "ok" ? current.hits : [];
+    const byKind = new Map<CatalogKind, Row[]>();
+    for (const hit of hits) {
+      const bucket = byKind.get(hit.kind);
+      if (bucket) bucket.push(hit);
+      else byKind.set(hit.kind, [hit]);
+    }
+    return KIND_ORDER.map((kind) => ({ kind, rows: byKind.get(kind) ?? [] })).filter(
+      (group) => group.rows.length > 0,
+    );
+  }, [current]);
+
+  const showRecents = trimmed.length < MIN_QUERY_LENGTH && recents.length > 0;
+  const nothingFound =
+    !searching && trimmed.length >= MIN_QUERY_LENGTH && grouped.length === 0 && !navMatches.length;
 
   return (
     <CommandDialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => (next ? setOpen(true) : dismiss())}
       title="Search"
-      description="Search instruments by symbol or name, or jump to a page."
+      description="Search stocks, indices, baskets and screens, or jump to a page."
     >
       <CommandInput
         value={query}
         onValueChange={setQuery}
-        placeholder="Search instruments, or jump to a page…"
+        placeholder="Search stocks, indices, baskets, screens…"
       />
       <CommandList className="max-h-80 overflow-y-auto">
         {searching ? (
@@ -131,30 +182,50 @@ export function CommandPalette() {
 
         {current?.status === "not-implemented" ? (
           <p className="px-3 py-2 text-sm text-muted-foreground">
-            Instrument search is not available on this server. Page navigation works now.
+            Search is not available on this server. Page navigation works now.
           </p>
         ) : null}
 
         {current?.status === "failed" ? (
-          <p className="px-3 py-2 text-sm text-muted-foreground">
-            Instrument search is unavailable right now.
-          </p>
+          <p className="px-3 py-2 text-sm text-muted-foreground">Search is unavailable right now.</p>
         ) : null}
 
-        {instruments.length > 0 ? (
-          <CommandGroup heading="Instruments">
-            {instruments.map((hit) => (
+        {showRecents ? (
+          <CommandGroup heading="Recent">
+            {recents.map((hit) => (
               <CommandItem
-                key={hit.symbol}
-                value={hit.symbol}
-                onSelect={() => goToInstrument(hit.symbol)}
+                key={`recent-${hit.kind}-${hit.id}`}
+                value={`recent-${hit.kind}-${hit.id}`}
+                onSelect={() => openHit(hit)}
               >
-                <span className="font-medium">{hit.symbol}</span>
-                <span className="truncate text-muted-foreground">{hit.name}</span>
+                <span className="font-medium">{hit.title}</span>
+                {hit.subtitle ? (
+                  <span className="truncate text-muted-foreground">{hit.subtitle}</span>
+                ) : null}
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                  {KIND_LABELS[hit.kind]}
+                </span>
               </CommandItem>
             ))}
           </CommandGroup>
         ) : null}
+
+        {grouped.map((group) => (
+          <CommandGroup key={group.kind} heading={KIND_LABELS[group.kind]}>
+            {group.rows.map((hit) => (
+              <CommandItem
+                key={`${hit.kind}-${hit.id}`}
+                value={`${hit.kind}-${hit.id}`}
+                onSelect={() => openHit(hit)}
+              >
+                <span className="font-medium">{hit.title}</span>
+                {hit.subtitle ? (
+                  <span className="truncate text-muted-foreground">{hit.subtitle}</span>
+                ) : null}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ))}
 
         {navMatches.length > 0 ? (
           <CommandGroup heading="Go to">
@@ -174,7 +245,7 @@ export function CommandPalette() {
           </CommandGroup>
         ) : null}
 
-        {!searching && navMatches.length === 0 && instruments.length === 0 && query ? (
+        {nothingFound ? (
           <CommandEmpty className="px-3 py-6 text-center text-sm text-muted-foreground">
             Nothing matches “{query}”.
           </CommandEmpty>

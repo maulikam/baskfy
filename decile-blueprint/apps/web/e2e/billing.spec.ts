@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { SIGNED_OUT } from "./helpers/auth";
+
 /**
  * `/pricing` end to end — PROMPTS.md Prompt 13 §5 and its fourth acceptance criterion.
  *
@@ -85,6 +87,9 @@ test.describe("the pricing page", () => {
   test("asks a signed-out visitor to sign in rather than showing a button that fails", async ({
     page,
   }) => {
+    /* Explicitly signed out: since the login gate closed, the suite signs in once in
+       `auth.setup.ts` and every spec inherits that session unless it says otherwise. */
+    await page.context().clearCookies();
     await page.goto("/pricing");
     const link = page.getByRole("link", { name: /sign in to choose/i }).first();
     await expect(link).toBeVisible();
@@ -107,6 +112,8 @@ test.describe("the pricing page", () => {
 });
 
 test.describe("the invoices page", () => {
+  test.use({ storageState: SIGNED_OUT });
+
   test("sends a signed-out visitor to sign in", async ({ page }) => {
     await page.goto("/invoices");
     await expect(page).toHaveURL(/\/login/);

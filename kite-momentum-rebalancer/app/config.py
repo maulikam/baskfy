@@ -9,6 +9,11 @@ load_dotenv()
 KITE_API_KEY = os.getenv("KITE_API_KEY", "")
 KITE_API_SECRET = os.getenv("KITE_API_SECRET", "")
 DRY_RUN = os.getenv("DRY_RUN", "true").lower() != "false"   # simulate orders unless explicitly disabled
+# P4.3: the merged gateway requires tenant ids on every order. The operator console is
+# still one book; these stamp that pair so Friday rebalance keeps working. A second
+# tenant is a different caller — never collapse a foreign principal onto these defaults.
+SOLE_USER_ID = int(os.getenv("BASKFY_SOLE_USER_ID", "1"))
+SOLE_BROKER_ACCOUNT_ID = int(os.getenv("BASKFY_SOLE_BROKER_ACCOUNT_ID", "1"))
 
 # Kite authorises orders against an allowlist of IPs. This connection offers both families
 # and prefers IPv6, so orders were refused for an address that cannot usefully be

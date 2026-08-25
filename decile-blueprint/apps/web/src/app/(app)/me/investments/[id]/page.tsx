@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { DriftRepair } from "@/components/investments/drift-repair";
 import { InvestmentActions } from "@/components/investments/investment-actions";
 import { ShowDetailsModal } from "@/components/investments/show-details-modal";
+import { SipForm } from "@/components/investments/sip-form";
 import { PageHeader } from "@/components/shell/page-header";
 import { EMPTY_CELL, formatNumber, formatPercent } from "@/lib/format";
 import { fetchInvestment } from "@/lib/investments/fetch";
@@ -152,9 +154,17 @@ export default async function InvestmentDetailPage({
             >
               Customize
             </Link>{" "}
-            — weight-diff plan preview (CUSTOMIZE); no execute
+            — weight-diff plan preview (CUSTOMIZE); no broker path from here
           </li>
-          <li>SIP — reminders land in SC7; no auto-debit here</li>
+          <li>
+            <Link
+              href={`/investments/${detail.id}/costs`}
+              className="text-foreground underline-offset-4 hover:underline"
+            >
+              Costs and returns
+            </Link>{" "}
+            — accrued fees, not charged
+          </li>
           <li>
             <Link
               href={`/investments/${detail.id}/orders`}
@@ -165,6 +175,8 @@ export default async function InvestmentDetailPage({
             — read-only batch list
           </li>
         </ul>
+        <SipForm investmentId={detail.id} />
+        <DriftRepair investmentId={detail.id} />
         <InvestmentActions basketName={detail.basket_name} />
       </section>
     </div>

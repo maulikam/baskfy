@@ -501,3 +501,26 @@ def screen_alert(to: str, sections: Sequence[AlertSection], *, manage_url: str) 
         text=_plain(heading, text_lines, ALERT_FOOTER_TEXT),
         html=html_body,
     )
+
+
+def rebalance_available(
+    to: str,
+    *,
+    basket_name: str,
+    version_no: int | None,
+    investments_path: str = "/me/investments",
+) -> Message:
+    """T8.3 — one mail when a published version raises ``REBALANCE_AVAILABLE``."""
+    heading = f"Rebalance update available for {basket_name}"
+    version_bit = f"Version {version_no} is live. " if version_no is not None else ""
+    body = [
+        f"{version_bit}A new target is ready for {basket_name}.",
+        f"Open Investments ({investments_path}) to review the update. "
+        "This message does not place an order; you decide at the broker.",
+    ]
+    return Message(
+        to=to,
+        subject=f"Rebalance update: {basket_name}",
+        text=_plain(heading, body),
+        html=_document(heading, [html.escape(paragraph) for paragraph in body]),
+    )

@@ -40,6 +40,18 @@ make web                           # http://127.0.0.1:3000
 
 `make doctor` reports what is up and what is not.
 
+**One web dev server per build directory.** `pnpm run dev` goes through
+`apps/web/scripts/dev-guard.mjs`, which refuses to start a second `next dev` against a `.next`
+that already has one. Two of them overwrite each other's chunks and the app then dies on a
+*request* with `Runtime TypeError: __webpack_modules__[moduleId] is not a function` pointing at
+`.next/server/webpack-runtime.js` — a message that reads like a source bug while `next build` of
+the same tree is clean. To run a second server anyway (two branches, two ports), give it its own
+build directory:
+
+```bash
+BASKFY_WEB_DIST_DIR=.next-alt pnpm --filter @baskfy/web run dev --port 3003
+```
+
 ### The desk
 
 ```bash
@@ -91,6 +103,44 @@ Fire it for one date and watch it. What "published" looks like:
 * `market_health_daily` has twelve rows, one per universe, each carrying `pct_above_20dma`;
 * the API's screen endpoints return the new date;
 * `/ops` on the desk shows the run.
+
+### Filling market cap and P/E for a date the pipeline already published
+
+Step 6 fetches NSE fundamentals as part of a night. For a **past** date — a table that was never
+filled, or a night where NSE was down — do not re-run the whole chain; it would refetch bars that
+are already correct and hand the quality gate a date nobody asked about.
+
+```bash
+make fundamentals DATE=2026-08-18      # ~2,540 symbols at NSE's 1 req/s, roughly 40 minutes
+make refactors    DATE=2026-08-18      # rebuild factor_daily from data already on disk
+```
+
+Both are safe to interrupt and re-run: `--resume` skips symbols already stored, the raw-file
+archive never refetches a key it already holds, and the fill commits every 25 symbols. The run
+ends with a line accounting for every symbol in scope — `stored / already_present / no_quote /
+unmatched / failed` — and names the failures so a second pass can target them. `ACCOUNTED OK`
+means those five add up to the scope; anything else means a symbol went missing and the run
+should not be believed.
+
+**If it stalls.** Observed once during the first real fill: the log starts repeating
+`provider retry`, the archived-file count stops rising, and the process sits at 0% CPU — while
+`curl` against the same NSE endpoint answers 200 in 0.3s. A stuck HTTP connection, not NSE. Kill
+it and re-run the same command; `--resume` picks up from the last committed batch and the archive
+means nothing already fetched is fetched twice. Watch progress with either of:
+
+```bash
+docker exec baskfy-postgres psql -U baskfy -d baskfy -tAc \
+  "select count(*) from fundamental_daily where date='2026-08-18'"
+find decile-blueprint/.archive/nse/equity-fundamentals -name '2026-08-18.json' | wc -l
+```
+
+The archive count leads the row count by up to one batch (25); if **both** are frozen for more
+than a minute or two, it is stalled.
+
+**Which date do you actually want?** Almost always the one the API serves, which is
+`max(pipeline_run.trade_date)` where `data_version IS NOT NULL` — *not* `max(ohlcv_daily.date)`.
+Filling only the newest bar date leaves every rendered surface on an em dash while the table looks
+full. `bash tools/tree3/surfaces.sh` checks the rendered end of that.
 
 The Beat schedule that does this unattended is in `services/worker/src/baskfy_worker/celery_app.py`.
 It also carries the desk's own two jobs (M19 §1) at 18:30 and 18:50 IST.
@@ -482,3 +532,18 @@ Flipping them is a deliberate deploy, not a byproduct of seeding the catalog or 
 **`DRY_RUN`.** Same rule as §1 and §7: every agent environment and every Friday drill keeps
 `DRY_RUN=true`. Curated plan previews and hand-offs are read-only by construction; the desk is
 where a simulated (or live) execute can happen, and only with `confirm=true`.
+
+### Catalog metrics (`cb_metrics`) — Tree 7
+
+Beat schedules `cb-eod-metrics` nightly, but until the job has actually written rows the
+`/baskets` / `/explore` cards show `metrics: null`. Populate (or refresh) with:
+
+```bash
+cd decile-blueprint
+make cb-metrics                 # as-of today IST
+make cb-metrics DATE=2026-08-21 # pin a trading day that has bars
+# or: uv run python -m baskfy_worker.cb_metrics_cli --date 2026-08-21
+```
+
+Requires a live Postgres with at least one non-archived `cb_basket` and price history for its
+constituents. Idempotent per `(basket_id, as_of_date)`.

@@ -275,6 +275,9 @@ function ScreenCard({
               </Link>
             </Button>
             <Button variant="ghost" size="sm" asChild>
+              <Link href={`/create?screen=${screen.public_id}` as never}>Create basket</Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
               <Link href={`/build/backtests?screen=${screen.public_id}` as never}>Backtest</Link>
             </Button>
             <Button variant="ghost" size="sm" onClick={() => onDuplicate(screen)}>

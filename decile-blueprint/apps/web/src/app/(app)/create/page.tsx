@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 
-import { CreateBasketForm } from "@/components/create/create-basket-form";
+import { CreateWorkspace } from "@/components/create/create-workspace";
 import { PageHeader } from "@/components/shell/page-header";
+import { SectionTabs } from "@/components/shell/section-tabs";
+import { serverApi } from "@/lib/api/server";
+import { pickDefaultScreenId } from "@/lib/create/screens";
 import { PAGES } from "@/lib/vocabulary";
 
 /**
- * `/create` — SC8. Build a PRIVATE basket (≥2 instruments, equal/custom weights).
- * Preview stubbed; save frames visibility=PRIVATE. No execute / OrderGateway.
+ * `/create` — SB2. Pick a screen (templates on first login, or one you built), size it, save.
+ * The manual symbol list is still behind "Pick stocks yourself". No execute / OrderGateway.
  */
 
 export const dynamic = "force-dynamic";
@@ -17,12 +20,31 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function CreateBasketPage() {
+function first(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+export default async function CreateBasketPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const api = await serverApi();
+  const { data } = await api.GET("/api/v1/screens");
+  const screens = data?.data ?? [];
+  const requested = first(params.screen) ?? null;
   const page = PAGES["/create"];
+
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
+    <div className="flex w-full min-w-0 flex-col gap-6">
+      <SectionTabs section="baskets" />
       <PageHeader title={page.title} blurb={page.blurb} />
-      <CreateBasketForm />
+      <CreateWorkspace
+        screens={screens}
+        initialScreenId={pickDefaultScreenId(screens, requested)}
+      />
     </div>
   );
 }

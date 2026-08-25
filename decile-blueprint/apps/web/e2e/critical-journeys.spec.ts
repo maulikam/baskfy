@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { dismissCookieBanner } from "./helpers/screen-chips";
+
 /**
  * The ten critical user journeys — Prompt 19 §5.
  *
@@ -141,18 +143,21 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Email").fill(EMAIL);
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/\/screens/);
+  await page.waitForURL(/\/build/);
+  await dismissCookieBanner(page);
 }
 
 /** Create and persist a minimal screen, and return its public id. A backtest needs one. */
 async function saveAScreen(page: Page): Promise<string> {
-  await page.goto("/screens");
+  await page.goto("/build");
+  await dismissCookieBanner(page);
   await page.getByTestId("new-screen").click();
-  await page.waitForURL(/\/screens\/[0-9a-f]{12}$/);
+  await page.waitForURL(/\/build\/[0-9a-f]{12}$/);
   const publicId = new URL(page.url()).pathname.split("/").at(-1) as string;
 
+  await page.getByTestId("chip-index").click();
   await page.getByTestId("index-select").selectOption("nifty-total-market");
-  await expect(page.getByTestId("result-count")).toContainText("results", { timeout: 20_000 });
+  await expect(page.getByTestId("result-count")).toContainText("matches", { timeout: 20_000 });
   const unsaved = page.getByTestId("unsaved-badge");
   if (await unsaved.isVisible()) {
     await page.getByTestId("apply-filters").click();

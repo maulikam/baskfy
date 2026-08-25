@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 
 const WEB_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO_ROOT = resolve(WEB_DIR, "..", "..");
-const NEXT_DIR = join(WEB_DIR, ".next");
+const NEXT_DIR = join(WEB_DIR, process.env.BASKFY_WEB_DIST_DIR ?? ".next");
 const MANIFEST = join(NEXT_DIR, "app-build-manifest.json");
 
 /**

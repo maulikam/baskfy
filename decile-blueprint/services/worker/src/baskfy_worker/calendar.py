@@ -38,6 +38,12 @@ from baskfy_core.seed_data import NSE_EXCHANGE_ID
 #: Below this many instruments with bars, "no bars" means "no backfill", not "holiday".
 MIN_INSTRUMENTS_FOR_HOLIDAY_INFERENCE: Final = 20
 
+#: 12-month factor windows (docs/05) need the lunar holidays in the year *behind* ``as_of``,
+#: not only the trade date the nightly run just ingested. 400 calendar days covers 12 months
+#: plus snap slack; a single-day reconcile left those holidays as ``derived`` and 9M/12M
+#: windows resolved long (T9.2).
+CALENDAR_LOOKBACK_DAYS: Final = 400
+
 
 class NotATradingDay(Exception):
     """Raised when work is attempted for a date the exchange was closed.

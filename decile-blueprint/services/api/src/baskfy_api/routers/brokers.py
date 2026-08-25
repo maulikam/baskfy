@@ -23,7 +23,12 @@ from fastapi import APIRouter, Path, Query
 from pydantic import BaseModel, Field
 
 from baskfy_api.auth import AuthenticatedDep
-from baskfy_api.broker_holdings import holding_row_to_dict, holdings_for_broker
+from baskfy_api.broker_holdings import (
+    HoldingsResult,
+    HoldingsSource,
+    holding_row_to_dict,
+    holdings_for_broker,
+)
 from baskfy_api.broker_oauth import (
     consume_oauth_state,
     dry_run_enabled,
@@ -52,6 +57,17 @@ _WIRED_AUTHORIZE: dict[str, str] = {
     "fyers": "https://api-t1.fyers.in/api/v3/generate-authcode",
     "dhan": "https://auth.dhan.co/login/consentApp-login",
 }
+
+#: Brokers whose OAuth can actually *finish*, not merely start.
+#:
+#: Knowing an authorize URL is not the same as having a login. ``BASKFY_KITE_API_KEY`` is a
+#: Zerodha app credential and :func:`baskfy_api.broker_oauth.exchange_request_token` speaks
+#: Kite's ``session/token`` checksum scheme, so Zerodha is the only broker for which a
+#: ``request_token`` can be redeemed and a session stored. Redirecting anywhere else would put
+#: Baskfy's Zerodha app key in another broker's URL and then fail at the callback — a login
+#: that cannot complete, offered as though it could. Same class of over-claim as the holdings
+#: note this leaf exists to fix; refuse honestly instead (Tree-5 leaf C1, handoff from C2).
+_OAUTH_COMPLETABLE: frozenset[str] = frozenset({"zerodha"})
 
 
 class BrokerCapabilitiesOut(BaseModel):
@@ -133,8 +149,27 @@ class SyncHoldingsOut(BaseModel):
     broker_id: str
     holdings: list[BrokerHoldingOut]
     dry_run: bool
+    source: HoldingsSource = Field(
+        description=(
+            "Provenance of `holdings`, as a machine-readable value a client can switch on. "
+            "`live` = the broker actually reported these rows; `fixture` = fabricated sample "
+            "rows; `empty` = no rows at all (never carries any); `unwired` = this broker has "
+            "no holdings adapter. Only `live` is the caller's real money."
+        )
+    )
+    degraded: bool = Field(
+        default=False,
+        description=(
+            "True when a live fetch was expected to work and did not, so `source` is a "
+            "fallback rather than a deliberate stub. A degraded fixture is still a fixture; "
+            "this is the second axis that tells the two apart."
+        ),
+    )
     note: str = Field(
-        description="How the list was produced (live / fixture / empty). Never an order path."
+        description=(
+            "The same statement as `source`, in prose for a human. Always names `source`. "
+            "Never an order path."
+        )
     )
 
 
@@ -210,6 +245,13 @@ async def oauth_callback(
         raise _bad_request("Invalid or expired OAuth state.")
     if pending.user_id != user_id:
         raise _bad_request("OAuth state does not belong to this account.")
+    if pending.broker_id not in _OAUTH_COMPLETABLE:
+        # The exchange below is Kite's, and the token store is one shared blob: honouring a
+        # state minted for another broker would file a Zerodha session under its name.
+        raise _bad_request(
+            f"Baskfy cannot complete an OAuth login for {pending.broker_id!r}; "
+            "only Zerodha's token exchange is implemented."
+        )
 
     api_key = os.environ.get("BASKFY_KITE_API_KEY", "").strip() or "dry-run-api-key"
     simulated = dry_run_enabled() or not os.environ.get("BASKFY_KITE_API_SECRET", "").strip()
@@ -276,12 +318,26 @@ async def connect_broker(
             reason=f"{broker.name} is on the catalog; its OAuth adapter is not wired yet.",
         )
 
+    if broker_id not in _OAUTH_COMPLETABLE:
+        # Refused *before* the app key is read, so a Zerodha credential can never be put in
+        # another broker's authorize URL.
+        return ConnectOut(
+            broker_id=broker_id,
+            oauth_available=False,
+            reason=(
+                f"{broker.name}'s authorize URL is known, but Baskfy holds no {broker.name} "
+                "app credential and cannot redeem its request_token, so the login would "
+                "start and could not finish. Zerodha is the only broker whose OAuth "
+                "completes today."
+            ),
+        )
+
     api_key = os.environ.get("BASKFY_KITE_API_KEY", "").strip()
     if not api_key:
         return ConnectOut(
             broker_id=broker_id,
             oauth_available=False,
-            reason="Zerodha app key is not configured on this deployment.",
+            reason=f"The {broker.name} app key is not configured on this deployment.",
         )
 
     state = secrets.token_urlsafe(24)
@@ -300,6 +356,36 @@ async def connect_broker(
     )
 
 
+def _holdings_note(result: HoldingsResult, *, broker_name: str, dry_run: bool) -> str:
+    """Prose that says the same thing ``source`` says — and names it, so the two cannot drift.
+
+    Every branch embeds ``result.source`` verbatim; a note that disagreed with the field it
+    describes would recreate the defect this leaf exists to fix, one layer up.
+    """
+    source = result.source
+    if source == "live":
+        text = f"live holdings reported by {broker_name}"
+    elif source == "unwired":
+        text = f"unwired: {broker_name} has no holdings adapter in this build"
+    elif source == "fixture" and result.degraded:
+        text = (
+            f"degraded: {broker_name} could not be reached, so these are fixture holdings "
+            "— sample numbers, not your holdings"
+        )
+    elif source == "fixture":
+        text = "fixture holdings (DRY_RUN or BASKFY_BROKER_HOLDINGS_FIXTURE)"
+    elif result.degraded:
+        text = (
+            f"degraded: {broker_name} could not be reached and no fixture is configured, "
+            "so the list is empty"
+        )
+    elif dry_run:
+        text = "DRY_RUN: empty holdings (set BASKFY_BROKER_HOLDINGS_FIXTURE for a fixture list)"
+    else:
+        text = "empty: no holdings were returned for this broker"
+    return f"{text} ({result.detail})" if result.detail else text
+
+
 @router.post(
     "/{broker_id}/sync-holdings",
     response_model=SyncHoldingsOut,
@@ -309,24 +395,28 @@ async def sync_holdings(
     principal: AuthenticatedDep,
     broker_id: Annotated[str, Path(min_length=2, max_length=32)],
 ) -> SyncHoldingsOut:
-    """Return holdings for the sole-tenant caller.
+    """Return holdings for the sole-tenant caller, labelled with where they came from.
 
-    Quantity fields follow desk non-negotiable #2 (qty + t1 + collateral). Under DRY_RUN or
-    without a live session this returns ``[]`` or an optional fixture — never crashes, never
-    places an order.
+    ``source`` is the load-bearing field: ``live`` means the broker actually reported these
+    rows and they are the caller's real money; ``fixture`` means they are fabricated;
+    ``empty`` and ``unwired`` carry nothing. ``degraded`` says whether a fixture was a
+    deliberate stub or a fallback after a live fetch failed. Quantity fields follow desk
+    non-negotiable #2 (qty + t1 + collateral). Under DRY_RUN or without a live session this
+    is empty or a fixture — never crashes, never places an order.
     """
     principal.require_user()
     broker = get_broker(broker_id)
     if broker is None:
         raise Problem(ProblemType.NOT_FOUND, f"No broker with id {broker_id!r}.")
 
-    rows = holdings_for_broker(broker_id)
-    holdings = [BrokerHoldingOut.model_validate(holding_row_to_dict(row)) for row in rows]
+    result = holdings_for_broker(broker_id)
+    holdings = [BrokerHoldingOut.model_validate(holding_row_to_dict(row)) for row in result.rows]
     dry = dry_run_enabled()
-    if holdings:
-        note = "fixture holdings (DRY_RUN or BASKFY_BROKER_HOLDINGS_FIXTURE)"
-    elif dry:
-        note = "DRY_RUN: empty holdings (set BASKFY_BROKER_HOLDINGS_FIXTURE for a fixture list)"
-    else:
-        note = "no live holdings available for this broker yet"
-    return SyncHoldingsOut(broker_id=broker_id, holdings=holdings, dry_run=dry, note=note)
+    return SyncHoldingsOut(
+        broker_id=broker_id,
+        holdings=holdings,
+        dry_run=dry,
+        source=result.source,
+        degraded=result.degraded,
+        note=_holdings_note(result, broker_name=broker.name, dry_run=dry),
+    )

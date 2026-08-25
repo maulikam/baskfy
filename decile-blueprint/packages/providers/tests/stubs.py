@@ -14,6 +14,7 @@ from baskfy_providers.ports import Capability, ProviderHealth
 from baskfy_providers.records import (
     DAILY_BARS_SCHEMA,
     CorporateAction,
+    EquityFundamental,
     IndexSnapshot,
     InstrumentRecord,
     ListingRecord,
@@ -97,3 +98,10 @@ class StubProvider:
         del on
         self._answer()
         return empty_frame(DAILY_BARS_SCHEMA)
+
+    def equity_fundamentals(
+        self, on: dt.date, symbols: tuple[str, ...] | list[str]
+    ) -> list[EquityFundamental]:
+        del on, symbols
+        self._answer()
+        return []

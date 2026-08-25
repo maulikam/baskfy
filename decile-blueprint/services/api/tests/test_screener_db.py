@@ -669,7 +669,7 @@ class TestProjection:
         outcome = await run_screen(screener_session, defn())
         assert outcome.result is not None
         assert outcome.result.columns[:3] == ("symbol", "name", "sorting_factor")
-        for column in ("close_raw", "series", "marketcap_cr", "ret_12m", "beta_12m", "ma_200"):
+        for column in ("ret_12m", "vol_12m", "close_raw"):
             assert column in outcome.result.columns
 
     async def test_saved_columns_are_added(self, screener_session: AsyncSession) -> None:

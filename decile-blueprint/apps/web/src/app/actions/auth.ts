@@ -29,8 +29,16 @@ const GENERIC_FAILURE = "Those details did not match an account.";
 /** Mirrors `baskfy_api.security.MIN_PASSWORD_LENGTH`, so the form says so before the round trip. */
 const MIN_PASSWORD_LENGTH = 8;
 
-/** Where a sign-in with no `?next=` lands. */
-const DEFAULT_DESTINATION = "/screens";
+/**
+ * Where a sign-in with no `?next=` lands.
+ *
+ * Still `/build`, and deliberately, even though SC9 gave the product a landing surface at
+ * `/home`. Moving it is a one-line change here and a thirteen-file change in `e2e/` — every
+ * sign-in helper waits for `/build` — and this sitting cannot run Playwright to prove those
+ * still pass. `docs/DECISIONS-MERGE.md` HOME3 records the switch as the follow-up it is, rather
+ * than shipping it unverified. `?next=` already wins, so a deep link is unaffected either way.
+ */
+const DEFAULT_DESTINATION = "/build";
 
 /**
  * `FormData.get` returns `string | File | null`. Stringifying a `File` yields "[object File]",

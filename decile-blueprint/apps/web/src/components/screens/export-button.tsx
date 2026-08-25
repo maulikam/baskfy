@@ -11,20 +11,18 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { accessToken } from "@/lib/api/browser";
 import { apiOrigin } from "@/lib/api/config";
 
 /**
- * docs/07: "GET /screens/{public_id}/csv?as_of=… → text/csv (entitlement-gated)".
- *
- * Prompt 9 deliverable 6: "Export button hitting /screens/{id}/csv, gated by entitlement with an
- * upgrade prompt on 402."
- *
- * The download is fetched rather than linked, because a plain `<a href>` cannot carry the bearer
- * token and — more importantly — cannot see a 402. A link to a gated endpoint either downloads a
- * problem+json document with a `.csv` name or navigates away from the screen; neither is an
- * upgrade prompt. Fetching lets the 402's own `upgrade_url` drive the dialog (docs/07
- * §Entitlements), so the paywall's destination comes from the server rather than being hard-coded.
+ * Export menu — CSV stays one level down (§3.3). Share lives as a sibling control.
  */
 const UPGRADE_FALLBACK = "/pricing";
 
@@ -33,6 +31,7 @@ export interface ExportButtonProps {
   screenName: string;
   asOf: string | null;
   disabled?: boolean | undefined;
+  iconOnly?: boolean | undefined;
 }
 
 interface Paywall {
@@ -40,7 +39,7 @@ interface Paywall {
   upgradeUrl: string;
 }
 
-export function ExportButton({ publicId, screenName, asOf, disabled }: ExportButtonProps) {
+export function ExportButton({ publicId, screenName, asOf, disabled, iconOnly }: ExportButtonProps) {
   const [busy, setBusy] = useState(false);
   const [paywall, setPaywall] = useState<Paywall | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -90,24 +89,42 @@ export function ExportButton({ publicId, screenName, asOf, disabled }: ExportBut
   }
 
   return (
-    <>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={disabled || busy}
-        onClick={() => void download()}
-        data-testid="export-csv"
-      >
-        {busy ? (
-          <Loader2 aria-hidden="true" className="animate-spin" />
-        ) : (
-          <Download aria-hidden="true" />
-        )}
-        Export
-      </Button>
+    <div className="relative">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size={iconOnly ? "icon" : "sm"}
+            disabled={disabled || busy}
+            data-testid="export-menu"
+            aria-label="Export"
+          >
+            {busy ? (
+              <Loader2 aria-hidden="true" className="animate-spin" />
+            ) : (
+              <Download aria-hidden="true" />
+            )}
+            {iconOnly ? null : "Export"}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>Export</DropdownMenuLabel>
+          <DropdownMenuItem
+            data-testid="export-csv"
+            disabled={busy}
+            onSelect={() => void download()}
+          >
+            <Download aria-hidden="true" className="size-4" />
+            Download CSV
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {failure ? (
-        <p role="alert" className="text-xs text-negative">
+        <p
+          role="alert"
+          className="absolute right-0 top-full z-20 mt-1 max-w-56 text-pretty text-xs text-negative"
+        >
           {failure}
         </p>
       ) : null}
@@ -120,11 +137,6 @@ export function ExportButton({ publicId, screenName, asOf, disabled }: ExportBut
           </DialogDescription>
           <div className="mt-4 flex gap-2">
             <Button variant="primary" size="sm" asChild>
-              {/*
-                A plain anchor, not `next/link`: the destination comes from the 402's own
-                `upgrade_url` (docs/07 §Entitlements), so it is a runtime string that `typedRoutes`
-                cannot check — and one a future deployment could point off-site.
-              */}
               <a href={paywall?.upgradeUrl ?? UPGRADE_FALLBACK}>See plans</a>
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setPaywall(null)}>
@@ -133,11 +145,10 @@ export function ExportButton({ publicId, screenName, asOf, disabled }: ExportBut
           </div>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }
 
-/** The server names the file (`Content-Disposition`); this is the fallback if it did not. */
 function filenameFrom(header: string | null, screenName: string, asOf: string | null): string {
   const match = header ? /filename="([^"]+)"/.exec(header) : null;
   if (match?.[1]) return match[1];

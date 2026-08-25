@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+from dataclasses import dataclass
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -24,8 +25,10 @@ from baskfy_core.models import (
     AppUser,
     CbBasket,
     CbBasketVersion,
+    CbCollection,
     CbConstituent,
     CbManager,
+    CbMetrics,
     Instrument,
 )
 from baskfy_core.scan_projection import (
@@ -40,6 +43,11 @@ MANAGER_SEED_ROWS: tuple[dict[str, object], ...] = (
         "slug": MANAGER_SLUG_BASKFY_ENGINE,
         "name": "Baskfy Engine",
         "kind": "ENGINE",
+        # 0020 gave managers a lifecycle and backfilled the rows that already existed. A FRESH
+        # seed skips that backfill and would take the column default (DRAFT), which cannot
+        # publish -- so a rebuilt database would come up with both seed managers unable to list
+        # the baskets they own. Stated here so seeding and migrating agree.
+        "state": "APPROVED",
         "bio": "Automated momentum strategies from the nightly MomentumScan pipeline.",
         "strategies": ["momentum-scan"],
         "disclosures_md": None,
@@ -48,6 +56,7 @@ MANAGER_SEED_ROWS: tuple[dict[str, object], ...] = (
         "slug": MANAGER_SLUG_MAULIK,
         "name": "Maulik",
         "kind": "HUMAN",
+        "state": "APPROVED",
         "bio": "Operator-curated baskets.",
         "strategies": [],
         "disclosures_md": None,
@@ -109,6 +118,138 @@ async def seed_curated_managers(session: AsyncSession) -> int:
             )
         )
     return len(MANAGER_SEED_ROWS)
+
+
+@dataclass(frozen=True, slots=True)
+class CollectionSeed:
+    """One editorial shelf, and the rule that fills it.
+
+    A dataclass rather than a dict so the predicate fields are typed: with ``dict[str, object]``
+    every ``row.get("categories")`` is an ``object`` that has to be cast back before use, and a
+    cast is where a typo stops being a type error.
+    """
+
+    slug: str
+    title: str
+    subtitle: str
+    position: int
+    #: Match baskets carrying any of these categories. Empty means "do not filter on category".
+    categories: tuple[str, ...] = ()
+    #: Match baskets run by any of these manager slugs.
+    managers: tuple[str, ...] = ()
+    rebalance_frequency: str | None = None
+    #: ``min_amount`` (cheapest first) or ``name``.
+    ordering: str = "name"
+
+
+#: The editorial shelves ``/baskets`` is browsed by. docs/smallcase/03 — smallcase's browse
+#: experience is mostly collections, and ``cb_collection`` has held nothing since 0014.
+#:
+#: **Membership is a rule, not a hand-written list of slugs.** A curated shelf is editorial, so
+#: the tempting shape is ``basket_slugs=("momentum-scan", ...)``. It was rejected: exactly one
+#: basket exists today, so every hand-written shelf would seed empty and stay empty until somebody
+#: remembered to edit this file — which is how ``cb_collection`` came to hold nothing for six
+#: migrations. A predicate over what actually exists fills itself as baskets are added, and
+#: re-running the seed refreshes membership rather than duplicating it.
+COLLECTION_SEED_ROWS: tuple[CollectionSeed, ...] = (
+    CollectionSeed(
+        slug="start-here",
+        title="Start here",
+        subtitle="The smallest cheque that still buys a whole basket.",
+        position=10,
+        ordering="min_amount",
+    ),
+    CollectionSeed(
+        slug="momentum",
+        title="Momentum",
+        subtitle="Baskets that hold what is already working, and sell what stops.",
+        position=20,
+        categories=("momentum",),
+    ),
+    CollectionSeed(
+        slug="run-by-the-engine",
+        title="Run by the engine",
+        subtitle="Rebalanced by the nightly pipeline, not by a person's conviction.",
+        position=30,
+        managers=(MANAGER_SLUG_BASKFY_ENGINE,),
+    ),
+    CollectionSeed(
+        slug="quarterly",
+        title="Rebalanced quarterly",
+        subtitle="Four decisions a year, not twelve.",
+        position=40,
+        rebalance_frequency="QUARTERLY",
+    ),
+)
+
+
+async def _collection_member_ids(session: AsyncSession, shelf: CollectionSeed) -> list[int]:
+    """Resolve one shelf's membership against the baskets that exist right now.
+
+    Only baskets a browsing user could actually open are eligible — the same two conditions
+    ``explore._visible()`` applies, spelled here rather than imported because a seeder importing a
+    router would invert the dependency. If those two ever diverge, ``test_collections.py`` fails:
+    it asserts a PRIVATE basket named by a collection is not returned by the API.
+
+    A shelf whose predicate matches nothing is still created. An empty shelf is a true statement
+    about the catalogue ("nothing here yet") and the page renders it as one; a *missing* shelf
+    would be a false statement about the product.
+    """
+    stmt = select(CbBasket.id).where(
+        CbBasket.archived_at.is_(None), CbBasket.visibility == "PUBLISHED"
+    )
+    if shelf.categories:
+        stmt = stmt.where(CbBasket.categories.overlap(list(shelf.categories)))
+    if shelf.managers:
+        stmt = stmt.join(CbManager, CbManager.id == CbBasket.manager_id).where(
+            CbManager.slug.in_(list(shelf.managers))
+        )
+    if shelf.rebalance_frequency is not None:
+        stmt = stmt.where(CbBasket.rebalance_frequency == shelf.rebalance_frequency)
+
+    if shelf.ordering == "min_amount":
+        # Cheapest first, and a basket with no metrics row yet sorts last rather than vanishing:
+        # "we do not know the minimum" is not the same as "there is no basket".
+        stmt = stmt.outerjoin(CbMetrics, CbMetrics.basket_id == CbBasket.id).order_by(
+            CbMetrics.min_amount.asc().nullslast(), CbBasket.name
+        )
+    else:
+        stmt = stmt.order_by(CbBasket.name)
+
+    return [int(value) for value in (await session.execute(stmt)).scalars().all()]
+
+
+async def seed_curated_collections(session: AsyncSession) -> int:
+    """Upsert the editorial shelves by slug, recomputing membership from current baskets.
+
+    Idempotent (house rule 7): re-running produces identical rows, because membership is derived
+    rather than appended and the upsert keys on ``slug``.
+    """
+    for shelf in COLLECTION_SEED_ROWS:
+        basket_ids = await _collection_member_ids(session, shelf)
+        stmt = insert(CbCollection).values(
+            slug=shelf.slug,
+            title=shelf.title,
+            subtitle=shelf.subtitle,
+            position=shelf.position,
+            basket_ids=basket_ids,
+        )
+        await session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=[CbCollection.slug],
+                set_={
+                    "title": stmt.excluded.title,
+                    "subtitle": stmt.excluded.subtitle,
+                    "position": stmt.excluded.position,
+                    "basket_ids": stmt.excluded.basket_ids,
+                },
+            )
+        )
+    return len(COLLECTION_SEED_ROWS)
+
+
+async def count_curated_collections(session: AsyncSession) -> int:
+    return int((await session.execute(select(func.count()).select_from(CbCollection))).scalar_one())
 
 
 async def count_curated_managers(session: AsyncSession) -> int:

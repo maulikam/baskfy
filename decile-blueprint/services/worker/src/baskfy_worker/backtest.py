@@ -65,6 +65,7 @@ from baskfy_core.models import (
     OhlcvDaily,
     TradingDay,
 )
+from baskfy_core.risk_free import attach_tbill_curve
 from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_core.universes import UNIVERSE_BY_SLUG
@@ -567,6 +568,7 @@ async def execute_backtest(
     progress: ProgressSink | None = None,
 ) -> BacktestOutcome:
     """Load, simulate, and — unless asked not to — run docs/10's four perturbations."""
+    config = attach_tbill_curve(config)
     loaded = await load_backtest_data(
         session, config, definition, with_offsets=fragility, progress=progress
     )

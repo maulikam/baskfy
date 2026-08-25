@@ -33,7 +33,13 @@ from dataclasses import dataclass, field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import PipelineRun
-from baskfy_worker.calendar import NotATradingDay, reconcile_calendar, require_trading_day
+from baskfy_providers.errors import ProviderError
+from baskfy_worker.calendar import (
+    CALENDAR_LOOKBACK_DAYS,
+    NotATradingDay,
+    reconcile_calendar,
+    require_trading_day,
+)
 from baskfy_worker.deps import PipelineDependencies
 from baskfy_worker.steps import (
     HardFailure,
@@ -59,6 +65,7 @@ from baskfy_worker.tasks import (
     quality,
     snapshots,
 )
+from baskfy_worker.tasks import fundamentals as fundamentals_task
 from baskfy_worker.tasks import instruments as instruments_task
 from baskfy_worker.tasks.quality import GateReport
 from baskfy_worker.window import DateWindow
@@ -173,7 +180,11 @@ async def _run_chain(  # noqa: PLR0915 - one block per pipeline step, and docs/0
     # docs/09 §Schedule: the calendar is "asserted against observed bar dates". Doing it here,
     # after the bars land and before anything computes, is what lets a date the seed list wrongly
     # called a holiday become a fact rather than staying a guess (docs/04a).
-    await reconcile_calendar(session, window.start, window.end)
+    #
+    # Look back the longest factor window, not only tonight: a single-day reconcile left lunar
+    # holidays in the trailing year as ``derived``, so 9M/12M resolved long (T9.2).
+    calendar_start = min(window.start, trade_date - dt.timedelta(days=CALENDAR_LOOKBACK_DAYS))
+    await reconcile_calendar(session, calendar_start, window.end)
 
     # --- 3. fetch_corporate_actions --------------------------------------
     async with record_step(
@@ -204,6 +215,26 @@ async def _run_chain(  # noqa: PLR0915 - one block per pipeline step, and docs/0
         session, run.id, PipelineStep.REFRESH_INDEX_SNAPSHOTS, trade_date
     ) as step:
         await snapshots.run_refresh_index_snapshots(session, deps.provider, step, trade_date)
+        # T9.1: equity PE/mcap from NSE, folded into this step the way listings are folded into
+        # refresh_instruments — not a twelfth pipeline identity. A quote failure is recorded and
+        # the night continues: NULL is already the publishable state.
+        #
+        # Scoped by `fundamentals_scope` (the day's traded names) and not by `active` (every
+        # non-delisted instrument). At NSE's 1 req/s that is ~2,540 requests instead of ~10,481,
+        # which is the difference between forty minutes and most of a night — and the names it
+        # drops have no bar to price a market cap on.
+        fundamentals = StepOutcome()
+        try:
+            await fundamentals_task.run_fetch_fundamentals(
+                session,
+                deps.provider,
+                fundamentals,
+                trade_date,
+                await fundamentals_task.fundamentals_scope(session, trade_date),
+            )
+        except ProviderError as exc:
+            fundamentals.note(error=str(exc))
+        step.note(fundamentals=fundamentals.detail, fundamentals_rows=fundamentals.rows_out)
     outcome.steps_completed.append(PipelineStep.REFRESH_INDEX_SNAPSHOTS)
 
     # --- 7. compute_factors ----------------------------------------------

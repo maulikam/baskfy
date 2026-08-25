@@ -131,11 +131,23 @@ class ManagerListOut(BaseModel):
 
 
 class CollectionOut(BaseModel):
+    """An editorial shelf, with enough in it to render.
+
+    ``baskets`` carries the same :class:`BasketCardOut` the catalogue grid uses, so a collection
+    page is one request rather than one request plus N. ``basket_slugs`` is kept and is exactly
+    ``[b.slug for b in baskets]`` — it predates the cards and something may still read it; a test
+    asserts the two never disagree, because two spellings of one list is how they drift.
+    """
+
     slug: str
     title: str
     subtitle: str | None = None
     basket_slugs: list[str]
+    baskets: list[BasketCardOut]
     position: int
+    #: How many baskets the shelf names that the caller may not see (PRIVATE or archived). Shown
+    #: nowhere; present so an operator can tell "this shelf is empty" from "this shelf is hidden".
+    withheld: int
 
 
 class CollectionListOut(BaseModel):
@@ -403,20 +415,47 @@ async def get_collection(
 
 
 async def _collection_out(session: AsyncSession, row: CbCollection) -> CollectionOut:
-    by_id: dict[int, str] = {}
-    if row.basket_ids:
-        for basket in (
-            await session.execute(
-                select(CbBasket).where(CbBasket.id.in_(list(row.basket_ids)), *_visible())
+    """Expand one shelf into cards, in the shelf's own order.
+
+    The order stored in ``basket_ids`` is editorial — "cheapest first", "by name" — so the result
+    is re-sorted back into it rather than left in whatever order the IN-list came back in. That
+    is why this builds a map and walks ``basket_ids``, instead of returning the query's rows.
+
+    One JOINed SELECT, the same shape the catalogue grid uses, so a shelf of twenty baskets is
+    still one round trip. ``_visible()`` is applied here exactly as it is everywhere else that
+    reaches ``cb_basket``.
+    """
+    wanted = list(row.basket_ids or [])
+    cards: dict[int, BasketCardOut] = {}
+    if wanted:
+        latest = (
+            select(CbMetrics.basket_id, func.max(CbMetrics.as_of_date).label("as_of_date"))
+            .group_by(CbMetrics.basket_id)
+            .subquery()
+        )
+        stmt = (
+            select(CbBasket, CbManager, CbMetrics)
+            .join(CbManager, CbManager.id == CbBasket.manager_id)
+            .outerjoin(latest, latest.c.basket_id == CbBasket.id)
+            .outerjoin(
+                CbMetrics,
+                (CbMetrics.basket_id == CbBasket.id)
+                & (CbMetrics.as_of_date == latest.c.as_of_date),
             )
-        ).scalars():
-            by_id[basket.id] = basket.slug
+            .where(CbBasket.id.in_(wanted), *_visible())
+        )
+        for basket, manager, metrics in (await session.execute(stmt)).all():
+            cards[basket.id] = _card(basket, manager, metrics)
+
+    ordered = [cards[i] for i in wanted if i in cards]
     return CollectionOut(
         slug=row.slug,
         title=row.title,
         subtitle=row.subtitle,
-        basket_slugs=[by_id[i] for i in (row.basket_ids or []) if i in by_id],
+        basket_slugs=[card.slug for card in ordered],
+        baskets=ordered,
         position=row.position,
+        withheld=len(wanted) - len(ordered),
     )
 
 

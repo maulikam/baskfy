@@ -1,11 +1,21 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
+import { HowItWorksFlow } from "@/components/marketing/how-it-works-flow";
+import { LandingFigures, LandingMarquee } from "@/components/marketing/landing-band";
+import { FloodButton } from "@/components/marketing/flood-button";
 import { SampleScreenTable } from "@/components/marketing/sample-screen-table";
-import { Button } from "@/components/ui/button";
+import {
+  CatalogGrid,
+  FaqSection,
+  Inspectable,
+  StepsPanel,
+  WordmarkBanner,
+} from "@/components/marketing/page-sections";
+import { ThreeWays } from "@/components/marketing/three-ways";
 import { fetchSampleScreen } from "@/lib/marketing/sample-screen";
 import { fetchPlanSummary } from "@/lib/marketing/plan-summary";
-import { FACTOR_FAMILIES } from "@/lib/marketing/factor-families";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
 
 /**
@@ -38,24 +48,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-const POINTS = [
-  {
-    title: "Every formula is written down",
-    body: "Sixty-four ranking factors, each with its algebra published in the specification rather than described in a sentence. The Sharpe variants name their window, their annualisation and their zero risk-free rate.",
-  },
-  {
-    title: "Point-in-time index membership",
-    body: "A screen run for a past date uses the constituents of that date, not today's. Where membership before 2018 had to be reconstructed, the row says reconstructed rather than pretending otherwise.",
-  },
-  {
-    title: "One rounding, three surfaces",
-    body: "Values are rounded once, when they are written. The API, the results table and the CSV export read the same stored number, so a figure cannot change depending on where you read it.",
-  },
-  {
-    title: "Adjusted by default, raw on request",
-    body: "Splits and bonuses are folded into an adjustment factor, so a return is a return and not a corporate action. Cash dividends are not: every return here is a price return, roughly 1.2% a year below a total return. The exchange print is kept alongside it and is what the price column shows.",
-  },
-] as const;
+
 
 export default async function LandingPage() {
   const [sample, plans] = await Promise.all([fetchSampleScreen(), fetchPlanSummary()]);
@@ -117,25 +110,111 @@ export default async function LandingPage() {
         like a settings screen. `[text-wrap:balance]` keeps the three lines even instead of leaving
         two words alone on the last one.
       */}
-      <section className="mx-auto max-w-6xl px-6 pb-16 pt-20">
-        <p className="eyebrow">{SITE_NAME}</p>
-        <h1 className="mt-4 max-w-[24ch] text-[2.5rem] leading-[1.05] sm:text-[3.25rem]">
-          {SITE_TAGLINE}
-        </h1>
-        <p className="mt-6 max-w-[58ch] text-lg leading-relaxed text-muted-foreground">
-          Every share listed on the NSE, ranked overnight on how strongly it has been rising —
-          across sixty-four published measures and fourteen lists of stocks, with the arithmetic
-          behind every number there to read.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Button variant="primary" size="lg" asChild>
-            <Link href="/register">Create an account</Link>
-          </Button>
-          <Button variant="outline" size="lg" asChild>
-            <Link href="/dashboard">Look around first</Link>
-          </Button>
+      {/*
+        The hero, to the shape of vaaya.ai: a centred column — small mono eyebrow, light display
+        headline, one sentence, an action row — sitting above a full-bleed photograph that runs to
+        both edges of the viewport.
+
+        The photograph is **ours**, generated for this page. An earlier attempt borrowed the
+        source's staging too literally — same desk, same monitor, same field — and was thrown away:
+        a generated near-replica of a distinctive photograph is still a replica. What carries over
+        is the register, which is what was actually wanted: one small human, an immense quiet
+        space, overcast light, desaturated. The scene is a stepwell, whose stacked tiers happen to
+        say something a portfolio of sleeves would want said.
+      */}
+      <section className="pb-14 pt-10 text-center">
+        <div className="mx-auto w-full max-w-6xl px-5 sm:px-7 lg:px-10">
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            One place for every strategy
+          </p>
+
+          <h1 className="vaaya-display mx-auto mt-6 max-w-[18ch] text-[2.75rem] sm:text-[4rem] lg:text-[4.5rem]">
+            {SITE_TAGLINE}
+          </h1>
+
+          <p className="mx-auto mt-7 max-w-[64ch] text-[17px] leading-relaxed text-muted-foreground">
+            Split one portfolio across a manager&rsquo;s basket, a rule you wrote and tested
+            yourself, and the long-term holdings you run by hand — each with its own capital, each
+            tracked on its own. The shares stay in your demat, across whichever brokers you use.
+          </p>
+
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+            <FloodButton href="/register" size="nav" hoverLabel="Let&rsquo;s go">
+              Get started
+            </FloodButton>
+            <Link
+              href="/market/today"
+              className="vaaya-pill flex h-11 items-center px-6 text-[15px] text-foreground/70 transition-colors hover:text-foreground"
+            >
+              See today&rsquo;s market
+            </Link>
+          </div>
         </div>
       </section>
+
+      {/*
+        Full-bleed, and deliberately not `next/image`: this is one above-the-fold hero at a known
+        aspect, so the srcset machinery buys nothing a plain `<img>` with explicit dimensions and
+        `fetchPriority` does not, and it costs a client component boundary on an otherwise static
+        page. The height is clamped so the figure stays small in frame at every width, which is the
+        entire point of the composition.
+      */}
+      <div className="relative w-full overflow-hidden">
+        <Image
+          src="/images/hero-stepwell.webp"
+          alt="A single person sitting alone on one ledge of an immense ancient Indian stepwell, dwarfed by hundreds of tiers of stone steps receding into shadow."
+          width={2400}
+          height={1340}
+          priority
+          sizes="100vw"
+          className="h-[42vh] max-h-[620px] w-full object-cover object-center sm:h-[52vh] lg:h-[60vh]"
+        />
+
+        {/*
+          The pill rows and the ticker ride the foot of the picture rather than following it, which
+          is what the source does and what makes the photograph read as a stage rather than a slab.
+          Absolutely positioned inside the image's own box, so the picture keeps its full height and
+          nothing below it moves.
+        */}
+        <div className="absolute inset-x-0 bottom-0">
+          <LandingMarquee />
+        </div>
+      </div>
+
+      {/*
+        Directly under the photograph, and that placement is the argument the page is making.
+        It used to sit six sections down, after the catalog grid, where a reader who had already
+        decided the site was another signal shop would never reach it. The one sentence that
+        distinguishes this product — *nothing here executes anything, and the cost is on screen
+        before you confirm* — is now the first thing said after the image.
+      */}
+      <section
+        aria-labelledby="how-it-works"
+        className="vaaya-surface vaaya-shell border-b border-border"
+      >
+        <div className="mx-auto max-w-6xl px-6 pt-16">
+          <h2 id="how-it-works" className="vaaya-display max-w-[20ch] text-[2.25rem] sm:text-[3rem]">
+            From intent to result, with the cost visible before it runs.
+          </h2>
+          <p className="mt-7 max-w-[64ch] text-[15px] leading-relaxed text-muted-foreground">
+            Nothing on this site executes anything. Every step is reversible up to the moment you
+            press confirm, and what the step will cost you in brokerage and statutory charges is on
+            screen before you press it.
+          </p>
+        </div>
+        <div className="mt-10 pb-16">
+          <HowItWorksFlow />
+        </div>
+      </section>
+
+      <LandingFigures />
+
+
+      <ThreeWays />
+
+      <StepsPanel />
+
+      <CatalogGrid />
 
       <section aria-labelledby="sample" className="mx-auto max-w-6xl px-6 pb-16">
         <h2 id="sample" className="mb-2 text-2xl">
@@ -148,61 +227,10 @@ export default async function LandingPage() {
         <SampleScreenTable sample={sample} />
       </section>
 
-      <section aria-labelledby="families" className="border-y border-border bg-muted/30">
-        <div className="mx-auto max-w-6xl px-6 py-16">
-          <h2 id="families" className="text-2xl">
-            What it measures
-          </h2>
-          <p className="mt-2 max-w-[62ch] text-base leading-relaxed text-muted-foreground">
-            Each family has its formula written out. Every family except the last is computed over five
-            calendar windows — one, three, six and nine months, and one year.
-          </p>
-          <div className="mt-6 overflow-x-auto">
-            <table className="w-full min-w-[42rem] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                  <th scope="col" className="py-2 pr-4 text-left font-medium">
-                    Family
-                  </th>
-                  <th scope="col" className="py-2 pr-4 text-left font-medium">
-                    What it measures
-                  </th>
-                  <th scope="col" className="py-2 text-right font-medium">
-                    Factors
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {FACTOR_FAMILIES.map((family) => (
-                  <tr key={family.key} className="border-b border-border/60 last:border-0">
-                    <th scope="row" className="py-3 pr-4 text-left font-medium">
-                      {family.label}
-                    </th>
-                    <td className="py-3 pr-4 text-muted-foreground">{family.description}</td>
-                    <td className="py-3 text-right tabular-nums text-muted-foreground">
-                      {family.count}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
 
-      <section aria-labelledby="what-it-does" className="mx-auto max-w-6xl px-6 py-16">
-        <h2 id="what-it-does" className="text-2xl">
-          What it does, precisely
-        </h2>
-        <ul className="mt-6 grid gap-6 sm:grid-cols-2">
-          {POINTS.map((point) => (
-            <li key={point.title} className="space-y-1">
-              <h3 className="font-medium">{point.title}</h3>
-              <p className="text-sm text-muted-foreground">{point.body}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <Inspectable />
+
+      <WordmarkBanner />
 
       <section aria-labelledby="pricing-summary" className="border-t border-border">
         <div className="mx-auto max-w-6xl px-6 py-16">
@@ -244,6 +272,8 @@ export default async function LandingPage() {
           )}
         </div>
       </section>
+
+      <FaqSection />
     </>
   );
 }

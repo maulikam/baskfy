@@ -21,6 +21,7 @@ from baskfy_execution.gateway import (
     OrderGateway,
     ProductGates,
 )
+from baskfy_execution.tenancy import TenantIds, refuse_cross_tenant
 from baskfy_execution.guards import (
     OvernightOptionError,
     UntouchableInstrumentError,
@@ -39,7 +40,9 @@ __all__ = [
     "ProductGates",
     "RiskConfig",
     "RiskManager",
+    "TenantIds",
     "UntouchableInstrumentError",
     "assert_not_overnight_option",
     "assert_tradeable",
+    "refuse_cross_tenant",
 ]

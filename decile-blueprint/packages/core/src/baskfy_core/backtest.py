@@ -55,11 +55,11 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from enum import StrEnum
-from typing import Final
+from typing import Annotated, Final
 
 import numpy as np
 import polars as pl
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, model_validator
 
 from baskfy_core.rank_buffer import HeldName, ScreenRank, plan_rebalance
 
@@ -344,10 +344,10 @@ class BacktestConfig(BaseModel):
     """docs/10 §Config, key for key, plus the two the document mentions only in prose.
 
     ``dividends`` appears in §"Execution model" step 7 rather than in the config block, and
-    ``risk_free_rate`` is required by §Outputs ("Sharpe (rf from a configurable T-bill series)")
-    with no table to read a series out of — ``docs/04`` has no T-bill anywhere. A flat annual rate
-    is the only thing this service can actually serve today; it is configuration rather than a
-    constant so it stops being a lie the moment a series exists. See ``docs/DECISIONS.md`` §15.
+    ``risk_free_rate`` is required by §Outputs ("Sharpe (rf from a configurable T-bill series)").
+    ``docs/04`` has no T-bill table; the bundled OECD IR3TIB series is attached at execute time
+    (T9.5) onto ``risk_free_curve``. The flat rate is the fallback when the series does not
+    overlap the window. See ``docs/DECISIONS.md`` §15.5.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -371,9 +371,31 @@ class BacktestConfig(BaseModel):
     benchmark: str = "nifty-500"
     risk_overlay: RiskOverlay = RiskOverlay()
     dividends: DividendPolicy = DividendPolicy.IGNORE
-    #: Annualised, as a decimal fraction. Zero is the honest default for a service with no T-bill
-    #: series: a made-up 6.5% would move every Sharpe and Sortino on the page.
+    #: Annualised, as a decimal fraction. Zero remains the fallback when no overlapping
+    #: T-bill observation exists (see ``risk_free_curve`` and ``baskfy_core.risk_free``).
     risk_free_rate: Decimal = Field(default=Decimal(0), ge=0, le=1)
+    #: Monthly (date, annual rate as a fraction) observations, forward-filled onto each
+    #: return day. Empty means "use ``risk_free_rate`` only". Worker backtests attach the
+    #: bundled OECD IR3TIB series via :func:`baskfy_core.risk_free.attach_tbill_curve`.
+    #:
+    #: The JSON schema is overridden to a plain array-of-arrays rather than the ``prefixItems``
+    #: tuple Pydantic would emit. Validation is unchanged — this is the *documented* shape only.
+    #: openapi-typescript turns ``prefixItems`` into a TypeScript tuple, and the value openapi-fetch
+    #: hands a caller is structurally widened to ``string[][]``, so the generated client could not
+    #: assign its own response to its own ``BacktestOut``: the web build failed on
+    #: ``Type 'string[][]' is not assignable to type '[string, string][]'``. A pair is honestly an
+    #: array of two, and the length is enforced by the model, not by the document.
+    #: ``docs/DECISIONS-MERGE.md`` M40.4.
+    risk_free_curve: Annotated[
+        tuple[tuple[dt.date, Decimal], ...],
+        WithJsonSchema(
+            {
+                "type": "array",
+                "items": {"type": "array", "items": {"type": "string"}},
+                "title": "Risk Free Curve",
+            }
+        ),
+    ] = ()
 
     @model_validator(mode="after")
     def _dates_ordered(self) -> BacktestConfig:

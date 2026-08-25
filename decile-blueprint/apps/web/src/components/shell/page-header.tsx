@@ -33,7 +33,13 @@ export function PageHeader({ title, blurb, actions, meta, className }: PageHeade
     <header className={cn("flex flex-col gap-4", className)}>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="min-w-0 space-y-1.5">
-          <h1 className="text-[2rem] leading-[1.05] sm:text-[2.5rem]">{title}</h1>
+          {/*
+            `vaaya-display` — weight 300, -0.02em, 0.98 leading. Twenty-nine pages render their
+            title through this component, so the product's headings are light here or nowhere; a
+            bold h1 on a screen the visitor reached from a light-set landing page reads as a
+            different application.
+          */}
+          <h1 className="vaaya-display text-[2rem] sm:text-[2.75rem]">{title}</h1>
           {blurb ? (
             <p className="max-w-[62ch] text-sm leading-relaxed text-muted-foreground">{blurb}</p>
           ) : null}

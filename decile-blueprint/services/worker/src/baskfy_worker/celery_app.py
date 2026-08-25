@@ -172,6 +172,21 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=20, minute=25, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_COMPUTE},
     },
+    # --- T8.2: promote PLANNED batches when the desk journal is settled ----------
+    "cb-sync-batches": {
+        # Intra-session: a Friday rebalance fill should show EXECUTED the same afternoon.
+        # Idempotent; synthetic cb-sim-* ids are skipped.
+        "task": "baskfy.cb.sync_batches",
+        "schedule": crontab(minute="*/15", day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
+    # --- T8.3: one email per REBALANCE_AVAILABLE (payload.notified_at) -----------
+    "cb-rebalance-notify": {
+        # After SIP reminders (09:00); before the cash session is busy.
+        "task": "baskfy.cb.rebalance_notify",
+        "schedule": crontab(hour=9, minute=30, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
 }
 
 

@@ -122,6 +122,34 @@ describe("the assumptions panel", () => {
     ).toBeTruthy();
     expect(screen.getByText(/NEXT trading day/)).toBeTruthy();
   });
+
+  /*
+   * The spec is "each statement appears once", not "the server never repeats itself". The server
+   * does deduplicate now, but rows written before it did carry the run notes twice — and a panel
+   * that prints the same sentence twice is a rendering fault to the reader either way. The line
+   * doubles as the React list key, so a repeat was also a key collision.
+   */
+  it("states a repeated assumption once", () => {
+    const repeated = "the screen returned nothing on 2024-11-29; the book went to cash.";
+    render(
+      <AssumptionsPanel
+        assumptions={["Orders fill at the NEXT trading day's open.", repeated, repeated]}
+        disclaimer="Past backtest results do not predict future results."
+      />,
+    );
+    expect(screen.getAllByText(repeated)).toHaveLength(1);
+  });
+
+  it("keeps the server's order", () => {
+    render(
+      <AssumptionsPanel
+        assumptions={["first", "second", "first", "third"]}
+        disclaimer="Past backtest results do not predict future results."
+      />,
+    );
+    const items = screen.getAllByRole("listitem").map((li) => li.textContent?.replace("·", ""));
+    expect(items).toEqual(["first", "second", "third"]);
+  });
 });
 
 describe("the trade log", () => {

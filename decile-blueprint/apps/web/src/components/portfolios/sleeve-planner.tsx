@@ -8,7 +8,10 @@ import { useState } from "react";
 import { ErrorState } from "@/components/data/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SleeveAllocationCard } from "@/components/portfolios/sleeve-allocation-card";
+import { addDecimalStrings, formatRupees } from "@/lib/portfolios/decimal";
 import { useAllocation, useSaveSleeves, useSleeves } from "@/lib/portfolios/queries";
+import { allocationUnits } from "@/lib/portfolios/units";
 
 /**
  * Dividing a portfolio across screens, with a slice you run yourself — M34.
@@ -17,9 +20,16 @@ import { useAllocation, useSaveSleeves, useSleeves } from "@/lib/portfolios/quer
  * much goes where**. Each sleeve carries its own capital and its own source, and a `manual` sleeve
  * is money you run yourself — counted so the totals are honest, never allocated.
  *
- * **Amounts and weights only.** There are no share counts here and there is no control that could
- * place anything: turning an amount into a number of units needs a market quote, and the API that
- * computes this never receives one. Execution lives in the desk console.
+ * **Amounts, weights and unit counts — and still no control that could place anything.** The
+ * allocation now carries `units` and `price` per row, because "₹5,00,000 of CUPID" is not a thing
+ * a reader can check against a demat statement and "1,757 shares" is. A count is not an
+ * instruction: there is no order affordance on this page and there is none anywhere in this app.
+ * Execution lives in the desk console.
+ *
+ * When a price is unavailable the row's `units` and `price` arrive as **`null`, never `0`**, and
+ * the cell renders as an em dash with the server's own reason beside it. A silent zero would read
+ * as "buy none of this", which is a different and false statement — preventing it is the entire
+ * point of the units feature.
  *
  * The market stance is shown as a fact — *"R1 · the strategy caps equity at 100% under R1"* — with
  * a control to size the sleeves to that cap. Applying it is the reader's decision; the page never
@@ -30,8 +40,6 @@ import { useAllocation, useSaveSleeves, useSleeves } from "@/lib/portfolios/quer
  * M22.4, M34.5, and now.)
  */
 
-const RUPEE = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
-
 /** Monotonic ids for rows the reader adds, so a new row keeps its identity while being typed in. */
 let keySeed = 0;
 function nextKey(): number {
@@ -39,8 +47,15 @@ function nextKey(): number {
   return keySeed;
 }
 
+/**
+ * Rupees, formatted without ever becoming a `number` — CLAUDE.md house rule 9.
+ *
+ * This used to be `Intl.NumberFormat().format(Number(value))`. A crore is 1e7 and a decade of
+ * contributions is more; the double was exact at these sizes today and would not have said so on
+ * the day it stopped being.
+ */
 function money(value: string | number): string {
-  return `₹${RUPEE.format(Number(value))}`;
+  return formatRupees(typeof value === "number" ? String(value) : value, { decimals: 0 });
 }
 
 interface Row {
@@ -54,16 +69,26 @@ interface Row {
   top_n: number;
 }
 
+/**
+ * `"4000000.00"` → `"4000000"`.
+ *
+ * `numeric(18,2)` serialises with its paise and a number input renders that verbatim, so the field
+ * reads like an accounting entry. Whole rupees is the precision the allocator uses. Done on the
+ * digits rather than through `Math.round(Number(...))`, so it is a truncation of a decimal string
+ * and not a trip through a float.
+ */
+function wholeRupees(capital: string | null | undefined): string {
+  const text = (capital ?? "0").trim();
+  const [whole = "0"] = text.split(".");
+  return whole === "" || whole === "-" ? "0" : whole;
+}
+
 function toRows(listing: SleeveListOut | undefined): Row[] {
   return (listing?.sleeves ?? []).map((sleeve) => ({
     key: `saved-${sleeve.id}`,
     name: sleeve.name,
     kind: sleeve.kind === "manual" ? "manual" : "screen",
-    // `numeric(18,2)` serialises as "4000000.00" and a number input renders that verbatim, so
-    // the field reads like an accounting entry. Whole rupees is the precision the allocator uses;
-    // the trailing paise are noise in a box somebody types into. Caught by screenshotting the
-    // page rather than by a test -- no assertion here was ever going to notice.
-    capital: String(Math.round(Number(sleeve.capital ?? 0))),
+    capital: wholeRupees(sleeve.capital),
     screen_public_id: sleeve.screen_public_id ?? null,
     top_n: sleeve.top_n ?? 15,
   }));
@@ -94,13 +119,16 @@ export function SleevePlanner({
   // they refuse is an immediate, silent delete.
   const [undo, setUndo] = useState<{ row: Row; at: number } | null>(null);
   const editing = rows ?? toRows(sleeves.data);
-  const total = editing.reduce((sum, row) => sum + (Number(row.capital) || 0), 0);
+  const total = addDecimalStrings(editing.map((row) => row.capital)) ?? "0";
 
   function update(index: number, patch: Partial<Row>) {
     setRows(editing.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   }
 
   const stance = allocation.data?.stance;
+  const units = allocation.data
+    ? allocationUnits(allocation.data)
+    : { pricedAsOf: null, unpriced: [], note: null };
 
   return (
     <div className="flex flex-col gap-5">
@@ -346,48 +374,35 @@ export function SleevePlanner({
             </p>
           )}
 
+          {/*
+            Units come from a price map, so the reader is told which day's prices produced them and
+            which names had none. A count with no date attached is a count nobody can check.
+          */}
+          <p className="text-xs text-muted-foreground" data-testid="allocation-pricing">
+            {units.pricedAsOf === null
+              ? "No prices were available, so every row below shows an amount and no unit count."
+              : `Unit counts are whole shares at closing prices from ${units.pricedAsOf}. They are what the amount buys, not an instruction to buy it.`}
+          </p>
+          {units.note !== null && (
+            <p
+              className="rounded-md border border-warning/40 bg-warning-muted/40 p-2.5 text-xs leading-relaxed"
+              data-testid="allocation-unpriced"
+            >
+              {units.note}
+            </p>
+          )}
+
           <div className="grid gap-3 xl:grid-cols-2">
             {allocation.data.sleeves.map((sleeve) => (
-              <div key={sleeve.name} className="rounded-xl border border-border/70 bg-card p-4">
-                <div className="flex items-baseline justify-between">
-                  <div>
-                    <div className="text-sm font-medium">{sleeve.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {sleeve.screen_name ?? "You run this one"}
-                    </div>
-                  </div>
-                  <div className="text-right text-sm tabular-nums">
-                    {money(sleeve.capital)}
-                    {Number(sleeve.cash) > 0 && (
-                      <div className="text-xs text-muted-foreground">
-                        {money(sleeve.cash)} cash
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {sleeve.rows.length > 0 && (
-                  <table className="mt-2 w-full text-sm tabular-nums">
-                    <tbody>
-                      {sleeve.rows.map((row) => (
-                        <tr key={row.symbol} className="border-t">
-                          <td className="py-1 pr-3 font-medium">{row.symbol}</td>
-                          <td className="py-1 pr-3 text-right text-muted-foreground">
-                            {Number(row.weight_pct).toFixed(2)}%
-                          </td>
-                          <td className="py-1 text-right">{money(row.amount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+              <SleeveAllocationCard key={sleeve.name} sleeve={sleeve} />
             ))}
           </div>
         </section>
       )}
 
       <p className="text-xs text-muted-foreground">
-        Amounts and target weights only — no share counts, and nothing here places an order.
+        Amounts, target weights and the whole shares they buy — nothing here places an order, and a
+        name with no price shows a blank rather than a zero.
       </p>
     </div>
   );

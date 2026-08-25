@@ -12,6 +12,9 @@ const INVEST_LIB = join(__dirname, "..");
 const INVEST_COMPONENTS = join(__dirname, "..", "..", "..", "components", "investments");
 const CB_COMPONENTS = join(__dirname, "..", "..", "..", "components", "cb");
 const INVEST_PAGES = join(__dirname, "..", "..", "..", "app", "(app)", "investments");
+const ME_INVEST_PAGES = join(__dirname, "..", "..", "..", "app", "(app)", "me", "investments");
+const PORTFOLIO_COMPONENTS = join(__dirname, "..", "..", "..", "components", "portfolios");
+const PORTFOLIO_LIB = join(__dirname, "..", "..", "portfolios");
 const WATCHLIST_PAGE = join(__dirname, "..", "..", "..", "app", "(app)", "watchlist");
 const FEES_PAGE = join(__dirname, "..", "..", "..", "app", "(app)", "fees");
 
@@ -31,6 +34,9 @@ const SOURCES = [
   ...filesUnder(INVEST_COMPONENTS),
   ...filesUnder(CB_COMPONENTS),
   ...filesUnder(INVEST_PAGES),
+  ...filesUnder(ME_INVEST_PAGES),
+  ...filesUnder(PORTFOLIO_COMPONENTS),
+  ...filesUnder(PORTFOLIO_LIB),
   ...filesUnder(WATCHLIST_PAGE),
   ...filesUnder(FEES_PAGE),
 ].filter((path) => (path.endsWith(".ts") || path.endsWith(".tsx")) && !path.includes("__tests__"));

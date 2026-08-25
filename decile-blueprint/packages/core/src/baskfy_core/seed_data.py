@@ -213,14 +213,9 @@ class ScreenSeed:
 
 #: docs/01 §4 — the results table's default columns.
 DEFAULT_COLUMNS: Final[list[str]] = [
-    "close_raw",
-    "series",
-    "marketcap_cr",
     "ret_12m",
-    "sharpe_12m",
     "vol_12m",
-    "beta_12m",
-    "ma_200",
+    "close_raw",
 ]
 
 # ---------------------------------------------------------------------------

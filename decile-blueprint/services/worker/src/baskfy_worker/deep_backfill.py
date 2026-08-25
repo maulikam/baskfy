@@ -2,11 +2,11 @@
 
     uv run python -m baskfy_worker.deep_backfill                 # DRY RUN
     uv run python -m baskfy_worker.deep_backfill --write         # writes
-    uv run python -m baskfy_worker.deep_backfill --write --from 2017-01-01
+    uv run python -m baskfy_worker.deep_backfill --write --from 2011-01-01
 
 `ohlcv_daily` starts at 2024-01-01 because that is as far back as the bhavcopy run went. Kite
 serves daily candles from **2000-01-03** (measured; nothing earlier exists) with a hard **2,000
-day** cap per request, so 2017 to today is two requests per instrument.
+day** cap per request, so 2011 to today is three requests per instrument.
 
 WHY THIS IS NOT `baskfy_worker.backfill`
 ----------------------------------------
@@ -75,7 +75,7 @@ KITE_EPOCH: Final = dt.date(2000, 1, 3)
 #: `InputException: interval exceeds max limit: 2000 days`.
 MAX_SPAN_DAYS: Final = 2000
 
-DEFAULT_START: Final = dt.date(2017, 1, 1)
+DEFAULT_START: Final = dt.date(2011, 1, 1)
 
 #: Rows are written in batches well under PostgreSQL's 32,767 bind-parameter ceiling (M23.2).
 UPSERT_CHUNK: Final = 1500

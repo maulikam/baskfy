@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
 
 import { CommandPalette } from "@/components/shell/command-palette";
 import { FreshnessPill } from "@/components/shell/freshness-pill";
@@ -15,8 +14,15 @@ import { PRIMARY_NAV, primarySection, type ReadyNavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 /**
- * Tree 6 consumer chrome: logo · 4 sliding-pill destinations · search · date · theme · avatar.
+ * Tree 6 consumer chrome: logo · 4 destinations · search · date · theme · avatar.
  * Mobile bottom tabs live in `BottomTabBar`; this header shrinks to logo · search · avatar under md.
+ *
+ * **The sliding pill is gone, and it was a bug as well as a mismatch.** A measured indicator read
+ * `offsetLeft`/`offsetWidth` from the active link in an effect; when the face and the capsule
+ * changed underneath it the measurement went stale, leaving the marker parked under the wrong item
+ * and the active label — white, because it expects the marker behind it — rendered white on white
+ * and simply disappeared. Painting the active state on the link itself cannot desync from the link
+ * it describes, and it is what the header this product now wears actually does.
  */
 export interface TopNavProps {
   user: UserMenuProps;
@@ -26,6 +32,7 @@ function sectionHref(item: ReadyNavItem, pathname: string): boolean {
   const section = primarySection(pathname);
   if (!section) return pathname === item.href || pathname.startsWith(`${item.href}/`);
   const map = {
+    home: "Home",
     market: "Market",
     baskets: "Baskets",
     build: "Build",
@@ -36,52 +43,38 @@ function sectionHref(item: ReadyNavItem, pathname: string): boolean {
 
 export function TopNav({ user }: TopNavProps) {
   const pathname = usePathname();
-  const listRef = useRef<HTMLUListElement>(null);
-  const [pill, setPill] = useState<{ left: number; width: number } | null>(null);
-
-  useEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    const active = list.querySelector<HTMLElement>("[data-active-pill='true']");
-    if (!active) {
-      setPill(null);
-      return;
-    }
-    setPill({ left: active.offsetLeft, width: active.offsetWidth });
-  }, [pathname]);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-border/70 bg-background/85 backdrop-blur-md">
-      <div className="mx-auto flex h-14 w-full max-w-[104rem] items-center gap-4 px-5 md:px-7">
-        <Wordmark />
+    /*
+      The same capsule the public header wears, so the product does not change costume when a
+      visitor signs in: white at 85% behind a 24px blur, one soft shadow, no border, full-round.
+
+      `sticky`, not `fixed` as the marketing header is. A fixed bar over a virtualised table means
+      permanently surrendering its height on every dense page and letting rows slide underneath it;
+      sticky keeps the capsule with you and still lets the document own its own flow.
+    */
+    <header className="sticky top-0 z-20 px-3 pb-2 pt-3 md:px-5">
+      <div className="vaaya-pill-bar mx-auto flex h-[3.25rem] w-full max-w-[104rem] items-center gap-4 pl-5 pr-4">
+        <Wordmark href="/home" />
 
         <nav
           id={PRIMARY_NAV_ID}
           aria-label="Primary"
           className="relative ml-2 hidden min-w-0 flex-1 md:block"
         >
-          <ul ref={listRef} className="relative flex items-center gap-1">
-            {pill ? (
-              <li
-                aria-hidden="true"
-                className="pointer-events-none absolute top-0 h-full rounded-md marker-control transition-[left,width] duration-200 ease-out"
-                data-active-pill="track"
-                style={{ left: pill.left, width: pill.width }}
-              />
-            ) : null}
+          <ul className="flex items-center gap-1">
             {PRIMARY_NAV.map((item) => {
               const active = sectionHref(item, pathname);
               return (
-                <li key={item.href} className="relative z-[1]">
+                <li key={item.href}>
                   <Link
                     href={item.href}
                     aria-current={active ? "page" : undefined}
-                    data-active-pill={active ? "true" : undefined}
                     className={cn(
-                      "relative block whitespace-nowrap rounded-md px-3 py-1.5 text-sm transition-colors duration-150",
+                      "block whitespace-nowrap rounded-full px-3 py-1.5 text-[15px] transition-colors duration-150",
                       active
-                        ? "font-medium text-brand-foreground"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                        ? "bg-accent font-medium text-accent-foreground"
+                        : "text-foreground/70 hover:bg-foreground/5 hover:text-foreground",
                     )}
                   >
                     {item.label}

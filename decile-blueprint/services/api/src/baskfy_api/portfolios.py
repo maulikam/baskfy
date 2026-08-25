@@ -31,9 +31,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from sqlalchemy import Select, delete, select, update
+from sqlalchemy import Select, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.broker_accounts import ensure_default_broker_account
 from baskfy_api.screener import (
     AsOfResolution,
     current_data_version,
@@ -69,6 +70,7 @@ __all__ = [
     "record_rebalance",
     "replace_holdings",
     "resolution_for",
+    "resolve_broker_account",
     "resolve_symbols",
     "run_rebalance",
 ]
@@ -167,9 +169,49 @@ async def held_names(session: AsyncSession, portfolio_id: int) -> tuple[HeldName
     )
 
 
+async def resolve_broker_account(session: AsyncSession, portfolio: Portfolio) -> int:
+    """Which broker account a holding written into ``portfolio`` belongs to.
+
+    Migration 0019 put ``broker_account_id`` in ``portfolio_holding``'s primary key and made it
+    ``NOT NULL``, because a share is always held *somewhere* and "held, broker unknown" is a
+    missing fact rather than a position. The migration also installed a ``BEFORE INSERT`` trigger
+    that fills the column in when a writer leaves it NULL, so that no writer — present or future,
+    including one nobody has written yet — can produce an unattributed row.
+
+    This function is the same rule, spelled in Python, so that the *live* writer names the
+    account itself and the trigger is left as a backstop rather than as the mechanism. Two
+    reasons it is worth doing here as well as there:
+
+    * a value the application chose is a value the application can report, test and reason
+      about; a value a trigger chose arrives only after a round trip, and only if somebody
+      remembers to read it back;
+    * the resolution order below is the one the rest of the API already uses for the same
+      question (``baskfy_api.curated_investments`` calls
+      :func:`~baskfy_api.broker_accounts.ensure_default_broker_account` for ``cb_investment``),
+      so a holding and an investment made on the same day land on the same account.
+
+    Order, most specific first:
+
+    1. the portfolio's own ``broker_account_id`` — a portfolio that declares itself attributable
+       to one account is the strongest statement anyone has made about where its money is;
+    2. otherwise the owner's default broker account, created if they have none.
+
+    Step 2 differs from the trigger in one narrow case, and deliberately: the trigger, unable to
+    call Python, falls back to *any* account the owner has before creating one, while this
+    prefers :data:`~baskfy_core.tenancy.DEFAULT_BROKER_ID` and creates it. A user whose only
+    account is at another broker therefore gets a default account here and their existing one
+    from the trigger. The divergence is unreachable for this writer — it names the account, so
+    the trigger never fires for it — and the honest fix for the general case belongs with P4.2,
+    where a holding will carry the account it was actually synced from.
+    """
+    if portfolio.broker_account_id is not None:
+        return portfolio.broker_account_id
+    return await ensure_default_broker_account(session, portfolio.user_id)
+
+
 async def replace_holdings(
     session: AsyncSession,
-    portfolio_id: int,
+    portfolio: Portfolio,
     holdings: Iterable[tuple[int, Decimal | None, Decimal | None]],
     *,
     added_on: dt.date,
@@ -181,45 +223,81 @@ async def replace_holdings(
     that was already held, so a re-upload of the same file does not reset every purchase date;
     docs/04 gives the column no other meaning, and "the day this row appeared" is the only one it
     can carry.
+
+    **Broker attribution (0019).** Every row written here names its ``broker_account_id``, chosen
+    by :func:`resolve_broker_account`. The caller's input — a CSV or a JSON array of symbols —
+    carries no broker column, so it describes *one* row per instrument, and this function makes
+    the stored rows say exactly that: a name previously held at two accounts collapses to one row
+    at the resolved account, and the count returned is the number of rows the caller asked for.
+    A replacement that left another account's row standing would report an import of five names
+    into a portfolio that then held six, which is the kind of quiet disagreement house rule 8
+    exists to prevent.
+
+    ``added_on`` for a name that was held at *several* accounts is the earliest of them — the
+    same rule migration 0019's ``downgrade()`` uses when it merges those rows, so a portfolio
+    that goes down and up again through the migration and a portfolio replaced through this
+    function agree on the date.
     """
-    existing = {
-        row.instrument_id: row.added_on
-        for row in (
-            await session.execute(
-                select(PortfolioHolding.instrument_id, PortfolioHolding.added_on).where(
-                    PortfolioHolding.portfolio_id == portfolio_id
-                )
-            )
-        ).all()
+    broker_account_id = await resolve_broker_account(session, portfolio)
+    existing = (
+        await session.execute(
+            select(
+                PortfolioHolding.instrument_id,
+                PortfolioHolding.broker_account_id,
+                PortfolioHolding.added_on,
+            ).where(PortfolioHolding.portfolio_id == portfolio.id)
+        )
+    ).all()
+    #: instrument -> the earliest date it appeared under, across every account it sits at.
+    first_seen: dict[int, dt.date] = {}
+    for row in existing:
+        seen = first_seen.get(row.instrument_id)
+        first_seen[row.instrument_id] = row.added_on if seen is None else min(seen, row.added_on)
+    already_here = {
+        row.instrument_id for row in existing if row.broker_account_id == broker_account_id
     }
+
     wanted = list(holdings)
     keep = {instrument_id for instrument_id, _, _ in wanted}
 
-    for instrument_id in existing.keys() - keep:
-        await session.execute(
-            delete(PortfolioHolding).where(
-                PortfolioHolding.portfolio_id == portfolio_id,
-                PortfolioHolding.instrument_id == instrument_id,
-            )
+    #: One statement rather than one per name: everything this portfolio holds that the caller
+    #: did not name, plus everything it named that is sitting at a different account.
+    await session.execute(
+        delete(PortfolioHolding).where(
+            PortfolioHolding.portfolio_id == portfolio.id,
+            or_(
+                PortfolioHolding.instrument_id.notin_(keep),
+                PortfolioHolding.broker_account_id != broker_account_id,
+            ),
         )
+    )
     for instrument_id, quantity, avg_price in wanted:
-        if instrument_id in existing:
+        if instrument_id in already_here:
             await session.execute(
                 update(PortfolioHolding)
                 .where(
-                    PortfolioHolding.portfolio_id == portfolio_id,
+                    PortfolioHolding.portfolio_id == portfolio.id,
                     PortfolioHolding.instrument_id == instrument_id,
+                    PortfolioHolding.broker_account_id == broker_account_id,
                 )
-                .values(quantity=quantity, avg_price=avg_price)
+                #: ``added_on`` is re-stated rather than left alone, because the surviving row
+                #: may be inheriting the date of a row at another account that this replacement
+                #: is deleting. For a name held in one place it is the value already there.
+                .values(
+                    quantity=quantity,
+                    avg_price=avg_price,
+                    added_on=first_seen.get(instrument_id, added_on),
+                )
             )
         else:
             session.add(
                 PortfolioHolding(
-                    portfolio_id=portfolio_id,
+                    portfolio_id=portfolio.id,
                     instrument_id=instrument_id,
+                    broker_account_id=broker_account_id,
                     quantity=quantity,
                     avg_price=avg_price,
-                    added_on=added_on,
+                    added_on=first_seen.get(instrument_id, added_on),
                 )
             )
     await session.flush()

@@ -15,6 +15,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { TermHint } from "@/components/ui/term";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TERMS, type TermId } from "@/lib/vocabulary";
 import { cn } from "@/lib/utils";
 
@@ -73,6 +74,12 @@ export function columnTerm(meta: unknown): TermId | undefined {
   return value && value in TERMS ? (value as TermId) : undefined;
 }
 
+/** `meta: { headerTooltip: "…" }` — technical name on hover for screen columns. */
+export function columnHeaderTooltip(meta: unknown): string | undefined {
+  if (typeof meta !== "object" || meta === null) return undefined;
+  return (meta as { headerTooltip?: string }).headerTooltip;
+}
+
 export type Density = "comfortable" | "compact";
 
 /** docs/08 §"Design principles": "default row height 34px with a comfortable/compact toggle." */
@@ -84,12 +91,39 @@ export const DEFAULT_REPEAT_HEADER_EVERY = 16;
 /** Rows rendered above and below the viewport, to keep fast scrolls from showing blank space. */
 const OVERSCAN = 8;
 
+/**
+ * How long a client-side sort keeps `transition-transform` on data rows.
+ *
+ * Gated and short: a standing transition would tween every `translateY` the virtualiser writes
+ * on scroll. 200ms is inside the motion budget (nothing > 300ms). The class name
+ * `motion-safe:duration-200` must stay in lockstep with this number.
+ */
+export const SORT_FLIP_MS = 200;
+
+/** Staggered row reveal on load/re-filter — §3.2, capped so row 271 does not wait seconds. */
+export const ROW_STAGGER_MS = 17;
+export const ROW_STAGGER_LIMIT = 12;
+export const ROW_STAGGER_DURATION_MS = 200;
+
+/** Motion budget ceiling enforced by tests — nothing animated may exceed this. */
+export const MAX_MOTION_MS = 300;
+
 export interface DataTableProps<TRow> {
   data: readonly TRow[];
   columns: ReadonlyArray<ColumnDef<TRow, unknown>>;
   /** Accessible name for the grid. Required — an unnamed grid is unnavigable. */
   label: string;
   density?: Density;
+  /**
+   * When set, overrides `ROW_HEIGHT[density]`. Screens pass 52 so a symbol+name two-liner
+   * fits; kitchen-sink and other callers keep the docs/08 default of 34.
+   */
+  rowHeight?: number;
+  /**
+   * Rendered as a single ⓘ on the sticky header row (native `title` tooltip). Not a second
+   * header row, and not a paragraph under the table.
+   */
+  sortNote?: string;
   /** 0 disables the repeat. docs/08 asks for it to be optional. */
   repeatHeaderEvery?: number;
   loading?: boolean;
@@ -97,7 +131,73 @@ export interface DataTableProps<TRow> {
   loadingRows?: number;
   height?: number;
   onRowActivate?: ((row: TRow) => void) | undefined;
+  /**
+   * Bumps when the result set changes (filter apply, refetch). Rows remount so the stagger
+   * entrance runs again; client-side sort leaves this alone so FLIP can reuse row nodes.
+   */
+  contentKey?: string | number | undefined;
   className?: string | undefined;
+}
+
+/** Delay for row `index`, or `undefined` when the stagger cap is exceeded. */
+export function rowStaggerDelayMs(index: number): number | undefined {
+  if (index < 0 || index >= ROW_STAGGER_LIMIT) return undefined;
+  return index * ROW_STAGGER_MS;
+}
+
+/** Technical factor/column name beside a sortable header — keyboard and touch reachable. */
+function HeaderTooltipHint({ tooltip }: { tooltip: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={tooltip}
+          data-testid="header-tooltip-trigger"
+          className={cn(
+            "grid size-4 shrink-0 place-items-center rounded-full border border-border",
+            "text-[9px] font-semibold leading-none text-muted-foreground",
+            "transition-colors duration-150 hover:border-muted-foreground hover:text-foreground",
+          )}
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <span aria-hidden="true">ⓘ</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs text-left">{tooltip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function SortNoteHint({ note }: { note: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          data-testid="sort-note"
+          aria-label={note}
+          className="absolute right-1 top-1/2 z-20 -translate-y-1/2 cursor-help rounded-sm px-1 py-0.5 text-[11px] leading-none text-muted-foreground hover:text-foreground"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <span aria-hidden="true">ⓘ</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs text-left">{note}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * Stable TanStack row id: a string `symbol` on the row object, otherwise the index.
+ * Identity is what lets a sort FLIP the same DOM node to a new `translateY`.
+ */
+function getRowId<TRow>(row: TRow, index: number): string {
+  if (typeof row !== "object" || row === null) return String(index);
+  const symbol = (row as Record<string, unknown>)["symbol"];
+  return typeof symbol === "string" && symbol.length > 0 ? symbol : String(index);
 }
 
 type DisplayRow = { kind: "repeat-header" } | { kind: "data"; index: number };
@@ -131,6 +231,10 @@ interface TableRowProps<TRow> {
   /** The focused column index when this row holds the focused cell, otherwise `null`. */
   focusedColumn: number | null;
   clickable: boolean;
+  /** True only for ~SORT_FLIP_MS after a sort, so scroll frames never pay for a transition. */
+  sortAnimating: boolean;
+  /** Milliseconds to delay the load stagger, or undefined when this row is past the cap. */
+  staggerDelayMs: number | undefined;
 }
 
 function TableRowInner<TRow>({
@@ -140,17 +244,29 @@ function TableRowInner<TRow>({
   height,
   focusedColumn,
   clickable,
+  sortAnimating,
+  staggerDelayMs,
 }: TableRowProps<TRow>) {
   return (
     <div
       role="row"
       aria-rowindex={index + 2}
       data-row-index={index}
+      data-stagger-delay={staggerDelayMs ?? undefined}
       className={cn(
-        "absolute left-0 top-0 flex w-full border-b border-border/60 text-sm hover:bg-muted/50",
+        "absolute left-0 top-0 flex w-full border-b border-border/40 text-sm hover:bg-muted/30",
         clickable && "cursor-pointer",
+        sortAnimating && "motion-safe:transition-transform motion-safe:duration-200",
+        staggerDelayMs !== undefined &&
+          "motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200 motion-reduce:animate-none",
       )}
-      style={{ height, transform: `translateY(${offset}px)` }}
+      style={{
+        height,
+        transform: `translateY(${offset}px)`,
+        ...(staggerDelayMs !== undefined
+          ? ({ animationDelay: `${staggerDelayMs}ms` } as const)
+          : {}),
+      }}
     >
       {row.getVisibleCells().map((cell, columnIndex) => {
         const focused = columnIndex === focusedColumn;
@@ -193,28 +309,55 @@ export function DataTable<TRow>({
   columns,
   label,
   density = "comfortable",
+  rowHeight: rowHeightOverride,
+  sortNote,
   repeatHeaderEvery = DEFAULT_REPEAT_HEADER_EVERY,
   loading = false,
   loadingRows = 12,
   height = 560,
   onRowActivate,
+  contentKey,
   className,
 }: DataTableProps<TRow>) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [sortAnimating, setSortAnimating] = useState(false);
   const [focus, setFocus] = useState<{ row: number; column: number }>({ row: 0, column: 0 });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sortFlipTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const rowMountKey = contentKey ?? 0;
+
+  /**
+   * Arm the FLIP class on the same render that applies the new sort order. An effect would
+   * enable the transition one frame late, after rows had already jumped to their new
+   * `translateY` — which is no animation at all.
+   */
+  const onSortingChange = useCallback<typeof setSorting>((updater) => {
+    setSortAnimating(true);
+    if (sortFlipTimer.current !== undefined) clearTimeout(sortFlipTimer.current);
+    sortFlipTimer.current = setTimeout(() => {
+      setSortAnimating(false);
+    }, SORT_FLIP_MS);
+    setSorting(updater);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (sortFlipTimer.current !== undefined) clearTimeout(sortFlipTimer.current);
+    };
+  }, []);
 
   const table = useReactTable({
     data: data as TRow[],
     columns: columns as Array<ColumnDef<TRow, unknown>>,
     state: { sorting },
-    onSortingChange: setSorting,
+    onSortingChange,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getRowId,
   });
 
   const rows = table.getRowModel().rows;
-  const rowHeight = ROW_HEIGHT[density];
+  const rowHeight = rowHeightOverride ?? ROW_HEIGHT[density];
   const displayRows = useMemo(
     () => buildDisplayRows(rows.length, repeatHeaderEvery),
     [rows.length, repeatHeaderEvery],
@@ -315,7 +458,7 @@ export function DataTable<TRow>({
         <div
           key={`repeat-${header.id}`}
           style={columnWidth(header.getSize(), columnGrows(header.column.columnDef.meta))}
-          className="flex items-center border-b border-border bg-muted/60 px-2 py-1.5 text-xs font-medium text-muted-foreground"
+          className="flex items-center border-b border-border/40 bg-card px-2 py-1.5 text-xs font-medium text-muted-foreground"
         >
           <span className="truncate">
             {flexRender(header.column.columnDef.header, header.getContext())}
@@ -326,18 +469,19 @@ export function DataTable<TRow>({
   );
 
   const headerRow = (
-    <div role="row" className="flex w-full" aria-rowindex={1}>
+    <div role="row" className="relative flex w-full" aria-rowindex={1}>
       {table.getHeaderGroups()[0]?.headers.map((header) => {
         const sorted = header.column.getIsSorted();
         const sortable = header.column.getCanSort();
         const term = columnTerm(header.column.columnDef.meta);
+        const headerTooltip = columnHeaderTooltip(header.column.columnDef.meta);
         return (
           <div
             key={header.id}
             role="columnheader"
             aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"}
             style={columnWidth(header.getSize(), columnGrows(header.column.columnDef.meta))}
-            className="flex items-center gap-1 border-b border-border bg-muted/60 px-2 text-xs font-medium text-muted-foreground"
+            className="flex items-center gap-1 border-b border-border/40 bg-card px-2 text-xs font-medium text-muted-foreground"
           >
             <button
               type="button"
@@ -367,9 +511,11 @@ export function DataTable<TRow>({
               ) : null}
             </button>
             {term ? <TermHint id={term} /> : null}
+            {headerTooltip ? <HeaderTooltipHint tooltip={headerTooltip} /> : null}
           </div>
         );
       })}
+      {sortNote ? <SortNoteHint note={sortNote} /> : null}
     </div>
   );
 
@@ -384,7 +530,7 @@ export function DataTable<TRow>({
       <div
         data-slot="data-table"
         data-loading="true"
-        className={cn("overflow-hidden rounded-md border border-border bg-card", className)}
+        className={cn("vaaya-card overflow-hidden bg-card", className)}
       >
         <div style={{ height }} className="overflow-hidden">
           {headerRow}
@@ -429,6 +575,7 @@ export function DataTable<TRow>({
               return (
                 <div
                   key={`repeat-${virtualRow.index}`}
+                  data-repeat-header=""
                   className="absolute left-0 top-0 w-full"
                   style={{ height: rowHeight, transform: `translateY(${virtualRow.start}px)` }}
                 >
@@ -442,13 +589,15 @@ export function DataTable<TRow>({
 
             return (
               <TableRow
-                key={row.id}
+                key={`${rowMountKey}-${row.id}`}
                 row={row}
                 index={entry.index}
                 offset={virtualRow.start}
                 height={rowHeight}
                 focusedColumn={entry.index === focus.row ? focus.column : null}
                 clickable={onRowActivate !== undefined}
+                sortAnimating={sortAnimating}
+                staggerDelayMs={rowStaggerDelayMs(entry.index)}
               />
             );
           })}

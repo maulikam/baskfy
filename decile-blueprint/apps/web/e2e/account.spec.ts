@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { SIGNED_OUT } from "./helpers/auth";
 import { clearInbox, codeFrom, tokenFrom, waitForEmail } from "./mailpit";
 
 /**
@@ -11,6 +12,12 @@ import { clearInbox, codeFrom, tokenFrom, waitForEmail } from "./mailpit";
  * is read out of **mailpit** (Prompt 12 §3), the password is verified with Argon2id by the API,
  * and the deletion is the real DPDP soft-delete. Each run uses a fresh address so the suite can be
  * re-run against the same database without a reset.
+ *
+ * **The lifecycle block starts signed out, deliberately.** Every other spec inherits the
+ * suite-wide session from `auth.setup.ts`; this one registers and deletes its own accounts, so
+ * beginning with somebody else's cookie would make "am I signed in?" mean two different things
+ * inside one test. The security-headers block below is *not* signed out — one of its cases loads
+ * a screen's results, which is gated.
  */
 
 const PASSWORD = "correct horse battery staple";
@@ -43,6 +50,8 @@ async function signInWithPassword(page: Page, email: string, password: string): 
 }
 
 test.describe("the account lifecycle", () => {
+  test.use({ storageState: SIGNED_OUT });
+
   test.beforeEach(async ({ request }) => {
     await clearInbox(request);
   });
@@ -67,7 +76,7 @@ test.describe("the account lifecycle", () => {
 
     // --- login -------------------------------------------------------------
     await signInWithPassword(page, email, PASSWORD);
-    await page.waitForURL(/\/screens/, { timeout: 20_000 });
+    await page.waitForURL(/\/build/, { timeout: 20_000 });
 
     await page.goto("/profile");
     await expect(page.getByRole("heading", { level: 1, name: "Profile" })).toBeVisible();
@@ -89,7 +98,7 @@ test.describe("the account lifecycle", () => {
     await signInWithPassword(page, email, PASSWORD);
     await expect(page.getByText(/did not match an account/i)).toBeVisible({ timeout: 15_000 });
     await signInWithPassword(page, email, NEW_PASSWORD);
-    await page.waitForURL(/\/screens/, { timeout: 20_000 });
+    await page.waitForURL(/\/build/, { timeout: 20_000 });
 
     // --- delete account ----------------------------------------------------
     await page.goto("/profile");
@@ -131,7 +140,7 @@ test.describe("the account lifecycle", () => {
     await expect(page.getByRole("textbox", { name: "Email" })).toHaveCount(1);
     await page.getByLabel("Six-digit code").fill(code);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL(/\/screens/, { timeout: 20_000 });
+    await page.waitForURL(/\/build/, { timeout: 20_000 });
   });
 
   test("resets a forgotten password from the emailed link", async ({ page, request }) => {
@@ -152,7 +161,7 @@ test.describe("the account lifecycle", () => {
     });
 
     await signInWithPassword(page, email, NEW_PASSWORD);
-    await page.waitForURL(/\/screens/, { timeout: 20_000 });
+    await page.waitForURL(/\/build/, { timeout: 20_000 });
   });
 
   test("a gated route sends an anonymous visitor to sign in, and back again", async ({ page }) => {
@@ -173,7 +182,7 @@ test.describe("the account lifecycle", () => {
     await page.getByLabel("Password").fill(PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
 
-    await page.waitForURL(/\/screens/, { timeout: 20_000 });
+    await page.waitForURL(/\/build/, { timeout: 20_000 });
     expect(page.url()).not.toContain("example.com");
   });
 
@@ -181,7 +190,7 @@ test.describe("the account lifecycle", () => {
     const email = freshEmail("export");
     await registerAccount(page, email, PASSWORD);
     await signInWithPassword(page, email, PASSWORD);
-    await page.waitForURL(/\/screens/, { timeout: 20_000 });
+    await page.waitForURL(/\/build/, { timeout: 20_000 });
 
     await page.goto("/profile");
     const download = page.waitForEvent("download");
@@ -230,8 +239,8 @@ test.describe("the security headers docs/11 pins", () => {
       if (message.text().includes("Content Security Policy")) violations.push(message.text());
     });
 
-    await page.goto("/screens/exmpl0000001");
-    await expect(page.getByTestId("result-count")).toHaveText("271 results", { timeout: 30_000 });
+    await page.goto("/build/exmpl0000001");
+    await expect(page.getByTestId("result-count")).toHaveText("271 matches", { timeout: 30_000 });
     expect(violations, violations.join("\n")).toEqual([]);
   });
 });

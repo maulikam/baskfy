@@ -118,6 +118,7 @@ def main() -> int:
     # Next 15 App Router picks these two up by filename alone — no <link> tags needed.
     master.resize((512, 512), Image.LANCZOS).save(APP / "icon.png", optimize=True)
     master.resize((180, 180), Image.LANCZOS).save(APP / "apple-icon.png", optimize=True)
+    write_ico(master, APP / "favicon.ico", ICO_SIZES)
 
     # The desk console is a Jinja app with its own static directory, and it gets the same face.
     if DESK_STATIC.exists():
@@ -133,7 +134,7 @@ def main() -> int:
     print(f"master {master.size[0]}px")
     for path in sorted(PUBLIC.iterdir()):
         print(f"  {path.name:24} {path.stat().st_size:>8,} bytes")
-    for name in ("icon.png", "apple-icon.png"):
+    for name in ("icon.png", "apple-icon.png", "favicon.ico"):
         print(f"  src/app/{name:16} {(APP / name).stat().st_size:>8,} bytes")
     if DESK_STATIC.exists():
         for name in ("favicon.ico", "apple-touch-icon.png", "logo-mark.png", "logo.svg"):

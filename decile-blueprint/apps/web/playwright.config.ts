@@ -20,6 +20,9 @@ const API_URL = `http://127.0.0.1:${API_PORT}`;
  * between modules) so that a `pytest` run and a `playwright` run cannot pull the ground out from
  * under each other.
  */
+/** Where `e2e/auth.setup.ts` parks the signed-in cookie for every other project to reuse. */
+const AUTH_STATE = "e2e/.auth/user.json";
+
 const DB = "postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_e2e";
 const DB_PG = "postgresql://baskfy:baskfy@localhost:5433/baskfy_e2e";
 const REDIS = process.env.BASKFY_REDIS_URL ?? "redis://localhost:6380/0";
@@ -41,7 +44,23 @@ export default defineConfig({
        fit on screen. */
     viewport: { width: 1440, height: 900 },
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  /*
+   * Two projects, and the dependency between them is the point.
+   *
+   * Since the login gate closed, a spec that opens `/build` from a cold browser lands on `/login`
+   * and tests nothing. `setup` signs in once and writes the cookie to disk; `chromium` loads it
+   * through `storageState`, so every spec starts signed in. The specs that must *not* be —
+   * `auth-gate.spec.ts`, and `account.spec.ts`, which registers its own accounts — override it
+   * with `test.use({ storageState: SIGNED_OUT })`.
+   */
+  projects: [
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], storageState: AUTH_STATE },
+      dependencies: ["setup"],
+    },
+  ],
   /*
    * Two servers, in order. The API migrates and seeds its own database before it starts listening,
    * so the whole suite is one command on a clean machine — `make up` for Postgres and Redis, then
@@ -94,11 +113,21 @@ export default defineConfig({
       },
     },
     {
-      command: `pnpm exec next build && pnpm exec next start --port ${PORT}`,
+      command: `pnpm exec next build && pnpm exec next start --hostname 127.0.0.1 --port ${PORT}`,
       url: BASE_URL,
       reuseExistingServer: !process.env.CI,
       timeout: 300_000,
       env: {
+        /*
+         * A build directory of its own. `next build` writes over whatever is in the target
+         * directory, so running the suite while a dev server is up used to overwrite that
+         * server's chunks underneath it — the request then died with
+         * `__webpack_modules__[moduleId] is not a function`, pointing at webpack-runtime.js and
+         * looking for all the world like a source bug. `next.config.ts` reads this variable, and
+         * `scripts/dev-guard.mjs` refuses a second dev server against one directory for the same
+         * reason.
+         */
+        BASKFY_WEB_DIST_DIR: ".next-e2e",
         BASKFY_JWT_SECRET: JWT_SECRET,
         AUTH_SECRET: JWT_SECRET,
         BASKFY_DATABASE_URL_PG: DB_PG,

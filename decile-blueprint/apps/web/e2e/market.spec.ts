@@ -240,12 +240,38 @@ test.describe("listings", () => {
 });
 
 test.describe("the sitemap", () => {
-  test("lists instrument URLs now that /listings can enumerate them", async ({ request }) => {
-    // `docs/10a` §6 recorded this as blocked on Prompt 11's `/listings`. It is not any more.
+  /**
+   * This test asserted the opposite until the login gate closed: `docs/10a` §6 had recorded the
+   * instrument walk as blocked on Prompt 11's `/listings`, Prompt 18 §4 unblocked it, and the
+   * sitemap carried every symbol on the register.
+   *
+   * `/instruments/*`, `/market-health`, `/dashboard` and `/listings` are now behind the gate, so
+   * a crawler following those URLs would collect several thousand redirects to `/login`. The
+   * sitemap therefore advertises only what is actually readable. **If the factsheets are meant to
+   * be an acquisition surface again, the fix is to make `/instruments` public in
+   * `src/lib/auth/public-routes.ts` — and then this test flips back.**
+   */
+  test("advertises only what a signed-out crawler can actually read", async ({ request }) => {
     const response = await request.get("/sitemap.xml");
     expect(response.status()).toBe(200);
     const xml = await response.text();
-    expect(xml).toContain("/instruments/CUPID");
-    expect(xml).toContain("/market-health");
+
+    expect(xml).toContain("/pricing");
+    expect(xml).toContain("/privacy-policy");
+    expect(xml).toContain("/blog/");
+
+    expect(xml).not.toContain("/instruments/");
+    expect(xml).not.toContain("/market-health");
+    expect(xml).not.toContain("/listings");
+  });
+
+  test("robots.txt disallows by default and allows the public pages by name", async ({
+    request,
+  }) => {
+    const text = await (await request.get("/robots.txt")).text();
+    expect(text).toContain("Disallow: /");
+    expect(text).toContain("Allow: /$");
+    expect(text).toContain("Allow: /pricing");
+    expect(text).not.toMatch(/^Allow: \/instruments/m);
   });
 });

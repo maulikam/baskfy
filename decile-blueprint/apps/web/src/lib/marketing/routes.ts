@@ -16,13 +16,18 @@ export interface PublicRoute {
   priority: number;
 }
 
-/** What the product is and what it costs. */
+/**
+ * What the product is and what it costs.
+ *
+ * **`/dashboard`, `/market-health` and `/listings` were here and are not any more.** The gate is
+ * closed by default now (`src/lib/auth/public-routes.ts`), and all three are behind it. A route in
+ * this list is a route in the sitemap and in the footer, and a sitemap entry that answers a login
+ * redirect is worse than no entry: it spends crawl budget to teach a crawler that the site is
+ * shut. They are still reachable — from the primary navigation, once you are signed in.
+ */
 export const PRODUCT_ROUTES: readonly PublicRoute[] = [
   { href: "/", label: "Home", priority: 1 },
   { href: "/pricing", label: "Pricing", priority: 0.9 },
-  { href: "/dashboard", label: "Indices dashboard", priority: 0.8 },
-  { href: "/market-health", label: "Market Pulse", priority: 0.8 },
-  { href: "/listings", label: "Listings", priority: 0.6 },
 ] as const;
 
 /** docs/01 §1: "`/faq`, `/support`, `/blog`, `/ama-recording`, `/inspire` | Content". */
@@ -56,8 +61,13 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = [
  * Routes that are statically generated and carry no session — the set `src/middleware.ts` serves
  * the nonce-free content policy to, and the set Prompt 18's first acceptance criterion is about.
  *
- * `/pricing`, `/dashboard`, `/market-health` and `/listings` are **not** here: each reads live data
- * or the session and renders dynamically (`docs/DECISIONS.md` §18.3).
+ * `/pricing` is **not** here: it reads the caller's current plan and renders dynamically
+ * (`docs/DECISIONS.md` §18.3). Neither are `/dashboard`, `/market-health` or `/listings`, which
+ * are now gated as well as dynamic.
+ *
+ * Note the second job this list has taken on: `src/lib/auth/public-routes.ts` builds the *public*
+ * set on top of it. Static, public and un-gated are the same property for these pages, and saying
+ * it once means the CSP decision and the access decision cannot drift apart.
  */
 export const STATIC_PUBLIC_PREFIXES: readonly string[] = [
   "/faq",

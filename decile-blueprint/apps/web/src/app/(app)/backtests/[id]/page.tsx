@@ -1,37 +1,18 @@
-import type { Metadata } from "next";
-
-import { BacktestResult } from "@/components/backtests/backtest-result";
-import { serverApi } from "@/lib/api/server";
+import { redirect } from "next/navigation";
 
 /**
- * `/backtests/[id]` — docs/08 §Routes: "client + polling/SSE".
+ * Tree 6: permanent consumer IA move — see next.config.ts.
  *
- * Server-rendered once so a finished run paints immediately, then handed to the client component,
- * which polls while the run is not terminal and subscribes to the SSE stream for the progress bar.
+ * A stub, not a copy of the page. `next.config.ts` redirects `/backtests/:id` before the
+ * filesystem routes are consulted, so a real page here would compile, ship and never render — and
+ * would drift away from `/build/backtests/[id]` silently.
+ * `scripts/check-shadowed-routes.mjs` keeps it a stub.
  */
-export const metadata: Metadata = {
-  title: "Backtest",
-  robots: { index: false, follow: false },
-};
-
-export const dynamic = "force-dynamic";
-
-export default async function BacktestPage({
+export default async function LegacyBacktestRedirect({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const api = await serverApi();
-  const { data, error } = await api.GET("/api/v1/backtests/{public_id}", {
-    params: { path: { public_id: id } },
-  });
-
-  return (
-    <BacktestResult
-      publicId={id}
-      initial={data ?? null}
-      error={data ? null : (error ?? "unreachable")}
-    />
-  );
+  redirect(`/build/backtests/${id}`);
 }

@@ -85,6 +85,15 @@ async def _unique_slug(session: SessionDep, base: str) -> str:
     raise Problem(ProblemType.INTERNAL_ERROR, "could not allocate a unique basket slug")
 
 
+async def slug_for(session: SessionDep, name: str) -> str:
+    """A collision-free catalog slug for *name*.
+
+    Public because ``routers/curated_from_screen.py`` creates baskets too, and two slug rules
+    would eventually disagree about the same name.
+    """
+    return await _unique_slug(session, _slugify(name))
+
+
 @router.post("/cb/baskets", response_model=CreateBasketOut, status_code=201)
 async def create_private_basket(
     body: CreateBasketIn,
@@ -134,7 +143,7 @@ async def create_private_basket(
         raise Problem(ProblemType.INTERNAL_ERROR, "curated manager seed is missing")
 
     today = dt.datetime.now(tz=dt.UTC).date()
-    slug = await _unique_slug(session, _slugify(body.name))
+    slug = await slug_for(session, body.name)
 
     basket = CbBasket(
         slug=slug,

@@ -57,6 +57,14 @@ export interface SampleRow {
   symbol: string;
   name: string;
   cells: SampleCell[];
+  /**
+   * The same columns as `cells`, unformatted.
+   *
+   * The table wants "+34.2%"; a plot wants 34.2. Keeping both off one fetch means the figure and
+   * the table on the landing page can never disagree about a row — they are the same row. `null`
+   * where the API sent no value, so a plot can leave a gap rather than draw a zero.
+   */
+  values: Record<string, number | null>;
 }
 
 export interface SampleScreen {
@@ -92,11 +100,22 @@ function render(key: string, value: unknown): string {
   return numeric.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** The raw number behind a cell, or `null` when the API sent nothing usable. */
+function numeric(value: unknown): number | null {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 function toRow(row: ScreenRunRowOut): SampleRow {
+  const source = row as Record<string, unknown>;
   return {
     rank: row.rank,
     symbol: row.symbol,
     name: row.name,
+    values: Object.fromEntries(
+      SAMPLE_COLUMNS.map((key) => [key, numeric(source[key])]),
+    ) as Record<string, number | null>,
     cells: SAMPLE_COLUMNS.map((key) => ({
       key,
       label: SAMPLE_COLUMN_LABELS[key] ?? key,

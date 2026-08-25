@@ -3240,3 +3240,1640 @@ order path.
 **Rejected.** Blocking Tree 6 on a new DB column/migration in this session.
 
 **Reversal.** Add `source` on curated baskets and upsert on screen save; keep the same card UI.
+
+### UI-1 One `next dev` per build directory, enforced rather than documented · ⚠ UNREVIEWED
+
+**Context.** A `Runtime TypeError: __webpack_modules__[moduleId] is not a function` at
+`.next/server/webpack-runtime.js`, plus an `[object Event]` unhandled rejection, reported against
+the running app. Neither was a source defect — a cold `next build` of the same tree compiled
+clean (52/52 static pages). Two `next dev` servers were running against the **same** `.next`
+(`pnpm --filter @baskfy/web run dev --port 3001` and `--port 3003`; the `dev` script hardcodes
+`--port 3000`, so a passthrough port looks like isolation and is not). Each holds its own
+in-memory module-id map while both rewrite the same chunk files. The second error is the same
+fault seen from the client: a chunk `<script>` that fails to load rejects with a DOM `Event`,
+which prints as `[object Event]`.
+
+**Taken.** `next.config.ts` reads `distDir` from `BASKFY_WEB_DIST_DIR` (default `.next`), so a
+second server can have a directory of its own. `apps/web/scripts/dev-guard.mjs` supervises
+`next dev` and holds a PID lock; a second server against the same directory is refused with an
+explanation and the env var to use. The lock lives in `node_modules/.cache/`, **not** in the build
+directory — `next dev` clears that directory at start-up, which silently deleted the first version
+of the lock. `playwright.config.ts` builds into `.next-e2e` for the same reason: `pnpm run e2e`
+runs `next build`, which would otherwise overwrite a running dev server's chunks.
+`scripts/bundle-budget.mjs` follows the variable. Hazard written into `RUN-AND-TEST.md`.
+
+**Rejected.** Documenting the hazard only (this class of failure surfaces on a request, not at
+start-up, so a note is read after the afternoon is gone). Killing the older server automatically
+(destroys work in a window the developer did not ask to be closed).
+
+**Reversal.** Delete `scripts/dev-guard.mjs` and restore `"dev": "next dev --port 3000"`. The
+`distDir` indirection is independent and worth keeping either way.
+
+### UI-2 The assumptions panel deduplicates, in the payload and at render · ⚠ UNREVIEWED
+
+**Context.** `GET /backtests/{id}` returned 33 `assumptions` of which 20 were unique: 13 sentences
+("the screen returned nothing on 2024-11-29; the book went to cash.") appeared **twice**, printed
+twice on the page and collided as React keys. `baskfy_api.backtests.assumptions()` ends with
+`result.notes`, and the worker's `notes_for()` hands the same notes back in `extra_notes`.
+
+**Taken.** `build_payload` wraps the concatenation in `dict.fromkeys` — order-preserving, and the
+idiom `backtest.py` and `notes_for` already use. `AssumptionsPanel` also deduplicates at render,
+because rows written before this fix still carry the repeat and would still display it.
+
+**Rejected.** Dropping `result.notes` from `assumptions()` (its one caller would then depend on
+the worker always passing them, which the API cannot assert). Keying the list by index (hides the
+duplication rather than fixing it, and the panel would still print the sentence twice).
+
+**Reversal.** Revert both hunks; the test `test_assumptions_state_each_note_once` then fails,
+which is the intended alarm.
+
+### UI-3 A page at a redirected path must be a stub, and lint says so · ⚠ UNREVIEWED
+
+**Context.** Tree 6 moved the consumer IA and left redirect stubs at the old paths — except
+`screens/[id]/columns/page.tsx` and `backtests/[id]/page.tsx`, which were left as **identical
+copies** of the `/build/...` pages. Next runs `redirects()` before the filesystem routes, so both
+compiled, shipped and could never render: content free to drift, impossible to see.
+
+**Taken.** Both reduced to redirect stubs. `apps/web/scripts/check-shadowed-routes.mjs` asserts the
+rule for every redirect source in `next.config.ts` — not "no file" but "nothing but a redirect" —
+and runs as part of `pnpm run lint`.
+
+**Rejected.** Deleting the files (the stub is a deliberate second line of defence for a
+client-side navigation that never reaches the edge). Trusting review.
+
+**Reversal.** Drop the check from the `lint` script.
+
+## SB1 — a screen becomes a basket: the profile suggests, the investor decides · ⚠ UNREVIEWED
+
+A screen answers *which stocks*. To be investable it needs two more numbers — **how much money**
+and **across how many names** — and the request that started this asked for the second to be
+suggested "based on R1, R2, R3, or whatever profiles we have created".
+
+### SB1.1 R1–R4 are not a concentration profile, so a second vocabulary was introduced
+
+**Context.** R1–R4 already exist and already mean one specific thing: the desk's weekly **equity
+exposure** tier (R1 caps equity at 100%, R2 at 70%, R3 at 40%). They are a reading of the market,
+not a fact about a person. Reusing them to pick a name count would have meant an investor who
+wants a concentrated twelve-name basket must also assert the market is defensive to get it — and
+it would have quietly overloaded a term the desk trades on.
+
+**Taken.** Compose the two instead of merging them. `baskfy_core.basket_sizing.HoldingProfile`
+(`CONSERVATIVE` 25 / `BALANCED` 20 / `AGGRESSIVE` 12) suggests the **count**; `cash_pct_for_tier`
+reads the desk's existing equity cap for the **cash share**. `BALANCED` is 20 because that is what
+the web layer has always materialized a screen at, so introducing profiles changed no existing
+basket. Fewer names is the aggressive end — the direction people reverse, so it is asserted by
+test rather than left to a comment.
+
+**Rejected.** Naming the profiles R1/R2/R3 as literally requested (the collision above; the
+Autonomy charter's tie-break toward "names that keep their meaning"). Deriving the count from the
+tier (an investor cannot then choose concentration at all). Asking Maulik first (the charter says
+decide and record).
+
+**Reversal.** `HoldingProfile` is one module and one column-free code path — delete it and pass an
+explicit count everywhere; nothing persisted depends on the enum.
+
+### SB1.2 The count is a default, never a rule
+
+**Context.** The stated requirement: the basket suggests X names, and an investor who wants a
+different number gets it.
+
+**Taken.** `resolve_holdings` takes the explicit count when there is one, else the profile's
+suggestion. A *suggestion* is trimmed silently to what the screen found (suggesting 20 when a
+screen returned 14 is the module's problem to absorb); an *explicit* count that cannot be filled
+**raises**, because the person asked for something specific and deserves to be told it is not
+there. The saved basket records which happened — `profile` is `NULL` and `holdings_overridden` is
+true once the investor chose. The browser preview clamps instead of throwing, since a number is
+half-typed on the way to being right.
+
+**Rejected.** Silently clamping an explicit request server-side (builds something smaller than was
+asked for and says nothing).
+
+### SB1.3 The server re-runs the screen; the body cannot name a holding
+
+**Context.** `POST /cb/baskets/from-screen` could have accepted the symbols and weights the browser
+already computed — they are sitting right there in the preview.
+
+**Taken.** The body names a **screen** and never a holding. The route runs that screen itself and
+stores what it returned, so `source = 'SCREEN'` is a fact rather than a caller's claim. The test
+that guards this reads `FromScreenIn.model_fields` for the *absence* of `symbols`/`constituents`,
+because no amount of exercising can demonstrate a missing field. The browser's numbers are a
+preview; the endpoint's are the record, which is why the UI confirms by linking to the saved
+basket rather than asserting the preview was stored.
+
+**Rejected.** Extending `POST /cb/baskets` with an optional screen id (one route with two trust
+models). Trusting the client list (would make the label meaningless).
+
+**Reversal.** Delete the router and `versioned.include_router(curated_from_screen.router)`; the
+migration below is additive and can stay.
+
+### SB1.4 `cb_basket.source_screen_id` is `ON DELETE SET NULL`
+
+**Context.** A basket cut from a screen should be re-cuttable from the same rule, which needs the
+link stored (Alembic `0017`, plus `SCREEN` added to the `cb_basket_source` check constraint).
+
+**Taken.** Nullable FK with `ON DELETE SET NULL`. Deleting the rule must not delete a basket
+somebody is holding; the NULL says exactly what is now true — it can no longer be re-cut.
+
+**Rejected.** `CASCADE` (destroys a holding record to tidy a rule). `RESTRICT` (makes a screen
+undeletable because of a basket the user may have archived).
+
+**Reversal.** `0017` downgrades: `SCREEN` rows become `MANUAL` before the constraint narrows.
+
+### SB1.5 The profile table is duplicated in TypeScript, and a test ties the two together
+
+**Context.** Every keystroke on the amount and count controls re-sizes the preview. Doing that over
+the network would be a round trip per keypress.
+
+**Taken.** `apps/web/src/lib/basket/profiles.ts` mirrors the Python table, and
+`packages/core/tests/test_holding_profile_parity.py` fails if they drift — the same trade already
+made for `lib/screens/operands.ts` and `lib/market/universes.ts`. Money still reconciles the same
+way in both: equal **rupees** per name (not a weight-derived split, which would hand the last name
+the rounding residual and look like a bigger position), remainder to cash, `deployed + cash ==
+amount`.
+
+**Rejected.** A `/meta/holding-profiles` endpoint (a round trip to learn three integers). Sizing
+server-side per keystroke.
+
+**Reversal.** Delete the TS table and call the endpoint on debounce; the parity test then has
+nothing to compare and is deleted with it.
+
+## SB2 — `/create` is screen-first; first login already has something to pick · ⚠ UNREVIEWED
+
+The request: a user (including a first signup) picks any of the screens the account already has,
+sets an amount and a name count, and saves a smallcase. The count is suggested from "R1, R2, R3,
+or whatever profiles we have created", and an explicit number is allowed.
+
+### SB2.1 The create page starts from a screen, not a blank symbol list
+
+**Context.** SB1 put sizing and save on the screen *results* page. `/create` was still the SC8
+manual form — type two tickers, set weights. A first-time user who opened Create never saw the
+six example screens login already hands them (`GET /screens` returns `user_id IS NULL` templates
+for a new account and for an anonymous visitor).
+
+**Taken.** `/create` opens on a screen dropdown (templates in one `<optgroup>`, the investor's
+own in another). `pickDefaultScreenId` selects the first template, or `?screen=` when that id is
+in the list — so a card on `/build` can deep-link. The SC8 symbol form stays behind "Pick stocks
+yourself". Create is a Baskets section tab so the page is findable.
+
+**Rejected.** Deleting the manual form (a screen is not the only way a basket starts). Making
+example screens require a duplicate-then-save (the API already accepts `user_id IS NULL` as a
+source — SB1.3). Asking which screen is the default (the first template is the one docs/13
+captured).
+
+**Reversal.** Point `/create` back at `CreateBasketForm` alone; drop the Baskets "Create" tab.
+
+### SB2.2 The name count still comes from HoldingProfile, not R1–R4
+
+**Context.** The request named R1/R2/R3 as the thing that picks the count. SB1.1 already refused
+that collision: those tokens are the desk's weekly *exposure* tier. The profiles we have created
+are `CONSERVATIVE` 25 / `BALANCED` 20 / `AGGRESSIVE` 12.
+
+**Taken.** Reuse `SizingControls`. The profile suggests; an explicit count wins and is what
+`POST /cb/baskets/from-screen` stores (`profile` null, `holdings_overridden` true). No new
+vocabulary.
+
+**Rejected.** Relabelling the three profiles R1/R2/R3 on this page only (same collision, now
+inconsistent with the screen results page).
+
+**Reversal.** Same as SB1.1 — delete `HoldingProfile` and pass an explicit count everywhere.
+
+## SB3 — create-time health is facts on the sized list, not a robo-advisor · ⚠ UNREVIEWED
+
+A ten-category industry wishlist (risk scores, VaR, tax-loss harvesting, analyst targets,
+family accounts, one-click execution) arrived after SB2. Most of it is already in the product
+under another name, or is blocked by D3 / docs/11 / the two laws.
+
+### SB3.1 What landed on the create page, and what did not
+
+**Taken.** A panel that reads the *sized* names and the screen row's own 1-year columns:
+largest name vs the desk's 15% single-name cap, median 1-year return, median 1-year vol, and
+a note when the list is shorter than five. Plus a link to Replay the same screen. Pure
+TypeScript, no new endpoint — the preview already has the rows.
+
+**Rejected, and why:**
+
+| Ask | Why not now |
+|---|---|
+| Risk questionnaire / VaR / correlation heatmap | Need a return matrix or a questionnaire product. We do not have either on this page. |
+| Analyst ratings / target prices | docs/11 forbids them as copy. The copy-lint exists so we cannot ship them "as a feature". |
+| Tax-loss harvesting | Tax advice. Not in this repo. |
+| Multi-user / family / share-with-advisor | Phase 4. D3 is unanswered. |
+| Direct execution / SIP that places orders | Non-negotiable 1. Plans hand off to the desk; the web never calls `place_order`. |
+| Public API | Held shut by a source constant. |
+| Sector heatmap | `instrument` has no sector column in this tree. The desk's `sectors.csv` is a boundary, not a fact we can attribute to NSE here. |
+
+**Reversal.** Delete `lib/basket/health.ts` and `BasketHealthPanel`. The create flow still sizes
+and saves.
+
+## SB4 — weight methods on the screen path, plus a true custom · ⚠ UNREVIEWED
+
+The screen already answers *which names*. SB1 answered *how many* and *how much cash*. This
+answers the third question: **how the deployed money is split**.
+
+### SB4.1 Suggested methods, then custom — not a blank formula
+
+**Context.** The ask was: a few suggested splits (equal, algo, rank, other weighted methods)
+plus a path where the investor types their own numbers.
+
+**Taken.** Five methods, reused from the backtest's schemes where those already have a name
+(`baskfy_core.backtest.Weighting` / `raw_weights`):
+
+| Method | Meaning |
+|---|---|
+| `EQUAL` | Default. Same rupees per name. Existing baskets do not move. |
+| `RANK` | Inside the *selected set*, best gets n, worst gets 1. Absolute screen rank would make a slice from 400–420 almost equal-weight. |
+| `SCORE` | The algo path: proportional to the screen's ranking factor. |
+| `INV_VOL` | Inverse `vol_12m`. More in the calmer names. |
+| `CUSTOM` | The investor's numbers. Server still runs the screen; custom cannot add or drop a name. |
+
+Market-cap weighting is on the backtest and not on create: a create preview often has no
+market-cap column, and a silent fallback to equal would look like a bug.
+
+**Rejected.** A free-form formula box. The five cover the suggestions; custom covers "I want
+my own". A formula language is a product, not a picker.
+
+**Reversal.** Delete `WeightMethod`, the picker, and the `method` / `custom_weights` fields.
+Equal weight remains.
+
+### SB4.2 `custom_weights`, not `weights` — SB1.3 still holds
+
+**Context.** SB1.3 forbids the body from naming holdings (`symbols`, `constituents`, `weights`)
+so `source = 'SCREEN'` cannot be a caller's claim.
+
+**Taken.** The field is `custom_weights`. Extra symbols raise. Missing names raise. The server
+still runs the screen and sizes *those* names. `test_curated_from_screen.py` still forbids
+`weights` / `symbols` / `constituents`.
+
+**Reversal.** Same as SB1.3 — the body would start accepting a holding list, and the label
+would be a lie.
+
+### SB4.3 Preview may fall back; save may not
+
+**Context.** Score and inverse-vol need columns. Custom is typed mid-keystroke. A preview that
+threw while somebody was clearing a cell would be useless.
+
+**Taken.** The TypeScript preview falls back to equal when a method cannot be applied (no
+score, no vol, all-zero custom). The save endpoint raises on the same inputs, with a sentence
+that says which column or name is missing. A yellow note on the picker explains the fallback.
+
+**Reversal.** Make the preview raise too — worse while typing, more honest after.
+
+### SB4.4 The method table is duplicated in TypeScript
+
+Same arrangement as SB1.5. `apps/web/src/lib/basket/methods.ts` mirrors
+`WeightMethod`. `packages/core/tests/test_weight_method_parity.py` fails if they drift.
+
+## SB6 — basket and custom-weight tables show the facts the screen already has · ⚠ UNREVIEWED
+
+The holdings table was Rank / Stock / Weight / Price / Amount. The custom-weight editor was
+ticker + a box. Both were too thin to type a number against.
+
+### SB6.1 What landed, and what did not
+
+**Taken.** The create preview asks for the fact columns the screen already knows how to
+project. Both tables show a column only when at least one row has a number:
+
+| Column | Source | Why |
+|---|---|---|
+| Market cap | `marketcap_cr` | Size of the name |
+| 1-yr return | `ret_12m` | What the screen usually ranked on |
+| Bumpiness | `vol_12m` | The risk number we actually store |
+| Beta | `beta_12m` | How it moves with the index |
+| Return vs risk | `sharpe_12m` | Return per unit of bumpiness |
+| Liquidity | `median_vol_12m` | Median 1-year traded value |
+| P/E | `pe` | When the row carries it |
+
+**Rejected.**
+
+| Ask | Why not |
+|---|---|
+| Sector | `instrument` has no sector column. The desk's `sectors.csv` is a boundary, not an NSE fact we can attribute here (same as SB3.1). A column of guesses would be worse than no column. |
+| A composite "risk factor" | Would be a score we invented. Bumpiness + beta are the two risk numbers the row already has. |
+| Analyst ratings / target prices | docs/11 forbids them. |
+
+**Reversal.** Delete `lib/basket/holding-facts.ts` and the extra `<th>`s. The five original
+columns remain.
+
+### SB6.2 A column with no data is not drawn
+
+An em-dash column looks like a missing feed. Hiding it says the fact is not on these rows.
+The featured basket (no factor columns) therefore still shows Rank / Stock / Weight / Price /
+Amount and nothing else.
+
+### SB6.3 The holdings table uses the shell width · ⚠ UNREVIEWED
+
+SB6 added six optional columns. `/create` and `/basket/[slug]` still used `max-w-3xl` (768px),
+so Weight/Price/Amount clipped while the shell (`max-w-[104rem]`) sat empty to the right.
+
+**Taken.** Drop the page cap; the table is `w-full`. Form controls stay their own `max-w-*`.
+
+**Rejected.** A horizontal scroll inside 768px — the empty band on the right would still look
+broken.
+
+**Reversal.** Put `max-w-3xl` back on those two pages.
+
+## SP — Screen page redesign (23 Aug 2026) · ⚠ UNREVIEWED
+
+Apple-clarity brief for `/build/:id` (legacy `/screens/:id`). Nav is a parallel workstream and
+was not touched.
+
+### SP.1 Bumpiness is five dots, not three
+
+**Context.** The brief asked for a three-dot scale. Seeded `vol_12m` on the 271-row example
+runs ~0.18–0.62 with quartiles at 0.31 / 0.37 / 0.43. Three buckets collapse the median into
+the same reading as the calmest name.
+
+**Taken.** Five bands at 0.25 / 0.35 / 0.45 / 0.55. Absolute, not screen-relative — three (or
+five) filled dots must mean the same risk on every screen. Percent stays on hover and beside
+the dots.
+
+**Rejected.** Three dots as written — less glanceable information for no saving of width.
+
+**Reversal.** Change `BUMPINESS_THRESHOLDS` to two cuts.
+
+### SP.2 No 7-day sparkline and no 1-year peek chart
+
+**Context.** Brief §2.1 / §2.4 asked for those “if data exists cheaply”. The preview payload is
+the ranked factor row. There is no history series on it.
+
+**Taken.** Do not N+1 `GET /instruments/{symbol}/history` per table row or peek. Reversible
+when preview grows a sparkline field.
+
+**Rejected.** Fetching history in the drawer on open — honest but a network hit on every row
+click, and the factsheet already has the chart one click further.
+
+### SP.3 Dead columns are dropped and named
+
+**Context.** MARKETCAP (and on the seed, Price / `close_raw`) rendered as a column of em dashes.
+
+**Taken.** `visibleResultColumns(columns, rows)` drops empty non-identity columns; the results
+panel discloses them. Diet still hides series / marketcap / MA 200 / beta / 1-yr Sharpe from
+the default view.
+
+### SP.4 Vaaya.ai visual direction on the screen page
+
+**Context.** After the Apple-clarity brief shipped, Maulik asked for the screen page to read like
+[vaaya.ai](https://vaaya.ai/) — editorial light canvas, floating pill bars, black primary CTAs,
+26px cards, thin display type, uppercase eyebrows.
+
+**Taken.** A scoped `.vaaya-surface` on `ScreenEditor` overrides tokens (monochrome `--brand`,
+`#f8fafc` canvas) and utilities (`vaaya-pill-bar`, `vaaya-card`, `vaaya-stat`, `vaaya-display`).
+Filter chips, story strip, table shell, mobile cards, peek drawer, and apply pill adopt the
+pattern. Global nav is unchanged (parallel workstream).
+
+**Rejected.** Rewriting root `globals.css` tokens for the whole app — would fight the Kite/Sensibull
+broker baseline everywhere else.
+
+**Reversal.** Remove `.vaaya-surface` wrapper and utilities; restore orange `primary` buttons on
+the screen page.
+
+
+## T7.1 — cb_metrics must be run, not only scheduled · ⚠ UNREVIEWED
+
+**Context.** Beat entry `cb-eod-metrics` → `baskfy.cb.compute_metrics` existed since SC2, but
+`cb_metrics` had **0 rows**. Catalog cards returned `metrics: null`. The job body commits per
+chunk/basket; wrapping it in `run_in_session`'s `session.begin()` raised on the first commit, so
+Celery Beat could never write a row.
+
+**Taken.** Populate once via `compute_all_metrics` (as_of 2026-08-21). Add
+`python -m baskfy_worker.cb_metrics_cli` / `make cb-metrics`. Fix the Celery task to use a
+session without an outer `begin()`.
+
+**Rejected.** Waiting for Beat alone — it had never produced a row. Leaving the broken
+`run_in_session` wrap — would keep the catalog empty forever.
+
+**Reversal.** Delete the CLI; revert the task to `run_in_session` only after the service stops
+self-committing.
+
+## T7.2 — Investment creation contract · ⚠ UNREVIEWED
+
+**Context.** Track C / SC11 forbid a web execute route. `PlanHandoffPanel` is the terminus.
+`cb_investment` was empty until a hand-inserted probe. Fees, XIRR, drift, SIP, exit history are
+machinery for objects that cannot come into existence in-product.
+
+Three options from the Tree 7 brief:
+
+| | Path | Creates `cb_investment` how |
+|---|---|---|
+| (a) | Desk creates; web reads | Operator console / desk after a real rebalance |
+| (b) | Mark as invested | User reconciles from broker holdings / plan they say they applied |
+| (c) | Kite Connect basket handoff | Broker session places a basket order; then persist |
+
+**Taken.** **(b) Mark as invested** as the near-term product contract. It does not place an
+order (SC11 holds). It creates an ACTIVE `cb_investment` from a published basket + declared
+amount/holdings after the user confirms they acted at their broker (or pasted holdings). That
+unblocks the investor half without pretending the web executed.
+
+**Also kept.** (a) remains valid for the operator desk / momentum console. (c) is deferred
+until `BROKER_OAUTH_REVIEW.signed_off` and D3 counsel — not this tree.
+
+**Rejected.** Building (c) now — blocked on OAuth sign-off and D3. Leaving the contract
+undecided — six finished subsystems stay unexercisable. Fake-execute from the web — forbidden.
+
+**Reversal.** Switch to (a)-only (operator creates every row) or implement (c) when OAuth/D3
+clear; update this entry and NEEDS-MAULIK.
+
+**Not built yet.** The UI/API for "mark as invested" is the next leaf after this decision; this
+entry only settles *which* contract we build toward. **Update (T8.1, 24 Aug 2026):** built —
+see T8.1.
+
+## T7.3 — The login gate is closed by default · ⚠ UNREVIEWED
+
+**Context.** Maulik, 24 Aug 2026: "if not logged in, login is necessary, and if logged out, no
+back buttons of the browser should work or no direct hit of the URL should work."
+
+`apps/web/src/middleware.ts` carried a `GATED_PREFIXES` **allow-by-default** list — `/profile`,
+`/change-password`, `/portfolios`, `/me/portfolios`, `/backtests`, `/build/backtests`,
+`/invoices`, `/admin`. Everything else under `(app)` rendered to anybody who typed the URL:
+`/build`, `/explore`, `/create`, `/holdings`, `/watchlist`, `/me/*`, `/baskets/*`, `/basket/*`,
+`/screens/*`, `/instruments/*`, `/market/*`, `/dashboard`, `/market-health`, `/listings`,
+`/kitchen-sink`, `/api-keys`, `/alerts`. A gate whose default is *open* fails silently: the diff
+that adds a page never mentions the middleware, so nobody reviews the omission.
+
+**Taken.** The list is inverted. `apps/web/src/lib/auth/public-routes.ts` enumerates the **public**
+surface and everything else is gated, enforced in three layers:
+
+1. `middleware.ts` — redirects to `/login?next=…` on the *absence* of a session cookie, and stamps
+   `Cache-Control: no-store` on every gated response. Prefetches are no longer excluded from the
+   matcher; the CSP work still skips them, which is the reason the exclusion existed.
+2. `(app)/layout.tsx` — re-checks with `auth()`, which actually opens the token. The middleware
+   runs on cookie *presence*; an expired or forged cookie walks past it.
+3. `services/api` — unchanged, and still the only authorisation that matters (`docs/12a` §11).
+
+Plus `components/auth/session-sentinel.tsx`, mounted only for a rendered session: it reloads on a
+bfcache restore (`pageshow.persisted`, which Safari hands back even for `no-store` pages) and
+re-checks `/api/auth/session` on `popstate` and on tab focus — the two paths where Next's *client
+router cache* can re-paint a signed-in page with no request reaching the server.
+
+Maulik chose the strict scope when asked: **all of `(app)` is gated**, including `/dashboard`,
+`/market-health` and `/listings`. Public are `/`, `/pricing`, the content and legal pages, the
+auth funnel, `/logout`, `/api/auth/*`, `/alerts/unsubscribe` (one-click unsubscribe cannot ask for
+a sign-in) and `/api/revalidate` (its own shared secret).
+
+**The cost, stated plainly.** `/instruments/[symbol]` is gated with the rest, and `docs/08` §Routes
+calls it "SEO-optimised (this is the organic-traffic surface)". The sitemap no longer enumerates
+instruments and `robots.txt` no longer allows them — a sitemap of login redirects spends crawl
+budget teaching a crawler that the site is shut. **The product now has no organic acquisition
+surface beyond the landing page, pricing, the blog and the legal pages.** If that is not intended,
+the fix is one line: add `/instruments` to `PUBLIC_PREFIXES`, and flip
+`e2e/market.spec.ts`'s sitemap test back.
+
+**Also.** `/logout` is a GET route handler, and its user-menu `<Link>` had no `prefetch={false}` —
+opening the account menu armed a request that ends the session. Fixed.
+
+**Rejected.** Keeping `/dashboard`, `/market-health` and `/listings` public as a shop window (the
+option Maulik declined). Gating the marketing and legal pages too — a regulator or payment
+provider must be able to read them without an account. Relying on `no-store` alone — Safari
+bfcaches `no-store` pages, and Next's router cache is not HTTP at all.
+
+**Reversal.** Every access decision is in one file. Restoring the old behaviour is re-adding paths
+to `PUBLIC_PREFIXES`; restoring the *shape* is reverting `middleware.ts` to a gated list, which
+this entry exists to argue against.
+
+**Evidence.** `apps/web/e2e/auth-gate.spec.ts` — 29 tests, green on 24 Aug 2026, including "after
+signing out, Back does not bring the app back" and "a URL copied while signed in is useless once
+signed out". Unit: `src/__tests__/middleware.test.ts` (35), `src/lib/auth/__tests__/public-routes.test.ts` (66).
+
+## T8.1 — Mark-as-invested lands in-product · ⚠ UNREVIEWED
+
+**Context.** T7.2 chose (b). Tree 8 leaf 1.1.1 is the write path: the user confirms they already
+traded at the broker; Baskfy records `cb_investment` + holdings + a `PLANNED` BUY batch + an
+uncollected fee.
+
+**Taken.** `POST /api/v1/cb/investments/mark` with `confirmed: true` and declared lots. Batch
+status is always `PLANNED`. One ACTIVE row per `(user, basket)` (409 otherwise). Web form
+`mark-invested-form` posts only this route.
+
+**Rejected.** Setting `EXECUTED` from the web — that's T8.2's desk journal. Inventing qty from
+weights — sizing refuses unit counts on purpose.
+
+**Reversal.** Delete the router and form; T7.2 (a) operator-created rows remain valid.
+
+## T8.2 — Desk fill is the only EXECUTED writer · ⚠ UNREVIEWED
+
+**Context.** Mark-as-invested must not pretend the web executed. The desk journal
+(`desk.rebalance_versions` / `rebalance_orders`) is the fill evidence.
+
+**Taken.** Worker `baskfy.cb.sync_batches` matches `cb_order_batch.desk_plan_id` to
+`version_id`. All planned qty filled → `EXECUTED` + `executed_at`. Some filled → `PARTIAL`.
+Synthetic `cb-sim-*` never matches → stay `PLANNED`. `DeskFillReader` is the test seam.
+
+**Rejected.** Web or curated routers writing `EXECUTED`. Calling the order gateway.
+
+**Reversal.** Stop the Beat entry; batches remain `PLANNED` until a later writer exists.
+
+## T8.3 — Rebalance email is delivered once · ⚠ UNREVIEWED
+
+**Context.** Publish already inserts `REBALANCE_AVAILABLE`. Nothing told the investor.
+
+**Taken.** Worker `baskfy.cb.rebalance_notify` emails once per open row whose payload lacks
+`notified_at`, then stamps `notified_at` + `delivery=email`. Failed send does not stamp, so
+Beat retries. Publish path is untouched.
+
+**Rejected.** Editing `curated_versions.py` to send at publish time (that path is already
+correct; notification is a worker concern).
+
+**Reversal.** Drop the Beat entry; pending rows still show in the UI.
+
+## T8.4 — SIP writer is REMINDER only · ⚠ UNREVIEWED
+
+**Context.** Beat `baskfy.cb.sip_reminders` already persists `SIP_DUE`, but no API created
+`cb_sip_plan` rows.
+
+**Taken.** `POST /cb/investments/{id}/sip` writes `mode=REMINDER`. `assert_reminder_mode`
+refuses AUTO. One ACTIVE plan per investment (409). UI `sip-form`.
+
+**Rejected.** AUTO / debit. Weakening the core guard.
+
+**Reversal.** Delete the router; Beat stays a no-op on an empty table.
+
+## T8.5 — Costs page shows accrued fees, not a charge · ⚠ UNREVIEWED
+
+**Context.** `platform_fee` and `cb_fee_ledger` exist; Track B collection stays off.
+
+**Taken.** `GET /cb/investments/{id}/costs` returns snapshot + `accrued_fees_total` +
+`returns_after_fees`. Page `/me/investments/[id]/costs` (`costs-after-fees`). `collected`
+is always false on this payload.
+
+**Rejected.** `POST /fees/collect` from the page. Pretending fees were charged.
+
+**Reversal.** Hide the page; ledger rows remain.
+
+## T8.6 — Drift fix rebases the book, not the broker · ⚠ UNREVIEWED
+
+**Context.** Core already has `detect_drift` / `fix_drift` / `rebase_holdings_after_drift`.
+
+**Taken.** `POST .../drift/scan` and `.../drift/fix`. Fix updates `cb_investment_holding` to
+broker qty, archives shortfall as synthetic EXIT math, resolves `DRIFT`. UI `drift-repair`.
+Posted `{symbol, qty}` or a desk snapshot; never an order.
+
+**Rejected.** Sending the shortfall as a buy/sell through any gateway.
+
+**Reversal.** Delete the router and component; core math stays.
+
+## T9.1 — Equity fundamentals from NSE quote-equity, folded into snapshots · ⚠ UNREVIEWED
+
+**Context.** `fundamental_daily` was never populated on backfilled DBs. `compute_factors` joins
+`marketcap_cr` and `pe` from it, so the landing page and decile bucketing rendered em dashes.
+`NEEDS-MAULIK.md` §15 asked for a source decision. docs/05 §14 already names NSE.
+
+**Taken.** NSE `GET /api/quote-equity?symbol=` (same host, cookie priming, archive-then-parse
+discipline as corporate actions). Issued size × `close_raw` / ₹1 crore is `marketcap_cr`.
+Folded into `refresh_index_snapshots`, not a twelfth pipeline step (listings already set that
+pattern). A `ProviderError` is recorded and the night continues: NULL is already publishable.
+
+**Rejected.** Paid vendor (no ADR, no licence). Kite quote (no issued size / PE). Inventing
+mcap from free-float `ffmc` on the index JSON (wrong quantity). A 12th `PipelineStep`.
+
+**Reversal.** Drop `equity_fundamentals` and the worker upsert; the join stays NULL-safe.
+
+## T9.2 — Nightly calendar reconcile looks back 12 months · ⚠ UNREVIEWED
+
+**Context.** 9M/12M windows were "the short calendar": lunar holidays in the trailing year
+stayed `derived` (assumed open) because nightly `reconcile_calendar` only covered the trade
+date. Windows resolved long (191/256 vs 185/247). Do not fudge `resolve_window`.
+
+**Taken.** `CALENDAR_LOOKBACK_DAYS = 400`. After bars land, reconcile `[trade_date - 400 days,
+window.end]`. Inference still requires a dense universe of bars (existing guard).
+
+**Rejected.** Putting guessed Diwali/Holi dates in `nse_trading_holidays.csv` (the seed file
+explicitly refuses lunar holidays). Changing `resolve_window` to a bar count.
+
+**Reversal.** Reconcile `window.start..window.end` only, as before.
+
+## T9.3 — Generated-scan flag stays `upload` · ⚠ UNREVIEWED
+
+**Context.** M12 top-25 membership is 25/25 but the rank-delta table is not empty (~16 deltas).
+Rule 7 and `docs/SHADOW-MODE.md` require an empty delta table *and* four consecutive green
+Fridays before `SCAN_SOURCE_DEFAULT=generated`.
+
+**Taken.** Leave the default `"upload"`. Do not flip the flag because fundamentals or calendar
+work landed. Friday still starts from a downloaded CSV.
+
+**Rejected.** Flipping early to "see if the desk is happier". One-share deltas are still red.
+
+**Reversal.** None needed; this restates the standing rule.
+
+## T9.4 — `deep_backfill` default start is 2011-01-01 · ⚠ UNREVIEWED
+
+**Context.** D5 is backfill from 2011-01-01. `DEFAULT_START` was 2017-01-01 (two Kite requests
+per name). Live `ohlcv_daily` still starts 2017-01-02 until the job is run. Do not use
+`make backfill` (M24.1: Kite-adjusted prices into `close_raw`).
+
+**Taken.** `DEFAULT_START = 2011-01-01` (three 2000-day windows to 2026-08-21). Running it is
+an evening at Kite's 3 req/s and needs a live token — not this session.
+
+**Rejected.** Changing the default without saying the data is still 2017 until the job finishes.
+
+**Reversal.** Set `DEFAULT_START` back to 2017-01-01.
+
+## T9.5 — OECD IR3TIB is the T-bill series · ⚠ UNREVIEWED
+
+**Context.** Backtest Sharpe was excess-over-zero (`risk_free_rate` default 0) because docs/04
+has no T-bill table. Factor Sharpe (`docs/05` §3, `ret_N / vol_N`) is a different number and
+must not grow an rf term — 1,355/1,355 CSV cells depend on that identity.
+
+**Taken.** Commit OECD MEI India IR3TIB (3-month short-term rates, monthly, 2011-11 → 2026-06,
+176 observations) as `baskfy_core.data/india_tbill.csv`. `execute_backtest` attaches it via
+`attach_tbill_curve`. Forward-fill onto return days. Factor Sharpe unchanged. No new Postgres
+table, no runtime OECD/FRED/RBI provider (network stays Kite + NSE).
+
+**Rejected.** Inventing a 6.5% flat rate. Scraping RBI WSS. A new `risk_free_daily` hypertable
+before a vendor is chosen. Putting rf into factor `sharpe_N`.
+
+**Reversal.** Stop attaching the curve; Sharpe falls back to excess-over-zero. Keep the CSV.
+
+## P4.0 — Phase 4 engineering may start; paid launch still waits · ⚠ UNREVIEWED
+
+**Date.** 24 Aug 2026. **Raised by.** User instruction: `/unlazy 3 start Phase 4 multi-tenant`.
+
+**Context.** Root CLAUDE.md and `docs/05` forbade Phase 4 until D3 had a written answer.
+D3 was written 23 Aug 2026 as posture B (`docs/DECISIONS-MERGE.md` §D3). Counsel C1–C3 remain
+open; C3 still blocks **paid** multi-tenant. D7 Track B flags stay false. D6 (static IP /
+Publisher) still shapes P4.2 topology. Non-negotiable #1: the web app never gains execute.
+
+**Taken.** Start P4 engineering with P4.1 (tenant columns + inventory test) and P4.3
+(gateway mismatch refusal). Do **not** in this sitting: two-account live OAuth (P4.2),
+per-user rate-limit load test (P4.4/P4.11), kill-switch productisation (P4.5),
+BasketDefinition (P4.6), entitlement flips (P4.7), per-user NAV jobs (P4.8), GTT-per-tenant
+(P4.9), RLS (P4.10), public signup, fee collection, or web execute.
+
+**Rejected.** Treating "start Phase 4" as the whole 8–12 week phase. Flipping Track B flags.
+Building web execute "dark". Altering `portfolio.db` (unrebuildable).
+
+**Reversal.** Revert P4.1/P4.3 commits; restore the "no P4 until D3" stop in CLAUDE.md.
+
+## P4.1 — Trading-path ORM carries tenant columns; desk SQLite deferred · ⚠ UNREVIEWED
+
+**Context.** `docs/05` P4.1: every desk-derived table gets `user_id` (+ `broker_account_id`
+where relevant); a test enumerates them; existing rows backfill to the founder.
+
+Desk tables still live in SQLite (`portfolio.db`) and a rehearsal `desk` schema. The SQLite
+file is unrebuildable evidence. `app/analytics/db.py` also forbids extra columns on those
+tables (the desk's own analytics phases read them by name).
+
+**Taken.** Define the trading path as the Postgres ORM tables in
+`baskfy_core.tenancy.TRADING_PATH_USER_ID_TABLES`. Add `broker_account` (id is the Law 2
+`broker_account_id`). Stamp `user_id` + `broker_account_id` on `cb_investment` and
+`cb_order_batch`. Backfill a Zerodha `broker_account` per `app_user`. List desk SQLite
+tables in `DESK_SQLITE_DEFERRED` so the enumeration test cannot "pass" by forgetting them.
+Do not ALTER `portfolio.db`.
+
+**Rejected.** Creating `fill`/`trade`/`plan_order` as new ORM tables in this sitting
+(that's the SQLite→Postgres writer flip, not a tenant stamp). Adding columns to SQLite
+snapshots. Treating watchlists as order-shaped (they get `user_id` already, not a broker
+account).
+
+**Reversal.** Drop migration `0018_trading_path_tenancy`; delete `baskfy_core.tenancy`.
+
+## P4.3 — Gateway refuses a tenant mismatch; desk console stamps the operator · ⚠ UNREVIEWED
+
+**Context.** Law 2: every order carries `user_id` + `broker_account_id`, and the gateway
+refuses a plan built for a different pair. `OrderGateway.place` had neither.
+
+**Taken.** Required `tenant` and `plan_tenant` (`TenantIds`) on
+`baskfy_execution.OrderGateway.place`. Mismatch returns `status=BLOCKED` with an error
+string — not an exception (P4.3: refusal, not a 500). Check runs before guards. The desk
+shim (`app/core/gateway.py`) stamps `BASKFY_SOLE_USER_ID` /
+`BASKFY_SOLE_BROKER_ACCOUNT_ID` when the operator console omits them, so Friday rebalance
+keeps working. Direct `baskfy_execution.OrderGateway` callers must pass the pair
+(fail-closed).
+
+**Rejected.** Defaulting the core gateway to founder ids (would collapse a second tenant
+onto the operator). Raising `TenantMismatchError` out of `place` (callers could turn it
+into a 500). Skipping the check under `DRY_RUN`.
+
+**Reversal.** Drop the two kwargs; restore the shim to a thin subclass.
+
+## BOOK.1 — One book is a UI composition of two ledgers, not a new table · ⚠ UNREVIEWED
+
+**Date.** 24 Aug 2026. **Raised by.** User request for a portfolio screen of multiple boxes plus
+an overall book (manager basket / own rule / by-hand holdings, each with its own capital).
+
+**Context.** Marketing (`three-ways.tsx`) already described the shape and said the combined page
+was not built. `cb_investment` carries live marks for baskets you hold. `portfolio` /
+`portfolio_sleeve` carries named CSV books and standing capital. Those are different ledgers:
+one is a mark, one is an assigned amount. Inventing a `book_box` table would either duplicate
+them or force a fake combined NAV.
+
+**Taken.** `/me/portfolios` composes both ledgers into boxes. Classification uses
+`cb_basket.visibility` + `source` (now on `InvestmentRowOut`) and sleeve `kind`. Sleeve capital
+and investment current value are shown as two overall figures and never summed. Unsleeved CSV
+holdings become one by-hand box; once sleeves exist they replace that leftover box so the same
+names are not counted twice. No unit counts, no web execute, no broker/MF feed.
+
+**Rejected.** A new box table. Treating marketing’s ₹35L / ₹5L / ₹60L as live data. Deriving
+share quantities from sleeve capital. Folding `/me/investments` away in the same sitting.
+
+**Reversal.** Restore the old named-book cards on `/me/portfolios`; drop `basket_source` /
+`visibility` from `InvestmentRowOut`; revert `lib/portfolios/book.ts`.
+
+
+---
+
+# Tree 5 — Portfolio management (25 Aug 2026)
+
+Ten leaves, one migration (`0019_portfolio_graph` on `0018_trading_path_tenancy`). Every entry
+below is a judgement call the Autonomy charter says to decide, record and continue past. The plan
+and its full status log are `TREE-PORTFOLIO-PLAN.md`; this file carries the *why*.
+
+## PM1 — A portfolio is a node in a forest; the depth cap is 6 · ⚠ UNREVIEWED
+
+**Context.** `portfolio` had four columns (`id`, `user_id`, `name`, `created_at`) and no way to
+express "this sits inside that". The user's own ask — a momentum sleeve beside a long-term core,
+read as one book — is a tree, and it was being approximated with flat names.
+
+**Taken.** `portfolio.parent_id`, a nullable self-reference with `ON DELETE SET NULL`, plus a
+database check `portfolio_parent_not_self`. The multi-row rules — cycles and depth — live in
+`baskfy_core.portfolio_graph` (Law 1: pure, no DB), because a cycle is not visible to a
+single-row constraint. `MAX_DEPTH = 6`, `ROOT_DEPTH = 1`; exactly six is legal, seven is refused.
+
+**Why six and not "unlimited".** Every consumer of the tree pays for depth linearly — the API
+response, the web tree view, the per-broker roll-up — and an uncapped `parent_id` is a
+denial-of-service a user can write to themselves. Six is deep enough for the shapes anyone has
+asked for (book → strategy → sleeve → account is four) and shallow enough that the roll-up stays
+a cheap recursion. The number is a constant in one module, not a scatter of literals.
+
+**`ON DELETE SET NULL`, not `CASCADE`.** Deleting a grouping node promotes its children to roots.
+Cascading would delete holdings to tidy up an organisational label — the same reasoning migration
+0013 already records for `portfolio_sleeve`.
+
+**Rejected.** A closure table or `ltree` path column (correct at a scale this product is nowhere
+near, and a second thing to keep consistent). Enforcing cycles with a recursive CHECK or a
+trigger (Postgres cannot express it in a CHECK, and a trigger would put a rule in a place no test
+of `packages/core` can see). No cap at all. A cap of 3 (too tight to survive the first user who
+groups by broker *and* by strategy).
+
+**Reversal.** `alembic downgrade 0018_trading_path_tenancy` drops `parent_id` and its constraint;
+delete `baskfy_core.portfolio_graph`. Raising the cap is a one-constant edit plus its tests.
+
+## PM2 — `portfolio.broker_account_id` is nullable, and NULL is a *fact*, not a gap · ⚠ UNREVIEWED
+
+**Context.** `cb_investment` already carried `broker_account_id` (0018). `portfolio` did not, so a
+portfolio could not say which account its money sat in — gap 2 of this tree.
+
+**Taken.** `portfolio.broker_account_id`, nullable, FK to `broker_account`, `ON DELETE SET NULL`.
+Its two states are two different statements: **NOT NULL** means "everything here is attributable
+to this one account"; **NULL** means "this is a roll-up node spanning brokers". NULL is not
+"unknown" and not "not filled in yet".
+
+**The consequence that made this worth writing down.** In the per-broker roll-up, "spans brokers"
+and "unattributed money" are deliberately different things, and the wire invariant is
+`total == sum(by_broker) + unattributed`. A roll-up node whose children are attributed has
+`unattributed == 0` and still has a NULL `broker_account_id`. Collapsing the two would let a
+consolidated view quietly report money it could not place.
+
+**Rejected.** NOT NULL with a synthetic "mixed" account row (a fake account is worse than an
+honest NULL, and it would appear in every account picker). A separate `is_rollup` boolean (two
+columns that can disagree). `ON DELETE RESTRICT` — unlinking a broker should turn an attributed
+portfolio back into a roll-up, which is the honest reading: nothing about the holdings changed,
+only what we can say about them.
+
+**Reversal.** Drop the column in the 0019 downgrade; the roll-up endpoint then reports everything
+as unattributed, which is true of a schema that cannot attribute.
+
+## PM3 — `portfolio_holding`'s primary key gains `broker_account_id` · ⚠ UNREVIEWED
+
+**Context.** The old key `(portfolio_id, instrument_id)` asserts that a portfolio holds a name in
+exactly one place. That is false the moment the same instrument is held at two brokers — which is
+precisely the situation this tree exists to make expressible.
+
+**Taken.** PK becomes `(portfolio_id, instrument_id, broker_account_id)`, the column **NOT NULL**,
+FK to `broker_account` with **no `ON DELETE` action at all**. Pre-existing rows are attributed on
+the rule migration 0018 already established: the portfolio's own account, else the owner's default
+broker account, else any account the owner has, else a default account created for them — exactly
+what `baskfy_api.broker_accounts.ensure_default_broker_account` does at runtime.
+
+**The trigger, and why a schema change needed one.** `portfolio_holding_attribute_broker_account`
+is a `BEFORE INSERT` trigger applying the same resolution rule whenever the column arrives NULL.
+Without it, the live writer `baskfy_api.portfolios.replace_holdings` — owned by a different leaf,
+and not editable inside the migration — would have begun failing on a NOT NULL violation the
+moment 0019 landed. The trigger fires *only* when the column is NULL, so a caller that names an
+account is never second-guessed, and no holding can be written unattributed by any writer,
+present or future. B1 subsequently taught `replace_holdings` to name the column itself
+(`portfolios.py:172 resolve_broker_account`); the trigger stays as the floor, not the mechanism,
+and a test proves attribution survives with the trigger explicitly disabled.
+
+**No `ON DELETE` on the FK, deliberately.** `SET NULL` is impossible inside a primary key, and
+`CASCADE` would delete positions in order to tidy up a login. The delete is refused instead — the
+database says no, cleanly, rather than destroying evidence.
+
+**`downgrade()` merges rather than deletes.** Rows written after the upgrade may hold one
+instrument at several brokers, and the old key cannot express that. Going down, quantities are
+summed, `avg_price` is re-derived as the quantity-weighted mean, `added_on` is the earliest, and
+only then are the folded-in rows removed. Proven with real data on the dev database, not asserted:
+`10 @ 100.0000` (2026-07-01) + `30 @ 200.0000` (2026-08-01) → `40.0000 / 175.0000 / 2026-07-01`.
+A row that predates the upgrade is alone in its group and returns byte-identical. What is lost on
+the way down is exactly the attribution the old schema had no column for.
+
+**Rejected.** A surrogate `id` PK with a unique index (hides the identity question rather than
+answering it, and every existing query keys on the pair). Leaving the column nullable and outside
+the key (then two brokers' rows for one name still collide). A downgrade that simply deletes
+duplicates — that is data loss dressed as reversibility.
+
+**Reversal.** `alembic downgrade 0018_trading_path_tenancy`, which performs the merge above.
+`packages/core/tests/test_schema_matches_docs.py` pins the key to the doc and must move with it.
+
+## PM4 — A sleeve may be sourced from a basket; the FK refuses the delete · ⚠ UNREVIEWED
+
+**Context.** `portfolio_sleeve.kind` was `CHECK (kind IN ('screen','manual'))`. The basket half of
+the product and the portfolio half did not join at all — gap 3.
+
+**Taken.** `kind` admits `'basket'`, paired structurally with a new nullable `basket_id`, exactly
+as `screen` is paired with `screen_id`. The `portfolio_sleeve_source` check now enumerates all
+three pairings, so an unsourced basket sleeve cannot exist
+(`0019_portfolio_graph.py:327` and the constraint below it).
+
+**No `ON DELETE` on `fk_portfolio_sleeve_basket_id_cb_basket`, and this is not an oversight.**
+`screen_id` uses `SET NULL`, which *contradicts* the pairing constraint: blanking the id while
+`kind` stays `'basket'` fails the CHECK, so the delete errors anyway — with a confusing message
+about a check constraint rather than about the reference. Omitting the action makes Postgres
+refuse the delete outright: same outcome, honest error.
+
+**The downgrade turns a basket sleeve into a `manual` one**, keeping the capital visibly
+unsourced. That is the outcome 0013 already chose for a sleeve whose screen went away. Deleting
+the row would destroy an allocation a person chose.
+
+**Rejected.** A separate `basket_sleeve` table (a sleeve is a sleeve; the kind is the variation).
+Reusing `screen_id` for a basket id (two meanings in one column). `ON DELETE SET NULL` to match
+`screen_id` (see above).
+
+**Reversal.** In the 0019 downgrade; basket sleeves become manual sleeves with their capital
+intact.
+
+## PM5 — `cb_investment.portfolio_id` is nullable, permanently · ⚠ UNREVIEWED
+
+**Context.** An investment in a curated basket had no way to say which portfolio it belonged to,
+so the money on `/me/investments` and the books on `/me/portfolios` were two ledgers that could
+not be read together.
+
+**Taken.** A nullable `portfolio_id` FK with `ON DELETE SET NULL`, plus `PUT`/`DELETE
+/cb/investments/{id}/portfolio` to file and unfile. Nullable is the *design*, not a migration
+convenience: an investment may legitimately sit outside any portfolio, and every row that predates
+0019 does. Filing is an act of bookkeeping — it records where a person considers the money to
+live, and **it never places, modifies or implies an order** (Law 2 untouched; non-negotiable #1
+untouched).
+
+**`ON DELETE SET NULL`.** Deleting a portfolio unfiles the investment. It never deletes the money
+or its history.
+
+**Rejected.** NOT NULL with a backfilled "Unfiled" portfolio for every user (invents a book nobody
+made and pollutes every listing). A join table (an investment is filed in at most one place; a
+join table would permit a state the product has no answer for). Making the filing move holdings.
+
+**Reversal.** Drop the column and the two routes; the two ledgers go back to being separate.
+
+## PM6 — Holdings carry a provenance enum, with `degraded` as a second axis · ⚠ UNREVIEWED
+
+**Context.** The money-safety defect of this tree. `holdings_for_broker` returned a bare
+`list[HoldingRow]` with no provenance, so `routers/brokers.py` labelled **any** non-empty result
+`"fixture holdings"` — including a live Kite fetch. A user looking at their real positions was
+told they were made up, and the API had no way to tell the difference either.
+
+**Taken.** `HoldingsResult(rows, source, degraded, detail)`, frozen, with
+`source ∈ {"live", "fixture", "empty", "unwired"}` validated in `__post_init__` and enforced for
+the object's lifetime, not only at construction. `live` with no rows raises; `empty` with rows
+raises; the router reports `source` verbatim. A live Kite fetch that returns rows reports `"live"`.
+
+**Why `degraded` is a separate boolean and not a fifth enum value.** `source` answers *where did
+these numbers come from*; `degraded` answers *is this what we intended to serve*. A degraded
+fixture is still a fixture. Folding them together would force every client that switches on
+`source` to re-learn the whole set the next time a degradation mode is added, and would make
+"these are fabricated" and "something went wrong" inexpressible independently — which is exactly
+the collapse that produced the original defect.
+
+**Non-negotiable #2 re-checked on the wire** while here: quantity 10 + t1 2 + collateral 3 →
+`total_quantity` 15.
+
+**Rejected.** A boolean `is_live` (cannot distinguish "no adapter" from "connected, holds
+nothing" — two very different things to show a user). Fixing only the router's message string
+(the information genuinely was not there to fix it with). Defaulting `source` to `"fixture"` for
+safety — a default that is wrong for the real case is how the bug started.
+
+**Reversal.** `holdings_for_broker` returns `result.rows`; the router's note goes back to a
+string. Do not do this.
+
+**Count correction for the record:** the original brief said `broker_holdings.py` had **seven**
+`return _fixture_holdings()` paths. The measured number at the pre-tree commit was **six**
+(`git show HEAD:...broker_holdings.py | grep -c 'return _fixture_holdings()'` → 6). The
+structural point was right and the count was wrong; recording the correction rather than
+repeating the brief.
+
+## PM7 — The broker catalog says `planned`, because seven brokers had no adapter · ⚠ UNREVIEWED
+
+**Context.** `broker_connections.py` advertised `holdings_sync="ready"` for **8 of 10** brokers.
+`_HOLDINGS_WIRED` — the set with an actual adapter — was, and is, `{"zerodha"}`. Seven brokers
+were telling users their holdings would sync: kotak, icici, upstox, angelone, fyers, fivepaisa,
+dhan.
+
+**Taken.** `holdings_sync="ready"` is reserved, in a comment on the catalog itself, for brokers in
+`_HOLDINGS_WIRED`. The seven were relabelled `"planned"`. Measured: `ready` rows 8 → **1**, and
+`{b.id for b in broker_catalog() if b.capabilities.holdings_sync == "ready"} == set(_HOLDINGS_WIRED) == {"zerodha"}`,
+asserted by `test_broker_capability_honesty.py`. The test was proven to assert the *spec* and not
+current behaviour (house rule 2) the hard way: restoring the old catalog from `git show HEAD:`
+turned it red (`3 failed, 6 passed`); restoring the new one turned it green again, byte-identical.
+
+**`"planned"`, not `"unavailable"`.** These brokers are on the roadmap and several have a usable
+public API; what does not exist is *our* adapter. `planned` says that. `unavailable` would be its
+own over-claim in the opposite direction.
+
+**This makes the catalog honest. It does not make the brokers work.** Writing the nine adapters
+needs credentials only Maulik can obtain — `NEEDS-MAULIK.md` §16.
+
+**Rejected.** Deriving `holdings_sync` from `_HOLDINGS_WIRED` at import time (`packages/core` must
+not import from `services/api`; Law 1 and the dependency direction both forbid it — hence a test
+that asserts the agreement instead of a computation that enforces it). Leaving the labels and
+adding a footnote in the UI. Deleting the unwired rows from the catalog entirely (a user should
+still see that we know their broker exists).
+
+**Reversal.** One-word edits per row, and the honesty test goes red — which is the point.
+
+## PM8 — OAuth can only be *completed* for Zerodha, and the old code leaked a live key · ⚠ UNREVIEWED
+
+**Context.** Found while making the catalog honest, and it was **live, not latent** —
+`BROKER_OAUTH_REVIEW.signed_off` is `True`. `POST /brokers/upstox/connect` returned a redirect to
+Upstox's authorize dialog carrying **Baskfy's Zerodha app key** as the `api_key` parameter: a
+credential for one broker handed to a different broker, on a real request. The callback would then
+redeem the returned token against Kite and write the shared token blob. The only refusal that path
+could produce read "Zerodha app key is not configured" — whatever broker the caller had clicked.
+
+**Taken.** `_OAUTH_COMPLETABLE: frozenset[str] = frozenset({"zerodha"})` in
+`routers/brokers.py:70`, checked at `:248` (callback) and `:321` (connect) — **before** the app
+key is read — refusing with a message that names the broker the caller actually clicked.
+
+**Why a second constant rather than reusing `_WIRED_AUTHORIZE`.** They answer different questions.
+`_WIRED_AUTHORIZE` (5 entries: zerodha, upstox, angelone, fyers, dhan) is "do we know this
+broker's authorize URL"; `_OAUTH_COMPLETABLE` (1 entry) is "can we finish the exchange and store a
+token". Knowing the URL is not consent to send someone else's key to it. Merging them would either
+re-open the leak or delete five URLs that are correct.
+
+**Still open, and explicitly not closed here** (it is `adapter_wired`'s semantics, owned by no leaf
+of this tree): `GET /brokers` reports `adapter_wired = broker.id in _WIRED_AUTHORIZE`, true for
+five brokers of which only one can complete a connection, and `capabilities.oauth == "ready"` for
+eight — angelone, dhan, fivepaisa, fyers, icici, kotak, upstox, zerodha — of which kotak and icici
+have no authorize URL at all. Both over-claim. Recorded on the status page rather than widened
+into this tree.
+
+**Rejected.** Deleting the non-Zerodha authorize URLs (throws away correct information and hides
+the gap). Refusing later, at token redemption (the key has already been sent by then — the whole
+point is to refuse *before* the redirect). A feature flag (this is not a feature; sending a
+credential to the wrong party has no "on" position).
+
+**Reversal.** Widen the frozenset one broker at a time, as each broker's real app key, secret and
+redirect URI arrive and its callback is tested end to end.
+
+## PM9 — `TREE_VALIDATION` is an alias for an existing 400, not a new `ProblemType` · ⚠ UNREVIEWED
+
+**Context.** The tree's own plan named `ProblemType.VALIDATION` for cycle / self-parent / depth
+errors. **It does not exist.** `problems.py` defines exactly one 400, spelled
+`INVALID_SCREEN_DEFINITION`, and `docs/07`'s catalogue is the wire contract — adding a member
+changes the generated TypeScript union for **every** route, and `problems.py` is owned by no leaf
+of this tree.
+
+**Taken.** `TREE_VALIDATION = ProblemType.INVALID_SCREEN_DEFINITION` at
+`routers/portfolios.py:135`, used at `:327` and `:669`. Cycles, self-parenting and depth
+violations return the router's existing 400 behind that name. A parent owned by another user
+returns `NOT_FOUND` instead, never a 403 — existence is not leaked.
+
+**Why an alias at all, rather than using the raw member.** The name is wrong for what it is doing
+— a portfolio cycle is not an invalid screen definition — and an alias says so in one place. The
+day a portfolio-shaped 400 exists in the catalogue, one line moves and every call site is correct.
+Spelling `INVALID_SCREEN_DEFINITION` at three portfolio call sites would spread a lie that is
+tedious to find later.
+
+**This is precedence rule 5 working as intended**: the plan's literal wording was wrong, the code
+was right, and the criterion was scoped rather than forced.
+
+**Rejected.** Adding `ProblemType.VALIDATION` (changes the wire contract for every route, in a
+file no leaf owns). Returning 422 from FastAPI's own validation (the check is semantic and
+multi-row — it needs the tree). A 409 (no such member either, same problem).
+
+**Reversal.** One line, once `problems.py` gains a portfolio 400.
+
+## PM10 — The portfolio response models were renamed, with NO back-compat aliases · ⚠ UNREVIEWED
+
+**Context.** `GET /portfolios` no longer returns a flat list. It returns `PortfolioForestOut` —
+`data` is the roots with nested `children`, plus an `orphans` array. An orphan is a fragment whose
+parent is not the caller's: unreachable through the API, so it is reported as a damage signal
+rather than silently dropped.
+
+**Taken.** The models renamed with the shape: `PortfolioDetailOut`, `PortfolioNodeOut`,
+`PortfolioForestOut`, `PortfolioWriteDetailOut`, `PortfolioCreateIn`, `PortfolioPatchIn`,
+`PortfolioRollupOut`, `PortfolioLinkBody`. `packages/api-client/src/client.ts` re-exports the new
+names (`client.ts:93-100`) and **no aliases were added** for the five names it used to export
+(`PortfolioOut`, `PortfolioSummaryOut`, `PortfolioListOut`, `PortfolioWriteOut`,
+`PortfolioCreate`).
+
+**Why no aliases, which is the actual judgement call.** An alias would let a caller keep reading a
+tree as a flat list, compile cleanly, and never find out — it would render a forest as its roots
+and lose every child. A rename that breaks the build is a rename that gets fixed. This is a
+pre-launch product with one consumer, `apps/web`, and its six affected files are known
+(`components/portfolios/rebalance-wizard.tsx`, `lib/portfolios/queries.ts`,
+`components/portfolios/portfolios-list.tsx`, `lib/portfolios/book.ts`,
+`lib/portfolios/__tests__/book.test.ts`).
+
+**Note.** `PortfolioSummaryOut` still exists inside `services/api/src/baskfy_api/schemas.py:891`
+as the base class `PortfolioNodeOut` extends. It is no longer part of the client's public surface.
+
+**Two API-shape facts a consumer must not get wrong.** `holdings_count` counts *this* portfolio's
+own rows, **not its subtree's** — it must never be presented as a subtree total. Roll-up money is
+exact unrounded `Decimal` with the wire invariant `total == sum(by_broker) + unattributed`, and
+every money field arrives as a **JSON string**, never a number (house rule 9 on the wire).
+
+**Rejected.** Deprecated aliases with a comment. Versioning the route (`/v2/portfolios`) for a
+product with one consumer and no external API — `D9` keeps the public API shut. Keeping the flat
+list and adding a parallel `/tree` route (two truths about the same data).
+
+**Reversal.** Re-add the five type aliases in `client.ts`. Doing so re-opens the failure mode.
+
+## PM11 — Sleeve allocation reports target units but not `held_units` · ⚠ UNREVIEWED
+
+**Context.** `baskfy_core.portfolio_units` computes `held_units`, `held_value` and `delta` per row
+(`portfolio_units.py:154-163, 395-404`). The sleeve allocation endpoint does **not** fill them.
+This is a deliberate omission and it is the most likely thing for a future session to "fix" wrongly.
+
+**Taken.** Sleeve allocation reports **target** units only. Two facts make held units
+unanswerable at that boundary: `portfolio_holding` is keyed by portfolio (and now broker account),
+while a sleeve is not a portfolio and holdings are not attributed to sleeves; and when two sleeves
+target the same name there is no honest rule for splitting the held quantity between them. Any
+number put in that field would be an allocation policy invented at render time.
+
+**What was done instead, so the gap is visible rather than silent.** `units` is `null` and never
+`0` — zero is a number, this is the absence of one; the sleeve carries `unpriced` (the names) and
+`units_note` (one sentence saying why); and `source_note` now distinguishes *the screen ran and
+matched nothing* (an answer) from *the screen could not be run* (an outage), which previously
+rendered identically as ₹0 deployed.
+
+**Rejected.** Splitting held quantity pro-rata across sleeves that name the same instrument
+(invented, and it would move with every price tick). Attributing holdings to sleeves with a new
+`sleeve_id` column (a real design, needing a real answer to "what happens when a sleeve is
+deleted" — out of scope here, not free). Reporting `held_units: 0` (a lie shaped like data).
+
+**Reversal.** N/A — nothing was built. Filling the field requires the attribution decision above
+to be taken first, and recorded here.
+
+## PM12 — What this tree got wrong about itself · ⚠ UNREVIEWED
+
+An honest record includes the process, not only the result. All of the following were found by
+*running* the checks rather than by reading them, and every one was a defect in the measuring
+instrument, not in the code being measured.
+
+**Five driver-authored gate defects.**
+
+1. **`-qq` blindness.** `pyproject.toml:281` already sets `addopts = "-q ..."`, so every
+   `uv run pytest ... -q` CHECK ran as `-qq`, which suppresses the `N passed` summary. Those gates
+   could never have matched their EXPECT regardless of outcome. 39 CHECK lines corrected.
+2. **A conjunction that could not fail.** Compound `ruff && mypy` gates matched on
+   `/Success: no issues/` — mypy's half — while ruff was failing beside it. One gate had already
+   been marked met on the evidence `[*] 4 fixable with the --fix option.` All such gates now emit a
+   single decisive `GATE_OK` / `GATE_FAILED` token from exit status.
+3. **`EXPECT: passed` matches inside `1 failed, 1555 passed`.** The worst of them: 54 gates used
+   the bare substring, and node A's N4 had already been marked met that way while the core suite
+   was red. 29 gates hardened to `/^\d+ passed/m`; every previously-met gate whose EXPECT changed
+   was **reset and re-run** rather than grandfathered — all still passed, which is the only way to
+   know they were real.
+4. **A CHECK calling a function that never existed** (`all_brokers`; the accessor is
+   `broker_catalog()`).
+5. **`-m db -k <filter>` deselecting the very suite its gate was named after** — the gate would
+   have gone green with that suite deleted.
+
+**Three ownership gaps in the plan**, all found by leaves rather than by the plan:
+`services/api/src/baskfy_api/portfolios.py` (the holdings writer the PK change lands on),
+`packages/core/tests/test_schema_matches_docs.py` (the doc↔ORM binding test), and
+`services/api/tests/test_api_artifacts.py` (`EXPECTED_PATHS`, which fails on any added route).
+A plan whose ownership table has holes produces either a merge conflict or a silent skip.
+
+**One wrong `ProblemType` in the contract** — see PM9.
+
+**A bug in the gates runner itself.** `~/.claude/skills/unlazy/scripts/gate-check.mjs:23` drops its
+first positional argument when no `--timeout` flag is present, so `gate-check.mjs <one-file>`
+resolves to an empty list and falls back to globbing **every** `gates/*.md` in the repo —
+executing and flipping boxes in files the caller does not own. It flipped 22 boxes across nine
+gate files whose leaves had not started, and 4 more in a later sweep; all 26 were reset with their
+evidence. Workaround for the run: always pass `--timeout` **before** the path. The shared script
+was not edited — it is the user's tooling and the fix is theirs to approve.
+
+**An infrastructure hazard, not a defect.** `baskfy_test` is a single shared database and
+`services/api/tests/conftest.py`'s `clean_database` fixture runs `DROP SCHEMA public CASCADE`.
+While leaves run concurrently, any `db`-marked gate can fail for reasons unrelated to the code
+under test — measured as six identical consecutive runs of one suite: 4× `23 passed`, 2× wiped.
+`db` gates are only trustworthy run serially, and every db-dependent leaf was re-verified with no
+leaf running. Related: never hand-reset `baskfy_test` with `DROP SCHEMA public CASCADE` — it
+leaves orphan `_timescaledb_internal` chunks and a wave of false failures.
+
+**⚠ The environment defect that is NOT resolved.** `uv run pytest services/api` returns a
+**different failure set on every run** of this machine. Measured across four runs:
+`test_api_run.py::TestCsvExport::test_the_values_match_the_json_response_exactly`,
+`test_load.py::TestFiftyConcurrentScreenRuns::test_the_pool_is_not_the_bottleneck`,
+`...::test_p95_stays_under_four_hundred_milliseconds_with_no_errors`,
+`test_api_keys.py::TestCreation::test_the_row_stores_a_digest_and_not_the_secret`. Every one passes
+in isolation and greps 0 for portfolio / sleeve / broker / investment. It is **not** random
+ordering — `pytest-randomly` and `xdist` are both absent, confirmed. The causes are shared-database
+pollution between module-scoped fixtures and load-sensitive latency budgets on a busy laptop; the
+csv-export failure is separately proven pre-existing by an A/B with 0019 downgraded.
+**Consequence, stated plainly: this tree does not claim the API suite is green, and does not claim
+the performance budgets hold.** The alternative — an ever-growing allowlist of "known flaky" tests
+— would have been the cheating version of this, and was rejected.
+
+**A sixth gate defect, found by E1 auditing its own passes rather than trusting them.** E1's G8
+("no secret, token or connection string was written into any doc") ran
+`grep -cE <pattern> docs/ NEEDS-MAULIK.md` — **without `-r`**. Grep on a directory with no
+recursion flag is unspecified: run by hand it reported `SECRET_HITS=1`, run under the gate
+runner's shell it reported `SECRET_HITS=0` and the gate recorded that as evidence. The gate was
+**blind** — it never scanned `docs/` at all and would have passed with a credential in every file.
+The one real hit it should have caught was pre-existing: `docs/00-merge-status.md:442` carried
+an async-Postgres connection URL with an inline username and password for the local test
+database. The line now points at `.env` / `infra/docker/compose.yml` instead of repeating a
+connection string that carries credentials, even local ones. G8's CHECK gained `-r`, gained the 04b addendum to its
+scan set, and gained a bearer-token pattern; G7's CHECK — which matched incidental occurrences of
+"fixture" near "six" elsewhere in the file and would have passed without the correction being
+written at all — now matches the correction sentence itself. Both were reset and re-run, and both
+were proven capable of failing by planting a violation in a scratch copy: `SECRET_HITS=1` and
+`CORRECTED=0` respectively. Stricter in every case; nothing was weakened.
+
+G5's CHECK had the same hole and was audited the same way: `grep -nE "broker|holdings"
+NEEDS-MAULIK.md` passes on the **pre-tree** file (`git show HEAD:NEEDS-MAULIK.md` matches on the
+older §13 OAuth entry), so it proved nothing about the nine-broker list. It now requires all nine
+broker names present **and** the statement of what they block, behind one decisive token —
+measured `GATE_OK BROKERS_NAMED=9` on the current file and `GATE_FAILED BROKERS_NAMED=2` on the
+pre-tree file. G1 and G3 were audited the same way and are sound: both produce no matching output
+against the pre-tree files, so neither could have passed without this tree's work.
+
+**Reversal.** N/A. This entry is a record; nothing here is a change to undo.
+
+## MGR1 — a manager identity is nullable-but-unique against an account ⚠ UNREVIEWED
+
+**Context.** `cb_manager` held two seed rows and no link to `app_user`. A third party could not
+become a manager because there was nothing to become.
+
+**Taken.** `cb_manager.user_id`, nullable FK, with a *partial* unique index
+(`uq_cb_manager_user_id ... WHERE user_id IS NOT NULL`). At most one manager identity per account;
+identities belonging to nobody stay legal.
+
+**Rejected.** (a) NOT NULL with a synthetic account for the engine — invents a login that must
+then be protected, for a pipeline that will never sign in. (b) A plain unique index — Postgres
+treats NULLs as distinct so it would have worked, but it says "these may repeat" to a reader,
+which is the opposite of the rule.
+
+**Reversal.** Drop the index and the column; the two seed rows never used it.
+
+## MGR2 — the onboarding lifecycle, and why SUSPENDED cannot reach APPROVED ⚠ UNREVIEWED
+
+**Context.** No application, no review, no state.
+
+**Taken.** `DRAFT → SUBMITTED → APPROVED | REJECTED`, `APPROVED → SUSPENDED`, and back only via
+`SUSPENDED → SUBMITTED → APPROVED`. The machine is `baskfy_core.manager_onboarding`; the database
+pins only the vocabulary, and the router calls `next_state` rather than comparing strings.
+
+**Rejected.** `SUSPENDED → APPROVED` as a one-click undo. Suspension exists for when something is
+wrong with a person's standing, and the honest way out is the review that establishes it is wrong
+no longer. A one-click restore would make suspension mean "hidden for now".
+
+**Reversal.** One entry in `TRANSITIONS`. `test_a_suspended_manager_cannot_be_restored_without_a_fresh_review`
+is the thing that will object, deliberately.
+
+## MGR3 — SEBI registration is captured, checked syntactically, and claims nothing ⚠ UNREVIEWED
+
+**Context.** `sebi_reg_no` was a bare nullable string: it could not say which registration it was,
+whether it had lapsed, or whether anybody had ever looked.
+
+**Taken.** A constrained `sebi_reg_type`, a validity window, and `sebi_reg_verified_at` (NULL
+until a human compares the number against the SEBI register). `baskfy_core.sebi_registration`
+checks format only, and three facts are kept separate on purpose: **well-formed** (a regex),
+**verified** (an operator action with a date), **compliant** (D3, unreviewed, decided by nobody in
+this codebase). Every API response carries a disclaimer saying so.
+
+**Rejected.** (a) Refusing an unrecognised shape — a manager holding a registration we have not
+seen must still be able to apply, so it is stored as `UNKNOWN` for a person to look at.
+(b) Calling the verdict field `valid`; it is `well_formed`, because `valid` invites the wrong
+belief.
+
+**Reversal.** The columns are additive; the pure module is deletable.
+
+## MGR4 — revenue share is schema-only, dark, and carries no default rate ⚠ UNREVIEWED
+
+**Context.** There was no revenue-share entity at all. Fee collection is Track B and its flag is
+false; **D7 pricing amounts are human-track** and must not be guessed.
+
+**Taken.** `cb_manager_revenue_share` with `rate_bps` NOT NULL and **no server default**, rows
+superseded rather than edited, and `GET /managers/me/revenue-share` 404ing while
+`BASKFY_FEE_COLLECTION_ENABLED` is false — the pattern `routers/track_b.py` already established.
+This follows the order P4.1 used: schema lands while paid launch waits on C3.
+
+**Rejected.** (a) A default rate. A default is exactly how a guessed number survives review — it
+never appears in a diff again. (b) Reporting a missing agreement as `rate_bps: 0`; absence and
+zero are different, and only one of them is a decision. The response says `unset: true`.
+
+**Reversal.** `downgrade()` drops the table. Safe *only* while the surface is dark — recorded in
+the migration docstring, because after the flag is flipped the table must be archived first.
+
+## MGR5 — applying is not public signup ⚠ UNREVIEWED
+
+**Context.** `BASKFY_PUBLIC_SIGNUP_ENABLED` is false and stays false.
+
+**Taken.** `POST /managers/me` requires an authenticated account. An existing user declares they
+want to manage; a stranger still cannot create an account. The router does not read that flag,
+because it opens nothing the flag gates.
+
+**Rejected.** Gating manager applications behind the public-signup flag — it would conflate "may
+anyone join Baskfy" with "may an existing user manage baskets", and leave the second unbuildable
+until the first is decided.
+
+**Reversal.** Delete the route.
+
+## MGR6 — editing a pending application is not a state transition ⚠ UNREVIEWED
+
+**Context.** Re-posting an application while `SUBMITTED` asked the machine for
+`SUBMITTED → SUBMITTED`, which it refuses as a no-op write.
+
+**Taken.** While `SUBMITTED`, the fields are edited in place and the state is untouched — nobody
+has decided anything yet, so there is no decision to re-make. `DRAFT` and `REJECTED` are real
+moves to `SUBMITTED`. `APPROVED` and `SUSPENDED` are refused: changing a registration behind an
+approval granted against the old one is what review exists for.
+
+**Reversal.** Remove the `if existing.state != "SUBMITTED"` guard in `routers/managers.py`.
+
+## COL1 — collection membership is a rule, not a hand-written list ⚠ UNREVIEWED
+
+**Context.** `cb_collection` has existed since migration 0014 and held zero rows. There was no
+seeder, so nothing would ever have created one.
+
+**Taken.** `COLLECTION_SEED_ROWS` is a tuple of `CollectionSeed` predicates (categories, manager
+slugs, rebalance frequency, ordering) resolved against the baskets that exist at seed time.
+Re-running recomputes membership; the upsert keys on `slug`.
+
+**Rejected.** Hand-written `basket_slugs`. Exactly one basket exists today, so every editorial
+shelf would seed empty and stay empty until somebody remembered to edit the file — which is
+precisely how the table came to hold nothing for six migrations.
+
+**Reversal.** Delete the seeder and the four rows; nothing else reads `COLLECTION_SEED_ROWS`.
+
+## COL2 — the brief's claim "there is no route to read one" was wrong ⚠ UNREVIEWED
+
+**Context.** The task said no route existed. `GET /explore/collections` (`explore.py:374`) and
+`GET /explore/collections/{slug}` (`explore.py:392`) both existed, both required a user, and both
+filtered through `_visible()`.
+
+**Taken.** Corrected in the gates file before any work, and the effort went to what was actually
+missing: content, a renderable payload, and a page. The routes were extended, not created.
+
+**Reversal.** n/a — a correction to the record.
+
+## COL3 — a collection returns whole cards, and `basket_slugs` is kept ⚠ UNREVIEWED
+
+**Context.** `CollectionOut.basket_slugs` was `list[str]`. A browse page cannot draw a card from a
+slug, so every shelf would have cost one request plus N.
+
+**Taken.** `baskets: list[BasketCardOut]` — the same card the catalogue grid uses, from one JOINed
+SELECT, re-sorted back into the shelf's stored editorial order. `basket_slugs` is kept and is
+exactly `[b.slug for b in baskets]`; a test asserts they never disagree.
+
+**Rejected.** Replacing `basket_slugs` outright — something may still read it, and the cost of
+keeping it is one list comprehension plus the test that pins them together.
+
+**Also added:** `withheld`, the count of named baskets the caller may not see. It is never
+rendered — a viewer learning that hidden baskets exist is what `visibility` prevents — and a test
+asserts no viewer-facing file renders it. It exists so an operator can tell "empty" from "hidden".
+
+## COL4 — the page lives under `/baskets`, and `/collection/[slug]` redirects to it ⚠ UNREVIEWED
+
+**Context.** The brief asked for `/collection/[slug]`. Tree 6 moved the entire consumer IA under
+`/baskets` and left a redirect plus a stub at every old path.
+
+**Taken.** The real page is `/baskets/collections/[slug]`, with `/collection/:slug` and
+`/collections` added to the redirect registry and redirect stubs at both — the convention Tree 6
+established, and `check-shadowed-routes.mjs` passes with 14 redirected routes.
+
+**Rejected.** A second top-level noun. It would fight the IA Tree 6 deliberately consolidated, and
+`SectionTabs`/`PAGES` are organised around the `/baskets` section.
+
+**Reversal.** Two lines in `next.config.ts` and two stub files.
+
+## T3F.1 — NSE retired `/api/quote-equity`; the fundamentals fetch was never going to work ⚠ UNREVIEWED
+
+**Context.** NEEDS-MAULIK §15 said `fundamental_daily` was empty because nobody had spent "one
+night against NSE" — the parser and the join were written and only a run was missing. That
+diagnosis was wrong. `GET https://www.nseindia.com/api/quote-equity?symbol=INFY` returns **403
+from AkamaiGHost** from this box, and so does the site root, while `nsearchives.nseindia.com`,
+`/api/marketStatus` and `/api/allIndices` all return 200 with live data. A 403 that reads like a
+bot block was in fact a **removed route**: NSE's quote page is now a Next.js app whose own chunks
+call `/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolData&marketType=N&series=EQ&symbol=…`.
+That endpoint answers 200 with no cookies and no priming. A night against NSE would have archived
+2,500 copies of an Akamai deny page.
+
+**Taken.** `NSEProvider.equity_fundamentals` fetches `GetQuoteApi`, and a new
+`parse_get_symbol_data` reads the current shape (`equityResponse[0]` with `tradeInfo.issuedSize`,
+`tradeInfo.lastPrice`, `secInfo.pdSymbolPe`). `parse_equity_quote` dispatches on the payload, so
+the retired shape still parses out of the archive — archived bytes are permanent (docs/09), and a
+file captured before the migration must not become unreadable. `pb` and `div_yield` are **not in
+the new payload at all** and are now always NULL; carrying the old field names forward would have
+made an absent number look like a fetched one.
+
+**Rejected.** Scraping the rendered quote page (the numbers are not server-rendered), and
+harvesting browser cookies to get the old route back (the route is gone, not guarded).
+
+**Reversal.** One constant and one parser; the retired parser is untouched and still tested.
+
+## T3F.2 — the series is a hint from the database, not a second round trip ⚠ UNREVIEWED
+
+**Context.** `GetQuoteApi` needs the series a symbol trades under. Asked for the wrong one it
+answers **200 with an empty `equityResponse`**, which is indistinguishable from "no such name" at
+the HTTP layer. On 2026-08-21 the universe is 2,286 EQ, 231 BE and 28 BZ, so a naive EQ-only fetch
+would silently produce NULL for 259 names.
+
+**Taken.** `equity_fundamentals` gained an optional `series_by_symbol` hint, and the fill passes
+`instrument.series`, which the listings step already stores. An empty response escalates to
+`functionName=getMetaData` and retries with the series NSE itself reports, so a stale hint costs a
+round trip and never a NULL row. Measured over the live fill: **2** metadata lookups in 433
+symbols.
+
+**Rejected.** Changing the port signature positionally (an optional keyword keeps every existing
+caller and the `ReferenceProvider` Protocol valid), and always calling `getMetaData` first (it
+would have doubled a 45-minute run to 90).
+
+**Reversal.** Drop the keyword; the fallback alone still works, more slowly.
+
+## T3F.3 — P/E is re-priced onto the target date rather than stored as fetched ⚠ UNREVIEWED
+
+**Context.** The quote has no history: it answers with *today's* price and *today's* P/E. A
+backfill of a past date that stored `record.pe` verbatim would put the fetch day's price inside
+that date's row, and a backtest standing on that date would be reading the future. CLAUDE.md house
+rule 5 warns explicitly against adding a second look-ahead violation.
+
+**Taken.** `_pe_on` scales the quoted ratio by `close_raw(on) / last_price`, which is the same as
+deriving the implied EPS and re-dividing. Every price in a stored row is then the price the
+exchange printed that day. Market cap already worked this way (`_marketcap_cr` prefers
+`close_raw`); this makes the two halves of the row consistent.
+
+**The residual, stated not hidden.** The EPS vintage is still the fetch day's. If a company
+reported between `on` and the fetch, the stored ratio uses earnings not known on `on`. NSE
+publishes no point-in-time EPS series, so this is the floor rather than a choice — and it is far
+smaller than carrying the price across too. A same-day nightly run has neither problem.
+
+**Rejected.** Storing the quoted ratio unchanged (a new rule-5 violation), and refusing to store
+P/E for past dates at all (it would leave every factsheet on an em dash to avoid an error smaller
+than a day's price move).
+
+**Reversal.** `_pe_on` returns `quoted_pe` unchanged; one line.
+
+## T3F.4 — a one-off fill command, because a pipeline night is the wrong shape ⚠ UNREVIEWED
+
+**Context.** T9.1 folded the fetch into step 6, which is right for a night already running.
+§15's actual situation is a table that has never been filled, on a date the pipeline already
+published. Reaching that through the ten-step orchestrator would refetch bars and corporate
+actions for a date whose bars are already correct, and an interruption forty minutes in would
+leave nothing behind — `session_scope` wraps the whole operation in one transaction.
+
+**Taken.** `baskfy_worker.fundamentals_cli fill`, scoped to instruments with a bar on the target
+date (2,545, not the 10,481 listed), resumable at two levels (`--resume` skips stored symbols; the
+archive never refetches an archived key), committing every 25 symbols through a new
+`db.checkpointed_session`, and accounting for every scoped symbol as stored / already-present /
+no-quote / failed with the failures named. `factors_cli recompute --date` re-runs step 7 alone
+against data already on disk.
+
+**Rejected.** Running the full pipeline (network work for no benefit, and the quality gate would
+judge a date it was not asked about), and one transaction for the whole fill (the failure mode
+this command exists to survive).
+
+**Reversal.** Delete two commands; the nightly path is untouched.
+
+## T3F.5 — both the published date and the newest bar date are filled ⚠ UNREVIEWED
+
+**Context.** These are not the same date and the difference decides whether anything renders. The
+API resolves every as-of through `screener.latest_published_date` — `max(pipeline_run.trade_date)`
+where `data_version IS NOT NULL` — which is **2026-08-18**. `max(ohlcv_daily.date)` is
+**2026-08-21**. Filling only the newer date would have left every surface on an em dash while the
+table looked full.
+
+**Taken.** Both. 2026-08-18 is what the product serves today; 2026-08-21 is what the next nightly
+publish will serve, so the fix does not regress the moment a night runs.
+
+**Checked before overwriting.** Recomputing `factor_daily` for 2026-08-18 is safe for parity:
+`marketcap_cr` is in `reconcile_cli.NOT_RECOMPUTED`, and reconciliation diffs the committed
+`reference-screen-export-2026-08-18.csv` fixture, never `factor_daily`. The 271 pre-existing
+non-null caps on that date came from `seed_published_run`, not from the answer key.
+
+**Reversal.** `DELETE FROM fundamental_daily WHERE date = …` and recompute; the corpus CSV is
+untouched either way.
+
+## HOME1 — the consumer nav gains a fifth destination, `/home` ⚠ UNREVIEWED
+
+**Context.** Tree 6 collapsed the primary chrome to four one-word destinations — Market · Baskets ·
+Build · Me — and its report argues that collapse at length. SC9's home surface has to be
+*reachable*, and a `/home` you can only get to by clicking the logo is a page most people never
+find. Three options: a fifth primary pill; wordmark-only; or fold home into `/me`.
+
+**Taken.** A fifth primary destination, first in the row, plus the app-shell wordmark pointing at
+`/home` instead of `/`. The observed product carries five bottom tabs too, and the tab bar is a
+`justify-around` flex row, so tabs narrow rather than overflow at 390px. Folding home into `/me`
+was rejected because `/me/investments` answers "what do I hold" and home answers "what needs me,
+and what is worth a look" — putting both under one tab is the conflation Tree 6 untangled between
+`/dashboard` and `/market/today`.
+
+**Rejected.** Wordmark-only (undiscoverable); replacing `/market/today`'s pill (the market question
+is not the "mine" question); a sixth for `/baskets/collections` (that lives inside Baskets).
+
+**Reversal.** Delete the first entry of `PRIMARY_NAV`, drop the `home` key from `SECTION_TABS` and
+the `home` arm of `primarySection`, and pass no `href` to `Wordmark` in `top-nav.tsx`. The page
+stays; only the chrome loses it. `src/lib/__tests__/nav.test.ts` asserts the count both ways.
+
+## HOME2 — trending is computed on request, not from an EOD snapshot ⚠ UNREVIEWED
+
+**Context.** SC9's ranking layer had never been built. `gates/trending-root.md` planned it as a
+pure domain module plus a persisted `cb_trending_snapshot` written by a Celery Beat task
+(migration 0020). The home surface needs the ranked lists; it does not need the table.
+
+**Taken.** Build the pure domain — `baskfy_core.curated_trending`, the same module path that plan
+names, so a snapshot tree extends it rather than competing — and serve it from
+`GET /api/v1/cb/trending`, which computes over `cb_basket` / `cb_metrics` / `cb_basket_version` /
+`cb_watchlist_item` / `cb_investment` / `cb_order_batch` in six grouped reads on each request. No
+migration, no Beat job, no table.
+
+Six grouped statements rather than one join, because joining five one-to-many tables multiplies
+rows before it aggregates them: a basket with three versions and two watchers would report six
+watchers. `test_curated_trending_http.py::test_counts_are_not_multiplied_by_a_join` is that
+assertion.
+
+The floors are the honest part. `MIN_ENTRIES = 3` (a ranked list of two is not a ranking) and
+`MIN_POPULATION = 5` (a popularity signal over four people is meaningless *and* discloses how
+those four behaved). A list under either floor is **withheld with a machine-readable reason**, and
+returned anyway so the surface can say why. Today's single-tenant database withholds all nine —
+which is exactly SC9's "no fake 'most invested'".
+
+**Rejected.** A snapshot table now (machinery for a catalog of one, and a live answer cannot go
+stale); dropping withheld lists from the payload (indistinguishable from never having built them);
+ranking over a smaller floor (the number would not be one this product could stand behind).
+
+**Reversal.** Delete the router and its mount, remove `/cb/trending` from `EXPECTED_PATHS`, and
+regenerate the client. The pure module has no callers of its own and can stay for the snapshot
+tree. `gates/trending-root.md` G5/G6/G9 — migration, Beat task, end-to-end job proof — remain open
+and unclaimed; that file's counts (LISTS=9 POP=3) match what was built here.
+
+## HOME3 — signing in still lands on `/build`, not `/home` ⚠ UNREVIEWED
+
+**Context.** `DEFAULT_DESTINATION` in `apps/web/src/app/actions/auth.ts` is where a sign-in with no
+`?next=` goes. `/build` was right when the screener was the whole product. With a landing surface
+built, `/home` is the better answer.
+
+**Taken.** Leave it at `/build` for now. Thirteen Playwright specs sign in through a helper that
+waits for `/build`, and this sitting could not run Playwright (the suite needs the app, the API and
+a database that other sessions were using) — so the switch would have shipped unverified across
+files this tree does not own.
+
+**Reversal / how to finish it.** One line here, plus `waitForURL(/\/build/)` → `/\/home/` in
+`e2e/auth.setup.ts`, `account.spec.ts` (×6), `critical-journeys.spec.ts`, `explore-handoff.spec.ts`,
+`instrument.spec.ts`, `disclaimer-sweep.spec.ts`, `portfolios.spec.ts`. Do it with Playwright
+running.
+
+## M40 — catalog search: one federated `GET /search`, four kinds, one round trip ⚠ UNREVIEWED
+
+**Context.** `baskfynavrefactorreport.md` §F11 ("Fragmented search") is the open item this closes:
+"Header search is stock-only … the indices table has its own separate search; baskets and screens
+aren't searchable at all from the header. One global search should cover stocks, indices, baskets,
+and screens." §"Global search" fixes the surface — "⌘K / tap-search opens a command palette
+searching stocks, indices, baskets, and screens, with recent items" — and the report's own
+open-items list carried it as item 5, deferred out of the Tree 6 nav work. The ⌘K palette shipped
+covering instruments plus a client-side filter over `NAV_ITEMS`: two of the five groups.
+
+**Taken.** A new `GET /api/v1/search?q=&limit=` (`baskfy_api.search` + `routers/search.py`) that
+answers all four kinds in one request, and a palette that consumes it. `limit` is **per kind**, so
+2,300 instruments cannot crowd the one basket the user meant out of the dialog. Ranking is exact →
+prefix → contains, per kind, ties broken by title — the rule `baskfy_api.instruments` already
+applied to symbols, now applied to all four rather than re-invented three more times.
+
+Rejected: four scoped calls from the browser per keystroke (four round trips, four abort
+controllers, four failure modes, and a ranking the client would have to invent); a search index
+(Postgres `ilike` over indexed columns with `LIMIT 5` is not the cost here — the round trip is).
+
+**Reversal.** Delete `routers/search.py`, its mount in `app.py`, `baskfy_api/search.py`, the
+`CatalogHitOut`/`CatalogSearchOut` schemas, and regenerate the client. The palette falls back by
+reverting `command-palette.tsx` to `lib/api/instruments.ts`, which is untouched.
+
+### M40.1 — a hit carries identity, not a URL
+
+**Context.** The palette needs a href. The API knows the resource; the web app knows the routes.
+
+**Taken.** `CatalogHitOut` is `kind` + `id` + `title` + `subtitle` and no href.
+`apps/web/src/lib/search/hrefs.ts` maps a kind to a route, and `hrefs.test.ts` asserts every kind's
+first path segment is a directory that actually exists under `src/app/(app)`. Tree 6 moved
+`/screens/{id}` → `/build/{id}` and `/explore` → `/baskets`; an href minted server-side would have
+made the next nav refactor an API deploy, and a palette pointing at last month's routes typechecks
+perfectly and 404s for every user.
+
+**Rejected.** Returning `href` from the API (couples the contract to one client's route table).
+
+**Reversal.** Add `href` to `CatalogHitOut` and delete `hrefs.ts`. Not recommended.
+
+### M40.2 — an index hit lands on the dashboard, filtered
+
+**Context.** There is no index detail page anywhere in the app; `index_def` has ~145 rows and the
+only surface that draws them is `/market/today`.
+
+**Taken.** An index hit goes to `/market/today?q=<slug>`. That page's search box is URL state
+(`nuqs`), so the hit lands with the table filtered to that index's row — level, change, P/E, P/B,
+sparkline. Building an index detail page was out of this sitting's scope and is not implied by F11.
+
+**Rejected.** `/market/mood?universe=<slug>` (only twelve of the ~145 indices have breadth series,
+so most hits would 422 or silently fall back); a new `/indices/{slug}` page (a whole surface, with
+no spec behind it).
+
+**Reversal.** One line in `hrefs.ts` once an index page exists. `hrefs.test.ts` pins the current
+answer, so the change is visible rather than silent.
+
+### M40.3 — recent items live in `localStorage`, not in a table
+
+**Context.** F11 asks for "recent items". The alternative is a `recent_item` table, a migration and
+a write on every navigation, to remember five rows per person.
+
+**Taken.** `localStorage`, per browser, capped at five, every read and write guarded — storage
+throws outright in a Safari private window, and a search box that will not open because a
+convenience feature threw is a far worse failure than one that has forgotten. Stored entries are
+validated on read: an entry written by an older build is exactly as trustworthy as user input, and
+an unknown `kind` would otherwise reach `hrefFor` and index `undefined`.
+
+Note the neighbouring precedent points the other way for a different reason: `announcement-banner`
+deliberately uses a cookie because it renders on the server and `localStorage` would flash. Recents
+are read only after the dialog opens, client-side, so that argument does not apply here.
+
+**Reversal.** Delete `lib/search/recents.ts` and the Recent group. Losing the stored list costs a
+person three keystrokes.
+
+### M40.4 — `risk_free_curve` is documented as an array of arrays, not a tuple
+
+**Context.** Not a search decision — a blocker found while doing this one. The checked-in
+`openapi.json` was badly stale (regenerating it produced a 15,000-line diff), and `risk_free_curve`
+had been added to `BacktestConfig` since it was last generated. Regenerating is not optional: a
+served route that is not in the document is a surface nobody agreed to, and `test_api_artifacts.py`
+enforces it. With the fresh document, `pnpm run lint` **and the production build** failed on
+`Type 'string[][]' is not assignable to type '[string, string][]'` — Pydantic emits `prefixItems`
+for `tuple[dt.date, Decimal]`, openapi-typescript turns that into a TS tuple, and the value
+`openapi-fetch` hands a caller is structurally widened to `string[][]`. The generated client could
+not assign its own response to its own `BacktestOut`. `e2e` could not run at all.
+
+**Taken.** `WithJsonSchema` on the field, declaring it `array of array of string`. **Validation is
+unchanged** — this alters the documented shape only, and the pair's length is still enforced by the
+model. Verified: 94 web typecheck errors with the stale artifact, 2 with the fresh one and this
+field still a tuple, 0 with the override.
+
+**Rejected.** Casting at the two call sites (hides a real contract disagreement); leaving the
+artifact stale (the new route would be undocumented and the build was already red).
+
+**Reversal.** Remove the `Annotated[..., WithJsonSchema(...)]` wrapper in
+`packages/core/src/baskfy_core/backtest.py` and regenerate — and then fix the two call sites, which
+is the work this avoided.
+
+### M40.5 — search is a mixed surface: open to anonymous callers, per-kind visibility
+
+**Context.** `/explore` calls `principal.require_user()`; `/screens` serves examples to anonymous
+callers and a user's own screens to that user; `/instruments` and `/indices/dashboard` are public.
+A federated search reaches all four.
+
+**Taken.** The route takes `PrincipalDep`, not `AuthenticatedDep`. Each kind's searcher applies
+**exactly** the predicate its own list route already applies: baskets need a user and must be
+`visibility = 'PUBLISHED'` and not archived; screens follow the examples/own rule; instruments and
+indices are open. An anonymous caller gets stocks, indices and example screens — precisely what
+they can already reach by navigating — and an empty basket group rather than a 401, because
+failing the whole search to protect one of four groups would take ⌘K away from every marketing
+page.
+
+`test_api_search.py` asserts the boundary from both sides: an anonymous caller receives no
+baskets, a PRIVATE basket is never returned to anyone, and another user's saved screen is never
+returned. A structural test ties the copied basket predicate to `explore._visible()` so the two
+cannot drift — the service spells the predicate out rather than importing a router.
+
+**Rejected.** `AuthenticatedDep` on the whole route; scoping baskets by tenant rather than by
+visibility (search is a read of the published catalog, not of anyone's holdings).
+
+**Reversal.** Swap `PrincipalDep` for `AuthenticatedDep` and delete the anonymous tests.
+
+## T3F.6 — the NSE fetch stalls about every 600 requests; supervised restart, and a named fix ⚠ UNREVIEWED
+
+**Context.** Observed twice during the real fill, at ~600 and ~1,180 symbols. The symptom is
+specific: the log repeats `provider retry`, the archived-file count freezes, the process sits at
+0% CPU, and `lsof` shows **one ESTABLISHED, idle socket to Akamai** — while `curl` against the
+same endpoint answers 200 in 0.3s from the same machine. It does not recover; 75 seconds of
+observation produced zero progress against a 30-second timeout.
+
+**Why the existing guards do not catch it.** `call_with_retry` is bounded correctly
+(`max_attempts=5`), so the hang is *inside* one `client.get`. `ProviderSettings.nse_request_timeout_seconds`
+is 30, but httpx applies `read` **per socket read**, not per request: a peer that goes silent
+mid-response, or trickles, is never timed out and the retry budget is never reached. Diagnosed to
+that point and no further — no packet capture was taken.
+
+**Taken, to deliver.** `tools/tree3/drive-fill.sh` supervises the fill: it bounds each invocation
+with `timeout`, re-runs with `--resume`, and stops rather than spins if a round makes no progress.
+This is sound rather than a hack only because of how the fill is built — resume skips stored
+symbols, the archive never refetches a key it holds, and each batch of 25 is committed — so a
+restart costs the current batch and nothing else.
+
+**Not taken, deliberately.** A speculative provider "fix". `httpx.Limits(keepalive_expiry=…)` and
+per-phase `httpx.Timeout` are both plausible and neither is *known* to address a trickle; shipping
+one would look like a fix and might not be. **The fix worth making is a total-request deadline** —
+a wall-clock bound around `NSEProvider._fetch` so no single request can outlive it regardless of
+how the socket behaves. That is a change to the provider's shape and belongs to whoever owns
+docs/09's fetch discipline, with a test that a trickling server is abandoned.
+
+**This affects the nightly path, not only the backfill.** Step 6 now really fetches ~2,540 quotes;
+the same stall would hang a night. Filed in `NEEDS-MAULIK.md` §17 and `docs/OPEN-ITEMS.md`.
+
+**Reversal.** Delete the driver script; the CLI is usable directly, with restarts by hand.

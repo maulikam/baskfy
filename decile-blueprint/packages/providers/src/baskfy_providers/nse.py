@@ -21,12 +21,14 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import json
 import re
 import zipfile
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Final, Protocol
+from urllib.parse import quote
 
 import httpx
 import polars as pl
@@ -43,6 +45,7 @@ from baskfy_providers.ratelimit import RateLimiter
 from baskfy_providers.records import (
     BHAVCOPY_SCHEMA,
     CorporateAction,
+    EquityFundamental,
     IndexSnapshot,
     ListingRecord,
     conform,
@@ -58,6 +61,17 @@ KIND_INDEX_SNAPSHOT: Final = "index-snapshot"
 KIND_CORPORATE_ACTIONS: Final = "corporate-actions"
 KIND_LISTINGS: Final = "listings"
 KIND_CONSTITUENTS: Final = "constituents"
+KIND_EQUITY_FUNDAMENTALS: Final = "equity-fundamentals"
+KIND_EQUITY_META: Final = "equity-meta"
+
+#: NSE retired ``/api/quote-equity`` when the site moved to Next.js; the edge now answers it with
+#: a 403 from AkamaiGHost, which reads like a bot block and is really a removed route. The quote
+#: page calls this proxy instead, with a ``functionName`` naming the operation. Discovered by
+#: reading the page's own chunks (DECISIONS-MERGE §T3F.1) because NSE publishes no API contract.
+_GET_QUOTE_API: Final = "/api/NextApi/apiClient/GetQuoteApi"
+
+#: Rs crore. docs/13 §2 finding 7: marketcap is an integer in this unit.
+_CRORE: Final = Decimal("10000000")
 
 #: NSE serves its public files only to something that looks like a browser that has already
 #: visited the site. These headers plus a primed cookie jar are the minimum that works.
@@ -310,6 +324,109 @@ class NSEProvider:
         )
         frame = _read_csv(_maybe_unzip(payload), context=f"bhavcopy {on.isoformat()}")
         return _bhavcopy_to_frame(frame, on)
+
+    def equity_fundamentals(
+        self,
+        on: dt.date,
+        symbols: Sequence[str],
+        *,
+        series_by_symbol: Mapping[str, str] | None = None,
+    ) -> list[EquityFundamental]:
+        """Issued size * last price and the published P/E, archived per symbol.
+
+        Folded into the nightly snapshots step rather than given a twelfth pipeline identity
+        (docs/03's ten plus M30's cache). A name NSE does not quote is skipped; the join stores
+        NULL and the UI renders an em dash — the same honesty as an index with no PE.
+
+        ``series_by_symbol`` is an optional hint (the caller usually has ``instrument.series``
+        already). It is only a hint: a symbol whose hinted series returns an empty quote falls
+        back to :meth:`_resolve_series`, so a stale hint costs a round trip, never a NULL row.
+        """
+        records: list[EquityFundamental] = []
+        hints = {k.upper(): v for k, v in (series_by_symbol or {}).items()}
+        for symbol in symbols:
+            token = symbol.strip().upper()
+            if not token:
+                continue
+            parsed = self._equity_fundamental(on, token, hints.get(token))
+            if parsed is not None:
+                records.append(parsed)
+        return records
+
+    def _equity_fundamental(
+        self, on: dt.date, token: str, series_hint: str | None
+    ) -> EquityFundamental | None:
+        """One symbol's quote: try the hinted series, then the series NSE itself reports.
+
+        NSE answers a wrong series with ``200`` and an empty ``equityResponse`` rather than an
+        error, so "no rows" is indistinguishable from "wrong series" at the HTTP layer. That is
+        why the empty case escalates to ``getMetaData`` instead of being recorded as a miss.
+        """
+        tried: set[str] = set()
+        candidates = [series_hint] if series_hint else []
+        for series in candidates:
+            record = self._quote(on, token, series, tried)
+            if record is not None:
+                return record
+        # The hint was absent or wrong. Ask NSE which series it quotes this name under; a series
+        # already tried is not retried, so a correct hint costs exactly one request.
+        resolved = self._resolve_series(on, token)
+        if resolved is not None:
+            return self._quote(on, token, resolved, tried)
+        return None
+
+    def _quote(
+        self, on: dt.date, token: str, series: str, tried: set[str]
+    ) -> EquityFundamental | None:
+        if series in tried:
+            return None
+        tried.add(series)
+        payload = self._quote_payload(on, token, series)
+        if payload is None:
+            return None
+        return parse_equity_quote(payload, on=on, fallback_symbol=token)
+
+    def _quote_payload(self, on: dt.date, token: str, series: str) -> bytes | None:
+        try:
+            return self._archived(
+                f"{KIND_EQUITY_FUNDAMENTALS}/{token}-{series}",
+                on,
+                f"{self._settings.nse_base_url}{_GET_QUOTE_API}"
+                f"?functionName=getSymbolData&marketType=N"
+                f"&series={quote(series)}&symbol={quote(token)}",
+                extension="json",
+                content_type="application/json",
+            )
+        except UnexpectedPayload:
+            # 404 — NSE does not list this name. Recorded by absence, not by an invented row.
+            return None
+
+    def _resolve_series(self, on: dt.date, token: str) -> str | None:
+        """Ask NSE which series it actually quotes this symbol under today."""
+        try:
+            payload = self._archived(
+                f"{KIND_EQUITY_META}/{token}",
+                on,
+                f"{self._settings.nse_base_url}{_GET_QUOTE_API}"
+                f"?functionName=getMetaData&symbol={quote(token)}",
+                extension="json",
+                content_type="application/json",
+            )
+        except UnexpectedPayload:
+            return None
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        active = data.get("activeSeries")
+        if not isinstance(active, list):
+            return None
+        codes = [str(code).strip().upper() for code in active if str(code).strip()]
+        if not codes:
+            return None
+        return "EQ" if "EQ" in codes else codes[0]
 
     # --- internals ------------------------------------------------------
 
@@ -638,6 +755,145 @@ def _ratio_pair(text: str) -> tuple[Decimal | None, Decimal | None] | None:
     if not match:
         return None
     return _to_decimal(match.group(1)), _to_decimal(match.group(2))
+
+
+def parse_equity_quote(
+    payload: bytes, *, on: dt.date, fallback_symbol: str
+) -> EquityFundamental | None:
+    """Read whichever equity-quote shape NSE served into one typed record.
+
+    Two shapes exist on disk. The archive is permanent (docs/09), so payloads captured before
+    NSE's Next.js migration must keep parsing forever; the live site serves the ``GetQuoteApi``
+    shape. Dispatching on the payload rather than on a config flag means a re-parse of the
+    archive never has to know when the file was fetched.
+    """
+    data = _quote_json(payload, fallback_symbol)
+    if "equityResponse" in data:
+        return parse_get_symbol_data(payload, on=on, fallback_symbol=fallback_symbol)
+    return parse_quote_equity(payload, on=on, fallback_symbol=fallback_symbol)
+
+
+def parse_get_symbol_data(
+    payload: bytes, *, on: dt.date, fallback_symbol: str
+) -> EquityFundamental | None:
+    """Read ``GetQuoteApi?functionName=getSymbolData`` into a typed record.
+
+    The live payload nests one entry per series under ``equityResponse``, each carrying
+    ``tradeInfo`` (issued size, last price, NSE's own total market cap), ``secInfo`` (the
+    published symbol P/E) and ``metaData``. A wrong series is answered with ``200`` and an
+    **empty** list, so an empty response returns ``None`` rather than an empty-but-present row.
+
+    ``pb`` and ``div_yield`` are not in this payload at all. They stay NULL: an em dash is the
+    truth, and carrying the old shape's field names forward would only make an absent number
+    look like a fetched one.
+    """
+    data = _quote_json(payload, fallback_symbol)
+    entries = data.get("equityResponse")
+    if not isinstance(entries, list) or not entries:
+        return None
+    entry = entries[0]
+    if not isinstance(entry, dict):
+        return None
+
+    trade = _section(entry, "tradeInfo")
+    security = _section(entry, "secInfo")
+    meta = _section(entry, "metaData")
+    order = _section(entry, "orderBook")
+
+    symbol = _clean(_first(meta, ("symbol",))) or fallback_symbol
+    shares = _int(_first(trade, ("issuedSize",)))
+    last = (
+        _decimal(_first(trade, ("lastPrice",)))
+        or _decimal(_first(meta, ("closePrice", "lastPrice")))
+        or _decimal(_first(order, ("lastPrice",)))
+    )
+    pe = _decimal(_first(security, ("pdSymbolPe",)))
+
+    marketcap_cr = _marketcap_from_shares(shares, last)
+    if marketcap_cr is None:
+        # NSE's own figure, already in rupees, when we cannot derive it ourselves.
+        total = _decimal(_first(trade, ("totalMarketCap",)))
+        if total is not None and total > 0:
+            marketcap_cr = int((total / _CRORE).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+    if marketcap_cr is None and pe is None and shares is None:
+        return None
+    return EquityFundamental(
+        symbol=symbol,
+        date=on,
+        shares_outstanding=shares,
+        last_price=last,
+        marketcap_cr=marketcap_cr,
+        pe=pe,
+        pb=None,
+        div_yield=None,
+    )
+
+
+def _quote_json(payload: bytes, fallback_symbol: str) -> dict[str, object]:
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise UnexpectedPayload(
+            f"equity quote for {fallback_symbol} is not JSON: {exc}", provider=PROVIDER_NAME
+        ) from exc
+    if not isinstance(data, dict):
+        raise UnexpectedPayload(
+            f"equity quote for {fallback_symbol} is not an object", provider=PROVIDER_NAME
+        )
+    return data
+
+
+def _section(data: Mapping[str, object], key: str) -> Mapping[str, object]:
+    """One nested object, or an empty mapping. NSE omits whole sections for some names."""
+    value = data.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _marketcap_from_shares(shares: int | None, price: Decimal | None) -> int | None:
+    if shares is None or price is None or price <= 0:
+        return None
+    return int((Decimal(shares) * price / _CRORE).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def parse_quote_equity(
+    payload: bytes, *, on: dt.date, fallback_symbol: str
+) -> EquityFundamental | None:
+    """Read NSE's retired ``quote-equity`` JSON into a typed record.
+
+    Kept for the archive, not for the network: NSE no longer serves this route. Payloads
+    captured before the migration still parse, which is the whole point of archiving raw bytes.
+
+    That payload nests ``info``, ``securityInfo``, ``priceInfo`` and ``metadata``. A missing
+    issued size or last price leaves ``marketcap_cr`` NULL rather than inventing a zero cap.
+    """
+    data = _quote_json(payload, fallback_symbol)
+
+    info = _section(data, "info")
+    security = _section(data, "securityInfo")
+    price = _section(data, "priceInfo")
+    meta = _section(data, "metadata")
+    symbol = _clean(_first(info, ("symbol",))) or fallback_symbol
+    shares = _int(_first(security, ("issuedSize", "issued_size")))
+    last = _decimal(_first(price, ("lastPrice", "close", "last_price")))
+    pe = _decimal(_first(price, ("pE", "pe"))) or _decimal(_first(meta, ("pdSymbolPe",)))
+    pb = _decimal(_first(price, ("pB", "pb"))) or _decimal(
+        _first(meta, ("pdSymbolPb", "pdSectorPb"))
+    )
+    div_yield = _decimal(_first(price, ("yield", "divYield")))
+    marketcap_cr = _marketcap_from_shares(shares, last)
+    if marketcap_cr is None and pe is None and shares is None:
+        return None
+    return EquityFundamental(
+        symbol=symbol,
+        date=on,
+        shares_outstanding=shares,
+        last_price=last,
+        marketcap_cr=marketcap_cr,
+        pe=pe,
+        pb=pb,
+        div_yield=div_yield,
+    )
 
 
 def parse_corporate_action_purpose(purpose: str) -> ParsedAction | None:

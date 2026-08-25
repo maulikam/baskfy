@@ -26,7 +26,8 @@ import { describe, expect, it } from "vitest";
  * paragraph still fails. Only the sentence being pinned is new.
  */
 const PAGE = readFileSync(
-  join(__dirname, "..", "..", "..", "app", "(app)", "market-health", "page.tsx"),
+  // Tree 6 moved this page to the Market hub; `/market-health` is now a redirect stub.
+  join(__dirname, "..", "..", "..", "app", "(app)", "market", "mood", "page.tsx"),
   "utf8",
 );
 

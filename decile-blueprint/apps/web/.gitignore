@@ -1,9 +1,14 @@
 .next/
+# alternate build dirs from BASKFY_WEB_DIST_DIR (scripts/dev-guard.mjs)
+.next-*/
 node_modules/
 playwright-report/
 test-results/
 next-env.d.ts
 *.tsbuildinfo
+
+# the saved sign-in for the browser suite (e2e/auth.setup.ts)
+e2e/.auth/
 
 # local diagnostic scratch
 .diag.mjs

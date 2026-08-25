@@ -112,3 +112,14 @@ def test_the_desk_is_capped_so_the_cli_is_killed_first():
     import pathlib
     unit = pathlib.Path("deploy/systemd/momentum-web.service").read_text()
     assert "MemoryMax=" in unit and "MemoryHigh=" in unit
+
+
+def test_restore_drill_matches_the_latest_manifest(live_db, tmp_path):
+    """A backup nobody has restored is a hypothesis — copy it out and read it."""
+    root = tmp_path / "backups"
+    B.run(root)
+    import scripts.restore_drill as drill
+
+    drill.B.DEST = root
+    drill.B.DB = live_db[0]
+    assert drill.main() == 0

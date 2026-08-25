@@ -32,6 +32,8 @@ blocker in the project.
 | **14** | **Git remote URL** so local SC/D3 commits can be pushed. |
 | **13** | ✅ **D3 written** (posture B in `docs/DECISIONS-MERGE.md` §D3, 23 Aug 2026). OAuth gate flipped. Counsel checklist C1–C3 (algo ID, research vs advice, RA/empanelment) remains open but **non-blocking** — see §13 below. |
 | **D7 / D10** | ⚠ UNREVIEWED stubs in `docs/DECISIONS-MERGE.md` (Track B flags stay false; no public market-data API). Amounts + licensing opinion still need Maulik / counsel before any flag flip. |
+| **15** | **Fundamentals live fill** — pipeline step exists (T9.1, NSE quote-equity folded into snapshots). Live `fundamental_daily` is still empty until a night (or a one-off fetch) runs against NSE. See §15. |
+| **16** | **Broker credentials for nine brokers** — Upstox, Angel One, Fyers, 5paisa, Dhan, ICICI, Kotak, HDFC (Groww has no public API). Only `BASKFY_KITE_*` exists today. Blocks consolidated holdings for every non-Zerodha account. See §16. |
 
 ---
 
@@ -464,7 +466,7 @@ is what lets a backtest exclude the uncertain period.
 |---|---|---|---|
 | C1 | **Algo ID / exchange registration** when Baskfy supplies order *plans* to a third-party Kite app (vs personal algo in own account at <10 orders/sec) | Per-order tagging / broker empanelment if B lands on the “algo supplied to others” side | No — OAuth + encrypted token store already unlocked |
 | C2 | **Research vs advice** for ranked baskets; what changes when personalised to existing holdings | Marketing claims, disclaimers, RA paperwork | No — does not gate connect redirects |
-| C3 | Whether posture B needs **RA registration** and/or **Kite-Publisher / empanelment** beyond the engineering unlock already taken | Product claims and SEBI filing path | No for sole-tenant operator desk; yes before multi-tenant paid |
+| C3 | Whether posture B needs **RA registration** and/or **Kite-Publisher / empanelment** beyond the engineering unlock already taken | Product claims and SEBI filing path | No for sole-tenant operator desk; **yes before multi-tenant paid**. P4.1/P4.3 engineering started 24 Aug 2026 without waiting on this. |
 
 Those filings do not gate OAuth redirects. See also `docs/DECISIONS-MERGE.md` §D3 (posture B) and
 §D7 / §D10 (Track B flags and display licensing remain UNREVIEWED continuity stubs).
@@ -485,11 +487,186 @@ peers, and the rest of Phase 4.
 normalized holdings row shape. CSV import on `/portfolios` remains the way to load a book.
 
 
-### 14. Git remote / push — **blocks publishing local commits**
-**Status:** open · **Raised:** Tree 4, 23 Aug 2026
+### 15. Fundamentals source — **code landed T9.1; live fill still needs a pipeline night**
+**Status:** source decided · **Raised:** UI route audit, 23 Aug 2026 · **Updated:** Tree 3 Numbers, 24 Aug 2026
 
-**What is needed:** a Git remote URL for this umbrella repo (`git remote add origin <url>`). This clone has **no remotes**; SC/D3 commits through `a7007b1` / later are local only.
+**What is needed:** a night (or a one-off `equity_fundamentals` fetch) against NSE, with a live
+cookie-primed session, so `fundamental_daily` on the latest published date is no longer empty.
+The source is no longer an open product decision: NSE `quote-equity`, issued size × `close_raw`.
 
-**What it blocks:** `git push`.
+**Why:** the join in `compute_factors` is ready. The backfilled DB still has **zero** non-null
+`marketcap_cr` on the latest date until that fetch runs (~2,500 symbols at the NSE throttle).
 
-**What was done meanwhile:** Tree 4 continues all non-push work; ABANDON recorded on the push gate.
+**What it blocks:** accurate decile bucketing, M-cap column on `/`, P/E on instrument factsheets
+on live (non-seed) data, until the first successful fetch.
+
+**What was done:** T9.1 — parser, archive-then-parse, worker upsert, folded into
+`refresh_index_snapshots`. Errors are recorded; they do not fail the night.
+
+---
+
+### 14. Git remote / push — **SSH key for agent push**
+**Status:** partial · **Raised:** Tree 4, 23 Aug 2026 · **Updated:** Tree 7, 24 Aug 2026
+
+**What is needed:** Agent (or Maulik) able to `git push` to `origin`. Remote **exists**:
+`origin git@github.com:maulikam/baskfy.git`, branch `developer` tracks `origin/developer`.
+Agent `git fetch` failed with `Permission denied (publickey)` — the laptop user may push;
+this agent session cannot.
+
+**What it blocks:** Agent-driven push; confirming GitHub Actions has run on a real push.
+
+**What was done meanwhile:** Tree 5 local CI baseline; Tree 7 populated `cb_metrics` (1 row for
+`momentum-scan`); manager route `/manager/[slug]`; T7.2 investment contract = mark-as-invested.
+
+---
+
+### 15. Mark-as-invested UI/API — **done in Tree 8**
+**Status:** closed · **Raised:** Tree 7, 24 Aug 2026 · **Closed:** Tree 8, 24 Aug 2026
+
+**What was needed:** Product implementation of T7.2 (b): create `cb_investment` when the user
+confirms they invested at the broker (no web execute).
+
+**What landed:** `POST /api/v1/cb/investments/mark` + `mark-invested-form` (T8.1). Desk fills
+promote `PLANNED` → `EXECUTED` via Beat `baskfy.cb.sync_batches` (T8.2). Costs, SIP reminder,
+rebalance email-once, and drift-repair shipped in the same tree (T8.3–T8.6).
+
+**What it no longer blocks:** End-to-end investor journeys on web (still no web order path).
+
+
+---
+
+### 17. **The NSE fetch stalls about every 600 requests — and this now affects a nightly run**
+**Status:** open, **not blocking** (a supervisor works around it) · **Raised:** Tree 3
+Fundamentals, 25 Aug 2026
+
+**What is needed:** a decision on the fix, and whoever owns docs/09's fetch discipline to make it.
+Nothing of yours by hand — this is engineering, filed here because it is the one thing this tree
+found that it deliberately did **not** fix.
+
+**What happens.** Twice during the first real fundamentals fill (at ~600 and ~1,180 symbols) the
+fetch hung: `provider retry` repeating, archived-file count frozen, process at 0% CPU, and one
+ESTABLISHED idle socket to Akamai — while `curl` against the same URL answered 200 in 0.3s from
+the same machine. Seventy-five seconds of observation, zero progress, against a 30-second timeout.
+
+**Why the guards miss it.** `call_with_retry` is bounded correctly, so the hang is inside a single
+`client.get`. `nse_request_timeout_seconds` is 30, but httpx applies `read` **per socket read**,
+not per request — a peer that goes silent mid-response is never timed out, and the retry budget is
+never reached.
+
+**Why it matters beyond the backfill.** Step 6 of the nightly pipeline now genuinely fetches
+~2,540 quotes (before this tree it fetched 10,481 Akamai deny pages in seconds and stored
+nothing). The same stall would hang a night rather than a backfill.
+
+**The fix worth making:** a total-request deadline around `NSEProvider._fetch` — a wall-clock
+bound no single request can outlive, whatever the socket does — with a test that a trickling
+server is abandoned. Not done here on purpose: `keepalive_expiry` and per-phase `httpx.Timeout`
+are both plausible and neither is *known* to address a trickle, and a speculative fix that looks
+like a fix is worse than a named open item.
+
+**What was done meanwhile:** `tools/tree3/drive-fill.sh` supervises the fill — bounds each
+invocation, restarts with `--resume`, stops rather than spins if a round makes no progress. Sound
+rather than a hack because the fill commits every 25 symbols and never refetches an archived key.
+See `docs/DECISIONS-MERGE.md` §T3F.6.
+
+---
+
+### 16. **Broker credentials — nine brokers, nine sets of hands-only steps** (tree 5, 25 Aug 2026)
+
+**Status:** open, **not blocking the run** · **Raised:** tree 5 leaf C2, confirmed by C1
+· **Urgency:** none of it is urgent; all of it is a prerequisite for the next step
+
+**What is needed.** A developer/API registration at each broker below, and the keys it issues.
+**The only broker credentials that exist anywhere in this project today are `BASKFY_KITE_*`**
+(`.env.example:56-63`) — Zerodha's, and nothing else. Every other broker in the catalog is a name
+with no key behind it.
+
+**What it blocks, precisely.** Consolidated holdings for **any non-Zerodha account**.
+`_HOLDINGS_WIRED == {"zerodha"}` and only Zerodha has a holdings adapter, so nine of the ten
+brokers a user can see cannot return a position. It also blocks a consolidated live net worth
+figure, which is why tree 5 deliberately did not build one: it would have been one live number
+plus nine absent ones, presented as if equivalent.
+
+**What was done meanwhile.** The product stopped claiming otherwise. The catalog's
+`holdings_sync="ready"` rows went from **8 to 1** — the seven over-claimants (kotak, icici,
+upstox, angelone, fyers, fivepaisa, dhan) now read `"planned"` — and a live credential leak was
+closed on the way: `POST /brokers/upstox/connect` had been redirecting to Upstox's authorize
+dialog carrying **Baskfy's Zerodha app key**, on a signed-off path. See `DECISIONS-MERGE.md`
+§PM7 and §PM8.
+
+| Broker | What only your hands can obtain |
+|---|---|
+| **Upstox** | A developer app: **API key + API secret + a registered redirect URI** |
+| **Angel One** | SmartAPI registration: **API key + secret + TOTP/2FA enrolment** on the account |
+| **Fyers** | An API v3 app: **app id + secret + redirect URI** |
+| **5paisa** | An OpenAPI app: **user key, encryption key, client code** |
+| **Dhan** | A **DhanHQ access token** generated from the web console — **per account** |
+| **ICICI Direct** | Breeze app registration: **API key + secret**, plus its session flow |
+| **Kotak** | **Neo API enablement on the account** + a partner app key |
+| **HDFC** | A **partner agreement / empanelment**. There is no self-serve developer programme |
+| **Groww** | **Nothing to ask for** — no generally available public trading API. Listed so it is not repeatedly re-investigated |
+
+**How to hand them over safely.** Into `.env` only, never into a file that is tracked, never
+pasted into a chat or an issue. Follow the existing `BASKFY_KITE_*` naming for whatever prefix
+each broker ends up with. `.env` and `data/` stay untracked (CLAUDE.md §Safety rails); no agent
+should ever echo them.
+
+**Order of value, if you only do some.** Upstox, Angel One, Fyers and Dhan are self-serve and
+already have known authorize URLs in the code (`_WIRED_AUTHORIZE`), so they are the cheapest to
+finish. ICICI and Kotak need an account-level enablement step. HDFC needs a commercial
+conversation. Groww needs nothing because there is nothing to get.
+
+**One label problem is still open and does not need you.** `adapter_wired` reports true for five
+brokers of which one works, and `capabilities.oauth == "ready"` for eight of which kotak and icici
+have no authorize URL at all. That is an engineering fix, recorded in `docs/00-merge-status.md`
+under Tree 5 §NOT done item 3.
+
+## §17 — Third-party managers: what only Maulik (or counsel) can supply
+
+Tree-3 built the identity, the lifecycle, the registration capture and the publishing verb. Four
+things are blocked on a human and were deliberately **not** guessed.
+
+### 1. The revenue-share rate — D7, blocking
+
+`cb_manager_revenue_share.rate_bps` has **no default**, on purpose. Nothing in the codebase knows
+what share a third-party manager keeps, and inventing one would bury a pricing decision in a
+migration where it never surfaces for review again.
+
+**Needed:** the number (in basis points), whether it varies by manager or basket, and whether it
+is charged on subscription revenue, on AUM, or per investment.
+**Blocks:** any actual payout. The schema and the dark endpoint are in; nothing computes money.
+**Meanwhile:** the surface 404s while `BASKFY_FEE_COLLECTION_ENABLED` is false, which it is.
+
+### 2. Which registration a manager must hold — D3 / counsel C1–C3, blocking
+
+The product now *captures* SEBI registration (type, number, validity window, verification date)
+and checks the number's **format**. It does not and must not decide who is permitted to publish
+baskets for other people's money — D3 posture B is ⚠ UNREVIEWED and RA/empanelment filings sit
+with counsel.
+
+**Needed:** counsel's answer on which registration (if any) a third-party manager must hold before
+their baskets may be listed to other users, and whether Baskfy carries any obligation to verify it
+rather than merely record it.
+**Blocks:** turning `state = APPROVED` into a defensible decision, and any onboarding that is open
+rather than operator-reviewed.
+**Meanwhile:** every response carries "Registration details are captured as supplied and are not
+verified by Baskfy unless a verification date is shown. A registration is not a statement by
+Baskfy that this manager may manage your money." Approval is staff-only and manual.
+
+### 3. Who does the verifying, and how it is evidenced
+
+`sebi_reg_verified_at` is written by a human action, never by the format checker. There is no
+process behind it yet.
+
+**Needed:** who checks a number against the SEBI register, how often re-checking happens (a
+registration can lapse after approval), and what evidence is retained.
+**Blocks:** the verification stamp meaning anything.
+**Meanwhile:** NULL, and the disclaimer says unverified.
+
+### 4. The manager agreement itself
+
+**Needed:** the contract a third-party manager signs — liability, termination, what happens to
+investors already holding a basket when a manager is suspended or leaves.
+
+**Blocks:** onboarding anyone who is not Maulik. This is the one that makes the other three real:
+suspension currently takes a basket out of the listing, and nothing says what an investor already
+invested in it is owed or told.

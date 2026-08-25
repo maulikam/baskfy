@@ -101,12 +101,29 @@ so `284.03 / 299.00 − 1 = −5.01%`, which is what the export stores and what 
 The test asserts both — `docs/05`'s arithmetic from `docs/05`'s numbers, and the served value from
 the export's numbers. Asserting only one would check a snapshot rather than a formula.
 
-## 9. `factor_daily.pe` is NULL, so the P/E card and key stat are em dashes
+## 9. `factor_daily.pe` — was an em dash everywhere, now a number (Tree 3)
 
-Nothing populates `fundamental_daily` — the open item CLAUDE.md has carried since Prompt 4 ("No
-pipeline step fetches fundamentals"). `docs/01` §5 puts P/E in block 2 and a "Price to Earnings"
-metric card in block 4, so both are rendered, and both show `—` until a fundamentals source exists.
-They are not removed: a missing row is a data gap, not a specification change.
+`docs/01` §5 puts P/E in block 2 and a "Price to Earnings" metric card in block 4, so both are
+rendered. Both used to show `—` for every instrument, because nothing had ever written a row to
+`fundamental_daily`.
+
+The cause turned out not to be a missing source. T9.1 had written the parser and the join against
+NSE's `/api/quote-equity`, and NSE had **retired that route** — it answers 403 from the Akamai
+edge, which reads like a bot block and is really a removed endpoint. The quote page calls
+`GetQuoteApi` now. With the provider pointed at the live route and the date's fundamentals filled,
+the factsheet serves real values: `GET /api/v1/instruments/BHARTIARTL` returns
+`marketcap_cr = 1207038` and `pe = 32.942` for `as_of = 2026-08-18`.
+
+Three things about it are still worth knowing:
+
+* **An em dash on a single name is now meaningful.** NSE publishes no P/E for a company without
+  earnings, and BZ-series names generally have none. The card is not removed — a missing ratio is
+  a data gap, not a specification change — but it no longer means "we never fetched anything".
+* **`pb` and `div_yield` will not follow.** The current payload does not carry them at all. Their
+  columns stay because the schema documents them, not because anything fills them.
+* **The stored P/E is re-priced onto the as-of date**, not the ratio NSE quoted on the day of the
+  fetch — the quote carries no history, and storing it verbatim into a past date would be
+  look-ahead (house rule 5, `docs/05` §14).
 
 ## 10. Two accessibility fixes the factsheet forced on the shell
 

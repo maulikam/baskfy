@@ -50,7 +50,7 @@ export async function serverFetchJson(options: ServerFetchJsonOptions): Promise<
   try {
     response = await fetch(options.url, {
       method: "GET",
-      headers: options.headers,
+      ...(options.headers ? { headers: options.headers } : {}),
       cache: options.cache ?? "no-store",
       signal,
     });
@@ -72,7 +72,7 @@ export async function serverFetchJson(options: ServerFetchJsonOptions): Promise<
  */
 export async function serverFetchJsonOrNull(
   options: ServerFetchJsonOptions,
-): Promise<unknown | null> {
+): Promise<unknown> {
   try {
     return await serverFetchJson(options);
   } catch {
@@ -88,13 +88,11 @@ export function timedFetch(
     const parent = request.signal;
     const budget = AbortSignal.timeout(timeoutMs);
     // AbortSignal.any is Node 20+ / modern browsers; fall back to budget-only if missing.
-    const anyFactory = (
-      AbortSignal as typeof AbortSignal & {
-        any?: (signals: AbortSignal[]) => AbortSignal;
-      }
-    ).any;
+    const signals = AbortSignal as typeof AbortSignal & {
+      any?: (signals: AbortSignal[]) => AbortSignal;
+    };
     const signal =
-      parent && typeof anyFactory === "function" ? anyFactory([parent, budget]) : budget;
+      parent && typeof signals.any === "function" ? signals.any([parent, budget]) : budget;
     return fetch(new Request(request, { signal }));
   };
 }

@@ -21,6 +21,7 @@ from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, JsonValue
 
+from baskfy_api.search import CatalogKind
 from baskfy_core.backtest import BacktestConfig
 from baskfy_core.portfolio_csv import MatchStatus, RowIssue, SkipReason, UnmatchedReason
 from baskfy_core.rank_buffer import Action, ExitReason
@@ -385,6 +386,43 @@ class RankHistoryOut(_Out):
     screen_public_id: str
     screen_name: str
     data: list[RankPointOut]
+
+
+# ---------------------------------------------------------------------------
+# Catalog search (baskfynavrefactorreport §F11 — the ⌘K palette)
+# ---------------------------------------------------------------------------
+
+
+class CatalogHitOut(_Out):
+    """One palette row: what it is, how to address it, and how to read it.
+
+    No href. `kind` + `id` is the identity; the web app maps a kind to a route
+    (`apps/web/src/lib/search/hrefs.ts`), because those routes moved twice during Tree 6 and an
+    href minted here would have made a nav refactor an API deploy. See `baskfy_api.search`.
+    """
+
+    #: `instrument` | `index` | `basket` | `screen`. Literal, not a bare `str`, so the generated
+    #: TypeScript client narrows it and the palette's kind→href map cannot miss a case.
+    kind: CatalogKind
+    #: The public handle: symbol, index slug, basket slug, or screen `public_id`.
+    id: str
+    #: What to show. The symbol for a stock — a ticker is what a person types and recognises.
+    title: str
+    #: The second line, when there is one worth showing: company name, "Universe"/"Index", the
+    #: basket's manager, or "Example" for a template screen.
+    subtitle: str | None = None
+
+
+class CatalogSearchOut(_Out):
+    """`GET /search?q=` — every kind the caller may see, at most `limit` of each.
+
+    `query` is echoed because the palette debounces and aborts: a response is only worth rendering
+    if it answers the prefix the user has finished typing.
+    """
+
+    query: str
+    limit: int
+    data: list[CatalogHitOut]
 
 
 # ---------------------------------------------------------------------------

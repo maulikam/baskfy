@@ -26,10 +26,12 @@ them, and where the root and a sub-file disagree on a rule, the root is wrong an
 
 ## Human-track decisions (NOT for agents — never build against a guess)
 
-D3 regulatory posture (posture B intended: RA registration + the Kite-Publisher/empanelment
-question — with counsel and Zerodha), D7 pricing amounts, D10 market-data display licensing.
-**No Phase-4+ (multi-tenant) work happens in this repo until D3 has a written answer in
-`docs/DECISIONS-MERGE.md`.** `MERGE-PROMPTS.md` deliberately stops at Phase 3.
+D3 regulatory posture: **written 23 Aug 2026 as B** in `docs/DECISIONS-MERGE.md` §D3
+(⚠ UNREVIEWED). RA/empanelment filings remain counsel C1–C3. **Paid** multi-tenant launch
+still waits on C3; P4.1/P4.3 engineering started 24 Aug 2026. D7 pricing amounts, D10
+market-data display licensing remain human-track. Track B flags stay false. The web app
+never gains an execute route. `MERGE-PROMPTS.md` still documents the Phase-3 stop as
+history; D3 is no longer the engineering blocker.
 
 ## The two laws (from docs/04 §2 — enforced by tests, both trees)
 
@@ -37,7 +39,7 @@ question — with counsel and Zerodha), D7 pricing amounts, D10 market-data disp
    no disk, no clock. I/O lives in `services/` or `packages/providers`.
 2. **`packages/execution` is the only path to an order.** Guards → risk → rate limit → journal →
    broker. Nothing calls `kc.place_order` directly. Guards refuse untouchable instruments before
-   any network call. (Multi-tenant clause, dormant until P4: every order carries `user_id` +
+   any network call. (Multi-tenant clause, active as of P4.3: every order carries `user_id` +
    `broker_account_id`, and the gateway refuses a mismatch.)
 
 ## The desk's seven non-negotiables (survive verbatim, forever)
@@ -150,7 +152,9 @@ remain:**
   blocks, what was done meanwhile) and keep working on everything not dependent on it.
 - Destroying or risking unrebuildable data with no verified backup path — never autonomous.
 - Placing a live order — never, full stop.
-- Phase-4+ scope — not in this run (D3 is unanswered).
+- Paid multi-tenant launch / Track B flag flips / web execute — C3, D7 amounts, and
+  non-negotiable #1. P4.1 schema and P4.3 gateway isolation are in; P4.2 two-token OAuth,
+  P4.10 RLS, and P4.11 load tests are not.
 - A red-gate parity delta that survives exhausted investigation → finish every module that does
   not depend on the failed numbers, then end the run with a full written report.
 

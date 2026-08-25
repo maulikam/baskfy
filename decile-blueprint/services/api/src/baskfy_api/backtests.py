@@ -579,6 +579,7 @@ def assumptions(config: BacktestConfig, result: BacktestResult) -> list[str]:
         "falls in that period rests on membership we inferred, not membership we observed.",
         "A delisted holding is sold at its last available close and the loss is taken. Nothing "
         "is forward-filled and nothing is dropped.",
+        _sharpe_assumption(config),
         "Past backtest results do not predict future results.",
     ]
     if config.risk_overlay.enabled:
@@ -589,6 +590,19 @@ def assumptions(config: BacktestConfig, result: BacktestResult) -> list[str]:
         )
     lines.extend(result.notes)
     return lines
+
+
+def _sharpe_assumption(config: BacktestConfig) -> str:
+    if config.risk_free_curve:
+        first, last = config.risk_free_curve[0][0], config.risk_free_curve[-1][0]
+        return (
+            "Sharpe and Sortino subtract the OECD MEI India 3-month short rate (IR3TIB), "
+            f"forward-filled from monthly observations {first.isoformat()}-{last.isoformat()}. "
+            "That series is a published proxy for the 91-day T-bill, not the RBI auction cutoff."
+        )
+    return (
+        "Sharpe is excess over zero: no overlapping T-bill observation was attached to this run."
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -616,7 +630,12 @@ def build_payload(
     payload["data_version"] = result.data_version
     payload["rebalance_count"] = len(result.rebalance_dates)
     payload["fragility"] = fragility_payload(fragility)
-    payload["assumptions"] = [*assumptions(config, result), *extra_notes]
+    # `dict.fromkeys` and not `set`: the panel reads top to bottom and the order is the argument.
+    # The two sources genuinely overlap — `assumptions()` ends with `result.notes`, and the
+    # worker's `notes_for()` hands the same notes back in `extra_notes` alongside the loader's.
+    # Without this, every run-specific note ("the screen returned nothing on ...") was printed
+    # twice in the panel and collided as a React key in the web app.
+    payload["assumptions"] = list(dict.fromkeys([*assumptions(config, result), *extra_notes]))
     payload["monthly_returns"] = [
         {"month": row.key, "return": round(row.ret, 10)}
         for row in monthly_returns(result.dates, result.equity)

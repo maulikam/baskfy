@@ -62,7 +62,8 @@ test.describe("keyboard-only walkthrough", () => {
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    await expect(page.getByPlaceholder(/Search instruments/)).toBeFocused();
+    // M40 widened the palette from instruments to the whole catalog; the placeholder says so.
+    await expect(page.getByPlaceholder(/Search stocks, indices, baskets, screens/)).toBeFocused();
 
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);

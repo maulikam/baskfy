@@ -37,6 +37,9 @@ export interface InvestmentRow {
   days_since_last_investment: number | null;
   rebalance_pending: boolean;
   snapshot: InvestorSnapshot | null;
+  /** ``cb_basket.source`` — SCAN, MANUAL, SCREEN. Optional until older payloads catch up. */
+  basket_source?: string | null;
+  visibility?: string | null;
 }
 
 export interface PendingActionBrief {
@@ -132,13 +135,22 @@ const EMPTY_FEES: FeeLedger = {
 export async function fetchInvestments(): Promise<InvestmentList> {
   const data = await tryJson("/cb/investments");
   if (data === null) return EMPTY_INVESTMENTS;
-  return data as InvestmentList;
+  const raw = data as InvestmentList & { items?: Array<InvestmentRow & { id: string | number }> };
+  return {
+    ...raw,
+    items: (raw.items ?? []).map((row) => ({ ...row, id: String(row.id) })),
+    pending_actions: (raw.pending_actions ?? []).map((action) => ({
+      ...action,
+      id: String(action.id),
+    })),
+  };
 }
 
 export async function fetchInvestment(id: string): Promise<InvestmentDetail | null> {
   const data = await tryJson(`/cb/investments/${encodeURIComponent(id)}`);
   if (data === null) return null;
-  return data as InvestmentDetail;
+  const raw = data as InvestmentDetail;
+  return { ...raw, id: String(raw.id) };
 }
 
 export async function fetchWatchlist(): Promise<Watchlist> {

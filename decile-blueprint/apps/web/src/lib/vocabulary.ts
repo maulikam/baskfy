@@ -47,6 +47,11 @@ export interface PageVocabulary {
  * default.
  */
 export const PAGES = {
+  /* —— The signed-in landing surface (SC9, docs/smallcase/05 §6.1) —— */
+  "/home": {
+    title: "Home",
+    blurb: "What you hold, what needs a decision, and what is worth a look.",
+  },
   /* —— Tree 6 canonical hubs (label = route section = tab title) —— */
   "/market/today": {
     title: "Today · Market",
@@ -89,7 +94,7 @@ export const PAGES = {
   },
   "/me/portfolios": {
     title: "Portfolios · Me",
-    blurb: "What you hold, and what would change if you rebalanced today.",
+    blurb: "Each basket, rule, and holding in its own box, with its own capital.",
     formerly: "Rebalance Tracker",
   },
   "/me/watchlist": {
@@ -114,7 +119,7 @@ export const PAGES = {
   },
   "/portfolios": {
     title: "Portfolios · Me",
-    blurb: "What you hold, and what would change if you rebalanced today.",
+    blurb: "Each basket, rule, and holding in its own box, with its own capital.",
     formerly: "Rebalance Tracker",
   },
   "/explore": {
@@ -135,7 +140,7 @@ export const PAGES = {
   },
   "/create": {
     title: "Create a basket",
-    blurb: "Pick at least two stocks, set weights, and save a private basket only you can see.",
+    blurb: "Pick a screen — templates are there on first login — then set the amount and how many names.",
   },
   "/backtests": {
     title: "Backtests · Build",

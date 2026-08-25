@@ -371,10 +371,11 @@ returns by the elapsed year fraction and uses that, so the factor is a property 
 ### 15.5 The risk-free rate is a flat annual rate, defaulting to zero
 
 `docs/10` §Outputs asks for "Sharpe (rf from a configurable T-bill series)". `docs/04` has no
-T-bill table and no pipeline step fetches one. A flat `risk_free_rate` on the config is the only
-thing this service can serve; **zero** is the default, because an invented 6.5% would move every
-Sharpe and Sortino on the page. It is configuration rather than a constant so it stops being a
-placeholder the moment a series exists.
+T-bill table. As of T9.5 the engine reads a bundled OECD MEI India IR3TIB monthly series
+(`baskfy_core.data/india_tbill.csv`) attached at execute time onto `BacktestConfig.risk_free_curve`.
+**Zero** remains the fallback when the series does not overlap the window, because an invented
+flat 6.5% would still move every Sharpe on a gap. Factor Sharpe (`docs/05` §3) is unchanged:
+it is `ret_N / vol_N` with no risk-free term.
 
 ### 15.6 The first trading day is always a rebalance date
 

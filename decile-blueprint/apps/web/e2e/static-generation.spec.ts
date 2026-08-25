@@ -26,7 +26,17 @@ import { POST_META } from "../src/lib/marketing/post-meta";
  * §Routes marks the last three "RSC" rather than SSG, and `/pricing` renders the caller's current
  * plan. `docs/DECISIONS.md` §18.3 records the reading.
  */
-const MANIFEST = resolve(process.cwd(), ".next", "prerender-manifest.json");
+/**
+ * **`.next-e2e`, not `.next`** — and this file asserted nothing at all until 24 Aug 2026 because
+ * of it. `playwright.config.ts` builds into a directory of its own (`BASKFY_WEB_DIST_DIR`) so a
+ * suite run cannot overwrite a running dev server's chunks; that variable is set on the *web
+ * server* process, not on the test process, so this read kept hitting the dev server's `.next`,
+ * where `prerender-manifest.json` lists zero routes. Every assertion below passed vacuously or
+ * failed for the wrong reason, and "the routes that read live data are honestly not in it" passed
+ * because an empty set contains nothing.
+ */
+const DIST_DIR = process.env.BASKFY_WEB_DIST_DIR ?? ".next-e2e";
+const MANIFEST = resolve(process.cwd(), DIST_DIR, "prerender-manifest.json");
 
 interface PrerenderManifest {
   routes: Record<string, unknown>;
@@ -63,7 +73,7 @@ test.describe("the public content surface is prerendered", () => {
        it will be because someone removed the per-caller plan state, and that should be a
        deliberate change rather than a silent one. */
     const routes = prerendered();
-    for (const dynamic of ["/pricing", "/dashboard", "/market-health", "/listings", "/screens"]) {
+    for (const dynamic of ["/pricing", "/dashboard", "/market-health", "/listings", "/screens", "/build"]) {
       expect(routes.has(dynamic), `${dynamic} unexpectedly became static`).toBe(false);
     }
   });

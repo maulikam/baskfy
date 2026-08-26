@@ -425,7 +425,15 @@ async def _collection_out(session: AsyncSession, row: CbCollection) -> Collectio
     still one round trip. ``_visible()`` is applied here exactly as it is everywhere else that
     reaches ``cb_basket``.
     """
-    wanted = list(row.basket_ids or [])
+    # De-duplicated, first mention wins. ``basket_ids`` is a stored list with no uniqueness
+    # constraint behind it, and a seeder join over the ``cb_metrics`` history did once write the
+    # same basket twice into ``start-here``. The seeder no longer can, but a shelf that names a
+    # basket twice must still render it once: this is the contract the page is built on, and
+    # relying on stored data to hold it is how the card came to be drawn twice in the first place.
+    wanted: list[int] = []
+    for basket_id in row.basket_ids or []:
+        if basket_id not in wanted:
+            wanted.append(basket_id)
     cards: dict[int, BasketCardOut] = {}
     if wanted:
         latest = (

@@ -1048,3 +1048,56 @@ corrected for M46 — §1, §2, §3, §4, §6 and §7 described passwords, sign-
 that no longer exist, and §4 omitted **Google**, which now receives an authentication request for
 every sign-in. `DRAFT-NOTICE.md` items 1 and 8 are closed, item 7 amended. The remaining six
 decisions there still need a lawyer.
+
+---
+
+## §26 — The Kite Publisher API key (M47)
+
+**What is needed.** `BASKFY_KITE_PUBLISHER_API_KEY` — the api key of the **Publisher** app
+("Baskfy", created 27 Aug 2026), from the Kite developer console.
+
+**It is not a secret.** A Publisher key travels inside the form the user's browser posts to
+`kite.zerodha.com/connect/basket`; Zerodha's own embed snippets put it in page source. So it can
+go through `box.sh`, unlike the Google client secret. Paste it here and it is a one-line env
+change plus a restart.
+
+**Where it goes:** `/opt/baskfy/.env.staging` (the API reads it; the web app never sees it — the
+key reaches the browser inside the `GET /baskets/plan/kite` response, not through the bundle).
+
+**Blocks:** the "Review N orders in Kite" button. Empty means the hand-off is **off** and the
+button is not rendered — deliberately, because a form posted with no `api_key` lands the user on
+an error page inside Kite, which reads as Baskfy being broken rather than as Baskfy being
+unconfigured.
+
+**Two things about that app that are worth checking before this goes live:**
+
+1. **The redirect URL currently reads `https://staging.baskfy.com/callback`, which is not a route
+   this app serves.** For Publisher it does not matter — Zerodha's console says so, and the basket
+   hand-off never uses it. Leave it or blank it; do not point it at
+   `/api/v1/brokers/callback`, which belongs to the Kite **Connect** flow and would be misleading.
+2. **Publisher is not Kite Connect.** `/brokers` — connect Zerodha, sync holdings — needs a Kite
+   Connect app (`BASKFY_KITE_API_KEY` + `BASKFY_KITE_API_SECRET`), which is the paid product. The
+   desk already holds Connect credentials in `kite-momentum-rebalancer/.env`, but that app is
+   wired to one account for single-user live execution; pointing multi-tenant web OAuth at it is a
+   separate decision, and `CLAUDE.md` still lists P4.2 two-token OAuth as not done.
+
+**Done meanwhile:** the whole hand-off is built and tested — `GET /baskets/plan/kite`,
+`baskfy_api.kite_basket`, the `KiteBasketForm` component, 21 API tests and 9 web tests. It is not
+yet placed on a page; see §27.
+
+---
+
+## §27 — Where the "Review in Kite" button should live (M47)
+
+**A product decision, not an engineering one.** The component is built and tested but not mounted
+on any page. `PlanHandoffPanel` (`components/cb/plan-handoff-panel.tsx`) is the obvious home — it
+is the existing hand-off surface — but today it points at `https://desk.modelbasket.in`, the
+**operator console**, which is Maulik's own and useless to a signed-in user. Replacing that button
+with the Kite one changes what that panel is for: from "the desk will execute this" to "you
+execute this, in your account".
+
+That is the right change under D3 posture B, and it is not one to make silently while a page still
+says "Execution stays in the desk console". Confirm the wording and the placement and it is a
+small edit.
+
+**Blocks:** nothing. The API route serves today; only the button is unplaced.

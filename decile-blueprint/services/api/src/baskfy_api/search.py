@@ -35,7 +35,7 @@ what they can already reach by navigating. Nothing here widens an existing bound
 ``subtitle``. Where ``/basket/{slug}`` lives is the web app's business — Tree 6 moved half these
 routes and would have moved them again with an API deploy attached if the href had been minted
 here. ``apps/web/src/lib/search/hrefs.ts`` owns the mapping, and a vitest asserts every kind has
-one. (``docs/DECISIONS-MERGE.md`` M40.1.)
+one. (``docs/DECISIONS-MERGE.md`` M46.1.)
 
 **Ranking is per kind, and it is the same rule four times.** Exact match first, then prefix, then
 contains, ties broken by title so the order is stable between identical requests. Nothing tries to
@@ -46,7 +46,6 @@ get at most five of each, so one prolific kind can never crowd the others out of
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final, Literal
 
@@ -132,9 +131,10 @@ def _rank(column: InstrumentedAttribute[str], needle: str) -> Case[int]:
 def normalise(query: str) -> str:
     """The needle every searcher works from: trimmed, and never longer than the documented bound.
 
-    Truncation rather than a 422 for over-long input: this endpoint is called on a keystroke, and
-    a paste of a whole paragraph into the search box should return nothing found, not an error
-    dialog. The router still declares `max_length` so the contract is written down.
+    The router declares `max_length`, so over-long input is refused at the boundary and this bound
+    is never reached over HTTP. It is kept because this function is the service's entry point and
+    a future caller — a worker, a test, a scoped palette — should not be able to hand four
+    kilobytes of pasted text to four `ILIKE '%…%'` scans by skipping the router.
     """
     return query.strip()[:MAX_QUERY_LENGTH]
 
@@ -168,7 +168,12 @@ async def search_indices(session: AsyncSession, needle: str, limit: int) -> tupl
     statement: Select[tuple[IndexDef, int]] = (
         select(IndexDef, rank.label("rank"))
         .where(IndexDef.name.ilike(pattern) | IndexDef.slug.ilike(pattern))
-        .order_by(rank.asc(), IndexDef.sort_order.asc(), IndexDef.name.asc())
+        # `is_universe` first at equal rank: `sort_order` is 1..14 for the docs/01 §6 universes
+        # and 0 for every dashboard-only row registered later, so ordering on it alone put
+        # "NIFTY50 PR 1x Inverse" above "NIFTY 50". A universe is the row a person means.
+        .order_by(
+            rank.asc(), IndexDef.is_universe.desc(), IndexDef.sort_order.asc(), IndexDef.name.asc()
+        )
         .limit(limit)
     )
     rows = (await session.execute(statement)).all()
@@ -254,11 +259,7 @@ async def search_screens(
 
 
 async def search_catalog(
-    session: AsyncSession,
-    query: str,
-    limit: int,
-    principal: Principal,
-    kinds: Sequence[CatalogKind] | None = None,
+    session: AsyncSession, query: str, limit: int, principal: Principal
 ) -> CatalogResults:
     """Every kind the caller may see, in `KIND_ORDER`, at most ``limit`` of each.
 
@@ -267,26 +268,21 @@ async def search_catalog(
     budget is spent on. The measured cost is dominated by the round trip, which is the thing this
     endpoint exists to have exactly one of.
 
-    ``kinds`` narrows the fan-out. Nothing calls it with a subset today; it is here because the
-    natural next request is a scoped palette ("just baskets"), and the alternative — a caller
-    discarding three quarters of the response — would have the API do work nobody reads.
+    No `kinds` parameter. A scoped palette ("just baskets") is the obvious next request and the
+    obvious place to add one — but an argument nothing passes is a branch nothing tests, and the
+    first draft of this function had exactly that.
     """
     needle = normalise(query)
-    wanted = tuple(kinds) if kinds is not None else KIND_ORDER
     if len(needle) < MIN_QUERY_LENGTH:
         return CatalogResults(query=needle, limit=limit, hits=())
 
-    hits: list[CatalogHit] = []
-    for kind in KIND_ORDER:
-        if kind not in wanted:
-            continue
-        if kind == "instrument":
-            hits.extend(await search_instruments(session, needle, limit))
-        elif kind == "index":
-            hits.extend(await search_indices(session, needle, limit))
-        elif kind == "basket":
-            hits.extend(await search_baskets(session, needle, limit, principal))
-        else:
-            hits.extend(await search_screens(session, needle, limit, principal))
-
-    return CatalogResults(query=needle, limit=limit, hits=tuple(hits))
+    return CatalogResults(
+        query=needle,
+        limit=limit,
+        hits=(
+            *await search_instruments(session, needle, limit),
+            *await search_indices(session, needle, limit),
+            *await search_baskets(session, needle, limit, principal),
+            *await search_screens(session, needle, limit, principal),
+        ),
+    )

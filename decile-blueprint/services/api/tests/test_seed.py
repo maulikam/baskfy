@@ -78,6 +78,13 @@ async def test_reference_seed_lands_the_documented_rows(
         "screen": 6,
         "cb_manager": 2,
         "cb_momentum_scan": 0,
+        # Two seed steps arrived after this dict was written and it had not caught up.
+        # `cb_catalogue` is 0 for the same reason `cb_momentum_scan` is: a catalogue basket is cut
+        # *from* a published date's data, and a reference-only seed publishes no pipeline run, so
+        # there is nothing to cut. Asserted as 0 rather than dropped — if it ever becomes non-zero
+        # here, the seed order changed and that is worth noticing.
+        "cb_catalogue": 0,
+        "cb_collection": 4,
     }
 
     async with async_sessionmaker(engine)() as session:

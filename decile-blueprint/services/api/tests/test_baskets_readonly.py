@@ -17,7 +17,7 @@ import pytest
 
 from baskfy_api import baskets as basket_data
 from baskfy_api.app import create_app
-from baskfy_api.routers import baskets, curated_create, curated_from_screen
+from baskfy_api.routers import baskets, curated_create, curated_from_screen, kite, managers
 
 MUTATING = ("post", "put", "patch", "delete")
 
@@ -48,9 +48,21 @@ OpenApiSpec = dict[str, dict[str, dict[str, object]]]
 #: being *less* trusting, not more — it takes no symbol list at all, and runs the named screen
 #: itself to find out what the constituents are. Nothing about it reaches a broker, and
 #: `test_the_exempted_routers_cannot_reach_the_execution_package` scans its source too.
+#: `POST`/`DELETE /api/v1/managers/me/baskets/{basket_slug}/publish` is a **listing** change and
+#: nothing else: a SEBI-registered manager putting one of their own baskets into the catalogue, or
+#: taking it back down. The route's own summary says so — "listing only — never an order" — and
+#: `routers/managers.py` was audited to the same standard as the two entries above before this was
+#: added: zero occurrences of `OrderGateway`, `place_order`, `/execute`, `baskfy_execution`,
+#: `kite_client` or `broker` anywhere in it, and
+#: `test_the_exempted_routers_cannot_reach_the_execution_package` now scans that module too.
+#:
+#: Publishing changes who can *see* a basket. It moves no shares, no money and no broker state,
+#: and an investor already holding it is unaffected either way — which is the question worth
+#: asking about an unpublish, and is NEEDS-MAULIK's manager-agreement item, not this test's.
 DELIBERATE_MUTATING_BASKET_ROUTES: dict[str, set[str]] = {
     "/api/v1/cb/baskets": {"post"},
     "/api/v1/cb/baskets/from-screen": {"post"},
+    "/api/v1/managers/me/baskets/{basket_slug}/publish": {"post", "delete"},
 }
 
 
@@ -77,7 +89,7 @@ class TestNoOrderPlacingRouteIsReachable:
 
     def test_the_exempted_routers_cannot_reach_the_execution_package(self) -> None:
         """The exemption is only defensible while the router behind it has no order path."""
-        for module in (curated_create, curated_from_screen):
+        for module in (curated_create, curated_from_screen, managers):
             source = inspect.getsource(module)
             for forbidden in ("baskfy_execution", "OrderGateway", "place_order", "kiteconnect"):
                 assert forbidden not in source, f"{module.__name__} references {forbidden}"
@@ -107,6 +119,31 @@ class TestNoOrderPlacingRouteIsReachable:
         source = inspect.getsource(baskets)
         for verb in MUTATING:
             assert f"@router.{verb}" not in source, f"baskets.py declares a {verb.upper()}"
+
+    def test_the_kite_handoff_router_declares_no_mutating_verb(self) -> None:
+        """`GET /baskets/plan/kite` returns a payload the *browser* posts to Kite.
+
+        The hand-off is only a hand-off while this router reads. A POST here would mean this
+        service submitting a basket on a user's behalf, which is the regulated activity the whole
+        posture avoids — so the shape is asserted structurally, not trusted to review.
+        """
+        source = inspect.getsource(kite)
+        for verb in MUTATING:
+            assert f"@router.{verb}" not in source, f"kite.py declares a {verb.upper()}"
+
+    def test_the_kite_handoff_router_cannot_reach_the_execution_package(self) -> None:
+        """Same bar as `baskets.py`, and it now clears it with nothing to exempt.
+
+        An earlier draft imported `assert_tradeable` so the hand-off would drop SGBs and G-secs.
+        That guard protects the *desk owner's* account — non-negotiable #7 exists because
+        `EXCLUDED_SYMBOLS` is one person's long-term holding — and applying it to a basket handed
+        to somebody else's Kite session filtered their orders for a reason that was never about
+        them. Removing it also removed the only reason this router had to touch the execution
+        package at all, so the assertion is the plain one.
+        """
+        source = inspect.getsource(kite)
+        for forbidden in ("baskfy_execution", "OrderGateway", "place_order", "kiteconnect"):
+            assert forbidden not in source, f"kite.py references {forbidden}"
 
     def test_the_router_cannot_reach_the_execution_package(self) -> None:
         source = inspect.getsource(baskets)

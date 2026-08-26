@@ -81,6 +81,7 @@ from baskfy_api.routers import (
     desk,
     explore,
     instruments,
+    kite,
     managers,
     market_data,
     meta,
@@ -543,6 +544,7 @@ def _mount_routers(versioned: APIRouter) -> None:
     # M22: read-only basket surfaces. No POST, no PUT, no DELETE -- execution stays in the desk
     # console, so nothing here crosses the SEBI gate. `test_baskets_readonly.py` asserts it.
     versioned.include_router(baskets.router)
+    versioned.include_router(kite.router)
     # M26: the desk's read-only surfaces -- performance, holdings, tradebook, regime, reconcile.
     # Same rule and the same reason as the line above; `test_desk_readonly.py` asserts it.
     versioned.include_router(desk.router)

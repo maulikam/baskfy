@@ -86,6 +86,19 @@ class Settings(BaseSettings):
     #: one env file describes the whole client.
     google_client_secret: str = ""
 
+    # --- Kite Publisher basket hand-off (M47) -------------------------------
+    #: The **Publisher** app's api key — not Kite Connect's. It is not a secret: it travels in the
+    #: form the user's browser posts to `kite.zerodha.com/connect/basket`, and Zerodha's own
+    #: embed snippets put it in page source. Empty means the hand-off is off and the button is not
+    #: rendered — never "post without a key", which would send the user to an error page in Kite.
+    #:
+    #: This buys no API access of any kind. Publisher hands a basket to the user's Kite session
+    #: for them to review and confirm; there is no session token, no holdings read, and no order
+    #: this system can place. Kite **Connect** is the paid product that does those, and its
+    #: credentials are `BASKFY_KITE_API_KEY` / `BASKFY_KITE_API_SECRET`, which are a different
+    #: app and a different thing entirely.
+    kite_publisher_api_key: str = ""
+
     #: docs/11: "OTP login as the default path". Six digits, ten minutes, five guesses.
     otp_length: int = Field(default=6, ge=6, le=10)
     otp_ttl_seconds: int = Field(default=10 * 60, gt=0)

@@ -140,6 +140,14 @@ class CollectionSeed:
     rebalance_frequency: str | None = None
     #: ``min_amount`` (cheapest first) or ``name``.
     ordering: str = "name"
+    #: Keep only the first N after ordering. ``None`` means "every basket that matches".
+    #:
+    #: A shelf with no predicate and no cap is not a shelf — it is the catalogue under a second
+    #: title, so it can never group anything and every other shelf hides inside it. ``start-here``
+    #: was exactly that, which is why three shelves and the grid all drew the same baskets. A cap
+    #: is what makes "the smallest cheque that still buys a whole basket" an editorial claim
+    #: rather than a re-sort of everything.
+    limit: int | None = None
 
 
 #: The editorial shelves ``/baskets`` is browsed by. docs/smallcase/03 — smallcase's browse
@@ -151,6 +159,10 @@ class CollectionSeed:
 #: remembered to edit this file — which is how ``cb_collection`` came to hold nothing for six
 #: migrations. A predicate over what actually exists fills itself as baskets are added, and
 #: re-running the seed refreshes membership rather than duplicating it.
+#: How many of the cheapest baskets "Start here" holds. Small enough that the shelf is a
+#: recommendation, large enough to fill a row of cards at every breakpoint.
+START_HERE_LIMIT = 6
+
 COLLECTION_SEED_ROWS: tuple[CollectionSeed, ...] = (
     CollectionSeed(
         slug="start-here",
@@ -158,6 +170,7 @@ COLLECTION_SEED_ROWS: tuple[CollectionSeed, ...] = (
         subtitle="The smallest cheque that still buys a whole basket.",
         position=10,
         ordering="min_amount",
+        limit=START_HERE_LIMIT,
     ),
     CollectionSeed(
         slug="momentum",
@@ -192,8 +205,10 @@ async def _collection_member_ids(session: AsyncSession, shelf: CollectionSeed) -
     it asserts a PRIVATE basket named by a collection is not returned by the API.
 
     A shelf whose predicate matches nothing is still created. An empty shelf is a true statement
-    about the catalogue ("nothing here yet") and the page renders it as one; a *missing* shelf
-    would be a false statement about the product.
+    about the catalogue ("nothing here yet") and its own page renders it as one; a *missing* shelf
+    would be a false statement about the product. Whether a browse page stacks that shelf or lists
+    it as a tile is a rendering decision, taken in ``lib/collections/select.ts`` — not here, where
+    hiding it would destroy the fact instead of presenting it.
     """
     stmt = select(CbBasket.id).where(
         CbBasket.archived_at.is_(None), CbBasket.visibility == "PUBLISHED"
@@ -210,11 +225,34 @@ async def _collection_member_ids(session: AsyncSession, shelf: CollectionSeed) -
     if shelf.ordering == "min_amount":
         # Cheapest first, and a basket with no metrics row yet sorts last rather than vanishing:
         # "we do not know the minimum" is not the same as "there is no basket".
-        stmt = stmt.outerjoin(CbMetrics, CbMetrics.basket_id == CbBasket.id).order_by(
-            CbMetrics.min_amount.asc().nullslast(), CbBasket.name
+        #
+        # Joined through *one* row per basket, deliberately. ``cb_metrics`` is a history — the
+        # momentum-scan basket already carries two ``as_of_date`` rows — so a plain join fans the
+        # basket out once per row and the shelf then names it twice. It was silent until this
+        # shelf grew a ``limit``, at which point the duplicate also pushed a real basket off the
+        # end. Latest metrics wins, which is the same row ``_collection_out`` puts on the card.
+        latest = (
+            select(
+                CbMetrics.basket_id.label("basket_id"),
+                func.max(CbMetrics.as_of_date).label("as_of_date"),
+            )
+            .group_by(CbMetrics.basket_id)
+            .subquery()
+        )
+        stmt = (
+            stmt.outerjoin(latest, latest.c.basket_id == CbBasket.id)
+            .outerjoin(
+                CbMetrics,
+                (CbMetrics.basket_id == CbBasket.id)
+                & (CbMetrics.as_of_date == latest.c.as_of_date),
+            )
+            .order_by(CbMetrics.min_amount.asc().nullslast(), CbBasket.name)
         )
     else:
         stmt = stmt.order_by(CbBasket.name)
+
+    if shelf.limit is not None:
+        stmt = stmt.limit(shelf.limit)
 
     return [int(value) for value in (await session.execute(stmt)).scalars().all()]
 

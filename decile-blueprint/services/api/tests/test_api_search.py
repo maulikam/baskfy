@@ -32,7 +32,7 @@ from baskfy_api.curated_seed import seed_curated_managers
 from baskfy_api.routers import explore
 from baskfy_api.routers import search as search_router
 from baskfy_core.curated_baskets import MANAGER_SLUG_BASKFY_ENGINE
-from baskfy_core.models import CbBasket, CbManager, Instrument, Screen
+from baskfy_core.models import CbBasket, CbManager, IndexDef, Instrument, Screen
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 
@@ -150,7 +150,7 @@ async def test_the_query_is_echoed_so_a_debounced_client_can_drop_stale_answers(
 async def test_a_hit_carries_identity_and_no_url(
     api: httpx.AsyncClient, screener_session: AsyncSession
 ) -> None:
-    """`kind` + `id` is the contract; routing is the web app's business (DECISIONS-MERGE M40.1).
+    """`kind` + `id` is the contract; routing is the web app's business (DECISIONS-MERGE M46.1).
 
     Asserted because the tempting shortcut is to mint `/basket/{slug}` here — and Tree 6 moved
     half these routes, which would have made a nav refactor an API deploy.
@@ -251,6 +251,37 @@ async def test_an_index_is_found_by_slug_as_well_as_by_name(
     assert SEEDED_INDEX_SLUG in ids_of(by_slug.json(), "index")
     titles = [hit["title"] for hit in rows_of(by_name.json()) if hit["kind"] == "index"]
     assert SEEDED_INDEX_NAME in titles
+
+
+async def test_a_universe_outranks_a_dashboard_only_index_at_equal_rank(
+    api: httpx.AsyncClient, screener_session: AsyncSession
+) -> None:
+    """Someone typing "nifty 50" means NIFTY 50, not "NIFTY50 PR 1x Inverse".
+
+    `index_def.sort_order` is 1..14 for docs/01 §6's universes and 0 for every dashboard-only row
+    registered later (`seed._register_unknown_indices`), so ordering on it alone put the derived
+    rows first. `is_universe` breaks the tie before `sort_order` is consulted.
+    """
+    _, public_id = await make_user(screener_session, "universefirst@example.com")
+    screener_session.add(
+        IndexDef(
+            id=901, slug="nifty-50-pr-1x-inverse", name="NIFTY50 PR 1X INVERSE", is_universe=False
+        )
+    )
+    await screener_session.flush()
+
+    # Queried by slug fragment, because that is the string both rows share: "NIFTY 50" with a
+    # space does not appear in "NIFTY50 PR 1X INVERSE" at all.
+    body = (
+        await api.get(
+            url("/search"),
+            params={"q": "nifty-50", "limit": search_service.MAX_LIMIT},
+            headers=bearer(public_id),
+        )
+    ).json()
+    slugs = ids_of(body, "index")
+    assert {"nifty-50", "nifty-50-pr-1x-inverse"} <= set(slugs), slugs
+    assert slugs.index("nifty-50") < slugs.index("nifty-50-pr-1x-inverse"), slugs
 
 
 # --- visibility: the reason a federated search is worth testing hard ----------------------

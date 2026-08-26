@@ -74,6 +74,7 @@ from baskfy_api.schemas import (
     TargetWeightOut,
 )
 from baskfy_api.screener import current_data_version
+from baskfy_core.allocation_ledger import PortfolioKind, PortfolioSource
 from baskfy_core.models import (
     BrokerAccount,
     Instrument,
@@ -676,6 +677,16 @@ async def create_portfolio(
         name=body.name,
         parent_id=parent_id,
         broker_account_id=broker_account_id,
+        # 0021/0022 made these NOT NULL with no server default, on purpose: §4.1 makes the kind
+        # an arithmetic decision, not a detail to inherit silently. A portfolio created through
+        # this route is one the user assembled, so HOLDING_GROUP is the true source (§3) and
+        # §5.2 then gives it the most conservative metric. CAPITAL because it holds real money
+        # and must sum into net worth; a monitoring view is created deliberately, never by
+        # default. `started_on` is today because that is the day this grouping begins, and every
+        # §5.2 metric is measured from it.
+        kind=PortfolioKind.CAPITAL.value,
+        source=PortfolioSource.HOLDING_GROUP.value,
+        started_on=dt.date.today(),
     )
     session.add(portfolio)
     await session.flush()
@@ -773,7 +784,15 @@ async def import_csv(  # noqa: PLR0913, PLR0917 - FastAPI injects one parameter 
         replayed = await _replayed(session, principal, _cache(request), scope, idempotency_key)
         if replayed is not None:
             return replayed
-        portfolio = Portfolio(user_id=user_id, name=name or _name_from(file.filename))
+        portfolio = Portfolio(
+            user_id=user_id,
+            name=name or _name_from(file.filename),
+            # Same reasoning as the create route above: an imported CSV is a holding group the
+            # user assembled, and it holds real money.
+            kind=PortfolioKind.CAPITAL.value,
+            source=PortfolioSource.HOLDING_GROUP.value,
+            started_on=dt.date.today(),
+        )
         session.add(portfolio)
         await session.flush()
         await idempotency.remember(_cache(request), scope, idempotency_key, str(portfolio.id))

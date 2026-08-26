@@ -5657,3 +5657,67 @@ this commit — the endpoints, schemas, pages and `auth_service` helpers were de
 **Still open.** SES remains in the sandbox, and it is still the path for support receipts, account
 deletion notices, screen alerts and rebalance mail. This change took *sign-in* off that
 dependency; it did not remove it.
+
+---
+
+## M47 — Kite Publisher basket hand-off, and whose account the guards protect ⚠ UNREVIEWED
+
+**Context.** Maulik created a Zerodha **Publisher** app for Baskfy and asked for the basket
+hand-off. Two things had to be untangled first.
+
+**The redirect URL he had set was wrong, and for a Publisher app it does not matter.** He had
+`https://staging.baskfy.com/callback`, which is not a route this app serves. The app's broker
+OAuth flow terminates at `GET /api/v1/brokers/callback` — but that is **Kite Connect**, the paid
+product, and `routers/brokers.py` redeems a `request_token` against `/session/token` using
+`BASKFY_KITE_API_KEY` *and* `BASKFY_KITE_API_SECRET`. A Publisher app issues neither. Publisher is
+the basket widget: it hands a prepared basket to the user's own Kite session. Zerodha's own console
+text says the redirect "does not matter until you want to do advanced offsite basket execution".
+
+**Decision.** Build the Publisher hand-off. `GET /baskets/plan/kite` returns the desk's latest plan
+shaped as Kite's `data` array plus the public `api_key`; the browser posts that to
+`kite.zerodha.com/connect/basket` from a real `<form>` and the user reviews and confirms **in
+Kite**. Nothing on this side places an order, holds a broker credential, or learns the outcome.
+This is D3 posture B exactly as `broker_connections.BROKER_OAUTH_REVIEW` words it: "publish
+baskets; user executes in their own broker account after confirm."
+
+**M47.1 — the mistake worth recording: whose account a guard protects.**
+
+The first version filtered the basket through `baskfy_execution.guards.assert_tradeable`, on the
+reasoning that non-negotiable #7 ("`EXCLUDED_SYMBOLS` instruments are untouchable") is a safety
+rule and a safety rule should not have two definitions. Maulik stopped it: *"SGB refusals should
+not be part of this project, here user can buy sell anything."*
+
+He is right, and the error is a general one. **`EXCLUDED_SYMBOLS` is `frozenset({"SGBDE31III"})`
+— one sovereign gold bond, held long-term by the desk's owner, protected so that a momentum
+strategy cannot sell it out from under him.** It is a personal position guard that reads as system
+policy only because the desk *is* one person's system. Baskfy's users are other people, with their
+own holdings and their own reasons; filtering their basket against the desk owner's protected
+positions removes rows for a reason that has nothing to do with them, in an account that is not
+his. The general lesson: before carrying a rule from the desk into the multi-tenant product, ask
+**whose account it protects**. #7 protects one, and it does not travel.
+
+**The desk's guard is untouched and still absolute** for the account it was written for.
+`test_kite_basket.py` asserts both halves — that an SGB now reaches the user's basket, *and* that
+`assert_tradeable` still raises on it — so removing the filter here cannot be mistaken for
+removing the rule. The desk's own suite is green (1330 passed).
+
+Dropping the filter also removed the only reason this router had to import
+`baskfy_execution` at all, so `test_baskets_readonly.py` asserts the plain "cannot reach the
+execution package" bar for `routers/kite.py` with no exemption — a better outcome than the
+carve-out the first version needed.
+
+**What is still filtered:** malformed rows only — a side that is not BUY/SELL, a non-positive
+quantity. Every drop is named in the response and in the UI, because a nine-row basket for a
+ten-row plan with no explanation reads as the app losing an order.
+
+**Rejected.** (a) Building the payload in TypeScript — the field names Kite expects would then
+live in two places and drift from the plan that produced them. (b) `readonly: true` on the rows —
+Kite would forbid the user changing quantities, and a basket is a suggestion. (c) A LIMIT order at
+`planned_ref_price` — that price is from the desk's evaluation and may be hours old; a limit that
+no longer crosses is an order that silently does not fill. MARKET, changeable in Kite.
+
+**Reversal.** Delete `routers/kite.py`, `kite_basket.py` and the component; the route is a GET and
+holds no state. `BASKFY_KITE_PUBLISHER_API_KEY` empty already disables it — the button is not
+rendered rather than rendered dead.
+
+**Blocked on:** the Publisher **API key**. `NEEDS-MAULIK.md` §26.

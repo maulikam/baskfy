@@ -62,7 +62,7 @@ export function MarkInvestedForm({
         confirmed: true,
         holdings,
       });
-      router.push(`/me/investments/${result.id}`);
+      router.push(`/portfolio/${result.id}`);
       router.refresh();
     } catch (caught) {
       setError(
@@ -118,7 +118,7 @@ export function MarkInvestedForm({
           onChange={(event) => setConfirmed(event.target.checked)}
           className="mt-0.5"
         />
-        I have already placed these orders at my broker. Baskfy is recording the book, not
+        I have already placed these orders at my broker. Baskfy is recording the holding, not
         sending them.
       </label>
       {error ? (

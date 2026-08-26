@@ -60,6 +60,9 @@ PRODUCER_TASK_ROUTES: dict[str, dict[str, str]] = {
     "baskfy.alerts.*": {"queue": "default"},
     "baskfy.desk.*": {"queue": "default"},
     "baskfy.cb.*": {"queue": "compute"},
+    # PORTFOLIO_REDESIGN.md §5.1's nightly EOD NAV job. Compute-bound over price history, like the
+    # factor and curated-metric steps.
+    "baskfy.portfolio.*": {"queue": "compute"},
 }
 
 #: The queue an unrouted name lands on. Must match the worker's ``task_default_queue``, which is

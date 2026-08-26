@@ -8,6 +8,7 @@ a visibility rule that does not quietly leak a PRIVATE basket onto a public shel
 from __future__ import annotations
 
 import datetime as dt
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -18,10 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.curated_seed import (
     COLLECTION_SEED_ROWS,
+    START_HERE_LIMIT,
     count_curated_collections,
     seed_curated_collections,
 )
-from baskfy_core.models import CbBasket, CbCollection, CbManager
+from baskfy_core.models import CbBasket, CbCollection, CbManager, CbMetrics
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 
@@ -104,6 +106,68 @@ class TestSeeding:
         for row in (await session.execute(select(CbCollection))).scalars():
             assert hidden.id not in list(row.basket_ids), f"{row.slug} named a PRIVATE basket"
 
+    def test_no_shelf_is_the_whole_catalogue_under_a_second_title(self) -> None:
+        """A shelf with neither a predicate nor a cap can never group anything.
+
+        This is not a style point. ``start-here`` was defined with no category, no manager, no
+        frequency and no limit, which made it exactly ``SELECT * FROM cb_basket`` ordered by price
+        — so every other shelf was a subset of it by construction, and a browse page stacking them
+        drew the same baskets over and over. Any future shelf added without a rule reintroduces
+        that, so the rule is asserted rather than remembered.
+        """
+        for shelf in COLLECTION_SEED_ROWS:
+            discriminates = bool(shelf.categories or shelf.managers or shelf.rebalance_frequency)
+            assert discriminates or shelf.limit is not None, (
+                f"{shelf.slug!r} matches every published basket and is uncapped — it is the "
+                f"catalogue, not a shelf"
+            )
+
+    async def test_start_here_holds_the_cheapest_few_rather_than_everything(
+        self, session: AsyncSession
+    ) -> None:
+        """The subtitle promises "the smallest cheque"; an uncapped shelf promises nothing."""
+        for index in range(START_HERE_LIMIT + 3):
+            await _a_basket(session, f"col-cap-{index:02d}")
+        await seed_curated_collections(session)
+        start_here = (
+            await session.execute(select(CbCollection).where(CbCollection.slug == "start-here"))
+        ).scalar_one()
+        published = list(
+            (
+                await session.execute(
+                    select(CbBasket.id).where(
+                        CbBasket.archived_at.is_(None), CbBasket.visibility == "PUBLISHED"
+                    )
+                )
+            ).scalars()
+        )
+        assert len(published) > START_HERE_LIMIT, "the fixture did not create enough baskets"
+        assert len(start_here.basket_ids) == START_HERE_LIMIT
+
+    async def test_no_seeded_shelf_names_the_same_basket_twice(self, session: AsyncSession) -> None:
+        """A shelf is a list of baskets, not a bag of them.
+
+        The regression this pins: ``start-here`` is ordered by ``cb_metrics.min_amount`` and the
+        join to that table fanned a basket out once per metrics row. ``momentum-scan`` carries two
+        ``as_of_date`` rows, so the shelf named it twice — and once the shelf was capped, the
+        duplicate also pushed a real basket off the end of the list.
+        """
+        basket = await _a_basket(session, "col-dup-metrics", categories=["momentum"])
+        for day in (dt.date(2026, 8, 20), dt.date(2026, 8, 21)):
+            session.add(
+                CbMetrics(
+                    basket_id=basket.id,
+                    as_of_date=day,
+                    min_amount=Decimal("1000.00"),
+                    computed_at=dt.datetime(2026, 8, 22, 3, 0, tzinfo=dt.UTC),
+                )
+            )
+        await session.flush()
+        await seed_curated_collections(session)
+        for row in (await session.execute(select(CbCollection))).scalars():
+            ids = list(row.basket_ids)
+            assert len(ids) == len(set(ids)), f"{row.slug} named a basket more than once"
+
     async def test_membership_refreshes_rather_than_accumulating(
         self, session: AsyncSession
     ) -> None:
@@ -153,6 +217,19 @@ class TestThePayloadCanBeRendered:
         await _shelf(session, "col-order", [first.id, second.id])
         body = (await api.get(url("/explore/collections/col-order"), headers=headers)).json()
         assert body["basket_slugs"] == ["col-order-zulu", "col-order-alpha"]
+
+    async def test_a_shelf_that_names_a_basket_twice_renders_it_once(
+        self, api: httpx.AsyncClient, session: AsyncSession
+    ) -> None:
+        """`basket_ids` has no uniqueness constraint, and the page cannot draw a card twice."""
+        headers = await _headers(session, "coldup")
+        one = await _a_basket(session, "col-dup-1")
+        two = await _a_basket(session, "col-dup-2")
+        await _shelf(session, "col-dup", [one.id, two.id, one.id])
+        body = (await api.get(url("/explore/collections/col-dup"), headers=headers)).json()
+        assert body["basket_slugs"] == ["col-dup-1", "col-dup-2"]
+        assert [card["slug"] for card in body["baskets"]] == ["col-dup-1", "col-dup-2"]
+        assert body["withheld"] == 0, "a de-duplicated id must not read as a hidden basket"
 
     async def test_an_empty_shelf_answers_with_an_empty_list_not_an_error(
         self, api: httpx.AsyncClient, session: AsyncSession

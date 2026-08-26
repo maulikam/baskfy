@@ -625,6 +625,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/baskets/plan/kite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The latest plan as a Kite Publisher basket (hand-off, not execution)
+         * @description Read the desk's latest plan and shape it for Kite's basket form.
+         *
+         *     404 when the desk has recorded no plans — inherited from `latest_plan`, which is called rather
+         *     than re-queried so there is one piece of SQL reading `rebalance_versions` and not two.
+         */
+        get: operations["planAsKiteBasket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/brokers": {
         parameters: {
             query?: never;
@@ -5748,6 +5771,44 @@ export interface components {
             next_cursor?: string | null;
         };
         JsonValue: unknown;
+        /**
+         * KiteBasketItemOut
+         * @description One row, in Kite's field names rather than ours — it is Kite's form that receives it.
+         */
+        KiteBasketItemOut: {
+            /** Exchange */
+            exchange: string;
+            /** Order Type */
+            order_type: string;
+            /** Product */
+            product: string;
+            /** Quantity */
+            quantity: number;
+            /** Readonly */
+            readonly: boolean;
+            /** Tradingsymbol */
+            tradingsymbol: string;
+            /** Transaction Type */
+            transaction_type: string;
+            /** Variety */
+            variety: string;
+        };
+        /**
+         * KiteBasketOut
+         * @description Everything the browser needs to render the form, and nothing it does not.
+         */
+        KiteBasketOut: {
+            /** Api Key */
+            api_key: string;
+            /** Configured */
+            configured: boolean;
+            /** Excluded */
+            excluded?: string[];
+            /** Items */
+            items: components["schemas"]["KiteBasketItemOut"][];
+            /** Url */
+            url: string;
+        };
         /**
          * LabelledRateOut
          * @description A rate §5.2 asks for that :class:`MetricKind` has no member for — labelled, never bare.
@@ -12123,6 +12184,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RebalancePlanOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    planAsKiteBasket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KiteBasketOut"];
                 };
             };
             /** @description Invalid screen definition */

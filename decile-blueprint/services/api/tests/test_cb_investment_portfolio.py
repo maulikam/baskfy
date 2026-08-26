@@ -39,6 +39,7 @@ from baskfy_api.routers.curated_investments import (
     list_investments,
     unlink_investment_from_portfolio,
 )
+from baskfy_core.allocation_ledger import PortfolioKind, PortfolioSource
 from baskfy_core.curated_baskets import SOLE_USER_ENV
 from baskfy_core.models import (
     BrokerAccount,
@@ -175,7 +176,14 @@ async def _book(
 async def _portfolio(
     session: AsyncSession, user_id: int, *, name: str, broker_account_id: int | None
 ) -> int:
-    row = Portfolio(user_id=user_id, name=name, broker_account_id=broker_account_id)
+    row = Portfolio(
+        user_id=user_id,
+        name=name,
+        broker_account_id=broker_account_id,
+        kind=PortfolioKind.CAPITAL.value,
+        source=PortfolioSource.HOLDING_GROUP.value,
+        started_on=dt.date(2026, 1, 2),
+    )
     session.add(row)
     await session.flush()
     return int(row.id)
@@ -881,8 +889,22 @@ def test_openapi_exposes_link_and_unlink_and_keeps_the_investment_optional() -> 
 
 def test_the_conflict_rule_is_the_same_asymmetry_the_rollup_uses() -> None:
     """Pure check of the rule, with no database in the way — both directions, and the null case."""
-    declares_one = Portfolio(user_id=1, name="one", broker_account_id=7)
-    spans = Portfolio(user_id=1, name="spans", broker_account_id=None)
+    declares_one = Portfolio(
+        user_id=1,
+        name="one",
+        broker_account_id=7,
+        kind=PortfolioKind.CAPITAL.value,
+        source=PortfolioSource.HOLDING_GROUP.value,
+        started_on=dt.date(2026, 1, 2),
+    )
+    spans = Portfolio(
+        user_id=1,
+        name="spans",
+        broker_account_id=None,
+        kind=PortfolioKind.CAPITAL.value,
+        source=PortfolioSource.HOLDING_GROUP.value,
+        started_on=dt.date(2026, 1, 2),
+    )
 
     conflict = curated_investments._broker_conflict
     assert conflict(investment_broker_account_id=9, portfolio=declares_one) is True

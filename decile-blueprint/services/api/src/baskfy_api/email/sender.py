@@ -98,10 +98,23 @@ class ResendTransport:
 
 
 class SmtpTransport:
-    """Local delivery to mailpit (Prompt 12 §3), and any other plain SMTP relay.
+    """mailpit locally (Prompt 12 §3), and a real relay in a deployment.
 
     ``smtplib`` is blocking, so the send runs in a worker thread. The alternative is another
     dependency for an operation that happens a handful of times per user, ever.
+
+    STARTTLS AND AUTH
+    -----------------
+    Both are opt-in and both default off, so mailpit — which offers neither — keeps working
+    unchanged. They exist because Amazon SES, which `docs/08` §2 names as this deployment's
+    sender, refuses an unauthenticated relay *and* refuses to carry credentials in the clear.
+    Before they existed this class could open a socket to SES and get nothing but a 530.
+
+    The order below is the one the protocol requires and is not interchangeable: EHLO, then
+    STARTTLS, then a second EHLO (the server's capability list changes once the session is
+    encrypted, and AUTH usually appears only in the second one), then LOGIN. ``smtplib`` re-sends
+    EHLO inside ``starttls()``, but doing it explicitly is what makes that guarantee visible to
+    the next reader rather than implicit in a library.
     """
 
     def __init__(self, settings: Settings) -> None:
@@ -109,9 +122,21 @@ class SmtpTransport:
         self._port = settings.smtp_port
         self._from = settings.email_from
         self._reply_to = settings.email_reply_to
+        self._username = settings.smtp_username
+        self._password = settings.smtp_password
+        self._starttls = settings.smtp_starttls
 
     def _send_blocking(self, mail: EmailMessage) -> None:
         with smtplib.SMTP(self._host, self._port, timeout=SEND_TIMEOUT_SECONDS) as client:
+            client.ehlo()
+            if self._starttls:
+                # No explicit context: the default verifies the server certificate against the
+                # system trust store. Passing an unverified context here would make the
+                # encryption decorative.
+                client.starttls()
+                client.ehlo()
+            if self._username:
+                client.login(self._username, self._password)
             client.send_message(mail)
 
     async def send(self, message: Message) -> None:

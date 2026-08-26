@@ -62,22 +62,25 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/instruments/{symbol}/history": {"get"},
     "/instruments/{symbol}/corporate-actions": {"get"},
     "/instruments/{symbol}/rank-history": {"get"},
+    # M46: the federated ⌘K search (`baskfynavrefactorreport` §F11). Documented here because a
+    # route absent from this list is a surface nobody agreed to — which is the assertion below.
+    "/search": {"get"},
     "/listings": {"get"},
     "/indices/dashboard": {"get"},
     "/market-health": {"get"},
     "/market-health/history": {"get"},
     # docs/07 §"Account & billing" — the auth half is Prompt 12's, the billing half Prompt 13's.
-    "/auth/register": {"post"},
-    "/auth/login": {"post"},
+    #
+    # M46 removed eight of these in one change — `register`, `login`, `request-otp`, `verify-otp`,
+    # `verify-email`, `forgot-password`, `reset-password` and `me/change-password` — when Google
+    # sign-in replaced the email/password funnel (`docs/DECISIONS-MERGE.md` M46). The list below
+    # is the entire authenticated surface now, and the assertion under it is what makes that a
+    # fact rather than a claim: a route absent from this list is a surface nobody agreed to, and
+    # a route still *in* the API after being deleted from here fails just as loudly.
+    "/auth/google": {"post"},
     "/auth/refresh": {"post"},
     "/auth/logout": {"post"},
-    "/auth/request-otp": {"post"},
-    "/auth/verify-otp": {"post"},
-    "/auth/verify-email": {"post"},
-    "/auth/forgot-password": {"post"},
-    "/auth/reset-password": {"post"},
     "/me": {"get", "patch", "delete"},
-    "/me/change-password": {"post"},
     "/me/export": {"get"},
     "/me/restore": {"post"},
     # docs/07 §"Account & billing", the billing half (Prompt 13).
@@ -100,6 +103,30 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/portfolios/{portfolio_id}/rebalance": {"post"},
     "/portfolios/{portfolio_id}/rebalances": {"get"},
     "/portfolios/{portfolio_id}/rebalances/{rebalance_id}": {"get"},
+    # PORTFOLIO_REDESIGN.md §6 and §7, not docs/07 -- which predates the redesign and describes
+    # a portfolio tracker with no allocation ledger under it. Seven reads and two writes, all
+    # authenticated and all user-scoped; `baskfy_api.routers.portfolio_overview` argues for each.
+    #
+    # There is no execute route here and there will not be one (§9): a rebalance produces an
+    # order plan the user takes to their broker, and
+    # `test_baskets_readonly.py::test_the_whole_api_has_no_order_route` covers this router the
+    # way it covers every other. The two writes are bookkeeping: `POST .../resolve` answers
+    # §4.3's reconciliation question, and `POST /portfolio` creates a grouping. Both move an
+    # allocation and neither reaches a broker.
+    # §6.6 and §6.7 -- the onboarding half. `suggestions` is a read that serves
+    # `baskfy_core.grouping_suggestions.suggest_groupings`; `POST /portfolio` is the redesign's
+    # create, which files whole holdings (§4.2) into a portfolio whose kind (§4.1) and source (§3)
+    # the caller states. Neither reaches a broker: creating a grouping is filing, not trading, and
+    # `test_baskets_readonly.py::test_the_whole_api_has_no_order_route` covers both.
+    "/portfolio": {"post"},
+    "/portfolio/suggestions": {"get"},
+    "/portfolio/overview": {"get"},
+    "/portfolio/holdings": {"get"},
+    "/portfolio/activity": {"get"},
+    "/portfolio/reconciliation": {"get"},
+    "/portfolio/reconciliation/{item_id}/resolve": {"post"},
+    "/portfolio/{portfolio_id}": {"get"},
+    "/portfolio/{portfolio_id}/nav": {"get"},
     # docs/07 §Backtests (Prompt 15). The four paths docs/07 does not list — the collection read,
     # `holdings`, the SSE stream and the download the signed `export` link redeems against — are
     # Prompt 15 deliverables 4, 5 and 6; each is argued for in `baskfy_api.routers.backtests` and

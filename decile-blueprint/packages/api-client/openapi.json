@@ -31,6 +31,144 @@
         "title": "Action",
         "type": "string"
       },
+      "ActivityItemOut": {
+        "description": "One row of §7's activity feed.",
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "broker": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BrokerRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "instrument": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InstrumentRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_pnl_event": {
+            "default": true,
+            "title": "Is Pnl Event",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ActivityKind"
+          },
+          "on": {
+            "format": "date",
+            "title": "On",
+            "type": "string"
+          },
+          "portfolio": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "reconciliation_item_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconciliation Item Id"
+          },
+          "reconciliation_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReconciliationState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "on",
+          "description"
+        ],
+        "title": "ActivityItemOut",
+        "type": "object"
+      },
+      "ActivityKind": {
+        "description": "What one activity row is. The cash kinds mirror ``portfolio_cash_flow.kind`` exactly.\n\n``CORPORATE_ACTION`` and ``RECONCILIATION`` are the two rows that are not cash movements.\nBoth belong in §7's list and neither is a P&L event — a split changes quantity and average\nprice and produces zero P&L (§4.5, criterion 6), and a question being asked or answered is a\nfact about our bookkeeping, not about the user's money.",
+        "enum": [
+          "BUY",
+          "SELL",
+          "DIVIDEND",
+          "ASSIGN",
+          "RELEASE",
+          "EXTERNAL_DEPOSIT",
+          "EXTERNAL_WITHDRAWAL",
+          "CORPORATE_ACTION",
+          "RECONCILIATION"
+        ],
+        "title": "ActivityKind",
+        "type": "string"
+      },
+      "ActivityOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "ActivityOut",
+        "type": "object"
+      },
       "AdminActionListOut": {
         "additionalProperties": false,
         "properties": {
@@ -221,6 +359,100 @@
           "is_staff"
         ],
         "title": "AdminUserOut",
+        "type": "object"
+      },
+      "AggregatedHoldingOut": {
+        "description": "§6.7: \"HDFC Bank — 320 (Zerodha 200 · Upstox 120)\".\n\nAggregated for display, with the broker breakdown preserved rather than summarised away. The\nledger keeps the two positions apart on purpose — they can be allocated apart and sold apart\n— so this row's ``allocation`` is filled only when every broker line agrees about it.\n``split_across_portfolios`` is what says otherwise, instead of one of the two answers\nsilently standing for both.",
+        "properties": {
+          "allocated": {
+            "default": false,
+            "title": "Allocated",
+            "type": "boolean"
+          },
+          "allocation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "brokers": {
+            "items": {
+              "$ref": "#/components/schemas/HoldingBrokerLineOut"
+            },
+            "title": "Brokers",
+            "type": "array"
+          },
+          "instrument": {
+            "$ref": "#/components/schemas/InstrumentRefOut"
+          },
+          "monitoring_views": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRefOut"
+            },
+            "title": "Monitoring Views",
+            "type": "array"
+          },
+          "pending_reconciliation": {
+            "default": false,
+            "title": "Pending Reconciliation",
+            "type": "boolean"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "price_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price As Of"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "split_across_portfolios": {
+            "default": false,
+            "title": "Split Across Portfolios",
+            "type": "boolean"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "instrument",
+          "quantity"
+        ],
+        "title": "AggregatedHoldingOut",
         "type": "object"
       },
       "AllocationOut": {
@@ -713,6 +945,49 @@
         "title": "ApplyBody",
         "type": "object"
       },
+      "AttentionOut": {
+        "description": "One row of §6.4's ribbon. The sentence comes from core, so every surface says it alike.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "subject_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Subject Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "message",
+          "count"
+        ],
+        "title": "AttentionOut",
+        "type": "object"
+      },
       "AwayFromHighFilter": {
         "additionalProperties": false,
         "description": "\"Within X% of high\". ``100`` means ignore (docs/01 §2.4).",
@@ -1184,7 +1459,7 @@
           },
           "drawdown": {
             "items": {
-              "$ref": "#/components/schemas/DrawdownPointOut"
+              "$ref": "#/components/schemas/baskfy_api__schemas__DrawdownPointOut"
             },
             "title": "Drawdown",
             "type": "array"
@@ -1750,6 +2025,47 @@
         "title": "BatchOut",
         "type": "object"
       },
+      "BenchmarkOut": {
+        "description": "§6.3's overlay and §7's \"benchmark diff\" — three numbers, never one.\n\nThe portfolio's figure, the index's over the same window, and the gap. Built by\n:func:`~baskfy_core.portfolio_nav.benchmark_comparison`, which refuses a model figure so that\ncriterion 5's blend cannot be reached from the benchmark direction either.",
+        "properties": {
+          "benchmark": {
+            "$ref": "#/components/schemas/ReturnFigureOut"
+          },
+          "difference": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/baskfy_api__routers__portfolio_overview__NavPointOut"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "portfolio": {
+            "$ref": "#/components/schemas/ReturnFigureOut"
+          }
+        },
+        "required": [
+          "name",
+          "portfolio",
+          "benchmark"
+        ],
+        "title": "BenchmarkOut",
+        "type": "object"
+      },
       "Body_importCsv": {
         "properties": {
           "file": {
@@ -1786,6 +2102,31 @@
           "trading"
         ],
         "title": "BrokerCapabilitiesOut",
+        "type": "object"
+      },
+      "BrokerCashOut": {
+        "description": "One broker account's Unallocated cash bucket (§4.4), with the day it is true for.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "balance": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Balance",
+            "type": "string"
+          },
+          "broker": {
+            "$ref": "#/components/schemas/BrokerRefOut"
+          }
+        },
+        "required": [
+          "broker",
+          "balance",
+          "as_of"
+        ],
+        "title": "BrokerCashOut",
         "type": "object"
       },
       "BrokerGateOut": {
@@ -2138,6 +2479,30 @@
         "title": "BrokerReconciliationOut",
         "type": "object"
       },
+      "BrokerRefOut": {
+        "description": "One broker account, named. ``broker_id`` is the catalog id (``zerodha``, …).",
+        "properties": {
+          "broker_account_id": {
+            "title": "Broker Account Id",
+            "type": "integer"
+          },
+          "broker_id": {
+            "title": "Broker Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "broker_account_id",
+          "broker_id",
+          "label"
+        ],
+        "title": "BrokerRefOut",
+        "type": "object"
+      },
       "CallbackOut": {
         "properties": {
           "broker_id": {
@@ -2333,35 +2698,6 @@
           "label"
         ],
         "title": "CellOut",
-        "type": "object"
-      },
-      "ChangePasswordIn": {
-        "additionalProperties": false,
-        "description": "``current_password`` is optional: an OTP-only account is *setting* one for the first time.",
-        "properties": {
-          "current_password": {
-            "anyOf": [
-              {
-                "maxLength": 128,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Current Password"
-          },
-          "new_password": {
-            "maxLength": 128,
-            "minLength": 8,
-            "title": "New Password",
-            "type": "string"
-          }
-        },
-        "required": [
-          "new_password"
-        ],
-        "title": "ChangePasswordIn",
         "type": "object"
       },
       "CheckoutSessionIn": {
@@ -3327,6 +3663,38 @@
         "title": "DataVersionOut",
         "type": "object"
       },
+      "DayPnlOut": {
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "on": {
+            "format": "date",
+            "title": "On",
+            "type": "string"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
+          }
+        },
+        "required": [
+          "on",
+          "amount"
+        ],
+        "title": "DayPnlOut",
+        "type": "object"
+      },
       "DeleteAccountIn": {
         "additionalProperties": false,
         "description": "Deleting is irreversible after the window, so it asks for the address back.",
@@ -3574,6 +3942,123 @@
         "title": "DeskTradeOut",
         "type": "object"
       },
+      "DetailHoldingOut": {
+        "description": "§7's holdings tab: weight, today's contribution, total contribution, broker.\n\n``total_contribution`` is ``None`` when the purchase price is unknown — §5.2 forbids showing\nsince-purchase P&L for a holding whose history has not been imported (§5.3), and a zero would\nbe exactly the forbidden number wearing a plausible face.",
+        "properties": {
+          "avg_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Price"
+          },
+          "broker": {
+            "$ref": "#/components/schemas/BrokerRefOut"
+          },
+          "first_bought_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Bought On"
+          },
+          "history_source": {
+            "default": "NONE",
+            "title": "History Source",
+            "type": "string"
+          },
+          "instrument": {
+            "$ref": "#/components/schemas/InstrumentRefOut"
+          },
+          "pending_reconciliation": {
+            "default": false,
+            "title": "Pending Reconciliation",
+            "type": "boolean"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "todays_contribution": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Todays Contribution"
+          },
+          "total_contribution": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Contribution"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight"
+          }
+        },
+        "required": [
+          "instrument",
+          "broker",
+          "quantity"
+        ],
+        "title": "DetailHoldingOut",
+        "type": "object"
+      },
       "DividendPolicy": {
         "description": "docs/10 §7: ``dividends: \"reinvest\" | \"cash\" | \"ignore\"``.\n\n## What the stored series actually is, and why this changed in M39\n\nThis enum used to default to ``reinvest`` on the strength of docs/09's adjustment algorithm,\nwhich folds cash dividends into ``adj_factor`` alongside splits and bonuses\n(``D -> (P_cum - D) / P_cum``). If that ran, ``ohlcv_daily.close`` would be a *total-return*\nseries and marking the book to it would be reinvestment, exactly.\n\n**It does not run.** M27 put the question to the reference corpus and measured the answer:\nof 45 deciding symbol-windows the price convention won 42, and it matched all 25 dividend-\npaying symbols exactly at stored precision on the three windows that reproduce. M28 then\napplied the 47 share-count actions and deliberately **not** the 38 dividend-shaped ones\n(`reconciliation/RECOVERED-ACTIONS.md`, \"VERDICT: PRICE RETURN\").\n\nSo the adjusted close is a **price-return** series: splits and bonuses are inside it, cash\ndividends are not. Every policy below is defined against that fact.\n\n``ignore``\n    Mark to the stored series and credit nothing — a pure price return. **Exact, needs no\n    extra data, and is therefore the default.** It is what the engine has always actually\n    computed; until M39 it was mislabelled ``reinvest``.\n``cash``\n    Credit each dividend to cash on its ex-date. Needs a dividend schedule on the panel and\n    is refused without one.\n``reinvest``\n    Would need a total-return series rebuilt from the dividend schedule. Same requirement,\n    same refusal — and note it can no longer be served by doing nothing, which is what made\n    the old default wrong rather than merely mislabelled: it understated every return by\n    roughly the dividend yield while telling the reader dividends were included.",
         "enum": [
@@ -3583,26 +4068,6 @@
         ],
         "title": "DividendPolicy",
         "type": "string"
-      },
-      "DrawdownPointOut": {
-        "additionalProperties": false,
-        "properties": {
-          "date": {
-            "format": "date",
-            "title": "Date",
-            "type": "string"
-          },
-          "drawdown": {
-            "title": "Drawdown",
-            "type": "number"
-          }
-        },
-        "required": [
-          "date",
-          "drawdown"
-        ],
-        "title": "DrawdownPointOut",
-        "type": "object"
       },
       "DriftDeltaOut": {
         "properties": {
@@ -4384,22 +4849,6 @@
         "title": "FlagStateOut",
         "type": "object"
       },
-      "ForgotPasswordIn": {
-        "additionalProperties": false,
-        "properties": {
-          "email": {
-            "format": "email",
-            "maxLength": 254,
-            "title": "Email",
-            "type": "string"
-          }
-        },
-        "required": [
-          "email"
-        ],
-        "title": "ForgotPasswordIn",
-        "type": "object"
-      },
       "FragilityRunOut": {
         "additionalProperties": false,
         "description": "docs/10 §\"honesty features\": one of the five runs in the fragility readout.",
@@ -4834,6 +5283,195 @@
         "title": "GaugeOut",
         "type": "object"
       },
+      "GoogleSignInIn": {
+        "additionalProperties": false,
+        "description": "The ID token `apps/web` received from Google, forwarded verbatim.\n\n**The only field, and that is the design.** No email, no subject, no display name: everything\nthis endpoint acts on is read out of the token *after* its signature is checked\n(`baskfy_api.auth_google`). A schema that also accepted an email would create a second,\nunsigned source for the one fact that decides which account you get.\n\nThe bound is generous — Google ID tokens for accounts in large Workspace domains carry a lot\nof claims — but it exists so a request cannot ask the JWKS path to chew on a megabyte.",
+        "properties": {
+          "id_token": {
+            "maxLength": 8192,
+            "minLength": 1,
+            "title": "Id Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id_token"
+        ],
+        "title": "GoogleSignInIn",
+        "type": "object"
+      },
+      "GroupingSuggestionOut": {
+        "description": "One offer from :func:`~baskfy_core.grouping_suggestions.suggest_groupings`, field for field.\n\nNothing here is composed by this router. ``proposed_name``, ``rationale``, ``value`` and the\ncoverage are what the pure module produced, because they are what the pure module's tests\ncheck — a sentence re-worded on the way out is a sentence nothing asserts. The client\n(``apps/web/src/lib/portfolio/organize.ts``) mirrors this shape and re-applies the module's\nown rank key locally, so the three names have to agree down to the underscore.\n\n``basket_id``, ``basket_coverage`` and ``missing_instrument_ids`` are set for, and only for, a\n:attr:`~baskfy_core.grouping_suggestions.SuggestionBasis.BASKET_OVERLAP` — the dataclass\nrefuses any other combination at construction, so the constraint is carried rather than\nrestated.",
+        "properties": {
+          "basis": {
+            "$ref": "#/components/schemas/SuggestionBasis"
+          },
+          "basket_coverage": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basket Coverage"
+          },
+          "basket_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basket Id"
+          },
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/HoldingKeyOut"
+            },
+            "title": "Keys",
+            "type": "array"
+          },
+          "missing_instrument_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Missing Instrument Ids",
+            "type": "array"
+          },
+          "proposed_name": {
+            "title": "Proposed Name",
+            "type": "string"
+          },
+          "rationale": {
+            "title": "Rationale",
+            "type": "string"
+          },
+          "suggested_kind": {
+            "$ref": "#/components/schemas/PortfolioKind"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "basis",
+          "proposed_name",
+          "value",
+          "rationale",
+          "suggested_kind"
+        ],
+        "title": "GroupingSuggestionOut",
+        "type": "object"
+      },
+      "HeroOut": {
+        "description": "§6.2's five hero metrics, plus the secondary row and the honesty flags around them.\n\n``current_value`` is criterion 1's number: every capital portfolio plus Unallocated plus\ncash, computed by :func:`~baskfy_core.allocation_ledger.consolidated_value` from a single\nwalk over the holdings. Monitoring views are not subtracted from it — they were never in it,\nbecause they hold no allocation for the walk to find.\n\n``pending_reconciliation`` is the freeze reaching the headline (§4.3). One open question\nanywhere makes the consolidated figure one we cannot state honestly, and the flag is how the\npage says so instead of printing a confident total.",
+        "properties": {
+          "current_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Current Value",
+            "type": "string"
+          },
+          "holdings_without_cost_basis": {
+            "default": 0,
+            "title": "Holdings Without Cost Basis",
+            "type": "integer"
+          },
+          "invested": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invested"
+          },
+          "invested_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invested Unavailable Reason"
+          },
+          "pending_reconciliation": {
+            "default": false,
+            "title": "Pending Reconciliation",
+            "type": "boolean"
+          },
+          "secondary": {
+            "$ref": "#/components/schemas/HeroSecondaryOut"
+          },
+          "todays_pnl": {
+            "$ref": "#/components/schemas/MoneyMoveOut"
+          },
+          "total_pnl": {
+            "$ref": "#/components/schemas/MoneyMoveOut"
+          },
+          "twr": {
+            "$ref": "#/components/schemas/LabelledRateOut"
+          },
+          "xirr": {
+            "$ref": "#/components/schemas/LabelledRateOut"
+          }
+        },
+        "required": [
+          "current_value",
+          "todays_pnl",
+          "total_pnl",
+          "xirr",
+          "twr",
+          "secondary"
+        ],
+        "title": "HeroOut",
+        "type": "object"
+      },
+      "HeroSecondaryOut": {
+        "description": "§6.2's collapsed second row: cash, the realised/unrealised split, dividends, brokers.",
+        "properties": {
+          "broker_count": {
+            "title": "Broker Count",
+            "type": "integer"
+          },
+          "cash": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cash",
+            "type": "string"
+          },
+          "dividends": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Dividends",
+            "type": "string"
+          },
+          "realised_pnl": {
+            "$ref": "#/components/schemas/MoneyMoveOut"
+          },
+          "unrealised_pnl": {
+            "$ref": "#/components/schemas/MoneyMoveOut"
+          }
+        },
+        "required": [
+          "cash",
+          "dividends",
+          "broker_count",
+          "unrealised_pnl",
+          "realised_pnl"
+        ],
+        "title": "HeroSecondaryOut",
+        "type": "object"
+      },
       "HistoryPointOut": {
         "additionalProperties": false,
         "properties": {
@@ -4914,6 +5552,112 @@
         "title": "HoldingBody",
         "type": "object"
       },
+      "HoldingBrokerLineOut": {
+        "description": "One physical position: this instrument, at this broker, and what it is allocated to.\n\n``allocation`` is ``None`` for Unallocated — a complete, legitimate state, never an error\n(§6.6). The monitoring views the position appears in are listed separately, because\nappearing in a lens is not being allocated (§4.1).",
+        "properties": {
+          "allocation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "avg_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Price"
+          },
+          "broker": {
+            "$ref": "#/components/schemas/BrokerRefOut"
+          },
+          "cost_basis": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Basis"
+          },
+          "first_bought_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Bought On"
+          },
+          "history_source": {
+            "default": "NONE",
+            "title": "History Source",
+            "type": "string"
+          },
+          "monitoring_views": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRefOut"
+            },
+            "title": "Monitoring Views",
+            "type": "array"
+          },
+          "pending_reconciliation": {
+            "default": false,
+            "title": "Pending Reconciliation",
+            "type": "boolean"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "broker",
+          "quantity"
+        ],
+        "title": "HoldingBrokerLineOut",
+        "type": "object"
+      },
       "HoldingIn": {
         "additionalProperties": false,
         "description": "docs/07: `POST /portfolios { name, holdings:[{symbol, quantity?, avg_price?}] }`.",
@@ -4959,6 +5703,47 @@
           "symbol"
         ],
         "title": "HoldingIn",
+        "type": "object"
+      },
+      "HoldingKeyIn": {
+        "additionalProperties": false,
+        "description": "One holding to allocate. **There is no quantity field and there must not be one** (§4.2).\n\nv1 allocates a holding *whole* to one capital portfolio. The rule is not \"a partial quantity\nis rejected\" — a rejected field is a field a client can send, a field a future patch can\nstart honouring, and a field a reader believes the product supports. It is absent, and\n``extra=\"forbid\"`` makes sending one a 422 rather than a silently ignored key.\n\n§4.2's own rationale is worth keeping in front of whoever next edits this class: partial\nallocation breaks sell attribution (§4.3) and corporate-action math (§4.5). It is a Phase-3\nitem, gated on the ledger being stable, and it arrives — if it arrives — as a migration and a\nnew field, not as a quantity that was here all along.",
+        "properties": {
+          "broker_account_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Broker Account Id",
+            "type": "integer"
+          },
+          "instrument_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Instrument Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "broker_account_id"
+        ],
+        "title": "HoldingKeyIn",
+        "type": "object"
+      },
+      "HoldingKeyOut": {
+        "description": "One physical position, named the way :class:`~baskfy_core.allocation_ledger.HoldingKey`\nnames it: an instrument at a broker account.\n\nInstrument alone would merge two brokers' positions into one, and §6.7 is explicit that the\ntwo legs of \"HDFC Bank — 320 (Zerodha 200 · Upstox 120)\" display together and *allocate\nseparately*. So the pair is the unit everywhere, on the wire as well as in the ledger.",
+        "properties": {
+          "broker_account_id": {
+            "title": "Broker Account Id",
+            "type": "integer"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "broker_account_id"
+        ],
+        "title": "HoldingKeyOut",
         "type": "object"
       },
       "HoldingOut": {
@@ -5081,37 +5866,6 @@
           "holdings"
         ],
         "title": "HoldingsIn",
-        "type": "object"
-      },
-      "HoldingsOut": {
-        "properties": {
-          "as_of": {
-            "title": "As Of",
-            "type": "string"
-          },
-          "excluded_value": {
-            "title": "Excluded Value",
-            "type": "number"
-          },
-          "rows": {
-            "items": {
-              "$ref": "#/components/schemas/DeskHoldingOut"
-            },
-            "title": "Rows",
-            "type": "array"
-          },
-          "total_value": {
-            "title": "Total Value",
-            "type": "number"
-          }
-        },
-        "required": [
-          "as_of",
-          "rows",
-          "total_value",
-          "excluded_value"
-        ],
-        "title": "HoldingsOut",
         "type": "object"
       },
       "ImpactModel": {
@@ -5654,6 +6408,29 @@
           "series"
         ],
         "title": "InstrumentHitOut",
+        "type": "object"
+      },
+      "InstrumentRefOut": {
+        "properties": {
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "symbol",
+          "name"
+        ],
+        "title": "InstrumentRefOut",
         "type": "object"
       },
       "InstrumentSearchOut": {
@@ -6285,6 +7062,55 @@
         "type": "object"
       },
       "JsonValue": {},
+      "LabelledRateOut": {
+        "description": "A rate §5.2 asks for that :class:`MetricKind` has no member for — labelled, never bare.\n\nTwo numbers are in this position and both are consolidated-level: §5.2's \"show **XIRR** (the\nuser's cash-flow-adjusted experience) and **TWR** (strategy quality) as two labeled numbers\".\nNeither is a portfolio's headline metric, so neither has a ``MetricKind``, and the enum\nbelongs to ``allocation_ledger`` — adding a member to it from here would be this router\ndeciding the product's metric vocabulary.\n\nSo the shape carries the same obligations without the enum: a label saying what the number is\nand the date it runs from. Criterion 3 asks for a label and a start date, and that is exactly\nwhat this is. The day ``MetricKind`` gains money-weighted and consolidated members, these two\nfields become a :class:`ReturnFigureOut` and this class goes away.",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "LabelledRateOut",
+        "type": "object"
+      },
       "LabelledValueOut": {
         "additionalProperties": false,
         "properties": {
@@ -6402,29 +7228,6 @@
           "data"
         ],
         "title": "ListingsPage",
-        "type": "object"
-      },
-      "LoginIn": {
-        "additionalProperties": false,
-        "properties": {
-          "email": {
-            "format": "email",
-            "maxLength": 254,
-            "title": "Email",
-            "type": "string"
-          },
-          "password": {
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Password",
-            "type": "string"
-          }
-        },
-        "required": [
-          "email",
-          "password"
-        ],
-        "title": "LoginIn",
         "type": "object"
       },
       "ManagerApplyIn": {
@@ -6974,6 +7777,32 @@
         "title": "MatchStatus",
         "type": "string"
       },
+      "MaxDrawdownOut": {
+        "properties": {
+          "drawdown": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Drawdown",
+            "type": "string"
+          },
+          "peak_on": {
+            "format": "date",
+            "title": "Peak On",
+            "type": "string"
+          },
+          "trough_on": {
+            "format": "date",
+            "title": "Trough On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "peak_on",
+          "trough_on",
+          "drawdown"
+        ],
+        "title": "MaxDrawdownOut",
+        "type": "object"
+      },
       "MeOut": {
         "additionalProperties": false,
         "description": "docs/07: `GET /me` -> \"profile + entitlements\".",
@@ -7006,10 +7835,6 @@
           "entitlements": {
             "$ref": "#/components/schemas/EntitlementsOut"
           },
-          "has_password": {
-            "title": "Has Password",
-            "type": "boolean"
-          },
           "is_staff": {
             "default": false,
             "title": "Is Staff",
@@ -7041,6 +7866,11 @@
             "title": "Public Id",
             "type": "string"
           },
+          "session_epoch": {
+            "default": 0,
+            "title": "Session Epoch",
+            "type": "integer"
+          },
           "subscription_status": {
             "anyOf": [
               {
@@ -7057,7 +7887,6 @@
           "public_id",
           "email",
           "email_verified",
-          "has_password",
           "created_at",
           "entitlements"
         ],
@@ -7132,6 +7961,19 @@
         ],
         "title": "MetricCardOut",
         "type": "object"
+      },
+      "MetricKind": {
+        "description": "What a return number actually *is*. Criterion 3: never an unlabelled column.",
+        "enum": [
+          "TWR_SINCE_SUBSCRIBED",
+          "TWR_SINCE_GO_LIVE",
+          "TWR_SINCE_CREATED",
+          "SINCE_GROUPED",
+          "XIRR_SINCE_PURCHASE",
+          "XIRR_CONSOLIDATED"
+        ],
+        "title": "MetricKind",
+        "type": "string"
       },
       "MetricsOut": {
         "properties": {
@@ -7298,6 +8140,67 @@
         "title": "MetricsOut",
         "type": "object"
       },
+      "MoneyMoveOut": {
+        "description": "A move in rupees with its percentage, over a window that is named rather than assumed.\n\n§6.2's \"Today's P&L (₹ and %, vs previous close)\" and \"Total P&L\". The percentage is a return\nnumber, so it carries a label and the date it is measured from, for the same reason every\nother rate here does. It is not a :class:`ReturnFigureOut` because a day's move is not one of\n§5.2's metrics and labelling it as one would state the wrong start event.\n\n``pct`` is ``None`` when there is nothing to be a fraction of — a portfolio worth zero\nyesterday has no percentage move today, and 0% would claim it was flat.",
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "MoneyMoveOut",
+        "type": "object"
+      },
       "MonthlyReturnOut": {
         "additionalProperties": false,
         "description": "One cell of docs/10 §Artefacts' \"monthly return heatmap\".",
@@ -7371,55 +8274,251 @@
         "title": "MovingAverageFilter",
         "type": "object"
       },
-      "NavPointOut": {
-        "description": "One end-of-day mark.",
+      "NavRange": {
+        "description": "§6.3's ranges. 1D and 1W are absent, not disabled — §5.1 is end-of-day only in v1.\n\nA member that cannot honestly be served is worse than a missing one: it teaches a client to\nrequest a window the product answers with a straight line through one point.",
+        "enum": [
+          "1M",
+          "3M",
+          "1Y",
+          "3Y",
+          "ALL"
+        ],
+        "title": "NavRange",
+        "type": "string"
+      },
+      "NavSeriesOut": {
+        "description": "§6.3's chart data: the marks, the per-day moves, the drawdown, and the labelled return.\n\n``portfolio_id`` is ``None`` for the consolidated series, matching\n``portfolio_nav_daily.portfolio_id`` — one table, one shape, so the combined chart and a\nsingle portfolio's chart can never disagree about what a mark means.",
         "properties": {
-          "benchmark_value": {
+          "benchmark": {
             "anyOf": [
               {
-                "type": "number"
+                "$ref": "#/components/schemas/BenchmarkOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "daily_pnl": {
+            "items": {
+              "$ref": "#/components/schemas/DayPnlOut"
+            },
+            "title": "Daily Pnl",
+            "type": "array"
+          },
+          "drawdown": {
+            "items": {
+              "$ref": "#/components/schemas/baskfy_api__routers__portfolio_overview__DrawdownPointOut"
+            },
+            "title": "Drawdown",
+            "type": "array"
+          },
+          "from_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Benchmark Value"
+            "title": "From On"
           },
-          "cash": {
-            "title": "Cash",
-            "type": "number"
-          },
-          "date": {
-            "title": "Date",
-            "type": "string"
-          },
-          "index_value": {
+          "max_drawdown": {
             "anyOf": [
               {
-                "type": "number"
+                "$ref": "#/components/schemas/MaxDrawdownOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pending_reconciliation": {
+            "default": false,
+            "title": "Pending Reconciliation",
+            "type": "boolean"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/baskfy_api__routers__portfolio_overview__NavPointOut"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Index Value"
+            "title": "Portfolio Id"
           },
-          "invested": {
-            "title": "Invested",
-            "type": "number"
+          "range": {
+            "$ref": "#/components/schemas/NavRange"
           },
-          "nav": {
-            "title": "Nav",
-            "type": "number"
+          "to_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To On"
+          },
+          "total_return": {
+            "$ref": "#/components/schemas/LabelledRateOut"
           }
         },
         "required": [
-          "date",
-          "nav",
-          "invested",
-          "cash"
+          "range",
+          "total_return"
         ],
-        "title": "NavPointOut",
+        "title": "NavSeriesOut",
+        "type": "object"
+      },
+      "NewPortfolioIn": {
+        "additionalProperties": false,
+        "description": "``POST /portfolio`` — §3's source, §4.1's kind, §6.7's benchmark, and the holdings to file.\n\nThe four facts that make a portfolio in the redesign's model are all required to be *stated*,\nand none of them is inferred:\n\n* ``kind`` decides arithmetic, not styling (§4.1). A capital portfolio takes each holding\n  exclusively and sums into net worth; a monitoring view is a lens that never enters a total.\n  Defaulting it would make the more consequential of the two arrive by accident.\n* ``source`` decides the headline metric (§5.2) and the badge (§3). ``SUBSCRIBED`` here means\n  the user is filing holdings against a model somebody else published — §9's framing, never\n  \"managed\", never \"advisory\".\n* ``benchmark_index_id`` is §6.3's per-portfolio override. ``None`` is not \"no comparison\": it\n  means the surface falls back to the product default.\n* ``holdings`` may be empty. §6.7 offers \"Empty\" as a starting point, and a portfolio with a\n  name and no positions yet is a legitimate thing to have made.\n\n``extra=\"forbid\"`` for the same reason :class:`HoldingKeyIn` has it: this is the schema §4.2\nis written into, and a body that carries an unknown key is a body somebody expected to mean\nsomething.",
+        "properties": {
+          "benchmark_index_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Index Id"
+          },
+          "holdings": {
+            "items": {
+              "$ref": "#/components/schemas/HoldingKeyIn"
+            },
+            "title": "Holdings",
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PortfolioKind"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PortfolioSource"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "source"
+        ],
+        "title": "NewPortfolioIn",
+        "type": "object"
+      },
+      "OverviewOut": {
+        "description": "§6, in one response. The two timestamps §6.1 requires are separate fields, deliberately.\n\nA price date and a sync date answer different questions — \"how old is the market data\" and\n\"how old is our copy of what you own\" — and a single \"last updated\" that quietly reports the\nolder of the two is how a user comes to believe a stale holdings list is a stale price. They\nare two fields with two labels and they are never merged.\n\n``holdings_synced_on`` is a **date**, not a wall-clock time, because a date is the finest\ntruth the schema holds: ``broker_cash.as_of`` records the day a balance is true for, and\nnothing records the instant a sync ran. Rendering a fabricated time would be the page\nclaiming a precision the data does not have. When a sync timestamp column exists, this field\nbecomes a datetime and its label stops saying \"close of\".",
+        "properties": {
+          "attention": {
+            "items": {
+              "$ref": "#/components/schemas/AttentionOut"
+            },
+            "title": "Attention",
+            "type": "array"
+          },
+          "chart": {
+            "$ref": "#/components/schemas/NavSeriesOut"
+          },
+          "hero": {
+            "$ref": "#/components/schemas/HeroOut"
+          },
+          "holdings_synced_label": {
+            "title": "Holdings Synced Label",
+            "type": "string"
+          },
+          "holdings_synced_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdings Synced On"
+          },
+          "monitoring_excluded_note": {
+            "default": "Monitoring view — overlaps with other portfolios, excluded from totals.",
+            "title": "Monitoring Excluded Note",
+            "type": "string"
+          },
+          "monitoring_views": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRowOut"
+            },
+            "title": "Monitoring Views",
+            "type": "array"
+          },
+          "open_reconciliation_count": {
+            "default": 0,
+            "title": "Open Reconciliation Count",
+            "type": "integer"
+          },
+          "portfolios": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRowOut"
+            },
+            "title": "Portfolios",
+            "type": "array"
+          },
+          "prices_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prices As Of"
+          },
+          "prices_label": {
+            "title": "Prices Label",
+            "type": "string"
+          },
+          "sync_status": {
+            "items": {
+              "$ref": "#/components/schemas/SyncStatusOut"
+            },
+            "title": "Sync Status",
+            "type": "array"
+          },
+          "unallocated": {
+            "$ref": "#/components/schemas/UnallocatedOut"
+          }
+        },
+        "required": [
+          "prices_label",
+          "holdings_synced_label",
+          "hero",
+          "chart",
+          "unallocated"
+        ],
+        "title": "OverviewOut",
         "type": "object"
       },
       "PeFilter-Input": {
@@ -7697,7 +8796,7 @@
           },
           "series": {
             "items": {
-              "$ref": "#/components/schemas/NavPointOut"
+              "$ref": "#/components/schemas/baskfy_api__routers__desk__NavPointOut"
             },
             "title": "Series",
             "type": "array"
@@ -8109,74 +9208,6 @@
         "title": "PortfolioCreateIn",
         "type": "object"
       },
-      "PortfolioDetailOut": {
-        "additionalProperties": false,
-        "description": "``GET /portfolios/{id}``: the portfolio, its holdings, and where it sits in the tree.",
-        "properties": {
-          "broker_account_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Broker Account Id"
-          },
-          "child_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Child Ids",
-            "type": "array"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "depth": {
-            "title": "Depth",
-            "type": "integer"
-          },
-          "holdings": {
-            "items": {
-              "$ref": "#/components/schemas/HoldingOut"
-            },
-            "title": "Holdings",
-            "type": "array"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "parent_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent Id"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "created_at",
-          "holdings",
-          "depth"
-        ],
-        "title": "PortfolioDetailOut",
-        "type": "object"
-      },
       "PortfolioForestOut": {
         "description": "``GET /portfolios``: the caller's portfolios, nested.\n\n``data`` holds the roots. ``orphans`` holds fragments whose ``parent_id`` names a portfolio\nthat is not in the caller's set — impossible through this API, which refuses a foreign\nparent, and therefore a symptom of damage. They are reported rather than dropped, because a\ndropped fragment is holdings that vanish from a list without anyone being told.",
         "properties": {
@@ -8200,6 +9231,15 @@
         ],
         "title": "PortfolioForestOut",
         "type": "object"
+      },
+      "PortfolioKind": {
+        "description": "§4.1. The two kinds behave differently in *arithmetic*, not merely in styling.",
+        "enum": [
+          "CAPITAL",
+          "MONITORING"
+        ],
+        "title": "PortfolioKind",
+        "type": "string"
       },
       "PortfolioLinkBody": {
         "description": "Which portfolio to file this investment under. One field, because that is the whole act.",
@@ -8324,6 +9364,33 @@
         "title": "PortfolioPatchIn",
         "type": "object"
       },
+      "PortfolioRefOut": {
+        "description": "A portfolio named from somewhere else's payload — the id, the name, and its kind.\n\n``kind`` travels with the name everywhere, because a reader who sees only a name cannot know\nwhether the thing being named counts toward a total (§4.1).",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/PortfolioKind"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "integer"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PortfolioSource"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "name",
+          "kind",
+          "source"
+        ],
+        "title": "PortfolioRefOut",
+        "type": "object"
+      },
       "PortfolioRollupOut": {
         "description": "``GET /portfolios/{id}/holdings``: a subtree's holdings, split by broker, with a total.",
         "properties": {
@@ -8391,11 +9458,325 @@
         "title": "PortfolioRollupOut",
         "type": "object"
       },
+      "PortfolioRowOut": {
+        "description": "One row of §6.5's table, or one muted row of its Monitoring views tab.\n\n``counts_toward_total`` is stated rather than inferred from ``kind``. A client that has to\nmap kinds to arithmetic is a client that can get the mapping wrong; this field is the answer,\nand for a monitoring view it is ``False`` with :attr:`excluded_note` saying why in §4.1's own\nwords.\n\n``model_return`` is present only on a subscribed portfolio and is *never* the same field as\n``headline_return`` (criterion 5). One is what this user experienced; the other is what the\npublisher reported. They are measured over the same window and they are still two numbers.",
+        "properties": {
+          "benchmark_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Name"
+          },
+          "broker_count": {
+            "default": 0,
+            "title": "Broker Count",
+            "type": "integer"
+          },
+          "brokers": {
+            "items": {
+              "$ref": "#/components/schemas/BrokerRefOut"
+            },
+            "title": "Brokers",
+            "type": "array"
+          },
+          "cash": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cash",
+            "type": "string"
+          },
+          "counts_toward_total": {
+            "title": "Counts Toward Total",
+            "type": "boolean"
+          },
+          "excluded_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded Note"
+          },
+          "headline_return": {
+            "$ref": "#/components/schemas/ReturnFigureOut"
+          },
+          "holdings_count": {
+            "default": 0,
+            "title": "Holdings Count",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PortfolioKind"
+          },
+          "model_return": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReturnFigureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pending_reconciliation": {
+            "default": false,
+            "title": "Pending Reconciliation",
+            "type": "boolean"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "integer"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PortfolioSource"
+          },
+          "source_badge": {
+            "title": "Source Badge",
+            "type": "string"
+          },
+          "started_on": {
+            "format": "date",
+            "title": "Started On",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "todays_pnl": {
+            "$ref": "#/components/schemas/MoneyMoveOut"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "name",
+          "kind",
+          "source",
+          "source_badge",
+          "started_on",
+          "value",
+          "cash",
+          "counts_toward_total",
+          "todays_pnl",
+          "headline_return",
+          "status"
+        ],
+        "title": "PortfolioRowOut",
+        "type": "object"
+      },
+      "PortfolioSource": {
+        "description": "§3. Shown as a badge everywhere, and it decides the headline metric (§5.2).",
+        "enum": [
+          "SUBSCRIBED",
+          "MY_SCREEN",
+          "MY_STRATEGY",
+          "HOLDING_GROUP"
+        ],
+        "title": "PortfolioSource",
+        "type": "string"
+      },
+      "PortfolioSummaryOut": {
+        "description": "§7's summary block. Same figures as the table row, plus invested and the benchmark diff.",
+        "properties": {
+          "benchmark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BenchmarkOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cash": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cash",
+            "type": "string"
+          },
+          "counts_toward_total": {
+            "title": "Counts Toward Total",
+            "type": "boolean"
+          },
+          "excluded_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded Note"
+          },
+          "headline_return": {
+            "$ref": "#/components/schemas/ReturnFigureOut"
+          },
+          "holdings_synced_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdings Synced On"
+          },
+          "invested": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invested"
+          },
+          "invested_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invested Unavailable Reason"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PortfolioKind"
+          },
+          "model_return": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReturnFigureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pending_reconciliation": {
+            "default": false,
+            "title": "Pending Reconciliation",
+            "type": "boolean"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "integer"
+          },
+          "prices_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prices As Of"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PortfolioSource"
+          },
+          "source_badge": {
+            "title": "Source Badge",
+            "type": "string"
+          },
+          "started_on": {
+            "format": "date",
+            "title": "Started On",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "todays_pnl": {
+            "$ref": "#/components/schemas/MoneyMoveOut"
+          },
+          "total_pnl": {
+            "$ref": "#/components/schemas/MoneyMoveOut"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          },
+          "xirr": {
+            "$ref": "#/components/schemas/LabelledRateOut"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "name",
+          "kind",
+          "source",
+          "source_badge",
+          "started_on",
+          "value",
+          "cash",
+          "todays_pnl",
+          "total_pnl",
+          "headline_return",
+          "xirr",
+          "counts_toward_total",
+          "status"
+        ],
+        "title": "PortfolioSummaryOut",
+        "type": "object"
+      },
       "PortfolioWriteDetailOut": {
         "description": "What a create, an import or a holdings replacement answers with.",
         "properties": {
           "portfolio": {
-            "$ref": "#/components/schemas/PortfolioDetailOut"
+            "$ref": "#/components/schemas/baskfy_api__routers__portfolios__PortfolioDetailOut"
           },
           "report": {
             "$ref": "#/components/schemas/ImportReportOut"
@@ -9555,6 +10936,142 @@
         "title": "ReconcileRowOut",
         "type": "object"
       },
+      "ReconciliationInboxOut": {
+        "description": "The inbox, plus exactly what the open questions in it are currently forbidding.",
+        "properties": {
+          "consolidated_pending": {
+            "default": false,
+            "title": "Consolidated Pending",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReconciliationItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "open_count": {
+            "default": 0,
+            "title": "Open Count",
+            "type": "integer"
+          },
+          "pending_portfolio_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Pending Portfolio Ids",
+            "type": "array"
+          },
+          "pending_status_label": {
+            "default": "Pending reconciliation",
+            "title": "Pending Status Label",
+            "type": "string"
+          },
+          "unallocated_pending": {
+            "default": false,
+            "title": "Unallocated Pending",
+            "type": "boolean"
+          }
+        },
+        "title": "ReconciliationInboxOut",
+        "type": "object"
+      },
+      "ReconciliationItemOut": {
+        "description": "One question in §4.3's inbox, with the sentence it asks and the portfolio to pre-select.\n\n``suggested_portfolio`` is a suggestion and is labelled as one everywhere it travels: the\nledger is explicit that a suggestion is never an attribution, and a UI that pre-selects\nwithout saying so is a UI that collects clicks rather than answers.",
+        "properties": {
+          "broker": {
+            "$ref": "#/components/schemas/BrokerRefOut"
+          },
+          "detected_on": {
+            "format": "date",
+            "title": "Detected On",
+            "type": "string"
+          },
+          "freezes": {
+            "default": false,
+            "title": "Freezes",
+            "type": "boolean"
+          },
+          "instrument": {
+            "$ref": "#/components/schemas/InstrumentRefOut"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "integer"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "resolved_portfolio": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/ReconciliationState"
+          },
+          "suggested_portfolio": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "item_id",
+          "state",
+          "reason",
+          "question",
+          "instrument",
+          "broker",
+          "quantity",
+          "detected_on"
+        ],
+        "title": "ReconciliationItemOut",
+        "type": "object"
+      },
+      "ReconciliationState": {
+        "description": "The inbox lifecycle, fixed by migration 0022's ``reconciliation_item_state_known``.\n\nThree states and no more. There is deliberately no ``SNOOZED`` and no ``IN_PROGRESS``: both\nwould be a fourth thing that freezes performance indefinitely while looking like progress,\nand §4.3's whole point is that the freeze should be uncomfortable enough to get answered.",
+        "enum": [
+          "OPEN",
+          "RESOLVED",
+          "DISMISSED"
+        ],
+        "title": "ReconciliationState",
+        "type": "string"
+      },
       "RegimeOut": {
         "properties": {
           "actual_equity_pct": {
@@ -9679,96 +11196,93 @@
         "title": "RegimeOut",
         "type": "object"
       },
-      "RegisterIn": {
-        "additionalProperties": false,
-        "description": "docs/07: `POST /auth/register`.\n\n``password`` is optional because docs/11 §Security makes OTP \"the default path, password\noptional\" — an account created without one signs in by code until it sets one.",
+      "ResolveBody": {
+        "description": "Which portfolio the detected change belongs to. One field, because that is the whole act.\n\nA dismissal (\"there is nothing here to attribute\") is a different answer with a different\nconsequence — it changes no allocation — and it is not this route. Folding both into one\nendpoint with a boolean would make the more dangerous of the two the default shape.",
         "properties": {
-          "accept_marketing": {
+          "portfolio_id": {
+            "exclusiveMinimum": 0.0,
+            "title": "Portfolio Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "portfolio_id"
+        ],
+        "title": "ResolveBody",
+        "type": "object"
+      },
+      "ResolveOut": {
+        "description": "What answering the question did: the item, and the allocation the answer implied.",
+        "properties": {
+          "allocated_to": {
+            "$ref": "#/components/schemas/PortfolioRefOut"
+          },
+          "item": {
+            "$ref": "#/components/schemas/ReconciliationItemOut"
+          },
+          "unfroze": {
+            "default": true,
+            "title": "Unfroze",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "item",
+          "allocated_to"
+        ],
+        "title": "ResolveOut",
+        "type": "object"
+      },
+      "ReturnFigureOut": {
+        "description": "One of §5.2's headline metrics, rendered with everything criterion 3 requires.\n\n``kind`` is a :class:`~baskfy_core.allocation_ledger.MetricKind` value and nothing else. That\nenum is the product's whole metric vocabulary; a router that invented a sixth member would be\nthe second vocabulary the ledger's own docstring warns about, and the two would drift.\n\n``value`` is ``None`` exactly when ``unavailable_reason`` is set, and the reason is a sentence\na user can read. An empty cell with no reason cannot be told apart from a zero, which is the\nfailure :class:`~baskfy_core.allocation_ledger.ReturnFigure` refuses at construction.\n\n``is_model`` is part of the payload rather than implied by the field name, so a client that\nrenders figures generically still cannot present a publisher's record as the user's own.",
+        "properties": {
+          "is_model": {
             "default": false,
-            "title": "Accept Marketing",
+            "title": "Is Model",
             "type": "boolean"
           },
-          "accept_terms": {
-            "default": false,
-            "title": "Accept Terms",
-            "type": "boolean"
+          "kind": {
+            "$ref": "#/components/schemas/MetricKind"
           },
-          "email": {
-            "format": "email",
-            "maxLength": 254,
-            "title": "Email",
+          "label": {
+            "title": "Label",
             "type": "string"
           },
-          "name": {
+          "since": {
+            "format": "date",
+            "title": "Since",
+            "type": "string"
+          },
+          "unavailable_reason": {
             "anyOf": [
               {
-                "maxLength": 120,
-                "minLength": 1,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Name"
+            "title": "Unavailable Reason"
           },
-          "password": {
+          "value": {
             "anyOf": [
               {
-                "maxLength": 128,
-                "minLength": 8,
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Password"
+            "title": "Value"
           }
         },
         "required": [
-          "email"
+          "kind",
+          "label",
+          "since"
         ],
-        "title": "RegisterIn",
-        "type": "object"
-      },
-      "RequestOtpIn": {
-        "additionalProperties": false,
-        "properties": {
-          "email": {
-            "format": "email",
-            "maxLength": 254,
-            "title": "Email",
-            "type": "string"
-          }
-        },
-        "required": [
-          "email"
-        ],
-        "title": "RequestOtpIn",
-        "type": "object"
-      },
-      "ResetPasswordIn": {
-        "additionalProperties": false,
-        "properties": {
-          "password": {
-            "maxLength": 128,
-            "minLength": 8,
-            "title": "Password",
-            "type": "string"
-          },
-          "token": {
-            "maxLength": 256,
-            "minLength": 8,
-            "title": "Token",
-            "type": "string"
-          }
-        },
-        "required": [
-          "token",
-          "password"
-        ],
-        "title": "ResetPasswordIn",
+        "title": "ReturnFigureOut",
         "type": "object"
       },
       "RevenueShareOut": {
@@ -10910,6 +12424,11 @@
             "title": "Public Id",
             "type": "string"
           },
+          "session_epoch": {
+            "default": 0,
+            "title": "Session Epoch",
+            "type": "integer"
+          },
           "token_type": {
             "default": "Bearer",
             "title": "Token Type",
@@ -11408,6 +12927,103 @@
         "title": "SortingFactorOut",
         "type": "object"
       },
+      "SourcePanelOut": {
+        "description": "§7's source panel. One shape for all four sources; the fields that do not apply are null.\n\nFour classes would force the client to branch four ways to draw one panel, and the branch is\nwhere the fifth source gets forgotten. ``headline`` is the sentence the panel leads with, and\nfor a subscribed portfolio it is §9's exact framing — never \"managed\", never \"advisory\".",
+        "properties": {
+          "basket_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basket Name"
+          },
+          "basket_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basket Slug"
+          },
+          "brokers": {
+            "items": {
+              "$ref": "#/components/schemas/BrokerRefOut"
+            },
+            "title": "Brokers",
+            "type": "array"
+          },
+          "execution_note": {
+            "default": "Baskfy never places an order. A rebalance produces a plan you take to your broker.",
+            "title": "Execution Note",
+            "type": "string"
+          },
+          "grouped_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grouped On"
+          },
+          "headline": {
+            "title": "Headline",
+            "type": "string"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "screen_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screen Name"
+          },
+          "screen_public_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screen Public Id"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PortfolioSource"
+          }
+        },
+        "required": [
+          "source",
+          "headline"
+        ],
+        "title": "SourcePanelOut",
+        "type": "object"
+      },
       "StanceOut": {
         "description": "The desk's current policy tier, as a fact.",
         "properties": {
@@ -11572,6 +13188,114 @@
         "title": "SubtreeHoldingOut",
         "type": "object"
       },
+      "SuggestionBasis": {
+        "description": "The three groupings §6.6 names, and nothing else.\n\nThe basis is part of every suggestion because the user is entitled to know *why* the product\nthinks these eight stocks belong together before they name the result. \"These are all\nFinancials\" and \"you bought these in the same year\" are very different claims, and a UI that\npresented both as an anonymous cluster would be asking for trust it has not earned.",
+        "enum": [
+          "SECTOR",
+          "PURCHASE_ERA",
+          "BASKET_OVERLAP"
+        ],
+        "title": "SuggestionBasis",
+        "type": "string"
+      },
+      "SuggestionBasisStatusOut": {
+        "description": "Whether one of §6.6's three bases could be computed at all, and if not, why not.\n\nThis field exists because of the difference between \"we looked and these holdings do not\ngroup by sector\" and \"we have no sector data for anybody\". Both produce no sector suggestion,\nand only one of them is a fact about the user's portfolio; collapsing them into an empty list\nwould have the screen tell a new user their holdings have nothing in common when what\nactually happened is that a reference table is empty.\n\n``considered`` is how many holdings the basis had an input for. Zero with ``available`` false\nis a missing input; a small number with ``available`` true is a real, thin answer.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/SuggestionBasis"
+          },
+          "considered": {
+            "default": 0,
+            "title": "Considered",
+            "type": "integer"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "required": [
+          "basis",
+          "available"
+        ],
+        "title": "SuggestionBasisStatusOut",
+        "type": "object"
+      },
+      "SuggestionsOut": {
+        "description": "``GET /portfolio/suggestions`` — §6.6's first-run helper, with its own honesty attached.\n\n§6.6 is the spec's most emphatic sentence (\"getting from 40 unallocated holdings to 4 named\nportfolios IS activation\"), and the failure it is most exposed to is a blank screen that\nreads as a verdict. So the payload carries three things a bare list cannot:\n\n* ``bases`` — per-basis availability, so the screen can say *which* input was missing;\n* ``unavailable_reason`` — set only when **no** basis could be computed at all, which is the\n  one case where \"no ideas\" would be a lie rather than an answer. It is ``None`` the moment\n  even one basis ran, including when that basis found nothing;\n* ``unpriced_instrument_ids`` — holdings excluded from every suggestion because no close is\n  on record for them. :func:`~baskfy_core.allocation_ledger.holding_value` refuses a missing\n  price and it is right to: a suggestion whose headline value quietly omitted a position\n  would rank below where it belongs and mislead the decision it exists to inform.\n\n``sectors`` is keyed by instrument id **as a string**, because that is what a JSON object key\nis; the §6.7 picker filters by it. It is empty when nothing in this database knows a sector,\nand ``bases`` then says so in a sentence.",
+        "properties": {
+          "bases": {
+            "items": {
+              "$ref": "#/components/schemas/SuggestionBasisStatusOut"
+            },
+            "title": "Bases",
+            "type": "array"
+          },
+          "cta": {
+            "default": "Organize into portfolios",
+            "title": "Cta",
+            "type": "string"
+          },
+          "sectors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Sectors",
+            "type": "object"
+          },
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/GroupingSuggestionOut"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          },
+          "unallocated_count": {
+            "default": 0,
+            "title": "Unallocated Count",
+            "type": "integer"
+          },
+          "unallocated_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unallocated Value",
+            "type": "string"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          },
+          "unpriced_instrument_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Unpriced Instrument Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "unallocated_value"
+        ],
+        "title": "SuggestionsOut",
+        "type": "object"
+      },
       "SupportMessageIn": {
         "additionalProperties": false,
         "description": "docs/07 does not describe this endpoint; PROMPTS.md Prompt 18 §2 asks for the form that\nposts to it, and a form with no destination is a lie told in HTML.\n``docs/DECISIONS.md`` §18.5 records the addition.\n\nBounds on every field, because every field is anonymous input that ends up in an email.",
@@ -11663,6 +13387,36 @@
           "note"
         ],
         "title": "SyncHoldingsOut",
+        "type": "object"
+      },
+      "SyncStatusOut": {
+        "description": "§6.1's per-broker sync status. One row per connected account, dated.",
+        "properties": {
+          "broker": {
+            "$ref": "#/components/schemas/BrokerRefOut"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "synced_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synced On"
+          }
+        },
+        "required": [
+          "broker",
+          "label"
+        ],
+        "title": "SyncStatusOut",
         "type": "object"
       },
       "TargetWeightOut": {
@@ -12153,6 +13907,106 @@
         "title": "TrendingOut",
         "type": "object"
       },
+      "UnallocatedHoldingOut": {
+        "description": "A holding in no capital portfolio, aggregated across brokers for display (§6.7).",
+        "properties": {
+          "brokers": {
+            "items": {
+              "$ref": "#/components/schemas/BrokerRefOut"
+            },
+            "title": "Brokers",
+            "type": "array"
+          },
+          "instrument": {
+            "$ref": "#/components/schemas/InstrumentRefOut"
+          },
+          "monitoring_views": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioRefOut"
+            },
+            "title": "Monitoring Views",
+            "type": "array"
+          },
+          "pending_reconciliation": {
+            "default": false,
+            "title": "Pending Reconciliation",
+            "type": "boolean"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument",
+          "quantity",
+          "value"
+        ],
+        "title": "UnallocatedHoldingOut",
+        "type": "object"
+      },
+      "UnallocatedOut": {
+        "description": "§6.6's centerpiece: cash plus unassigned holdings, with a total and a way out.\n\nPresent in every overview response, including when it is empty. A section that appears only\nwhen something is wrong is a section users learn to read as an alarm; §6.6 makes it the place\na new account starts, which means it has to be a place that exists.",
+        "properties": {
+          "cash": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cash",
+            "type": "string"
+          },
+          "cash_by_broker": {
+            "items": {
+              "$ref": "#/components/schemas/BrokerCashOut"
+            },
+            "title": "Cash By Broker",
+            "type": "array"
+          },
+          "cta": {
+            "default": "Organize into portfolios",
+            "title": "Cta",
+            "type": "string"
+          },
+          "holdings": {
+            "items": {
+              "$ref": "#/components/schemas/UnallocatedHoldingOut"
+            },
+            "title": "Holdings",
+            "type": "array"
+          },
+          "holdings_count": {
+            "title": "Holdings Count",
+            "type": "integer"
+          },
+          "holdings_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Holdings Value",
+            "type": "string"
+          },
+          "pending_reconciliation": {
+            "default": false,
+            "title": "Pending Reconciliation",
+            "type": "boolean"
+          },
+          "total_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cash",
+          "holdings_value",
+          "holdings_count",
+          "total_value"
+        ],
+        "title": "UnallocatedOut",
+        "type": "object"
+      },
       "UniverseOut": {
         "additionalProperties": false,
         "description": "docs/07: \"index_def rows where is_universe\".",
@@ -12203,7 +14057,6 @@
         "properties": {
           "token": {
             "maxLength": 128,
-            "minLength": 8,
             "title": "Token",
             "type": "string"
           }
@@ -12335,45 +14188,6 @@
           "source"
         ],
         "title": "UpdatePostOut",
-        "type": "object"
-      },
-      "VerifyEmailIn": {
-        "additionalProperties": false,
-        "properties": {
-          "token": {
-            "maxLength": 256,
-            "minLength": 8,
-            "title": "Token",
-            "type": "string"
-          }
-        },
-        "required": [
-          "token"
-        ],
-        "title": "VerifyEmailIn",
-        "type": "object"
-      },
-      "VerifyOtpIn": {
-        "additionalProperties": false,
-        "properties": {
-          "code": {
-            "maxLength": 10,
-            "minLength": 4,
-            "title": "Code",
-            "type": "string"
-          },
-          "email": {
-            "format": "email",
-            "maxLength": 254,
-            "title": "Email",
-            "type": "string"
-          }
-        },
-        "required": [
-          "email",
-          "code"
-        ],
-        "title": "VerifyOtpIn",
         "type": "object"
       },
       "WatchlistAddIn": {
@@ -12849,6 +14663,88 @@
         "title": "Weighting",
         "type": "string"
       },
+      "baskfy_api__routers__desk__HoldingsOut": {
+        "properties": {
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "excluded_value": {
+            "title": "Excluded Value",
+            "type": "number"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/DeskHoldingOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total_value": {
+            "title": "Total Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "as_of",
+          "rows",
+          "total_value",
+          "excluded_value"
+        ],
+        "title": "HoldingsOut",
+        "type": "object"
+      },
+      "baskfy_api__routers__desk__NavPointOut": {
+        "description": "One end-of-day mark.",
+        "properties": {
+          "benchmark_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Value"
+          },
+          "cash": {
+            "title": "Cash",
+            "type": "number"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "index_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Value"
+          },
+          "invested": {
+            "title": "Invested",
+            "type": "number"
+          },
+          "nav": {
+            "title": "Nav",
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "nav",
+          "invested",
+          "cash"
+        ],
+        "title": "NavPointOut",
+        "type": "object"
+      },
       "baskfy_api__routers__explore__ManagerOut": {
         "properties": {
           "bio": {
@@ -13006,6 +14902,263 @@
           "registration_disclaimer"
         ],
         "title": "ManagerOut",
+        "type": "object"
+      },
+      "baskfy_api__routers__portfolio_overview__DrawdownPointOut": {
+        "properties": {
+          "drawdown": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Drawdown",
+            "type": "string"
+          },
+          "index": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Index",
+            "type": "string"
+          },
+          "on": {
+            "format": "date",
+            "title": "On",
+            "type": "string"
+          },
+          "peak": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Peak",
+            "type": "string"
+          }
+        },
+        "required": [
+          "on",
+          "index",
+          "peak",
+          "drawdown"
+        ],
+        "title": "DrawdownPointOut",
+        "type": "object"
+      },
+      "baskfy_api__routers__portfolio_overview__HoldingsOut": {
+        "description": "§2's flat broker-level truth: every share, which broker, what it is allocated to.",
+        "properties": {
+          "holdings_synced_label": {
+            "title": "Holdings Synced Label",
+            "type": "string"
+          },
+          "holdings_synced_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdings Synced On"
+          },
+          "prices_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prices As Of"
+          },
+          "prices_label": {
+            "title": "Prices Label",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/AggregatedHoldingOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Value",
+            "type": "string"
+          },
+          "unallocated_count": {
+            "default": 0,
+            "title": "Unallocated Count",
+            "type": "integer"
+          },
+          "unpriced_instrument_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Unpriced Instrument Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "prices_label",
+          "holdings_synced_label",
+          "total_value"
+        ],
+        "title": "HoldingsOut",
+        "type": "object"
+      },
+      "baskfy_api__routers__portfolio_overview__NavPointOut": {
+        "description": "One stored end-of-day mark. ``net_flow`` travels with it, always — see\n:class:`~baskfy_core.portfolio_nav.NavPoint`: a value without its flow is a chart that reads\na transfer as a profit.",
+        "properties": {
+          "cash": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cash",
+            "type": "string"
+          },
+          "net_flow": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Flow",
+            "type": "string"
+          },
+          "on": {
+            "format": "date",
+            "title": "On",
+            "type": "string"
+          },
+          "pending_reconciliation": {
+            "default": false,
+            "title": "Pending Reconciliation",
+            "type": "boolean"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "on",
+          "value",
+          "cash",
+          "net_flow"
+        ],
+        "title": "NavPointOut",
+        "type": "object"
+      },
+      "baskfy_api__routers__portfolio_overview__PortfolioDetailOut": {
+        "description": "``GET /portfolio/{id}`` — §7 in one response: summary, holdings, source panel.",
+        "properties": {
+          "brokers": {
+            "items": {
+              "$ref": "#/components/schemas/BrokerRefOut"
+            },
+            "title": "Brokers",
+            "type": "array"
+          },
+          "holdings": {
+            "items": {
+              "$ref": "#/components/schemas/DetailHoldingOut"
+            },
+            "title": "Holdings",
+            "type": "array"
+          },
+          "source_panel": {
+            "$ref": "#/components/schemas/SourcePanelOut"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PortfolioSummaryOut"
+          }
+        },
+        "required": [
+          "summary",
+          "source_panel"
+        ],
+        "title": "PortfolioDetailOut",
+        "type": "object"
+      },
+      "baskfy_api__routers__portfolios__PortfolioDetailOut": {
+        "additionalProperties": false,
+        "description": "``GET /portfolios/{id}``: the portfolio, its holdings, and where it sits in the tree.",
+        "properties": {
+          "broker_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broker Account Id"
+          },
+          "child_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Child Ids",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "depth": {
+            "title": "Depth",
+            "type": "integer"
+          },
+          "holdings": {
+            "items": {
+              "$ref": "#/components/schemas/HoldingOut"
+            },
+            "title": "Holdings",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "holdings",
+          "depth"
+        ],
+        "title": "PortfolioDetailOut",
+        "type": "object"
+      },
+      "baskfy_api__schemas__DrawdownPointOut": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "drawdown": {
+            "title": "Drawdown",
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "drawdown"
+        ],
+        "title": "DrawdownPointOut",
         "type": "object"
       }
     }
@@ -15229,136 +17382,15 @@
         ]
       }
     },
-    "/api/v1/auth/forgot-password": {
+    "/api/v1/auth/google": {
       "post": {
-        "operationId": "forgotPassword",
+        "description": "The only way into the product (`docs/DECISIONS-MERGE.md` M46).\n\n`apps/web` runs the OAuth dance and posts the resulting ID token here. **The token is the\ncredential** — this endpoint never accepts an email or a subject as a parameter, because an\nendpoint that did would mint a session for whoever the caller named.\n\nThere is no neutral 202 here and no membership oracle to protect: the caller has already\nproved to Google who they are, so \"this account is new\" is something they know better than\nwe do. What stays uniform is the *failure*: every rejection is the same 401, whether the\nsignature was wrong, the audience was somebody else's application, or the address was\nunverified.",
+        "operationId": "signInWithGoogle",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ForgotPasswordIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AcceptedOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Invalid screen definition"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Authentication required"
-          },
-          "402": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Your plan does not include this feature"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data version is no longer current"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "No trading day available for that date"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Too many requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data pipeline is degraded"
-          }
-        },
-        "summary": "Email a password-reset link",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/login": {
-      "post": {
-        "description": "docs/07: `POST /auth/login`. docs/11: Argon2id, with lockout after 10 failures.",
-        "operationId": "login",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginIn"
+                "$ref": "#/components/schemas/GoogleSignInIn"
               }
             }
           },
@@ -15466,7 +17498,7 @@
             "description": "Data pipeline is degraded"
           }
         },
-        "summary": "Sign in with a password",
+        "summary": "Sign in with Google",
         "tags": [
           "auth"
         ]
@@ -15684,615 +17716,6 @@
           }
         },
         "summary": "Rotate the refresh token",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/register": {
-      "post": {
-        "description": "docs/07: `POST /auth/register`.\n\nAnswers 202 either way. Registering an address that already has an account sends *that*\naccount a sign-in prompt rather than saying \"already registered\", which would turn the\nregistration form into a membership check.",
-        "operationId": "register",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AcceptedOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Invalid screen definition"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Authentication required"
-          },
-          "402": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Your plan does not include this feature"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data version is no longer current"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "No trading day available for that date"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Too many requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data pipeline is degraded"
-          }
-        },
-        "summary": "Create an account",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/request-otp": {
-      "post": {
-        "description": "docs/11: \"OTP login as the default path\". 202 whether or not the address is known.",
-        "operationId": "requestOtp",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RequestOtpIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AcceptedOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Invalid screen definition"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Authentication required"
-          },
-          "402": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Your plan does not include this feature"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data version is no longer current"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "No trading day available for that date"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Too many requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data pipeline is degraded"
-          }
-        },
-        "summary": "Email a sign-in code",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/reset-password": {
-      "post": {
-        "description": "Resetting signs the user in, and signs every other session out.\n\nSigning them in is the difference between \"your password is changed, now go and log in\" and\nfinishing the job. Signing the others out is the point of the reset: whoever prompted it\nshould not still be holding a session.",
-        "operationId": "resetPassword",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResetPasswordIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Invalid screen definition"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Authentication required"
-          },
-          "402": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Your plan does not include this feature"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data version is no longer current"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "No trading day available for that date"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Too many requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data pipeline is degraded"
-          }
-        },
-        "summary": "Set a new password",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/verify-email": {
-      "post": {
-        "description": "The counterpart to the mail `/auth/register` sends.\n\nNot in docs/07's list — docs/07 names `register` but not the confirmation it implies, and an\nunverifiable verification mail would be worse than none. `docs/12a` §1.",
-        "operationId": "verifyEmail",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifyEmailIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AcceptedOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Invalid screen definition"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Authentication required"
-          },
-          "402": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Your plan does not include this feature"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data version is no longer current"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "No trading day available for that date"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Too many requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data pipeline is degraded"
-          }
-        },
-        "summary": "Confirm an email address",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/verify-otp": {
-      "post": {
-        "operationId": "verifyOtp",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifyOtpIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Invalid screen definition"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Authentication required"
-          },
-          "402": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Your plan does not include this feature"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data version is no longer current"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "No trading day available for that date"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Too many requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data pipeline is degraded"
-          }
-        },
-        "summary": "Sign in with a code",
         "tags": [
           "auth"
         ]
@@ -21903,7 +23326,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HoldingsOut"
+                  "$ref": "#/components/schemas/baskfy_api__routers__desk__HoldingsOut"
                 }
               }
             },
@@ -26771,128 +28194,6 @@
         ]
       }
     },
-    "/api/v1/me/change-password": {
-      "post": {
-        "description": "docs/07: `POST /me/change-password`.\n\nAn account with no password (docs/11 allows it — \"password optional\") is *setting* one and\nsupplies none; an account that has one must prove it, so a stolen access token cannot be\nupgraded into a permanent credential.",
-        "operationId": "changePassword",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChangePasswordIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MeOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Invalid screen definition"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Authentication required"
-          },
-          "402": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Your plan does not include this feature"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Not found"
-          },
-          "409": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data version is no longer current"
-          },
-          "422": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "No trading day available for that date"
-          },
-          "429": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Too many requests"
-          },
-          "500": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Internal server error"
-          },
-          "503": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemOut"
-                }
-              }
-            },
-            "description": "Data pipeline is degraded"
-          }
-        },
-        "summary": "Change the password",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
     "/api/v1/me/export": {
       "get": {
         "description": "docs/11 §Compliance: \"DPDP Act: ... **data export** ... endpoints\".\n\nEverything keyed to the account, in one document. Market data is not included: it is not the\nuser's personal data, it is the same public data every account sees.",
@@ -27837,6 +29138,1147 @@
         ]
       }
     },
+    "/api/v1/portfolio": {
+      "post": {
+        "description": "§6.7's confirm step: name a grouping, choose its kind and source, and file holdings into it.\n\n**Not an order path.** This writes a ``portfolio`` row and moves bookkeeping allocations. It\nreaches no broker, names no side and no product, and moves no share — the shares are already\nin the user's demat and stay exactly where they are. §9's promise that a rebalance produces a\nplan the user takes to their broker is untouched by this route existing.\n\nWHY THIS IS NOT ``POST /portfolios``\n------------------------------------\nThe older route creates a node in the portfolio *forest* — a parent, a broker attribution, a\nlist of symbols and quantities — and it hard-codes ``kind=CAPITAL``, ``source=HOLDING_GROUP``\nbecause those columns arrived under it in 0021/0022 and it has no way to ask. The redesign's\nmodel is a different object: §4.1's kind is an arithmetic decision, §3's source decides the\nheadline metric, §6.7 asks for a benchmark, and §4.2 allocates **whole holdings the user\nalready owns** rather than importing symbol-and-quantity lines. Bolting four fields onto the\nold body would have made one route that means two things; this is the second thing.\n\nTHE FOUR REFUSALS, AND WHY EACH IS THE ANSWER IT IS\n---------------------------------------------------\n1. **A holding already in another capital portfolio** — 400, naming the portfolio it is in.\n   Acceptance criterion 2 is that a holding can never be in two capital portfolios, and\n   0021's partial unique index enforces it in Postgres. The index would refuse this write on\n   its own, with an integrity error nobody can act on; the pre-check exists so the answer\n   says *which* holding and *which* portfolio. The ``IntegrityError`` guard below is still\n   kept, because between the check and the insert is a window, and a race must produce the\n   same sentence rather than a 500.\n2. **A foreign broker account, instrument or benchmark** — 404, never 403. See\n   :func:`_owned_broker_account`.\n3. **A holding the caller does not hold** — 404, for the same reason: the ledger knows every\n   position this user has, and a pair that is not one of them is not a thing to allocate.\n4. **A quantity** — 422, from the schema, because :class:`HoldingKeyIn` has no such field and\n   forbids extras (§4.2).\n\nA **monitoring view takes no capital allocation** (§4.1). Its holdings are written as\n``MONITORING`` rows, which 0021's index ignores, so a lens may freely overlap a capital\nportfolio *and* another lens — and the holdings it watches stay wherever they were, including\nUnallocated. That is why the conflict check above runs only for ``CAPITAL``: refusing a lens\nfor overlapping would be refusing it for doing its job.",
+        "operationId": "newPortfolio",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewPortfolioIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/baskfy_api__routers__portfolio_overview__PortfolioDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "New Portfolio",
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/api/v1/portfolio/activity": {
+      "get": {
+        "description": "§7's activity: trades, cash assignments, dividends, corporate actions, reconciliation.\n\nFive sources, one ordered list, newest first. They are merged rather than paginated\nseparately because the question a user brings here — \"why does this number look like that\" —\nis answered by the sequence of events, and three lists in three tabs is that sequence taken\napart.\n\n**A corporate action is not a P&L event** (§4.5, criterion 6), and the row says so on the\nwire: ``is_pnl_event=False``. So does a reconciliation row — a question being asked or\nanswered is bookkeeping, not money. Marking them is what stops a client from summing the feed\ninto a figure that double-counts a split.",
+        "operationId": "portfolioActivity",
+        "parameters": [
+          {
+            "description": "Only this portfolio's activity.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this portfolio's activity.",
+              "title": "Portfolio Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Portfolio Activity",
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/api/v1/portfolio/holdings": {
+      "get": {
+        "description": "§2's flat broker-level truth: every share, which broker, and what it is allocated to.\n\n§6.7 asks for the same stock at two brokers to be shown aggregated with the breakdown\npreserved — *HDFC Bank — 320 (Zerodha 200 · Upstox 120)* — and that is exactly what this\nreturns: an aggregate row with the per-broker lines under it, never an aggregate that has\nthrown the lines away. The ledger keeps the two positions apart because they can be allocated\napart and sold apart, and a display that merged them would make one of those facts\nunrepresentable.\n\nUnallocated holdings are in this list like everything else. They are the user's shares; a\nholdings view that quietly omitted them would be the one bug this endpoint cannot have.",
+        "operationId": "portfolioHoldings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/baskfy_api__routers__portfolio_overview__HoldingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Portfolio Holdings",
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/api/v1/portfolio/overview": {
+      "get": {
+        "description": "§6's single screen: header, hero, chart, ribbon, table, and the unallocated section.\n\nEverything on it is one consistent picture of one moment, which is the reason it is one\nresponse: a client assembling the header from one call and the totals from another would\neventually straddle a nightly job and render a page whose halves disagree.\n\n**The totals here exclude monitoring views and cannot include one.** Not by a filter — by\nconstruction. A monitoring view holds no allocation (§4.1), and\n:func:`~baskfy_core.allocation_ledger.portfolio_values` sums allocations; there is no branch\nin this handler that could forget the exclusion, because there is no branch. The muted rows\nare rendered from a second, separate walk into a second, separate list.",
+        "operationId": "portfolioOverview",
+        "parameters": [
+          {
+            "description": "§6.3's chart range. End-of-day only in v1.",
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NavRange",
+              "default": "1Y",
+              "description": "§6.3's chart range. End-of-day only in v1."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Portfolio Overview",
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/api/v1/portfolio/reconciliation": {
+      "get": {
+        "description": "§4.3's inbox, plus what the open questions in it are currently forbidding.\n\nThe default is the open questions, because that is what an inbox is: the list of things sync\ncould not decide. History is reachable — pass a state, or read §7's activity feed, where a\nresolved question sits in sequence with the events around it.\n\n:attr:`ReconciliationInboxOut.pending_portfolio_ids` is not a convenience. §6.5's Status\ncolumn and §4.3's freeze are the same fact, and a client that derived one from the item list\nwould eventually derive it differently from the way\n:func:`~baskfy_core.reconciliation.freeze_report` does — most obviously for ``UNKNOWN_INFLOW``,\nwhere the shares exist in the account and nothing is allocated, so it is *Unallocated* that\ngoes pending.",
+        "operationId": "portfolioReconciliation",
+        "parameters": [
+          {
+            "description": "Filter by lifecycle state. Omit for the open questions only.",
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ReconciliationState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by lifecycle state. Omit for the open questions only.",
+              "title": "State"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationInboxOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Portfolio Reconciliation",
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/api/v1/portfolio/reconciliation/{item_id}/resolve": {
+      "post": {
+        "description": "Answer one of §4.3's questions by naming the capital portfolio the change belongs to.\n\n**Not an order path.** This records a bookkeeping decision: which logical portfolio a change\nsync already observed should count against. It reaches no broker and moves no share; the\nshares moved before we ever saw them.\n\nTwo things must land together and they do, in one transaction:\n:class:`~baskfy_core.reconciliation.ResolutionOutcome` carries both the entry in its new\nterminal state *and* the allocation the answer implies, precisely so a caller cannot persist\none and lose the other. An item marked RESOLVED whose holding is still in no portfolio would\nbe an unfrozen holding with nowhere to contribute — a quietly wrong total in place of a\nloudly pending one.\n\nThe three refusals come from the domain, not from here: an already-answered question is not\nre-answerable, a portfolio that does not exist cannot be named, and a monitoring view holds\nno allocation at all (§4.1) so resolving to one would leave the total short. Each becomes a\n400 with the domain's own sentence, which names what was wrong in words the user can act on.",
+        "operationId": "resolveReconciliationItem",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Item Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Resolve Reconciliation Item",
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/api/v1/portfolio/suggestions": {
+      "get": {
+        "description": "§6.6's first-run helper: the unallocated pile in, a short ranked list of named groups out.\n\n> First-run experience: connect broker → everything lands in Unallocated → the product\n> actively helps sort it (suggest groupings by sector, by purchase era, by overlap with a\n> subscribed basket). **Getting from 40 unallocated holdings to 4 named portfolios IS\n> activation.**\n\nThis route gathers the four facts :class:`~baskfy_core.grouping_suggestions.SuggestionInputs`\npermits — sectors, first-bought dates, an as-of date and the models the user follows — and\nhands them to :func:`~baskfy_core.grouping_suggestions.suggest_groupings`. **The ranking, the\nrationale sentences, the coverage arithmetic and the two-holding minimum all live there**, and\nnone of them is re-implemented here. That is the same rule the read routes above follow, and\nit is what lets ``apps/web/.../organize.ts`` port the rank key and stay in step: there is one\ndefinition of a suggestion and it is tested in ``packages/core``.\n\n**Unpriced positions are excluded, not zeroed.**\n:func:`~baskfy_core.allocation_ledger.holding_value` raises on a missing close and it is right\nto; a suggestion whose headline value quietly omitted a position would rank below where it\nbelongs. They are named in ``unpriced_instrument_ids`` instead.\n\n**A missing input is reported, never disguised.** Sectors and purchase dates are both things\nthis database frequently does not have (there is no sector column, and ``first_bought_on`` is\nNULL until a CAS import). §6.6's screen must be able to say *which* input was missing, because\n\"we have no sector data\" and \"your holdings have nothing in common\" are opposite messages and\na bare empty list says the second one. ``bases`` carries the first;\n``unavailable_reason`` is set only when no basis could run at all.\n\nNothing here writes. Accepting a suggestion is ``POST /portfolio`` below, where a human has\nchosen the kind, the name and the benchmark — a suggestion is a sentence the product is\nprepared to say, never an allocation.",
+        "operationId": "portfolioSuggestions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Portfolio Suggestions",
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/api/v1/portfolio/{portfolio_id}": {
+      "get": {
+        "description": "§7's detail page: summary, holdings with weight and contribution, and the source panel.\n\nA monitoring view is served here like any other portfolio, with its value, its holdings and\nits own return — and with ``counts_toward_total=False`` and §4.1's note beside it. Refusing to\nshow one would be the wrong lesson: a lens is a legitimate thing to look at, it is only an\nillegitimate thing to *add up*.",
+        "operationId": "portfolioDetail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Portfolio Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/baskfy_api__routers__portfolio_overview__PortfolioDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Portfolio Detail",
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/api/v1/portfolio/{portfolio_id}/nav": {
+      "get": {
+        "description": "One portfolio's stored EOD NAV series (§5.1), range-filtered, with §6.3's derived views.\n\nThe series is read, never recomputed. §5.1's whole argument is that a mark is a claim about a\nday — \"valued at close of {date}\" — and recomputing it from today's allocations would rewrite\nhistory every time a holding moved between portfolios. A chart that changes shape because a\nuser renamed something is not a record.",
+        "operationId": "portfolioNav",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Portfolio Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "§6.3's ranges. End-of-day only in v1.",
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NavRange",
+              "default": "1Y",
+              "description": "§6.3's ranges. End-of-day only in v1."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NavSeriesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Portfolio Nav",
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
     "/api/v1/portfolios": {
       "get": {
         "description": "The caller's portfolios as a forest: a child appears under its parent, never beside it.\n\n``data`` holds the roots, newest first, each with its children nested underneath. Before\nmigration 0019 every portfolio was a root, so a client that only reads ``data[*]`` sees\nexactly what it saw then — the nesting is additive.",
@@ -28498,7 +30940,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PortfolioDetailOut"
+                  "$ref": "#/components/schemas/baskfy_api__routers__portfolios__PortfolioDetailOut"
                 }
               }
             },
@@ -28629,7 +31071,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PortfolioDetailOut"
+                  "$ref": "#/components/schemas/baskfy_api__routers__portfolios__PortfolioDetailOut"
                 }
               }
             },

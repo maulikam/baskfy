@@ -8,6 +8,12 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * Sign in — and, since Google became the only way in, sign *up* as well
+ * (`docs/DECISIONS-MERGE.md` M46). There is no separate `/register` page any more: a first
+ * sign-in creates the account, so a page asking people to choose between the two would be asking
+ * about a distinction the system no longer makes.
+ */
 export default async function LoginPage({
   searchParams,
 }: {
@@ -22,7 +28,7 @@ export default async function LoginPage({
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
         <p className="text-sm text-muted-foreground">
-          A one-time code is the default; a password works too.
+          Continue with Google. If you have not been here before, this creates your account.
         </p>
       </div>
 
@@ -36,15 +42,23 @@ export default async function LoginPage({
       ) : null}
 
       <LoginForm next={next} />
+
+      {/*
+        The consent line. docs/11 §Compliance carries a DPDP consent record, and until this change
+        it was collected as a mandatory checkbox on `/register`. The checkbox is gone (Maulik,
+        27 Aug 2026); the record is not — `link_google_identity` writes it at first sign-in, with
+        the document version, against this sentence. `docs/DECISIONS-MERGE.md` M46.2.
+      */}
       <p className="text-sm text-muted-foreground">
-        No account yet?{" "}
-        <Link href="/register" className="text-accent underline-offset-4 hover:underline">
-          Create one
+        By continuing you agree to our{" "}
+        <Link href="/terms-conditions" className="text-accent underline-offset-4 hover:underline">
+          Terms
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy-policy" className="text-accent underline-offset-4 hover:underline">
+          Privacy Policy
         </Link>
-        {" · "}
-        <Link href="/forgot-password" className="text-accent underline-offset-4 hover:underline">
-          Forgot password
-        </Link>
+        .
       </p>
     </main>
   );

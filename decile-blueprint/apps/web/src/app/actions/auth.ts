@@ -3,20 +3,17 @@
 import { AuthError } from "next-auth";
 
 import { signIn } from "@/lib/auth";
-import {
-  forgotPassword,
-  registerAccount,
-  requestOtp,
-  resetPassword,
-} from "@/lib/auth/api-auth";
 
 /**
- * Server actions for the placeholder auth pages — Prompt 8 deliverable 5.
+ * The one server action the sign-in page needs.
  *
- * Server actions rather than client fetches, for two reasons that both matter here. The API
- * origin and the session cookie are server-side concerns, and a form that posts to a server
- * action still works with JavaScript disabled — which for a sign-in page is the difference
- * between a degraded experience and no way in at all.
+ * Everything else that lived here — `signInWithPassword`, `sendOtp`, `register`, `sendResetLink`,
+ * `chooseNewPassword`, `signInWithOtp` — went with the endpoints behind it when Google became the
+ * only way in (`docs/DECISIONS-MERGE.md` M46).
+ *
+ * A server action rather than a client `signIn()` call, for the reason it always was: a form that
+ * posts to a server action still works with JavaScript disabled, which for a sign-in page is the
+ * difference between a degraded experience and no way in at all.
  */
 
 export interface FormResult {
@@ -24,25 +21,18 @@ export interface FormResult {
   message: string;
 }
 
-const GENERIC_FAILURE = "Those details did not match an account.";
-
-/** Mirrors `baskfy_api.security.MIN_PASSWORD_LENGTH`, so the form says so before the round trip. */
-const MIN_PASSWORD_LENGTH = 8;
-
 /**
  * Where a sign-in with no `?next=` lands.
  *
- * Still `/build`, and deliberately, even though SC9 gave the product a landing surface at
- * `/home`. Moving it is a one-line change here and a thirteen-file change in `e2e/` — every
- * sign-in helper waits for `/build` — and this sitting cannot run Playwright to prove those
- * still pass. `docs/DECISIONS-MERGE.md` HOME3 records the switch as the follow-up it is, rather
- * than shipping it unverified. `?next=` already wins, so a deep link is unaffected either way.
+ * `/home`, which is what `lib/nav.ts` calls the first destination: "What you hold, what needs a
+ * decision, and what is worth a look." `/build` was right when the screener was the whole
+ * product, and stopped being right when SC9 gave the product a landing surface.
  */
-const DEFAULT_DESTINATION = "/build";
+const DEFAULT_DESTINATION = "/home";
 
 /**
  * `FormData.get` returns `string | File | null`. Stringifying a `File` yields "[object File]",
- * which would be silently treated as an email address, so a non-string is read as absent.
+ * so a non-string is read as absent.
  */
 function field(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -61,93 +51,26 @@ function destination(formData: FormData): string {
   return DEFAULT_DESTINATION;
 }
 
-export async function signInWithPassword(
+/**
+ * Hand off to Google.
+ *
+ * This never returns on the happy path: `signIn` throws a redirect, Next completes the
+ * navigation, and the user comes back through `/api/auth/callback/google`. The `FormResult` exists
+ * for the case where Auth.js refuses before it can redirect — a missing client id, most likely,
+ * which is what an unconfigured deployment looks like from here.
+ */
+export async function signInWithGoogle(
   _previous: FormResult | null,
   formData: FormData,
 ): Promise<FormResult> {
-  const email = field(formData, "email");
-  const password = field(formData, "password");
-  if (!email || !password) return { ok: false, message: "Enter your email and password." };
-
   try {
-    await signIn("password", { email, password, redirectTo: destination(formData) });
+    await signIn("google", { redirectTo: destination(formData) });
     return { ok: true, message: "Signed in." };
   } catch (error) {
-    if (error instanceof AuthError) return { ok: false, message: GENERIC_FAILURE };
+    if (error instanceof AuthError) {
+      return { ok: false, message: "We could not reach Google sign-in. Try again in a moment." };
+    }
     // A redirect is thrown, not returned; re-throwing lets Next complete the navigation.
-    throw error;
-  }
-}
-
-export async function sendOtp(
-  _previous: FormResult | null,
-  formData: FormData,
-): Promise<FormResult> {
-  const email = field(formData, "email");
-  if (!email) return { ok: false, message: "Enter your email address." };
-
-  const result = await requestOtp(email);
-  return { ok: result.accepted, message: result.detail };
-}
-
-export async function register(
-  _previous: FormResult | null,
-  formData: FormData,
-): Promise<FormResult> {
-  const email = field(formData, "email");
-  const password = field(formData, "password");
-  if (!email) return { ok: false, message: "Enter your email address." };
-  if (formData.get("accept_terms") !== "on") {
-    return { ok: false, message: "Please accept the Terms and the Privacy Policy." };
-  }
-
-  const result = await registerAccount({
-    email,
-    password: password || undefined,
-    name: field(formData, "name") || undefined,
-    acceptTerms: true,
-    acceptMarketing: formData.get("accept_marketing") === "on",
-  });
-  return { ok: result.accepted, message: result.detail };
-}
-
-export async function sendResetLink(
-  _previous: FormResult | null,
-  formData: FormData,
-): Promise<FormResult> {
-  const email = field(formData, "email");
-  if (!email) return { ok: false, message: "Enter your email address." };
-  const result = await forgotPassword(email);
-  return { ok: result.accepted, message: result.detail };
-}
-
-export async function chooseNewPassword(
-  _previous: FormResult | null,
-  formData: FormData,
-): Promise<FormResult> {
-  const token = field(formData, "token");
-  const password = field(formData, "password");
-  if (!token) return { ok: false, message: "That reset link is incomplete." };
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    return { ok: false, message: `Passwords must be at least ${MIN_PASSWORD_LENGTH} characters.` };
-  }
-  const result = await resetPassword(token, password);
-  return { ok: result.accepted, message: result.detail };
-}
-
-export async function signInWithOtp(
-  _previous: FormResult | null,
-  formData: FormData,
-): Promise<FormResult> {
-  const email = field(formData, "email");
-  const code = field(formData, "code");
-  if (!email || !code) return { ok: false, message: "Enter your email and the six-digit code." };
-
-  try {
-    await signIn("otp", { email, code, redirectTo: destination(formData) });
-    return { ok: true, message: "Signed in." };
-  } catch (error) {
-    if (error instanceof AuthError) return { ok: false, message: "That code is not valid." };
     throw error;
   }
 }

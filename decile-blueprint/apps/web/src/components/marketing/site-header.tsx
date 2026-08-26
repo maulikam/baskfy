@@ -20,7 +20,7 @@ import { Wordmark } from "@/components/shell/wordmark";
  * signed-out visitor reading the refund policy has no use for a Screens link they cannot open.
  */
 const LINKS = [
-  { href: "/baskets", label: "Baskets" },
+  { href: "/discover", label: "Baskets" },
   { href: "/market/today", label: "Market" },
   { href: "/pricing", label: "Pricing" },
   { href: "/faq", label: "FAQ" },
@@ -59,7 +59,7 @@ export function SiteHeader() {
         >
           Sign in
         </Link>
-        <FloodButton href="/register" size="nav" hoverLabel="Create an account">
+        <FloodButton href="/login" size="nav" hoverLabel="Create an account">
           Get started
         </FloodButton>
       </div>

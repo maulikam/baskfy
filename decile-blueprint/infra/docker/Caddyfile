@@ -1,0 +1,163 @@
+# Caddy — the only thing on the Phase A box listening to the world.
+#
+# `docs/08` §3: "Ingress | Caddy on the box (as the desk does today)". §2 keeps the same shape in
+# Phase B, where CloudFront → ALB replaces this file and nothing else moves.
+#
+# THE GATE
+# --------
+# Maulik chose a gated staging host (26 Aug 2026) because the four legal drafts under
+# `src/content/legal/` are unreviewed (NEEDS-MAULIK §19) and D3's regulatory posture is written
+# but UNREVIEWED. Until counsel clears them, an India-equities site must not be publicly
+# discoverable. Three independent mechanisms, because any one of them can be misconfigured:
+#
+#   1. ~~`basic_auth`~~ — REMOVED 27 Aug 2026 (M46.4). Google's OAuth verification fetches the
+#      homepage and the legal pages anonymously and refused the app while they answered 401.
+#   2. `X-Robots-Tag: noindex, nofollow` on every response — written as "the one that still works
+#      if auth is ever lifted before the drafts are cleared". That day arrived; this is now load
+#      bearing rather than a belt.
+#   3. `/robots.txt` served from here, disallowing everything, overriding whatever the app emits.
+#
+# So the site is readable by anyone holding a URL and still not discoverable through a search
+# engine. `noindex` governs indexing, not fetching, which is why a verification crawler can read
+# what a search crawler is told to ignore.
+#
+# Flipping public is `docs/runbooks/07-deploy-phase-a.md` §7 and is deliberately more than one
+# edit: removing the password should not be something a fat finger can do.
+# Both of these are whole *directives*, not values, and both may legitimately be empty.
+#
+# Caddy has no conditionals: `email {$BASKFY_ACME_EMAIL}` with the variable unset expands to a
+# bare `email` and the config fails to adapt ("wrong argument count"), which is how the first
+# version of this file crash-looped. A placeholder that expands to nothing is a blank line, which
+# the parser is happy with — so the switch is the presence of the directive, not of an argument.
+#
+#   BASKFY_ACME_EMAIL_DIRECTIVE="email ops@example.com"
+#   BASKFY_ACME_CA_DIRECTIVE="acme_ca https://acme-staging-v02.api.letsencrypt.org/directory"
+#
+# Use the staging CA while DNS is still moving: a failed challenge against the production
+# endpoint burns Let's Encrypt's rate limit for a week. Neither is needed when
+# BASKFY_SITE_ADDRESS is a bare port (local verification), because Caddy does not attempt ACME
+# without a hostname to get a certificate for.
+{
+	{$BASKFY_ACME_EMAIL_DIRECTIVE}
+	{$BASKFY_ACME_CA_DIRECTIVE}
+}
+
+{$BASKFY_SITE_ADDRESS} {
+	encode zstd gzip
+
+	# ---------------------------------------------------------------- the gate
+	#
+	# Caddy evaluates directives in ITS OWN order, not the order they appear in this file. Writing
+	# `basic_auth` above the `handle` blocks did not put it "first" — it put it first for every
+	# path, including /robots.txt and /healthz, both of which came back 401. Matchers, not
+	# position, are how you scope it.
+	# `route` forces these to run in the order they are written. Without it Caddy applies its own
+	# directive table, which puts `basic_auth` ahead of `header` — the 401 short-circuited before
+	# the header handler ever ran, so the one response a stranger actually receives was the one
+	# response missing `X-Robots-Tag`. Verified by `tools/deploy/verify-gate.sh`.
+	route {
+		# ---------------------------------------------------------- the gate is gone (M46.4)
+		#
+		# `basic_auth` and its `@open`/`@gated` matchers were here. Maulik removed the password on
+		# 27 Aug 2026 so that staging is reachable, which Google's OAuth verification requires: it
+		# fetches the homepage, the privacy policy and the terms anonymously and refused the app while
+		# each of them answered 401. Six of its eight complaints were this gate.
+		#
+		# TWO OF THE THREE MECHANISMS REMAIN, AND THEY ARE NOW THE WHOLE DEFENCE
+		# The header block above this file's own introduction describes three independent layers. The
+		# first is now removed. The remaining two are `X-Robots-Tag: noindex, nofollow` on every
+		# response, set below, and a `/robots.txt` that disallows everything. Together they mean the
+		# site is *readable by anyone holding a URL* and still not *discoverable* through a search
+		# engine — which is the property the original decision was actually protecting, because the
+		# four legal drafts under `src/content/legal/` are unreviewed (NEEDS-MAULIK §19) and D3's
+		# regulatory posture is written but UNREVIEWED.
+		#
+		# The introduction says flipping public "is deliberately more than one edit: removing the
+		# password should not be something a fat finger can do." It was not one: it was asked for
+		# explicitly, after the consequence was put in writing and read. What that sentence is really
+		# asking of the next person is that these two layers not be removed casually as well —
+		# `tools/deploy/verify-gate.sh` fails if either one goes.
+
+		# `noindex` unconditionally, and set on the way IN rather than deferred.
+		#
+		# `defer` was tried first — it applies the header when the response is written, which is
+		# what you want for overriding a value a backend sends. But `basic_auth` writes its 401
+		# through its own error path, and the deferred writer never ran: the single response a
+		# stranger actually receives was the only one without the header. Setting it eagerly puts
+		# it on the shared ResponseWriter before any handler downstream can short-circuit.
+		#
+		# This is the mechanism that still holds if the password is ever lifted before counsel
+		# clears the legal drafts, so it is the one that must not depend on anything else being
+		# right. `tools/deploy/verify-gate.sh` asserts it on the 401 specifically.
+		header {
+			X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
+			# Caddy announces itself; one less fingerprint on a box that reaches the order path.
+			-Server
+		}
+
+
+		# ---------------------------------------------------------------- open paths
+		# Served from here rather than by the app: this file has to be true even when the app is down,
+		# and `apps/web` legitimately serves a permissive robots.txt for the day this goes public.
+		handle /robots.txt {
+			header Content-Type "text/plain; charset=utf-8"
+			respond `User-agent: *
+Disallow: /
+` 200
+		}
+
+		# Uptime checks need something without a password, and it must reveal nothing.
+		handle /healthz {
+			respond "ok" 200
+		}
+
+		# ---------------------------------------------------------------- routes
+		# The API, for the browser. Server rendering does not come through here at all — the web
+		# container reaches `http://api:8000` directly across the compose network
+		# (`BASKFY_INTERNAL_API_ORIGIN`), which is why a gated host does not 401 its own pages.
+		#
+		# `/api/v1/*`, NOT `/api/*`. FastAPI serves only under the version prefix, and Next owns
+		# three sibling routes that live under `/api` without it:
+		#
+		#   /api/auth/[...nextauth]   NextAuth — session, sign-in, callback
+		#   /api/revalidate           on-demand ISR
+		#   /api/account/export       the GDPR export stream
+		#
+		# The first draft matched `/api/*` and handed all three to FastAPI, which answered 404.
+		# The visible symptom was `GET /api/auth/session 404` in the browser console and a broken
+		# session on every page — a bug that looks like NextAuth misconfiguration and is a one-word
+		# routing error. Widening this back to `/api/*` breaks authentication site-wide.
+		handle /api/v1/* {
+			reverse_proxy api:8000 {
+				# docs/08 §5: "the backtest SSE stream goes to api.baskfy.com directly on the ALB (idle
+				# timeout raised to 300 s), not through CloudFront". No CloudFront in Phase A, so the
+				# equivalent is: never buffer, and do not time the stream out mid-backtest.
+				flush_interval -1
+				transport http {
+					response_header_timeout 300s
+				}
+			}
+		}
+
+		# Everything else is the Next.js app.
+		handle {
+			reverse_proxy web:3000 {
+				flush_interval -1
+			}
+		}
+	}
+
+	# An error response never reaches the `header` directive above, no matter where it is placed or
+	# whether it is deferred (both were tried). `handle_errors` is the supported hook for that path.
+	#
+	# This was written for `basic_auth`'s 401, which was the one response a stranger ever received.
+	# The gate is gone (M46.4) and the block stays, because a 404 or a 502 is now what a stranger
+	# meets on a bad URL — and with the password removed, `X-Robots-Tag` is one of only two things
+	# still keeping unreviewed legal drafts out of a search index. An error page that quietly lost
+	# the header would be a hole in the wrong wall.
+	handle_errors {
+		header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
+		header -Server
+		respond "{err.status_code} {err.status_text}" {err.status_code}
+	}
+}

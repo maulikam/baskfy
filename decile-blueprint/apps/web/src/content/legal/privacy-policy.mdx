@@ -5,29 +5,34 @@ DRAFT REQUIRING LEGAL REVIEW — NOT REVIEWED BY A LAWYER.
 Written by engineers from PROMPTS.md Prompt 18 §3 and docs/11 §"Compliance & legal (India)"
 ("DPDP Act: consent record, data export and deletion endpoints, breach notification runbook")
 and §Security's PII inventory. Read src/content/legal/DRAFT-NOTICE.md before publishing.
-No Data Protection Officer and no grievance officer has been appointed; both are [BRACKETED].
+The supplier's identity and the grievance officer were supplied by Maulik on 27 Aug 2026 and are
+filled in. No Data Protection Officer has been appointed; the DPDP Act's threshold for a
+Significant Data Fiduciary has not been assessed. Section 4's Google entry and section 7 were
+rewritten for M46 (Google sign-in); they describe what the code does today.
 ================================================================================================
 */}
 
 This policy explains what personal data Baskfy collects, why, how long it is kept, and what you
 can do about it. It is written against the Digital Personal Data Protection Act, 2023.
 
-The data fiduciary is [SUPPLIER LEGAL NAME], [SUPPLIER ADDRESS].
+The data fiduciary is RENIL, 703/2, Sector 4C, Gandhinagar, Gujarat 382006.
 
 ## 1. What we collect
 
 **Because you gave it to us**
 
-- Your email address. Required — it is your identity on the Service and where we send sign-in
-  codes.
-- Your display name, if you set one. Optional.
+- Your email address, your name and your Google account identifier, received from Google when
+  you sign in. Signing in with Google is the only way to use the Service, so this is required —
+  the email address is your identity on the Service and where we send receipts and notices. We
+  ask Google only for your name, your email address and the fact that Google has verified it. We
+  never receive your Google password, and we never ask for one of our own.
+- A different display name, if you set one. Optional.
 - The contents of any message you send us through the support form.
 
 **Because you used the Service**
 
 - Your saved screens, column layouts, portfolios, backtests and preferences.
-- Sign-in events, refresh-token records and failed-attempt counts, which is what makes account
-  lockout and session revocation possible.
+- Sign-in events and refresh-token records, which is what makes session revocation possible.
 - Server logs containing your IP address, the request path and a request identifier.
 
 **Because you paid us**
@@ -47,7 +52,7 @@ We set the following, and only the following:
 | Cookie | Purpose | Refusable |
 |---|---|---|
 | Session token | Keeps you signed in | No — the Service cannot work without it |
-| Refresh token | Renews your session without asking for the password again | No |
+| Refresh token | Renews your session without sending you back to Google | No |
 | CSRF token pair | Prevents another site submitting forms as you | No |
 | Consent record | Remembers this choice | No |
 | Announcement dismissal | Stops a banner reappearing | No |
@@ -63,24 +68,39 @@ you asked for.
 
 For payment records and tax invoices: because Indian tax law requires us to keep them.
 
-For security logs, lockout counters and rate-limit counters: because we have a legitimate need to
-keep the Service and your account safe.
+For security logs and rate-limit counters: because we have a legitimate need to keep the Service
+and your account safe.
 
 For anything else — and there is presently nothing else — because you consented, in which case you
 may withdraw consent at any time.
 
 ## 4. Who we share it with
 
+- **Google**, which authenticates you. When you sign in, Google tells us your name, your email
+  address and your Google account identifier; Google separately knows that you signed in to this
+  Service. Your relationship with Google is governed by Google's own privacy policy, not by this
+  one.
 - **Razorpay**, to take payment and issue receipts.
-- **[EMAIL PROVIDER]**, to deliver sign-in codes, receipts and notices.
-- **[HOSTING PROVIDER]** and **Cloudflare R2**, which host the servers and the object storage the
+- **Amazon SES**, to deliver receipts and notices.
+- **Amazon Web Services** and **Cloudflare R2**, which host the servers and the object storage the
   Service runs on.
-- **Sentry**, which receives error reports. Our logging strips passwords, tokens and codes before
+- **Sentry**, which receives error reports. Our logging strips tokens and credentials before
   anything leaves the process.
 
-We do not sell personal data and we do not share it for advertising. Some of these providers
-process data outside India; we rely on the transfer mechanisms permitted under the DPDP Act for
-that. [CONFIRM THE MECHANISM AND THE COUNTRIES.]
+We do not sell personal data and we do not share it for advertising.
+
+**Where your data is processed.** Your account, your saved work, your payment records and the
+servers that run the Service are in **India** — Amazon Web Services' Mumbai region
+(`ap-south-1`), and Razorpay, which is an Indian company. Two things leave: **Google** processes
+your sign-in in the **United States** and elsewhere, and **Sentry**, when error reporting is
+enabled, receives redacted diagnostics in the **United States**. Object storage on **Cloudflare
+R2** may be served from outside India.
+
+**The mechanism.** Section 16 of the DPDP Act permits a Data Fiduciary to transfer personal data
+for processing to any country outside India except one the Central Government has restricted by
+notification. No such restriction applies to any of the transfers above. We do not rely on your
+consent for these transfers, so you do not lose the Service by objecting to one — but if a country
+we use is later restricted, we will stop transferring to it rather than ask you to agree.
 
 ## 5. How long we keep it
 
@@ -90,7 +110,7 @@ that. [CONFIRM THE MECHANISM AND THE COUNTRIES.]
 | Session and refresh-token records | Until expiry or revocation |
 | Payment records and tax invoices | Eight years, as Indian tax law requires |
 | Consent records | For as long as the account exists, plus the statutory period |
-| Server logs | [RETENTION PERIOD — NOT YET SET] |
+| Server logs | 90 days |
 
 ## 6. Your rights
 
@@ -107,14 +127,20 @@ survive for the statutory retention period, and they are linked to an account ro
 cannot be dropped. Your email, name and saved work are erased; a stripped account row and the
 invoices remain.
 
-Changing your email address is not something the profile page can do, because a new address has to
-be proved before it takes effect and that flow is not built. Write to support.
+Changing your email address is not something the profile page can do. Your address is the one
+Google gives us when you sign in, so it is changed in your Google account rather than here — and
+because your account is identified by a stable Google account identifier rather than by the
+address, changing it in Google signs you into the same Baskfy account, not a new one. If you need
+the address on an already-issued invoice corrected, write to support.
 
 ## 7. Security
 
-Passwords are hashed with Argon2id. Sign-in codes and refresh tokens are stored as SHA-256 digests
-rather than in the clear. Sessions are httpOnly, SameSite cookies. All traffic is over TLS. Our
-logging filter redacts secrets, and our error reporter receives redacted records.
+**We store no password.** Signing in is delegated to Google, so there is no credential of ours
+to steal, guess or reset — the strength of your sign-in, and its recovery, are settings in your
+Google account. The identity token Google issues is verified against Google's published keys on
+every sign-in and is never written to a log. Refresh tokens are stored as SHA-256 digests rather
+than in the clear. Sessions are httpOnly, SameSite cookies. All traffic is over TLS. Our logging
+filter redacts secrets, and our error reporter receives redacted records.
 
 No system is perfectly secure. If a breach affects your data we will notify you and the Data
 Protection Board of India as the DPDP Act requires.
@@ -130,5 +156,5 @@ affects how we use your data will be notified before it takes effect.
 
 ## 10. Contact
 
-Questions, requests and complaints: [GRIEVANCE OFFICER NAME], [GRIEVANCE OFFICER EMAIL]. You may
-also complain to the Data Protection Board of India.
+Questions, requests and complaints: Maulik, grievance@baskfy.com. You may also complain to the
+Data Protection Board of India.

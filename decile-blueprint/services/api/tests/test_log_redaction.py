@@ -21,7 +21,7 @@ from typing import Final
 
 import httpx
 import pytest
-from api_helpers import assert_problem, url
+from api_helpers import StubGoogle, assert_problem, google_token, url
 from screener_helpers import requires_db
 
 from baskfy_api.csrf import CSRF_COOKIE, CSRF_HEADER, REFRESH_COOKIE
@@ -106,16 +106,16 @@ class TestTheEndpointsInPractice:
         # `caplog` installs its own handler, so the filter has to be on it too — which is exactly
         # the situation `configure_logging` creates for the real stdout handler.
         caplog.handler.addFilter(RedactingFilter())
+        stub = StubGoogle()
+        transport = api._transport
+        app = getattr(transport, "app", None)
+        assert app is not None, "the api fixture must be built on an ASGITransport"
+        app.state.google_verifier = stub
+        id_token = google_token()
 
         with caplog.at_level(logging.DEBUG):
-            await api.post(
-                url("/auth/register"),
-                json={"email": EMAIL, "password": PASSWORD, "accept_terms": True},
-            )
-            signed_in = await api.post(
-                url("/auth/login"), json={"email": EMAIL, "password": PASSWORD}
-            )
-            assert signed_in.status_code == 200
+            signed_in = await api.post(url("/auth/google"), json={"id_token": id_token})
+            assert signed_in.status_code == 200, signed_in.text
             access_token = str(signed_in.json()["access_token"])
             refresh_cookie = signed_in.cookies[REFRESH_COOKIE]
             csrf = signed_in.cookies[CSRF_COOKIE]
@@ -126,41 +126,51 @@ class TestTheEndpointsInPractice:
                 cookies={REFRESH_COOKIE: refresh_cookie, CSRF_COOKIE: csrf},
             )
             await api.get(url("/me"), headers={"Authorization": f"Bearer {access_token}"})
-            # A failure path too — this is where a careless `log.warning(body)` would live.
+            # A failure path too — this is where a careless `log.warning(body)` would live, and
+            # the Google endpoint *does* log every rejection on purpose.
+            rejected = google_token(subject="forged")
+            stub.rejects.add(rejected)
             assert_problem(
-                await api.post(
-                    url("/auth/login"), json={"email": EMAIL, "password": "the wrong one"}
-                ),
+                await api.post(url("/auth/google"), json={"id_token": rejected}),
                 401,
                 "unauthenticated",
             )
 
         rendered = "\n".join(JsonFormatter().format(record) for record in caplog.records)
         for secret, what in (
-            (PASSWORD, "the password"),
+            (id_token, "the Google ID token"),
             (access_token, "the access token"),
             (refresh_cookie, "the refresh token"),
             (csrf, "the CSRF token"),
         ):
             assert secret not in rendered, f"{what} was written to the log"
 
-    async def test_the_otp_never_reaches_the_log(
+    async def test_a_refused_google_token_is_not_echoed(
         self, api: httpx.AsyncClient, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """The one deliberate exception is the `console` transport, which this app is not using.
+        """The rejection path logs a reason, and the reason must not be the token.
 
-        `ConsoleTransport` prints the body on purpose so a developer can read a code with no mail
-        server; `Settings.require_configured` refuses it in production. The `api` fixture builds a
-        mailer from test settings, whose transport is `console` — so this asserts the *endpoint*
-        does not log the code, and `docs/12a` §7 records the transport's exemption.
+        This is the one place the temptation is real: a 401 with no context is hard to debug, so
+        the obvious fix is to log what was submitted. A Google ID token is a bearer credential
+        until it expires — logging a *valid* one that failed some later check would put a working
+        credential in the log, and logging a forged one tells an attacker with log access exactly
+        how close they got.
         """
         caplog.handler.addFilter(RedactingFilter())
-        await api.post(
-            url("/auth/register"),
-            json={"email": EMAIL, "password": PASSWORD, "accept_terms": True},
-        )
-        with caplog.at_level(logging.INFO, logger="baskfy_api.auth_service"):
-            await api.post(url("/auth/request-otp"), json={"email": EMAIL})
+        transport = api._transport
+        app = getattr(transport, "app", None)
+        assert app is not None
+        app.state.google_verifier = StubGoogle()
+        forged = "a-token-shaped-string-that-is-not-one"
+
+        with caplog.at_level(logging.DEBUG):
+            assert_problem(
+                await api.post(url("/auth/google"), json={"id_token": forged}),
+                401,
+                "unauthenticated",
+            )
 
         rendered = "\n".join(JsonFormatter().format(record) for record in caplog.records)
-        assert "otp" not in rendered.lower() or REDACTED in rendered
+        assert forged not in rendered, "the refused token was echoed into the log"
+        # ...and the rejection *was* recorded, so this is not passing because nothing was logged.
+        assert "google sign-in rejected" in rendered

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { DangerZone } from "@/components/account/danger-zone";
@@ -52,16 +51,24 @@ export default async function ProfilePage() {
         <h2 id="security-heading" className="text-sm font-semibold">
           Security
         </h2>
+        {/*
+          There is nothing to change here any more. This account has no password and no recovery
+          code — it signs in with Google, so the credential, its strength and its recovery all
+          live in a Google account we deliberately do not manage
+          (`docs/DECISIONS-MERGE.md` M46). Saying so is worth a line: an account page with no
+          security section at all reads as an omission rather than as an answer.
+        */}
         <p className="text-sm text-muted-foreground">
-          {me.has_password
-            ? "This account has a password."
-            : "This account signs in with one-time codes only."}{" "}
-          <Link
-            href="/change-password"
+          You sign in with Google. Your password and two-factor settings are managed in your{" "}
+          <a
+            href="https://myaccount.google.com/security"
             className="text-accent underline-offset-4 hover:underline"
+            target="_blank"
+            rel="noreferrer noopener"
           >
-            {me.has_password ? "Change password" : "Set a password"}
-          </Link>
+            Google account
+          </a>
+          .
         </p>
       </section>
 

@@ -7,6 +7,7 @@ Importing this package registers every table on ``Base.metadata``, which is what
 from baskfy_core.models.accounts import (
     PAYMENT_STATUSES,
     AppUser,
+    AuthIdentity,
     Backtest,
     BrokerAccount,
     Payment,
@@ -150,6 +151,7 @@ __all__ = [
     "ApiKey",
     "ApiKeyUsageDaily",
     "AppUser",
+    "AuthIdentity",
     "AuthLockout",
     "AuthToken",
     "AuthVerificationToken",

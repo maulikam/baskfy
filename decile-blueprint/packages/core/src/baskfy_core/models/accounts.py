@@ -13,6 +13,7 @@ from sqlalchemy import (
     DateTime,
     FetchedValue,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -25,8 +26,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import CITEXT, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from baskfy_core.allocation_ledger import PortfolioKind, PortfolioSource
 from baskfy_core.models.base import (
     INR,
+    MONEY,
     PRICE_RAW,
     QUANTITY,
     Base,
@@ -79,6 +82,71 @@ class AppUser(Base):
     is_staff: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false"), default=False
     )
+    #: The generation number of this account's *web* sessions, and the only way one can be killed.
+    #:
+    #: The web session is an Auth.js JWT cookie with a thirty-day life, and `jwt` strategy is
+    #: forced — Auth.js v5 cannot use database sessions with the Credentials provider
+    #: (`docs/08a` §3). A self-contained JWT is valid until it expires no matter what this
+    #: database thinks, so before this column existed there was nothing a server could do to end
+    #: a session: sign-out deleted the browser's copy, and `revoke_all_for_user` revoked
+    #: refresh-session rows that the web app never reads. The consequence was that changing a
+    #: password did not evict whoever prompted the change, which is the one thing a password
+    #: change is for. `NEEDS-MAULIK.md` §22 is the finding; this is the fix.
+    #:
+    #: The number is stamped into the session at sign-in and re-checked on every gated render
+    #: against `GET /me`. Bumping it makes every cookie issued before the bump fail that
+    #: comparison, so "sign out everywhere" costs one `UPDATE` and takes effect on the next
+    #: navigation rather than in thirty days.
+    #:
+    #: Monotonic and never reset — it is a generation counter, not a count of anything a user
+    #: would recognise, and reuse of a number would resurrect a session that was meant to die.
+    session_epoch: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0"), default=0
+    )
+
+
+class AuthIdentity(Base):
+    """One external identity — today always Google — bound to one ``app_user``.
+
+    WHY THIS IS NOT JUST A COLUMN ON ``app_user``
+    ---------------------------------------------
+    A ``google_subject`` column would work exactly until the second provider, and it would make
+    "signed in with Google" a property of the account rather than a fact with its own history.
+    A row per identity means adding Apple or a broker SSO later is an insert, not a migration of
+    every user row.
+
+    WHY IT IS KEYED ON ``subject`` AND NOT ON THE EMAIL
+    ---------------------------------------------------
+    Google's ``sub`` is stable for the life of the account and is never reissued. The email is
+    neither: a Workspace administrator can rename a user, and a released consumer address can be
+    registered by a *different person* months later. Keying on the address would hand that person
+    the original account. The email is still stored on ``app_user`` because the product shows it
+    and mails to it — but it is a display fact, not an identity.
+    """
+
+    __tablename__ = "auth_identity"
+    __table_args__ = (
+        # The pair is what a sign-in looks up, and it must be unique or one Google account could
+        # be bound to two users and the lookup would be a coin toss.
+        UniqueConstraint("provider", "subject", name="uq_auth_identity_provider_subject"),
+        # One account per provider per user: signing in with Google twice must not accumulate
+        # rows, and it is what makes the upsert on sign-in idempotent (house rule 7).
+        UniqueConstraint("user_id", "provider", name="uq_auth_identity_user_provider"),
+        Index("ix_auth_identity_user_id", "user_id"),
+    )
+
+    id: Mapped[BigIntPk]
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id"), nullable=False)
+    #: ``google`` today. A short catalog string, not an enum, so a second provider needs no
+    #: migration of this column's type.
+    provider: Mapped[str] = mapped_column(String, nullable=False)
+    #: The provider's stable subject identifier (Google's ``sub``).
+    subject: Mapped[str] = mapped_column(String, nullable=False)
+    #: What the provider last told us this identity's address was, for support and for noticing
+    #: a rename. Never used to *find* the account.
+    email_at_provider: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[CreatedAt]
+    last_login_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class BrokerAccount(Base):
@@ -190,6 +258,12 @@ class Payment(Base):
     sac_code: Mapped[str | None] = mapped_column(String)
 
 
+def _in_values(column: str, values: type[PortfolioKind] | type[PortfolioSource]) -> str:
+    """``kind IN ('CAPITAL', 'MONITORING')`` built from the enum, never typed twice."""
+    allowed = ", ".join(f"'{member.value}'" for member in values)
+    return f"{column} IN ({allowed})"
+
+
 class Portfolio(Base):
     """A user's portfolio — since migration 0019, a node in that user's portfolio forest.
 
@@ -224,6 +298,14 @@ class Portfolio(Base):
         # (2) and (3) above are not expressible here; (1) is, and is the one a single bad write
         # can introduce, so the database owns it.
         CheckConstraint("parent_id IS NULL OR parent_id <> id", name="portfolio_parent_not_self"),
+        # 0021. The values come from the domain enums rather than from strings repeated here, so
+        # the database and `baskfy_core.allocation_ledger` cannot drift into disagreeing about
+        # what a kind or a source is.
+        CheckConstraint(_in_values("kind", PortfolioKind), name="portfolio_kind_known"),
+        CheckConstraint(_in_values("source", PortfolioSource), name="portfolio_source_known"),
+        # Redundant against the primary key; it exists so `portfolio_holding` can reference
+        # `(id, kind)` and have the database keep its copy of `kind` honest.
+        UniqueConstraint("id", "kind", name="uq_portfolio_id_kind"),
         Index("ix_portfolio_parent_id", "parent_id"),
         Index("ix_portfolio_broker_account_id", "broker_account_id"),
     )
@@ -239,6 +321,22 @@ class Portfolio(Base):
         BigInteger, ForeignKey("broker_account.id", ondelete="SET NULL")
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
+    #: PORTFOLIO_REDESIGN.md §4.1. CAPITAL sums into consolidated net worth and holds each of its
+    #: holdings exclusively; MONITORING is an overlapping lens that never enters a total. The
+    #: distinction is arithmetic, not styling, which is why it is a column and not a tag.
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    #: §3. Decides the headline return metric (§5.2) and the badge shown on every surface.
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    #: 0022. The date every §5.2 metric is measured from, and the date the "since grouped" mark
+    #: is taken at for a holding group. Backfilled from ``created_at`` and NOT NULL thereafter:
+    #: acceptance criterion 3 ties every displayed return to a start date, and a metric with an
+    #: implicit start is a number nobody can check.
+    started_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    #: 0022. §6.3's benchmark overlay, which §6.5 lets a portfolio override. NULL = no override,
+    #: so the surface falls back to the product default rather than to no comparison at all.
+    benchmark_index_id: Mapped[int | None] = mapped_column(
+        SmallInteger, ForeignKey("index_def.id", ondelete="SET NULL")
+    )
     created_at: Mapped[CreatedAt]
 
 
@@ -267,6 +365,24 @@ class PortfolioHolding(Base):
         PrimaryKeyConstraint("portfolio_id", "instrument_id", "broker_account_id"),
         Index("ix_portfolio_holding_instrument_id", "instrument_id"),
         Index("ix_portfolio_holding_broker_account_id", "broker_account_id"),
+        # 0021. The copy of ``portfolio.kind`` is kept honest by the database rather than by a
+        # writer: this key makes disagreement unrepresentable, and ON UPDATE CASCADE carries a
+        # portfolio's holdings with it when its kind changes.
+        ForeignKeyConstraint(
+            ["portfolio_id", "portfolio_kind"],
+            ["portfolio.id", "portfolio.kind"],
+            name="fk_portfolio_holding_portfolio_kind",
+            onupdate="CASCADE",
+        ),
+        # Acceptance criterion 2, enforced by Postgres: at most one CAPITAL row per physical
+        # holding. Monitoring rows are absent from the index, so lenses overlap freely (§4.1).
+        Index(
+            "uq_portfolio_holding_one_capital_portfolio",
+            "instrument_id",
+            "broker_account_id",
+            unique=True,
+            postgresql_where=text("portfolio_kind = 'CAPITAL'"),
+        ),
     )
 
     portfolio_id: Mapped[int] = mapped_column(
@@ -281,9 +397,22 @@ class PortfolioHolding(Base):
     broker_account_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("broker_account.id"), nullable=False, server_default=FetchedValue()
     )
+    #: 0021. A copy of the owning portfolio's ``kind``, and the reason the partial unique index
+    #: above can be written at all — an index cannot read another table, so the fact is brought
+    #: here and the composite foreign key stops it from ever disagreeing.
+    portfolio_kind: Mapped[str] = mapped_column(String, nullable=False)
     quantity: Mapped[Decimal | None] = mapped_column(QUANTITY)
     avg_price: Mapped[Decimal | None] = mapped_column(PRICE_RAW)
     added_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    #: 0022 / §5.3. When these shares were first bought, once something knows — NULL until a CAS
+    #: import or a broker that publishes buy history says so. NULL is not "today": §5.2 forbids
+    #: since-purchase P&L for a holding whose purchase date is unknown, and a default would
+    #: silently unlock exactly the number it forbids.
+    first_bought_on: Mapped[dt.date | None] = mapped_column(Date)
+    #: 0022 / §5.3. Where ``first_bought_on`` and ``avg_price`` came from: ``NONE``, ``CAS``,
+    #: ``BROKER`` or ``MANUAL``. It is provenance, not decoration — "since grouped" upgrades to a
+    #: true since-purchase figure only for rows that can say where their history came from.
+    history_source: Mapped[str] = mapped_column(String, nullable=False, server_default="NONE")
 
 
 class PortfolioRebalance(Base):
@@ -452,3 +581,154 @@ class PortfolioSleeve(Base):
     top_n: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="15")
     sort_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
     created_at: Mapped[CreatedAt]
+
+
+# ---------------------------------------------------------------------------
+# The portfolio redesign's three data layers — PORTFOLIO_REDESIGN.md §4.6
+#
+# §4.6 asks for the layers to be kept separate *in the schema*, and the reason is that they have
+# different owners and different truths. The broker ledger is what a broker says is there. Market
+# data is what the exchange printed. The Baskfy portfolio ledger is the only one this product
+# authors — which holding belongs to which portfolio, which cash moved where, and what each day
+# was worth. Collapsing them would make it impossible to say, later, which number came from whom.
+# ---------------------------------------------------------------------------
+
+
+class BrokerCash(Base):
+    """Layer 1 — the Unallocated cash bucket of §4.4, one per broker account.
+
+    Derived from ``portfolio_cash_flow`` and materialised anyway: §6.2 shows cash in the hero
+    row and §6.6 shows it in the Unallocated section, and summing a lifetime of flows to render
+    one number on every page load is the cheap version of this.
+    """
+
+    __tablename__ = "broker_cash"
+
+    broker_account_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("broker_account.id", ondelete="CASCADE"), primary_key=True
+    )
+    balance: Mapped[Decimal] = mapped_column(MONEY, nullable=False, server_default="0")
+    #: Which day this balance is true for. §6.1 shows the sync timestamp separately from the
+    #: price timestamp precisely so the two are never confused for each other.
+    as_of: Mapped[dt.date] = mapped_column(Date, nullable=False)
+
+
+class PortfolioCashFlow(Base):
+    """Layer 3 — every movement of money, and the only input to per-portfolio XIRR (§4.4).
+
+    The distinction this table exists to preserve, in §4.4's own terms: an external deposit lands
+    in Unallocated and is not a portfolio event; **assigning** cash to a portfolio is an internal
+    inflow and *is* the XIRR cash-flow event; buying a stock inside a portfolio is a cash-to-stock
+    transfer and is *not* an XIRR event. A balance column can express none of that after the fact,
+    which is why the flows are rows and the balance is derived from them.
+
+    ``portfolio_id`` is NULL exactly when the flow is external, enforced by a check constraint —
+    the boundary is data, not convention.
+    """
+
+    __tablename__ = "portfolio_cash_flow"
+    __table_args__ = (
+        Index("ix_portfolio_cash_flow_portfolio_occurred", "portfolio_id", "occurred_on"),
+        Index("ix_portfolio_cash_flow_broker_occurred", "broker_account_id", "occurred_on"),
+    )
+
+    id: Mapped[BigIntPk]
+    broker_account_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("broker_account.id", ondelete="CASCADE"), nullable=False
+    )
+    portfolio_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("portfolio.id", ondelete="CASCADE")
+    )
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    occurred_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    #: Set for BUY/SELL/DIVIDEND, so the activity tab (§7) can name the stock a flow concerned.
+    instrument_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("instrument.id"))
+    quantity: Mapped[Decimal | None] = mapped_column(QUANTITY)
+    note: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[CreatedAt]
+
+
+class PortfolioNavDaily(Base):
+    """Layer 3 — the official end-of-day value, §5.1's "like a fund NAV".
+
+    One row per portfolio per day, and ``portfolio_id IS NULL`` for the consolidated series, so
+    §6.3's combined chart and a single portfolio's chart read the same table rather than two that
+    can disagree.
+
+    Stored rather than recomputed on read. §5.1 makes this series the source for the chart, per-day
+    P&L, contribution and drawdown; recomputing a year of it per page load would be slow, and worse
+    would silently rewrite history whenever an allocation changed. "Valued at close of {date}" is a
+    claim about that day, and a claim needs a record.
+    """
+
+    __tablename__ = "portfolio_nav_daily"
+    #: 0023 replaced the primary key with a unique index. A PK makes every one of its columns
+    #: NOT NULL in Postgres, which silently made ``portfolio_id`` non-nullable — and a NULL
+    #: ``portfolio_id`` *is* the consolidated series, the row criterion 1 is computed from. The
+    #: table documented it as nullable in two places and the database disagreed; nobody noticed
+    #: until the nightly job tried to write the row. ``NULLS NOT DISTINCT`` (PG 15+) gives the
+    #: same uniqueness and still serves as an ``ON CONFLICT`` arbiter.
+    __table_args__ = (Index("ix_portfolio_nav_daily_portfolio_date", "portfolio_id", "date"),)
+
+    #: NULL = the consolidated series for this user. Nullable in the database *because* 0023
+    #: removed the primary key; see the note above.
+    portfolio_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("portfolio.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("app_user.id", ondelete="CASCADE"),
+        nullable=False,
+        primary_key=True,
+    )
+    date: Mapped[dt.date] = mapped_column(Date, nullable=False, primary_key=True)
+    market_value: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    cash: Mapped[Decimal] = mapped_column(MONEY, nullable=False, server_default="0")
+    #: The day's net internal flow, which is what makes a time-weighted return computable from
+    #: this series alone: TWR has to divide the day at each flow, and cannot if the flow is lost.
+    net_flow: Mapped[Decimal] = mapped_column(MONEY, nullable=False, server_default="0")
+    #: §4.3's freeze, made visible. A day whose value could not be trusted says so; omitting the
+    #: row instead would leave a gap that a chart draws as zero.
+    pending_reconciliation: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+
+
+class ReconciliationItem(Base):
+    """Layer 3 — a question sync could not answer on its own (§4.3).
+
+    "We detected a sell of 100 HDFC Bank — which portfolio?" Its existence is what stops a guess:
+    while it is OPEN the affected holding's contribution to performance is frozen rather than
+    attributed to whichever portfolio looked likely.
+
+    A RESOLVED row must name ``resolved_portfolio_id``, enforced by a check constraint. Without
+    that, "resolved" could mean "somebody clicked something" and a return series would move on a
+    decision nobody recorded.
+    """
+
+    __tablename__ = "reconciliation_item"
+    __table_args__ = (Index("ix_reconciliation_item_user_state", "user_id", "state"),)
+
+    id: Mapped[BigIntPk]
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    instrument_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("instrument.id"), nullable=False
+    )
+    broker_account_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("broker_account.id", ondelete="CASCADE"), nullable=False
+    )
+    quantity: Mapped[Decimal] = mapped_column(QUANTITY, nullable=False)
+    reason: Mapped[str] = mapped_column(String, nullable=False)
+    state: Mapped[str] = mapped_column(String, nullable=False, server_default="OPEN")
+    #: The portfolio the UI pre-selects. A suggestion, never an attribution (§4.3).
+    suggested_portfolio_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("portfolio.id", ondelete="SET NULL")
+    )
+    resolved_portfolio_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("portfolio.id", ondelete="SET NULL")
+    )
+    detected_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    resolved_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))

@@ -23,8 +23,36 @@ Models: `packages/core/src/decile_core/models/auth.py`.
 | `auth_lockout` | `docs/11`: "account lockout after 10 failures with email notification". |
 | `account_deletion` | `docs/11` §Compliance: "DPDP Act: … deletion endpoints", with PROMPTS.md Prompt 12 §5's seven-day window. |
 | `consent_record` | `docs/11` §Compliance: "DPDP Act: **consent record** …". |
+| `auth_identity` | M46: Google sign-in is the only way in, so an account is reached through a provider subject rather than a password hash. `docs/DECISIONS-MERGE.md` M46. |
 
 Plus one column: `app_user.deleted_at`, the soft-delete marker the window needs.
+
+## What M46 changed, and what it left standing
+
+Google sign-in replaced registration, the email OTP, the password and the reset link in one
+change (`docs/DECISIONS-MERGE.md` M46). The immediate cause was operational — SES sits in its
+sandbox, so every verification mail to an unverified recipient was refused with a 554 and five
+consecutive sign-ups reached a dead end while the form answered 202 — and the deeper one is that
+five accounts existed, none with a password set, so there was nothing to migrate.
+
+**`auth_identity` is the new table.** One row per external identity, keyed on
+`(provider, subject)`. It is keyed on Google's `sub` and not on the email because the `sub` is
+stable for the life of the account and is never reissued, while an address is neither: a
+Workspace administrator can rename a user, and a released consumer address can be registered by a
+different person months later. The email is still on `app_user` — the product shows it and mails
+to it — but it is a display fact, not an identity.
+
+**Four tables are now written by nothing, and are deliberately still here.**
+`auth_verification_token` held Auth.js's OTP codes and the web app no longer opens a database
+connection at all; `auth_token` held the OTP, verification and reset codes; `auth_lockout` counted
+password failures, and an ID token cannot be guessed the way a password can. `refresh_token` is
+the exception — it is still written, by `issue_session`.
+
+Dropping the three dead tables is a destructive migration against rows that are somebody's
+history, so it is not part of M46. They are inert: no code path inserts into them, and
+`packages/core/tests/test_schema_matches_docs.py` still requires each to be documented here,
+which is what this paragraph is. Dropping them is a decision to take deliberately and with a
+backup, not a tidy-up to fold into an auth change.
 
 ## Column notes that are not obvious from the DDL
 

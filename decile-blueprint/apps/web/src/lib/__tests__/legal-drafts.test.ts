@@ -74,12 +74,130 @@ describe("the legal documents are marked as drafts in the repository", () => {
   });
 });
 
+describe("the documents render as documents", () => {
+  /*
+   * `privacy-policy.mdx` states what we store, and for how long, in two tables. MDX implements
+   * CommonMark, and **pipe tables are not CommonMark** — they are a GitHub extension — so without
+   * `remark-gfm` in the pipeline those tables reached the reader as literal lines of
+   * `| Session token | Keeps you signed in | No |` on a live legal page.
+   *
+   * This asserts the pipeline against the content rather than the config alone: if a document
+   * grows a table, the plugin that renders it must be configured. Checking `next.config.ts` is
+   * indirect, and it is the only place the two facts meet without building the app in a unit test.
+   */
+  const NEXT_CONFIG = resolve(process.cwd(), "next.config.ts");
+
+  it("configures remark-gfm whenever a document uses a table", () => {
+    const withTables = mdxFiles().filter((name) =>
+      /^\|.+\|\s*$/m.test(readFileSync(join(LEGAL_DIR, name), "utf-8")),
+    );
+    if (withTables.length === 0) return;
+
+    const config = readFileSync(NEXT_CONFIG, "utf-8");
+    expect(
+      config,
+      `${withTables.join(", ")} use pipe tables, which MDX cannot parse without remark-gfm`,
+    ).toContain("remarkGfm");
+    expect(config).toContain("remarkPlugins");
+  });
+
+  it("keeps every table well-formed — a header, a delimiter, and rows of equal width", () => {
+    for (const name of mdxFiles()) {
+      const lines = readFileSync(join(LEGAL_DIR, name), "utf-8").split("\n");
+      for (const [index, line] of lines.entries()) {
+        if (!/^\|.+\|\s*$/.test(line)) continue;
+        const next = lines[index + 1] ?? "";
+        // The line after a table's header must be the delimiter row, or GFM does not see a table
+        // at all and silently renders the whole block as a paragraph of pipes.
+        const isHeader = !/^\|[\s:|-]+\|\s*$/.test(line) && !/^\|.+\|\s*$/.test(lines[index - 1] ?? "");
+        if (isHeader) {
+          expect(next, `${name}:${index + 1} — table header is not followed by a delimiter row`)
+            .toMatch(/^\|[\s:|-]+\|\s*$/);
+          const columns = line.split("|").length;
+          expect(next.split("|").length, `${name}:${index + 2} — delimiter column count`)
+            .toBe(columns);
+        }
+      }
+    }
+  });
+});
+
 describe("the drafts do not pretend to be finished", () => {
-  it.each(mdxFiles())("%s leaves the unknown facts as bracketed placeholders", (name) => {
-    /* A legal document that invented a GSTIN or a registered address would be worse than one that
-       admits it does not know them: the invented one reads as authoritative. */
+  /*
+   * This block used to assert the opposite: that every document still carried a `[BRACKETED]`
+   * placeholder, on the reasoning that "a legal document that invented a GSTIN or a registered
+   * address would be worse than one that admits it does not know them".
+   *
+   * That reasoning is intact. What changed is the fact underneath it — Maulik supplied the
+   * supplier identity, the GSTIN, the grievance officer and the jurisdiction on 27 Aug 2026, so
+   * those are no longer unknown and stating them is not invention. Two things genuinely are still
+   * unknown, and those are what this now guards. Asserting "a placeholder exists" would, from
+   * today, be asserting current behaviour rather than the spec (house rule 2).
+   */
+
+  /*
+   * The last two placeholders were filled with conventional defaults on 27 Aug 2026 at Maulik's
+   * request: 90 days for server logs, and DPDP §16 with the countries named for cross-border
+   * transfers. Both are now statements of policy, so what is worth asserting is that they say
+   * something specific rather than that they are absent.
+   */
+  it("commits to a definite log-retention period", () => {
+    const rendered = renderedText(readFileSync(join(LEGAL_DIR, "privacy-policy.mdx"), "utf-8"));
+    expect(rendered).toMatch(/\| Server logs \| \d+ days \|/);
+  });
+
+  it("names the transfer mechanism and the countries, not just 'the DPDP Act'", () => {
+    const rendered = renderedText(readFileSync(join(LEGAL_DIR, "privacy-policy.mdx"), "utf-8"));
+    // The section, because "we comply with the DPDP Act" is not a mechanism...
+    expect(rendered).toContain("Section 16 of the DPDP Act");
+    // ...and the countries, because a transfer notice that names none tells a reader nothing.
+    for (const country of ["India", "United States"]) {
+      expect(rendered, `§4 does not say where data goes: ${country}`).toContain(country);
+    }
+  });
+
+  /*
+   * The inverse guard. Now that the supplier placeholders are filled, an unfilled one reappearing
+   * means a document was edited from an older copy — which would ship `[SUPPLIER GSTIN]` to a
+   * reader on a live page.
+   */
+  const FILLED_IN = [
+    "[SUPPLIER LEGAL NAME]",
+    "[SUPPLIER ENTITY TYPE]",
+    "[SUPPLIER ADDRESS]",
+    "[SUPPLIER GSTIN]",
+    "[GRIEVANCE OFFICER NAME]",
+    "[GRIEVANCE OFFICER EMAIL]",
+    "[CITY]",
+    "[HOSTING PROVIDER]",
+    "[EMAIL PROVIDER]",
+  ];
+
+  it.each(mdxFiles())("%s has no unfilled supplier placeholder left", (name) => {
     const rendered = renderedText(readFileSync(join(LEGAL_DIR, name), "utf-8"));
-    const bracketed = rendered.match(/\[[A-Z][A-Z \-/]+\]/g) ?? [];
-    expect(bracketed.length, `${name} has no placeholders — has it been filled in?`).toBeGreaterThan(0);
+    for (const placeholder of FILLED_IN) {
+      expect(rendered, `${name} still contains ${placeholder}`).not.toContain(placeholder);
+    }
+  });
+
+  /*
+   * The supplier's identity is written out in four documents. Four copies of an address is exactly
+   * the thing that drifts when one gets edited — and a terms page and a privacy page naming
+   * different addresses for the same supplier is the kind of inconsistency a counterparty notices.
+   */
+  it("states one supplier identity, identically, everywhere it appears", () => {
+    const facts = ["RENIL", "703/2, Sector 4C, Gandhinagar, Gujarat 382006"];
+    for (const fact of facts) {
+      const naming = mdxFiles().filter((name) =>
+        renderedText(readFileSync(join(LEGAL_DIR, name), "utf-8")).includes(fact),
+      );
+      expect(naming.length, `no document states "${fact}"`).toBeGreaterThan(0);
+    }
+    // The GSTIN appears once, in the terms — and must not have been pasted into a second document
+    // where a stale copy could diverge from it.
+    const withGstin = mdxFiles().filter((name) =>
+      readFileSync(join(LEGAL_DIR, name), "utf-8").includes("24ANFPD9399F1ZS"),
+    );
+    expect(withGstin).toEqual(["terms-conditions.mdx"]);
   });
 });

@@ -36,7 +36,7 @@ describe("an anonymous request for a gated page", () => {
     "/build",
     "/explore",
     "/holdings",
-    "/me/portfolios",
+    "/portfolio/portfolios",
     "/instruments/CUPID",
     "/market-health",
     "/dashboard",
@@ -109,8 +109,6 @@ describe("a public page needs no session", () => {
     "/blog/what-a-decile-actually-measures",
     "/privacy-policy",
     "/login",
-    "/register",
-    "/reset-password?token=abc",
     "/alerts/unsubscribe?token=abc",
     "/api/auth/session",
   ])("%s is served, not redirected", (path) => {

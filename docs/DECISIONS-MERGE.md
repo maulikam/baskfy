@@ -4725,7 +4725,7 @@ files this tree does not own.
 `instrument.spec.ts`, `disclaimer-sweep.spec.ts`, `portfolios.spec.ts`. Do it with Playwright
 running.
 
-## M40 — catalog search: one federated `GET /search`, four kinds, one round trip ⚠ UNREVIEWED
+## M46 — catalog search: one federated `GET /search`, four kinds, one round trip ⚠ UNREVIEWED
 
 **Context.** `baskfynavrefactorreport.md` §F11 ("Fragmented search") is the open item this closes:
 "Header search is stock-only … the indices table has its own separate search; baskets and screens
@@ -4749,7 +4749,7 @@ controllers, four failure modes, and a ranking the client would have to invent);
 `CatalogHitOut`/`CatalogSearchOut` schemas, and regenerate the client. The palette falls back by
 reverting `command-palette.tsx` to `lib/api/instruments.ts`, which is untouched.
 
-### M40.1 — a hit carries identity, not a URL
+### M46.1 — a hit carries identity, not a URL
 
 **Context.** The palette needs a href. The API knows the resource; the web app knows the routes.
 
@@ -4764,7 +4764,7 @@ perfectly and 404s for every user.
 
 **Reversal.** Add `href` to `CatalogHitOut` and delete `hrefs.ts`. Not recommended.
 
-### M40.2 — an index hit lands on the dashboard, filtered
+### M46.2 — an index hit lands on the dashboard, filtered
 
 **Context.** There is no index detail page anywhere in the app; `index_def` has ~145 rows and the
 only surface that draws them is `/market/today`.
@@ -4780,7 +4780,7 @@ no spec behind it).
 **Reversal.** One line in `hrefs.ts` once an index page exists. `hrefs.test.ts` pins the current
 answer, so the change is visible rather than silent.
 
-### M40.3 — recent items live in `localStorage`, not in a table
+### M46.3 — recent items live in `localStorage`, not in a table
 
 **Context.** F11 asks for "recent items". The alternative is a `recent_item` table, a migration and
 a write on every navigation, to remember five rows per person.
@@ -4798,7 +4798,7 @@ are read only after the dialog opens, client-side, so that argument does not app
 **Reversal.** Delete `lib/search/recents.ts` and the Recent group. Losing the stored list costs a
 person three keystrokes.
 
-### M40.4 — `risk_free_curve` is documented as an array of arrays, not a tuple
+### M46.4 — `risk_free_curve` is documented as an array of arrays, not a tuple
 
 **Context.** Not a search decision — a blocker found while doing this one. The checked-in
 `openapi.json` was badly stale (regenerating it produced a 15,000-line diff), and `risk_free_curve`
@@ -4822,7 +4822,7 @@ artifact stale (the new route would be undocumented and the build was already re
 `packages/core/src/baskfy_core/backtest.py` and regenerate — and then fix the two call sites, which
 is the work this avoided.
 
-### M40.5 — search is a mixed surface: open to anonymous callers, per-kind visibility
+### M46.5 — search is a mixed surface: open to anonymous callers, per-kind visibility
 
 **Context.** `/explore` calls `principal.require_user()`; `/screens` serves examples to anonymous
 callers and a user's own screens to that user; `/instruments` and `/indices/dashboard` are public.
@@ -4877,3 +4877,783 @@ docs/09's fetch discipline, with a test that a trickling server is abandoned.
 the same stall would hang a night. Filed in `NEEDS-MAULIK.md` §17 and `docs/OPEN-ITEMS.md`.
 
 **Reversal.** Delete the driver script; the CLI is usable directly, with restarts by hand.
+
+### M46.6 — the e2e seed's basket comes from the reference export, not from fifteen large caps
+
+**Context.** Also not a search decision — the second blocker found while doing this one. The
+Playwright spec for the Baskets group could not pass, and the reason was not the palette:
+`select slug, name from cb_basket` against `baskfy_e2e` returned **zero rows**.
+`seed_momentum_scan_basket` documents its own escape hatch — "Returns 0 when fewer than `top_n` of
+the ranked symbols exist in `instrument`" — and its default `FIXTURE_SCAN_SYMBOLS` is fifteen large
+caps (RELIANCE, TCS, INFY, HDFCBANK, …), none of which is in the 271-row reference export the
+`e2e` seed loads. Measured: `select count(*) from instrument where symbol in (...)` → 0 of 4
+sampled, against 271 instruments. So the branch had been taken silently on every `seed e2e`, and
+every catalog surface in the browser suite has been exercised against an empty catalog.
+
+**Taken.** The `e2e` branch now passes `ranked_symbols=tuple(row.symbol for row in
+to_rows().instruments)`. The export is already ordered by AVERAGE SHARPE RETURN 12/6/3/1 desc
+(docs/13) — a momentum ranking — so its head is the honest input for a basket named Momentum Scan.
+`cb_momentum_scan: 0 rows` → `1 rows`, and `momentum-scan` / "Momentum Scan" / PUBLISHED now exists.
+
+**Rejected.** Changing `FIXTURE_SCAN_SYMBOLS` itself or the function's default (a golden test in
+`test_curated_schema.py` pins the projection from those fifteen symbols, and the `all` / `fixture`
+seed paths would have moved with it); making the seeder raise instead of returning 0 (a bigger
+behaviour change than this sitting should make to another tree's seeder — but note the silent-zero
+return is *why* this went unnoticed, and it is worth revisiting).
+
+**Reversal.** Drop the `ranked_symbols=` argument. `e2e/search.spec.ts`'s three basket cases fail
+immediately, which is the point.
+
+### M46.7 — this block was renumbered from M40 after a collision ⚠ UNREVIEWED
+
+**Context.** Written as M40 and committed as M40. `## M40 — the palette is the broker screen's`
+(line 2886) already existed, with its own M40.1–M40.4, from a concurrent tree — a different
+palette, the colour one. Two `## M40` sections with different M40.2s make every cross-reference in
+the code ambiguous.
+
+**Taken.** Renumbered this block and its thirteen cross-references (source comments, tests, the
+status page, the nav report, the gates file) to M46 — the next free number after M45. The older
+M40 keeps the number it had; the newer block moves, because a reference written earlier should not
+change meaning.
+
+**Note for whoever numbers the next one.** Sections are allocated by reading the file, and several
+sessions are writing it at once. `grep -oE "^## M[0-9]+" docs/DECISIONS-MERGE.md | sed 's/## M//' |
+sort -n | tail -1` is the check that would have prevented this.
+
+## COL5 — redundant shelves are suppressed at render time, by identity, never by deletion ⚠ UNREVIEWED
+
+**Context.** Four collections existed; three (`start-here`, `momentum`, `run-by-the-engine`)
+resolved to the same single basket and `quarterly` to none, because `cb_basket` held exactly one
+row. `/baskets` and `/baskets/collections` stacked all four, so one basket card was drawn three
+times under three headings and then a dashed empty box. Every row of data behind that page was
+true; the page still read as broken.
+
+**Taken.** `apps/web/src/lib/collections/select.ts`. A shelf is dropped from a *stacked* render
+when it holds no baskets, or when it holds exactly the baskets of a shelf already kept above it
+in curator order. If fewer than two survive, the caller renders the directory instead of shelves.
+Suppression is presentation-only: `selectShelves` returns the dropped shelves in `suppressed`, and
+a test asserts kept + suppressed is the whole input, so nothing leaves the product.
+
+**Rejected — and this was tried first and was wrong.** Suppressing a shelf whose baskets are a
+*subset* of one above it. It looked stronger. Then the catalogue grew from one basket to seven
+mid-session and `quarterly` became a strict subset of the cheapest-six shelf — containment would
+have deleted a real editorial claim ("four decisions a year") because its baskets happened to also
+be cheap. Overlap between two different shelves is browsing, not redundancy. Only an exact repeat
+is furniture.
+
+**Also rejected.** Fixing it in the seeder by not creating an empty shelf. A missing shelf is a
+false statement about the product (COL1); which shelves a *page* stacks is a rendering decision,
+and it belongs where rendering decisions are made.
+
+**Reversal.** Delete `select.ts` and have `CollectionShelves` map every collection to a
+`CollectionShelf`. That is exactly the previous behaviour.
+
+## COL6 — the collections index is a directory of doors, not a stack of rooms ⚠ UNREVIEWED
+
+**Context.** `/baskets/collections` rendered every shelf with all of its cards, which is where the
+repetition was loudest and where it could not be suppressed — an index's job is to be complete.
+
+**Taken.** The index always renders `CollectionDirectory`: one tile per collection, title,
+subtitle and count, every collection including the empty ones ("Nothing on this shelf yet"). Cards
+live on each shelf's own page, which is the one place a person has asked for that shelf by name —
+and where `CollectionShelf`'s honest empty state (COL1's reasoning) still renders unchanged. The
+tile is `CollectionTile`, shared with home's "Take your pick" grid so the two cannot drift.
+
+**Rejected.** Applying COL5's suppression to the index. It would make the index incomplete, which
+is worse than repetitive.
+
+**Reversal.** Swap `CollectionDirectory` back for the `collections.map(CollectionShelf)` it
+replaced; the component is unchanged.
+
+## COL7 — a shelf with neither a predicate nor a cap is the catalogue under a second title ⚠ UNREVIEWED
+
+**Context.** `start-here` was defined with no category, no manager and no frequency — only an
+ordering. It was `SELECT * FROM cb_basket` sorted by price, so every other shelf was a subset of
+it by construction, at any catalogue size. That is a curation defect independent of the thin
+catalogue that made it visible.
+
+**Taken.** `CollectionSeed` gains `limit`; `start-here` takes `START_HERE_LIMIT = 6`, which makes
+"the smallest cheque that still buys a whole basket" an editorial claim rather than a re-sort of
+everything. `test_no_shelf_is_the_whole_catalogue_under_a_second_title` asserts every seed row has
+a predicate or a cap, so a future shelf cannot reintroduce it.
+
+**Rejected.** Giving `start-here` a category predicate. It is meant to be a cross-section by
+price, not by strategy; a cap keeps that meaning.
+
+**Reversal.** `limit=None` on the seed row.
+
+## COL8 — the shelf payload de-duplicates, in the seeder and again at the API ⚠ UNREVIEWED
+
+**Context.** Found by measurement, not by reading: re-seeding against the dev database produced
+`start-here = [1, 25, 27, 1, 28, 29]`. `_collection_member_ids` ordered by `cb_metrics.min_amount`
+through a plain join, and `cb_metrics` is a history — `momentum-scan` carries two `as_of_date`
+rows, so the basket was named twice. Silent until COL7's cap, which then let the duplicate push a
+real basket off the end.
+
+**Taken.** Two defences. The seeder joins through a latest-`as_of_date` subquery — one row per
+basket, the same row `_collection_out` puts on the card. And `_collection_out` de-duplicates
+`basket_ids` itself, first mention winning, because `basket_ids` is a stored list with no
+uniqueness constraint behind it and "each basket at most once" is the contract the page is built
+on. `withheld` counts distinct ids, so a de-duplicated id does not read as a hidden basket.
+
+**Rejected.** Fixing only the seeder. It leaves every row already written wrong, and the API would
+still trust stored data to hold an invariant nothing enforces.
+
+**Reversal.** Both are local: drop the subquery back to a plain join, and restore
+`wanted = list(row.basket_ids or [])`.
+
+## DSC1 — Baskets became Discover, and every old path still resolves ⚠ UNREVIEWED
+
+**Context.** The hub was named after the product's taxonomy. A reader's goal is to find an
+investment approach, not to navigate a noun.
+
+**Taken.** `/baskets*` → `/discover*`, moved rather than duplicated (the shadowed-route rule says
+a redirected path must hold no page file), with five entries in `next.config.ts` and
+`LEGACY_REDIRECTS`. Discover's tabs are For you · All baskets · Collections · Compare · Saved.
+**`Create` is gone from the hub**: it builds a strategy, which is Build's job, and a second
+entrance made the two sections look like rivals.
+
+**Found while doing it, and fixed.** The ⌘K palette matched nav items on `label` only, so the
+instant "Baskets" became "Discover" every reader who typed the word they knew got nothing back.
+`NavItem.formerly` had existed since Tree 6 and was rendered but never searched. It is searched
+now, and `/discover` carries `formerly: "Baskets"`. A rename must not orphan the people who
+learned the previous name.
+
+**Reversal.** Reverse the five redirects, move the directory back, restore the three old tabs.
+
+## DSC2 — the brief's colour direction is declined, and form carries the distinction ⚠ UNREVIEWED
+
+**Context.** The brief asks to "use orange primarily for actions and active data" and to give
+strategy categories "distinct but restrained colours".
+
+**Taken.** Neither. `app/globals.css` records a decision made 24 Aug 2026 at Maulik's own
+request: the accent is near-black and **colour is reserved for meaning** — green up, red down,
+amber caution — with structure carried by ink, hairlines and space. `contrast.test.ts` parses
+that file and enforces it; `no-brand-as-text.test.ts` fails the build on coloured type. The same
+file records why the mark's orange is kept out of the UI: "a product whose logo and whose losses
+share a hue has made both mean less."
+
+So the brief's *goal* — memorable, distinguishable baskets — is met with **form**: eight drawn
+strategy marks (`components/discover/strategy-mark.tsx`) replacing the two-letter monogram, each
+with a readable meaning for a screen reader. Eight decorative hues would have put eight colours
+in front of the three that mean something.
+
+**Also declined for the same reason.** `VolatilityChip` coloured low volatility green and high
+amber, which told a reader that calm is good. Volatility has no direction. All three buckets are
+neutral now and the word carries it.
+
+**Reversal.** Add hues to `FAMILY_ORDER` and to the chip; expect `contrast.test.ts` to have an
+opinion.
+
+## DSC3 — a preference that cannot be checked is not counted ⚠ UNREVIEWED
+
+**Context.** The brief's goal composer asks for five preferences and its starting choices say
+"Matches 4 of your 5 preferences". Two of the five cannot be checked exactly against data this
+product holds, and one basket in three carries no launch date or no category tags at all.
+
+**Taken.** `MatchResult.examined` counts only preferences that were really examined, and the
+sentence reads "Matches 3 of 4 preferences **that could be checked**". An unexaminable preference
+inflates neither the numerator nor the denominator, and the breakdown marks it "not counted
+either way". Horizon is checked as *evidence available* — "it has 14 months of history, so there
+is no 5+ years record to judge it on" — never as suitability, because the first is a fact about
+the basket and the second is an opinion about the reader's finances.
+
+**Rejected.** Counting an unexaminable preference as a match, which is what makes "4 of 5" a
+number that means nothing. Also rejected: the words *best*, *recommended for you* and *suitable*
+anywhere in Discover — D3 is unreviewed and this product is not an adviser. A test asserts it
+over every file under `components/discover`, `lib/discover` and `app/(app)/discover`.
+
+**Reversal.** Local to `lib/discover/match.ts`.
+
+## DSC4 — a metric nobody computes is a visible blank, never a dropped row ⚠ UNREVIEWED
+
+**Context.** `cb_metrics` holds no maximum drawdown, no recovery duration, no Sharpe, no Sortino,
+no turnover, no benchmark delta and no concentration. The brief's card, most of its twenty
+advanced filters and half of its comparison table are made of those figures.
+
+**Taken.** Nothing is estimated and nothing is quietly omitted. `uncomputedMetrics()` returns
+each as a real row with an em dash, a plain-language explanation and the reason it is missing;
+the comparison table renders those rows, the filter rail names the controls it cannot offer, and
+`docs/DISCOVER-METRICS-GAP.md` records where each figure would come from and in what order they
+are worth building. `differences()` never reports two blanks as a difference, so the gap cannot
+manufacture false signal.
+
+**Rejected.** Dropping the rows. A comparison without a drawdown row reads as "these baskets are
+alike on drawdown" — a claim nobody made and nobody checked. Also rejected: filter controls for
+metrics that do not exist, which would teach a reader they had narrowed something when they had
+not.
+
+**Reversal.** Delete `UNCOMPUTED_METRIC_KEYS`; every consumer degrades to showing fewer rows.
+
+## DSC5 — the shelf's superlative is checked against what is on screen ⚠ UNREVIEWED
+
+**Context.** The three starting choices are a closest match and two extremes. Tie-breaking the
+lead column by lowest volatility took the calmest basket, after which the "Moves around less"
+column beside it claimed a superlative about the *second* calmest — a false statement generated
+by a sorting choice.
+
+**Taken.** The lead column will not take a basket that one of the other two columns exists to
+show, unless every tied candidate is an extreme (a catalogue of one or two). And the wording is
+computed against the three actually rendered: a column says "the least of the three shown here"
+only when it is, and drops to a plain statement of its figure when it is not.
+
+**Reversal.** Local to `startingChoices` in `lib/discover/match.ts`.
+
+## PW1 — a sector comes from index membership, or it does not come at all ⚠ UNREVIEWED
+
+**Context.** `PORTFOLIO_REDESIGN.md` §6.6 wants unallocated holdings suggested "by sector", and
+`baskfy_core.grouping_suggestions.suggest_by_sector` takes `{instrument_id -> sector}` as a
+parameter (law 1). Nothing in this schema holds a sector: `instrument` has no such column, and
+the desk's `data/sectors.csv` is a file outside the repo's data plant.
+
+**Taken.** `GET /portfolio/suggestions` derives the map from `index_member_daily` joined to
+`index_def` where `is_universe IS FALSE` — the sector indices, NIFTY BANK / NIFTY IT / NIFTY
+PHARMA — taking the **most recent** membership row per instrument and breaking ties on
+`index_def.id` so two calls always agree. When that yields nothing, the payload reports the
+sector basis as unavailable with a sentence naming *the missing input*, and serves the other two
+bases.
+
+**Rejected.** Adding an `instrument.sector` column, which is a reference-data decision that
+belongs to the pipeline and not to a read handler. Also rejected: shipping a hard-coded symbol →
+sector table, which would be a second source of truth that nobody refreshes and that would go
+wrong silently at the first NSE reclassification.
+
+**Reversal.** Replace the body of `_sector_map`; every caller already tolerates an empty map.
+
+## PW2 — "subscribed" means an ACTIVE investment or a filed portfolio, never a bookmark ⚠ UNREVIEWED
+
+**Context.** §6.6's third basis is overlap with "a subscribed basket", and `cb_subscription` is
+Track B and dormant (D3). Three tables could stand in: `cb_investment`, `cb_watchlist_item`, and
+a `SUBSCRIBED` portfolio's `portfolio_sleeve.basket_id`.
+
+**Taken.** An **ACTIVE `cb_investment`**, or a sleeve of one of the caller's `SUBSCRIBED`
+portfolios. Both are relationships the user asserted with money or with filing.
+
+**Rejected.** The watchlist. `suggest_by_basket_overlap` writes its own rationale — *"You
+subscribe to {name}, and you already hold 11 of its 15 stocks"* — and a bookmark is not a
+subscription, so including it would put a false sentence on the activation screen. One suggestion
+fewer is the cheaper error.
+
+**Reversal.** One `select` in `_subscribed_baskets`.
+
+## PW3 — `POST /portfolio` refuses a double allocation; it never moves one ⚠ UNREVIEWED
+
+**Context.** Acceptance criterion 2 says a holding is in exactly one capital portfolio, and
+`uq_portfolio_holding_one_capital_portfolio` enforces it. A create route that names a holding
+already spoken for could either move it or refuse.
+
+**Taken.** Refuse, with a 400 that names each conflicting stock **and the portfolio it is already
+in**, collecting every conflict rather than raising on the first — a user who selected twelve
+holdings must not be told about them one at a time. The whole write runs inside a `SAVEPOINT`, so
+a race that reaches the index answers with the same sentence instead of a 500, and a portfolio
+that could not hold what it named is never left behind. §4.2's whole-holding rule is carried by
+the request schema having **no quantity field at all** (`extra="forbid"`), not by validation.
+
+**Rejected.** Moving the holding. Moving between capital portfolios changes two return series and
+is a deliberate act; §6.7's create step is not where a user is asking for it. Also rejected: a new
+`ProblemType` member — `docs/07`'s catalogue has one 400 and the generated TypeScript unions the
+type strings, so `ALLOCATION_REFUSED` aliases it exactly as `routers.portfolios.TREE_VALIDATION`
+already does.
+
+**Reversal.** `_refuse_double_allocation` becomes a call to `_apply_allocation`'s move branch.
+
+## MKT1 — the landing page states our fee and attributes the rest to the broker ⚠ UNREVIEWED
+
+**Context.** The "From intent to result" section has been headed *"with the cost visible before it
+runs"* since 24 Aug, and its blurb said *"what the step will cost you in brokerage and statutory
+charges is on screen before you press it."* Bringing the diagram under it up to date meant
+checking that sentence, and it does not hold: `curated_plans.py` and
+`routers/curated_investments.py` carry **no cost field** — grep `cost|charge|stt|brokerage` and
+you get one comment — so no plan surface renders a brokerage or STT line.
+`/portfolio/[id]/costs` is accrued **platform fees**, not statutory charges, and
+`components/investments/fee-faq.tsx` already says in as many words that *"broker and statutory
+charges stay with the broker and are not modeled here."* Two shipped surfaces contradicted each
+other and the marketing one was the wrong one.
+
+**Taken.** Split the claim. The diagram grew a `cost` box carrying the platform fee's real
+arithmetic — `min(₹100, 1.5% × amount) + 18% GST` on a buy, zero on a rebalance, an exit or a
+customize — placed **last in the engine**, upstream of every wire that reaches a rail, so
+"before it runs" is drawn as a position and not asserted as a sentence. Under it sits one line
+that cannot be shortened away: *"That is our fee. Brokerage and statutory charges are your
+broker's, shown at the broker on the order you confirm there."* The section blurb was reworded to
+match. `__tests__/how-it-works-flow.test.tsx` asserts all three: the fee's numbers, the
+attribution, and the ordering.
+
+**Rejected.** (a) Building a pre-trade charges estimate so the original sentence became true.
+`packages/core/src/baskfy_core/costs.py` already models the six Zerodha CNC components exactly —
+it reproduced the 18 Aug live session's ₹8,583.95 to the paisa — so this is a plumbing job, not a
+research one, and it is the better end state. It is also an API change plus a plan-schema change,
+which is not what "update the animation" authorised, and shipping a false sentence for another
+week to keep the diff small is the wrong trade. Filed below. (b) Deleting the cost promise from
+the heading. It is the product's central differentiator and it is *half* true today; narrowing it
+to what is true beats abandoning it.
+
+**Still open, and this is the honest version of the gap:** no surface in the web app shows a
+per-plan brokerage/STT estimate before a confirm. When one exists, the attribution line becomes
+"…and here is what your broker will charge", and the blurb can go back to its original wording.
+
+**Reversal.** One `const` (`ATTRIBUTION`) and one paragraph in `app/(marketing)/page.tsx`.
+
+## MKT2 — the allocation figure gained a fourth slice, as a by-hand one ⚠ UNREVIEWED
+
+**Context.** Maulik asked for a fourth row on the landing page's "One portfolio, three
+allocations" figure: *"your fundamental selections and IPO selections"*.
+
+**Taken.** A fourth row — *Fundamental picks and IPOs*, ₹10,00,000 — with `kind` **By hand**, the
+same source as the long-term row, and the amounts rebalanced so the four still total a round
+crore (35 / 5 / 10 / 50). Two rows sharing a source is not a redundancy in the picture; it is the
+point of it, because each carries its own capital and a rebalance inside one cannot spend the
+other's. `__tests__/three-ways.test.tsx` now asserts the bar fills exactly 100, the amounts total
+₹1,00,00,000, and the heading's number word matches the number of rows drawn.
+
+**Rejected.** Presenting it as a screener output. `factor_registry` exposes `marketcap_cr` and
+`pe` as columns and `pe` as a sort factor — enough to rank on, nothing like a fundamentals
+screener — and `fundamental_daily` is 82.2% filled for the 2026-08-18 published date. The figure
+therefore claims only that such names can be a slice of their own, which is true today, and the
+test asserts the phrase "fundamentals screener" never appears.
+
+**Reversal.** One entry in `EXAMPLE`, one word in the heading (the test derives it).
+
+## AWS1 — Phase A is built and verified, but on Docker rather than on AWS ⚠ UNREVIEWED
+
+**Context.** Maulik asked to host the site on AWS and chose Phase A (one EC2 box, ≈$50/mo) over
+Phase B (Fargate, ≈$205–240) and a gated staging host over a public one. `docs/08` §3 specifies
+Phase A precisely. What it did not anticipate: `apps/web` is listed as "not deployed" in Phase A,
+because when §6 was written the Jinja desk was still the UI. It is not any more.
+
+**Taken.** Deploy the web app on the Phase A box as a fourth compose service, rather than waiting
+for Phase B. The topology is otherwise §3 exactly, and §2's claim — "the same containers, the same
+compose-style topology ... which is what makes the second phase a re-plumbing, not a rewrite" —
+holds for `web` as much as for `api`.
+
+Verification is the part worth recording. There are **no AWS credentials on any machine this was
+written from** (`which aws` finds nothing, `~/.aws` does not exist), so nothing could be applied.
+Rather than ship unrun YAML, the entire stack was built and exercised on local Docker — which is
+`aarch64`, the same architecture as the `t4g.large` Graviton target, so the images are the real
+artefact. Eight services up, 24 migrations applied, the gate challenging strangers, server
+rendering reaching the API internally. Six scripts under `tools/deploy/` reproduce it.
+
+That found five bugs no amount of reading would have: Caddy's directive table silently putting
+`basic_auth` ahead of the `header` and the path matchers; `basic_auth` writing its 401 through an
+error path that bypasses `header` entirely (`handle_errors` is the fix); Compose interpolating the
+`$` out of every bcrypt hash; Celery Beat crash-looping on a root-owned working directory; and a
+container running a stale image that hid a real SSR bug for twenty minutes.
+
+**Rejected.** (a) Phase B now — four times the cost for a product with one user, and it forces the
+§4 Timescale exit as prerequisite work. (b) Writing the Terraform and calling it done. It would
+have "passed review" and failed on first apply; `terraform validate` alone caught two invalid DLM
+descriptions. (c) Public at the apex — the four legal drafts are unreviewed (NEEDS-MAULIK §19).
+
+**Reversal.** Nothing is applied; `terraform destroy` is the whole undo, and until credentials
+exist there is nothing to undo.
+
+## AWS2 — the API origin is split by horizon, and the split is scanned ⚠ UNREVIEWED
+
+**Context.** `apiOrigin()` had one answer for "where is the API", read by 40 modules — server
+components, server actions, route handlers, and client components building `href`s. In a container
+behind a gated Caddy those are two different answers: server rendering must reach `http://api:8000`
+across the compose network, and anything a browser follows must be the public host. The first
+build got this wrong and every data page rendered its error state **while returning HTTP 200** —
+SSR was hairpinning out to `staging.baskfy.com` and meeting Caddy's own password.
+
+**Taken.** A second function, `serverApiOrigin()`, used at the 23 server-side fetch sites;
+`apiOrigin()` unchanged everywhere a browser consumes the result. Unset, the two are identical, so
+local development and the suite are unaffected. `lib/api/__tests__/api-origin-split.test.ts` scans
+the source: a `"use client"` module that mentions `serverApiOrigin` fails the suite, and so does a
+server module still fetching the public origin. Three files are exempted **by name with a reason**
+(`middleware.ts`'s CSP, an invoice `<a href>`, the config module itself) — the same `ALLOWED`
+convention `no-jargon.test.ts` uses.
+
+**Rejected.** (a) A runtime `typeof window` guard. It was written first and is worse than useless:
+false during SSR of a client component, which is exactly when it would be needed, and true under
+jsdom, where it silently disabled the tests. Next's bundler already erases a non-`NEXT_PUBLIC_`
+variable from client bundles, which is the stronger guarantee. (b) Exempting `/api/*` from the
+gate so SSR could hairpin. It works, and it puts the API on the public internet to solve a
+routing problem.
+
+**Reversal.** Delete `serverApiOrigin`, sed the 23 call sites back. The env var unset is already
+a no-op, so this can also be disabled without a code change.
+
+## AWS3 — Phase A is applied, into the Proof of Concept account, and the org SCP gained ap-south-1 ⚠ UNREVIEWED
+
+**Context.** The first SSO profile landed in `392852903913`, where every EC2/S3/CloudTrail/DLM call
+failed. The cause was not IAM: an SCP attached at the organization **root** —
+`AdvancedModeRegionRestrictionSecurityControlPolicy` (`p-nfkd4p30`) — has a `RegionFloor` statement
+denying everything outside `ap-southeast-2 / us-east-1 / us-west-2`. `ap-south-1` was not on it.
+Moving region is not available: `docs/08` §1 pins Mumbai to the Zerodha-registered order IP and
+Kite's RTT, and `variables.tf` validates it.
+
+The second attempt authenticated into `494191147195` instead, which worked — because SCPs never
+apply to an organization's management account. That is a worse place to run a workload, not a
+better one, and it was declined.
+
+**Taken.** Two changes, both with Maulik's explicit go-ahead:
+
+1. `ap-south-1` added to the `RegionFloor` allow-list. One entry; no service permission changed.
+   The policy is `AwsManaged: false`, so it is the org's to edit. Original snapshotted to
+   `ops/aws-backups/scp-p-nfkd4p30-20260826T181920.json` — reverting is one `update-policy`.
+2. The `baskfy` SSO user assigned `AdministratorAccess` on **`056235107739` ("Proof of Concept")**,
+   and the deployment applied there. A member account, under the SCP, is where a workload belongs.
+
+**Result.** `Apply complete! Resources: 28 added, 0 changed, 0 destroyed` — later 29 (see below).
+EIP `3.108.148.38`, instance `i-086986250704e4392`, bucket `baskfy-archive`, zone
+`Z001861036GDEJEBVYYBV`. The stack runs on the box: eight services, Alembic at
+`0024_portfolio_kind_default`, 70 tables, `/api/v1/meta/universes` 200, the landing page rendering
+with its stylesheet, zero SSR fetch failures, Beat's clock in IST.
+
+**Rejected.** (a) Deploying into the management account — it controls SCPs, billing and account
+creation for all three, and no guardrail can protect it. (b) Detaching the SCP entirely rather
+than adding one region — it restricts two other people's accounts and the narrow edit achieves the
+same thing. (c) `us-east-1` — see above; not a variable this product can move.
+
+**Reversal.** `terraform destroy` (EIP, bucket and zone carry `prevent_destroy`, so those need an
+explicit removal), the SCP snapshot, and `delete-account-assignment` for the SSO grant.
+
+### Three things the apply found that no amount of reading would have
+
+1. **The instance role could not pull its own images.** `compute.tf` granted SSM and the S3
+   archive, and nothing for ECR. It fails at *deploy* time, not apply time, and the message names
+   `ecr:GetAuthorizationToken` rather than the role. Fixed as `aws_iam_role_policy.ecr_pull` —
+   scoped to the two repositories, read-only, with `GetAuthorizationToken` on `*` because AWS
+   rejects a resource ARN on that action. Resource count 29 → 30 declared.
+2. **`env_file` resolved to `/` on the box.** It was `../../../.env.staging`, correct only when
+   read from inside a checkout. Now `.env.staging`, beside the compose file, with a symlink
+   keeping the repo layout working.
+3. **The SSM agent registers before cloud-init finishes.** `docker compose version` printed
+   nothing, the clock read UTC and `/opt/baskfy/READY` was absent — all of which reads as a failed
+   bootstrap and none of which was. `cloud-init status --wait` is now the first thing
+   `tools/deploy/box.sh` runs, and the runbook says so.
+
+**Secrets discipline for the box, recorded because it is easy to get wrong later.** The database
+password and JWT secret are generated **on the instance** and never leave it — not via SSM
+parameters (retained in command history and CloudTrail) and not via S3. Only the gate's bcrypt
+hash travels, through the private archive bucket, because a bcrypt hash is not reversible. The
+gate plaintext exists in exactly one place, `ops/baskfy-staging-gate-password.txt`, which is
+gitignored — a rule that had to be added, since `ops/` was covered by nothing.
+
+## SEC1 — sign-out now clears the origin's stores, and the session it cannot revoke is written down ⚠ UNREVIEWED
+
+**Context.** Maulik reported, 26 Aug 2026, that on the live `staging.baskfy.com` the Back button
+still shows the app after signing out. The server-side gate is not the problem and was verified
+over the public internet: `/home`, `/market/today`, `/portfolio/overview`, `/build`, `/me/profile`
+and `/admin` all answer `307 → /login?next=…` with no session cookie, a forged cookie is refused
+by `(app)/layout.tsx` rather than the middleware, and every gated response carries
+`Cache-Control: no-store`. The hole is in the browser, and it is one store nothing in the codebase
+addressed.
+
+**What was actually wrong.** Chrome 123 began admitting `Cache-Control: no-store` documents to the
+**back/forward cache**, and evicts such an entry only when cookies change *while it is held*.
+Signing out changes the cookie on the way out — before the page is stored — so the entry is
+admitted clean and Back re-paints a signed-in page from memory with no request for the gate to
+answer. `SessionSentinel` does catch it on `pageshow`, but catching it means the page has already
+been painted and the person watches it disappear; it is also the app's own JavaScript, which is
+the wrong place for the last line of a sign-out. Separately, `/logout` is on the public route
+list, so `denyStorage` never saw it: the sign-out response itself carried no cache directive at
+all, which was confirmed live.
+
+**Choice taken.** `src/app/logout/route.ts` builds its own response instead of delegating to
+`signOut({ redirectTo })`, because a `redirectTo` throws `NEXT_REDIRECT` and Next turns it into a
+bare 307 that no header can be attached to. The response now carries
+`Clear-Site-Data: "cache", "cookies", "storage"` — the one lever a browser honours without our
+code running, and the one that reaches bfcache — plus `no-store`, an explicit deletion of the
+session cookie under both of the names Auth.js uses, and a 303 rather than a 307 so the method
+cannot be replayed if the trigger ever becomes a form post. `"executionContexts"` is deliberately
+excluded: it asks for a reload racing a redirect, and Chrome does not implement it.
+`src/app/logout/__tests__/route.test.ts` pins the contract.
+
+**Rejected.** (a) Relying on `SessionSentinel` alone — it is a repair after the fact and it fails
+open if the bundle does not run. (b) Shortening the session `maxAge` — it does not touch bfcache
+and it is a product decision about how often people re-authenticate, not a fix for this. (c)
+Making `/logout` POST-only, which would also close the `<img src=/logout>` cross-site sign-out:
+four e2e call sites do `page.goto("/logout")`, the severity is nuisance rather than disclosure,
+and it is a separate change with its own test churn. Recorded as open below.
+
+**Reversal.** Revert the one file and its test; nothing else moved and no data shape changed.
+
+### The finding this investigation surfaced, which is larger and is NOT fixed
+
+**A web session cannot be revoked, and `revoke_all_for_user` does not do what its docstring says.**
+`auth()` is `strategy: "jwt"` with `maxAge: 30 * 24 * 60 * 60` — forced, because Auth.js v5 cannot
+use database sessions with the Credentials provider (`docs/08a` §3). The cookie is therefore a
+self-contained 30-day credential. Deleting the browser's copy, which is all sign-out does, does
+not invalidate it. The `jwt` callback re-mints the 15-minute API access token locally from
+`BASKFY_JWT_SECRET` and never consults the API, and `current_principal` in
+`services/api/src/baskfy_api/auth.py` verifies signature, claim set and lifetime and then checks
+only that `sub` names a row in `app_user` — it never reads the refresh-session table.
+
+The consequence is that `set_password` → `revoke_all_for_user`, whose docstring reads "A password
+change that leaves old sessions alive does not evict whoever prompted it", revokes rows that the
+web app has never read. It is true of the API's own refresh sessions and false of the session real
+users actually hold. **Changing your Baskfy password does not sign an attacker out of the web
+app**; they keep it for the remainder of the 30 days. The same gap is why sign-out is a
+browser-side problem at all: there is no server-side kill switch for a web session, so every
+control has to live in the browser.
+
+API keys have `revoked_at` and a test asserting a revoked key dies within a second. User sessions
+had no equivalent.
+
+**Built, 27 Aug 2026, on Maulik's go-ahead — see §SEC2 below.**
+
+### Also open, in descending order of how much they would cost to be wrong about
+
+1. **The committed Kite Fernet key is still open** — `NEEDS-MAULIK.md` §20, unchanged. This sweep
+   re-confirmed it rather than finding it: `kite-momentum-rebalancer/data/.kite_token.json.key` is
+   still tracked, `app/token_store.py` still reads it, and step 1 there (rotate the key,
+   re-encrypt the token) is still the fix. It remains the largest security item in the repo and it
+   outranks everything in this list.
+2. **`/logout` is a GET with no CSRF token**, so a cross-origin page can sign a user out with an
+   `<img>`. Nuisance-grade, but it is also why `prefetch={false}` on the user menu's link is
+   load-bearing rather than an optimisation.
+3. **`SessionSentinel` never polls.** It checks on `pageshow`, `popstate` and `visibilitychange`;
+   a tab left open and visible holds a signed-in render indefinitely. Worth little until a session
+   can be revoked at all, and worth a lot the moment it can.
+4. **`/api/v1/docs` and `/api/v1/openapi.json` answer 200**, gated today only by Caddy's basic
+   auth. That gate is what comes off at launch, and the decision of whether the schema is public
+   should be made deliberately rather than inherited from FastAPI's default.
+
+**Verified good, so that a later reader does not re-audit them.** Every gated path redirects
+without a session and a forged cookie is refused by the layout; `Strict-Transport-Security`
+(2 years, `includeSubDomains`, `preload`), `X-Content-Type-Options`, `X-Frame-Options: DENY`,
+`Referrer-Policy`, `Permissions-Policy` and a nonce-based CSP with `frame-ancestors 'none'`,
+`object-src 'none'` and `base-uri 'self'` are all present live; `?next=` is validated as a
+relative path, so there is no open redirect; every `/admin/*` API route answers 401 anonymously
+and 404 to a non-staff session; there is no `/execute` or order-placing route in the 142 paths the
+live API publishes, so non-negotiable #1 holds on the deployed box; Argon2id for passwords with
+SHA-256 for high-entropy tokens, double-submit CSRF on the two cookie-authenticated endpoints,
+Redis-backed rate limiting that fails closed, and lockout on repeated auth failure.
+
+## STG1 — four defects Maulik found on the live staging site ⚠ UNREVIEWED
+
+**Context.** The first real use of the deployed site surfaced four problems at once. Each is
+recorded because three of them were invisible to every test that existed, and one was mine.
+
+### 1. Caddy was swallowing NextAuth (mine, introduced with the Caddyfile)
+
+`handle /api/*` sent **everything** under `/api` to FastAPI, which serves only `/api/v1/*`. Next
+owns three sibling routes — `api/auth/[...nextauth]`, `api/revalidate`, `api/account/export` — so
+`GET /api/auth/session` answered 404 and the session was broken on every page since the first
+deploy. Scoped to `handle /api/v1/*`, with all three named in a comment so widening it back reads
+as the outage it is. `tools/deploy/verify-api-routing.sh` asserts both halves live.
+
+### 2. `/market/today` turned a 503 into a 500
+
+The API was behaving correctly and saying so precisely —
+`{"type":"pipeline-degraded","detail":"no pipeline_run has been published..."}` — and the page
+`await`ed a fetch that threw on any non-2xx. `MarketDataUnavailable` existed **only to be thrown**;
+nothing in the codebase caught it. Next rendered "Application error", digest `3649330443`.
+
+**Taken.** `fetchIndexDashboardOrDegraded()` returns `null` on **503 only**, and the page renders
+an honest empty state. 500 and 404 still throw. A catch-all was rejected: it would turn every
+backend defect into a silent empty state, which is worse than the crash it replaces because nobody
+would ever see it. docs/11 §Reliability's "graceful degradation" is the spec being met.
+
+### 3. Signing in landed on `/build` — HOME3, now closed
+
+HOME3 deferred this because sixteen Playwright waits assert the old landing, and that sitting
+could not run Playwright. Both halves moved together: `DEFAULT_DESTINATION = "/home"` and all
+sixteen waits across eleven specs. Each was verified to be a *post-login* wait; the four
+`/build/<id>` waits are deliberate navigation to a saved screen and were left alone.
+`login-destination.test.ts` now fails if either half moves without the other.
+
+### 4. A banner that could not be linted
+
+`(app)/layout.tsx` carried "December 2026 update: … are on the way" in JSX. Served in August,
+announcing December, and calling three shipped features forthcoming.
+
+**Taken.** `lib/marketing/announcement.ts` — a record with an `until` date, and `null` today.
+Prose cannot be linted; a date can, and `announcement.test.ts` fails the suite if what ships is
+already expired. The `/december-2026-update` **page** stays: it is a deliberate pattern
+implementation (docs/01 §1, Prompt 18 §2), and its footer link is legitimate — a first version of
+the live check matched that link and reported the banner as still present.
+
+### 5. Staging had no market data
+
+Which is what made (2) visible at all. Seeded from the local development database — but **market
+and reference tables only**, fifteen of them, chosen by name. A full `pg_dump` was taken first,
+measured at 182 MB, and **deleted unused**: it carried `refresh_token` and `auth_token` rows, and
+copying live session credentials to a cloud box to fix a missing chart is not a trade worth making.
+`verify-staging-data.sh` asserts both the floors and that those two tables stayed small.
+
+Five of the fifteen are Timescale hypertables, where `pg_dump -t` collects the empty parent and
+none of the chunk rows — the first dump came out at 284 KB for 3.5 M rows and looked like a
+success. They were exported with `COPY … TO STDOUT (format binary)` instead, which reads through
+the hypertable. Loaded: 3,534,860 `ohlcv_daily`, 685,636 `factor_daily`, 612,583
+`index_member_daily`, 148,212 `index_snapshot_daily`, 10,481 instruments, 176 indices — every
+count matching the source exactly.
+
+The `pipeline_run` row staging already had was an **aborted** run: Beat's nightly chain firing at
+18:45 on an empty database and correctly refusing to publish. It was replaced with a faithful copy
+of the run the seeded data came from (trade_date 2026-08-18, `data_version` 1).
+
+**Rejected.** Restoring the full dump. Faster, and it would have put the development database's
+users, consent records and live refresh tokens on a public-facing box.
+
+### Two things found on the way, neither caused by this work
+
+- **`verify-suites.sh` could not fail.** It grepped `tail -3` of pytest for a passed/failed line;
+  on a failing run those three lines are the FAILED list, so the pattern matched nothing and the
+  gate printed `SUITES OK` over three real failures. A check that cannot fail is worse than no
+  check — it launders a red suite as green. Now it refuses to proceed without a summary it can
+  read, and prints the failures.
+- **`openapi.json` was stale since the portfolio redesign** — nine routes missing. Regenerating
+  also renamed four schemas to `baskfy_api__routers__portfolio_overview__HoldingsOut` and similar,
+  because the redesign introduced **duplicate model names** across modules (`HoldingsOut`,
+  `NavPointOut`, `DrawdownPointOut`, `PortfolioDetailOut` each defined twice). FastAPI disambiguates
+  by module path, and the generated TypeScript client inherits those names. Not fixed here —
+  renaming public models is a contract change — but it is worth doing before anyone depends on
+  them.
+
+## SEC2 — a web session can be revoked, by generation number ⚠ UNREVIEWED
+
+**Context.** §SEC1 fixed the reported bug and surfaced a larger one: nothing could end a web
+session. The session is an Auth.js JWT cookie with a thirty-day life and `jwt` strategy is forced
+(Auth.js v5 cannot use database sessions with the Credentials provider, `docs/08a` §3), so the
+cookie is a self-contained credential. Sign-out deleted the browser's copy; `revoke_all_for_user`
+revoked `refresh_token` rows the web app has never read, because it mints its own access tokens
+from the shared secret and `current_principal` checks only that `sub` names a row in `app_user`.
+The visible consequence: **a password change did not evict whoever prompted it.** Written up as
+`NEEDS-MAULIK.md` §22; Maulik said build it.
+
+**Choice taken — a generation counter, `app_user.session_epoch`.** Migration `0025_session_epoch`
+adds it `NOT NULL DEFAULT 0`. `revoke_all_for_user` bumps it, so every existing caller (password
+change, password reset, account deletion) gains web-session revocation without a new call site.
+It is returned on both `MeOut` and `SessionOut`, frozen into the Auth.js token at sign-in, and
+compared in `(app)/layout.tsx` — which already awaits `GET /me` on every gated render, so the
+check costs no extra round trip. The comparison itself is `isSessionRevoked` in
+`src/lib/auth/session-epoch.ts`, a pure function with its own tests, because a security rule
+written as one line inside an async server component is a rule nobody reviews.
+
+**Four decisions inside it that could have gone the other way, each pinned by a test.**
+
+1. **A counter, not `sessions_valid_after TIMESTAMPTZ`.** A timestamp makes correctness depend on
+   two clocks agreeing: a token minted a second before a revocation, by a container running
+   slightly fast, compares as still valid. An integer has no such failure mode. The cost is that
+   "revoke everything issued before 4pm" is inexpressible, and nothing needs it.
+2. **`DEFAULT 0`, and a missing stamp reads as generation 0.** The instinctive safe reading —
+   "unknown generation means refuse" — would sign the entire userbase out on the deploy that adds
+   this. A security fix that logs everybody out teaches people that being logged out is normal.
+   Old cookies are grandfathered, not exempt: the first bump kills them.
+3. **`>`, not `!==`.** A stamp *ahead* of the server means a rolled-back database or a lagging
+   read replica. Evicting a legitimate session over replication lag is indistinguishable, to the
+   person it happens to, from the bug this exists to fix.
+4. **The bump is unconditional, not conditioned on a refresh row having been revoked.** An
+   OTP-only account — docs/11's *default* path — may have no live refresh token, and gating the
+   epoch on one would leave exactly those accounts' web sessions standing through a password
+   change.
+
+**A fifth, on the ordering.** `reset_password` calls `set_password` (which bumps) and *then*
+`issue_session`. `SessionOut` therefore reads `session_epoch` off an ORM object the bump changed
+underneath it, so `revoke_all_for_user` passes `synchronize_session="fetch"` explicitly rather
+than relying on `"auto"` inferring it. Without that the new session is stamped with the generation
+the reset just invalidated, and the user is signed out of the session their own password reset
+created. `test_the_session_a_reset_issues_carries_the_generation_it_created` is that assertion.
+
+**Scope held deliberately.** Ordinary sign-out does **not** bump the epoch — it stays cookie
+deletion plus `Clear-Site-Data` (§SEC1). Signing out on one laptop should not end the session on a
+phone, and the epoch now makes an explicit "sign out everywhere" button possible for the first
+time; that button is not built here. `maxAge` stays at thirty days for the same reason: it is a
+product decision about how often people re-authenticate, and the epoch is what makes thirty days
+defensible rather than alarming.
+
+**Rejected.** (a) A Redis denylist keyed on a `jti` — it works, but it puts session validity in a
+store that can be flushed, and "sessions all came back after a cache restart" is a worse failure
+than an extra integer column. (b) Checking in the middleware — it sees only a cookie and would
+need a network call per request; the layout already has the answer. (c) Having the `jwt` callback
+re-read the epoch when it re-mints the access token — that would make a revoked session renew
+itself, which is the opposite of the point. The stamp must be frozen at issue.
+
+**Verification.** Migration up/down round-trips against Postgres (`0 → 1 → 0 → 1` on the column's
+existence); six API tests in `TestSessionEpoch` and six web tests in `session-epoch.test.ts`; the
+API and web suites green; ruff, ruff-format and mypy clean on every file touched.
+
+**Reversal.** `alembic downgrade -1` and revert the four source files. Dropping the column
+re-opens the hole rather than corrupting anything — sessions stop being checkable, they do not
+become invalid.
+
+**Found while regenerating the client, and fixed in passing.** `packages/api-client` did not
+compile on `developer` before this work: `src/client.ts` was edited on 26 Aug to reference
+`Schemas["baskfy_api__routers__portfolios__PortfolioDetailOut"]` and
+`Schemas["baskfy_api__schemas__DrawdownPointOut"]` — the disambiguated names FastAPI emits now
+that two Pydantic models share each of those class names — but the generated `schema.ts` was never
+committed alongside it, so `tsc` failed with two `TS2339`s. `make client` regenerated both
+artifacts; the large diff on `openapi.json` and `generated/schema.ts` is that accumulated drift,
+not this change. Worth a `generate:check` in CI, which the package already has a script for.
+
+---
+
+## M46 — Google sign-in replaces registration, the password, the OTP and the reset link ⚠ UNREVIEWED
+
+**Context.** Maulik reported that no email reached anyone signing up. The cause was not a bug:
+Amazon SES is in its sandbox (`ProductionAccessEnabled: False` in account `baskfy-poc`,
+`ap-south-1`), and in the sandbox SES delivers **only to verified identities**. Every other
+recipient is refused with `554 Message rejected: Email address is not verified` — reproduced
+directly from the box against an IANA-reserved address. Five `POST /auth/register` calls in 72
+hours produced five `email delivery failed` log lines: a 100% failure rate. `/auth/register`
+answers 202 either way by design (a response that changes on send failure tells a stranger whether
+an address is registered), so the signup page looked perfect and nothing arrived.
+
+Two things kept it invisible: `playwright.config.ts` sets `BASKFY_EMAIL_TRANSPORT: "smtp"`, so the
+e2e mailpit suite was green while no deployment env set the variable at all; and
+`logging.TextFormatter` drops `extra`, so the `reason` the mailer carefully attaches was never
+printed.
+
+**Decision.** Delete the email/password funnel entirely and delegate identity to Google. Removed:
+`/auth/register`, `/auth/login`, `/auth/request-otp`, `/auth/verify-otp`, `/auth/verify-email`,
+`/auth/forgot-password`, `/auth/reset-password`, `/me/change-password`, the `/register`,
+`/verify-email`, `/forgot-password`, `/reset-password` and `/change-password` pages, both
+`Credentials` providers, the Auth.js Postgres adapter, and the OTP/reset/lockout machinery in
+`auth_service`. Added: `POST /auth/google`, `baskfy_api.auth_google`, and `auth_identity`
+(migration `0026`).
+
+**What made this cheap.** Five accounts existed and **none had a password set** — every one had
+registered and been stranded at the verification mail. There was nothing to migrate.
+
+**The security property the design rests on.** `apps/web` runs the OAuth dance and forwards the
+*ID token*; it never tells the API who signed in. The API verifies Google's signature against the
+published JWKS, pins `RS256`, requires `aud` to equal our client id, accepts both of Google's
+issuer spellings, and refuses `email_verified` that is not `true`. `GoogleSignInIn` has one field
+and `_In` sets `extra="forbid"`, so an email smuggled into the body is a 400, not an ignored key.
+Without the `aud` check, any token minted for anybody else's Google app would sign that person in.
+
+**Identity is keyed on Google's `sub`, not the email.** A Workspace rename must not create a
+second account, and a released consumer address re-registered by a different person must not
+inherit the first one's holdings. The second case refuses rather than guesses (`IdentityConflict`).
+
+**M46.2 — the consent checkbox.** `accept_terms` was mandatory at `/register` and wrote a
+`ConsentRecord`. Maulik removed the requirement (27 Aug 2026). The **record** was kept: the
+sign-in page states "By continuing you agree to our Terms and Privacy Policy" and
+`link_google_identity` writes the row at first sign-in with the document version. Dropping the
+record as well would have removed a DPDP artefact `docs/11` §Compliance requires; keeping it costs
+nothing and gates nobody.
+
+**M46.3 / M46.4 — the staging gate.** Google's OAuth verification reported eight failures, six of
+which were Caddy's `basic_auth` returning 401 to its crawler (including the tell: "your privacy
+policy URL is the same as your homepage URL", which is Google seeing one identical 401 body at
+both). M46.3 opened the homepage and the four legal documents while leaving every signed-in
+surface gated. Maulik then asked for the password to be removed outright, and M46.4 did that.
+**Two of the three mechanisms in the Caddyfile's own list remain** — `X-Robots-Tag: noindex` on
+every response including errors, and a `robots.txt` denying everything — so the site is readable
+by anyone holding a URL and still not discoverable through a search engine. `noindex` governs
+indexing, not fetching, which is why a verification crawler reads what a search crawler ignores.
+`tools/deploy/verify-gate.sh` was rewritten to assert this new property instead of the old 401.
+
+**Rejected.** (a) Requesting SES production access and keeping the email flow — it is the right
+thing to do for receipts and alerts regardless, but it is an AWS support case with a review, and
+it leaves every password, reset link and OTP replay in the threat model. (b) Adding Google
+*alongside* the password — with zero passwords set, the second path would be dead code guarding a
+credential nobody had. (c) Having the web app post the parsed Google profile to the API over the
+shared secret — easier, and it turns any injection in the front end into full account takeover.
+
+**Verification.** 45 API auth tests including `test_auth_google.py`, which signs real RS256 tokens
+against a generated keypair and asserts the audience-substitution and algorithm-confusion attacks
+are both refused (the HS256-signed-with-the-public-key token is assembled by hand, because PyJWT
+refuses to *encode* one). Web suite 1928 green, `tsc` clean, `next build` clean. The Caddyfile was
+validated and then probed in a container path by path, before and after.
+
+**Reversal.** `alembic downgrade -1` drops `auth_identity`; the accounts survive and are re-adopted
+on next sign-in through the same verified-email match. Restoring the password flow means reverting
+this commit — the endpoints, schemas, pages and `auth_service` helpers were deleted, not disabled.
+
+**Still open.** SES remains in the sandbox, and it is still the path for support receipts, account
+deletion notices, screen alerts and rebalance mail. This change took *sign-in* off that
+dependency; it did not remove it.

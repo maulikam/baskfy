@@ -27,26 +27,21 @@ import secrets
 from dataclasses import dataclass
 from typing import Final
 
-from sqlalchemy import ColumnElement, delete, select, update
+from sqlalchemy import ColumnElement, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import encode_token
-from baskfy_api.email import Mailer
-from baskfy_api.email import templates as mail
+from baskfy_api.auth_google import GoogleIdentity
 from baskfy_api.security import (
     digest,
     hash_password,
-    needs_rehash,
     new_opaque_token,
-    new_otp,
-    verify_password,
 )
 from baskfy_api.settings import Settings
 from baskfy_core.models import (
     AccountDeletion,
     AppUser,
-    AuthLockout,
-    AuthToken,
+    AuthIdentity,
     ConsentRecord,
     RefreshToken,
 )
@@ -108,70 +103,6 @@ def normalise_email(email: str) -> str:
 # ---------------------------------------------------------------------------
 # Lockout — docs/11: "account lockout after 10 failures with email notification"
 # ---------------------------------------------------------------------------
-
-
-async def _lockout_row(session: AsyncSession, identifier: str) -> AuthLockout | None:
-    return (
-        await session.execute(select(AuthLockout).where(AuthLockout.identifier == identifier))
-    ).scalar_one_or_none()
-
-
-async def assert_not_locked(session: AsyncSession, identifier: str, settings: Settings) -> None:
-    """Raise :class:`AccountLocked` while a lockout is in force."""
-    row = await _lockout_row(session, identifier)
-    if row is None or row.locked_until is None:
-        return
-    remaining = (row.locked_until - now()).total_seconds()
-    if remaining > 0:
-        raise AccountLocked(int(remaining) + 1)
-    # The window has passed. Clear it here rather than in a job: the next attempt is exactly when
-    # anyone cares, and a sweeper would be a moving part for state nobody reads in between.
-    await _reset_failures(session, identifier)
-
-
-async def _reset_failures(session: AsyncSession, identifier: str) -> None:
-    await session.execute(delete(AuthLockout).where(AuthLockout.identifier == identifier))
-
-
-async def record_failure(
-    session: AsyncSession,
-    identifier: str,
-    settings: Settings,
-    mailer: Mailer,
-) -> None:
-    """Count one failed attempt, and lock plus notify once the count reaches the limit.
-
-    The count is over a rolling window (``auth_failure_window_minutes``), so nine failures last
-    month plus one today is not a lockout. Failures against an address with no account are counted
-    the same way — see the module docstring.
-    """
-    moment = now()
-    window_start = moment - dt.timedelta(minutes=settings.auth_failure_window_minutes)
-    row = await _lockout_row(session, identifier)
-
-    if row is None:
-        row = AuthLockout(identifier=identifier, failures=0)
-        session.add(row)
-    if row.last_failure_at is not None and row.last_failure_at < window_start:
-        row.failures = 0
-        row.notified_at = None
-
-    row.failures += 1
-    row.first_failure_at = row.first_failure_at or moment
-    row.last_failure_at = moment
-
-    if row.failures >= settings.auth_max_failures:
-        row.locked_until = moment + dt.timedelta(minutes=settings.auth_lockout_minutes)
-        if row.notified_at is None:
-            # Only to an address that actually has an account: mailing a stranger to say their
-            # non-existent account is locked is both confusing and a disclosure of nothing useful.
-            user = await find_user(session, identifier)
-            if user is not None:
-                await mailer.deliver(
-                    mail.lockout(user.email, settings.auth_lockout_minutes, row.failures)
-                )
-            row.notified_at = moment
-    await session.flush()
 
 
 # ---------------------------------------------------------------------------
@@ -239,153 +170,122 @@ async def record_consent(
 
 
 # ---------------------------------------------------------------------------
-# One-time codes — OTP, email verification, password reset
+# Google sign-in — the only way in (docs/DECISIONS-MERGE.md M46)
 # ---------------------------------------------------------------------------
 
+#: The one provider today. A catalog string rather than an enum so a second one is data.
+GOOGLE_PROVIDER: Final = "google"
 
-@dataclass(frozen=True, slots=True)
-class CodeSpec:
-    """What kind of one-time code to mint.
 
-    A record rather than four keyword arguments, because the four always travel together and the
-    three call sites each pass a fixed combination — the OTP, the verification link, the reset
-    link. The named constructors below are those three.
+class IdentityConflict(AuthError):
+    """The verified address belongs to an account already bound to a *different* Google subject.
+
+    This should not happen — Google does not reissue a ``sub``, and it does not hand the same
+    verified address to two accounts. But "should not happen" is not a security control: if it
+    ever does, adopting the account would mean the second subject silently inherits the first
+    one's data. Refusing is the only safe answer, and it is loud enough to be investigated.
     """
 
-    purpose: str
-    ttl_seconds: int
-    #: Digits, for something read out of an email; otherwise a 256-bit URL-safe secret for a link.
-    numeric: bool
-    length: int = 6
 
-    @staticmethod
-    def otp(settings: Settings) -> CodeSpec:
-        return CodeSpec("otp", settings.otp_ttl_seconds, numeric=True, length=settings.otp_length)
+async def link_google_identity(
+    session: AsyncSession,
+    identity: GoogleIdentity,
+    settings: Settings,
+    *,
+    source_ip: str | None = None,
+    user_agent: str | None = None,
+) -> tuple[AppUser, bool]:
+    """Resolve a verified Google identity to an ``app_user``, creating one if needed.
 
-    @staticmethod
-    def email_verify(settings: Settings) -> CodeSpec:
-        return CodeSpec("email_verify", settings.email_verification_ttl_seconds, numeric=False)
+    Returns the user and whether this call created the account, so the caller can tell a first
+    sign-in from a returning one without a second query.
 
-    @staticmethod
-    def password_reset(settings: Settings) -> CodeSpec:
-        return CodeSpec("password_reset", settings.password_reset_ttl_seconds, numeric=False)
-
-
-async def issue_code(
-    session: AsyncSession, spec: CodeSpec, *, email: str, user: AppUser | None
-) -> str:
-    """Mint a code, store its digest, and return the plaintext for delivery.
-
-    Any outstanding code for the same address and purpose is consumed first. Two live sign-in
-    codes in one inbox is a support question, and it doubles the guessing surface for no gain.
+    THREE PATHS, IN THIS ORDER — the order is the security property
+    ----------------------------------------------------------------
+    1. **The identity row exists.** The normal case. Looked up on ``(provider, subject)``, never
+       on the email, so a Workspace rename signs the same person into the same account.
+    2. **No identity, but the verified address matches an account.** Adoption — this is how the
+       five accounts that predate Google sign-in get in, and how anyone who had a password-era
+       account keeps their data. Safe *only* because the address arrived on a signature-checked
+       token with ``email_verified`` true; `auth_google` refuses anything less, and this function
+       must never be handed an unverified address.
+    3. **Neither.** A new account. No password is set — there is no longer any way to use one —
+       and ``email_verified_at`` is stamped from Google's assertion rather than from a mail we
+       send, which is the entire point of the change.
     """
-    await session.execute(
-        update(AuthToken)
-        .where(
-            AuthToken.email == normalise_email(email),
-            AuthToken.purpose == spec.purpose,
-            AuthToken.consumed_at.is_(None),
+    existing = await session.scalar(
+        select(AuthIdentity).where(
+            AuthIdentity.provider == GOOGLE_PROVIDER,
+            AuthIdentity.subject == identity.subject,
         )
-        .values(consumed_at=now())
     )
-    plaintext = new_otp(spec.length) if spec.numeric else new_opaque_token()
+    if existing is not None:
+        user = await session.get(AppUser, existing.user_id)
+        if user is None:  # pragma: no cover — the FK makes this unreachable
+            raise InvalidCredentials("identity points at no account")
+        existing.email_at_provider = identity.email
+        existing.last_login_at = now()
+        await session.flush()
+        return user, False
+
+    email = normalise_email(identity.email)
+    user = await find_user_including_deleted(session, email)
+    created = False
+
+    if user is None:
+        user = await create_user(
+            session, email, password=None, name=identity.name, settings=settings
+        )
+        created = True
+        # docs/11 §Compliance, DPDP: a consent record with the document version agreed to. The
+        # terms checkbox is gone from the sign-in page (Maulik, 27 Aug 2026) — the page states
+        # the agreement instead of gating on it, so consent is recorded at first sign-in rather
+        # than collected as a click. `docs/DECISIONS-MERGE.md` M46.2 records the change and why
+        # the *record* survived the checkbox.
+        await record_consent(
+            session,
+            user,
+            ("terms", "privacy"),
+            source_ip=source_ip,
+            user_agent=user_agent,
+        )
+    else:
+        conflicting = await session.scalar(
+            select(AuthIdentity).where(
+                AuthIdentity.user_id == user.id,
+                AuthIdentity.provider == GOOGLE_PROVIDER,
+            )
+        )
+        if conflicting is not None:
+            log.error(
+                "google identity conflict",
+                extra={"user_public_id": user.public_id, "reason": "subject mismatch"},
+            )
+            raise IdentityConflict("this account is bound to a different Google identity")
+
+    # Google asserted the address, which is a stronger proof than the mail we used to send: it
+    # proves control of the inbox *now*, not at some point before the link expired.
+    if user.email_verified_at is None:
+        user.email_verified_at = now()
+    if not user.name and identity.name:
+        user.name = identity.name
+
     session.add(
-        AuthToken(
-            user_id=user.id if user is not None else None,
-            email=normalise_email(email),
-            purpose=spec.purpose,
-            token_hash=digest(plaintext),
-            expires_at=now() + dt.timedelta(seconds=spec.ttl_seconds),
+        AuthIdentity(
+            user_id=user.id,
+            provider=GOOGLE_PROVIDER,
+            subject=identity.subject,
+            email_at_provider=identity.email,
+            last_login_at=now(),
         )
     )
     await session.flush()
-    return plaintext
+    return user, created
 
 
-async def consume_code(
-    session: AsyncSession, *, email: str, purpose: str, supplied: str, max_attempts: int
-) -> AuthToken:
-    """Verify and burn a code. Raises :class:`InvalidCredentials` on anything but a clean match.
-
-    The lookup is by digest, so a wrong code finds nothing and the stored value is never compared
-    as a string. A near-miss still costs the live code an attempt, which is what stops a six-digit
-    space being walked inside its ten-minute life.
-    """
-    address = normalise_email(email)
-    row = (
-        await session.execute(
-            select(AuthToken)
-            .where(
-                AuthToken.email == address,
-                AuthToken.purpose == purpose,
-                AuthToken.token_hash == digest(supplied),
-                AuthToken.consumed_at.is_(None),
-            )
-            .order_by(AuthToken.id.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-
-    if row is None:
-        await _burn_attempt(session, address, purpose, max_attempts)
-        raise InvalidCredentials("That code is not valid.")
-    if row.expires_at <= now():
-        row.consumed_at = now()
-        await session.flush()
-        raise InvalidCredentials("That code has expired.")
-
-    row.consumed_at = now()
-    await session.flush()
-    return row
-
-
-async def consume_link_token(session: AsyncSession, *, purpose: str, supplied: str) -> AuthToken:
-    """Burn a code that arrived in a link, where the address is not supplied separately.
-
-    Verification and reset links carry a 256-bit secret and nothing else — asking the user to
-    retype their address alongside it would add a step and no security, since the secret already
-    proves inbox control. The lookup is by digest, so a wrong token finds nothing.
-    """
-    row = (
-        await session.execute(
-            select(AuthToken).where(
-                AuthToken.purpose == purpose,
-                AuthToken.token_hash == digest(supplied),
-                AuthToken.consumed_at.is_(None),
-            )
-        )
-    ).scalar_one_or_none()
-    if row is None:
-        raise InvalidCredentials("That link is not valid.")
-    if row.expires_at <= now():
-        row.consumed_at = now()
-        await session.flush()
-        raise InvalidCredentials("That link has expired.")
-    row.consumed_at = now()
-    await session.flush()
-    return row
-
-
-async def _burn_attempt(session: AsyncSession, email: str, purpose: str, max_attempts: int) -> None:
-    """Charge a wrong guess to whichever code is currently live for this address."""
-    live = (
-        await session.execute(
-            select(AuthToken)
-            .where(
-                AuthToken.email == email,
-                AuthToken.purpose == purpose,
-                AuthToken.consumed_at.is_(None),
-            )
-            .order_by(AuthToken.id.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    if live is None:
-        return
-    live.attempts += 1
-    if live.attempts >= max_attempts:
-        live.consumed_at = now()
-    await session.flush()
+# ---------------------------------------------------------------------------
+# One-time codes — OTP, email verification, password reset
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -444,7 +344,38 @@ async def revoke_family(session: AsyncSession, family_id: str, reason: str) -> i
 
 
 async def revoke_all_for_user(session: AsyncSession, user_id: int, reason: str) -> int:
-    """Every session, everywhere — used by a password change and by account deletion."""
+    """Every session, everywhere — used by a password change and by account deletion.
+
+    **Two stores, and for a long time this function only emptied one of them.** Revoking the
+    ``refresh_token`` rows ends the API's own sessions, and the web app has never held one: its
+    session is an Auth.js JWT cookie, it mints its own access tokens from the shared secret, and
+    ``current_principal`` checks only that ``sub`` names a row in ``app_user``. So the docstring
+    above used to be true of the API and false of the session every real user actually has —
+    a password change left whoever prompted it signed in for the remainder of thirty days
+    (``NEEDS-MAULIK.md`` §22).
+
+    Bumping ``session_epoch`` is what closes that. The number is stamped into the cookie at
+    sign-in and compared on every gated render, so every cookie issued before this line fails
+    that comparison on the caller's next navigation.
+
+    The bump happens even when no refresh token was live. The two stores are independent, and
+    conditioning one on the other would mean an OTP-only account — which may have no refresh row
+    to revoke — kept its web session through a password change.
+    """
+    await session.execute(
+        update(AppUser)
+        .where(AppUser.id == user_id)
+        .values(session_epoch=AppUser.session_epoch + 1),
+        # `fetch`, spelled out rather than left to `synchronize_session="auto"`. The reset-password
+        # path calls `set_password` (which lands here) and *then* `issue_session`, and the
+        # `SessionOut` it builds reads `user.session_epoch` off the same ORM object this statement
+        # just changed underneath. Without synchronisation that attribute is the pre-bump value,
+        # so the brand-new session would be stamped with the generation this call invalidated —
+        # and the user would be signed out of the session their password reset just created.
+        # `auto` happens to choose `fetch` here, because `session_epoch + 1` is a SQL expression
+        # it cannot evaluate in Python; depending on that inference is depending on a fallback.
+        execution_options={"synchronize_session": "fetch"},
+    )
     return await _revoke_where(session, RefreshToken.user_id == user_id, reason)
 
 
@@ -530,39 +461,6 @@ async def revoke_one(session: AsyncSession, supplied: str, reason: str) -> None:
 # ---------------------------------------------------------------------------
 # Password login
 # ---------------------------------------------------------------------------
-
-
-async def authenticate_password(
-    session: AsyncSession, email: str, password: str, settings: Settings
-) -> AppUser:
-    """Verify a password, upgrading the stored hash if the parameters have moved on.
-
-    Raises :class:`InvalidCredentials` for a wrong password *and* for an unknown address, having
-    paid the same Argon2id cost in both cases.
-    """
-    user = await find_user(session, email)
-    stored = user.password_hash if user is not None else None
-    if not verify_password(password, stored, settings) or user is None:
-        raise InvalidCredentials("Those credentials are not valid.")
-
-    if user.password_hash is not None and needs_rehash(user.password_hash, settings):
-        # The only moment the plaintext exists to re-derive from.
-        user.password_hash = hash_password(password, settings)
-        await session.flush()
-    return user
-
-
-async def set_password(
-    session: AsyncSession, user: AppUser, password: str, settings: Settings, *, reason: str
-) -> None:
-    """Change a password and end every other session.
-
-    A password change that leaves old sessions alive does not evict whoever prompted it.
-    """
-    user.password_hash = hash_password(password, settings)
-    await session.flush()
-    await revoke_all_for_user(session, user.id, reason)
-    await _reset_failures(session, user.email)
 
 
 # ---------------------------------------------------------------------------

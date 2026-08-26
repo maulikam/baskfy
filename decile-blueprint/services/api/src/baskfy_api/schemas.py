@@ -539,55 +539,6 @@ Password = Annotated[str, Field(min_length=8, max_length=128)]
 DisplayName = Annotated[str, Field(min_length=1, max_length=120)]
 
 
-class RegisterIn(_In):
-    """docs/07: `POST /auth/register`.
-
-    ``password`` is optional because docs/11 §Security makes OTP "the default path, password
-    optional" — an account created without one signs in by code until it sets one.
-    """
-
-    email: Email
-    password: Password | None = None
-    name: DisplayName | None = None
-    #: docs/11 §Compliance: the DPDP consent record. Registering without agreeing is a 400.
-    accept_terms: bool = False
-    accept_marketing: bool = False
-
-
-class LoginIn(_In):
-    email: Email
-    password: str = Field(min_length=1, max_length=128)
-
-
-class RequestOtpIn(_In):
-    email: Email
-
-
-class VerifyOtpIn(_In):
-    email: Email
-    code: str = Field(min_length=4, max_length=10)
-
-
-class ForgotPasswordIn(_In):
-    email: Email
-
-
-class ResetPasswordIn(_In):
-    token: str = Field(min_length=8, max_length=256)
-    password: Password
-
-
-class ChangePasswordIn(_In):
-    """``current_password`` is optional: an OTP-only account is *setting* one for the first time."""
-
-    current_password: str | None = Field(default=None, max_length=128)
-    new_password: Password
-
-
-class VerifyEmailIn(_In):
-    token: str = Field(min_length=8, max_length=256)
-
-
 class UpdateMeIn(_In):
     name: DisplayName | None = None
 
@@ -613,6 +564,26 @@ class SessionOut(_Out):
     email: str
     name: str | None = None
     email_verified: bool = False
+    #: The generation number the caller must stamp into whatever session it creates from this
+    #: response. Returned here so a sign-in needs one round trip rather than a second call to
+    #: `/me` purely to learn the epoch — and so that the number a session carries is the one that
+    #: was current at the instant it was issued, not at the instant somebody got around to asking.
+    session_epoch: int = 0
+
+
+class GoogleSignInIn(_In):
+    """The ID token `apps/web` received from Google, forwarded verbatim.
+
+    **The only field, and that is the design.** No email, no subject, no display name: everything
+    this endpoint acts on is read out of the token *after* its signature is checked
+    (`baskfy_api.auth_google`). A schema that also accepted an email would create a second,
+    unsigned source for the one fact that decides which account you get.
+
+    The bound is generous — Google ID tokens for accounts in large Workspace domains carry a lot
+    of claims — but it exists so a request cannot ask the JWKS path to chew on a megabyte.
+    """
+
+    id_token: str = Field(min_length=1, max_length=8192)
 
 
 class AcceptedOut(_Out):
@@ -645,7 +616,6 @@ class MeOut(_Out):
     email: str
     name: str | None = None
     email_verified: bool
-    has_password: bool
     created_at: dt.datetime
     plan_code: str | None = None
     subscription_status: str | None = None
@@ -656,6 +626,14 @@ class MeOut(_Out):
     is_staff: bool = False
     #: Set while an erasure is pending, so the UI can offer to cancel it (Prompt 12 §5).
     deletion_scheduled_for: dt.datetime | None = None
+    #: ``app_user.session_epoch`` — the generation this account's web sessions must carry.
+    #:
+    #: Here rather than on a dedicated endpoint because the web app's `(app)` layout already
+    #: awaits `GET /me` on every gated render, so the check the caller performs with this costs
+    #: no extra round trip. A cookie whose stamped epoch is lower than this one was issued before
+    #: a revocation and must be refused; see `NEEDS-MAULIK.md` §22 for why a JWT session needs
+    #: this at all.
+    session_epoch: int = 0
 
 
 class DeletionOut(_Out):
@@ -1529,7 +1507,10 @@ class ScreenAlertDeliveryListOut(_Out):
 
 
 class UnsubscribeIn(_In):
-    token: str = Field(min_length=8, max_length=128)
+    #: No minimum — same reasoning as :class:`VerifyEmailIn`. One-click unsubscribe is reached
+    #: from a link in an email, and a reader who cannot unsubscribe because their client wrapped
+    #: the URL is the one complaint that turns into a spam report.
+    token: str = Field(max_length=128)
 
 
 class UnsubscribeOut(_Out):

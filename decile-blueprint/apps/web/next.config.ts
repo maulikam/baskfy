@@ -1,4 +1,7 @@
+import { resolve } from "node:path";
+
 import createMdx from "@next/mdx";
+import remarkGfm from "remark-gfm";
 import type { NextConfig } from "next";
 
 /** The slice of webpack's config this file touches. Narrow, so nothing here is `any`. */
@@ -43,13 +46,52 @@ const securityHeaders = [
  * MDX explicitly, so `@next/mdx` is the Next-native answer and adds no runtime to the client
  * bundle: MDX compiles to React server components at build time. `docs/DECISIONS.md` §18.1.
  *
- * No remark or rehype plugins. A plugin chain is a second thing that can break a build, and
- * neither the four legal documents nor the three posts need one.
+ * **One remark plugin: `remark-gfm`.** This comment used to say there were none, on the reasoning
+ * that "a plugin chain is a second thing that can break a build, and neither the four legal
+ * documents nor the three posts need one". The second half was wrong, and silently so: MDX
+ * implements CommonMark, and **pipe tables are not CommonMark** — they are a GitHub extension. So
+ * `privacy-policy.mdx`'s cookie table and its retention table were being rendered as five lines of
+ * literal `| Session token | Keeps you signed in | No |` text on a live legal page, which is where
+ * a reader looks to find out what we store and for how long.
+ *
+ * Nothing about the original argument is abandoned. `remark-gfm` runs at build time and compiles
+ * to the same server components, so the "adds no runtime to the client bundle" property in the
+ * paragraph above is unchanged — and a plugin that turns a table into a table is not a chain.
+ * `apps/web/src/lib/__tests__/legal-drafts.test.ts` now asserts the tables survive the pipeline,
+ * so this cannot regress into raw pipes again without a test failing.
  */
-const withMdx = createMdx({});
+const withMdx = createMdx({
+  options: { remarkPlugins: [remarkGfm] },
+});
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  /*
+   * `docs/08-aws-architecture.md` §5: "Next.js 15 `output: 'standalone'` in a container. This is
+   * the deployment mode the Next team documents as supporting everything; Amplify Hosting is
+   * explicitly avoided (SSE buffering, version lag)."
+   *
+   * Standalone emits `.next/standalone/server.js` with only the `node_modules` the server
+   * actually reached, which is what lets the runtime image be `node:22-slim` with no pnpm store
+   * and no workspace symlinks inside it — see `infra/docker/Dockerfile.web`.
+   *
+   * It costs nothing in development: the flag only changes what `next build` writes. Two things
+   * it does *not* carry, and the Dockerfile copies them by hand because of it — `public/` and
+   * `.next/static/` — which is documented behaviour, not a bug, and the reason a container that
+   * boots but serves unstyled HTML is the classic first failure here. `verify-web-image.sh`
+   * asserts a real stylesheet loads for exactly that reason.
+   */
+  output: "standalone",
+  /*
+   * Standalone traces file dependencies outward from this directory. `apps/web` is one member of
+   * a pnpm workspace, so the trace has to be rooted at the workspace root — two levels up, where
+   * `pnpm-workspace.yaml` lives — or the server bundle comes out missing `@baskfy/api-client`
+   * and every dependency pnpm hoisted into the root `node_modules/.pnpm` store.
+   *
+   * Resolved rather than left to inference: Next's own guess walks up looking for a lockfile, and
+   * inside the Docker build context there is more than one candidate above this directory.
+   */
+  outputFileTracingRoot: resolve(import.meta.dirname, "../.."),
   // Next 15.5 enables segment explorer devtools by default; when the dev
   // manifest drifts (common after large refactors / HMR), SegmentViewNode fails
   // to resolve and the client webpack runtime throws "reading 'call'".
@@ -85,25 +127,77 @@ const nextConfig: NextConfig = {
    */
   redirects() {
     return Promise.resolve([
+      /*
+       * Google sign-in replaced the whole email/password funnel (`docs/DECISIONS-MERGE.md` M46),
+       * so four pages stopped existing. They keep resolving rather than 404ing, because the two
+       * that mattered most were *followed out of email*: a verification link and a reset link,
+       * sent to people who by definition are trying to get into an account they cannot reach.
+       * Landing them on a 404 is the worst possible answer to "I cannot sign in".
+       *
+       * `permanent: false`. These are not a rename — the destination does something different
+       * from what the source promised, and a 308 would be cached in the browser forever against
+       * the day any of these paths means something again.
+       */
+      { source: "/register", destination: "/login", permanent: false },
+      { source: "/forgot-password", destination: "/login", permanent: false },
+      { source: "/reset-password", destination: "/login", permanent: false },
+      { source: "/verify-email", destination: "/login", permanent: false },
       { source: "/dashboard", destination: "/market/today", permanent: true },
       { source: "/market-health", destination: "/market/mood", permanent: true },
       { source: "/listings", destination: "/market/listings", permanent: true },
-      { source: "/explore", destination: "/baskets", permanent: true },
+      { source: "/explore", destination: "/discover", permanent: true },
+      /*
+       * `/baskets` → `/discover`. The hub was named after the product's taxonomy; it is named
+       * after the reader's task now. Every old path keeps resolving, `:slug` included, so a
+       * bookmark or a link in an old email still lands on the right shelf.
+       */
+      { source: "/baskets", destination: "/discover", permanent: true },
+      { source: "/baskets/featured", destination: "/discover/featured", permanent: true },
+      { source: "/baskets/plan", destination: "/discover/plan", permanent: true },
+      { source: "/baskets/collections", destination: "/discover/collections", permanent: true },
+      {
+        source: "/baskets/collections/:slug",
+        destination: "/discover/collections/:slug",
+        permanent: true,
+      },
       // Collections shipped under the Tree-6 consumer IA rather than as a second
       // top-level noun. `/collection/:slug` is the shape the brief asked for, so it
       // resolves — the same way every other moved path does.
-      { source: "/collection/:slug", destination: "/baskets/collections/:slug", permanent: true },
-      { source: "/collections", destination: "/baskets/collections", permanent: true },
+      { source: "/collection/:slug", destination: "/discover/collections/:slug", permanent: true },
+      { source: "/collections", destination: "/discover/collections", permanent: true },
       { source: "/screens", destination: "/build", permanent: true },
       { source: "/screens/new", destination: "/build/new", permanent: false },
       { source: "/screens/:id", destination: "/build/:id", permanent: true },
       { source: "/screens/:id/columns", destination: "/build/:id/columns", permanent: true },
       { source: "/backtests", destination: "/build/backtests", permanent: true },
       { source: "/backtests/:id", destination: "/build/backtests/:id", permanent: true },
-      { source: "/investments", destination: "/me/investments", permanent: true },
-      { source: "/investments/:path*", destination: "/me/investments/:path*", permanent: true },
-      { source: "/portfolios", destination: "/me/portfolios", permanent: true },
-      { source: "/watchlist", destination: "/me/watchlist", permanent: true },
+      /*
+       * PORTFOLIO_REDESIGN.md §2: the money left Me. `Me → Investments | Portfolios | Watchlist`
+       * became `Portfolio → Overview | Portfolios | Holdings | Activity | Watchlist`, and Me kept
+       * profile, brokers, subscription and security only.
+       *
+       * Two families of source, all landing in `/portfolio`:
+       *
+       * - the flat pre-Tree-6 paths (`/investments`, `/portfolios`, `/watchlist`), re-pointed at
+       *   the new homes instead of chaining through `/me/*` — the first hop's destination holds
+       *   no page any more, and a two-hop redirect is a second thing to keep correct;
+       * - the Tree-6 `/me/*` paths themselves, which is what a bookmark from this week is.
+       *
+       * `/me/investments/:path*` → `/portfolio/:path*` carries the investment detail pages
+       * (`[id]`, `[id]/costs`, `[id]/customize`, `[id]/orders`) to `/portfolio/[id]`: post-merge
+       * an investment *is* a portfolio, so its detail page is the portfolio detail page (§7).
+       * The exact sources are listed before the wildcards, which is the order Next matches in.
+       *
+       * `/me` itself is deliberately NOT here — see `src/app/(app)/me/page.tsx`.
+       */
+      { source: "/investments", destination: "/portfolio/overview", permanent: true },
+      { source: "/investments/:path*", destination: "/portfolio/:path*", permanent: true },
+      { source: "/portfolios", destination: "/portfolio/portfolios", permanent: true },
+      { source: "/watchlist", destination: "/portfolio/watchlist", permanent: true },
+      { source: "/me/investments", destination: "/portfolio/overview", permanent: true },
+      { source: "/me/investments/:path*", destination: "/portfolio/:path*", permanent: true },
+      { source: "/me/portfolios", destination: "/portfolio/portfolios", permanent: true },
+      { source: "/me/watchlist", destination: "/portfolio/watchlist", permanent: true },
     ]);
   },
   /*

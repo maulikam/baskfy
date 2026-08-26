@@ -6,7 +6,7 @@ from decimal import Decimal
 from functools import lru_cache
 from typing import Final, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 #: docs/07: "Base: `/api/v1`".
@@ -75,6 +75,17 @@ class Settings(BaseSettings):
     #: How long a refresh-token family lives before a fresh login is required.
     refresh_token_ttl_days: int = Field(default=30, gt=0)
 
+    # --- Google sign-in (the only way in; docs/DECISIONS-MERGE.md M46) -------
+    #: The OAuth client the web app authenticates against, and therefore the **only** `aud` this
+    #: API accepts on a Google ID token. Empty means Google sign-in is off: `POST /auth/google`
+    #: answers 401 rather than verifying against a wildcard, because an ID token checked without
+    #: an audience is a token minted for somebody else's application that we accepted as ours.
+    google_client_id: str = ""
+    #: Held by the web app for the code exchange. The API never uses it — it verifies an ID token
+    #: signature against Google's public JWKS and needs no secret to do so. It lives here only so
+    #: one env file describes the whole client.
+    google_client_secret: str = ""
+
     #: docs/11: "OTP login as the default path". Six digits, ten minutes, five guesses.
     otp_length: int = Field(default=6, ge=6, le=10)
     otp_ttl_seconds: int = Field(default=10 * 60, gt=0)
@@ -110,6 +121,18 @@ class Settings(BaseSettings):
     email_reply_to: str | None = None
     smtp_host: str = "localhost"
     smtp_port: int = Field(default=1025, gt=0)
+    # The three below exist for a real relay — Amazon SES is the one this deployment uses
+    # (docs/08 §2: "SES production (ap-south-1)"). Mailpit needs none of them, which is why every
+    # default is the mailpit-shaped one: no TLS, no credentials, and the transport behaves exactly
+    # as it did before they existed.
+    #
+    # SES rejects both an unauthenticated relay and a plaintext session, so `smtp` could not
+    # reach it at all until these landed.
+    smtp_username: str = ""
+    smtp_password: str = ""
+    #: STARTTLS on the existing port (587 for SES). Not implicit TLS — SES's 465 is a different
+    #: endpoint mode, and 587 + STARTTLS is what AWS documents first.
+    smtp_starttls: bool = False
     #: The web app's origin, for the links in emails.
     web_origin: str = "http://localhost:3000"
     #: Where `POST /support` delivers (Prompt 18 §2). A setting, not a constant, so a deployment
@@ -321,6 +344,29 @@ class Settings(BaseSettings):
     # --- CORS ----------------------------------------------------------------
     cors_origins: tuple[str, ...] = ("http://localhost:3000",)
 
+    @model_validator(mode="after")
+    def _smtp_credentials_are_coherent(self) -> Settings:
+        """Half-configured SMTP credentials, refused in **every** environment.
+
+        Not inside :meth:`require_configured`, which only runs for production: a developer
+        pointing at a real relay from a laptop has the same two ways to get this wrong, and both
+        fail identically — the mail simply never arrives. SES answers 530 to a username with no
+        password and closes the session; nothing in the application logs says why, and the symptom
+        is indistinguishable from a user mistyping their address.
+        """
+        if self.email_transport != "smtp":
+            return self
+        if bool(self.smtp_username) != bool(self.smtp_password):
+            raise RuntimeError("BASKFY_SMTP_USERNAME and BASKFY_SMTP_PASSWORD must be set together")
+        if self.smtp_username and not self.smtp_starttls:
+            # AUTH LOGIN is base64, not encryption. Without STARTTLS the relay password crosses
+            # the network in something a packet capture reads directly.
+            raise RuntimeError(
+                "BASKFY_SMTP_STARTTLS is false while SMTP credentials are set; that would send "
+                "the relay password in the clear"
+            )
+        return self
+
     def require_configured(self) -> None:
         """Refuse to serve production traffic with development defaults.
 
@@ -352,6 +398,14 @@ class Settings(BaseSettings):
             )
         if self.email_transport == "resend" and not self.resend_api_key:
             raise RuntimeError("BASKFY_RESEND_API_KEY is empty but the transport is 'resend'")
+        if not self.google_client_id:
+            # Google is the only way in (docs/DECISIONS-MERGE.md M46) — there is no password and
+            # no OTP to fall back to. An empty client id in production is not a degraded sign-in
+            # path, it is no sign-in path at all, so it is a startup error rather than a 401 the
+            # first real user discovers.
+            raise RuntimeError(
+                "BASKFY_GOOGLE_CLIENT_ID is empty in production; nobody could sign in"
+            )
         # docs/11 §Security: "Razorpay webhooks: verify signature". An empty secret cannot verify
         # one, and a webhook handler that accepts anything is a way to grant yourself a plan.
         if not self.razorpay_webhook_secret:

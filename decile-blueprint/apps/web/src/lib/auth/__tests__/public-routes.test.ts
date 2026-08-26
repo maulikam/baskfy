@@ -19,9 +19,9 @@ describe("the gate is closed by default", () => {
     "/holdings",
     "/watchlist",
     "/me",
-    "/me/portfolios",
-    "/me/investments/abc/orders",
-    "/baskets/featured",
+    "/portfolio/portfolios",
+    "/portfolio/abc/orders",
+    "/discover/featured",
     "/basket/nifty-momentum",
     "/screens",
     "/screens/exmpl0000001/columns",
@@ -33,7 +33,6 @@ describe("the gate is closed by default", () => {
     "/portfolios",
     "/backtests",
     "/profile",
-    "/change-password",
     "/invoices",
     "/admin",
     "/admin/users",
@@ -67,14 +66,10 @@ describe("what stays public, and why each one has to", () => {
     ["/privacy-policy", "docs/11 §Compliance"],
     ["/refund-policy", "docs/11 §Compliance"],
     ["/disclaimer", "docs/11 §Compliance"],
-    ["/login", "the way in"],
-    ["/register", "the way in"],
-    ["/forgot-password", "the way in"],
-    ["/reset-password", "followed from an email, by definition with no session"],
-    ["/verify-email", "followed from an email, by definition with no session"],
+    ["/login", "the way in, and since M46 the only one"],
     ["/logout", "the way out"],
     ["/api/auth/session", "Auth.js's own endpoints"],
-    ["/api/auth/callback/password", "Auth.js's own endpoints"],
+    ["/api/auth/callback/google", "Auth.js's own endpoints"],
     ["/alerts/unsubscribe", "one-click unsubscribe cannot ask for a sign-in first"],
     ["/api/revalidate", "the pipeline webhook, guarded by its own shared secret"],
     ["/opengraph-image", "or every shared link renders a blank card"],
@@ -132,4 +127,29 @@ describe("prefix matching does not leak", () => {
     expect(isPublicPath("/alerts/unsubscribe/done")).toBe(true);
     expect(isPublicPath("/blog/rss.xml")).toBe(true);
   });
+});
+
+/**
+ * `docs/DECISIONS-MERGE.md` M46: Google sign-in replaced the email/password funnel and four pages
+ * stopped existing. This asserts the *spec* — that they are not public routes any more — rather
+ * than the current shape of the array, so re-adding one to `PUBLIC_PREFIXES` without re-adding
+ * the page fails here instead of quietly opening an ungated path to a 404.
+ */
+describe("the pages Google sign-in replaced are no longer routes at all", () => {
+  it.each([
+    ["/register", "a first sign-in creates the account"],
+    ["/forgot-password", "there is no password to forget"],
+    ["/reset-password", "nor one to reset"],
+    ["/verify-email", "Google verified the address before we ever saw it"],
+  ])("%s is not public — %s", (path) => {
+    expect(isPublicPath(path)).toBe(false);
+  });
+
+  /*
+   * They are not gated *in practice*, and that is deliberate rather than contradictory:
+   * `next.config.ts` redirects all four to `/login`, and Next runs `redirects()` before
+   * middleware — so the gate never sees them. Asserting they are non-public here is what keeps
+   * the middleware honest if that redirect is ever removed: an unknown path must gate, not 404
+   * an anonymous visitor who followed a link out of an old email.
+   */
 });

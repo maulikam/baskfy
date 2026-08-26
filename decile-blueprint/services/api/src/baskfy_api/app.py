@@ -36,6 +36,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from baskfy_api import invoices, metrics
+from baskfy_api.auth_google import GoogleVerifier
 from baskfy_api.db import create_engine, session_factory
 from baskfy_api.email import Mailer, build_transport
 from baskfy_api.http_cache import register_http_cache
@@ -83,6 +84,7 @@ from baskfy_api.routers import (
     managers,
     market_data,
     meta,
+    portfolio_overview,
     portfolios,
     public,
     screens,
@@ -362,6 +364,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # One transport for the process (docs/02 §Email). Built here rather than per request so a
     # Resend client's connection pool is reused and a misconfiguration fails at startup.
     app.state.mailer = Mailer(build_transport(settings))
+    # Built once so the Google JWKS cache is shared across requests rather than re-fetched per
+    # sign-in. Constructing it performs no I/O (`baskfy_api.auth_google`), so an unconfigured
+    # deployment still starts — `POST /auth/google` then answers 401 rather than 500.
+    app.state.google_verifier = GoogleVerifier(settings)
     # docs/02 §"Object storage": Cloudflare R2, or a directory when no bucket is configured.
     # Built once, like the mailer, so an S3 client's connection pool is reused across invoices.
     app.state.invoice_archive = invoices.build_invoice_archive(settings)
@@ -520,13 +526,19 @@ def _mount_routers(versioned: APIRouter) -> None:
     versioned.include_router(meta.router)
     versioned.include_router(screens.router)
     versioned.include_router(instruments.router)
-    # M40: the federated ⌘K search. Mounted next to `instruments` because it supersedes
+    # M46: the federated ⌘K search. Mounted next to `instruments` because it supersedes
     # that router's typeahead as the palette's entry point (`baskfynavrefactorreport` F11).
     versioned.include_router(search.router)
     versioned.include_router(market_data.router)
     versioned.include_router(auth.router)
     versioned.include_router(billing.router)
     versioned.include_router(portfolios.router)
+    # PORTFOLIO_REDESIGN.md §6 and §7: the read API behind the redesigned Portfolio section.
+    # Six reads and one answer (the reconciliation inbox's). No execute route, ever (§9) --
+    # `test_portfolio_overview.py` greps the module for the order vocabulary. Mounted after
+    # `portfolios` because both live under a `/portfolio*` prefix and the older router owns
+    # `/portfolios`; the two never collide, and this ordering keeps that visible.
+    versioned.include_router(portfolio_overview.router)
     versioned.include_router(backtests.router)
     # M22: read-only basket surfaces. No POST, no PUT, no DELETE -- execution stays in the desk
     # console, so nothing here crosses the SEBI gate. `test_baskets_readonly.py` asserts it.

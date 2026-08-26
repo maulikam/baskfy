@@ -12,7 +12,8 @@ import { PAGES } from "@/lib/vocabulary";
 
 /**
  * Tree 6 collapsed the consumer IA to Market · Baskets · Build · Me; SC9 added the signed-in
- * landing surface in front of them. Desk Real money + Account + Help remain secondary groups.
+ * landing surface in front of them; PORTFOLIO_REDESIGN.md §2 replaced Me with Portfolio and gave
+ * it five tabs of its own. Desk Real money + Account + Help remain secondary groups.
  *
  * Five, not four, and the count is asserted rather than inferred: a sixth destination is an IA
  * decision, and it should have to change a test that says so out loud.
@@ -22,11 +23,23 @@ describe("the primary consumer IA", () => {
     expect(PRIMARY_NAV.map((item) => item.label)).toEqual([
       "Home",
       "Market",
-      "Baskets",
+      "Discover",
       "Build",
-      "Me",
+      "Portfolio",
     ]);
     expect(PRIMARY_NAV).toHaveLength(5);
+  });
+
+  /*
+    PORTFOLIO_REDESIGN.md §2, asserted by name rather than by shape. "Me" was the fifth
+    destination and it held the money *and* the account; the money is its own hub now and the
+    landing tab is Overview, so the pill points there rather than at a bare `/portfolio`.
+  */
+  it("makes the money its own destination, landing on Overview", () => {
+    const portfolio = PRIMARY_NAV.find((item) => item.label === "Portfolio");
+    expect(portfolio?.href).toBe("/portfolio/overview");
+    expect(PRIMARY_NAV.map((item) => item.label)).not.toContain("Me");
+    expect(SECTION_TABS.portfolio[0]?.label).toBe("Overview");
   });
 
   it("puts the landing surface at /home, not at the screener's market dashboard", () => {
@@ -52,9 +65,9 @@ describe("the primary consumer IA", () => {
     expect(NAV_GROUPS[0]?.items.map((item) => item.href)).toEqual([
       "/home",
       "/market/today",
-      "/baskets",
+      "/discover",
       "/build",
-      "/me/investments",
+      "/portfolio/overview",
     ]);
   });
 
@@ -64,17 +77,115 @@ describe("the primary consumer IA", () => {
 
   it("keeps section tabs for each hub", () => {
     expect(SECTION_TABS.market.map((t) => t.label)).toEqual(["Today", "Mood", "Listings"]);
-    expect(SECTION_TABS.baskets.map((t) => t.label)).toEqual(["Explore", "Featured", "Create"]);
-    expect(SECTION_TABS.build.map((t) => t.label)).toEqual(["Screens", "Backtests"]);
-    expect(SECTION_TABS.me.map((t) => t.label)).toEqual([
-      "Investments",
+    /* Discover's five tabs. "Create" is deliberately gone: it builds a strategy, which is Build's
+       job, and a second entrance from inside Discover made the two sections look like rivals. */
+    expect(SECTION_TABS.discover.map((t) => t.label)).toEqual([
+      "For you",
+      "All baskets",
+      "Collections",
+      "Compare",
+      "Saved",
+    ]);
+    expect(SECTION_TABS.discover.map((t) => t.href)).not.toContain("/create");
+    // Create moved here out of Discover: it builds a strategy, which is this hub's job.
+    expect(SECTION_TABS.build.map((t) => t.label)).toEqual(["Screens", "Backtests", "Create"]);
+    expect(SECTION_TABS.build.map((t) => t.href)).toContain("/create");
+    /*
+      §2: `Me → Investments | Portfolios | Watchlist` becomes
+      `Portfolio → Overview | Portfolios | Holdings | Activity | Watchlist`. Overview leads
+      because it is the default landing tab; "Investments" is gone as a word, because it and
+      "Portfolios" were two names for one thing (§1 problem 1).
+    */
+    expect(SECTION_TABS.portfolio.map((t) => t.label)).toEqual([
+      "Overview",
       "Portfolios",
+      "Holdings",
+      "Activity",
       "Watchlist",
     ]);
+    expect(SECTION_TABS.portfolio.map((t) => t.href)).toEqual([
+      "/portfolio/overview",
+      "/portfolio/portfolios",
+      "/portfolio/holdings",
+      "/portfolio/activity",
+      "/portfolio/watchlist",
+    ]);
+    expect(SECTION_TABS.portfolio.map((t) => t.label)).not.toContain("Investments");
+
+    /* §2's other half: Me keeps profile / settings / subscription and no money.
+       The "Security" tab went with `/change-password` when Google sign-in replaced the password
+       (`docs/DECISIONS-MERGE.md` M46) — there is no credential of ours left to manage, so the tab
+       had nowhere to point. What it used to say is now a sentence on `/profile` telling the
+       reader their sign-in lives in their Google account. */
+    expect(SECTION_TABS.me.map((t) => t.label)).toEqual(["Profile", "Brokers", "Subscription"]);
+    for (const tab of SECTION_TABS.me) {
+      expect(tab.href.startsWith("/portfolio"), `${tab.href} is money, not account`).toBe(false);
+    }
   });
 
-  it("documents fourteen legacy permanent redirects for Tree 6", () => {
-    expect(LEGACY_REDIRECTS).toHaveLength(14);
+  /*
+    Every money path that used to sit under Me now lights Portfolio, including on the way through
+    the redirect. `/portfolios` (plural) is the desk's rebalance sub-tree and must not be caught
+    by a sloppy `startsWith("/portfolio")`.
+  */
+  it("routes the old Me money paths to the Portfolio section", () => {
+    expect(primarySection("/portfolio/overview")).toBe("portfolio");
+    expect(primarySection("/portfolio/holdings")).toBe("portfolio");
+    expect(primarySection("/me/investments")).toBe("portfolio");
+    expect(primarySection("/me/portfolios")).toBe("portfolio");
+    expect(primarySection("/me/watchlist")).toBe("portfolio");
+    expect(primarySection("/investments")).toBe("portfolio");
+    expect(primarySection("/portfolios/12/rebalance")).toBe("portfolio");
+    expect(primarySection("/me")).toBe("me");
+  });
+
+  /*
+    A tab that navigates nowhere is worse than a tab that is missing, so the five §2 destinations
+    are checked against the route table the app actually publishes.
+  */
+  it("gives every Portfolio tab a page in the vocabulary route table", () => {
+    for (const tab of SECTION_TABS.portfolio) {
+      expect(PAGES[tab.href as keyof typeof PAGES], `${tab.href} has no page record`).toBeDefined();
+    }
+  });
+
+  it("documents every legacy permanent redirect, so no old path silently 404s", () => {
+    expect(LEGACY_REDIRECTS).toHaveLength(23);
+  });
+
+  it("keeps every `/baskets*` path resolving after the rename to Discover", () => {
+    const sources = LEGACY_REDIRECTS.map((entry) => entry.source);
+    for (const path of [
+      "/baskets",
+      "/baskets/featured",
+      "/baskets/plan",
+      "/baskets/collections",
+    ]) {
+      expect(sources, `${path} still resolves`).toContain(path);
+    }
+    const hub = LEGACY_REDIRECTS.find((entry) => entry.source === "/baskets");
+    expect(hub?.destination).toBe("/discover");
+  });
+
+  it("keeps every path the money section used to live at resolving", () => {
+    const map = new Map(LEGACY_REDIRECTS.map((entry) => [entry.source, entry.destination]));
+    expect(map.get("/me/investments")).toBe("/portfolio/overview");
+    expect(map.get("/me/portfolios")).toBe("/portfolio/portfolios");
+    expect(map.get("/me/watchlist")).toBe("/portfolio/watchlist");
+    // The pre-Tree-6 flat paths are re-pointed at the new homes, not chained through `/me/*`.
+    expect(map.get("/investments")).toBe("/portfolio/overview");
+    expect(map.get("/portfolios")).toBe("/portfolio/portfolios");
+    expect(map.get("/watchlist")).toBe("/portfolio/watchlist");
+    for (const destination of map.values()) {
+      expect(destination.startsWith("/me/"), `${destination} still lands under Me`).toBe(false);
+    }
+  });
+
+  it("lets a reader find Discover by the name it used to have", () => {
+    // A rename must not orphan the people who learned the previous word; the ⌘K palette
+    // searches `formerly` for exactly this reason.
+    const discover = PRIMARY_NAV.find((item) => item.label === "Discover");
+    expect(discover?.formerly).toBe("Baskets");
   });
 });
 
@@ -105,7 +216,6 @@ describe("the sidebar IA", () => {
       "/fees",
       "/profile",
       "/brokers",
-      "/change-password",
     ]);
   });
 
@@ -136,8 +246,10 @@ describe("the sidebar's words", () => {
     }
   });
 
-  it("keeps the professional name for renamed Me/Market pages", () => {
-    expect(PAGES["/me/portfolios"].formerly).toBe("Rebalance Tracker");
+  it("keeps the professional name for renamed Portfolio/Market pages", () => {
+    expect(PAGES["/portfolio/portfolios"].formerly).toBe("Rebalance Tracker");
+    // "Investments" is retired as a tab but stays searchable in ⌘K, exactly as "Baskets" did.
+    expect(PAGES["/portfolio/overview"].formerly).toBe("Investments");
     expect(PAGES["/market/mood"].formerly).toBe("Market Health");
   });
 

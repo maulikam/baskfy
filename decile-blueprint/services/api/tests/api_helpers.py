@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.app import create_app
 from baskfy_api.auth import encode_token
+from baskfy_api.auth_google import GoogleIdentity, GoogleVerificationError
 from baskfy_api.db import get_session
 from baskfy_api.routers import public as public_router
 from baskfy_api.settings import Settings
@@ -223,3 +224,44 @@ async def running_public_app(
         opened = settings.model_copy(update={"public_api_enabled": True})
         async with running_app(opened, session) as client:
             yield client
+
+
+#: The address :func:`google_token` signs in by default. Its own constant rather than a test
+#: module's, so every suite that drives a sign-in agrees on who signed in.
+STUB_GOOGLE_EMAIL: Final = "person@example.com"
+
+
+class StubGoogle:
+    """Stands in for :class:`GoogleVerifier`, the way :class:`Outbox` stands in for the mailer.
+
+    The real verifier's job is to turn an opaque string into a trusted identity by checking
+    Google's signature over it. Reproducing that here would mean an RSA keypair and a local JWKS
+    per test, which is the *verifier's* test, not every endpoint's — it lives in
+    `test_auth_google.py` and uses real crypto. What every other test needs is a way to say
+    "Google says this is person@example.com", so this double reads the identity straight out of a
+    token this module also writes.
+
+    ``rejects`` is how a test asks for the failure path without constructing an invalid token:
+    whatever the verifier would have refused, it refuses the same way — one
+    :class:`GoogleVerificationError`, no detail about which check failed.
+    """
+
+    PREFIX: Final = "stub"
+
+    def __init__(self) -> None:
+        self.rejects: set[str] = set()
+        self.seen: list[str] = []
+
+    async def verify(self, id_token: str) -> GoogleIdentity:
+        self.seen.append(id_token)
+        if id_token in self.rejects or not id_token.startswith(f"{self.PREFIX}:"):
+            raise GoogleVerificationError("stub refused this token")
+        _, subject, email, name = id_token.split(":", maxsplit=3)
+        return GoogleIdentity(subject=subject, email=email, name=name or None)
+
+
+def google_token(
+    subject: str = "google-sub-1", email: str = STUB_GOOGLE_EMAIL, name: str = ""
+) -> str:
+    """The string :class:`StubGoogle` reads an identity out of. Never leaves the test suite."""
+    return f"{StubGoogle.PREFIX}:{subject}:{email}:{name}"

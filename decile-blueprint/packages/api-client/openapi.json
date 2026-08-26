@@ -7062,6 +7062,94 @@
         "type": "object"
       },
       "JsonValue": {},
+      "KiteBasketItemOut": {
+        "description": "One row, in Kite's field names rather than ours — it is Kite's form that receives it.",
+        "properties": {
+          "exchange": {
+            "title": "Exchange",
+            "type": "string"
+          },
+          "order_type": {
+            "title": "Order Type",
+            "type": "string"
+          },
+          "product": {
+            "title": "Product",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "readonly": {
+            "title": "Readonly",
+            "type": "boolean"
+          },
+          "tradingsymbol": {
+            "title": "Tradingsymbol",
+            "type": "string"
+          },
+          "transaction_type": {
+            "title": "Transaction Type",
+            "type": "string"
+          },
+          "variety": {
+            "title": "Variety",
+            "type": "string"
+          }
+        },
+        "required": [
+          "variety",
+          "tradingsymbol",
+          "exchange",
+          "transaction_type",
+          "order_type",
+          "quantity",
+          "product",
+          "readonly"
+        ],
+        "title": "KiteBasketItemOut",
+        "type": "object"
+      },
+      "KiteBasketOut": {
+        "description": "Everything the browser needs to render the form, and nothing it does not.",
+        "properties": {
+          "api_key": {
+            "title": "Api Key",
+            "type": "string"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "excluded": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/KiteBasketItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "api_key",
+          "configured",
+          "items"
+        ],
+        "title": "KiteBasketOut",
+        "type": "object"
+      },
       "LabelledRateOut": {
         "description": "A rate §5.2 asks for that :class:`MetricKind` has no member for — labelled, never bare.\n\nTwo numbers are in this position and both are consolidated-level: §5.2's \"show **XIRR** (the\nuser's cash-flow-adjusted experience) and **TWR** (strategy quality) as two labeled numbers\".\nNeither is a portfolio's headline metric, so neither has a ``MetricKind``, and the enum\nbelongs to ``allocation_ledger`` — adding a member to it from here would be this router\ndeciding the product's metric vocabulary.\n\nSo the shape carries the same obligations without the enum: a label saying what the number is\nand the date it runs from. Criterion 3 asks for a label and a start date, and that is exactly\nwhat this is. The day ``MetricKind`` gains money-weighted and consolidated members, these two\nfields become a :class:`ReturnFigureOut` and this class goes away.",
         "properties": {
@@ -19181,6 +19269,118 @@
           }
         },
         "summary": "Latest Plan",
+        "tags": [
+          "baskets"
+        ]
+      }
+    },
+    "/api/v1/baskets/plan/kite": {
+      "get": {
+        "description": "Read the desk's latest plan and shape it for Kite's basket form.\n\n404 when the desk has recorded no plans — inherited from `latest_plan`, which is called rather\nthan re-queried so there is one piece of SQL reading `rebalance_versions` and not two.",
+        "operationId": "planAsKiteBasket",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KiteBasketOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No trading day available for that date"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The latest plan as a Kite Publisher basket (hand-off, not execution)",
         "tags": [
           "baskets"
         ]

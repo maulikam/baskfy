@@ -400,9 +400,24 @@ def _weights_by_symbol(
 def _min_amount_for(
     constituents: Sequence[tuple[int, Decimal, str]], prices: Mapping[int, Decimal]
 ) -> Decimal | None:
-    if not constituents or len(prices) != len(constituents):
+    """The smallest whole-share amount, or NULL when any one name is unpriced.
+
+    The guard is "every constituent has a price", **not** "the map is the same size as the
+    basket". ``prices`` is built once per chunk and covers every instrument across every basket
+    in it, so a size comparison is only ever true by accident — it held while ``cb_basket`` had a
+    single 15-name row and returned NULL for all six baskets the moment the catalogue was filled.
+    A basket cannot be priced off a map that happens to be the right length.
+    """
+    if not constituents:
         return None
-    ordered_prices = [prices[iid] for iid, _, _ in constituents]
+    ordered_prices: list[Decimal] = []
+    for instrument_id, _, _ in constituents:
+        price = prices.get(instrument_id)
+        if price is None:
+            # One unpriced name means the whole minimum is unknown, and NULL says so rather than
+            # quoting a figure that would buy an incomplete basket.
+            return None
+        ordered_prices.append(price)
     ordered_weights = [weight for _, weight, _ in constituents]
     return money(min_amount(ordered_prices, ordered_weights))
 

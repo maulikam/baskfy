@@ -31,6 +31,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.curated_catalogue import seed_catalogue
 from baskfy_api.curated_seed import (
     seed_curated_collections,
     seed_curated_managers,
@@ -662,6 +663,9 @@ async def seed_reference(session: AsyncSession) -> dict[str, int]:
         "cb_manager": await seed_curated_managers(session),
         # Returns 0 until instruments for the fixture ranking exist (after fixture/bars).
         "cb_momentum_scan": await seed_momentum_scan_basket(session),
+        # The published shelf. Each entry re-runs its own screen against real bars, so this is 0
+        # on a database with no price history and fills in once a backfill has run.
+        "cb_catalogue": await seed_catalogue(session),
         # Last, and deliberately so: membership is a predicate over the baskets that exist, so a
         # shelf seeded before its baskets would come out empty and stay empty until the next run.
         "cb_collection": await seed_curated_collections(session),
@@ -702,7 +706,7 @@ async def _run(command: str, database_url: str | None) -> dict[str, int]:
             # therefore being exercised against an empty catalog. The export is already sorted by
             # AVERAGE SHARPE RETURN 12/6/3/1 desc (docs/13), which is a momentum ranking, so its
             # head is the honest input for a basket called Momentum Scan.
-            # `docs/DECISIONS-MERGE.md` M40.6.
+            # `docs/DECISIONS-MERGE.md` M46.6.
             counts["cb_momentum_scan"] = await seed_momentum_scan_basket(
                 session, ranked_symbols=tuple(row.symbol for row in to_rows().instruments)
             )

@@ -39,6 +39,10 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # `test_baskets_readonly.py` fails if a mutating verb ever appears on either.
     "/baskets": {"get"},
     "/baskets/plan": {"get"},
+    # M47: the desk's latest plan shaped as a Kite Publisher basket. A GET, and it stays a GET —
+    # it returns a payload the *browser* posts to Kite, where the user reviews and confirms in
+    # their own session. `test_baskets_readonly.py` asserts that structurally.
+    "/baskets/plan/kite": {"get"},
     # M26 (MERGE-PROMPTS.md), not docs/07, for the same reason: the desk's own console pages,
     # moved onto the web app. Every one is GET and only GET -- `test_desk_readonly.py` fails if a
     # mutating verb appears, and asserts the module cannot reach a broker at all.

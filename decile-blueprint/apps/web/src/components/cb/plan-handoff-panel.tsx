@@ -63,7 +63,7 @@ export function PlanHandoffPanel({
           </a>
         </Button>
         <Button asChild variant="outline" size="sm">
-          <Link href="/baskets">Today&apos;s scan basket</Link>
+          <Link href="/discover">Today&apos;s scan basket</Link>
         </Button>
       </div>
     </aside>

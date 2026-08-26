@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import datetime as dt
 import html
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
@@ -63,12 +64,52 @@ class Message:
     reply_to: str | None = None
 
 
+#: Where the mark is fetched from. A *setting* would be better and is deliberately not used: this
+#: module is pure and has no `Settings` in scope, every caller is a one-line template function, and
+#: the URL is a constant of the brand rather than of a deployment. `BASKFY_BRAND_ORIGIN` overrides
+#: it for a host that is not the production one.
+BRAND_ORIGIN: Final = os.environ.get("BASKFY_BRAND_ORIGIN", "https://staging.baskfy.com")
+LOGO_URL: Final = f"{BRAND_ORIGIN}/brand/logo-mark-192.png"
+
+
+def _masthead() -> str:
+    """The mark and the name, above every message.
+
+    **The wordmark is text, not part of the image, and that is the whole design.** Gmail, Outlook
+    and Apple Mail all block remote images until the reader allows them, so an all-image masthead
+    renders as an empty box with a red X on first open — on the *verification* email, which is the
+    first thing anyone ever receives from us. Text always renders; the mark is decoration that
+    improves it when images load.
+
+    For the same reason the `<img>` carries `alt=""` rather than "Baskfy": with the word already
+    beside it in real text, a non-empty alt would make a screen reader say the name twice, and
+    would put a stray "Baskfy" where the broken-image placeholder sits.
+
+    PNG, not the site's SVG: Gmail strips `<img>` elements pointing at SVG outright. 192px for a
+    48px slot, so it stays sharp on a retina screen.
+    """
+    return (
+        '<table role="presentation" cellpadding="0" cellspacing="0" border="0" '
+        'style="margin:0 0 24px"><tr>'
+        f'<td style="padding-right:10px;vertical-align:middle">'
+        f'<img src="{LOGO_URL}" width="34" height="34" alt="" '
+        'style="display:block;border:0;outline:none;text-decoration:none;height:34px;width:auto">'
+        "</td>"
+        '<td style="vertical-align:middle;font-size:18px;font-weight:600;'
+        'letter-spacing:-0.035em;color:#14161a">Baskfy</td>'
+        "</tr></table>"
+    )
+
+
 def _document(heading: str, paragraphs: list[str], footer: str = FOOTER_TEXT) -> str:
     """The one HTML shell. Inline styles only — every mail client strips a `<style>` block.
 
     ``paragraphs`` are **already-escaped HTML fragments**, not text: a couple of the messages need
     a link or a code block, and escaping at the call site keeps the one shared shell from having to
     know which is which. Every caller passes `html.escape(...)` for anything user-supplied.
+
+    The masthead is prepended here rather than by each template, so no message can ship unbranded
+    and none can brand itself differently. See :func:`_masthead`.
     """
     body = "".join(
         paragraph
@@ -79,6 +120,7 @@ def _document(heading: str, paragraphs: list[str], footer: str = FOOTER_TEXT) ->
     return (
         '<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;'
         'font-size:15px;color:#14161a;max-width:560px;margin:0 auto;padding:24px">'
+        f"{_masthead()}"
         f'<h1 style="font-size:18px;margin:0 0 20px">{html.escape(heading)}</h1>'
         f"{body}"
         '<hr style="border:none;border-top:1px solid #e4e6eb;margin:24px 0">'

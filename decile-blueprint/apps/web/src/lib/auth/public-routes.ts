@@ -7,7 +7,7 @@ import { STATIC_PUBLIC_PREFIXES } from "@/lib/marketing/routes";
  * allow-by-default list (`/profile`, `/portfolios`, `/backtests`, `/admin`, …), which meant a new
  * route under `(app)` was public until somebody remembered to add it — and by August 2026 that
  * "somebody remembered" had not happened for `/build`, `/explore`, `/create`, `/me/*`,
- * `/holdings`, `/watchlist`, `/baskets/*`, `/basket/*`, `/instruments/*` or `/screens/*`. A gate
+ * `/holdings`, `/watchlist`, `/discover/*`, `/basket/*`, `/instruments/*` or `/screens/*`. A gate
  * whose default is *open* fails silently, and the failure is invisible in review because the
  * diff that adds a page never mentions the middleware.
  *
@@ -37,13 +37,11 @@ const PUBLIC_EXACT: ReadonlySet<string> = new Set([
 
 /** Paths that are public together with everything beneath them. */
 const PUBLIC_PREFIXES: readonly string[] = [
-  /* The way in. Gating the sign-in funnel would be a redirect loop, and the reset and
-     verification links in email are followed by people who by definition have no session. */
+  /* The way in, and since Google sign-in replaced registration it is the only one
+     (`docs/DECISIONS-MERGE.md` M46). `/register`, `/forgot-password`, `/reset-password` and
+     `/verify-email` were here too; all four pages are gone. Gating this would be a redirect
+     loop. */
   "/login",
-  "/register",
-  "/forgot-password",
-  "/reset-password",
-  "/verify-email",
   /* The way out. `/logout` clears the cookie; requiring a session to reach it is harmless but
      confusing when a stale cookie is exactly what somebody is trying to get rid of. */
   "/logout",

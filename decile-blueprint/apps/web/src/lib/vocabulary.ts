@@ -68,14 +68,36 @@ export const PAGES = {
     blurb: "Companies that have recently joined the exchange.",
     formerly: "Listings",
   },
-  "/baskets": {
-    title: "Explore · Baskets",
-    blurb: "Browse curated baskets by cost, swing, and how they have moved so far.",
+  "/discover": {
+    title: "Discover",
+    blurb: "Say how you want to invest, and see which baskets match it.",
     formerly: "Explore",
   },
-  "/baskets/featured": {
-    title: "Featured · Baskets",
-    blurb: "The names the strategy ranks highest right now, and the weight each would carry.",
+  "/discover/all": {
+    title: "All baskets · Discover",
+    blurb: "Every published basket, with its risk before its return.",
+    formerly: "Explore",
+  },
+  "/discover/compare": {
+    title: "Compare · Discover",
+    blurb: "Two or three baskets side by side, measured over the same period.",
+  },
+  "/discover/collections": {
+    title: "Collections · Discover",
+    blurb: "Baskets grouped into shelves — by cost of entry, by how they pick, by who runs them.",
+  },
+  "/discover/saved": {
+    title: "Saved · Discover",
+    blurb: "Baskets you have saved, and how they have moved since you saved them.",
+  },
+  "/discover/featured": {
+    /*
+      Renamed. "Featured" implied an editorial choice among many and the page has never been one:
+      it renders the house momentum strategy as it would be constructed today. A label that
+      cannot be explained is worse than a plain one — docs/DISCOVER-AUDIT.md C13.
+    */
+    title: "House strategy · Discover",
+    blurb: "The engine's own momentum basket, as it would be built today — names and weights.",
     formerly: "Today's basket",
   },
   "/build": {
@@ -88,20 +110,46 @@ export const PAGES = {
     blurb: "Run a set of rules against the past and see how it would have gone.",
     formerly: "Backtests",
   },
+  /* —— The Portfolio hub (PORTFOLIO_REDESIGN.md §2) ——
+     Five tabs, one section. `Overview` is the landing tab; `Portfolios` absorbed the tab that
+     used to be called `Investments`, because they named the same thing (§1 problem 1). Titles
+     carry the section so the browser tab, the ⌘K palette and the heading all agree. —— */
+  "/portfolio/overview": {
+    title: "Overview · Portfolio",
+    blurb: "Everything you hold, across baskets and brokers, in one picture.",
+    formerly: "Investments",
+  },
+  "/portfolio/portfolios": {
+    title: "Portfolios · Portfolio",
+    blurb: "Your holdings grouped into portfolios that can be measured on their own.",
+    formerly: "Rebalance Tracker",
+  },
+  "/portfolio/holdings": {
+    title: "Holdings · Portfolio",
+    blurb: "Every share you own, which broker holds it, and which portfolio it belongs to.",
+  },
+  "/portfolio/activity": {
+    title: "Activity · Portfolio",
+    blurb: "Buys, sells, cash moves, dividends and corporate actions, newest first.",
+  },
+  "/portfolio/watchlist": {
+    title: "Watchlist · Portfolio",
+    blurb: "Baskets you are keeping an eye on, and how they have moved since you added them.",
+  },
+  /* —— Legacy path keys kept so redirects and residual imports still resolve —— */
   "/me/investments": {
     title: "Investments · Me",
     blurb: "Baskets you hold, what they are worth, and what still needs a decision.",
   },
   "/me/portfolios": {
     title: "Portfolios · Me",
-    blurb: "Each basket, rule, and holding in its own box, with its own capital.",
+    blurb: "Each basket, screen, and holding in its own portfolio, with its own capital.",
     formerly: "Rebalance Tracker",
   },
   "/me/watchlist": {
     title: "Watchlist · Me",
     blurb: "Baskets you are keeping an eye on, and how they have moved since you added them.",
   },
-  /* —— Legacy path keys kept so redirects and residual imports still resolve —— */
   "/dashboard": {
     title: "Today · Market",
     blurb: "Every NSE index, and how each one moved.",
@@ -119,12 +167,12 @@ export const PAGES = {
   },
   "/portfolios": {
     title: "Portfolios · Me",
-    blurb: "Each basket, rule, and holding in its own box, with its own capital.",
+    blurb: "Each basket, screen, and holding in its own portfolio, with its own capital.",
     formerly: "Rebalance Tracker",
   },
   "/explore": {
     title: "Explore · Baskets",
-    blurb: "Browse curated baskets by cost, swing, and how they have moved so far.",
+    blurb: "Browse curated baskets by cost, volatility, and how they have moved so far.",
   },
   "/investments": {
     title: "Investments · Me",
@@ -184,11 +232,6 @@ export const PAGES = {
     title: "Brokers",
     blurb: "Connect Zerodha, HDFC, Kotak, ICICI and more in a few clicks.",
     formerly: "Broker connections",
-  },
-  "/change-password": {
-    title: "Password",
-    blurb: "Change the password you sign in with.",
-    formerly: "Change Password",
   },
   "/faq": {
     title: "Common questions",

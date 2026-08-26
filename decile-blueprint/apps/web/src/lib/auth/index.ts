@@ -1,32 +1,44 @@
 import NextAuth, { type DefaultSession } from "next-auth";
-import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 
-import { baskfyAdapter } from "@/lib/auth/adapter";
 import { ACCESS_TOKEN_TTL_SECONDS, mintAccessToken } from "@/lib/auth/jwt";
-import { requestOtp, verifyOtp, verifyPassword } from "@/lib/auth/api-auth";
+import { exchangeGoogleIdToken } from "@/lib/auth/api-auth";
 
 /**
- * Auth.js v5 — docs/02: "Auth.js v5 (credentials + email OTP), sessions in Postgres";
- * docs/11 §Security: "Argon2id password hashing; OTP login as the default path, password
- * optional. JWT: HS256, 15-min access."
+ * Auth.js v5 — Google is the only provider (`docs/DECISIONS-MERGE.md` M46).
  *
- * Three things are worth reading before changing anything here.
+ * WHAT THIS REPLACED
+ * ------------------
+ * Two `Credentials` providers: `password` (Argon2id, verified by the API) and `otp` (a six-digit
+ * code mailed by the API). Both are gone, along with `/register`, `/verify-email`,
+ * `/forgot-password` and `/reset-password`. The immediate cause was operational — SES sits in its
+ * sandbox, so every verification mail to an unverified recipient was refused and five consecutive
+ * sign-ups dead-ended — but the change stands on its own: five accounts existed and none had a
+ * password set, so there was nothing to migrate and a whole category of things to stop getting
+ * wrong.
  *
- * 1. **The session strategy is `jwt`, and that is forced.** Auth.js v5 cannot use database
- *    sessions with the Credentials provider. docs/02 asks for credentials *and* Postgres
- *    sessions; those two cannot both hold. The Postgres adapter still carries the user records
- *    and the OTP verification tokens, which is the part the email flow needs. `docs/08a` §3.
+ * Four things are worth reading before changing anything here.
  *
- * 2. **The access token is not the session cookie.** The cookie is Auth.js's own encrypted JWT;
- *    `session.accessToken` is a *separate* HS256 token minted for `services/api`, whose verifier
- *    (`baskfy_api.auth`) refuses anything longer-lived than fifteen minutes. It is re-minted
- *    inside the `jwt` callback whenever it is within a minute of expiring, so a long session
- *    never carries a stale bearer token.
+ * 1. **The session strategy is `jwt`.** It was forced before, because Auth.js v5 cannot use
+ *    database sessions with the Credentials provider. With Google it is now a choice, and it stays
+ *    for the reason it always held in practice: `services/api` is the system of record for
+ *    accounts, and a second session store would be a second answer to "who is this".
  *
- * 3. **The credential checks are the API's.** Prompt 12 built `/auth/*`, so `api-auth.ts` posts
- *    to them and Argon2id verification happens where the hash lives (docs/11 §Security). The
- *    access token in the session is the one the API minted, not one this app derived — so the
- *    token the API verifies and the token it issued are the same object.
+ * 2. **There is no adapter any more.** `baskfyAdapter` existed to hold users and the OTP
+ *    verification tokens. The API owns both facts, and the OTP tokens no longer exist, so the web
+ *    app has stopped opening its own Postgres connection entirely. One less place that can read
+ *    the account table.
+ *
+ * 3. **The access token is not the session cookie.** The cookie is Auth.js's own encrypted JWT;
+ *    `session.accessToken` is a *separate* HS256 token minted by the API for itself, whose
+ *    verifier (`baskfy_api.auth`) refuses anything longer-lived than fifteen minutes. It is
+ *    re-minted inside the `jwt` callback whenever it is within a minute of expiring, so a long
+ *    session never carries a stale bearer token.
+ *
+ * 4. **Google proves the identity; the API decides what it means.** This app never tells the API
+ *    who signed in. It forwards the ID token and the API checks the signature, the audience and
+ *    `email_verified` for itself — see `exchangeGoogleIdToken`. That keeps this app outside the
+ *    trust boundary, where a front end belongs.
  */
 
 declare module "next-auth" {
@@ -35,6 +47,13 @@ declare module "next-auth" {
     accessToken?: string | undefined;
     /** Epoch milliseconds; the browser client refreshes shortly before this. */
     accessTokenExpiresAt?: number | undefined;
+    /**
+     * The generation this session was issued at. `(app)/layout.tsx` compares it against
+     * `GET /me`'s `session_epoch` on every gated render; a session older than the server's
+     * generation was revoked and must not render. This is the only kill switch a `jwt`-strategy
+     * session has — see `NEEDS-MAULIK.md` §22.
+     */
+    sessionEpoch?: number | undefined;
     user: { publicId?: string | undefined } & DefaultSession["user"];
   }
 }
@@ -49,6 +68,7 @@ interface BaskfyToken {
   publicId?: string | undefined;
   accessToken?: string | undefined;
   accessTokenExpiresAt?: number | undefined;
+  sessionEpoch?: number | undefined;
   /** Auth.js's own JWT is an open record; keeping the index signature makes this a *view* of it. */
   [claim: string]: unknown;
 }
@@ -61,75 +81,59 @@ function secret(): string | undefined {
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  adapter: baskfyAdapter(),
   session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60 },
   trustHost: true,
   pages: { signIn: "/login", error: "/login" },
   providers: [
-    Credentials({
-      id: "password",
-      name: "Email and password",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(raw) {
-        const email = typeof raw?.email === "string" ? raw.email : "";
-        const password = typeof raw?.password === "string" ? raw.password : "";
-        if (!email || !password) return null;
-        const account = await verifyPassword(email, password);
-        if (!account) return null;
-        return {
-          id: account.publicId,
-          email: account.email,
-          name: account.name,
-          accessToken: account.accessToken,
-          accessTokenExpiresAt: account.accessTokenExpiresAt,
-        };
-      },
-    }),
-    /**
-     * docs/11: "OTP login as the default path, password optional." Modelled as a second
-     * credentials provider rather than Auth.js's Email provider because the code is entered in
-     * the app (a six-digit OTP), not clicked in a magic link — and because the send half is
-     * `POST /auth/request-otp` (docs/07), which is the server's job, not the client's.
-     */
-    Credentials({
-      id: "otp",
-      name: "Email OTP",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        code: { label: "Code", type: "text" },
-      },
-      async authorize(raw) {
-        const email = typeof raw?.email === "string" ? raw.email : "";
-        const code = typeof raw?.code === "string" ? raw.code : "";
-        if (!email || !code) return null;
-        const account = await verifyOtp(email, code);
-        if (!account) return null;
-        return {
-          id: account.publicId,
-          email: account.email,
-          name: account.name,
-          accessToken: account.accessToken,
-          accessTokenExpiresAt: account.accessTokenExpiresAt,
-        };
+    Google({
+      /* `?? ""` rather than `!`: `exactOptionalPropertyTypes` is on, and the honest reading of a
+         missing client id is "this deployment has no Google credentials", not "trust me". An
+         empty string fails at Google's authorize endpoint with a message that names the problem,
+         which is a better failure than a non-null assertion that turns it into a runtime
+         `undefined` somewhere deeper. `Settings.require_configured` refuses it outright in
+         production, so this state can only exist on a laptop or in staging. */
+      clientId: process.env.BASKFY_GOOGLE_CLIENT_ID ?? "",
+      clientSecret: process.env.BASKFY_GOOGLE_CLIENT_SECRET ?? "",
+      authorization: {
+        params: {
+          // `select_account` rather than the default. Without it, anyone with exactly one Google
+          // session is signed straight back into the account they just signed out of, with no
+          // visible step in between — which reads as "sign out is broken" rather than as SSO.
+          prompt: "select_account",
+          scope: "openid email profile",
+        },
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, account }) {
       const claims: BaskfyToken = token;
-      if (user?.id) {
-        claims.publicId = user.id;
-        // The API issued this on `/auth/login`; carrying it rather than minting a second one
-        // means the token the API verifies is the token the API created.
-        const authorised = user as { accessToken?: string; accessTokenExpiresAt?: number };
-        if (authorised.accessToken) {
-          claims.accessToken = authorised.accessToken;
-          claims.accessTokenExpiresAt = authorised.accessTokenExpiresAt;
+
+      /* First call of a new sign-in: `account` carries what Google returned. This is the only
+         moment the ID token exists, so it is the only moment the exchange can happen.
+
+         A failed exchange THROWS rather than returning the token. Returning it would hand the
+         browser a session cookie with no `publicId` — signed in as far as Auth.js is concerned,
+         nobody as far as the API is concerned — and every gated page would then bounce the user
+         through a redirect loop it could not explain. Throwing sends them to `pages.error`, which
+         is `/login`, with nothing issued. */
+      if (account?.id_token) {
+        const exchanged = await exchangeGoogleIdToken(account.id_token);
+        if (!exchanged) {
+          throw new Error("The accounts service rejected that Google sign-in.");
         }
+        claims.publicId = exchanged.publicId;
+        claims.accessToken = exchanged.accessToken;
+        claims.accessTokenExpiresAt = exchanged.accessTokenExpiresAt;
+        /* Stamped once, at sign-in, and never refreshed. That is the whole point: if this were
+           re-read from the API alongside the access token below, the session would silently adopt
+           every bump the moment it saw one, and a revoked session would renew itself instead of
+           dying. The number has to be frozen at issue for the comparison downstream to mean
+           anything. */
+        claims.sessionEpoch = exchanged.sessionEpoch;
+        return token;
       }
+
       const publicId = claims.publicId;
       if (!publicId) return token;
 
@@ -154,9 +158,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.user.publicId = claims.publicId;
       session.accessToken = claims.accessToken;
       session.accessTokenExpiresAt = claims.accessTokenExpiresAt;
+      session.sessionEpoch = claims.sessionEpoch;
       return session;
     },
   },
 });
 
-export { requestOtp, ACCESS_TOKEN_TTL_SECONDS };
+export { ACCESS_TOKEN_TTL_SECONDS };

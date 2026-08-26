@@ -120,7 +120,7 @@ export default async function LandingPage() {
         a generated near-replica of a distinctive photograph is still a replica. What carries over
         is the register, which is what was actually wanted: one small human, an immense quiet
         space, overcast light, desaturated. The scene is a stepwell, whose stacked tiers happen to
-        say something a portfolio of sleeves would want said.
+        say something a portfolio of allocations would want said.
       */}
       <section className="pb-14 pt-10 text-center">
         <div className="mx-auto w-full max-w-6xl px-5 sm:px-7 lg:px-10">
@@ -133,13 +133,13 @@ export default async function LandingPage() {
           </h1>
 
           <p className="mx-auto mt-7 max-w-[64ch] text-[17px] leading-relaxed text-muted-foreground">
-            Split one portfolio across a manager&rsquo;s basket, a rule you wrote and tested
-            yourself, and the long-term holdings you run by hand — each with its own capital, each
+            Split one portfolio across a manager&rsquo;s basket, a screen you wrote and tested
+            yourself, and the long-term holdings you manage yourself — each with its own capital, each
             tracked on its own. The shares stay in your demat, across whichever brokers you use.
           </p>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <FloodButton href="/register" size="nav" hoverLabel="Let&rsquo;s go">
+            <FloodButton href="/login" size="nav" hoverLabel="Let&rsquo;s go">
               Get started
             </FloodButton>
             <Link
@@ -196,10 +196,19 @@ export default async function LandingPage() {
           <h2 id="how-it-works" className="vaaya-display max-w-[20ch] text-[2.25rem] sm:text-[3rem]">
             From intent to result, with the cost visible before it runs.
           </h2>
+          {/*
+            Reworded 26 Aug 2026. It used to say the step's cost "in brokerage and statutory
+            charges is on screen before you press it", and that was not true: no plan surface in
+            this app renders a brokerage or STT line — `curated_plans.py` and the investment
+            routers carry no cost field at all, and `/portfolio/[id]/costs` is accrued platform
+            fees. Our fee is ours to state and is stated; the broker's charges are the broker's,
+            and the broker shows them. Saying so is the version that survives a reader checking.
+          */}
           <p className="mt-7 max-w-[64ch] text-[15px] leading-relaxed text-muted-foreground">
             Nothing on this site executes anything. Every step is reversible up to the moment you
-            press confirm, and what the step will cost you in brokerage and statutory charges is on
-            screen before you press it.
+            confirm, our fee for the step is on screen before you get there, and the brokerage and
+            statutory charges are your broker&rsquo;s — shown at the broker, on the order you
+            confirm yourself.
           </p>
         </div>
         <div className="mt-10 pb-16">

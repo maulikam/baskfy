@@ -74,9 +74,7 @@ export type MeOut = Schemas["MeOut"];
 export type EntitlementsOut = Schemas["EntitlementsOut"];
 export type DeletionOut = Schemas["DeletionOut"];
 export type DataExportOut = Schemas["DataExportOut"];
-export type RegisterIn = Schemas["RegisterIn"];
-export type LoginIn = Schemas["LoginIn"];
-export type ChangePasswordIn = Schemas["ChangePasswordIn"];
+export type GoogleSignInIn = Schemas["GoogleSignInIn"];
 export type RankPointOut = Schemas["RankPointOut"];
 
 /** docs/07 §"Account & billing" — plans, checkout and invoices (Prompt 13). */
@@ -96,7 +94,7 @@ export type InvoicePage = Schemas["InvoicePage"];
  * `broker_account_id`, `depth` and `child_ids`. The old flat names are gone rather than
  * aliased — an alias would let a caller keep reading a tree as a list and never find out.
  */
-export type PortfolioDetailOut = Schemas["PortfolioDetailOut"];
+export type PortfolioDetailOut = Schemas["baskfy_api__routers__portfolios__PortfolioDetailOut"];
 export type PortfolioNodeOut = Schemas["PortfolioNodeOut"];
 export type PortfolioForestOut = Schemas["PortfolioForestOut"];
 export type PortfolioWriteDetailOut = Schemas["PortfolioWriteDetailOut"];
@@ -148,7 +146,7 @@ export type HoldingPage = Schemas["HoldingPage"];
 export type TradeOut = Schemas["TradeOut"];
 export type TradePage = Schemas["TradePage"];
 export type EquityPointOut = Schemas["EquityPointOut"];
-export type DrawdownPointOut = Schemas["DrawdownPointOut"];
+export type DrawdownPointOut = Schemas["baskfy_api__schemas__DrawdownPointOut"];
 export type MonthlyReturnOut = Schemas["MonthlyReturnOut"];
 export type FragilityRunOut = Schemas["FragilityRunOut"];
 export type ExportLinkOut = Schemas["ExportLinkOut"];

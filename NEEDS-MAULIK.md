@@ -32,7 +32,10 @@ blocker in the project.
 | **14** | **Git remote URL** so local SC/D3 commits can be pushed. |
 | **13** | ✅ **D3 written** (posture B in `docs/DECISIONS-MERGE.md` §D3, 23 Aug 2026). OAuth gate flipped. Counsel checklist C1–C3 (algo ID, research vs advice, RA/empanelment) remains open but **non-blocking** — see §13 below. |
 | **D7 / D10** | ⚠ UNREVIEWED stubs in `docs/DECISIONS-MERGE.md` (Track B flags stay false; no public market-data API). Amounts + licensing opinion still need Maulik / counsel before any flag flip. |
-| **15** | **Fundamentals live fill** — pipeline step exists (T9.1, NSE quote-equity folded into snapshots). Live `fundamental_daily` is still empty until a night (or a one-off fetch) runs against NSE. See §15. |
+| **15** | ✅ **Fundamentals — cleared.** The diagnosis in this row was wrong: NSE had *retired* `/api/quote-equity` (403 from Akamai), so no night would ever have filled the table. Provider repointed at `GetQuoteApi`; `fundamental_daily` filled to 82.2% of the published date and the factsheet serves real M-cap and P/E. Finish the last 18% with `make fundamentals DATE=2026-08-18`. See §15. |
+| **17** | **The NSE fetch stalls every ~600 requests** — and step 6 is now long enough to hit it, so this can hang a night. Worked around for backfills; the real fix is named. See §17. |
+| **19** | ⚠ **Four legal pages are live and show `[SUPPLIER LEGAL NAME]` to visitors.** Needs seven facts from you, then counsel. `docs/COUNSEL-BRIEF.md` is ready to forward. See §19. |
+| **18** | **The landing page's sample screen is 402-blocked** by the `custom_columns` entitlement, not by data. Unblocking it moves a paywall — your call (D7-adjacent). See §18. |
 | **16** | **Broker credentials for nine brokers** — Upstox, Angel One, Fyers, 5paisa, Dhan, ICICI, Kotak, HDFC (Groww has no public API). Only `BASKFY_KITE_*` exists today. Blocks consolidated holdings for every non-Zerodha account. See §16. |
 
 ---
@@ -487,21 +490,67 @@ peers, and the rest of Phase 4.
 normalized holdings row shape. CSV import on `/portfolios` remains the way to load a book.
 
 
-### 15. Fundamentals source — **code landed T9.1; live fill still needs a pipeline night**
-**Status:** source decided · **Raised:** UI route audit, 23 Aug 2026 · **Updated:** Tree 3 Numbers, 24 Aug 2026
+### 15. Fundamentals live fill — **the diagnosis was wrong; fixed and filled (Tree 3, 25 Aug 2026)**
+**Status:** ✅ **cleared** — nothing of yours is needed · **Raised:** UI route audit, 23 Aug 2026
+· **Closed:** Tree 3 Fundamentals, 25 Aug 2026
 
-**What is needed:** a night (or a one-off `equity_fundamentals` fetch) against NSE, with a live
-cookie-primed session, so `fundamental_daily` on the latest published date is no longer empty.
-The source is no longer an open product decision: NSE `quote-equity`, issued size × `close_raw`.
+*(Note: two sections in this file are numbered 15. This is the fundamentals one; the
+mark-as-invested §15 further down is Tree 8's and was already closed.)*
 
-**Why:** the join in `compute_factors` is ready. The backfilled DB still has **zero** non-null
-`marketcap_cr` on the latest date until that fetch runs (~2,500 symbols at the NSE throttle).
+**What this entry used to say:** the parser and the join were written, the table was empty, and
+all it needed was "a night (or a one-off `equity_fundamentals` fetch) against NSE".
 
-**What it blocks:** accurate decile bucketing, M-cap column on `/`, P/E on instrument factsheets
-on live (non-seed) data, until the first successful fetch.
+**That was wrong, and a night would not have fixed it.** NSE **retired** `/api/quote-equity` in
+its Next.js migration. The route now answers **403 from AkamaiGHost**, which reads exactly like a
+bot block and is really a removed endpoint — so a night against NSE would have archived ~2,500
+copies of an Akamai deny page and reported success. The live quote page calls
+`/api/NextApi/apiClient/GetQuoteApi?functionName=getSymbolData` instead, found by reading the
+page's own JavaScript chunks, and that answers 200 with no cookies and no priming. The payload
+shape changed too (`equityResponse[0].tradeInfo.issuedSize`, `secInfo.pdSymbolPe`), so the parser
+was reading fields that no longer exist.
 
-**What was done:** T9.1 — parser, archive-then-parse, worker upsert, folded into
-`refresh_index_snapshots`. Errors are recorded; they do not fail the night.
+**A second trap, worth knowing about for any future backfill:** the date the API serves is
+`max(pipeline_run.trade_date)` where `data_version IS NOT NULL`, **not** `max(ohlcv_daily.date)`.
+Those were 2026-08-18 and 2026-08-21. Filling only the newer one leaves every surface on an em
+dash while `fundamental_daily` looks full. Both dates are filled, and the CLI now defaults to the
+published date and says which it picked.
+
+**Where it stands.** Measured, not recalled (`bash tools/tree3/report-numbers.sh`):
+
+| | 2026-08-18 (**published — what the API serves**) | 2026-08-21 (newest bars) |
+|---|---|---|
+| `fundamental_daily` rows | **2,089 of 2,540 — 82.2%** | 605 of 2,545 — 23.8% |
+| with `marketcap_cr` | 2,089 | 605 |
+| with `pe` | 1,570 | 451 |
+
+**It is not 100%, and the reason is not NSE.** The fill was stopped part-way; the remaining names
+were never fetched. Re-running `make fundamentals DATE=2026-08-18` finishes them — `--resume`
+skips the 2,089 already stored and the archive never refetches a key it holds, so it costs only
+what is genuinely missing. Twenty-four names are genuine misses: NSE answers with an entry whose
+sections are all `null`, and no row is invented for them.
+
+**Proof the chain works end to end**, not just the table:
+
+* `factors_cli recompute --date 2026-08-18` took `factor_daily` from 271 market caps / 0 P/E to
+  846 / 637, every non-null matching its `fundamental_daily` source exactly. (It has not been
+  re-run since the fill passed 2,089, so `make refactors DATE=2026-08-18` is worth one more pass.)
+* `GET /api/v1/instruments/BHARTIARTL` at `as_of=2026-08-18` now returns
+  `marketcap_cr = 1207038` and `pe = 32.942`. It returned `null`/`null` before.
+* Decile bucketing is no longer one giant tie: D1's smallest cap (₹39,471 cr) exceeds the largest
+  cap outside D1 (₹39,366 cr), across 760 distinct values.
+
+**What is still true and is not going to change:** `pb` and `div_yield` are not in NSE's current
+payload at all, so they stay NULL — permanently, not pending a fetch. An em dash on a single
+name's P/E now means NSE publishes no ratio for it (a company without earnings, most BZ-series
+names), not that nothing was ever fetched.
+
+**One thing this did *not* fix, filed as §17:** the NSE fetch stalls roughly every 600 requests
+and the nightly path can now hit it. See §17 for the symptom, why the timeouts miss it, and the
+fix worth making.
+
+**Commands:** `make fundamentals DATE=2026-08-18` then `make refactors DATE=2026-08-18`, or
+`bash tools/tree3/drive-fill.sh 2026-08-18` to supervise it. `RUN-AND-TEST.md` §2 has the detail;
+`docs/DECISIONS-MERGE.md` §T3F.1–T3F.6 has the reasoning.
 
 ---
 
@@ -532,6 +581,79 @@ rebalance email-once, and drift-repair shipped in the same tree (T8.3–T8.6).
 
 **What it no longer blocks:** End-to-end investor journeys on web (still no web order path).
 
+
+---
+
+### 19. **Four legal pages are LIVE and showing `[SUPPLIER LEGAL NAME]` to visitors**
+**Status:** open, **the most urgent thing in this file** · **Raised:** UI prune, 25 Aug 2026
+
+**What is needed:** seven facts, then a lawyer. The facts are yours; the review is counsel's.
+`docs/COUNSEL-BRIEF.md` is a single document you can forward to a lawyer as-is — it consolidates
+the eight questions on the drafts, the C1–C3 regulatory questions from §13, and D7/D10, so nobody
+has to assemble them from three files.
+
+**The finding.** `/terms-conditions`, `/privacy-policy`, `/disclaimer` and `/refund-policy` all
+return **HTTP 200 to anyone** and render literal bracketed placeholders. Measured 25 Aug 2026:
+
+| Page | What a visitor sees today |
+|---|---|
+| `/terms-conditions` | `[SUPPLIER LEGAL NAME]` `[SUPPLIER ENTITY TYPE]` `[SUPPLIER ADDRESS]` `[SUPPLIER GSTIN]` `[GRIEVANCE OFFICER NAME]` `[GRIEVANCE OFFICER EMAIL]` `[CITY]` |
+| `/privacy-policy` | `[SUPPLIER LEGAL NAME]` `[SUPPLIER ADDRESS]` `[GRIEVANCE OFFICER NAME]` `[GRIEVANCE OFFICER EMAIL]` `[HOSTING PROVIDER]` `[EMAIL PROVIDER]` |
+| `/disclaimer` | `[SUPPLIER LEGAL NAME]` |
+| `/refund-policy` | `[GRIEVANCE OFFICER NAME]` `[GRIEVANCE OFFICER EMAIL]` |
+
+This is not a rendering bug — the values are genuinely unknown to the repo. The in-repo DRAFT
+marker is deliberately invisible on the rendered page (Prompt 18's instruction, on the reasoning
+that a "DRAFT" watermark invites a customer to argue nothing was agreed), and a guard test
+enforces that. The consequence nobody weighed is what you see above.
+
+**The seven facts (nothing can be filled in without them):**
+
+- [ ] Supplier legal name, and entity type (proprietorship / LLP / private limited)
+- [ ] Registered address
+- [ ] GSTIN
+- [ ] Grievance officer name + email — **required by the DPDP Act**
+- [ ] Governing-law city / venue
+- [ ] Hosting provider and email provider, named for the privacy policy
+- [ ] Confirm prices are GST-inclusive (they are, in this build), or decide to change it
+
+**What was done meanwhile:** `docs/COUNSEL-BRIEF.md` written; the guard test re-run
+(`legal-drafts.test.ts`, 22 passed) confirming the drafts still cannot pass as reviewed; this
+entry filed. **An agent cannot engage a lawyer** — that step is yours and nothing here substitutes
+for it.
+
+---
+
+### 18. **The landing page's sample screen is 402-blocked — a pricing call, not a bug fix**
+**Status:** open, **needs your decision** (D7-adjacent) · **Raised:** Tree 3 Fundamentals,
+25 Aug 2026
+
+**What is needed:** a decision on whether the marketing page's teaser table may show gated
+columns to a visitor with no account. Two lines of code either way; neither is mine to pick.
+
+**What happens now.** `/` renders *"The sample screen could not be loaded — the data service did
+not answer when this page was built."* That is its honest empty state, and the cause is not the
+data service. `fetchSampleScreen` posts to `/api/v1/screens/preview` asking for
+`close_raw, marketcap_cr, ret_12m, sharpe_12m, vol_12m`. `ANONYMOUS` grants only
+`Feature.SCREENER`, and `DEFAULT_RESULT_COLUMNS` is `(ret_12m, vol_12m, close_raw)` — so three of
+those five are "custom columns" and the call returns **402 payment-required**.
+
+**Why it lands here rather than being fixed.** The page's own copy says the sample is there to be
+read "without an account", so the intent is clear enough — but every way of honouring it changes
+product behaviour:
+
+* grant `custom_columns` to `ANONYMOUS`, or exempt the preview route → **moves a paywall**;
+* drop the gated columns from the teaser → **removes the M-cap column** that §15 asked for, and
+  Sharpe with it;
+* give the marketing fetch a service principal → a new trust boundary for a public page.
+
+That is a pricing and positioning question (D7), and CLAUDE.md says never to build against a guess
+on those.
+
+**What it does *not* block.** Fundamentals themselves are filled and rendering: the instrument
+factsheet serves real `marketcap_cr` and `pe`, and the screener's own columns carry them for the
+served date. This is the last surface §15 named that still shows nothing, and it would show
+nothing today even with a perfect fundamentals table.
 
 ---
 
@@ -592,6 +714,23 @@ upstox, angelone, fyers, fivepaisa, dhan) now read `"planned"` — and a live cr
 closed on the way: `POST /brokers/upstox/connect` had been redirecting to Upstox's authorize
 dialog carrying **Baskfy's Zerodha app key**, on a signed-off path. See `DECISIONS-MERGE.md`
 §PM7 and §PM8.
+
+**Update — 26 Aug 2026, portfolio-redesign leaf C2 (broker holdings sync).** The worker now has a
+holdings sync (`baskfy_worker.tasks.holdings_sync`) behind a provider port, with a Kite adapter
+(`KiteProvider.broker_holdings` / `.broker_cash`) and a fixture adapter. **No live Kite fetch has
+ever been executed** — the whole chain is proven against the fixture provider, with the test
+suite's network block armed. Two hands-only things stand between that and a real sync, both
+Zerodha-side and neither blocking any further engineering:
+
+1. **A valid daily Kite access token.** Kite invalidates it at the start of each trading day, and
+   regenerating it is a login + 2FA that only Maulik can perform. Without one the holdings
+   capability is simply unavailable, and — deliberately — the stack raises rather than falling
+   back to invented positions (`CapabilityNotAvailable`, never a fixture).
+2. **Which `broker_account.id` that token belongs to.** P4.2 (per-user encrypted OAuth tokens) is
+   not built, so the adapter holds exactly one token. `KiteRuntime.holdings_account_id` exists to
+   record the answer and refuses a read for any other account; left unset on the single-tenant
+   founder box, it serves whichever account is asked for. It must be set before a second tenant
+   exists.
 
 | Broker | What only your hands can obtain |
 |---|---|
@@ -670,3 +809,242 @@ investors already holding a basket when a manager is suspended or leaves.
 **Blocks:** onboarding anyone who is not Maulik. This is the one that makes the other three real:
 suspension currently takes a basket out of the listing, and nothing says what an investor already
 invested in it is owed or told.
+
+---
+
+## 20. ⚠️ URGENT — the Kite token's encryption key is committed and pushed
+
+**This one is not about the deployment; the deployment's safety check found it.**
+
+`kite-momentum-rebalancer/data/.kite_token.json.key` is a **44-byte base64 string — a Fernet
+key** — and it is tracked by git. It entered in commit `44c029c` ("M16: green — the order path is
+its own package, and the token is encrypted", 22 Aug 2026) and `git branch -r --contains 44c029c`
+puts it in **`origin/developer`**, i.e. on GitHub at `git@github.com:maulikam/baskfy.git`.
+
+The cause is a one-line gap, now closed: `kite-momentum-rebalancer/.gitignore` ignored
+`data/.kite_token.json` — the ciphertext — and said nothing about `data/.kite_token.json.key`, the
+key that decrypts it. Ignoring the ciphertext while committing its key protects nothing.
+
+**What is and is not exposed.** The encrypted token itself was never tracked (`git ls-files`
+confirms only the `.key` is in the index), so the repository alone does not yield a usable Kite
+session. What is exposed is the key, permanently, to anyone who has ever had read access to that
+repository or a clone of it. The token that key decrypts grants full account read **and order
+placement** until it expires.
+
+**Needed from you, in this order:**
+
+1. **Rotate the Fernet key and re-encrypt the token** — assume the committed key is public. This
+   is the fix; everything below is cleanup. Deleting the file from GitHub does not un-disclose it.
+2. **Rotate the Kite API secret** at the Kite developer console, and re-authenticate, if you want
+   to be certain no derived session survives.
+3. Decide about history. `git rm --cached` untracks it going forward; only a history rewrite
+   (`git filter-repo`) removes it from the 22 Aug commit, and that rewrites every SHA on
+   `developer` and needs a force-push. **Not done autonomously** — it is destructive, it touches a
+   branch with a remote, and it is worth nothing without step 1.
+
+**Blocks:** nothing technically — but it is the largest single security item open in the repo, and
+it is worth more than any feature currently in flight.
+
+**Done meanwhile:** the gitignore gap is closed (`data/.kite_token.json.*` and `data/*.key`), and
+`tools/deploy/verify-safety.sh` now fails the build if a secret-shaped file is ever tracked again.
+The file is left in the index untouched, because untracking it without rotating the key would look
+like a fix while changing nothing.
+
+---
+
+## 21. AWS account access for the Phase A box — ✅ RESOLVED 26 Aug 2026, except DNS
+
+**Applied.** Account `056235107739` ("Proof of Concept"), `ap-south-1`. 29 resources. The stack is
+running on `i-086986250704e4392` / EIP `3.108.148.38`. See `docs/DECISIONS-MERGE.md` AWS3.
+
+**The one thing still outstanding is yours:** point `baskfy.com`'s nameservers at the Route 53 zone
+(below). Until then `staging.baskfy.com` is NXDOMAIN, Caddy cannot pass the ACME challenge, and
+there is no certificate — so the container is deliberately stopped rather than burning Let's
+Encrypt's five-failures-per-hour limit.
+
+```
+ns-1364.awsdns-42.org
+ns-1695.awsdns-19.co.uk
+ns-485.awsdns-60.com
+ns-909.awsdns-49.net
+```
+
+The gate password is in `ops/baskfy-staging-gate-password.txt` (gitignored). Put it in a password
+manager; nothing else has a copy.
+
+### Original entry, kept for the record
+
+Everything in `docs/08` §3 is now built and verified locally — images, compose, Caddy gate,
+Terraform — and none of it can be applied, because there is no AWS on this machine: `which aws`
+finds nothing and `~/.aws` does not exist.
+
+**Update, 26 Aug 2026:** Maulik logged into the AWS **console**. That is not CLI access — this
+machine still has no credentials. The AWS CLI (2.36.31) is now installed, and
+`bash tools/deploy/preflight-aws.sh` reports exactly what is missing; it currently stops at
+"no working credentials".
+
+**Needed:**
+
+1. **CLI credentials for the `ap-south-1` account.** `aws configure sso` is the recommendation —
+   short-lived, nothing written to disk that is worth stealing. `aws configure` with an access key
+   also works and is what most people do; it puts a long-lived secret in `~/.aws/credentials`,
+   which in a single-owner account is the only real risk in this whole step. The permission set is
+   `decile-blueprint/infra/terraform/deploy-policy.json`, derived from the 29 resources the
+   configuration actually declares; `AdministratorAccess` via Identity Center is the simpler and,
+   on balance, safer choice for the first apply.
+2. **`baskfy.com`'s nameservers pointed at the Route 53 hosted zone** Terraform creates, so
+   `staging.baskfy.com` resolves and Caddy can complete an ACME challenge. Registrar-side, so only
+   you can do it.
+3. **A budget email address** for the billing alarm the Terraform sets at $75/mo — §7's line is
+   "nothing above $75/month exists until the SEBI gate is passed", so the alarm is set to notice
+   the moment that stops being true.
+4. **The gate password** — run `bash tools/deploy/gate-password.sh`, keep the plaintext in a
+   password manager, put the hash in `.env.staging.compose` on the box. It is printed once and
+   stored nowhere.
+
+**Blocks:** `terraform apply`, and therefore the live URL. Nothing else.
+
+**Done meanwhile:** the whole stack runs and is verified end to end on Docker locally — eight
+services, migrations at `0024`, the gate challenging strangers, server rendering reaching the API
+across the container network. `bash tools/deploy/verify-stack.sh` reproduces it. When the
+credentials exist the remaining work is `terraform apply` and one `docker compose up`, both
+scripted in `decile-blueprint/docs/runbooks/07-deploy-phase-a.md`.
+
+**Not blocking this, but blocking going public:** the four legal drafts are still unreviewed
+(§19), which is why the first deploy is gated and `noindex` rather than public. Flipping it public
+is runbook §7 and deliberately takes more than one edit.
+
+---
+
+## 22. A web session cannot be revoked — ✅ BUILT 27 Aug 2026
+
+**Found 26 Aug 2026, chasing your report that Back still shows the app after signing out.**
+
+That report is fixed (`docs/DECISIONS-MERGE.md` §SEC1): the sign-out response now sends
+`Clear-Site-Data`, which drops the origin's cookies, storage and cached documents — the
+back/forward cache among them — so Back has nothing left to restore. Shipped, tested, no
+migration.
+
+Chasing it surfaced something larger, and it is not fixed because the fix is yours to sequence.
+
+**The gap.** The web session is an Auth.js JWT cookie with `maxAge` of 30 days, and `jwt` strategy
+is forced — Auth.js v5 cannot use database sessions with the Credentials provider (`docs/08a` §3).
+That cookie is a self-contained 30-day credential. Sign-out deletes the browser's copy; it does
+not invalidate the credential. The `jwt` callback re-mints the 15-minute API access token locally
+from `BASKFY_JWT_SECRET` without ever calling the API, and `current_principal` checks signature,
+claims and lifetime and then only that `sub` names a row in `app_user` — it never reads the
+refresh-session table.
+
+**So `revoke_all_for_user` does not do what its docstring says.** `set_password` calls it, and its
+docstring reads "A password change that leaves old sessions alive does not evict whoever prompted
+it." That is true of the API's own refresh sessions and false of the session real users hold.
+**Changing your Baskfy password does not sign an attacker out of the web app** — they keep it for
+the remainder of the 30 days. Password reset and account deletion have the same gap. API keys, by
+contrast, have `revoked_at` and a test asserting a revoked key dies within a second; user sessions
+have no equivalent.
+
+**The fix, and why it is not already done.** A session epoch: an integer column on `app_user`,
+bumped by `revoke_all_for_user`, returned on `MeOut`, stamped into the Auth.js JWT at sign-in, and
+compared in `(app)/layout.tsx` — which already fetches `/me` on every gated render, so it costs no
+new round trip. Sign-out bumps it too, which turns the 30-day cookie into a dead one. That is an
+Alembic migration, a regenerated `@baskfy/api-client`, and a change to the auth contract, applied
+to a box that is already serving. Landing it beside a header fix without your say-so is the kind
+of change that should not arrive as a surprise.
+
+**Built 27 Aug 2026** on your go-ahead, exactly as recommended above:
+`app_user.session_epoch` (migration `0025_session_epoch`), bumped by `revoke_all_for_user`, so a
+password change, a password reset and an account deletion all now end web sessions as well as API
+ones. Returned on `MeOut` and `SessionOut`, frozen into the Auth.js token at sign-in, compared in
+`(app)/layout.tsx` where `GET /me` is already awaited — no extra round trip. Full reasoning, the
+four edge cases and what was rejected are in `docs/DECISIONS-MERGE.md` §SEC2.
+
+**Two things deliberately NOT changed, which are still yours to call:**
+
+1. **Ordinary sign-out does not bump the epoch** — signing out on a laptop should not end the
+   session on a phone. The epoch now makes an explicit **"sign out everywhere"** button possible
+   for the first time; say the word and it is a small addition to the security page.
+2. **`maxAge` stays at 30 days.** How often people re-authenticate is a product decision, and the
+   epoch is what makes 30 days defensible rather than alarming.
+
+**Still needs your hands — one deploy step.** `alembic upgrade head` against the staging database
+before the new web image goes up. The migration is additive, `NOT NULL DEFAULT 0`, backfills every
+existing account to the generation their current sessions already carry, and is invisible to
+anybody signed in when it runs — nobody gets logged out by the deploy. Down-migration round-trips
+cleanly if you need to back it out.
+
+**Blocks:** nothing. The sentence "signing out of Baskfy ends the session" is now true of the
+browser, and "changing your password evicts whoever prompted it" is now true of the server.
+
+**Done meanwhile:** the browser half is closed and verified — `Clear-Site-Data` plus `no-store`
+plus explicit cookie deletion on `/logout`, pinned by
+`decile-blueprint/apps/web/src/app/logout/__tests__/route.test.ts`. The server-side gate was
+audited over the public internet and is sound: every gated path redirects without a session, a
+forged cookie is refused by the layout rather than the middleware, `?next=` cannot be pointed
+off-origin, every `/admin/*` route is 401 anonymous and 404 to a non-staff session, and none of
+the 142 paths the live API publishes can place an order. The full list of what was checked and
+found good is in `docs/DECISIONS-MERGE.md` §SEC1, so nobody re-audits it.
+
+---
+
+## §24 — Google OAuth client credentials (M46)
+
+**What is needed.** `BASKFY_GOOGLE_CLIENT_ID` and `BASKFY_GOOGLE_CLIENT_SECRET` from the Google
+Cloud console, for the `baskfy` project's Web application OAuth client.
+
+- **Authorized redirect URIs:** `https://staging.baskfy.com/api/auth/callback/google` and
+  `http://localhost:3000/api/auth/callback/google`. Verified against the code: there is no
+  `basePath` override in the Auth.js config and the box sets `NEXTAUTH_URL=https://staging.baskfy.com`.
+- **Scopes:** `openid`, `email`, `profile` — all non-sensitive, so publishing to Production needs
+  no Google verification review.
+- **Both containers need it.** The web container runs the OAuth dance and needs both values; the
+  API needs the **client id** only, because it checks that `aud` on the incoming ID token is ours.
+  That check is what stops a token minted for somebody else's Google app from signing that person
+  into Baskfy.
+
+**Do not set the secret through `tools/deploy/box.sh`.** Its own header says why: `ssm
+send-command` parameters are retained in command history and visible in CloudTrail. Use
+`aws ssm start-session --target i-086986250704e4392 --profile baskfy-poc` and edit
+`/opt/baskfy/.env.staging` there, the way `ses-credentials.sh` writes the SMTP password.
+
+**Blocks:** **all sign-in.** M46 removed the password and the OTP, so with no client id there is
+no way into the product. `Settings.require_configured` refuses an empty client id in production
+outright; in staging the API boots and `POST /auth/google` answers 401.
+
+**Done meanwhile:** everything else. The endpoint, the verifier, `auth_identity` + migration 0026,
+the Auth.js Google provider, the rewritten `/login`, and the removal of the whole email/password
+surface are built and tested (45 API auth tests, 1928 web tests). The moment the two values are on
+the box, sign-in works without another code change.
+
+---
+
+## §25 — Two things the legal pages now promise that nothing enforces (M46)
+
+**Supplied 27 Aug 2026 and filled in:** RENIL, sole proprietorship, 703/2 Sector 4C, Gandhinagar,
+Gujarat 382006, GSTIN `24ANFPD9399F1ZS`, grievance officer Maulik / `grievance@baskfy.com`,
+jurisdiction Gandhinagar. All ten placeholders across the four documents are gone.
+
+**What is needed, item 1: an inbox for `grievance@baskfy.com`.** It receives nothing today. SES on
+this deployment is send-only and the domain has no MX for it. That address is now printed in
+`terms-conditions.mdx` §15 and `privacy-policy.mdx` §10 as the statutory grievance contact under
+the Consumer Protection (E-Commerce) Rules and the DPDP Act. **A grievance address that silently
+bounces is worse than not naming one.** Needs Google Workspace on the domain, or SES inbound
+receiving.
+
+**What is needed, item 2: a full legal name for the grievance officer.** "Maulik" alone is
+recorded. The E-Commerce Rules contemplate a named individual, which in practice means a full
+name. One-line fix in three places once supplied.
+
+**What is needed, item 3: enforce the 90-day log retention we now state.** `privacy-policy.mdx` §5
+says server logs are kept 90 days. The box rotates container logs by **size** — Docker `json-file`
+at `max-size=50m, max-file=5`, 250 MB per service — not by age, which at current traffic is very
+likely *more* than ninety days. The policy currently promises a shorter retention than the
+infrastructure delivers. Needs a cron or a log shipper with a time-based lifecycle.
+
+**Blocks:** nothing technical. Items 1 and 2 should be closed before the legal pages are relied on
+by a regulator or a payment provider; item 3 before anyone audits the claim.
+
+**Done meanwhile:** all four documents are internally consistent and the privacy policy was
+corrected for M46 — §1, §2, §3, §4, §6 and §7 described passwords, sign-in codes and a lockout
+that no longer exist, and §4 omitted **Google**, which now receives an authentication request for
+every sign-in. `DRAFT-NOTICE.md` items 1 and 8 are closed, item 7 amended. The remaining six
+decisions there still need a lawyer.

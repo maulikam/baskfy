@@ -19,7 +19,14 @@ from typing import Final
 
 import httpx
 import pytest
-from api_helpers import TEST_JWT_SECRET, assert_problem, url
+from api_helpers import (
+    STUB_GOOGLE_EMAIL,
+    TEST_JWT_SECRET,
+    StubGoogle,
+    assert_problem,
+    google_token,
+    url,
+)
 from screener_helpers import requires_db
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +35,7 @@ from baskfy_api.auth import encode_token
 from baskfy_api.csrf import CSRF_COOKIE, CSRF_HEADER, REFRESH_COOKIE
 from baskfy_api.email import Mailer
 from baskfy_api.email.templates import Message
-from baskfy_core.models import AppUser, AuthLockout, AuthToken, ConsentRecord, RefreshToken
+from baskfy_core.models import AppUser, AuthIdentity, ConsentRecord, RefreshToken
 
 pytestmark = [
     pytest.mark.db,
@@ -41,9 +48,7 @@ pytestmark = [
 
 JsonMap = dict[str, object]
 
-EMAIL: Final = "person@example.com"
-PASSWORD: Final = "correct horse battery"
-OTHER_PASSWORD: Final = "a different one entirely"
+EMAIL: Final = STUB_GOOGLE_EMAIL
 
 
 def body_of(response: httpx.Response) -> JsonMap:
@@ -106,217 +111,197 @@ def outbox(api: httpx.AsyncClient) -> Outbox:
     return box
 
 
-async def register(
-    api: httpx.AsyncClient, email: str = EMAIL, password: str | None = PASSWORD
+@pytest.fixture(autouse=True)
+def google(api: httpx.AsyncClient) -> StubGoogle:
+    """Swap the app's verifier for the double. Same seam as :func:`outbox`.
+
+    ``autouse`` because every test in this module signs in, and a test that forgot to ask for the
+    double would reach the *real* verifier, fail its JWKS fetch, and report a confusing 401
+    instead of the thing it was actually asserting.
+    """
+    stub = StubGoogle()
+    transport = api._transport
+    app = getattr(transport, "app", None)
+    assert app is not None, "the api fixture must be built on an ASGITransport"
+    app.state.google_verifier = stub
+    return stub
+
+
+async def sign_in(
+    api: httpx.AsyncClient,
+    *,
+    subject: str = "google-sub-1",
+    email: str = EMAIL,
+    name: str = "",
 ) -> httpx.Response:
-    payload: JsonMap = {"email": email, "accept_terms": True}
-    if password is not None:
-        payload["password"] = password
-    return await api.post(url("/auth/register"), json=payload)
+    """What `register` + `login` used to be, in one call — because it now is one call.
+
+    A first sign-in creates the account and a later one signs into it; there is no separate
+    registration step to perform first (`docs/DECISIONS-MERGE.md` M46).
+    """
+    return await api.post(
+        url("/auth/google"), json={"id_token": google_token(subject, email, name)}
+    )
 
 
-async def login(
-    api: httpx.AsyncClient, email: str = EMAIL, password: str = PASSWORD
-) -> httpx.Response:
-    return await api.post(url("/auth/login"), json={"email": email, "password": password})
+class TestGoogleSignIn:
+    """The only way in, so this is where the front door is tested.
 
+    The *verification* half — signature, audience, issuer, `email_verified` — is
+    `test_auth_google.py`, against real RSA. What is here is everything that happens once a token
+    has been believed: which account it resolves to, what is created, and what is recorded.
+    """
 
-class TestRegistration:
-    async def test_it_creates_an_account_and_sends_a_confirmation(
-        self, api: httpx.AsyncClient, outbox: Outbox, screener_session: AsyncSession
+    async def test_a_first_sign_in_creates_the_account_and_a_session(
+        self, api: httpx.AsyncClient, google: StubGoogle
     ) -> None:
-        response = await register(api)
-        assert response.status_code == 202
-        assert body_of(response)["status"] == "accepted"
+        del google
+        response = await sign_in(api, name="Asha Rao")
+        assert response.status_code == 200, response.text
 
-        user = (
-            await screener_session.execute(select(AppUser).where(AppUser.email == EMAIL))
-        ).scalar_one()
-        assert user.password_hash is not None
-        assert user.password_hash.startswith("$argon2id$"), "docs/11 names Argon2id"
-        assert PASSWORD not in user.password_hash
-
-        message = outbox.last_for(EMAIL)
-        assert "Confirm" in message.subject
-        assert message.text and message.html, "plain-text alternative is required (Prompt 12 §3)"
-
-    async def test_registering_a_known_address_says_the_same_thing(
-        self, api: httpx.AsyncClient, outbox: Outbox
-    ) -> None:
-        """docs/11's PII inventory makes the customer list PII, so this form is not a
-        membership check."""
-        first = await register(api)
-        second = await register(api)
-        assert first.status_code == second.status_code == 202
-        assert body_of(first)["detail"] == body_of(second)["detail"]
-        # The owner of the address is told, though.
-        assert "sign-in code" in outbox.last_for(EMAIL).subject
-
-    async def test_it_requires_the_terms_to_be_accepted(self, api: httpx.AsyncClient) -> None:
-        """docs/11 §Compliance: "DPDP Act: consent record"."""
-        response = await api.post(
-            url("/auth/register"), json={"email": "x@example.com", "accept_terms": False}
-        )
-        assert_problem(response, 400, "invalid-screen-definition")
-
-    async def test_it_records_the_consent(
-        self, api: httpx.AsyncClient, outbox: Outbox, screener_session: AsyncSession
-    ) -> None:
-        del outbox
-        await register(api)
-        rows = (
-            await screener_session.execute(select(AppUser).where(AppUser.email == EMAIL))
-        ).scalar_one()
-        consents = (
-            (
-                await screener_session.execute(
-                    select(ConsentRecord).where(ConsentRecord.user_id == rows.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        assert {row.kind for row in consents} == {"terms", "privacy"}
-        assert all(row.document_version for row in consents)
-
-    async def test_a_password_is_optional(
-        self, api: httpx.AsyncClient, outbox: Outbox, screener_session: AsyncSession
-    ) -> None:
-        """docs/11: "OTP login as the default path, **password optional**"."""
-        del outbox
-        assert (await register(api, password=None)).status_code == 202
-        user = (
-            await screener_session.execute(select(AppUser).where(AppUser.email == EMAIL))
-        ).scalar_one()
-        assert user.password_hash is None
-
-    async def test_a_short_password_is_refused(self, api: httpx.AsyncClient) -> None:
-        response = await api.post(
-            url("/auth/register"),
-            json={"email": EMAIL, "password": "short", "accept_terms": True},
-        )
-        assert_problem(response, 400, "invalid-screen-definition")
-
-
-class TestPasswordLogin:
-    async def test_it_returns_an_access_token_and_sets_the_cookies(
-        self, api: httpx.AsyncClient, outbox: Outbox
-    ) -> None:
-        del outbox
-        await register(api)
-        response = await login(api)
-        assert response.status_code == 200
-
-        payload = body_of(response)
-        assert payload["token_type"] == "Bearer"
-        assert payload["email"] == EMAIL
-        assert isinstance(payload["access_token"], str)
-
-        # docs/11: the refresh token is an httpOnly cookie and nowhere else.
+        body = body_of(response)
+        assert body["email"] == EMAIL
+        assert body["name"] == "Asha Rao"
+        assert body["access_token"]
+        # docs/11: the refresh token is a cookie and never the body.
+        assert "refresh_token" not in body
         assert REFRESH_COOKIE in response.cookies
         assert CSRF_COOKIE in response.cookies
-        assert "refresh" not in response.text.lower()
 
-    async def test_the_access_token_works_against_the_rest_of_the_api(
-        self, api: httpx.AsyncClient, outbox: Outbox
+    async def test_the_address_is_verified_without_an_email_being_sent(
+        self, api: httpx.AsyncClient, google: StubGoogle, outbox: Outbox
     ) -> None:
-        del outbox
-        await register(api)
-        token = str(body_of(await login(api))["access_token"])
-        me = await api.get(url("/me"), headers={"Authorization": f"Bearer {token}"})
-        assert me.status_code == 200
-        assert as_map(body_of(me))["email"] == EMAIL
+        """The whole point of the change.
 
-    async def test_a_wrong_password_is_a_flat_401(
-        self, api: httpx.AsyncClient, outbox: Outbox
+        Verification used to mean a link in a mail this service sent — and when SES refused to
+        deliver it, the account was unreachable. Google asserted the address before we ever saw
+        it, so the account is verified on arrival and no mail is involved.
+        """
+        del google
+        assert body_of(await sign_in(api))["email_verified"] is True
+        assert outbox.messages == [], [m.subject for m in outbox.messages]
+
+    async def test_signing_in_twice_reuses_the_account(
+        self, api: httpx.AsyncClient, google: StubGoogle, screener_session: AsyncSession
     ) -> None:
-        del outbox
-        await register(api)
-        assert_problem(await login(api, password=OTHER_PASSWORD), 401, "unauthenticated")
+        """House rule 7 applied to identity: re-running produces identical rows, not new ones."""
+        del google
+        first = body_of(await sign_in(api))
+        second = body_of(await sign_in(api))
+        assert first["public_id"] == second["public_id"]
 
-    async def test_an_unknown_address_answers_identically(self, api: httpx.AsyncClient) -> None:
-        known = await login(api, email="nobody@example.com", password=OTHER_PASSWORD)
-        body = assert_problem(known, 401, "unauthenticated")
-        assert "not valid" in str(body["detail"]).lower()
-        assert "no such" not in str(body["detail"]).lower()
-
-
-class TestOtp:
-    async def test_the_default_path_signs_in_with_a_code(
-        self, api: httpx.AsyncClient, outbox: Outbox
-    ) -> None:
-        """docs/11: "OTP login as the default path"."""
-        await register(api, password=None)
-        accepted = await api.post(url("/auth/request-otp"), json={"email": EMAIL})
-        assert accepted.status_code == 202
-
-        code = outbox.codes_in(outbox.last_for(EMAIL))
-        response = await api.post(url("/auth/verify-otp"), json={"email": EMAIL, "code": code})
-        assert response.status_code == 200
-        assert body_of(response)["email"] == EMAIL
-
-    async def test_a_code_works_once(self, api: httpx.AsyncClient, outbox: Outbox) -> None:
-        await register(api, password=None)
-        await api.post(url("/auth/request-otp"), json={"email": EMAIL})
-        code = outbox.codes_in(outbox.last_for(EMAIL))
-        assert (
-            await api.post(url("/auth/verify-otp"), json={"email": EMAIL, "code": code})
-        ).status_code == 200
-        assert_problem(
-            await api.post(url("/auth/verify-otp"), json={"email": EMAIL, "code": code}),
-            401,
-            "unauthenticated",
-        )
-
-    async def test_an_unknown_address_sends_nothing_and_says_the_same(
-        self, api: httpx.AsyncClient, outbox: Outbox
-    ) -> None:
-        response = await api.post(url("/auth/request-otp"), json={"email": "ghost@example.com"})
-        assert response.status_code == 202
-        assert outbox.messages == []
-
-    async def test_the_code_is_stored_hashed(
-        self, api: httpx.AsyncClient, outbox: Outbox, screener_session: AsyncSession
-    ) -> None:
-        await register(api, password=None)
-        await api.post(url("/auth/request-otp"), json={"email": EMAIL})
-        code = outbox.codes_in(outbox.last_for(EMAIL))
-        rows = (
-            (
-                await screener_session.execute(
-                    select(AuthToken).where(AuthToken.email == EMAIL, AuthToken.purpose == "otp")
-                )
-            )
+        users = (
+            (await screener_session.execute(select(AppUser).where(AppUser.email == EMAIL)))
             .scalars()
             .all()
         )
-        assert rows
-        assert all(code not in row.token_hash for row in rows)
+        assert len(users) == 1
+        identities = (
+            (await screener_session.execute(select(AuthIdentity))).scalars().all()
+        )
+        assert len(identities) == 1, "a second sign-in must not accumulate an identity row"
 
-    async def test_signing_in_by_code_verifies_the_address(
-        self, api: httpx.AsyncClient, outbox: Outbox, screener_session: AsyncSession
+    async def test_the_subject_identifies_the_account_not_the_address(
+        self, api: httpx.AsyncClient, google: StubGoogle, screener_session: AsyncSession
     ) -> None:
-        """A correct code proves control of the inbox, which is what verification asserts."""
-        await register(api, password=None)
-        await api.post(url("/auth/request-otp"), json={"email": EMAIL})
-        code = outbox.codes_in(outbox.last_for(EMAIL))
-        await api.post(url("/auth/verify-otp"), json={"email": EMAIL, "code": code})
+        """A Workspace rename must not create a second account.
 
-        user = (
-            await screener_session.execute(select(AppUser).where(AppUser.email == EMAIL))
-        ).scalar_one()
-        await screener_session.refresh(user)
-        assert user.email_verified_at is not None
+        This is why `auth_identity` is keyed on Google's `sub` and not on the email: the address
+        is a display fact that can change, and the subject is the identity that cannot.
+        """
+        del google
+        first = body_of(await sign_in(api, subject="sub-stable", email=EMAIL))
+        renamed = body_of(await sign_in(api, subject="sub-stable", email="asha@example.com"))
+        assert renamed["public_id"] == first["public_id"]
+
+        users = (await screener_session.execute(select(AppUser))).scalars().all()
+        assert len(users) == 1, "the rename created a second account"
+
+    async def test_a_different_subject_with_the_same_address_is_refused(
+        self, api: httpx.AsyncClient, google: StubGoogle
+    ) -> None:
+        """The inverse, and the dangerous direction.
+
+        Google does not hand one verified address to two subjects, so this should be unreachable.
+        If it ever happens, adopting the account would let the second subject inherit the first
+        one's holdings — so it refuses rather than guesses.
+        """
+        del google
+        assert (await sign_in(api, subject="sub-one")).status_code == 200
+        assert_problem(await sign_in(api, subject="sub-two"), 401, "unauthenticated")
+
+    async def test_consent_is_recorded_once_at_the_first_sign_in(
+        self, api: httpx.AsyncClient, google: StubGoogle, screener_session: AsyncSession
+    ) -> None:
+        """docs/11 §Compliance, DPDP.
+
+        The mandatory checkbox is gone (`docs/DECISIONS-MERGE.md` M46.2) — the sign-in page states
+        the agreement rather than gating on it. The *record* is not gone, and it must not
+        accumulate a row per sign-in either: it says what was agreed to and when, once.
+        """
+        del google
+        await sign_in(api)
+        await sign_in(api)
+
+        kinds = sorted(
+            row.kind
+            for row in (await screener_session.execute(select(ConsentRecord))).scalars().all()
+        )
+        assert kinds == ["privacy", "terms"], kinds
+
+    async def test_a_token_google_did_not_sign_is_a_flat_401(
+        self, api: httpx.AsyncClient, google: StubGoogle
+    ) -> None:
+        google.rejects.add(google_token())
+        assert_problem(await sign_in(api), 401, "unauthenticated")
+
+    async def test_the_failure_says_nothing_about_which_check_refused(
+        self, api: httpx.AsyncClient, google: StubGoogle
+    ) -> None:
+        """A caller who learns *why* their forged token failed learns how to forge a better one."""
+        google.rejects.add(google_token())
+        refused = body_of(await sign_in(api))
+        forged = body_of(
+            await api.post(url("/auth/google"), json={"id_token": "not-even-the-right-shape"})
+        )
+        assert refused["detail"] == forged["detail"]
+
+    async def test_no_account_is_created_by_a_refused_token(
+        self, api: httpx.AsyncClient, google: StubGoogle, screener_session: AsyncSession
+    ) -> None:
+        google.rejects.add(google_token())
+        await sign_in(api)
+        users = (await screener_session.execute(select(AppUser))).scalars().all()
+        assert users == []
+
+    async def test_the_endpoint_accepts_no_identity_field_at_all(
+        self, api: httpx.AsyncClient, google: StubGoogle
+    ) -> None:
+        """The security property the whole design rests on, enforced twice by the schema.
+
+        `GoogleSignInIn` has one field, so there is nothing to send but the token — and because
+        `_In` sets ``extra="forbid"``, an email smuggled alongside it is not quietly ignored, it
+        is a 400. The weaker version of this endpoint takes the caller's word for who they are;
+        this one cannot be asked the question at all.
+        """
+        del google
+        refused = await api.post(
+            url("/auth/google"),
+            json={"id_token": google_token(email=EMAIL), "email": "attacker@example.com"},
+        )
+        assert_problem(refused, 400, "invalid-screen-definition")
+
+        # ...and the token on its own still works, so the refusal is about the extra key.
+        assert body_of(await sign_in(api))["email"] == EMAIL
 
 
 class TestRefreshAndLogout:
     async def _sign_in(self, api: httpx.AsyncClient) -> tuple[str, str]:
-        response = await login(api)
+        response = await sign_in(api)
         return response.cookies[REFRESH_COOKIE], response.cookies[CSRF_COOKIE]
 
     async def test_refresh_rotates_the_token(self, api: httpx.AsyncClient, outbox: Outbox) -> None:
         del outbox
-        await register(api)
         refresh_cookie, csrf = await self._sign_in(api)
 
         rotated = await api.post(
@@ -332,7 +317,6 @@ class TestRefreshAndLogout:
     ) -> None:
         """docs/11: "CSRF protection on all cookie-authenticated mutations"."""
         del outbox
-        await register(api)
         refresh_cookie, csrf = await self._sign_in(api)
         assert_problem(
             await api.post(
@@ -347,7 +331,6 @@ class TestRefreshAndLogout:
         self, api: httpx.AsyncClient, outbox: Outbox
     ) -> None:
         del outbox
-        await register(api)
         refresh_cookie, csrf = await self._sign_in(api)
         assert_problem(
             await api.post(
@@ -361,7 +344,6 @@ class TestRefreshAndLogout:
 
     async def test_logout_revokes_the_token(self, api: httpx.AsyncClient, outbox: Outbox) -> None:
         del outbox
-        await register(api)
         refresh_cookie, csrf = await self._sign_in(api)
 
         out = await api.post(
@@ -385,40 +367,12 @@ class TestRefreshAndLogout:
 class TestSecurity:
     """Prompt 12's first acceptance criterion, in three parts."""
 
-    async def test_brute_force_triggers_a_lockout(
-        self, api: httpx.AsyncClient, outbox: Outbox, screener_session: AsyncSession
-    ) -> None:
-        """docs/11: "account lockout after 10 failures with email notification"."""
-        await register(api)
-        statuses = [(await login(api, password=OTHER_PASSWORD)).status_code for _ in range(10)]
-        assert statuses[:9] == [401] * 9, statuses
-        # The tenth failure trips it; the request that follows is refused as rate-limited.
-        locked = await login(api, password=OTHER_PASSWORD)
-        assert locked.status_code == 429, locked.text
-        assert "Retry-After" in locked.headers
-
-        # Even the *correct* password is refused while the lockout stands.
-        assert (await login(api)).status_code == 429
-
-        row = (
-            await screener_session.execute(
-                select(AuthLockout).where(AuthLockout.identifier == EMAIL)
-            )
-        ).scalar_one()
-        assert row.failures >= 10
-        assert row.locked_until is not None
-
-        # ...and the account's owner was told, exactly once.
-        notices = [m for m in outbox.messages if "Unusual sign-in" in m.subject]
-        assert len(notices) == 1, [m.subject for m in outbox.messages]
-
     async def test_refresh_reuse_is_detected_and_revokes_the_family(
         self, api: httpx.AsyncClient, outbox: Outbox, screener_session: AsyncSession
     ) -> None:
         """RFC 9700 §4.14.2, which is what "rotating refresh" is for."""
         del outbox
-        await register(api)
-        signed_in = await login(api)
+        signed_in = await sign_in(api)
         first = signed_in.cookies[REFRESH_COOKIE]
         csrf = signed_in.cookies[CSRF_COOKIE]
 
@@ -461,8 +415,7 @@ class TestSecurity:
         self, api: httpx.AsyncClient, outbox: Outbox
     ) -> None:
         del outbox
-        await register(api)
-        public_id = str(body_of(await login(api))["public_id"])
+        public_id = str(body_of(await sign_in(api))["public_id"])
 
         forged = encode_token(public_id, "a-different-secret-that-is-long-enough-32")
         assert_problem(
@@ -480,8 +433,7 @@ class TestSecurity:
         self, api: httpx.AsyncClient, outbox: Outbox
     ) -> None:
         del outbox
-        await register(api)
-        public_id = str(body_of(await login(api))["public_id"])
+        public_id = str(body_of(await sign_in(api))["public_id"])
         stale = encode_token(
             public_id,
             TEST_JWT_SECRET,
@@ -495,82 +447,19 @@ class TestSecurity:
         )
 
 
-class TestPasswordReset:
-    async def test_the_full_reset_flow(self, api: httpx.AsyncClient, outbox: Outbox) -> None:
-        await register(api)
-        assert (
-            await api.post(url("/auth/forgot-password"), json={"email": EMAIL})
-        ).status_code == 202
-
-        token = outbox.token_in(outbox.last_for(EMAIL))
-        response = await api.post(
-            url("/auth/reset-password"), json={"token": token, "password": OTHER_PASSWORD}
-        )
-        assert response.status_code == 200, response.text
-
-        assert (await login(api, password=OTHER_PASSWORD)).status_code == 200
-        assert_problem(await login(api, password=PASSWORD), 401, "unauthenticated")
-
-    async def test_a_reset_link_works_once(self, api: httpx.AsyncClient, outbox: Outbox) -> None:
-        await register(api)
-        await api.post(url("/auth/forgot-password"), json={"email": EMAIL})
-        token = outbox.token_in(outbox.last_for(EMAIL))
-        await api.post(
-            url("/auth/reset-password"), json={"token": token, "password": OTHER_PASSWORD}
-        )
-        assert_problem(
-            await api.post(
-                url("/auth/reset-password"), json={"token": token, "password": "third password"}
-            ),
-            400,
-            "invalid-screen-definition",
-        )
-
-    async def test_a_reset_ends_every_other_session(
-        self, api: httpx.AsyncClient, outbox: Outbox
-    ) -> None:
-        await register(api)
-        signed_in = await login(api)
-        refresh_cookie = signed_in.cookies[REFRESH_COOKIE]
-        csrf = signed_in.cookies[CSRF_COOKIE]
-
-        await api.post(url("/auth/forgot-password"), json={"email": EMAIL})
-        token = outbox.token_in(outbox.last_for(EMAIL))
-        await api.post(
-            url("/auth/reset-password"), json={"token": token, "password": OTHER_PASSWORD}
-        )
-
-        assert_problem(
-            await api.post(
-                url("/auth/refresh"),
-                headers={CSRF_HEADER: csrf},
-                cookies={REFRESH_COOKIE: refresh_cookie, CSRF_COOKIE: csrf},
-            ),
-            401,
-            "unauthenticated",
-        )
-
-    async def test_an_unknown_address_answers_the_same(
-        self, api: httpx.AsyncClient, outbox: Outbox
-    ) -> None:
-        response = await api.post(url("/auth/forgot-password"), json={"email": "ghost@example.com"})
-        assert response.status_code == 202
-        assert outbox.messages == []
-
-
 class TestMe:
     async def _token(self, api: httpx.AsyncClient) -> dict[str, str]:
-        return {"Authorization": f"Bearer {body_of(await login(api))['access_token']}"}
+        return {"Authorization": f"Bearer {body_of(await sign_in(api))['access_token']}"}
 
     async def test_it_carries_the_profile_and_the_entitlements(
         self, api: httpx.AsyncClient, outbox: Outbox
     ) -> None:
         """docs/07: `GET /me` -> "profile + entitlements"."""
         del outbox
-        await register(api)
+        await sign_in(api)
         body = body_of(await api.get(url("/me"), headers=await self._token(api)))
         assert body["email"] == EMAIL
-        assert body["has_password"] is True
+        assert body["email_verified"] is True
         entitlements = as_map(body["entitlements"])
         assert set(entitlements) == {
             "screener",
@@ -587,84 +476,22 @@ class TestMe:
 
     async def test_patch_updates_the_name(self, api: httpx.AsyncClient, outbox: Outbox) -> None:
         del outbox
-        await register(api)
+        await sign_in(api)
         headers = await self._token(api)
         body = body_of(await api.patch(url("/me"), json={"name": "Renamed"}, headers=headers))
         assert body["name"] == "Renamed"
-
-    async def test_change_password_requires_the_current_one(
-        self, api: httpx.AsyncClient, outbox: Outbox
-    ) -> None:
-        del outbox
-        await register(api)
-        headers = await self._token(api)
-        assert_problem(
-            await api.post(
-                url("/me/change-password"),
-                json={"current_password": "wrong", "new_password": OTHER_PASSWORD},
-                headers=headers,
-            ),
-            401,
-            "unauthenticated",
-        )
-
-    async def test_change_password_works_and_ends_other_sessions(
-        self, api: httpx.AsyncClient, outbox: Outbox
-    ) -> None:
-        del outbox
-        await register(api)
-        signed_in = await login(api)
-        headers = {"Authorization": f"Bearer {body_of(signed_in)['access_token']}"}
-        refresh_cookie = signed_in.cookies[REFRESH_COOKIE]
-        csrf = signed_in.cookies[CSRF_COOKIE]
-
-        changed = await api.post(
-            url("/me/change-password"),
-            json={"current_password": PASSWORD, "new_password": OTHER_PASSWORD},
-            headers=headers,
-        )
-        assert changed.status_code == 200
-
-        assert (await login(api, password=OTHER_PASSWORD)).status_code == 200
-        assert_problem(
-            await api.post(
-                url("/auth/refresh"),
-                headers={CSRF_HEADER: csrf},
-                cookies={REFRESH_COOKIE: refresh_cookie, CSRF_COOKIE: csrf},
-            ),
-            401,
-            "unauthenticated",
-        )
-
-    async def test_an_otp_only_account_can_set_a_password(
-        self, api: httpx.AsyncClient, outbox: Outbox
-    ) -> None:
-        """docs/11: "password optional" — setting the first one supplies no current password."""
-        await register(api, password=None)
-        await api.post(url("/auth/request-otp"), json={"email": EMAIL})
-        code = outbox.codes_in(outbox.last_for(EMAIL))
-        signed_in = await api.post(url("/auth/verify-otp"), json={"email": EMAIL, "code": code})
-        headers = {"Authorization": f"Bearer {body_of(signed_in)['access_token']}"}
-
-        response = await api.post(
-            url("/me/change-password"), json={"new_password": PASSWORD}, headers=headers
-        )
-        assert response.status_code == 200
-        assert body_of(response)["has_password"] is True
-        assert (await login(api)).status_code == 200
-
 
 class TestDpdp:
     """docs/11 §Compliance: "DPDP Act: consent record, data export and deletion endpoints"."""
 
     async def _token(self, api: httpx.AsyncClient) -> dict[str, str]:
-        return {"Authorization": f"Bearer {body_of(await login(api))['access_token']}"}
+        return {"Authorization": f"Bearer {body_of(await sign_in(api))['access_token']}"}
 
     async def test_export_returns_everything_the_account_owns(
         self, api: httpx.AsyncClient, outbox: Outbox
     ) -> None:
         del outbox
-        await register(api)
+        await sign_in(api)
         body = body_of(await api.get(url("/me/export"), headers=await self._token(api)))
         assert set(body) == {
             "exported_at",
@@ -681,7 +508,17 @@ class TestDpdp:
     async def test_deleting_schedules_erasure_and_deactivates_immediately(
         self, api: httpx.AsyncClient, outbox: Outbox, screener_session: AsyncSession
     ) -> None:
-        await register(api)
+        """Prompt 12 §5: erasure is scheduled, and the live session ends now.
+
+        This used to assert a second thing as well — that the *password* stopped signing in. It
+        cannot any more, and not because the check was dropped: with one sign-in path, and that
+        path being the one Prompt 12 §5 says cancels a pending deletion, signing in again is
+        `test_signing_in_again_cancels_the_deletion` rather than a rejection. What "deactivates
+        immediately" means here is therefore the session, which is what the epoch bump does and
+        what the assertion below reads.
+        """
+        signed_in = body_of(await sign_in(api))
+        before = signed_in["session_epoch"]
         headers = await self._token(api)
         response = await api.request("DELETE", url("/me"), json={"email": EMAIL}, headers=headers)
         assert response.status_code == 200
@@ -693,15 +530,17 @@ class TestDpdp:
         await screener_session.refresh(user)
         assert user.deleted_at is not None
 
-        # Deactivated: the password no longer signs in.
-        assert_problem(await login(api), 401, "unauthenticated")
+        # Deactivated: every web session issued before this moment fails the generation check the
+        # gated layout makes on its next navigation.
+        assert isinstance(before, int)
+        assert user.session_epoch > before
         assert "deleted" in outbox.last_for(EMAIL).subject.lower()
 
     async def test_deleting_requires_the_address_back(
         self, api: httpx.AsyncClient, outbox: Outbox
     ) -> None:
         del outbox
-        await register(api)
+        await sign_in(api)
         headers = await self._token(api)
         assert_problem(
             await api.request(
@@ -715,10 +554,88 @@ class TestDpdp:
         self, api: httpx.AsyncClient, outbox: Outbox
     ) -> None:
         """Prompt 12 §5's soft-delete window is only soft if it can be undone."""
-        await register(api)
+        await sign_in(api)
         await api.request(
             "DELETE", url("/me"), json={"email": EMAIL}, headers=await self._token(api)
         )
 
         await api.post(url("/me/restore"), json={"email": EMAIL})
-        assert (await login(api)).status_code == 200
+        assert (await sign_in(api)).status_code == 200
+
+
+class TestSessionEpoch:
+    """``app_user.session_epoch`` — the only thing that can end a *web* session.
+
+    Why revoking refresh tokens is not enough, and never was: the web app has never held one. Its
+    session is an Auth.js JWT cookie, it mints access tokens from the shared secret, and
+    ``current_principal`` checks only that ``sub`` names a row — so revoking rows nobody reads
+    left the session that actually mattered alive for the rest of its thirty days
+    (``NEEDS-MAULIK.md`` §22). The epoch is what the web app compares against, so these assert the
+    number, not the rows.
+
+    **What bumps it changed with M46.** It used to be a password change or a reset, and both are
+    gone. Account deletion and restore are what remain (``auth_service.revoke_all_for_user``), and
+    they are what these now assert against — the mechanism is unchanged, only its trigger is.
+    """
+
+    async def test_a_fresh_account_starts_at_a_known_generation(
+        self, api: httpx.AsyncClient
+    ) -> None:
+        """Zero, and stated rather than implied: every comparison downstream is against this."""
+        await sign_in(api)
+        assert body_of(await sign_in(api))["session_epoch"] == 0
+
+    async def test_signing_in_reports_the_generation_the_session_must_carry(
+        self, api: httpx.AsyncClient
+    ) -> None:
+        """On ``SessionOut`` so a sign-in learns it in one round trip, not two."""
+        signed_in = await sign_in(api)
+        headers = {"Authorization": f"Bearer {body_of(signed_in)['access_token']}"}
+
+        me = body_of(await api.get(url("/me"), headers=headers))
+        assert me["session_epoch"] == body_of(signed_in)["session_epoch"]
+
+    async def test_deleting_the_account_moves_the_generation_on(
+        self, api: httpx.AsyncClient, google: StubGoogle
+    ) -> None:
+        """The eviction path, now that a password change is not one.
+
+        A session issued before the deletion must fail the comparison the gated layout makes, or
+        somebody who asked to be erased keeps browsing their holdings for thirty days.
+        """
+        del google
+        signed_in = body_of(await sign_in(api))
+        before = signed_in["session_epoch"]
+        headers = {"Authorization": f"Bearer {signed_in['access_token']}"}
+
+        deleted = await api.request(
+            "DELETE", url("/me"), json={"email": EMAIL}, headers=headers
+        )
+        assert deleted.status_code == 200, deleted.text
+
+        # Signing in again cancels the deletion (Prompt 12 §5) and reports the new generation.
+        after = body_of(await sign_in(api))["session_epoch"]
+        assert isinstance(before, int) and isinstance(after, int)
+        assert after > before, "a deletion must invalidate every cookie issued before it"
+
+    async def test_the_generation_never_goes_backwards(
+        self, api: httpx.AsyncClient, google: StubGoogle
+    ) -> None:
+        """It is a generation counter, not a count of anything.
+
+        Reuse of a number would resurrect a session that was meant to die, so the only property
+        that matters is monotonicity — asserted here rather than left to the ``+ 1``.
+        """
+        del google
+        seen: list[int] = []
+        for _ in range(3):
+            signed_in = body_of(await sign_in(api))
+            epoch = signed_in["session_epoch"]
+            assert isinstance(epoch, int)
+            seen.append(epoch)
+            headers = {"Authorization": f"Bearer {signed_in['access_token']}"}
+            await api.request("DELETE", url("/me"), json={"email": EMAIL}, headers=headers)
+
+        assert seen == sorted(seen), seen
+        assert len(set(seen)) == len(seen), f"a generation was reused: {seen}"
+

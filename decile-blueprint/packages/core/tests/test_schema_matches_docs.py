@@ -22,6 +22,7 @@ MONOREPO_ROOT = Path(__file__).resolve().parents[4]
 #:   ``trading_day``   — Prompt 1 deliverable 3; see docs/04a-trading-day-addendum.md
 #:   ``ingest_cursor`` — Prompt 3 deliverable 6; see docs/04b-pipeline-tables-addendum.md
 #:   ``basket_snapshot`` — M30's nightly basket cache; see docs/04b-pipeline-tables-addendum.md
+#:   the four portfolio-redesign tables — see docs/04d-portfolio-redesign-addendum.md
 DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # Reference & instrument data
     "exchange": ("id",),
@@ -70,6 +71,11 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # M35 / migration 0019: broker_account_id joins the key so the same instrument held at two
     # brokers is two rows a per-broker roll-up can add up. docs/04b addendum.
     "portfolio_holding": ("portfolio_id", "instrument_id", "broker_account_id"),
+    # PORTFOLIO_REDESIGN.md's three data layers — docs/04d-portfolio-redesign-addendum.md
+    "broker_cash": ("broker_account_id",),
+    "portfolio_cash_flow": ("id",),
+    "portfolio_nav_daily": ("portfolio_id", "user_id", "date"),
+    "reconciliation_item": ("id",),
     "backtest": ("id",),
     "pipeline_run": ("id",),
     "pipeline_run_step": ("id",),
@@ -82,6 +88,10 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "auth_lockout": ("identifier",),
     "account_deletion": ("user_id",),
     "consent_record": ("id",),
+    # M46: Google sign-in replaced the email/password funnel, so identity is federated and an
+    # account is bound to a provider subject rather than to a password hash.
+    # docs/04c-auth-tables-addendum.md.
+    "auth_identity": ("id",),
     # Billing additions — not in docs/04's DDL either. docs/11 §Security requires webhook
     # deduplication by event id and PROMPTS.md Prompt 13 requires gapless invoice numbers;
     # neither is possible with `plan`/`subscription`/`payment` alone. See

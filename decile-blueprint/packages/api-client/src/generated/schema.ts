@@ -324,24 +324,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/forgot-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Email a password-reset link */
-        post: operations["forgotPassword"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/login": {
+    "/api/v1/auth/google": {
         parameters: {
             query?: never;
             header?: never;
@@ -351,10 +334,20 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Sign in with a password
-         * @description docs/07: `POST /auth/login`. docs/11: Argon2id, with lockout after 10 failures.
+         * Sign in with Google
+         * @description The only way into the product (`docs/DECISIONS-MERGE.md` M46).
+         *
+         *     `apps/web` runs the OAuth dance and posts the resulting ID token here. **The token is the
+         *     credential** — this endpoint never accepts an email or a subject as a parameter, because an
+         *     endpoint that did would mint a session for whoever the caller named.
+         *
+         *     There is no neutral 202 here and no membership oracle to protect: the caller has already
+         *     proved to Google who they are, so "this account is new" is something they know better than
+         *     we do. What stays uniform is the *failure*: every rejection is the same 401, whether the
+         *     signature was wrong, the audience was somebody else's application, or the address was
+         *     unverified.
          */
-        post: operations["login"];
+        post: operations["signInWithGoogle"];
         delete?: never;
         options?: never;
         head?: never;
@@ -399,114 +392,6 @@ export interface paths {
          *     race. `docs/12a` §4.
          */
         post: operations["refresh"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/register": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create an account
-         * @description docs/07: `POST /auth/register`.
-         *
-         *     Answers 202 either way. Registering an address that already has an account sends *that*
-         *     account a sign-in prompt rather than saying "already registered", which would turn the
-         *     registration form into a membership check.
-         */
-        post: operations["register"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/request-otp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Email a sign-in code
-         * @description docs/11: "OTP login as the default path". 202 whether or not the address is known.
-         */
-        post: operations["requestOtp"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/reset-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Set a new password
-         * @description Resetting signs the user in, and signs every other session out.
-         *
-         *     Signing them in is the difference between "your password is changed, now go and log in" and
-         *     finishing the job. Signing the others out is the point of the reset: whoever prompted it
-         *     should not still be holding a session.
-         */
-        post: operations["resetPassword"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/verify-email": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Confirm an email address
-         * @description The counterpart to the mail `/auth/register` sends.
-         *
-         *     Not in docs/07's list — docs/07 names `register` but not the confirmation it implies, and an
-         *     unverifiable verification mail would be worse than none. `docs/12a` §1.
-         */
-        post: operations["verifyEmail"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/verify-otp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Sign in with a code */
-        post: operations["verifyOtp"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2057,30 +1942,6 @@ export interface paths {
         patch: operations["patchMe"];
         trace?: never;
     };
-    "/api/v1/me/change-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Change the password
-         * @description docs/07: `POST /me/change-password`.
-         *
-         *     An account with no password (docs/11 allows it — "password optional") is *setting* one and
-         *     supplies none; an account that has one must prove it, so a stolen access token cannot be
-         *     upgraded into a permanent credential.
-         */
-        post: operations["changePassword"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/me/export": {
         parameters: {
             query?: never;
@@ -2253,6 +2114,319 @@ export interface paths {
          *     tier is hidden unless its feature flag is on (Prompt 13 §5).
          */
         get: operations["listPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * New Portfolio
+         * @description §6.7's confirm step: name a grouping, choose its kind and source, and file holdings into it.
+         *
+         *     **Not an order path.** This writes a ``portfolio`` row and moves bookkeeping allocations. It
+         *     reaches no broker, names no side and no product, and moves no share — the shares are already
+         *     in the user's demat and stay exactly where they are. §9's promise that a rebalance produces a
+         *     plan the user takes to their broker is untouched by this route existing.
+         *
+         *     WHY THIS IS NOT ``POST /portfolios``
+         *     ------------------------------------
+         *     The older route creates a node in the portfolio *forest* — a parent, a broker attribution, a
+         *     list of symbols and quantities — and it hard-codes ``kind=CAPITAL``, ``source=HOLDING_GROUP``
+         *     because those columns arrived under it in 0021/0022 and it has no way to ask. The redesign's
+         *     model is a different object: §4.1's kind is an arithmetic decision, §3's source decides the
+         *     headline metric, §6.7 asks for a benchmark, and §4.2 allocates **whole holdings the user
+         *     already owns** rather than importing symbol-and-quantity lines. Bolting four fields onto the
+         *     old body would have made one route that means two things; this is the second thing.
+         *
+         *     THE FOUR REFUSALS, AND WHY EACH IS THE ANSWER IT IS
+         *     ---------------------------------------------------
+         *     1. **A holding already in another capital portfolio** — 400, naming the portfolio it is in.
+         *        Acceptance criterion 2 is that a holding can never be in two capital portfolios, and
+         *        0021's partial unique index enforces it in Postgres. The index would refuse this write on
+         *        its own, with an integrity error nobody can act on; the pre-check exists so the answer
+         *        says *which* holding and *which* portfolio. The ``IntegrityError`` guard below is still
+         *        kept, because between the check and the insert is a window, and a race must produce the
+         *        same sentence rather than a 500.
+         *     2. **A foreign broker account, instrument or benchmark** — 404, never 403. See
+         *        :func:`_owned_broker_account`.
+         *     3. **A holding the caller does not hold** — 404, for the same reason: the ledger knows every
+         *        position this user has, and a pair that is not one of them is not a thing to allocate.
+         *     4. **A quantity** — 422, from the schema, because :class:`HoldingKeyIn` has no such field and
+         *        forbids extras (§4.2).
+         *
+         *     A **monitoring view takes no capital allocation** (§4.1). Its holdings are written as
+         *     ``MONITORING`` rows, which 0021's index ignores, so a lens may freely overlap a capital
+         *     portfolio *and* another lens — and the holdings it watches stay wherever they were, including
+         *     Unallocated. That is why the conflict check above runs only for ``CAPITAL``: refusing a lens
+         *     for overlapping would be refusing it for doing its job.
+         */
+        post: operations["newPortfolio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Portfolio Activity
+         * @description §7's activity: trades, cash assignments, dividends, corporate actions, reconciliation.
+         *
+         *     Five sources, one ordered list, newest first. They are merged rather than paginated
+         *     separately because the question a user brings here — "why does this number look like that" —
+         *     is answered by the sequence of events, and three lists in three tabs is that sequence taken
+         *     apart.
+         *
+         *     **A corporate action is not a P&L event** (§4.5, criterion 6), and the row says so on the
+         *     wire: ``is_pnl_event=False``. So does a reconciliation row — a question being asked or
+         *     answered is bookkeeping, not money. Marking them is what stops a client from summing the feed
+         *     into a figure that double-counts a split.
+         */
+        get: operations["portfolioActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/holdings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Portfolio Holdings
+         * @description §2's flat broker-level truth: every share, which broker, and what it is allocated to.
+         *
+         *     §6.7 asks for the same stock at two brokers to be shown aggregated with the breakdown
+         *     preserved — *HDFC Bank — 320 (Zerodha 200 · Upstox 120)* — and that is exactly what this
+         *     returns: an aggregate row with the per-broker lines under it, never an aggregate that has
+         *     thrown the lines away. The ledger keeps the two positions apart because they can be allocated
+         *     apart and sold apart, and a display that merged them would make one of those facts
+         *     unrepresentable.
+         *
+         *     Unallocated holdings are in this list like everything else. They are the user's shares; a
+         *     holdings view that quietly omitted them would be the one bug this endpoint cannot have.
+         */
+        get: operations["portfolioHoldings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Portfolio Overview
+         * @description §6's single screen: header, hero, chart, ribbon, table, and the unallocated section.
+         *
+         *     Everything on it is one consistent picture of one moment, which is the reason it is one
+         *     response: a client assembling the header from one call and the totals from another would
+         *     eventually straddle a nightly job and render a page whose halves disagree.
+         *
+         *     **The totals here exclude monitoring views and cannot include one.** Not by a filter — by
+         *     construction. A monitoring view holds no allocation (§4.1), and
+         *     :func:`~baskfy_core.allocation_ledger.portfolio_values` sums allocations; there is no branch
+         *     in this handler that could forget the exclusion, because there is no branch. The muted rows
+         *     are rendered from a second, separate walk into a second, separate list.
+         */
+        get: operations["portfolioOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Portfolio Reconciliation
+         * @description §4.3's inbox, plus what the open questions in it are currently forbidding.
+         *
+         *     The default is the open questions, because that is what an inbox is: the list of things sync
+         *     could not decide. History is reachable — pass a state, or read §7's activity feed, where a
+         *     resolved question sits in sequence with the events around it.
+         *
+         *     :attr:`ReconciliationInboxOut.pending_portfolio_ids` is not a convenience. §6.5's Status
+         *     column and §4.3's freeze are the same fact, and a client that derived one from the item list
+         *     would eventually derive it differently from the way
+         *     :func:`~baskfy_core.reconciliation.freeze_report` does — most obviously for ``UNKNOWN_INFLOW``,
+         *     where the shares exist in the account and nothing is allocated, so it is *Unallocated* that
+         *     goes pending.
+         */
+        get: operations["portfolioReconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/reconciliation/{item_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Reconciliation Item
+         * @description Answer one of §4.3's questions by naming the capital portfolio the change belongs to.
+         *
+         *     **Not an order path.** This records a bookkeeping decision: which logical portfolio a change
+         *     sync already observed should count against. It reaches no broker and moves no share; the
+         *     shares moved before we ever saw them.
+         *
+         *     Two things must land together and they do, in one transaction:
+         *     :class:`~baskfy_core.reconciliation.ResolutionOutcome` carries both the entry in its new
+         *     terminal state *and* the allocation the answer implies, precisely so a caller cannot persist
+         *     one and lose the other. An item marked RESOLVED whose holding is still in no portfolio would
+         *     be an unfrozen holding with nowhere to contribute — a quietly wrong total in place of a
+         *     loudly pending one.
+         *
+         *     The three refusals come from the domain, not from here: an already-answered question is not
+         *     re-answerable, a portfolio that does not exist cannot be named, and a monitoring view holds
+         *     no allocation at all (§4.1) so resolving to one would leave the total short. Each becomes a
+         *     400 with the domain's own sentence, which names what was wrong in words the user can act on.
+         */
+        post: operations["resolveReconciliationItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Portfolio Suggestions
+         * @description §6.6's first-run helper: the unallocated pile in, a short ranked list of named groups out.
+         *
+         *     > First-run experience: connect broker → everything lands in Unallocated → the product
+         *     > actively helps sort it (suggest groupings by sector, by purchase era, by overlap with a
+         *     > subscribed basket). **Getting from 40 unallocated holdings to 4 named portfolios IS
+         *     > activation.**
+         *
+         *     This route gathers the four facts :class:`~baskfy_core.grouping_suggestions.SuggestionInputs`
+         *     permits — sectors, first-bought dates, an as-of date and the models the user follows — and
+         *     hands them to :func:`~baskfy_core.grouping_suggestions.suggest_groupings`. **The ranking, the
+         *     rationale sentences, the coverage arithmetic and the two-holding minimum all live there**, and
+         *     none of them is re-implemented here. That is the same rule the read routes above follow, and
+         *     it is what lets ``apps/web/.../organize.ts`` port the rank key and stay in step: there is one
+         *     definition of a suggestion and it is tested in ``packages/core``.
+         *
+         *     **Unpriced positions are excluded, not zeroed.**
+         *     :func:`~baskfy_core.allocation_ledger.holding_value` raises on a missing close and it is right
+         *     to; a suggestion whose headline value quietly omitted a position would rank below where it
+         *     belongs. They are named in ``unpriced_instrument_ids`` instead.
+         *
+         *     **A missing input is reported, never disguised.** Sectors and purchase dates are both things
+         *     this database frequently does not have (there is no sector column, and ``first_bought_on`` is
+         *     NULL until a CAS import). §6.6's screen must be able to say *which* input was missing, because
+         *     "we have no sector data" and "your holdings have nothing in common" are opposite messages and
+         *     a bare empty list says the second one. ``bases`` carries the first;
+         *     ``unavailable_reason`` is set only when no basis could run at all.
+         *
+         *     Nothing here writes. Accepting a suggestion is ``POST /portfolio`` below, where a human has
+         *     chosen the kind, the name and the benchmark — a suggestion is a sentence the product is
+         *     prepared to say, never an allocation.
+         */
+        get: operations["portfolioSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/{portfolio_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Portfolio Detail
+         * @description §7's detail page: summary, holdings with weight and contribution, and the source panel.
+         *
+         *     A monitoring view is served here like any other portfolio, with its value, its holdings and
+         *     its own return — and with ``counts_toward_total=False`` and §4.1's note beside it. Refusing to
+         *     show one would be the wrong lesson: a lens is a legitimate thing to look at, it is only an
+         *     illegitimate thing to *add up*.
+         */
+        get: operations["portfolioDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/{portfolio_id}/nav": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Portfolio Nav
+         * @description One portfolio's stored EOD NAV series (§5.1), range-filtered, with §6.3's derived views.
+         *
+         *     The series is read, never recomputed. §5.1's whole argument is that a mark is a claim about a
+         *     day — "valued at close of {date}" — and recomputing it from today's allocations would rewrite
+         *     history every time a holding moved between portfolios. A chart that changes shape because a
+         *     user renamed something is not a record.
+         */
+        get: operations["portfolioNav"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2887,6 +3061,56 @@ export interface components {
          * @enum {string}
          */
         Action: "enter" | "hold";
+        /**
+         * ActivityItemOut
+         * @description One row of §7's activity feed.
+         */
+        ActivityItemOut: {
+            /** Amount */
+            amount?: string | null;
+            broker?: components["schemas"]["BrokerRefOut"] | null;
+            /** Description */
+            description: string;
+            instrument?: components["schemas"]["InstrumentRefOut"] | null;
+            /**
+             * Is Pnl Event
+             * @default true
+             */
+            is_pnl_event: boolean;
+            kind: components["schemas"]["ActivityKind"];
+            /**
+             * On
+             * Format: date
+             */
+            on: string;
+            portfolio?: components["schemas"]["PortfolioRefOut"] | null;
+            /** Quantity */
+            quantity?: string | null;
+            /** Reconciliation Item Id */
+            reconciliation_item_id?: number | null;
+            reconciliation_state?: components["schemas"]["ReconciliationState"] | null;
+        };
+        /**
+         * ActivityKind
+         * @description What one activity row is. The cash kinds mirror ``portfolio_cash_flow.kind`` exactly.
+         *
+         *     ``CORPORATE_ACTION`` and ``RECONCILIATION`` are the two rows that are not cash movements.
+         *     Both belong in §7's list and neither is a P&L event — a split changes quantity and average
+         *     price and produces zero P&L (§4.5, criterion 6), and a question being asked or answered is a
+         *     fact about our bookkeeping, not about the user's money.
+         * @enum {string}
+         */
+        ActivityKind: "BUY" | "SELL" | "DIVIDEND" | "ASSIGN" | "RELEASE" | "EXTERNAL_DEPOSIT" | "EXTERNAL_WITHDRAWAL" | "CORPORATE_ACTION" | "RECONCILIATION";
+        /** ActivityOut */
+        ActivityOut: {
+            /** Items */
+            items?: components["schemas"]["ActivityItemOut"][];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
         /** AdminActionListOut */
         AdminActionListOut: {
             /** Data */
@@ -2947,6 +3171,47 @@ export interface components {
             name?: string | null;
             /** Public Id */
             public_id: string;
+        };
+        /**
+         * AggregatedHoldingOut
+         * @description §6.7: "HDFC Bank — 320 (Zerodha 200 · Upstox 120)".
+         *
+         *     Aggregated for display, with the broker breakdown preserved rather than summarised away. The
+         *     ledger keeps the two positions apart on purpose — they can be allocated apart and sold apart
+         *     — so this row's ``allocation`` is filled only when every broker line agrees about it.
+         *     ``split_across_portfolios`` is what says otherwise, instead of one of the two answers
+         *     silently standing for both.
+         */
+        AggregatedHoldingOut: {
+            /**
+             * Allocated
+             * @default false
+             */
+            allocated: boolean;
+            allocation?: components["schemas"]["PortfolioRefOut"] | null;
+            /** Brokers */
+            brokers?: components["schemas"]["HoldingBrokerLineOut"][];
+            instrument: components["schemas"]["InstrumentRefOut"];
+            /** Monitoring Views */
+            monitoring_views?: components["schemas"]["PortfolioRefOut"][];
+            /**
+             * Pending Reconciliation
+             * @default false
+             */
+            pending_reconciliation: boolean;
+            /** Price */
+            price?: string | null;
+            /** Price As Of */
+            price_as_of?: string | null;
+            /** Quantity */
+            quantity: string;
+            /**
+             * Split Across Portfolios
+             * @default false
+             */
+            split_across_portfolios: boolean;
+            /** Value */
+            value?: string | null;
         };
         /** AllocationOut */
         AllocationOut: {
@@ -3108,6 +3373,22 @@ export interface components {
             target_weights: {
                 [key: string]: number | string;
             };
+        };
+        /**
+         * AttentionOut
+         * @description One row of §6.4's ribbon. The sentence comes from core, so every surface says it alike.
+         */
+        AttentionOut: {
+            /** Count */
+            count: number;
+            /** Kind */
+            kind: string;
+            /** Message */
+            message: string;
+            /** Since */
+            since?: string | null;
+            /** Subject Ids */
+            subject_ids?: number[];
         };
         /**
          * AwayFromHighFilter
@@ -3401,7 +3682,7 @@ export interface components {
             /** Disclaimer */
             disclaimer: string;
             /** Drawdown */
-            drawdown?: components["schemas"]["DrawdownPointOut"][];
+            drawdown?: components["schemas"]["baskfy_api__schemas__DrawdownPointOut"][];
             /** Equity Curve */
             equity_curve?: components["schemas"]["EquityPointOut"][];
             /** Error */
@@ -3571,6 +3852,24 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * BenchmarkOut
+         * @description §6.3's overlay and §7's "benchmark diff" — three numbers, never one.
+         *
+         *     The portfolio's figure, the index's over the same window, and the gap. Built by
+         *     :func:`~baskfy_core.portfolio_nav.benchmark_comparison`, which refuses a model figure so that
+         *     criterion 5's blend cannot be reached from the benchmark direction either.
+         */
+        BenchmarkOut: {
+            benchmark: components["schemas"]["ReturnFigureOut"];
+            /** Difference */
+            difference?: string | null;
+            /** Name */
+            name: string;
+            /** Points */
+            points?: components["schemas"]["baskfy_api__routers__portfolio_overview__NavPointOut"][];
+            portfolio: components["schemas"]["ReturnFigureOut"];
+        };
         /** Body_importCsv */
         Body_importCsv: {
             /**
@@ -3587,6 +3886,20 @@ export interface components {
             oauth: string;
             /** Trading */
             trading: string;
+        };
+        /**
+         * BrokerCashOut
+         * @description One broker account's Unallocated cash bucket (§4.4), with the day it is true for.
+         */
+        BrokerCashOut: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Balance */
+            balance: string;
+            broker: components["schemas"]["BrokerRefOut"];
         };
         /** BrokerGateOut */
         BrokerGateOut: {
@@ -3736,6 +4049,18 @@ export interface components {
             /** Portfolio Spans Brokers */
             portfolio_spans_brokers: boolean;
         };
+        /**
+         * BrokerRefOut
+         * @description One broker account, named. ``broker_id`` is the catalog id (``zerodha``, …).
+         */
+        BrokerRefOut: {
+            /** Broker Account Id */
+            broker_account_id: number;
+            /** Broker Id */
+            broker_id: string;
+            /** Label */
+            label: string;
+        };
         /** CallbackOut */
         CallbackOut: {
             /** Broker Id */
@@ -3826,16 +4151,6 @@ export interface components {
             percentile?: number | null;
             /** Value */
             value?: string | number | null;
-        };
-        /**
-         * ChangePasswordIn
-         * @description ``current_password`` is optional: an OTP-only account is *setting* one for the first time.
-         */
-        ChangePasswordIn: {
-            /** Current Password */
-            current_password?: string | null;
-            /** New Password */
-            new_password: string;
         };
         /**
          * CheckoutSessionIn
@@ -4230,6 +4545,18 @@ export interface components {
              */
             trade_date: string;
         };
+        /** DayPnlOut */
+        DayPnlOut: {
+            /** Amount */
+            amount: string;
+            /**
+             * On
+             * Format: date
+             */
+            on: string;
+            /** Pct */
+            pct?: string | null;
+        };
         /**
          * DeleteAccountIn
          * @description Deleting is irreversible after the window, so it asks for the address back.
@@ -4317,6 +4644,44 @@ export interface components {
             symbol: string;
         };
         /**
+         * DetailHoldingOut
+         * @description §7's holdings tab: weight, today's contribution, total contribution, broker.
+         *
+         *     ``total_contribution`` is ``None`` when the purchase price is unknown — §5.2 forbids showing
+         *     since-purchase P&L for a holding whose history has not been imported (§5.3), and a zero would
+         *     be exactly the forbidden number wearing a plausible face.
+         */
+        DetailHoldingOut: {
+            /** Avg Price */
+            avg_price?: string | null;
+            broker: components["schemas"]["BrokerRefOut"];
+            /** First Bought On */
+            first_bought_on?: string | null;
+            /**
+             * History Source
+             * @default NONE
+             */
+            history_source: string;
+            instrument: components["schemas"]["InstrumentRefOut"];
+            /**
+             * Pending Reconciliation
+             * @default false
+             */
+            pending_reconciliation: boolean;
+            /** Price */
+            price?: string | null;
+            /** Quantity */
+            quantity: string;
+            /** Todays Contribution */
+            todays_contribution?: string | null;
+            /** Total Contribution */
+            total_contribution?: string | null;
+            /** Value */
+            value?: string | null;
+            /** Weight */
+            weight?: string | null;
+        };
+        /**
          * DividendPolicy
          * @description docs/10 §7: ``dividends: "reinvest" | "cash" | "ignore"``.
          *
@@ -4351,16 +4716,6 @@ export interface components {
          * @enum {string}
          */
         DividendPolicy: "reinvest" | "cash" | "ignore";
-        /** DrawdownPointOut */
-        DrawdownPointOut: {
-            /**
-             * Date
-             * Format: date
-             */
-            date: string;
-            /** Drawdown */
-            drawdown: number;
-        };
         /** DriftDeltaOut */
         DriftDeltaOut: {
             /** Broker Qty */
@@ -4648,14 +5003,6 @@ export interface components {
             /** Subscriptions Enabled */
             subscriptions_enabled: boolean;
         };
-        /** ForgotPasswordIn */
-        ForgotPasswordIn: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-        };
         /**
          * FragilityRunOut
          * @description docs/10 §"honesty features": one of the five runs in the fragility readout.
@@ -4793,6 +5140,105 @@ export interface components {
             /** Value */
             value?: string | number | null;
         };
+        /**
+         * GoogleSignInIn
+         * @description The ID token `apps/web` received from Google, forwarded verbatim.
+         *
+         *     **The only field, and that is the design.** No email, no subject, no display name: everything
+         *     this endpoint acts on is read out of the token *after* its signature is checked
+         *     (`baskfy_api.auth_google`). A schema that also accepted an email would create a second,
+         *     unsigned source for the one fact that decides which account you get.
+         *
+         *     The bound is generous — Google ID tokens for accounts in large Workspace domains carry a lot
+         *     of claims — but it exists so a request cannot ask the JWKS path to chew on a megabyte.
+         */
+        GoogleSignInIn: {
+            /** Id Token */
+            id_token: string;
+        };
+        /**
+         * GroupingSuggestionOut
+         * @description One offer from :func:`~baskfy_core.grouping_suggestions.suggest_groupings`, field for field.
+         *
+         *     Nothing here is composed by this router. ``proposed_name``, ``rationale``, ``value`` and the
+         *     coverage are what the pure module produced, because they are what the pure module's tests
+         *     check — a sentence re-worded on the way out is a sentence nothing asserts. The client
+         *     (``apps/web/src/lib/portfolio/organize.ts``) mirrors this shape and re-applies the module's
+         *     own rank key locally, so the three names have to agree down to the underscore.
+         *
+         *     ``basket_id``, ``basket_coverage`` and ``missing_instrument_ids`` are set for, and only for, a
+         *     :attr:`~baskfy_core.grouping_suggestions.SuggestionBasis.BASKET_OVERLAP` — the dataclass
+         *     refuses any other combination at construction, so the constraint is carried rather than
+         *     restated.
+         */
+        GroupingSuggestionOut: {
+            basis: components["schemas"]["SuggestionBasis"];
+            /** Basket Coverage */
+            basket_coverage?: string | null;
+            /** Basket Id */
+            basket_id?: number | null;
+            /** Keys */
+            keys?: components["schemas"]["HoldingKeyOut"][];
+            /** Missing Instrument Ids */
+            missing_instrument_ids?: number[];
+            /** Proposed Name */
+            proposed_name: string;
+            /** Rationale */
+            rationale: string;
+            suggested_kind: components["schemas"]["PortfolioKind"];
+            /** Value */
+            value: string;
+        };
+        /**
+         * HeroOut
+         * @description §6.2's five hero metrics, plus the secondary row and the honesty flags around them.
+         *
+         *     ``current_value`` is criterion 1's number: every capital portfolio plus Unallocated plus
+         *     cash, computed by :func:`~baskfy_core.allocation_ledger.consolidated_value` from a single
+         *     walk over the holdings. Monitoring views are not subtracted from it — they were never in it,
+         *     because they hold no allocation for the walk to find.
+         *
+         *     ``pending_reconciliation`` is the freeze reaching the headline (§4.3). One open question
+         *     anywhere makes the consolidated figure one we cannot state honestly, and the flag is how the
+         *     page says so instead of printing a confident total.
+         */
+        HeroOut: {
+            /** Current Value */
+            current_value: string;
+            /**
+             * Holdings Without Cost Basis
+             * @default 0
+             */
+            holdings_without_cost_basis: number;
+            /** Invested */
+            invested?: string | null;
+            /** Invested Unavailable Reason */
+            invested_unavailable_reason?: string | null;
+            /**
+             * Pending Reconciliation
+             * @default false
+             */
+            pending_reconciliation: boolean;
+            secondary: components["schemas"]["HeroSecondaryOut"];
+            todays_pnl: components["schemas"]["MoneyMoveOut"];
+            total_pnl: components["schemas"]["MoneyMoveOut"];
+            twr: components["schemas"]["LabelledRateOut"];
+            xirr: components["schemas"]["LabelledRateOut"];
+        };
+        /**
+         * HeroSecondaryOut
+         * @description §6.2's collapsed second row: cash, the realised/unrealised split, dividends, brokers.
+         */
+        HeroSecondaryOut: {
+            /** Broker Count */
+            broker_count: number;
+            /** Cash */
+            cash: string;
+            /** Dividends */
+            dividends: string;
+            realised_pnl: components["schemas"]["MoneyMoveOut"];
+            unrealised_pnl: components["schemas"]["MoneyMoveOut"];
+        };
         /** HistoryPointOut */
         HistoryPointOut: {
             /**
@@ -4813,6 +5259,42 @@ export interface components {
             symbol: string;
         };
         /**
+         * HoldingBrokerLineOut
+         * @description One physical position: this instrument, at this broker, and what it is allocated to.
+         *
+         *     ``allocation`` is ``None`` for Unallocated — a complete, legitimate state, never an error
+         *     (§6.6). The monitoring views the position appears in are listed separately, because
+         *     appearing in a lens is not being allocated (§4.1).
+         */
+        HoldingBrokerLineOut: {
+            allocation?: components["schemas"]["PortfolioRefOut"] | null;
+            /** Avg Price */
+            avg_price?: string | null;
+            broker: components["schemas"]["BrokerRefOut"];
+            /** Cost Basis */
+            cost_basis?: string | null;
+            /** First Bought On */
+            first_bought_on?: string | null;
+            /**
+             * History Source
+             * @default NONE
+             */
+            history_source: string;
+            /** Monitoring Views */
+            monitoring_views?: components["schemas"]["PortfolioRefOut"][];
+            /**
+             * Pending Reconciliation
+             * @default false
+             */
+            pending_reconciliation: boolean;
+            /** Price */
+            price?: string | null;
+            /** Quantity */
+            quantity: string;
+            /** Value */
+            value?: string | null;
+        };
+        /**
          * HoldingIn
          * @description docs/07: `POST /portfolios { name, holdings:[{symbol, quantity?, avg_price?}] }`.
          */
@@ -4823,6 +5305,41 @@ export interface components {
             quantity?: number | string | null;
             /** Symbol */
             symbol: string;
+        };
+        /**
+         * HoldingKeyIn
+         * @description One holding to allocate. **There is no quantity field and there must not be one** (§4.2).
+         *
+         *     v1 allocates a holding *whole* to one capital portfolio. The rule is not "a partial quantity
+         *     is rejected" — a rejected field is a field a client can send, a field a future patch can
+         *     start honouring, and a field a reader believes the product supports. It is absent, and
+         *     ``extra="forbid"`` makes sending one a 422 rather than a silently ignored key.
+         *
+         *     §4.2's own rationale is worth keeping in front of whoever next edits this class: partial
+         *     allocation breaks sell attribution (§4.3) and corporate-action math (§4.5). It is a Phase-3
+         *     item, gated on the ledger being stable, and it arrives — if it arrives — as a migration and a
+         *     new field, not as a quantity that was here all along.
+         */
+        HoldingKeyIn: {
+            /** Broker Account Id */
+            broker_account_id: number;
+            /** Instrument Id */
+            instrument_id: number;
+        };
+        /**
+         * HoldingKeyOut
+         * @description One physical position, named the way :class:`~baskfy_core.allocation_ledger.HoldingKey`
+         *     names it: an instrument at a broker account.
+         *
+         *     Instrument alone would merge two brokers' positions into one, and §6.7 is explicit that the
+         *     two legs of "HDFC Bank — 320 (Zerodha 200 · Upstox 120)" display together and *allocate
+         *     separately*. So the pair is the unit everywhere, on the wire as well as in the ledger.
+         */
+        HoldingKeyOut: {
+            /** Broker Account Id */
+            broker_account_id: number;
+            /** Instrument Id */
+            instrument_id: number;
         };
         /** HoldingOut */
         HoldingOut: {
@@ -4867,17 +5384,6 @@ export interface components {
         HoldingsIn: {
             /** Holdings */
             holdings: components["schemas"]["HoldingIn"][];
-        };
-        /** HoldingsOut */
-        HoldingsOut: {
-            /** As Of */
-            as_of: string;
-            /** Excluded Value */
-            excluded_value: number;
-            /** Rows */
-            rows: components["schemas"]["DeskHoldingOut"][];
-            /** Total Value */
-            total_value: number;
         };
         /**
          * ImpactModel
@@ -5046,6 +5552,15 @@ export interface components {
             name: string;
             /** Series */
             series: string | null;
+            /** Symbol */
+            symbol: string;
+        };
+        /** InstrumentRefOut */
+        InstrumentRefOut: {
+            /** Instrument Id */
+            instrument_id: number;
+            /** Name */
+            name: string;
             /** Symbol */
             symbol: string;
         };
@@ -5233,6 +5748,31 @@ export interface components {
             next_cursor?: string | null;
         };
         JsonValue: unknown;
+        /**
+         * LabelledRateOut
+         * @description A rate §5.2 asks for that :class:`MetricKind` has no member for — labelled, never bare.
+         *
+         *     Two numbers are in this position and both are consolidated-level: §5.2's "show **XIRR** (the
+         *     user's cash-flow-adjusted experience) and **TWR** (strategy quality) as two labeled numbers".
+         *     Neither is a portfolio's headline metric, so neither has a ``MetricKind``, and the enum
+         *     belongs to ``allocation_ledger`` — adding a member to it from here would be this router
+         *     deciding the product's metric vocabulary.
+         *
+         *     So the shape carries the same obligations without the enum: a label saying what the number is
+         *     and the date it runs from. Criterion 3 asks for a label and a start date, and that is exactly
+         *     what this is. The day ``MetricKind`` gains money-weighted and consolidated members, these two
+         *     fields become a :class:`ReturnFigureOut` and this class goes away.
+         */
+        LabelledRateOut: {
+            /** Label */
+            label: string;
+            /** Since */
+            since?: string | null;
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
+            /** Value */
+            value?: string | null;
+        };
         /** LabelledValueOut */
         LabelledValueOut: {
             /** Label */
@@ -5265,16 +5805,6 @@ export interface components {
             data: components["schemas"]["ListingOut"][];
             /** Next Cursor */
             next_cursor?: string | null;
-        };
-        /** LoginIn */
-        LoginIn: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            /** Password */
-            password: string;
         };
         /** ManagerApplyIn */
         ManagerApplyIn: {
@@ -5433,6 +5963,21 @@ export interface components {
          * @enum {string}
          */
         MatchStatus: "matched" | "ambiguous" | "unmatched";
+        /** MaxDrawdownOut */
+        MaxDrawdownOut: {
+            /** Drawdown */
+            drawdown: string;
+            /**
+             * Peak On
+             * Format: date
+             */
+            peak_on: string;
+            /**
+             * Trough On
+             * Format: date
+             */
+            trough_on: string;
+        };
         /**
          * MeOut
          * @description docs/07: `GET /me` -> "profile + entitlements".
@@ -5450,8 +5995,6 @@ export interface components {
             /** Email Verified */
             email_verified: boolean;
             entitlements: components["schemas"]["EntitlementsOut"];
-            /** Has Password */
-            has_password: boolean;
             /**
              * Is Staff
              * @default false
@@ -5463,6 +6006,11 @@ export interface components {
             plan_code?: string | null;
             /** Public Id */
             public_id: string;
+            /**
+             * Session Epoch
+             * @default 0
+             */
+            session_epoch: number;
             /** Subscription Status */
             subscription_status?: string | null;
         };
@@ -5482,6 +6030,12 @@ export interface components {
             /** Value */
             value?: string | number | null;
         };
+        /**
+         * MetricKind
+         * @description What a return number actually *is*. Criterion 3: never an unlabelled column.
+         * @enum {string}
+         */
+        MetricKind: "TWR_SINCE_SUBSCRIBED" | "TWR_SINCE_GO_LIVE" | "TWR_SINCE_CREATED" | "SINCE_GROUPED" | "XIRR_SINCE_PURCHASE" | "XIRR_CONSOLIDATED";
         /** MetricsOut */
         MetricsOut: {
             /** As Of Date */
@@ -5514,6 +6068,30 @@ export interface components {
             volatility_bucket?: string | null;
             /** Volatility Value */
             volatility_value?: string | null;
+        };
+        /**
+         * MoneyMoveOut
+         * @description A move in rupees with its percentage, over a window that is named rather than assumed.
+         *
+         *     §6.2's "Today's P&L (₹ and %, vs previous close)" and "Total P&L". The percentage is a return
+         *     number, so it carries a label and the date it is measured from, for the same reason every
+         *     other rate here does. It is not a :class:`ReturnFigureOut` because a day's move is not one of
+         *     §5.2's metrics and labelling it as one would state the wrong start event.
+         *
+         *     ``pct`` is ``None`` when there is nothing to be a fraction of — a portfolio worth zero
+         *     yesterday has no percentage move today, and 0% would claim it was flat.
+         */
+        MoneyMoveOut: {
+            /** Amount */
+            amount?: string | null;
+            /** Label */
+            label: string;
+            /** Pct */
+            pct?: string | null;
+            /** Since */
+            since?: string | null;
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
         };
         /**
          * MonthlyReturnOut
@@ -5577,22 +6155,122 @@ export interface components {
             enabled: boolean;
         };
         /**
-         * NavPointOut
-         * @description One end-of-day mark.
+         * NavRange
+         * @description §6.3's ranges. 1D and 1W are absent, not disabled — §5.1 is end-of-day only in v1.
+         *
+         *     A member that cannot honestly be served is worse than a missing one: it teaches a client to
+         *     request a window the product answers with a straight line through one point.
+         * @enum {string}
          */
-        NavPointOut: {
-            /** Benchmark Value */
-            benchmark_value?: number | null;
-            /** Cash */
-            cash: number;
-            /** Date */
-            date: string;
-            /** Index Value */
-            index_value?: number | null;
-            /** Invested */
-            invested: number;
-            /** Nav */
-            nav: number;
+        NavRange: "1M" | "3M" | "1Y" | "3Y" | "ALL";
+        /**
+         * NavSeriesOut
+         * @description §6.3's chart data: the marks, the per-day moves, the drawdown, and the labelled return.
+         *
+         *     ``portfolio_id`` is ``None`` for the consolidated series, matching
+         *     ``portfolio_nav_daily.portfolio_id`` — one table, one shape, so the combined chart and a
+         *     single portfolio's chart can never disagree about what a mark means.
+         */
+        NavSeriesOut: {
+            benchmark?: components["schemas"]["BenchmarkOut"] | null;
+            /** Daily Pnl */
+            daily_pnl?: components["schemas"]["DayPnlOut"][];
+            /** Drawdown */
+            drawdown?: components["schemas"]["baskfy_api__routers__portfolio_overview__DrawdownPointOut"][];
+            /** From On */
+            from_on?: string | null;
+            max_drawdown?: components["schemas"]["MaxDrawdownOut"] | null;
+            /**
+             * Pending Reconciliation
+             * @default false
+             */
+            pending_reconciliation: boolean;
+            /** Points */
+            points?: components["schemas"]["baskfy_api__routers__portfolio_overview__NavPointOut"][];
+            /** Portfolio Id */
+            portfolio_id?: number | null;
+            range: components["schemas"]["NavRange"];
+            /** To On */
+            to_on?: string | null;
+            total_return: components["schemas"]["LabelledRateOut"];
+        };
+        /**
+         * NewPortfolioIn
+         * @description ``POST /portfolio`` — §3's source, §4.1's kind, §6.7's benchmark, and the holdings to file.
+         *
+         *     The four facts that make a portfolio in the redesign's model are all required to be *stated*,
+         *     and none of them is inferred:
+         *
+         *     * ``kind`` decides arithmetic, not styling (§4.1). A capital portfolio takes each holding
+         *       exclusively and sums into net worth; a monitoring view is a lens that never enters a total.
+         *       Defaulting it would make the more consequential of the two arrive by accident.
+         *     * ``source`` decides the headline metric (§5.2) and the badge (§3). ``SUBSCRIBED`` here means
+         *       the user is filing holdings against a model somebody else published — §9's framing, never
+         *       "managed", never "advisory".
+         *     * ``benchmark_index_id`` is §6.3's per-portfolio override. ``None`` is not "no comparison": it
+         *       means the surface falls back to the product default.
+         *     * ``holdings`` may be empty. §6.7 offers "Empty" as a starting point, and a portfolio with a
+         *       name and no positions yet is a legitimate thing to have made.
+         *
+         *     ``extra="forbid"`` for the same reason :class:`HoldingKeyIn` has it: this is the schema §4.2
+         *     is written into, and a body that carries an unknown key is a body somebody expected to mean
+         *     something.
+         */
+        NewPortfolioIn: {
+            /** Benchmark Index Id */
+            benchmark_index_id?: number | null;
+            /** Holdings */
+            holdings?: components["schemas"]["HoldingKeyIn"][];
+            kind: components["schemas"]["PortfolioKind"];
+            /** Name */
+            name: string;
+            source: components["schemas"]["PortfolioSource"];
+        };
+        /**
+         * OverviewOut
+         * @description §6, in one response. The two timestamps §6.1 requires are separate fields, deliberately.
+         *
+         *     A price date and a sync date answer different questions — "how old is the market data" and
+         *     "how old is our copy of what you own" — and a single "last updated" that quietly reports the
+         *     older of the two is how a user comes to believe a stale holdings list is a stale price. They
+         *     are two fields with two labels and they are never merged.
+         *
+         *     ``holdings_synced_on`` is a **date**, not a wall-clock time, because a date is the finest
+         *     truth the schema holds: ``broker_cash.as_of`` records the day a balance is true for, and
+         *     nothing records the instant a sync ran. Rendering a fabricated time would be the page
+         *     claiming a precision the data does not have. When a sync timestamp column exists, this field
+         *     becomes a datetime and its label stops saying "close of".
+         */
+        OverviewOut: {
+            /** Attention */
+            attention?: components["schemas"]["AttentionOut"][];
+            chart: components["schemas"]["NavSeriesOut"];
+            hero: components["schemas"]["HeroOut"];
+            /** Holdings Synced Label */
+            holdings_synced_label: string;
+            /** Holdings Synced On */
+            holdings_synced_on?: string | null;
+            /**
+             * Monitoring Excluded Note
+             * @default Monitoring view — overlaps with other portfolios, excluded from totals.
+             */
+            monitoring_excluded_note: string;
+            /** Monitoring Views */
+            monitoring_views?: components["schemas"]["PortfolioRowOut"][];
+            /**
+             * Open Reconciliation Count
+             * @default 0
+             */
+            open_reconciliation_count: number;
+            /** Portfolios */
+            portfolios?: components["schemas"]["PortfolioRowOut"][];
+            /** Prices As Of */
+            prices_as_of?: string | null;
+            /** Prices Label */
+            prices_label: string;
+            /** Sync Status */
+            sync_status?: components["schemas"]["SyncStatusOut"][];
+            unallocated: components["schemas"]["UnallocatedOut"];
         };
         /**
          * PeFilter
@@ -5690,7 +6368,7 @@ export interface components {
             /** Return Pct */
             return_pct?: number | null;
             /** Series */
-            series: components["schemas"]["NavPointOut"][];
+            series: components["schemas"]["baskfy_api__routers__desk__NavPointOut"][];
         };
         /** PipelineRunDetailOut */
         PipelineRunDetailOut: {
@@ -5840,31 +6518,6 @@ export interface components {
             parent_id?: number | null;
         };
         /**
-         * PortfolioDetailOut
-         * @description ``GET /portfolios/{id}``: the portfolio, its holdings, and where it sits in the tree.
-         */
-        PortfolioDetailOut: {
-            /** Broker Account Id */
-            broker_account_id?: number | null;
-            /** Child Ids */
-            child_ids?: number[];
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Depth */
-            depth: number;
-            /** Holdings */
-            holdings: components["schemas"]["HoldingOut"][];
-            /** Id */
-            id: number;
-            /** Name */
-            name: string;
-            /** Parent Id */
-            parent_id?: number | null;
-        };
-        /**
          * PortfolioForestOut
          * @description ``GET /portfolios``: the caller's portfolios, nested.
          *
@@ -5879,6 +6532,12 @@ export interface components {
             /** Orphans */
             orphans?: components["schemas"]["PortfolioNodeOut"][];
         };
+        /**
+         * PortfolioKind
+         * @description §4.1. The two kinds behave differently in *arithmetic*, not merely in styling.
+         * @enum {string}
+         */
+        PortfolioKind: "CAPITAL" | "MONITORING";
         /**
          * PortfolioLinkBody
          * @description Which portfolio to file this investment under. One field, because that is the whole act.
@@ -5940,6 +6599,21 @@ export interface components {
             parent_id?: number | null;
         };
         /**
+         * PortfolioRefOut
+         * @description A portfolio named from somewhere else's payload — the id, the name, and its kind.
+         *
+         *     ``kind`` travels with the name everywhere, because a reader who sees only a name cannot know
+         *     whether the thing being named counts toward a total (§4.1).
+         */
+        PortfolioRefOut: {
+            kind: components["schemas"]["PortfolioKind"];
+            /** Name */
+            name: string;
+            /** Portfolio Id */
+            portfolio_id: number;
+            source: components["schemas"]["PortfolioSource"];
+        };
+        /**
          * PortfolioRollupOut
          * @description ``GET /portfolios/{id}/holdings``: a subtree's holdings, split by broker, with a total.
          */
@@ -5962,11 +6636,129 @@ export interface components {
             unattributed: components["schemas"]["TotalsOut"];
         };
         /**
+         * PortfolioRowOut
+         * @description One row of §6.5's table, or one muted row of its Monitoring views tab.
+         *
+         *     ``counts_toward_total`` is stated rather than inferred from ``kind``. A client that has to
+         *     map kinds to arithmetic is a client that can get the mapping wrong; this field is the answer,
+         *     and for a monitoring view it is ``False`` with :attr:`excluded_note` saying why in §4.1's own
+         *     words.
+         *
+         *     ``model_return`` is present only on a subscribed portfolio and is *never* the same field as
+         *     ``headline_return`` (criterion 5). One is what this user experienced; the other is what the
+         *     publisher reported. They are measured over the same window and they are still two numbers.
+         */
+        PortfolioRowOut: {
+            /** Benchmark Name */
+            benchmark_name?: string | null;
+            /**
+             * Broker Count
+             * @default 0
+             */
+            broker_count: number;
+            /** Brokers */
+            brokers?: components["schemas"]["BrokerRefOut"][];
+            /** Cash */
+            cash: string;
+            /** Counts Toward Total */
+            counts_toward_total: boolean;
+            /** Excluded Note */
+            excluded_note?: string | null;
+            headline_return: components["schemas"]["ReturnFigureOut"];
+            /**
+             * Holdings Count
+             * @default 0
+             */
+            holdings_count: number;
+            kind: components["schemas"]["PortfolioKind"];
+            model_return?: components["schemas"]["ReturnFigureOut"] | null;
+            /** Name */
+            name: string;
+            /**
+             * Pending Reconciliation
+             * @default false
+             */
+            pending_reconciliation: boolean;
+            /** Portfolio Id */
+            portfolio_id: number;
+            /** Publisher */
+            publisher?: string | null;
+            source: components["schemas"]["PortfolioSource"];
+            /** Source Badge */
+            source_badge: string;
+            /**
+             * Started On
+             * Format: date
+             */
+            started_on: string;
+            /** Status */
+            status: string;
+            todays_pnl: components["schemas"]["MoneyMoveOut"];
+            /** Value */
+            value: string;
+        };
+        /**
+         * PortfolioSource
+         * @description §3. Shown as a badge everywhere, and it decides the headline metric (§5.2).
+         * @enum {string}
+         */
+        PortfolioSource: "SUBSCRIBED" | "MY_SCREEN" | "MY_STRATEGY" | "HOLDING_GROUP";
+        /**
+         * PortfolioSummaryOut
+         * @description §7's summary block. Same figures as the table row, plus invested and the benchmark diff.
+         */
+        PortfolioSummaryOut: {
+            benchmark?: components["schemas"]["BenchmarkOut"] | null;
+            /** Cash */
+            cash: string;
+            /** Counts Toward Total */
+            counts_toward_total: boolean;
+            /** Excluded Note */
+            excluded_note?: string | null;
+            headline_return: components["schemas"]["ReturnFigureOut"];
+            /** Holdings Synced On */
+            holdings_synced_on?: string | null;
+            /** Invested */
+            invested?: string | null;
+            /** Invested Unavailable Reason */
+            invested_unavailable_reason?: string | null;
+            kind: components["schemas"]["PortfolioKind"];
+            model_return?: components["schemas"]["ReturnFigureOut"] | null;
+            /** Name */
+            name: string;
+            /**
+             * Pending Reconciliation
+             * @default false
+             */
+            pending_reconciliation: boolean;
+            /** Portfolio Id */
+            portfolio_id: number;
+            /** Prices As Of */
+            prices_as_of?: string | null;
+            /** Publisher */
+            publisher?: string | null;
+            source: components["schemas"]["PortfolioSource"];
+            /** Source Badge */
+            source_badge: string;
+            /**
+             * Started On
+             * Format: date
+             */
+            started_on: string;
+            /** Status */
+            status: string;
+            todays_pnl: components["schemas"]["MoneyMoveOut"];
+            total_pnl: components["schemas"]["MoneyMoveOut"];
+            /** Value */
+            value: string;
+            xirr: components["schemas"]["LabelledRateOut"];
+        };
+        /**
          * PortfolioWriteDetailOut
          * @description What a create, an import or a holdings replacement answers with.
          */
         PortfolioWriteDetailOut: {
-            portfolio: components["schemas"]["PortfolioDetailOut"];
+            portfolio: components["schemas"]["baskfy_api__routers__portfolios__PortfolioDetailOut"];
             report: components["schemas"]["ImportReportOut"];
         };
         /**
@@ -6419,6 +7211,81 @@ export interface components {
             /** Symbol */
             symbol: string;
         };
+        /**
+         * ReconciliationInboxOut
+         * @description The inbox, plus exactly what the open questions in it are currently forbidding.
+         */
+        ReconciliationInboxOut: {
+            /**
+             * Consolidated Pending
+             * @default false
+             */
+            consolidated_pending: boolean;
+            /** Items */
+            items?: components["schemas"]["ReconciliationItemOut"][];
+            /**
+             * Open Count
+             * @default 0
+             */
+            open_count: number;
+            /** Pending Portfolio Ids */
+            pending_portfolio_ids?: number[];
+            /**
+             * Pending Status Label
+             * @default Pending reconciliation
+             */
+            pending_status_label: string;
+            /**
+             * Unallocated Pending
+             * @default false
+             */
+            unallocated_pending: boolean;
+        };
+        /**
+         * ReconciliationItemOut
+         * @description One question in §4.3's inbox, with the sentence it asks and the portfolio to pre-select.
+         *
+         *     ``suggested_portfolio`` is a suggestion and is labelled as one everywhere it travels: the
+         *     ledger is explicit that a suggestion is never an attribution, and a UI that pre-selects
+         *     without saying so is a UI that collects clicks rather than answers.
+         */
+        ReconciliationItemOut: {
+            broker: components["schemas"]["BrokerRefOut"];
+            /**
+             * Detected On
+             * Format: date
+             */
+            detected_on: string;
+            /**
+             * Freezes
+             * @default false
+             */
+            freezes: boolean;
+            instrument: components["schemas"]["InstrumentRefOut"];
+            /** Item Id */
+            item_id: number;
+            /** Quantity */
+            quantity: string;
+            /** Question */
+            question: string;
+            /** Reason */
+            reason: string;
+            /** Resolved At */
+            resolved_at?: string | null;
+            resolved_portfolio?: components["schemas"]["PortfolioRefOut"] | null;
+            state: components["schemas"]["ReconciliationState"];
+            suggested_portfolio?: components["schemas"]["PortfolioRefOut"] | null;
+        };
+        /**
+         * ReconciliationState
+         * @description The inbox lifecycle, fixed by migration 0022's ``reconciliation_item_state_known``.
+         *
+         *     Three states and no more. There is deliberately no ``SNOOZED`` and no ``IN_PROGRESS``: both
+         *     would be a fourth thing that freezes performance indefinitely while looking like progress,
+         *     and §4.3's whole point is that the freeze should be uncomfortable enough to get answered.
+         * @enum {string}
+         */
+        ReconciliationState: "OPEN" | "RESOLVED" | "DISMISSED";
         /** RegimeOut */
         RegimeOut: {
             /** Actual Equity Pct */
@@ -6455,47 +7322,63 @@ export interface components {
             tier: string;
         };
         /**
-         * RegisterIn
-         * @description docs/07: `POST /auth/register`.
+         * ResolveBody
+         * @description Which portfolio the detected change belongs to. One field, because that is the whole act.
          *
-         *     ``password`` is optional because docs/11 §Security makes OTP "the default path, password
-         *     optional" — an account created without one signs in by code until it sets one.
+         *     A dismissal ("there is nothing here to attribute") is a different answer with a different
+         *     consequence — it changes no allocation — and it is not this route. Folding both into one
+         *     endpoint with a boolean would make the more dangerous of the two the default shape.
          */
-        RegisterIn: {
+        ResolveBody: {
+            /** Portfolio Id */
+            portfolio_id: number;
+        };
+        /**
+         * ResolveOut
+         * @description What answering the question did: the item, and the allocation the answer implied.
+         */
+        ResolveOut: {
+            allocated_to: components["schemas"]["PortfolioRefOut"];
+            item: components["schemas"]["ReconciliationItemOut"];
             /**
-             * Accept Marketing
+             * Unfroze
+             * @default true
+             */
+            unfroze: boolean;
+        };
+        /**
+         * ReturnFigureOut
+         * @description One of §5.2's headline metrics, rendered with everything criterion 3 requires.
+         *
+         *     ``kind`` is a :class:`~baskfy_core.allocation_ledger.MetricKind` value and nothing else. That
+         *     enum is the product's whole metric vocabulary; a router that invented a sixth member would be
+         *     the second vocabulary the ledger's own docstring warns about, and the two would drift.
+         *
+         *     ``value`` is ``None`` exactly when ``unavailable_reason`` is set, and the reason is a sentence
+         *     a user can read. An empty cell with no reason cannot be told apart from a zero, which is the
+         *     failure :class:`~baskfy_core.allocation_ledger.ReturnFigure` refuses at construction.
+         *
+         *     ``is_model`` is part of the payload rather than implied by the field name, so a client that
+         *     renders figures generically still cannot present a publisher's record as the user's own.
+         */
+        ReturnFigureOut: {
+            /**
+             * Is Model
              * @default false
              */
-            accept_marketing: boolean;
+            is_model: boolean;
+            kind: components["schemas"]["MetricKind"];
+            /** Label */
+            label: string;
             /**
-             * Accept Terms
-             * @default false
+             * Since
+             * Format: date
              */
-            accept_terms: boolean;
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            /** Name */
-            name?: string | null;
-            /** Password */
-            password?: string | null;
-        };
-        /** RequestOtpIn */
-        RequestOtpIn: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-        };
-        /** ResetPasswordIn */
-        ResetPasswordIn: {
-            /** Password */
-            password: string;
-            /** Token */
-            token: string;
+            since: string;
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
+            /** Value */
+            value?: string | null;
         };
         /** RevenueShareOut */
         RevenueShareOut: {
@@ -6916,6 +7799,11 @@ export interface components {
             /** Public Id */
             public_id: string;
             /**
+             * Session Epoch
+             * @default 0
+             */
+            session_epoch: number;
+            /**
              * Token Type
              * @default Bearer
              */
@@ -7094,6 +7982,38 @@ export interface components {
             label: string;
         };
         /**
+         * SourcePanelOut
+         * @description §7's source panel. One shape for all four sources; the fields that do not apply are null.
+         *
+         *     Four classes would force the client to branch four ways to draw one panel, and the branch is
+         *     where the fifth source gets forgotten. ``headline`` is the sentence the panel leads with, and
+         *     for a subscribed portfolio it is §9's exact framing — never "managed", never "advisory".
+         */
+        SourcePanelOut: {
+            /** Basket Name */
+            basket_name?: string | null;
+            /** Basket Slug */
+            basket_slug?: string | null;
+            /** Brokers */
+            brokers?: components["schemas"]["BrokerRefOut"][];
+            /**
+             * Execution Note
+             * @default Baskfy never places an order. A rebalance produces a plan you take to your broker.
+             */
+            execution_note: string;
+            /** Grouped On */
+            grouped_on?: string | null;
+            /** Headline */
+            headline: string;
+            /** Publisher */
+            publisher?: string | null;
+            /** Screen Name */
+            screen_name?: string | null;
+            /** Screen Public Id */
+            screen_public_id?: string | null;
+            source: components["schemas"]["PortfolioSource"];
+        };
+        /**
          * StanceOut
          * @description The desk's current policy tier, as a fact.
          */
@@ -7156,6 +8076,89 @@ export interface components {
             symbol: string;
         };
         /**
+         * SuggestionBasis
+         * @description The three groupings §6.6 names, and nothing else.
+         *
+         *     The basis is part of every suggestion because the user is entitled to know *why* the product
+         *     thinks these eight stocks belong together before they name the result. "These are all
+         *     Financials" and "you bought these in the same year" are very different claims, and a UI that
+         *     presented both as an anonymous cluster would be asking for trust it has not earned.
+         * @enum {string}
+         */
+        SuggestionBasis: "SECTOR" | "PURCHASE_ERA" | "BASKET_OVERLAP";
+        /**
+         * SuggestionBasisStatusOut
+         * @description Whether one of §6.6's three bases could be computed at all, and if not, why not.
+         *
+         *     This field exists because of the difference between "we looked and these holdings do not
+         *     group by sector" and "we have no sector data for anybody". Both produce no sector suggestion,
+         *     and only one of them is a fact about the user's portfolio; collapsing them into an empty list
+         *     would have the screen tell a new user their holdings have nothing in common when what
+         *     actually happened is that a reference table is empty.
+         *
+         *     ``considered`` is how many holdings the basis had an input for. Zero with ``available`` false
+         *     is a missing input; a small number with ``available`` true is a real, thin answer.
+         */
+        SuggestionBasisStatusOut: {
+            /** Available */
+            available: boolean;
+            basis: components["schemas"]["SuggestionBasis"];
+            /**
+             * Considered
+             * @default 0
+             */
+            considered: number;
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
+        };
+        /**
+         * SuggestionsOut
+         * @description ``GET /portfolio/suggestions`` — §6.6's first-run helper, with its own honesty attached.
+         *
+         *     §6.6 is the spec's most emphatic sentence ("getting from 40 unallocated holdings to 4 named
+         *     portfolios IS activation"), and the failure it is most exposed to is a blank screen that
+         *     reads as a verdict. So the payload carries three things a bare list cannot:
+         *
+         *     * ``bases`` — per-basis availability, so the screen can say *which* input was missing;
+         *     * ``unavailable_reason`` — set only when **no** basis could be computed at all, which is the
+         *       one case where "no ideas" would be a lie rather than an answer. It is ``None`` the moment
+         *       even one basis ran, including when that basis found nothing;
+         *     * ``unpriced_instrument_ids`` — holdings excluded from every suggestion because no close is
+         *       on record for them. :func:`~baskfy_core.allocation_ledger.holding_value` refuses a missing
+         *       price and it is right to: a suggestion whose headline value quietly omitted a position
+         *       would rank below where it belongs and mislead the decision it exists to inform.
+         *
+         *     ``sectors`` is keyed by instrument id **as a string**, because that is what a JSON object key
+         *     is; the §6.7 picker filters by it. It is empty when nothing in this database knows a sector,
+         *     and ``bases`` then says so in a sentence.
+         */
+        SuggestionsOut: {
+            /** Bases */
+            bases?: components["schemas"]["SuggestionBasisStatusOut"][];
+            /**
+             * Cta
+             * @default Organize into portfolios
+             */
+            cta: string;
+            /** Sectors */
+            sectors?: {
+                [key: string]: string;
+            };
+            /** Suggestions */
+            suggestions?: components["schemas"]["GroupingSuggestionOut"][];
+            /**
+             * Unallocated Count
+             * @default 0
+             */
+            unallocated_count: number;
+            /** Unallocated Value */
+            unallocated_value: string;
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
+            /** Unpriced Instrument Ids */
+            unpriced_instrument_ids?: number[];
+        };
+        /**
          * SupportMessageIn
          * @description docs/07 does not describe this endpoint; PROMPTS.md Prompt 18 §2 asks for the form that
          *     posts to it, and a form with no destination is a lie told in HTML.
@@ -7204,6 +8207,17 @@ export interface components {
              * @enum {string}
              */
             source: "live" | "fixture" | "empty" | "unwired";
+        };
+        /**
+         * SyncStatusOut
+         * @description §6.1's per-broker sync status. One row per connected account, dated.
+         */
+        SyncStatusOut: {
+            broker: components["schemas"]["BrokerRefOut"];
+            /** Label */
+            label: string;
+            /** Synced On */
+            synced_on?: string | null;
         };
         /**
          * TargetWeightOut
@@ -7411,6 +8425,58 @@ export interface components {
             return_convention_note: string;
         };
         /**
+         * UnallocatedHoldingOut
+         * @description A holding in no capital portfolio, aggregated across brokers for display (§6.7).
+         */
+        UnallocatedHoldingOut: {
+            /** Brokers */
+            brokers?: components["schemas"]["BrokerRefOut"][];
+            instrument: components["schemas"]["InstrumentRefOut"];
+            /** Monitoring Views */
+            monitoring_views?: components["schemas"]["PortfolioRefOut"][];
+            /**
+             * Pending Reconciliation
+             * @default false
+             */
+            pending_reconciliation: boolean;
+            /** Quantity */
+            quantity: string;
+            /** Value */
+            value: string;
+        };
+        /**
+         * UnallocatedOut
+         * @description §6.6's centerpiece: cash plus unassigned holdings, with a total and a way out.
+         *
+         *     Present in every overview response, including when it is empty. A section that appears only
+         *     when something is wrong is a section users learn to read as an alarm; §6.6 makes it the place
+         *     a new account starts, which means it has to be a place that exists.
+         */
+        UnallocatedOut: {
+            /** Cash */
+            cash: string;
+            /** Cash By Broker */
+            cash_by_broker?: components["schemas"]["BrokerCashOut"][];
+            /**
+             * Cta
+             * @default Organize into portfolios
+             */
+            cta: string;
+            /** Holdings */
+            holdings?: components["schemas"]["UnallocatedHoldingOut"][];
+            /** Holdings Count */
+            holdings_count: number;
+            /** Holdings Value */
+            holdings_value: string;
+            /**
+             * Pending Reconciliation
+             * @default false
+             */
+            pending_reconciliation: boolean;
+            /** Total Value */
+            total_value: string;
+        };
+        /**
          * UniverseOut
          * @description docs/07: "index_def rows where is_universe".
          */
@@ -7475,21 +8541,6 @@ export interface components {
             source: string;
             /** Title */
             title: string;
-        };
-        /** VerifyEmailIn */
-        VerifyEmailIn: {
-            /** Token */
-            token: string;
-        };
-        /** VerifyOtpIn */
-        VerifyOtpIn: {
-            /** Code */
-            code: string;
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
         };
         /**
          * WatchlistAddIn
@@ -7655,6 +8706,35 @@ export interface components {
          * @enum {string}
          */
         Weighting: "equal" | "inverse_volatility" | "rank" | "marketcap";
+        /** HoldingsOut */
+        baskfy_api__routers__desk__HoldingsOut: {
+            /** As Of */
+            as_of: string;
+            /** Excluded Value */
+            excluded_value: number;
+            /** Rows */
+            rows: components["schemas"]["DeskHoldingOut"][];
+            /** Total Value */
+            total_value: number;
+        };
+        /**
+         * NavPointOut
+         * @description One end-of-day mark.
+         */
+        baskfy_api__routers__desk__NavPointOut: {
+            /** Benchmark Value */
+            benchmark_value?: number | null;
+            /** Cash */
+            cash: number;
+            /** Date */
+            date: string;
+            /** Index Value */
+            index_value?: number | null;
+            /** Invested */
+            invested: number;
+            /** Nav */
+            nav: number;
+        };
         /** ManagerOut */
         baskfy_api__routers__explore__ManagerOut: {
             /** Bio */
@@ -7699,6 +8779,116 @@ export interface components {
             slug: string;
             /** State */
             state: string;
+        };
+        /** DrawdownPointOut */
+        baskfy_api__routers__portfolio_overview__DrawdownPointOut: {
+            /** Drawdown */
+            drawdown: string;
+            /** Index */
+            index: string;
+            /**
+             * On
+             * Format: date
+             */
+            on: string;
+            /** Peak */
+            peak: string;
+        };
+        /**
+         * HoldingsOut
+         * @description §2's flat broker-level truth: every share, which broker, what it is allocated to.
+         */
+        baskfy_api__routers__portfolio_overview__HoldingsOut: {
+            /** Holdings Synced Label */
+            holdings_synced_label: string;
+            /** Holdings Synced On */
+            holdings_synced_on?: string | null;
+            /** Prices As Of */
+            prices_as_of?: string | null;
+            /** Prices Label */
+            prices_label: string;
+            /** Rows */
+            rows?: components["schemas"]["AggregatedHoldingOut"][];
+            /** Total Value */
+            total_value: string;
+            /**
+             * Unallocated Count
+             * @default 0
+             */
+            unallocated_count: number;
+            /** Unpriced Instrument Ids */
+            unpriced_instrument_ids?: number[];
+        };
+        /**
+         * NavPointOut
+         * @description One stored end-of-day mark. ``net_flow`` travels with it, always — see
+         *     :class:`~baskfy_core.portfolio_nav.NavPoint`: a value without its flow is a chart that reads
+         *     a transfer as a profit.
+         */
+        baskfy_api__routers__portfolio_overview__NavPointOut: {
+            /** Cash */
+            cash: string;
+            /** Net Flow */
+            net_flow: string;
+            /**
+             * On
+             * Format: date
+             */
+            on: string;
+            /**
+             * Pending Reconciliation
+             * @default false
+             */
+            pending_reconciliation: boolean;
+            /** Value */
+            value: string;
+        };
+        /**
+         * PortfolioDetailOut
+         * @description ``GET /portfolio/{id}`` — §7 in one response: summary, holdings, source panel.
+         */
+        baskfy_api__routers__portfolio_overview__PortfolioDetailOut: {
+            /** Brokers */
+            brokers?: components["schemas"]["BrokerRefOut"][];
+            /** Holdings */
+            holdings?: components["schemas"]["DetailHoldingOut"][];
+            source_panel: components["schemas"]["SourcePanelOut"];
+            summary: components["schemas"]["PortfolioSummaryOut"];
+        };
+        /**
+         * PortfolioDetailOut
+         * @description ``GET /portfolios/{id}``: the portfolio, its holdings, and where it sits in the tree.
+         */
+        baskfy_api__routers__portfolios__PortfolioDetailOut: {
+            /** Broker Account Id */
+            broker_account_id?: number | null;
+            /** Child Ids */
+            child_ids?: number[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Depth */
+            depth: number;
+            /** Holdings */
+            holdings: components["schemas"]["HoldingOut"][];
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id?: number | null;
+        };
+        /** DrawdownPointOut */
+        baskfy_api__schemas__DrawdownPointOut: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Drawdown */
+            drawdown: number;
         };
     };
     responses: never;
@@ -9568,7 +10758,7 @@ export interface operations {
             };
         };
     };
-    forgotPassword: {
+    signInWithGoogle: {
         parameters: {
             query?: never;
             header?: never;
@@ -9577,112 +10767,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ForgotPasswordIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AcceptedOut"];
-                };
-            };
-            /** @description Invalid screen definition */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Your plan does not include this feature */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data version is no longer current */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description No trading day available for that date */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Too many requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data pipeline is degraded */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    login: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginIn"];
+                "application/json": components["schemas"]["GoogleSignInIn"];
             };
         };
         responses: {
@@ -9885,531 +10970,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionOut"];
-                };
-            };
-            /** @description Invalid screen definition */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Your plan does not include this feature */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data version is no longer current */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description No trading day available for that date */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Too many requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data pipeline is degraded */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    register: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AcceptedOut"];
-                };
-            };
-            /** @description Invalid screen definition */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Your plan does not include this feature */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data version is no longer current */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description No trading day available for that date */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Too many requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data pipeline is degraded */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    requestOtp: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RequestOtpIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AcceptedOut"];
-                };
-            };
-            /** @description Invalid screen definition */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Your plan does not include this feature */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data version is no longer current */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description No trading day available for that date */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Too many requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data pipeline is degraded */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    resetPassword: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResetPasswordIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionOut"];
-                };
-            };
-            /** @description Invalid screen definition */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Your plan does not include this feature */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data version is no longer current */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description No trading day available for that date */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Too many requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data pipeline is degraded */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    verifyEmail: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VerifyEmailIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AcceptedOut"];
-                };
-            };
-            /** @description Invalid screen definition */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Your plan does not include this feature */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data version is no longer current */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description No trading day available for that date */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Too many requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data pipeline is degraded */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
-    verifyOtp: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VerifyOtpIn"];
-            };
-        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -15183,7 +15743,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HoldingsOut"];
+                    "application/json": components["schemas"]["baskfy_api__routers__desk__HoldingsOut"];
                 };
             };
             /** @description Invalid screen definition */
@@ -19007,111 +19567,6 @@ export interface operations {
             };
         };
     };
-    changePassword: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChangePasswordIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MeOut"];
-                };
-            };
-            /** @description Invalid screen definition */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Authentication required */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Your plan does not include this feature */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data version is no longer current */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description No trading day available for that date */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Too many requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-            /** @description Data pipeline is degraded */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemOut"];
-                };
-            };
-        };
-    };
     exportMe: {
         parameters: {
             query?: never;
@@ -19929,6 +20384,942 @@ export interface operations {
             };
         };
     };
+    newPortfolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewPortfolioIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["baskfy_api__routers__portfolio_overview__PortfolioDetailOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    portfolioActivity: {
+        parameters: {
+            query?: {
+                /** @description Only this portfolio's activity. */
+                portfolio_id?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    portfolioHoldings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["baskfy_api__routers__portfolio_overview__HoldingsOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    portfolioOverview: {
+        parameters: {
+            query?: {
+                /** @description §6.3's chart range. End-of-day only in v1. */
+                range?: components["schemas"]["NavRange"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverviewOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    portfolioReconciliation: {
+        parameters: {
+            query?: {
+                /** @description Filter by lifecycle state. Omit for the open questions only. */
+                state?: components["schemas"]["ReconciliationState"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconciliationInboxOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    resolveReconciliationItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    portfolioSuggestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionsOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    portfolioDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portfolio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["baskfy_api__routers__portfolio_overview__PortfolioDetailOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    portfolioNav: {
+        parameters: {
+            query?: {
+                /** @description §6.3's ranges. End-of-day only in v1. */
+                range?: components["schemas"]["NavRange"];
+            };
+            header?: never;
+            path: {
+                portfolio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NavSeriesOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     listPortfolios: {
         parameters: {
             query?: never;
@@ -20363,7 +21754,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PortfolioDetailOut"];
+                    "application/json": components["schemas"]["baskfy_api__routers__portfolios__PortfolioDetailOut"];
                 };
             };
             /** @description Invalid screen definition */
@@ -20571,7 +21962,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PortfolioDetailOut"];
+                    "application/json": components["schemas"]["baskfy_api__routers__portfolios__PortfolioDetailOut"];
                 };
             };
             /** @description Invalid screen definition */

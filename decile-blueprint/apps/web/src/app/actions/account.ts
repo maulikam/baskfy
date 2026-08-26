@@ -7,14 +7,15 @@ import { signOut } from "@/lib/auth";
 import { callMe, type MutationResult } from "@/lib/auth/me";
 
 /**
- * Server actions for `/profile` and `/change-password` — Prompt 12 deliverable 4.
+ * Server actions for `/profile` — Prompt 12 deliverable 4.
  *
  * They call the API with the session's bearer token rather than touching the database, so every
- * rule the API enforces — the current-password check, the password policy, the session
- * revocation — applies identically whether the change came from the web app or from a script.
+ * rule the API enforces applies identically whether the change came from the web app or from a
+ * script.
+ *
+ * `changePassword` used to live here. Google sign-in replaced the password entirely
+ * (`docs/DECISIONS-MERGE.md` M46), so there is no credential on this side to change.
  */
-
-const MIN_PASSWORD_LENGTH = 8;
 
 function field(formData: FormData, name: string): string {
   const value = formData.get(name);
@@ -34,29 +35,6 @@ export async function updateProfile(
   return { ok: true, message: "Saved." };
 }
 
-export async function changePassword(
-  _previous: MutationResult | null,
-  formData: FormData,
-): Promise<MutationResult> {
-  const current = field(formData, "current_password");
-  const next = field(formData, "new_password");
-  const confirm = field(formData, "confirm_password");
-
-  if (next.length < MIN_PASSWORD_LENGTH) {
-    return { ok: false, message: `Passwords must be at least ${MIN_PASSWORD_LENGTH} characters.` };
-  }
-  if (next !== confirm) return { ok: false, message: "The two new passwords do not match." };
-
-  const result = await callMe("/me/change-password", "POST", {
-    current_password: current || null,
-    new_password: next,
-  });
-  if (!result.ok) return { ok: false, message: result.detail };
-  return {
-    ok: true,
-    message: "Your password has been changed. Every other session has been signed out.",
-  };
-}
 
 /**
  * DPDP erasure — Prompt 12 §5. Signs the browser out on success, because the account it was

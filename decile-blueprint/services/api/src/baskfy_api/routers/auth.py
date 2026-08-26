@@ -1,24 +1,33 @@
 """``/auth/*`` and ``/me`` — docs/07 §"Account & billing", docs/11 §Security (Prompt 12).
 
-    POST /auth/register  /auth/login  /auth/refresh  /auth/logout
-    POST /auth/request-otp  /auth/verify-otp
-    POST /auth/forgot-password  /auth/reset-password
+    POST /auth/google   -> the only way in
+    POST /auth/refresh  /auth/logout
     GET  /me                                  -> profile + entitlements
     PATCH /me
-    POST /me/change-password
+    GET  /me/export     DELETE /me     POST /me/restore
 
-plus three docs/11 §Compliance requires and docs/07 does not enumerate: `POST /auth/verify-email`
-(the counterpart to the mail `/auth/register` sends), `GET /me/export` and `DELETE /me` with
-`POST /me/restore` (DPDP export and erasure, Prompt 12 §5). `docs/12a` §1 records the addition.
+WHAT USED TO BE HERE
+--------------------
+``/auth/register``, ``/auth/login``, ``/auth/request-otp``, ``/auth/verify-otp``,
+``/auth/verify-email``, ``/auth/forgot-password``, ``/auth/reset-password`` and
+``/me/change-password``. All eight are gone: Google sign-in replaced the lot
+(`docs/DECISIONS-MERGE.md` M46). Nothing in this service stores or checks a password any more,
+and no sign-in path sends an email.
 
-Two shapes recur and are deliberate:
+Two shapes that ran through the old endpoints are worth knowing are *deliberately absent*:
 
-**The uninformative 202.** `request-otp`, `forgot-password` and `register` all answer
-`202 accepted` with the same sentence whether or not the address is known. docs/11's PII inventory
-makes the customer list PII; an endpoint that says "no such account" publishes it.
+**The uninformative 202 is gone with the endpoints that needed it.** ``register``,
+``request-otp`` and ``forgot-password`` all answered identically for a known and an unknown
+address, because an endpoint that says "no such account" publishes the customer list. Google
+sign-in has no such leak to plug — the caller has already proved to Google who they are, so
+there is no membership question they could be asking us.
 
-**The lockout is checked before the credential.** docs/11: "account lockout after 10 failures".
-Checking after would let a locked account still be probed at full speed.
+**The lockout is gone with the password.** "Ten failures then lock" existed because a password
+can be guessed. An ID token cannot: it is either signed by Google or it is not. The lockout
+machinery survives in ``auth_service`` only for the model and the migration; nothing calls it.
+
+What has *not* changed is that every rejection is one flat 401 with one sentence
+(:func:`_as_problem`), so a caller learns nothing about which check refused them.
 """
 
 from __future__ import annotations
@@ -32,31 +41,22 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import AuthenticatedDep, settings_for
+from baskfy_api.auth_google import GoogleVerificationError, GoogleVerifier, TokenVerifier
 from baskfy_api.auth_service import (
     AccountLocked,
     AuthError,
-    CodeSpec,
     InvalidCredentials,
     IssuedSession,
     TokenReused,
-    assert_not_locked,
-    authenticate_password,
     cancel_deletion,
-    consume_code,
-    consume_link_token,
-    create_user,
-    find_user,
     find_user_including_deleted,
-    issue_code,
     issue_session,
+    link_google_identity,
     normalise_email,
-    record_consent,
-    record_failure,
     request_deletion,
     revoke_all_for_user,
     revoke_one,
     rotate_refresh,
-    set_password,
 )
 from baskfy_api.csrf import (
     REFRESH_COOKIE,
@@ -70,24 +70,15 @@ from baskfy_api.email import templates as mail
 from baskfy_api.entitlements import EntitlementsDep
 from baskfy_api.problems import Problem, ProblemType, unauthenticated
 from baskfy_api.schemas import (
-    AcceptedOut,
-    ChangePasswordIn,
     DataExportOut,
     DeleteAccountIn,
     DeletionOut,
     EntitlementsOut,
-    ForgotPasswordIn,
-    LoginIn,
+    GoogleSignInIn,
     MeOut,
-    RegisterIn,
-    RequestOtpIn,
-    ResetPasswordIn,
     SessionOut,
     UpdateMeIn,
-    VerifyEmailIn,
-    VerifyOtpIn,
 )
-from baskfy_api.security import WeakPassword, verify_password
 from baskfy_api.settings import Settings
 from baskfy_core.models import (
     AccountDeletion,
@@ -153,6 +144,11 @@ def _session_response(response: Response, issued: IssuedSession, settings: Setti
         email=issued.user.email,
         name=issued.user.name,
         email_verified=issued.user.email_verified_at is not None,
+        # Read *after* `issue_session`, which matters on the reset-password path: `set_password`
+        # bumps the epoch, and a value captured before that would stamp the new session with the
+        # generation it just invalidated — signing the user out of the session they are in the
+        # middle of creating.
+        session_epoch=issued.user.session_epoch,
     )
 
 
@@ -178,186 +174,75 @@ def _as_problem(error: AuthError) -> Problem:
 # ---------------------------------------------------------------------------
 
 
-@router.post(
-    "/auth/register",
-    response_model=AcceptedOut,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Create an account",
-)
-async def register(
-    request: Request,
-    body: RegisterIn,
-    session: SessionDep,
-    settings: SettingsDep,
-    mailer: MailerDep,
-) -> AcceptedOut:
-    """docs/07: `POST /auth/register`.
+def _google(request: Request) -> TokenVerifier:
+    """The process-wide verifier, built once by ``create_app`` so the JWKS cache is shared.
 
-    Answers 202 either way. Registering an address that already has an account sends *that*
-    account a sign-in prompt rather than saying "already registered", which would turn the
-    registration form into a membership check.
+    Typed as the protocol rather than the class so a test can substitute a double on
+    ``app.state`` — the same seam ``_mailer`` opens for :class:`Outbox`.
     """
-    if not body.accept_terms:
-        raise Problem(
-            ProblemType.INVALID_SCREEN_DEFINITION,
-            "The Terms and the Privacy Policy have to be accepted to create an account.",
-            errors=[{"field": "accept_terms", "message": "required"}],
-        )
-
-    email = normalise_email(str(body.email))
-    existing = await find_user_including_deleted(session, email)
-
-    if existing is None:
-        try:
-            user = await create_user(
-                session, email, password=body.password, name=body.name, settings=settings
-            )
-        except WeakPassword as exc:
-            raise Problem(
-                ProblemType.INVALID_SCREEN_DEFINITION,
-                str(exc),
-                errors=[{"field": "password", "message": str(exc)}],
-            ) from exc
-
-        kinds = ["terms", "privacy"] + (["marketing"] if body.accept_marketing else [])
-        await record_consent(
-            session,
-            user,
-            tuple(kinds),
-            source_ip=_client_ip(request),
-            user_agent=_user_agent(request),
-        )
-        token = await issue_code(session, CodeSpec.email_verify(settings), email=email, user=user)
-        await mailer.deliver(
-            mail.verify_email(
-                user.email,
-                f"{settings.web_origin}/verify-email?token={token}",
-                settings.email_verification_ttl_seconds // HOUR_SECONDS,
-            )
-        )
-    else:
-        # The address is taken. Tell *the owner*, not the person at the form.
-        code = await issue_code(session, CodeSpec.otp(settings), email=email, user=existing)
-        await mailer.deliver(
-            mail.otp(existing.email, code, settings.otp_ttl_seconds // MINUTE_SECONDS)
-        )
-
-    return AcceptedOut(detail=NEUTRAL_DETAIL)
+    verifier = getattr(request.app.state, "google_verifier", None)
+    if isinstance(verifier, TokenVerifier):
+        return verifier
+    return GoogleVerifier(_settings(request))
 
 
-@router.post("/auth/login", response_model=SessionOut, summary="Sign in with a password")
-async def login(
-    body: LoginIn,
+GoogleDep = Annotated[TokenVerifier, Depends(_google)]
+
+
+@router.post("/auth/google", response_model=SessionOut, summary="Sign in with Google")
+async def sign_in_with_google(
+    request: Request,
+    body: GoogleSignInIn,
     response: Response,
     session: SessionDep,
     settings: SettingsDep,
-    mailer: MailerDep,
+    google: GoogleDep,
 ) -> SessionOut:
-    """docs/07: `POST /auth/login`. docs/11: Argon2id, with lockout after 10 failures."""
-    email = normalise_email(str(body.email))
+    """The only way into the product (`docs/DECISIONS-MERGE.md` M46).
+
+    `apps/web` runs the OAuth dance and posts the resulting ID token here. **The token is the
+    credential** — this endpoint never accepts an email or a subject as a parameter, because an
+    endpoint that did would mint a session for whoever the caller named.
+
+    There is no neutral 202 here and no membership oracle to protect: the caller has already
+    proved to Google who they are, so "this account is new" is something they know better than
+    we do. What stays uniform is the *failure*: every rejection is the same 401, whether the
+    signature was wrong, the audience was somebody else's application, or the address was
+    unverified.
+    """
     try:
-        await assert_not_locked(session, email, settings)
-        user = await authenticate_password(session, email, body.password, settings)
+        identity = await google.verify(body.id_token)
+    except GoogleVerificationError as error:
+        # The reason is logged, never returned. A caller who learns *why* their forged token
+        # failed learns how to forge a better one.
+        log.warning("google sign-in rejected", extra={"reason": str(error)})
+        raise unauthenticated("That Google sign-in could not be verified.") from error
+
+    try:
+        user, created = await link_google_identity(
+            session,
+            identity,
+            settings,
+            source_ip=_client_ip(request),
+            user_agent=_user_agent(request),
+        )
     except AuthError as error:
-        if isinstance(error, InvalidCredentials):
-            await record_failure(session, email, settings, mailer)
         raise _as_problem(error) from error
 
     await _clear_pending_deletion(session, user)
     issued = await issue_session(session, user, settings)
+    log.info(
+        "google sign-in",
+        extra={"user_public_id": user.public_id, "account_created": created},
+    )
     return _session_response(response, issued, settings)
+
 
 
 async def _clear_pending_deletion(session: AsyncSession, user: AppUser) -> None:
     """Prompt 12 §5: "Signing in again before then cancels the deletion"."""
     if user.deleted_at is not None:
         await cancel_deletion(session, user)
-
-
-@router.post(
-    "/auth/request-otp",
-    response_model=AcceptedOut,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Email a sign-in code",
-)
-async def request_otp(
-    body: RequestOtpIn,
-    session: SessionDep,
-    settings: SettingsDep,
-    mailer: MailerDep,
-) -> AcceptedOut:
-    """docs/11: "OTP login as the default path". 202 whether or not the address is known."""
-    email = normalise_email(str(body.email))
-    user = await find_user(session, email)
-    if user is not None:
-        code = await issue_code(session, CodeSpec.otp(settings), email=email, user=user)
-        await mailer.deliver(mail.otp(user.email, code, settings.otp_ttl_seconds // MINUTE_SECONDS))
-    return AcceptedOut(detail=NEUTRAL_DETAIL)
-
-
-@router.post("/auth/verify-otp", response_model=SessionOut, summary="Sign in with a code")
-async def verify_otp(
-    body: VerifyOtpIn,
-    response: Response,
-    session: SessionDep,
-    settings: SettingsDep,
-    mailer: MailerDep,
-) -> SessionOut:
-    email = normalise_email(str(body.email))
-    try:
-        await assert_not_locked(session, email, settings)
-        await consume_code(
-            session,
-            email=email,
-            purpose="otp",
-            supplied=body.code,
-            max_attempts=settings.otp_max_attempts,
-        )
-    except AuthError as error:
-        if isinstance(error, InvalidCredentials):
-            await record_failure(session, email, settings, mailer)
-        raise _as_problem(error) from error
-
-    user = await find_user_including_deleted(session, email)
-    if user is None:
-        raise unauthenticated("Those credentials are not valid.")
-
-    # A correct code proves control of the inbox, which is exactly what verification asserts.
-    if user.email_verified_at is None:
-        user.email_verified_at = dt.datetime.now(tz=dt.UTC)
-    await _clear_pending_deletion(session, user)
-    await session.flush()
-
-    issued = await issue_session(session, user, settings)
-    return _session_response(response, issued, settings)
-
-
-@router.post("/auth/verify-email", response_model=AcceptedOut, summary="Confirm an email address")
-async def verify_email(
-    body: VerifyEmailIn,
-    session: SessionDep,
-    settings: SettingsDep,
-) -> AcceptedOut:
-    """The counterpart to the mail `/auth/register` sends.
-
-    Not in docs/07's list — docs/07 names `register` but not the confirmation it implies, and an
-    unverifiable verification mail would be worse than none. `docs/12a` §1.
-    """
-    del settings
-    try:
-        token = await consume_link_token(session, purpose="email_verify", supplied=body.token)
-    except InvalidCredentials as error:
-        raise Problem(
-            ProblemType.INVALID_SCREEN_DEFINITION,
-            "That confirmation link is not valid or has already been used.",
-            errors=[{"field": "token", "message": "invalid or expired"}],
-        ) from error
-
-    user = await find_user_including_deleted(session, token.email)
-    if user is not None and user.email_verified_at is None:
-        user.email_verified_at = dt.datetime.now(tz=dt.UTC)
-        await session.flush()
-    return AcceptedOut(detail="Your email address is confirmed.")
 
 
 # ---------------------------------------------------------------------------
@@ -420,76 +305,6 @@ async def logout(
 # ---------------------------------------------------------------------------
 
 
-@router.post(
-    "/auth/forgot-password",
-    response_model=AcceptedOut,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Email a password-reset link",
-)
-async def forgot_password(
-    body: ForgotPasswordIn,
-    session: SessionDep,
-    settings: SettingsDep,
-    mailer: MailerDep,
-) -> AcceptedOut:
-    email = normalise_email(str(body.email))
-    user = await find_user(session, email)
-    if user is not None:
-        token = await issue_code(session, CodeSpec.password_reset(settings), email=email, user=user)
-        await mailer.deliver(
-            mail.password_reset(
-                user.email,
-                f"{settings.web_origin}/reset-password?token={token}",
-                settings.password_reset_ttl_seconds // MINUTE_SECONDS,
-            )
-        )
-    return AcceptedOut(detail=NEUTRAL_DETAIL)
-
-
-@router.post("/auth/reset-password", response_model=SessionOut, summary="Set a new password")
-async def reset_password(
-    body: ResetPasswordIn,
-    response: Response,
-    session: SessionDep,
-    settings: SettingsDep,
-) -> SessionOut:
-    """Resetting signs the user in, and signs every other session out.
-
-    Signing them in is the difference between "your password is changed, now go and log in" and
-    finishing the job. Signing the others out is the point of the reset: whoever prompted it
-    should not still be holding a session.
-    """
-    try:
-        token = await consume_link_token(session, purpose="password_reset", supplied=body.token)
-    except InvalidCredentials as error:
-        raise Problem(
-            ProblemType.INVALID_SCREEN_DEFINITION,
-            "That reset link is not valid or has already been used.",
-            errors=[{"field": "token", "message": "invalid or expired"}],
-        ) from error
-
-    user = await find_user_including_deleted(session, token.email)
-    if user is None:
-        raise unauthenticated("That reset link refers to an account that no longer exists.")
-
-    try:
-        await set_password(session, user, body.password, settings, reason="password_reset")
-    except WeakPassword as exc:
-        raise Problem(
-            ProblemType.INVALID_SCREEN_DEFINITION,
-            str(exc),
-            errors=[{"field": "password", "message": str(exc)}],
-        ) from exc
-
-    await _clear_pending_deletion(session, user)
-    if user.email_verified_at is None:
-        user.email_verified_at = dt.datetime.now(tz=dt.UTC)
-        await session.flush()
-
-    issued = await issue_session(session, user, settings)
-    return _session_response(response, issued, settings)
-
-
 # ---------------------------------------------------------------------------
 # /me
 # ---------------------------------------------------------------------------
@@ -535,7 +350,6 @@ async def _me_payload(session: AsyncSession, user: AppUser, entitlements: Entitl
         email=user.email,
         name=user.name,
         email_verified=user.email_verified_at is not None,
-        has_password=user.password_hash is not None,
         created_at=user.created_at,
         plan_code=plan_code,
         subscription_status=subscription.status if subscription is not None else None,
@@ -544,6 +358,9 @@ async def _me_payload(session: AsyncSession, user: AppUser, entitlements: Entitl
         # it renders every gate from `entitlements` — server truth, never a client guess.
         is_staff=user.is_staff,
         deletion_scheduled_for=pending.purge_after if pending is not None else None,
+        # What the caller compares its own session against. A cookie stamped with a lower number
+        # was issued before a revocation and is dead; `NEEDS-MAULIK.md` §22.
+        session_epoch=user.session_epoch,
     )
 
 
@@ -569,39 +386,6 @@ async def patch_me(
     if body.name is not None:
         user.name = body.name
         await session.flush()
-    return await _me_payload(session, user, entitlements)
-
-
-@router.post("/me/change-password", response_model=MeOut, summary="Change the password")
-async def change_password(
-    body: ChangePasswordIn,
-    session: SessionDep,
-    settings: SettingsDep,
-    principal: AuthenticatedDep,
-    entitlements: EntitlementsDep,
-) -> MeOut:
-    """docs/07: `POST /me/change-password`.
-
-    An account with no password (docs/11 allows it — "password optional") is *setting* one and
-    supplies none; an account that has one must prove it, so a stolen access token cannot be
-    upgraded into a permanent credential.
-    """
-    user = await _load_me(session, principal.require_user())
-
-    if user.password_hash is not None:
-        supplied = body.current_password or ""
-        if not verify_password(supplied, user.password_hash, settings):
-            raise unauthenticated("The current password is not correct.")
-
-    try:
-        await set_password(session, user, body.new_password, settings, reason="password_change")
-    except WeakPassword as exc:
-        raise Problem(
-            ProblemType.INVALID_SCREEN_DEFINITION,
-            str(exc),
-            errors=[{"field": "new_password", "message": str(exc)}],
-        ) from exc
-
     return await _me_payload(session, user, entitlements)
 
 

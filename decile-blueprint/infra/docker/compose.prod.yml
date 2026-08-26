@@ -1,0 +1,248 @@
+# Phase A — the whole product on one EC2 box, per `docs/08-aws-architecture.md` §3.
+#
+#     docker compose -f infra/docker/compose.prod.yml --env-file .env.staging up -d
+#
+# This is deliberately the same topology as Phase B, one layer down: the same containers, the same
+# environment contract, the same queue split. §2 calls that "what makes the second phase a
+# re-plumbing, not a rewrite" — postgres becomes RDS, redis becomes Valkey, caddy becomes ALB, and
+# no application code changes.
+#
+# WHAT IS NOT HERE
+# ----------------
+# mailpit, prometheus and grafana. `compose.yml` (development) keeps them; §3 gives Phase A
+# "compose --profile observability as built", which is a deliberate second step, not this file's
+# job. Adding them here would put two unauthenticated dashboards on a box that reaches the order
+# path.
+
+# Distinct from `compose.yml`'s `baskfy`. Same project name means Docker treats the two files as
+# one stack: bringing this up beside the development stack merged them, and mailpit — which this
+# file deliberately excludes — appeared in `ps` as part of the deployment.
+name: baskfy-staging
+
+x-python-image: &python-image
+  image: ${BASKFY_PY_IMAGE:-baskfy-py:local}
+  restart: unless-stopped
+  # Relative to THIS file, always. The first version pointed at ../../../.env.staging, which is
+  # correct only when the compose file is read from `infra/docker/` inside a checkout — on the box
+  # it lives in /opt/baskfy and that path resolved to `/`. Keeping the env file beside the compose
+  # file makes the two layouts identical; the repo checkout gets a symlink (see the Makefile
+  # target and tools/deploy/bootstrap-local.sh).
+  env_file: [.env.staging]
+  environment:
+    # docs/08 §1: the whole schedule is IST wall-clock tied to the NSE session.
+    TZ: Asia/Kolkata
+    BASKFY_DATABASE_URL: postgresql+asyncpg://baskfy:${BASKFY_DB_PASSWORD:?set BASKFY_DB_PASSWORD}@postgres:5432/baskfy
+    BASKFY_REDIS_URL: redis://redis:6379/0
+    # Root CLAUDE.md, non-negotiable 1 and the safety rails. Stated here as well as baked into the
+    # image so that reading this file tells you the truth about the box.
+    DRY_RUN: "true"
+    BASKFY_PUBLIC_API_ENABLED: "false"
+    BASKFY_FREE_TIER_ENABLED: "false"
+  depends_on:
+    postgres: {condition: service_healthy}
+    redis: {condition: service_healthy}
+
+services:
+  # ------------------------------------------------------------------ edge
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    # Overridable so the stack can be verified on a laptop that already has something on 80.
+    # On the box these are 80 and 443 and nothing else is listening.
+    ports:
+      - "${BASKFY_HTTP_PORT:-80}:80"
+      - "${BASKFY_HTTPS_PORT:-443}:443"
+      - "${BASKFY_HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data       # certificates and ACME account — losing this re-issues, so it is a volume
+      - caddy-config:/config
+    environment:
+      BASKFY_SITE_ADDRESS: ${BASKFY_SITE_ADDRESS:?set BASKFY_SITE_ADDRESS}
+      BASKFY_ACME_EMAIL_DIRECTIVE: ${BASKFY_ACME_EMAIL_DIRECTIVE:-}
+      BASKFY_ACME_CA_DIRECTIVE: ${BASKFY_ACME_CA_DIRECTIVE:-}
+      BASKFY_GATE_USER: ${BASKFY_GATE_USER:?set BASKFY_GATE_USER}
+      # A bcrypt hash always contains `$` (`$2a$14$…`), and Compose interpolates `$` in values
+      # read from an env file — the hash arrived at Caddy with its salt eaten and every login
+      # failed. Escape each `$` as `$$` in the env file; `tools/deploy/gate-password.sh` does it
+      # for you and is the only supported way to generate this.
+      BASKFY_GATE_PASSWORD_HASH: ${BASKFY_GATE_PASSWORD_HASH:?set BASKFY_GATE_PASSWORD_HASH — bcrypt with $$-escaping, from tools/deploy/gate-password.sh}
+    depends_on: [web, api]
+
+  # ------------------------------------------------------------------ app
+  web:
+    image: ${BASKFY_WEB_IMAGE:-baskfy-web:local}
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Kolkata
+      NODE_ENV: production
+      # The whole point of the split horizon: server rendering talks to the API across the
+      # container network and never meets Caddy's password. See `lib/api/config.ts`.
+      BASKFY_INTERNAL_API_ORIGIN: http://api:8000
+      BASKFY_ENVIRONMENT: staging
+      BASKFY_JWT_SECRET: ${BASKFY_JWT_SECRET:?set BASKFY_JWT_SECRET}
+      BASKFY_JWT_ISSUER: ${BASKFY_JWT_ISSUER:-baskfy}
+      BASKFY_JWT_AUDIENCE: ${BASKFY_JWT_AUDIENCE:-baskfy-web}
+      BASKFY_RELEASE: ${BASKFY_RELEASE:-dev}
+      NEXTAUTH_URL: ${BASKFY_PUBLIC_URL:?set BASKFY_PUBLIC_URL}
+      AUTH_SECRET: ${BASKFY_JWT_SECRET}
+      AUTH_TRUST_HOST: "true"
+      # Google sign-in (M46). Both values, because this container runs the OAuth code exchange.
+      #
+      # THEY HAVE TO BE LISTED HERE. This service is the one that does NOT take `env_file:
+      # [.env.staging]` — the python services get that through the `x-python-image` anchor, and
+      # this block is the whole of the web container's environment. A value added to
+      # `.env.staging` and nowhere else reaches the API and never reaches Auth.js, which fails as
+      # "Google sign-in is misconfigured" on a box where the setting is visibly present.
+      #
+      # `:-` and not `:?`, deliberately, and it is the opposite of the choice made for
+      # `BASKFY_JWT_SECRET` above. An unset secret means nothing can be verified and the stack
+      # should refuse to start. An unset Google client means *sign-in* is broken while the
+      # marketing pages and the four legal documents still serve — and those are what Google's own
+      # OAuth verification fetches, so taking the site down over a missing sign-in credential
+      # would break the thing that fixes it. `Settings.require_configured` still refuses an empty
+      # client id outright in production, where the trade runs the other way.
+      #
+      # NOT server-side-inlined at build time: these are read by the Auth.js config on the server,
+      # not by the client bundle, so they are a restart rather than a rebuild.
+      BASKFY_GOOGLE_CLIENT_ID: ${BASKFY_GOOGLE_CLIENT_ID:-}
+      BASKFY_GOOGLE_CLIENT_SECRET: ${BASKFY_GOOGLE_CLIENT_SECRET:-}
+    # NEXT_PUBLIC_* is absent on purpose: it is inlined at build time, so setting it here would
+    # change nothing and read as if it had. It lives in the image's build args.
+    expose: ["3000"]
+    depends_on:
+      api: {condition: service_started}
+
+  api:
+    <<: *python-image
+    command:
+      - uvicorn
+      - baskfy_api.app:get_app
+      - --factory
+      - --host=0.0.0.0
+      - --port=8000
+      # One worker. Phase A is one user (§2), the workload is IO-bound against Postgres, and a
+      # second worker would double the connection pool for no measurable gain. Phase B scales by
+      # task count, not by process count.
+      - --workers=1
+      - --proxy-headers
+      - --forwarded-allow-ips=*
+    expose: ["8000"]
+    healthcheck:
+      # `/health` is at the app root, NOT under API_PREFIX, and it deliberately does not
+      # touch Postgres — app.py: "A health check that fails when PostgreSQL is briefly
+      # unreachable takes the process out of the load balancer at the exact moment it would
+      # have recovered on its own."
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # docs/08 §5: "the four Celery queues split across two services so a slow Kite night still
+  # cannot starve compute". Phase A runs both roles, still split, so the split is exercised long
+  # before it matters.
+  worker:
+    <<: *python-image
+    command:
+      - celery
+      - -A
+      - baskfy_worker.celery_app:app
+      - worker
+      - -Q
+      - compute,backtest,default
+      - -l
+      - info
+      - --concurrency=2
+
+  ingest-worker:
+    <<: *python-image
+    command:
+      - celery
+      - -A
+      - baskfy_worker.celery_app:app
+      - worker
+      - -Q
+      - ingest
+      - -l
+      - info
+      # One. Kite's floor is ~3 req/s and the providers rate-limit themselves; extra concurrency
+      # here only queues up behind the same limiter while holding more connections.
+      - --concurrency=1
+
+  beat:
+    <<: *python-image
+    command:
+      - celery
+      - -A
+      - baskfy_worker.celery_app:app
+      - beat
+      - -l
+      - info
+      # Explicit, and on a volume. Beat defaults to `./celerybeat-schedule` in the working
+      # directory, which is root-owned in this image — it crash-looped on EACCES until this was
+      # added. Persisting it also matters on its own: a Beat that loses this file treats every
+      # schedule as never-run and re-fires the whole nightly chain on the next restart.
+      - --schedule=/var/lib/baskfy/celerybeat-schedule
+      - --pidfile=
+    volumes:
+      - baskfy-beat:/var/lib/baskfy
+    # Celery's own docs: exactly one Beat, ever. Two would double every scheduled job — including
+    # the nightly chain and the publish check.
+    deploy:
+      replicas: 1
+
+  # One-shot. Not started by `up`; run explicitly before a deploy switches traffic:
+  #     docker compose -f infra/docker/compose.prod.yml run --rm migrate
+  # A profile rather than a `depends_on`, because a migration that runs on every container restart
+  # is a migration that runs during an outage, on a box that is already unhappy.
+  migrate:
+    <<: *python-image
+    profiles: [tools]
+    restart: "no"
+    working_dir: /repo/services/api
+    command: [alembic, upgrade, head]
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  # ------------------------------------------------------------------ data
+  postgres:
+    # §3: "Keep the Timescale container image in Phase A ... The Timescale exit happens once, at
+    # P3.9, into RDS (§4)." Same pin as the development compose, so dev and staging agree.
+    image: timescale/timescaledb:2.17.2-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: baskfy
+      POSTGRES_PASSWORD: ${BASKFY_DB_PASSWORD:?set BASKFY_DB_PASSWORD}
+      POSTGRES_DB: baskfy
+      TZ: Asia/Kolkata
+    volumes:
+      - baskfy-pgdata:/var/lib/postgresql/data
+    # Not published to the host. The nightly pg_dump runs `docker compose exec`, and an exposed
+    # 5432 on a public EIP is the single most-scanned port on the internet.
+    expose: ["5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U baskfy -d baskfy"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    volumes:
+      - baskfy-redisdata:/data
+    expose: ["6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  baskfy-pgdata:
+  baskfy-redisdata:
+  baskfy-beat:
+  caddy-data:
+  caddy-config:

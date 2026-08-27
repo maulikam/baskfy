@@ -391,6 +391,16 @@ class TestEquityFundamentals:
         empty = b'{"equityResponse":[]}'
         assert parse_equity_quote(empty, on=ON, fallback_symbol="INFY") is None
 
+    def test_an_entry_whose_sections_are_all_null_is_not_a_row(self) -> None:
+        """The literal shape NSE returns for a name it does not quote — captured from DSFCL
+        on 2026-08-18. Every section is JSON ``null``, not absent, so a parser that only
+        guarded against missing keys would build a row of zeroes out of it."""
+        payload = (
+            b'{"equityResponse":[{"orderBook":null,"metaData":null,"tradeInfo":null,'
+            b'"priceInfo":null,"secInfo":null,"lastUpdateTime":null}]}'
+        )
+        assert parse_equity_quote(payload, on=ON, fallback_symbol="DSFCL") is None
+
     def test_nse_total_marketcap_is_used_when_shares_are_missing(self) -> None:
         payload = (
             b'{"equityResponse":[{"metaData":{"symbol":"X"},'

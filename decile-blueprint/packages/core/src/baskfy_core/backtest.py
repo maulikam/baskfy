@@ -385,7 +385,7 @@ class BacktestConfig(BaseModel):
     #: assign its own response to its own ``BacktestOut``: the web build failed on
     #: ``Type 'string[][]' is not assignable to type '[string, string][]'``. A pair is honestly an
     #: array of two, and the length is enforced by the model, not by the document.
-    #: ``docs/DECISIONS-MERGE.md`` M40.4.
+    #: ``docs/DECISIONS-MERGE.md`` M46.4.
     risk_free_curve: Annotated[
         tuple[tuple[dt.date, Decimal], ...],
         WithJsonSchema(

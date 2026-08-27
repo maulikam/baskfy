@@ -27,8 +27,8 @@ from baskfy_providers.errors import (
     UpstreamUnavailable,
 )
 from baskfy_providers.kite import DEFAULT_MAX_DAYS_PER_REQUEST, KiteProvider, KiteRuntime
-from baskfy_providers.ports import BARS_CAPABILITIES, Capability
-from baskfy_providers.records import DAILY_BARS_SCHEMA
+from baskfy_providers.ports import BARS_CAPABILITIES, HOLDINGS_CAPABILITIES, Capability
+from baskfy_providers.records import DAILY_BARS_SCHEMA, BrokerAccountRef
 from baskfy_providers.retry import RetryHooks, RetryPolicy
 from baskfy_providers.settings import ProviderSettings
 from baskfy_providers.tokens import IST, AccessTokenStore
@@ -46,21 +46,27 @@ TODAY = dt.datetime.now(tz=IST).replace(hour=9, minute=0, second=0, microsecond=
 class FakeKiteClient:
     """Records calls, and fails in whatever way the test asks for."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - a test double is configured, not called
         self,
         *,
         candles: list[dict[str, object]] | None = None,
         instruments: list[dict[str, object]] | None = None,
         raises: Exception | None = None,
         fail_times: int | None = None,
+        positions: list[dict[str, object]] | None = None,
+        margins: dict[str, object] | None = None,
     ) -> None:
         self._candles = candles or []
         self._instruments = instruments or []
         self._raises = raises
         self._fail_times = fail_times
+        self._positions = positions or []
+        self._margins = margins or {}
         self.access_tokens: list[str] = []
         self.historical_calls: list[tuple[int, dt.date, dt.date, str]] = []
         self.instrument_calls: int = 0
+        self.holdings_calls: int = 0
+        self.margin_segments: list[str | None] = []
 
     def set_access_token(self, access_token: str) -> None:
         self.access_tokens.append(access_token)
@@ -91,6 +97,16 @@ class FakeKiteClient:
         self.historical_calls.append((instrument_token, from_date, to_date, interval))
         self._maybe_raise()
         return [candle for candle in self._candles if from_date <= _candle_date(candle) <= to_date]
+
+    def holdings(self) -> list[dict[str, object]]:
+        self.holdings_calls += 1
+        self._maybe_raise()
+        return self._positions
+
+    def margins(self, segment: str | None = None) -> dict[str, object]:
+        self.margin_segments.append(segment)
+        self._maybe_raise()
+        return self._margins
 
 
 def _candle_date(candle: dict[str, object]) -> dt.date:
@@ -149,11 +165,15 @@ def build_provider(
 
 
 class TestCapabilities:
-    def test_it_offers_only_bars(self, settings: ProviderSettings) -> None:
+    def test_it_offers_bars_and_the_broker_ledger(self, settings: ProviderSettings) -> None:
         """docs/02: Kite has no constituents, no PE/PB, no corporate actions. It must not claim
-        them, or CompositeProvider would route reference calls into a dead end."""
+        them, or CompositeProvider would route reference calls into a dead end.
+
+        It does serve the read-only broker ledger (PORTFOLIO_REDESIGN.md §4.6 layer 1), which is
+        the one thing Kite knows that NSE cannot: what this user actually holds.
+        """
         provider = KiteProvider(settings)
-        assert provider.capabilities() == BARS_CAPABILITIES
+        assert provider.capabilities() == BARS_CAPABILITIES | HOLDINGS_CAPABILITIES
         assert Capability.INDEX_CONSTITUENTS not in provider.capabilities()
         assert Capability.CORPORATE_ACTIONS not in provider.capabilities()
 
@@ -531,3 +551,185 @@ def _candles(start: dt.date, count: int) -> list[dict[str, object]]:
         }
         for offset in range(count)
     ]
+
+
+class TestBrokerHoldings:
+    """PORTFOLIO_REDESIGN.md §4.6 layer 1, read through the fake client — never the network."""
+
+    def test_it_sums_settled_t1_and_collateral(
+        self,
+        configured_settings: ProviderSettings,
+        stored_token: AccessTokenStore,
+    ) -> None:
+        """Desk non-negotiable #2: total = quantity + t1_quantity + collateral_quantity.
+
+        Reading ``quantity`` alone would see a sell of the pledged 30 that never happened, and
+        the sync above this would ask the user about it — which is the failure mode this rule
+        exists to prevent.
+        """
+        client = FakeKiteClient(
+            positions=[
+                {
+                    "tradingsymbol": "SBIN",
+                    "exchange": "NSE",
+                    "isin": "INE062A01020",
+                    "quantity": 60,
+                    "t1_quantity": 10,
+                    "collateral_quantity": 30,
+                    "average_price": 512.25,
+                    "last_price": 540.10,
+                    "product": "CNC",
+                }
+            ]
+        )
+        provider = build_provider(configured_settings, client, stored_token)
+
+        rows = provider.broker_holdings(_ref())
+
+        assert [row.symbol for row in rows] == ["SBIN"]
+        assert rows[0].total_quantity == Decimal("100")
+        assert rows[0].quantity == Decimal("60")
+        assert rows[0].collateral_quantity == Decimal("30")
+
+    def test_prices_arrive_as_decimal_not_float(
+        self,
+        configured_settings: ProviderSettings,
+        stored_token: AccessTokenStore,
+    ) -> None:
+        """House rule 9: money is never a float, and the boundary is where that is decided."""
+        client = FakeKiteClient(
+            positions=[{"tradingsymbol": "INFY", "quantity": 5, "average_price": 1477.35}]
+        )
+        provider = build_provider(configured_settings, client, stored_token)
+
+        row = provider.broker_holdings(_ref())[0]
+
+        assert isinstance(row.average_price, Decimal)
+        assert row.average_price == Decimal("1477.35")
+
+    def test_a_missing_average_price_is_unknown_not_zero(
+        self,
+        configured_settings: ProviderSettings,
+        stored_token: AccessTokenStore,
+    ) -> None:
+        """§5.2 forbids since-purchase P&L for a holding whose buy price we do not know.
+
+        A zero would silently unlock exactly that number, and it would be wrong.
+        """
+        client = FakeKiteClient(positions=[{"tradingsymbol": "INFY", "quantity": 5}])
+        provider = build_provider(configured_settings, client, stored_token)
+
+        assert provider.broker_holdings(_ref())[0].average_price is None
+
+    def test_one_unreadable_row_does_not_lose_the_others(
+        self,
+        configured_settings: ProviderSettings,
+        stored_token: AccessTokenStore,
+    ) -> None:
+        """A new instrument class must not cost the user the sync of everything else they own."""
+        client = FakeKiteClient(
+            positions=[
+                {"tradingsymbol": "", "quantity": 1},
+                {"quantity": 2},
+                {"tradingsymbol": "TCS", "quantity": 3},
+            ]
+        )
+        provider = build_provider(configured_settings, client, stored_token)
+
+        assert [row.symbol for row in provider.broker_holdings(_ref())] == ["TCS"]
+
+    def test_an_empty_account_is_an_answer_not_an_error(
+        self,
+        configured_settings: ProviderSettings,
+        stored_token: AccessTokenStore,
+    ) -> None:
+        """ "They sold everything" and "the fetch failed" must never be the same value."""
+        provider = build_provider(configured_settings, FakeKiteClient(positions=[]), stored_token)
+        assert provider.broker_holdings(_ref()) == []
+
+    def test_a_token_failure_is_raised_not_swallowed(
+        self,
+        configured_settings: ProviderSettings,
+        stored_token: AccessTokenStore,
+    ) -> None:
+        """docs/09 calls token expiry the #1 pipeline failure; it must be loud here too."""
+        client = FakeKiteClient(raises=kite_exceptions.TokenException("token expired"))
+        provider = build_provider(configured_settings, client, stored_token)
+
+        with pytest.raises(AccessTokenExpired):
+            provider.broker_holdings(_ref())
+
+    def test_another_brokers_account_is_refused(
+        self,
+        configured_settings: ProviderSettings,
+        stored_token: AccessTokenStore,
+    ) -> None:
+        """A Kite session cannot fetch Upstox holdings, and must not pretend it just did."""
+        client = FakeKiteClient(positions=[{"tradingsymbol": "TCS", "quantity": 1}])
+        provider = build_provider(configured_settings, client, stored_token)
+
+        with pytest.raises(ProviderUnavailable, match="upstox"):
+            provider.broker_holdings(_ref(broker_id="upstox"))
+        assert client.holdings_calls == 0
+
+    def test_another_tenants_account_is_refused_when_the_owner_is_known(
+        self,
+        configured_settings: ProviderSettings,
+        stored_token: AccessTokenStore,
+    ) -> None:
+        """The read-side of "the gateway refuses a mismatch" (the two laws, multi-tenant clause).
+
+        P4.2 is not built, so this adapter holds one token. Where the deployment knows whose it
+        is, a read for anyone else is refused rather than answered with the wrong money.
+        """
+        client = FakeKiteClient(positions=[{"tradingsymbol": "TCS", "quantity": 1}])
+        provider = KiteProvider(
+            configured_settings,
+            KiteRuntime(
+                rate_limiter=UnlimitedBucket(),
+                client_factory=lambda _api_key: client,
+                token_store=stored_token,
+                holdings_account_id=7,
+            ),
+        )
+
+        assert provider.broker_holdings(_ref(broker_account_id=7))[0].symbol == "TCS"
+        with pytest.raises(ProviderUnavailable, match="another tenant"):
+            provider.broker_holdings(_ref(broker_account_id=8))
+
+
+class TestBrokerCash:
+    def test_it_reads_the_equity_segments_net_balance(
+        self,
+        configured_settings: ProviderSettings,
+        stored_token: AccessTokenStore,
+    ) -> None:
+        client = FakeKiteClient(margins={"net": 12345.67, "available": {"cash": 12345.67}})
+        provider = build_provider(configured_settings, client, stored_token)
+
+        assert provider.broker_cash(_ref()) == Decimal("12345.67")
+        assert client.margin_segments == ["equity"]
+
+    def test_it_reads_the_whole_envelope_too(
+        self,
+        configured_settings: ProviderSettings,
+        stored_token: AccessTokenStore,
+    ) -> None:
+        """One level of nesting must not cost the user their cash balance."""
+        client = FakeKiteClient(margins={"equity": {"net": 900.5}, "commodity": {"net": 1.0}})
+        provider = build_provider(configured_settings, client, stored_token)
+
+        assert provider.broker_cash(_ref()) == Decimal("900.5")
+
+    def test_no_reported_balance_is_none_not_zero(
+        self,
+        configured_settings: ProviderSettings,
+        stored_token: AccessTokenStore,
+    ) -> None:
+        """§4.4's bucket is part of net worth. A zero we inferred would take real money away."""
+        provider = build_provider(configured_settings, FakeKiteClient(margins={}), stored_token)
+        assert provider.broker_cash(_ref()) is None
+
+
+def _ref(*, broker_account_id: int = 1, broker_id: str = "zerodha") -> BrokerAccountRef:
+    return BrokerAccountRef(broker_account_id=broker_account_id, broker_id=broker_id)

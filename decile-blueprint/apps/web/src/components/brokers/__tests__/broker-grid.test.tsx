@@ -22,10 +22,10 @@ const ZERODHA: Broker = {
   short_name: "Zerodha",
   mark: "Z",
   color: "#387ed1",
-  blurb: "Kite Connect — holdings, positions and CNC orders in your own account.",
-  api_name: "Kite Connect",
-  docs_url: "https://kite.trade/docs/connect/v3/",
-  capabilities: { oauth: "ready", holdings_sync: "ready", trading: "ready" },
+  blurb: "Kite Publisher — send a basket to your own Kite and confirm it there.",
+  api_name: "Kite Publisher",
+  docs_url: "https://kite.trade/docs/connect/v3/publisher/",
+  capabilities: { oauth: "not_applicable", holdings_sync: "not_available", trading: "handoff" },
   sort_order: 1,
   connected: false,
   connection_status: "not_connected",
@@ -85,5 +85,62 @@ describe("the D3 policy gate and the credential are different questions", () => 
       <BrokerGrid brokers={[ZERODHA]} gate={gate({ live_oauth_enabled: true, signed_off: true })} />,
     );
     expect(screen.queryByRole("button", { name: /^Connect Zerodha$/ })).toBeNull();
+  });
+});
+
+
+describe("the panel describes Publisher, not a Connect OAuth", () => {
+  /*
+   * The over-claim Maulik kept hitting. Zerodha's row said "Kite Connect — holdings, positions and
+   * CNC orders", three green "Ready" labels, and three steps describing an OAuth login: "Authorize
+   * Baskfy to read holdings", "we sync the holdings into your portfolio". None of it is true of the
+   * integration Baskfy uses. Kite Publisher links no account, stores no token and reads nothing
+   * back — and Kite Connect is ₹2,000/month licensed for the app owner's own account, which is the
+   * wrong shape for a product other people sign into. `docs/DECISIONS-MERGE.md` M55.
+   */
+  it("names Kite Publisher", () => {
+    render(<BrokerGrid brokers={[ZERODHA]} gate={gate()} />);
+    expect(screen.getByText("Kite Publisher")).toBeInTheDocument();
+    expect(screen.queryByText("Kite Connect")).toBeNull();
+  });
+
+  it("does not promise a holdings sync it cannot do", () => {
+    render(<BrokerGrid brokers={[ZERODHA]} gate={gate()} />);
+    expect(screen.getByText("Not available")).toBeInTheDocument();
+    // The old rendering: a green "Ready" beside `holdings_sync`.
+    expect(screen.queryByText("Ready")).toBeNull();
+  });
+
+  it("calls the account link what it is — nothing to link", () => {
+    render(<BrokerGrid brokers={[ZERODHA]} gate={gate()} />);
+    expect(screen.getByText("Account link")).toBeInTheDocument();
+    expect(screen.getByText("Not needed")).toBeInTheDocument();
+    expect(screen.getByText("You confirm in Kite")).toBeInTheDocument();
+    // The tile says what the broker *does*, not "Not needed" — which is a true answer to a
+    // question nobody asked while looking at a grid of logos.
+    expect(screen.getByText("Basket hand-off")).toBeInTheDocument();
+  });
+
+  it("gives the steps of the flow it actually has", () => {
+    render(<BrokerGrid brokers={[ZERODHA]} gate={gate()} />);
+    expect(screen.getByText(/Pick a basket and the amount/i)).toBeInTheDocument();
+    expect(screen.getByText(/opens them in Zerodha as one basket/i)).toBeInTheDocument();
+    expect(screen.getByText(/nothing is placed from Baskfy/i)).toBeInTheDocument();
+    // The Connect-flow steps must not appear for a hand-off broker.
+    expect(screen.queryByText(/Authorize Baskfy to read holdings/i)).toBeNull();
+    expect(screen.queryByText(/we sync the holdings into your portfolio/i)).toBeNull();
+  });
+
+  it("still shows the OAuth steps for a broker that really does connect", () => {
+    /* The other integration is not deleted — the code path exists and a future broker may use it.
+       Asserting it keeps this from becoming a one-way door. */
+    const oauthBroker = {
+      ...ZERODHA,
+      id: "somebroker",
+      short_name: "SomeBroker",
+      capabilities: { oauth: "ready", holdings_sync: "ready", trading: "ready" },
+    };
+    render(<BrokerGrid brokers={[oauthBroker]} gate={gate({ connect_configured: true })} />);
+    expect(screen.getByText(/Authorize Baskfy to read holdings/i)).toBeInTheDocument();
   });
 });

@@ -26,7 +26,20 @@ __all__ = [
     "get_broker",
 ]
 
-Capability = Literal["ready", "planned", "partner"]
+#: What a row on the connect grid may claim.
+#:
+#: The first three describe a **Kite Connect**-style adapter somewhere on the road to working.
+#: The last three (M55) describe Zerodha, which is not on that road: Baskfy uses **Kite
+#: Publisher**, which links no account, stores no token and reads nothing back. Without them the
+#: only sayable things about Publisher were "ready" — which claimed a holdings sync that does not
+#: exist — or "planned", which promises one that is never coming.
+#:
+#: ``not_applicable``  there is nothing to connect; the basket opens in the session you have.
+#: ``not_available``   this cannot be done at all on this integration, and will not be.
+#: ``handoff``         you do it, in your own terminal, after reviewing what we prepared.
+Capability = Literal[
+    "ready", "planned", "partner", "not_applicable", "not_available", "handoff"
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +88,15 @@ BROKER_OAUTH_REVIEW: Final = BrokerOauthReview(
 
 @dataclass(frozen=True, slots=True)
 class BrokerCapability:
-    """What an adapter can do once live OAuth is allowed."""
+    """What an adapter can do.
+
+    `not_applicable`, `not_available` and `handoff` joined `ready` / `partner` / `planned` at M55.
+    The original three all described a *Connect* adapter at some stage of being built, and there
+    was no way to say the true thing about Zerodha: that it is not on that road at all. Baskfy
+    uses Kite Publisher, which links no account, stores no token and reads nothing back — so
+    "planned" would promise a holdings sync that is never coming, and "ready" claimed one that
+    does not exist.
+    """
 
     oauth: Capability
     holdings_sync: Capability
@@ -121,16 +142,39 @@ class BrokerDef:
 #: Writing an adapter is what earns a ``"ready"``; it needs credentials, which are a
 #: ``NEEDS-MAULIK.md`` item, not a source edit.
 BROKERS: Final[tuple[BrokerDef, ...]] = (
+    # Zerodha is **Kite Publisher**, not Kite Connect, and the difference is the whole of what
+    # this row says (Maulik, 27 Aug 2026; `docs/DECISIONS-MERGE.md` M55).
+    #
+    # Kite Connect is ₹2,000/month per app and is licensed for the app owner's own account. That
+    # makes it the wrong product for a service other people sign into: it is a personal API key,
+    # and Baskfy is not one person's project. Publisher is free, needs no API secret, and does the
+    # one thing this product actually needs — hand a prepared basket to whichever Zerodha account
+    # the reader is signed into, for them to confirm.
+    #
+    # This row used to claim `oauth: ready, holdings_sync: ready, trading: ready` and describe
+    # "Kite Connect — holdings, positions and CNC orders". Every one of those was an over-claim on
+    # a deployment that has no Connect app and is not getting one, and the grid rendered them as
+    # three green "Ready" labels beside a Connect button that could only ever error.
     BrokerDef(
         id="zerodha",
         name="Zerodha",
         short_name="Zerodha",
         mark="Z",
         color="#387ed1",
-        blurb="Kite Connect — holdings, positions and CNC orders in your own account.",
-        api_name="Kite Connect",
-        docs_url="https://kite.trade/docs/connect/v3/",
-        capabilities=BrokerCapability(oauth="ready", holdings_sync="ready", trading="ready"),
+        blurb="Kite Publisher — send a basket to your own Kite and confirm it there.",
+        api_name="Kite Publisher",
+        docs_url="https://kite.trade/docs/connect/v3/publisher/",
+        capabilities=BrokerCapability(
+            # No account is linked and no token is stored: Publisher opens a basket in whatever
+            # Zerodha session the browser already has.
+            oauth="not_applicable",
+            # Publisher is one-way. It hands orders *to* Kite and reads nothing back, so there is
+            # no session to fetch holdings with. CSV import is the path, and the UI says so.
+            holdings_sync="not_available",
+            # The user trades, in their own terminal, after reviewing every line. Baskfy places
+            # nothing — desk non-negotiable #1 is untouched by this.
+            trading="handoff",
+        ),
         sort_order=1,
     ),
     BrokerDef(

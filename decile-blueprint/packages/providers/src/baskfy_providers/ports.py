@@ -17,12 +17,15 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 import polars as pl
 
 from baskfy_providers.records import (
+    BrokerAccountRef,
+    BrokerHoldingRecord,
     CorporateAction,
     EquityFundamental,
     IndexSnapshot,
@@ -42,6 +45,10 @@ class Capability(StrEnum):
     LISTINGS = "listings"
     BHAVCOPY = "bhavcopy"
     EQUITY_FUNDAMENTALS = "equity_fundamentals"
+    #: PORTFOLIO_REDESIGN.md §4.6 layer 1 — what a broker says the user actually holds.
+    BROKER_HOLDINGS = "broker_holdings"
+    #: §4.4 — the broker's own cash balance, which becomes the Unallocated cash bucket.
+    BROKER_CASH = "broker_cash"
 
 
 #: docs/09's table: KiteProvider provides BarsProvider.
@@ -59,6 +66,19 @@ REFERENCE_CAPABILITIES: frozenset[Capability] = frozenset(
         Capability.BHAVCOPY,
         Capability.EQUITY_FUNDAMENTALS,
     }
+)
+
+
+#: PORTFOLIO_REDESIGN.md §10 phase 1: HoldingsProvider is the broker-ledger port.
+#:
+#: Deliberately a *third* set rather than an extension of ``BARS_CAPABILITIES``. Kite happens to
+#: serve both, but they are different products with different failure modes and — decisively —
+#: different consequences when a fallback substitutes for them. A wrong candle is a wrong chart;
+#: a wrong holdings list is somebody else's money on somebody's screen. Keeping the sets apart is
+#: what lets the production stack register a fixture bars provider and *no* fixture holdings
+#: provider, so a holdings call fails loudly instead of degrading into fiction.
+HOLDINGS_CAPABILITIES: frozenset[Capability] = frozenset(
+    {Capability.BROKER_HOLDINGS, Capability.BROKER_CASH}
 )
 
 
@@ -146,5 +166,43 @@ class ReferenceProvider(HealthReporting, Protocol):
         ``series_by_symbol`` is an optional hint: NSE quotes a symbol under a series, and a
         caller holding ``instrument.series`` can save the adapter a lookup round trip. An
         adapter is free to ignore it; a wrong hint must never produce a wrong row.
+        """
+        ...
+
+
+@runtime_checkable
+class HoldingsProvider(HealthReporting, Protocol):
+    """The broker ledger — PORTFOLIO_REDESIGN.md §4.6 layer 1, read-only, forever.
+
+    **This port cannot place an order and must never gain a method that can.** Law 2 says
+    ``packages/execution`` is the only path to an order; a provider adapter is on the other side
+    of that line, and the moment a "sell this" verb appears here the guards, the risk checks, the
+    rate limits and the journal are all bypassed. Reads only: what is held, and how much cash is
+    sitting there.
+
+    Both methods take a :class:`BrokerAccountRef` rather than reading ambient credentials,
+    because holdings are per-tenant and an adapter that infers the account from configuration
+    cannot be told it has the wrong one.
+    """
+
+    def broker_holdings(self, account: BrokerAccountRef) -> list[BrokerHoldingRecord]:
+        """Every equity position the broker reports for ``account``.
+
+        An account holding nothing returns an empty list — that is an answer, not an error, and
+        a sync must be able to tell "the user sold everything" from "the fetch failed". A fetch
+        that fails raises a :class:`baskfy_providers.errors.ProviderError`; it never returns an
+        empty list to paper over the failure, because an empty list here reads as a total exit
+        and would have the sync ask the user about every position they own.
+        """
+        ...
+
+    def broker_cash(self, account: BrokerAccountRef) -> Decimal | None:
+        """The broker's reported cash balance for ``account``, or ``None`` if it publishes none.
+
+        ``None`` and ``Decimal("0")`` are different statements and both are meaningful: zero is
+        an empty account, ``None`` is a broker that does not tell us. §4.4's Unallocated cash
+        bucket must not be written from a guess, so a ``None`` leaves the stored balance alone.
+
+        Decimal, never float (house rule 9): this number is money.
         """
         ...

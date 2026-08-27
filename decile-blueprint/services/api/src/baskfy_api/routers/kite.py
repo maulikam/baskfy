@@ -1,6 +1,7 @@
 """``/baskets/plan/kite`` — the Zerodha Publisher hand-off payload.
 
-    GET /baskets/plan/kite   the desk's latest plan, shaped as a Kite Publisher basket
+    GET /baskets/plan/kite       the desk's latest plan, shaped as a Kite Publisher basket
+    GET /explore/{slug}/kite     a curated basket at a chosen amount, likewise
 
 ONE GET, AND IT WILL STAY ONE GET
 ---------------------------------
@@ -36,16 +37,22 @@ field names Kite expects can drift out of step with the ones the API produced.
 
 from __future__ import annotations
 
-from typing import Annotated
+import datetime as dt
+from decimal import Decimal
+from typing import Annotated, Final
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from baskfy_api.auth import settings_for
 from baskfy_api.db import SessionDep
 from baskfy_api.kite_basket import build_basket
+from baskfy_api.problems import Problem, ProblemType, not_found
 from baskfy_api.routers.baskets import latest_plan
 from baskfy_api.settings import Settings
+from baskfy_core.curated_plans import build_invest_plan
+from baskfy_core.models import CbBasket, CbBasketVersion, CbConstituent, Instrument, OhlcvDaily
 
 router = APIRouter(tags=["baskets"])
 
@@ -104,6 +111,124 @@ async def plan_as_kite_basket(session: SessionDep, settings: SettingsDep) -> Kit
     plan = await latest_plan(session)
     payload = build_basket(
         [(o.symbol, o.side, o.planned_qty) for o in plan.orders],
+        api_key=settings.kite_publisher_api_key,
+    )
+    return KiteBasketOut(
+        url=payload.url,
+        api_key=payload.api_key,
+        configured=payload.configured,
+        items=[KiteBasketItemOut(**item.as_dict()) for item in payload.items],
+        batches=[
+            [KiteBasketItemOut(**item.as_dict()) for item in batch] for batch in payload.batches
+        ],
+        excluded=list(payload.excluded),
+    )
+
+
+#: How far back to look for a close when the latest trading day has none for an instrument.
+#: The same floor `curated_metrics_service` uses, and for the same reason: without it the planner
+#: scans every year-chunk of the hypertable.
+CLOSE_LOOKBACK_DAYS: Final = 30
+
+
+@router.get(
+    "/explore/{slug}/kite",
+    response_model=KiteBasketOut,
+    summary="A curated basket at a chosen amount, as a Kite Publisher basket",
+)
+async def basket_as_kite_basket(
+    slug: str,
+    amount: Annotated[Decimal, Query(gt=0, description="Rupees to invest")],
+    session: SessionDep,
+    settings: SettingsDep,
+) -> KiteBasketOut:
+    """Turn a basket's *weights* into *quantities* for a given amount, then into a Kite basket.
+
+    WHY THIS EXISTS BESIDE `/baskets/plan/kite`
+    -------------------------------------------
+    That one hands over **the desk's** rebalance plan, which is the desk owner's orders for the
+    desk owner's book. Offering it to a signed-in stranger was always the wrong semantics — it is
+    the finding recorded as `NEEDS-MAULIK.md` §27. This is the one a user actually wants: *this
+    basket, this much money, what do I buy?*
+
+    NOTHING HERE IS RE-DERIVED
+    --------------------------
+    Weights → quantities is `baskfy_core.curated_plans.build_invest_plan`, the same pure function
+    `POST /cb/plans/invest` calls. It already handles the arithmetic that looks trivial and is not:
+    whole shares only, the remainder that cannot be spent, and a weight whose share price exceeds
+    its slice of the amount. Writing a second version of that here would have produced a basket
+    that disagreed with the plan preview the user had just been shown, in rupees.
+
+    Prices are the latest `close_raw` on or before today — the exchange print, per house rule 6,
+    because this figure becomes a share count somebody buys. They are a *reference*: the basket
+    goes to Kite as MARKET orders and the user sees live prices there before confirming.
+    """
+    basket = await session.scalar(
+        select(CbBasket).where(CbBasket.slug == slug.strip(), CbBasket.archived_at.is_(None))
+    )
+    if basket is None:
+        raise not_found("basket", slug)
+
+    version = await session.scalar(
+        select(CbBasketVersion)
+        .where(CbBasketVersion.basket_id == basket.id)
+        .order_by(CbBasketVersion.version_no.desc())
+        .limit(1)
+    )
+    if version is None:
+        raise Problem(ProblemType.NOT_FOUND, f"basket {slug!r} has no published version.")
+
+    rows = (
+        await session.execute(
+            select(Instrument.id, Instrument.symbol, CbConstituent.weight)
+            .join(CbConstituent, CbConstituent.instrument_id == Instrument.id)
+            .where(CbConstituent.version_id == version.id)
+        )
+    ).all()
+    if not rows:
+        raise Problem(ProblemType.NOT_FOUND, f"basket {slug!r} has no constituents.")
+
+    weights = {str(symbol): Decimal(weight) for _, symbol, weight in rows}
+    by_id = {int(iid): str(symbol) for iid, symbol, _ in rows}
+
+    today = dt.date.today()
+    price_rows = (
+        await session.execute(
+            select(OhlcvDaily.instrument_id, OhlcvDaily.close_raw)
+            .distinct(OhlcvDaily.instrument_id)
+            .where(
+                OhlcvDaily.instrument_id.in_(list(by_id)),
+                OhlcvDaily.date >= today - dt.timedelta(days=CLOSE_LOOKBACK_DAYS),
+                OhlcvDaily.date <= today,
+            )
+            .order_by(OhlcvDaily.instrument_id, OhlcvDaily.date.desc())
+        )
+    ).all()
+    prices = {by_id[int(iid)]: Decimal(close) for iid, close in price_rows}
+
+    missing = sorted(set(weights) - set(prices))
+    if missing:
+        # Named, not counted. "Some prices are unavailable" leaves a reader unable to tell whether
+        # the basket is stale, delisted or simply not ingested yet.
+        raise Problem(
+            ProblemType.PIPELINE_DEGRADED,
+            f"no recent close for {', '.join(missing)}, so a share count cannot be worked out.",
+        )
+
+    try:
+        plan = build_invest_plan(
+            target_weights=weights,
+            prices=prices,
+            amount=amount,
+            now=dt.datetime.now(tz=dt.UTC),
+        )
+    except ValueError as error:
+        raise Problem(ProblemType.INVALID_SCREEN_DEFINITION, str(error)) from error
+
+    # `DeskPlan` is a `TypedDict`, so the legs are subscripted rather than attributes — the same
+    # way `routers/curated_plans._preview_from_core` reads them.
+    payload = build_basket(
+        [(leg["symbol"], leg["side"], leg["quantity"]) for leg in plan["legs"]],
         api_key=settings.kite_publisher_api_key,
     )
     return KiteBasketOut(

@@ -43,6 +43,10 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # it returns a payload the *browser* posts to Kite, where the user reviews and confirms in
     # their own session. `test_baskets_readonly.py` asserts that structurally.
     "/baskets/plan/kite": {"get"},
+    # M53: a curated basket at a chosen amount, as a Kite basket. Weights become quantities via
+    # `build_invest_plan` — the same pure function `POST /cb/plans/invest` calls — so the hand-off
+    # cannot disagree in rupees with the plan preview the user was just shown.
+    "/explore/{slug}/kite": {"get"},
     # M26 (MERGE-PROMPTS.md), not docs/07, for the same reason: the desk's own console pages,
     # moved onto the web app. Every one is GET and only GET -- `test_desk_readonly.py` fails if a
     # mutating verb appears, and asserts the module cannot reach a broker at all.

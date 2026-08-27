@@ -17,7 +17,7 @@ import { describe, expect, it } from "vitest";
  */
 
 const HERE = join(__dirname, "..");
-const BASKET_PAGES = join(__dirname, "..", "..", "..", "app", "(app)", "baskets");
+const BASKET_PAGES = join(__dirname, "..", "..", "..", "app", "(app)", "discover");
 
 function filesUnder(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {

@@ -104,7 +104,8 @@ export function ApiKeyManager({ keys }: { keys: readonly ApiKeyOut[] }) {
 
       {keys.length === 0 ? (
         <p className="rounded-md border border-border bg-muted/50 p-4 text-sm text-muted-foreground">
-          No keys yet.
+          No keys yet. Create one with the form above — the secret appears once, on that screen
+          only, because we store a hash and not the key. Copy it before you navigate away.
         </p>
       ) : (
         <table className="w-full text-sm">

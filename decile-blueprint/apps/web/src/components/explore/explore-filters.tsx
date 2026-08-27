@@ -99,7 +99,7 @@ export function ExploreFilters({ state }: { state: ExploreFilterState }) {
           )}
         />
         <Chip
-          label="Low swing"
+          label="Low volatility"
           active={state.volatility === "LOW"}
           href={hrefFor(
             definedParams({

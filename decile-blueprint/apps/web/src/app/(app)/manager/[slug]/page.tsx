@@ -106,7 +106,7 @@ export default async function ManagerPage({
       <p className="text-xs text-muted-foreground">
         Registration does not guarantee performance. This page is read-only — nothing here buys
         or sells anything.{" "}
-        <Link href="/baskets" className="text-accent underline-offset-4 hover:underline">
+        <Link href="/discover" className="text-accent underline-offset-4 hover:underline">
           Back to baskets
         </Link>
       </p>

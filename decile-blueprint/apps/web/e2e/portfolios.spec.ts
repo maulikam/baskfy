@@ -41,7 +41,7 @@ async function signIn(page: Page): Promise<void> {
 }
 
 async function uploadMessyPortfolio(page: Page): Promise<void> {
-  await page.goto("/portfolios");
+  await page.goto("/portfolio/portfolios");
   await page.getByTestId("toggle-upload").click();
   await page.getByTestId("csv-input").setInputFiles({
     name: "holdings.csv",
@@ -79,7 +79,7 @@ test.describe("the rebalance tracker", () => {
   });
 
   test("the sample CSV is a real download", async ({ page }) => {
-    await page.goto("/portfolios");
+    await page.goto("/portfolio/portfolios");
     await page.getByTestId("toggle-upload").click();
     const href = await page.getByTestId("sample-csv").getAttribute("href");
     expect(href).toContain("/portfolios/sample-csv");

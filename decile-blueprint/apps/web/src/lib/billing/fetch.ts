@@ -2,7 +2,7 @@ import "server-only";
 
 import type { InvoicePage, PlanListOut } from "@baskfy/api-client";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { auth } from "@/lib/auth";
 
 /**
@@ -28,7 +28,7 @@ const PLANS_REVALIDATE_SECONDS = 300;
 export class BillingUnavailable extends Error {}
 
 export async function fetchPlans(): Promise<PlanListOut> {
-  const response = await fetch(`${apiOrigin()}/api/v1/plans`, {
+  const response = await fetch(`${serverApiOrigin()}/api/v1/plans`, {
     next: { revalidate: PLANS_REVALIDATE_SECONDS, tags: ["plans"] },
   });
   if (!response.ok) throw new BillingUnavailable(`/plans responded ${response.status}`);
@@ -41,7 +41,7 @@ export async function fetchInvoices(): Promise<InvoicePage | null> {
   const token = session?.accessToken;
   if (!token) return null;
 
-  const response = await fetch(`${apiOrigin()}/api/v1/invoices`, {
+  const response = await fetch(`${serverApiOrigin()}/api/v1/invoices`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });

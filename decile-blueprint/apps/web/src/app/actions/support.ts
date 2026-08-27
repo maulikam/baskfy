@@ -1,6 +1,6 @@
 "use server";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import type { MutationResult } from "@/lib/auth/me";
 import { SUPPORT_TOPICS } from "@/lib/marketing/support-topics";
 
@@ -57,7 +57,7 @@ export async function sendSupportMessage(
 
   let response: Response;
   try {
-    response = await fetch(`${apiOrigin()}/api/v1/support`, {
+    response = await fetch(`${serverApiOrigin()}/api/v1/support`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name, email, topic, message }),

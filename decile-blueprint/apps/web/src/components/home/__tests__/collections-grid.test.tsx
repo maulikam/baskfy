@@ -40,7 +40,7 @@ describe("the collections grid", () => {
     render(<CollectionsGrid collections={[collection()]} />);
     expect(
       screen.getByTestId("collection-park-your-savings").getAttribute("href"),
-    ).toBe("/baskets/collections/park-your-savings");
+    ).toBe("/discover/collections/park-your-savings");
   });
 
   it("counts the baskets a viewer may actually see", () => {

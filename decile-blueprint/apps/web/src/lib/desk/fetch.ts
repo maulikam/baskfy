@@ -1,6 +1,6 @@
 import "server-only";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { ServerFetchTimeoutError, serverFetchJson } from "@/lib/api/server-fetch";
 
 /**
@@ -121,7 +121,7 @@ export interface Reconcile {
 
 async function readJson(path: string): Promise<unknown> {
   try {
-    return await serverFetchJson({ url: `${apiOrigin()}/api/v1${path}` });
+    return await serverFetchJson({ url: `${serverApiOrigin()}/api/v1${path}` });
   } catch (error) {
     if (error instanceof ServerFetchTimeoutError) {
       throw new DeskUnavailable(`${path} timed out after ${error.timeoutMs}ms`);

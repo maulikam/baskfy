@@ -28,7 +28,7 @@ export function BasketDetail({
   className?: string;
   /**
    * When given, the amount is owned by the caller and this component renders no input of its own.
-   * `/basket/[slug]` and `/baskets/featured` omit it and keep the local box; a screen basket
+   * `/basket/[slug]` and `/discover/featured` omit it and keep the local box; a screen basket
    * passes it, because there the amount also decides what gets saved.
    */
   amount?: number | undefined;

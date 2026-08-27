@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { auth } from "@/lib/auth";
 import type { MutationResult } from "@/lib/auth/me";
 
@@ -34,7 +34,7 @@ export async function dismissPendingAction(id: string): Promise<MutationResult> 
 
   let response: Response;
   try {
-    response = await fetch(`${apiOrigin()}/api/v1/cb/pending-actions/${trimmed}/dismiss`, {
+    response = await fetch(`${serverApiOrigin()}/api/v1/cb/pending-actions/${trimmed}/dismiss`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
@@ -52,6 +52,6 @@ export async function dismissPendingAction(id: string): Promise<MutationResult> 
 
   // Both surfaces render the same list, so both have to forget the card.
   revalidatePath("/home");
-  revalidatePath("/me/investments");
+  revalidatePath("/portfolio/overview");
   return { ok: true, message: "Dismissed." };
 }

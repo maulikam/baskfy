@@ -31,15 +31,16 @@ import { forestRows, spanningNodeIds } from "@/lib/portfolios/tree";
 import { PAGES } from "@/lib/vocabulary";
 
 /**
- * `/me/portfolios` — one book, many boxes.
+ * `/portfolio/portfolios` — one portfolio group, many portfolios.
  *
- * A named CSV book can be split into sleeves (a rule you wrote, a slice you run by hand). Baskets
+ * A named CSV group can be split into allocations (a screen you wrote, a slice you hold
+ * manually). Baskets
  * you marked as invested sit in the same overview, each with the stats that ledger actually has.
- * Rebalance still answers "which symbols changed"; this page answers "how is each box doing".
+ * Rebalance still answers "which symbols changed"; this page answers "how is each one doing".
  *
  * Since migration 0019 a portfolio can sit **inside** another one, so the page opens with the
- * shape — which book is under which, and which broker account each is attributed to — before it
- * gets to the boxes. `initial` is still the roots, so the server component that renders this did
+ * shape — which group holds which, and which broker account each is attributed to — before it
+ * gets to the cards. `initial` is still the roots, so the server component that renders this did
  * not have to change; `orphans` and the deeper levels arrive with the client fetch.
  */
 export interface PortfoliosListProps {
@@ -131,10 +132,10 @@ export function PortfoliosList({
 
   return (
     <div className="space-y-8">
-      <SectionTabs section="me" />
+      <SectionTabs section="portfolio" />
       <PageHeader
-        title={PAGES["/me/portfolios"].title}
-        blurb={PAGES["/me/portfolios"].blurb}
+        title={PAGES["/portfolio/portfolios"].title}
+        blurb={PAGES["/portfolio/portfolios"].blurb}
         actions={
           <Button
             variant={showUpload ? "outline" : "primary"}
@@ -146,7 +147,7 @@ export function PortfoliosList({
             {showUpload ? "Close" : "New portfolio"}
           </Button>
         }
-        meta="Shares stay in your demat. Each box has its own capital. Nothing on this page places an order."
+        meta="Each portfolio has its own capital. Nothing on this page places an order."
       />
 
       {showUpload ? (
@@ -155,7 +156,7 @@ export function PortfoliosList({
           <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-4">
             <div className="min-w-48 flex-1 space-y-1">
               <label htmlFor="empty-name" className="text-sm font-medium">
-                …or start empty and divide it into boxes later
+                …or start empty and create sub-portfolios later
               </label>
               <Input
                 id="empty-name"
@@ -186,8 +187,8 @@ export function PortfoliosList({
         </div>
       ) : empty ? (
         <EmptyState
-          title="No boxes yet"
-          reason="Bring in a manager's basket, a rule you wrote, leftover demat names, or mutual funds you run by hand — each in its own box, each with its own capital."
+          title="No portfolios yet"
+          reason="Bring in a manager's basket, a screen you wrote, leftover demat names, or mutual funds you hold manually — each its own portfolio, each with its own capital."
           action={{ label: "Upload a CSV", onClick: () => setShowUpload(true) }}
           icon={<Scale className="size-6" />}
         />
@@ -232,7 +233,7 @@ export function PortfoliosList({
                     {section.portfolioId !== undefined ? (
                       <p className="text-xs text-muted-foreground">
                         {section.holdingsCount} holding
-                        {section.holdingsCount === 1 ? "" : "s"} filed in this book itself
+                        {section.holdingsCount === 1 ? "" : "s"} in this group itself
                       </p>
                     ) : (
                       <p className="text-xs text-muted-foreground">
@@ -251,7 +252,7 @@ export function PortfoliosList({
                       <Button variant="outline" size="sm" asChild>
                         <Link href={`/portfolios/${section.portfolioId}/sleeves` as never}>
                           <Layers aria-hidden="true" />
-                          Divide
+                          Create sub-portfolio
                         </Link>
                       </Button>
                       <Button
@@ -268,14 +269,14 @@ export function PortfoliosList({
                     </div>
                   ) : (
                     <Button variant="outline" size="sm" asChild>
-                      <Link href="/me/investments">Investments</Link>
+                      <Link href="/portfolio/overview">Investments</Link>
                     </Button>
                   )}
                 </div>
                 {section.boxes.length === 0 ? (
                   <p className="rounded-xl border border-dashed border-border bg-card/50 px-4 py-6 text-sm text-muted-foreground">
-                    No boxes in this book yet. Divide it into a rule you wrote and what you run by
-                    hand, or upload the names you already hold.
+                    No portfolios in this group yet. Create one for a screen you wrote and one for
+                    what you hold manually, or upload the names you already hold.
                   </p>
                 ) : (
                   <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -301,7 +302,7 @@ export function PortfoliosList({
             Delete “{pendingDelete?.name}”?
           </DialogTitle>
           <DialogDescription className="mt-2 text-sm text-muted-foreground">
-            This removes the named book, its holdings and every rebalance you were shown for it.
+            This removes the named group, its holdings and every rebalance you were shown for it.
             Baskets you hold are a separate ledger and stay.
           </DialogDescription>
           <div className="mt-4 flex gap-2">
@@ -327,6 +328,16 @@ export function PortfoliosList({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/*
+        The one place this page says it, per PORTFOLIO_REDESIGN.md §8: the sentence used to be
+        repeated on the header, the roll-up and every card, which is how boilerplate stops being
+        read. The regulatory disclaimer is a different sentence and a different component —
+        `AppShell` mounts that on every app page and it is not affected by this.
+      */}
+      <p className="text-xs text-muted-foreground" data-testid="portfolios-footnote">
+        Shares stay in your demat, across whichever brokers you use.
+      </p>
     </div>
   );
 }

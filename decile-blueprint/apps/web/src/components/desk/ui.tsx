@@ -246,7 +246,7 @@ export function DeskNav({ current }: { current: string }) {
   // M36 they did, and a link named "Market stance" that opened a page headed "Risk dial" is the
   // kind of small inconsistency that makes a product feel unfinished.
   const links: readonly Route[] = [
-    "/baskets",
+    "/discover",
     "/performance",
     "/holdings",
     "/tradebook",

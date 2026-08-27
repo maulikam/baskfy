@@ -13,7 +13,7 @@ import { PAGES } from "@/lib/vocabulary";
  *
  * D3 posture B is signed: live OAuth may redirect for wired adapters (Zerodha first).
  * The web app still never places orders — connect + holdings sync only. CSV import on
- * `/portfolios` remains available as a parallel path.
+ * `/portfolio/portfolios` remains available as a parallel path.
  */
 export const metadata: Metadata = {
   title: PAGES["/brokers"].title,
@@ -65,7 +65,7 @@ export default async function BrokersPage() {
           broker login opens after Baskfy&apos;s regulatory posture is recorded — until then a
           click shows the flow and explains why the redirect is held. You can still manage a
           portfolio by uploading a holdings CSV on{" "}
-          <Link href="/portfolios" className="text-accent underline-offset-4 hover:underline">
+          <Link href="/portfolio/portfolios" className="text-accent underline-offset-4 hover:underline">
             My portfolios
           </Link>
           .
@@ -75,7 +75,7 @@ export default async function BrokersPage() {
           <strong className="font-medium text-foreground">Broker login is open.</strong> Connect
           Zerodha to sync holdings (qty + T1 + collateral). Baskfy never places an order from this
           page — plans still need your confirm on the desk. CSV import stays on{" "}
-          <Link href="/portfolios" className="text-accent underline-offset-4 hover:underline">
+          <Link href="/portfolio/portfolios" className="text-accent underline-offset-4 hover:underline">
             My portfolios
           </Link>
           .

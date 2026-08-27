@@ -1,25 +1,32 @@
 "use client";
 
 import {
+  Briefcase,
+  Compass,
   House,
   LineChart,
   Store,
-  User,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { PRIMARY_NAV, primarySection } from "@/lib/nav";
+import { PRIMARY_NAV, SECTION_LABEL, primarySection } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
+/*
+  Keyed by the primary label. `Baskets` and `Me` are gone as destinations — the hub was renamed
+  Discover, and PORTFOLIO_REDESIGN.md §2 replaced Me with Portfolio — and `Baskets` is kept only
+  because it is still the fallback shape for anything unmapped.
+*/
 const ICONS: Record<string, LucideIcon> = {
   Home: House,
   Market: LineChart,
+  Discover: Compass,
   Baskets: Store,
   Build: Wrench,
-  Me: User,
+  Portfolio: Briefcase,
 };
 
 /**
@@ -40,12 +47,9 @@ export function BottomTabBar() {
     >
       <ul className="mx-auto flex h-14 max-w-[104rem] items-stretch justify-around px-2">
         {PRIMARY_NAV.map((item) => {
-          const active =
-            (section === "home" && item.label === "Home") ||
-            (section === "market" && item.label === "Market") ||
-            (section === "baskets" && item.label === "Baskets") ||
-            (section === "build" && item.label === "Build") ||
-            (section === "me" && item.label === "Me");
+          // One record, shared with `TopNav` — the copy that lived here had gone stale against
+          // the Discover rename and silently stopped lighting that tab.
+          const active = section !== null && item.label === SECTION_LABEL[section];
           const Icon = ICONS[item.label] ?? Store;
           return (
             <li key={item.href} className="flex min-w-0 flex-1">

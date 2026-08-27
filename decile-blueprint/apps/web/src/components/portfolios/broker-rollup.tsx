@@ -29,6 +29,7 @@ export interface BrokerRollupProps {
 
 export function BrokerRollup({ view, portfolioName }: BrokerRollupProps) {
   const { coverage, invariant } = view;
+  const attributed = view.lines.filter((line) => !line.unattributed).length;
 
   return (
     <section
@@ -44,13 +45,13 @@ export function BrokerRollup({ view, portfolioName }: BrokerRollupProps) {
             Whose money is where{portfolioName ? ` — ${portfolioName}` : ""}
           </h2>
           <p className="text-xs text-muted-foreground">
-            Every holding filed under this portfolio and the {view.subtreeSize - 1} portfolio
+            Every holding in this portfolio and the {view.subtreeSize - 1} portfolio
             {view.subtreeSize - 1 === 1 ? "" : "s"} beneath it, summed per broker account.
           </p>
         </div>
         <Badge variant={view.spansBrokers ? "neutral" : "outline"}>
           {view.spansBrokers
-            ? `Spans ${view.lines.filter((line) => !line.unattributed).length} brokers`
+            ? `Connected to ${attributed} broker${attributed === 1 ? "" : "s"}`
             : "One broker account"}
         </Badge>
       </div>
@@ -80,7 +81,7 @@ export function BrokerRollup({ view, portfolioName }: BrokerRollupProps) {
             {view.lines.length === 0 ? (
               <tr>
                 <td colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
-                  Nothing is filed under this portfolio yet.
+                  Nothing has been placed in this portfolio yet.
                 </td>
               </tr>
             ) : null}

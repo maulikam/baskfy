@@ -10,7 +10,7 @@ import { isStaticPublicPath } from "@/lib/marketing/routes";
  * `@/lib/auth/public-routes` is redirected to `/login?next=…` when the request carries no session
  * cookie. It used to be the other way round — an enumerated list of gated prefixes, everything
  * else public — and that list had fallen a year behind the routes: `/build`, `/explore`,
- * `/create`, `/holdings`, `/me/*`, `/watchlist`, `/baskets/*`, `/instruments/*` and `/screens/*`
+ * `/create`, `/holdings`, `/me/*`, `/watchlist`, `/discover/*`, `/instruments/*` and `/screens/*`
  * all rendered to anybody who typed the URL. A default-open gate cannot be reviewed, because the
  * diff that adds a page never mentions this file.
  *

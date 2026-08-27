@@ -14,7 +14,7 @@ import type { CatalogHitOut } from "@baskfy/api-client";
  * **`localStorage`, deliberately, and per browser.** The alternative is a `recent_item` table and
  * a write on every navigation — a schema, a migration and a request per click, to remember four
  * rows. This is a convenience, not a record: losing it costs a person three keystrokes.
- * `docs/DECISIONS-MERGE.md` M40.3.
+ * `docs/DECISIONS-MERGE.md` M46.3.
  *
  * Every read and write is guarded. Storage throws outright in a Safari private window and in some
  * embedded contexts, and a search box that cannot open because a convenience feature threw is a

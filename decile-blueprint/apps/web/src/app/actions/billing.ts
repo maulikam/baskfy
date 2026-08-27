@@ -2,7 +2,7 @@
 
 import type { CheckoutSessionOut } from "@baskfy/api-client";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { auth } from "@/lib/auth";
 
 /**
@@ -25,7 +25,7 @@ export async function startCheckout(planCode: string): Promise<CheckoutResult> {
   if (!token) return { ok: false, message: "Sign in first." };
 
   try {
-    const response = await fetch(`${apiOrigin()}/api/v1/checkout/session`, {
+    const response = await fetch(`${serverApiOrigin()}/api/v1/checkout/session`, {
       method: "POST",
       headers: { "content-type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ plan_code: planCode }),

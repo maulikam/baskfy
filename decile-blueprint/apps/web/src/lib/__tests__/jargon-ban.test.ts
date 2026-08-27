@@ -28,7 +28,7 @@ describe("consumer jargon ban (Tree 6)", () => {
   it("featured basket page source has no desk/MomentumScan user-facing copy", () => {
     const file = join(
       process.cwd(),
-      "src/app/(app)/baskets/featured/page.tsx",
+      "src/app/(app)/discover/featured/page.tsx",
     );
     const src = readFileSync(file, "utf8");
     expect(src).not.toMatch(/MomentumScan/);

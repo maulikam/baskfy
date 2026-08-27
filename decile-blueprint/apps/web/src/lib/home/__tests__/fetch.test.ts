@@ -22,7 +22,14 @@ const investments = vi.fn<() => Promise<unknown>>();
 
 class ExploreUnavailable extends Error {}
 
-vi.mock("@/lib/api/config", () => ({ apiOrigin: () => "http://api.test" }));
+/* Both origins. `fetch.ts` is a `server-only` module, so it reaches the API through
+   `serverApiOrigin()` — the in-network address, which is what stops server rendering from
+   hairpinning out through Caddy's password (see `lib/api/config.ts`). The mock returns the same
+   host for both because these tests are about degradation, not about routing. */
+vi.mock("@/lib/api/config", () => ({
+  apiOrigin: () => "http://api.test",
+  serverApiOrigin: () => "http://api.test",
+}));
 vi.mock("@/lib/auth", () => ({ auth: () => Promise.resolve({ accessToken: "t0ken" }) }));
 vi.mock("@/lib/api/server-fetch", () => ({
   serverFetchJsonOrNull: (options: unknown): Promise<unknown> => jsonOrNull(options),

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { BasketCard } from "@/components/explore/basket-card";
+import { DiscoverBasketCard } from "@/components/discover/basket-card";
 import type { Collection } from "@/lib/collections/fetch";
 
 /**
@@ -35,7 +35,7 @@ export function CollectionShelf({
           <Heading className="text-lg font-semibold tracking-tight">
             {showAll ? (
               <Link
-                href={`/baskets/collections/${collection.slug}`}
+                href={`/discover/collections/${collection.slug}`}
                 className="hover:underline"
               >
                 {collection.title}
@@ -50,7 +50,7 @@ export function CollectionShelf({
         </div>
         {showAll && count > 0 ? (
           <Link
-            href={`/baskets/collections/${collection.slug}`}
+            href={`/discover/collections/${collection.slug}`}
             className="shrink-0 text-sm text-muted-foreground hover:text-foreground hover:underline"
           >
             See all {count}
@@ -69,7 +69,7 @@ export function CollectionShelf({
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {collection.baskets.map((basket) => (
-            <BasketCard key={basket.slug} basket={basket} />
+            <DiscoverBasketCard key={basket.slug} basket={basket} />
           ))}
         </div>
       )}

@@ -86,7 +86,7 @@ export function TrendingModule({ trending, className }: TrendingModuleProps) {
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-sm font-semibold">Trending</h2>
         <Link
-          href="/baskets"
+          href="/discover"
           className="text-xs text-muted-foreground underline-offset-4 hover:underline"
         >
           Browse everything

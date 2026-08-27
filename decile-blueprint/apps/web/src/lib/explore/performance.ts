@@ -1,5 +1,5 @@
 import type { PerformancePoint } from "@/components/explore/performance-chart";
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import type { ExploreMetrics } from "@/lib/explore/fetch";
 
 /**
@@ -130,7 +130,7 @@ export async function fetchExplorePerformanceSeries(
 ): Promise<PerformancePoint[]> {
   try {
     const response = await fetch(
-      `${apiOrigin()}/api/v1/explore/${encodeURIComponent(slug)}/performance`,
+      `${serverApiOrigin()}/api/v1/explore/${encodeURIComponent(slug)}/performance`,
       { cache: "no-store" },
     );
     if (!response.ok) return [];

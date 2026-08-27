@@ -9,13 +9,14 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from baskfy_api.seed import (
-    seed_reference,
+    _run,
     seed_reference_fixture,
     seed_trading_days,
+seed_reference,
 )
 from baskfy_core.models import (
     FactorDaily,
@@ -246,3 +247,46 @@ async def test_fixture_membership_matches_the_denormalised_mask(
             )
         ).scalar_one()
     assert from_membership == from_mask
+
+
+@pytest.mark.asyncio
+async def test_seed_all_leaves_the_catalogue_surfaces_with_something_to_render(
+    engine: AsyncEngine, migrated: None
+) -> None:
+    """`make seed` must fill the tables the public pages read, not merely run without error.
+
+    This is the test that would have caught 27 Aug 2026's two "the page shows nothing" reports.
+    Both were empty tables under working code:
+
+    * `/pricing` rendered its "Before you buy" preamble and no plan cards, because `plan` was
+      empty — the deploy runbook had no seed step at all, so staging was migrated and never
+      seeded (`docs/runbooks/07-deploy-phase-a.md` §4 now has one).
+    * `/discover/collections` rendered an empty directory, and would have kept rendering empty
+      shelves even after seeding: the `all` branch called `seed_momentum_scan_basket` with the
+      default `FIXTURE_SCAN_SYMBOLS`, fifteen large caps that are not in the 271-row export, so
+      it took its "fewer than top_n symbols exist" branch and returned 0. The `e2e` branch was
+      fixed for exactly this in M46.6; `all` was not.
+
+    Asserting counts rather than "it ran" is the whole point. A seeder that succeeds and populates
+    nothing is indistinguishable from a working one until somebody opens the page.
+    """
+    # Driven through `_run`, the function the CLI calls, and not by calling the seeders directly.
+    # That distinction is the test: `seed_momentum_scan_basket` was never broken — it returned 0
+    # because of the arguments the `all` branch passed it. A test that called it with the right
+    # ranked symbols would have passed throughout the bug.
+    counts = await _run("all", str(engine.url.render_as_string(hide_password=False)))
+
+    assert counts.get("cb_momentum_scan", 0) >= 1, (
+        "`seed all` produced no basket, so every collection shelf renders empty — check that the "
+        "fixture branch ranks from the reference export and not from FIXTURE_SCAN_SYMBOLS"
+    )
+
+    async with async_sessionmaker(engine)() as session:
+        plans = (await session.execute(select(func.count()).select_from(Plan))).scalar_one()
+        shelves = (
+            await session.execute(text("select count(*) from cb_collection"))
+        ).scalar_one()
+
+    # The three docs/01 §1 plans. `/pricing` renders one card each; zero is the reported bug.
+    assert plans == 3, f"/pricing would render {plans} cards"
+    assert shelves >= 1, "/discover/collections would render an empty directory"

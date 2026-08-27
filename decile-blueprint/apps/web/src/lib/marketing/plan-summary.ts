@@ -2,7 +2,7 @@ import "server-only";
 
 import type { PlanListOut } from "@baskfy/api-client";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { billingCadence, formatPrice } from "@/lib/billing/format";
 
 /**
@@ -34,7 +34,7 @@ export interface PlanSummary {
 
 export async function fetchPlanSummary(): Promise<PlanSummary[]> {
   try {
-    const response = await fetch(`${apiOrigin()}/api/v1/plans`, {
+    const response = await fetch(`${serverApiOrigin()}/api/v1/plans`, {
       next: { revalidate: REVALIDATE_SECONDS, tags: ["plans"] },
     });
     if (!response.ok) return [];

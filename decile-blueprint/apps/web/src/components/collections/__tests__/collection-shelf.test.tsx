@@ -75,7 +75,7 @@ describe("CollectionShelf", () => {
   it("links the shelf to its own page", () => {
     render(<CollectionShelf collection={shelf()} />);
     const link = screen.getByRole("link", { name: "Momentum" });
-    expect(link).toHaveAttribute("href", "/baskets/collections/momentum");
+    expect(link).toHaveAttribute("href", "/discover/collections/momentum");
   });
 
   it("omits the see-all link when the shelf is already the whole page", () => {

@@ -78,7 +78,7 @@ export function StepsPanel() {
             </h2>
             <p className="mt-7 max-w-[46ch] text-[15px] leading-relaxed text-muted-foreground">
               A screen becomes a basket, a basket takes its place in one of your portfolios — or in
-              one sleeve of one — and the portfolio produces an order plan you confirm at your own
+              one allocation inside one — and the portfolio produces an order plan you confirm at your own
               broker.
             </p>
             <p className="mt-4 max-w-[46ch] text-[15px] leading-relaxed text-muted-foreground">
@@ -142,8 +142,8 @@ const CATALOG: ReadonlyArray<{ title: string; note: string; chips: readonly stri
   },
   {
     title: "Portfolios",
-    note: "One book, many sleeves.",
-    chips: ["Sleeves", "Allocation", "Drift", "Rebalance tracker", "CSV import", "XIRR"],
+    note: "One portfolio, many allocations.",
+    chips: ["Allocations", "Weights", "Drift", "Rebalance tracker", "CSV import", "XIRR"],
   },
   {
     title: "Brokers",

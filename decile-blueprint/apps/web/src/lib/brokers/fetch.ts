@@ -1,6 +1,6 @@
 import "server-only";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { auth } from "@/lib/auth";
 
 /**
@@ -59,7 +59,7 @@ export async function fetchBrokerCatalog(): Promise<BrokerCatalog> {
   const session = await auth();
   if (!session?.accessToken) throw new BrokersUnavailable("sign-in required");
 
-  const response = await fetch(`${apiOrigin()}/api/v1/brokers`, {
+  const response = await fetch(`${serverApiOrigin()}/api/v1/brokers`, {
     headers: { Authorization: `Bearer ${session.accessToken}` },
     cache: "no-store",
   });
@@ -79,7 +79,7 @@ export async function startBrokerConnect(brokerId: string): Promise<ConnectResul
     };
   }
 
-  const response = await fetch(`${apiOrigin()}/api/v1/brokers/${brokerId}/connect`, {
+  const response = await fetch(`${serverApiOrigin()}/api/v1/brokers/${brokerId}/connect`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${session.accessToken}`,

@@ -90,7 +90,7 @@ describe("the sleeve planner states the stance rather than urging it", () => {
     // The default is what matters, not where it is stored. It moved from component state into
     // the URL so a capped view can be linked to; `withDefault(false)` keeps it off until ticked.
     expect(PLANNER).toMatch(/withDefault\(false\)/);
-    expect(PLANNER).toMatch(/Size my screen sleeves to this cap/i);
+    expect(PLANNER).toMatch(/Size my screen allocations to this cap/i);
   });
 
   it("puts the cap in the URL so the view can be linked to", () => {

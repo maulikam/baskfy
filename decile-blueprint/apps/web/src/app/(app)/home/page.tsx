@@ -48,7 +48,7 @@ export default async function HomePage() {
       <NetWorthHeader
         netWorth={investments.net_worth}
         investmentCount={active.length}
-        href="/me/investments"
+        href="/portfolio/overview"
       />
 
       <PendingActionsCarousel
@@ -65,10 +65,10 @@ export default async function HomePage() {
       {active.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Nothing invested yet.{" "}
-          <Link href="/baskets" className="text-accent underline-offset-4 hover:underline">
+          <Link href="/discover" className="text-accent underline-offset-4 hover:underline">
             Browse the catalog
           </Link>{" "}
-          — investing records a book entry here; it never places an order.
+          — investing records a ledger entry here; it never places an order.
         </p>
       ) : null}
     </div>

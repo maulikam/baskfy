@@ -3,7 +3,7 @@ import "server-only";
 import { createBaskfyClient, type BaskfyClient } from "@baskfy/api-client";
 
 import { auth } from "@/lib/auth";
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { timedFetch } from "@/lib/api/server-fetch";
 import { currentTraceparent } from "@/lib/api/trace";
 
@@ -22,7 +22,7 @@ export async function serverApi(): Promise<BaskfyClient> {
   const session = await auth();
   const token = session?.accessToken;
   return createBaskfyClient({
-    baseUrl: apiOrigin(),
+    baseUrl: serverApiOrigin(),
     fetch: timedFetch(),
     ...(token ? { getAccessToken: () => token } : {}),
     // Prompt 17 §1: carry the render's span across the hop, so a slow page and the screen query
@@ -34,7 +34,7 @@ export async function serverApi(): Promise<BaskfyClient> {
 /** An unauthenticated client, for the public pages that read `/meta/*` during SSG. */
 export function publicApi(): BaskfyClient {
   return createBaskfyClient({
-    baseUrl: apiOrigin(),
+    baseUrl: serverApiOrigin(),
     fetch: timedFetch(),
     getTraceparent: currentTraceparent,
   });

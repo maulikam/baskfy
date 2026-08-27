@@ -109,7 +109,7 @@ export function assessBasketHealth(rows: readonly HealthRow[]): BasketHealth {
   if (largestSleevePct !== null && largestSleevePct > SINGLE_NAME_CAP_PCT) {
     notes.push({
       kind: "single-name",
-      text: `One name is ${largestSleevePct.toFixed(1)}% of the stocks sleeve. The desk caps a single name at ${SINGLE_NAME_CAP_PCT}%.`,
+      text: `One name is ${largestSleevePct.toFixed(1)}% of the stocks allocation. The desk caps a single name at ${SINGLE_NAME_CAP_PCT}%.`,
     });
   }
   if (names > 0 && names < FEW_NAMES) {

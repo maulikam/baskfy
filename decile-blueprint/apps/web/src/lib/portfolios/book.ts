@@ -9,8 +9,8 @@
  * A box is one slice of capital, tracked on its own:
  *
  * - **Manager** — a published catalog basket you hold.
- * - **Your rule** — a screen you wrote (private SCAN/SCREEN basket, or a `kind=screen` sleeve).
- * - **By hand** — leftover CSV holdings, a private MANUAL basket, or a `kind=manual` sleeve.
+ * - **My screen** — a screen you wrote (private SCAN/SCREEN basket, or a `kind=screen` sleeve).
+ * - **Manual holdings** — leftover CSV holdings, a private MANUAL basket, or a `kind=manual` sleeve.
  *
  * Sleeve capital is a standing instruction, not a mark. Investment current value is a mark.
  * Adding the two is not a combined NAV, and the UI must not present it as one.
@@ -30,8 +30,8 @@ export type BoxKind = (typeof BOX_KIND)[keyof typeof BOX_KIND];
 
 export const BOX_KIND_LABEL: Record<BoxKind, string> = {
   manager: "Manager",
-  rule: "Your rule",
-  manual: "By hand",
+  rule: "My screen",
+  manual: "Manual holdings",
 };
 
 /** The investment fields the book needs — a slice of the list payload, safe to pass to the client. */
@@ -139,7 +139,7 @@ function investmentBox(row: BookInvestment): BookBox | null {
     xirr: snap?.xirr_displayable ? (snap.xirr ?? null) : null,
     holdingsCount: null,
     valueIsLiveMark: snap?.current_value != null && snap.current_value !== "",
-    href: `/me/investments/${row.id}`,
+    href: `/portfolio/${row.id}`,
   };
 }
 

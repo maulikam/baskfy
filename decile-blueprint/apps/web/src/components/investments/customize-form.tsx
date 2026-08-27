@@ -109,7 +109,7 @@ export function CustomizeForm({ investmentId, basketName }: CustomizeFormProps) 
         />
       </label>
       <label className="block space-y-1 text-sm">
-        <span className="font-medium">Book amount (₹)</span>
+        <span className="font-medium">Amount recorded (₹)</span>
         <input
           className="w-full rounded-md border border-border bg-background px-2 py-1.5 tabular-nums"
           value={amount}

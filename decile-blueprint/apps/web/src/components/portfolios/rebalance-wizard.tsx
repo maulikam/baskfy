@@ -30,7 +30,7 @@ import {
  *      with copy-to-clipboard and CSV. Show unmatched symbols prominently rather than silently
  *      dropping."
  *
- * Step 1 happened on `/portfolios`; this page shows which portfolio is loaded (and lets a user
+ * Step 1 happened on `/portfolio/portfolios`; this page shows which portfolio is loaded (and lets a user
  * replace its holdings from a file without leaving), then takes the screen and the two rule
  * inputs, then renders the three columns in the reference product's order.
  *
@@ -90,7 +90,7 @@ export function RebalanceWizard({ portfolioId, initial }: RebalanceWizardProps) 
           </p>
         </div>
         <Button variant="ghost" size="sm" className="ml-auto" asChild>
-          <Link href="/portfolios">All portfolios</Link>
+          <Link href="/portfolio/portfolios">All portfolios</Link>
         </Button>
         <Button variant="outline" size="sm" onClick={() => setShowUpload((open) => !open)}>
           {showUpload ? "Close" : "Replace holdings"}

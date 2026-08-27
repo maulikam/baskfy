@@ -39,7 +39,7 @@ export default async function CreateBasketPage({
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-6">
-      <SectionTabs section="baskets" />
+      <SectionTabs section="build" />
       <PageHeader title={page.title} blurb={page.blurb} />
       <CreateWorkspace
         screens={screens}

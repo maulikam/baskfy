@@ -1,20 +1,9 @@
 import Link from "next/link";
 import type { Route } from "next";
 
-import { EMPTY_CELL, formatNumber } from "@/lib/format";
+import { StrategyMark } from "@/components/discover/strategy-mark";
+import { formatReturn, formatRupees } from "@/lib/discover/metrics";
 import { cn } from "@/lib/utils";
-
-function monogram(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-  return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
-}
-
-function rupees(value: string | number | null | undefined): string {
-  if (value === null || value === undefined || value === "") return EMPTY_CELL;
-  return `₹${formatNumber(value, { decimals: 0 })}`;
-}
 
 export interface SharedBasketCardModel {
   name: string;
@@ -26,11 +15,22 @@ export interface SharedBasketCardModel {
   topSymbols?: readonly string[];
   badge?: string;
   cagr?: string | number | null;
+  /** The volatility bucket in words. Never labelled "Swing": that named nothing measurable. */
   volatility?: string | null;
+  /** Strategy tags, so the mark can be the strategy's rather than the name's initials. */
+  categories?: readonly string[];
 }
 
 /**
- * Shared smallcase-style card (Tree 6 §5.1). Explore catalog and Build auto-baskets both use this.
+ * Shared card for Build's saved screens shown as baskets (Tree 6 §5.1).
+ *
+ * The catalogue has its own richer card now (`components/discover/basket-card.tsx`) — this one
+ * survives for screens, which carry a name and a thesis and no metrics at all. Three defects it
+ * shared with the old catalogue card are fixed here too, because a screen card sits beside basket
+ * cards on the same page and may not contradict them: the two-letter monogram is a strategy mark,
+ * the risk column is labelled by its measure rather than "Swing", and a percentage arrives from
+ * the API as a string so the unit is applied by `formatReturn` rather than by a `typeof` check
+ * that was never true in production.
  */
 export function BasketCard({
   basket,
@@ -51,12 +51,7 @@ export function BasketCard({
     >
       <Link href={basket.href as Route} className="flex flex-col gap-3 focus:outline-none">
         <div className="flex items-start gap-3">
-          <span
-            className="grid size-10 shrink-0 place-items-center rounded-md bg-muted text-xs font-semibold text-foreground"
-            aria-hidden="true"
-          >
-            {monogram(basket.name)}
-          </span>
+          <StrategyMark categories={basket.categories ?? []} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="truncate text-sm font-semibold text-foreground">{basket.name}</h2>
@@ -83,22 +78,20 @@ export function BasketCard({
           <div>
             <div className="eyebrow">Min. amount</div>
             <div className="mt-0.5 text-sm font-medium tabular-nums">
-              {rupees(basket.minAmount)}
+              {formatRupees(basket.minAmount)}
             </div>
           </div>
           {basket.headlinePct !== null && basket.headlinePct !== undefined ? (
             <div>
               <div className="eyebrow">{basket.headlineLabel ?? "1Y"}</div>
               <div className="mt-0.5 text-sm font-medium tabular-nums">
-                {typeof basket.headlinePct === "number"
-                  ? `${basket.headlinePct.toFixed(1)}%`
-                  : basket.headlinePct}
+                {formatReturn(basket.headlinePct)}
               </div>
             </div>
           ) : null}
           {basket.volatility ? (
             <div>
-              <div className="eyebrow">Swing</div>
+              <div className="eyebrow">Volatility</div>
               <div className="mt-0.5 text-sm font-medium">{basket.volatility}</div>
             </div>
           ) : null}

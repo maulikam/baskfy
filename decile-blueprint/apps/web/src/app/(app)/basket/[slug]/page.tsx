@@ -111,7 +111,7 @@ export default async function BasketDetailPage({
           }
         />
         <div>
-          <div className="eyebrow">Swing</div>
+          <div className="eyebrow">Volatility</div>
           <div className="mt-1.5">
             <VolatilityChip bucket={metrics?.volatility_bucket} />
           </div>

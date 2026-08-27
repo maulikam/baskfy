@@ -48,7 +48,7 @@ export function BasketHealthPanel({
               ? "—"
               : `${health.largestSleevePct.toFixed(1)}% of stocks`
           }
-          hint={`Desk single-name cap is ${SINGLE_NAME_CAP_PCT}% of the stocks sleeve.`}
+          hint={`Desk single-name cap is ${SINGLE_NAME_CAP_PCT}% of the stocks allocation.`}
         />
         <Stat
           label="1-yr return, median"

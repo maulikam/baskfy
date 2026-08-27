@@ -2,7 +2,7 @@ import "server-only";
 
 import type { FactsheetOut, InstrumentHistoryOut } from "@baskfy/api-client";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 
 /**
  * Server-side reads for `/instruments/[symbol]` — docs/07 §Instruments.
@@ -28,7 +28,7 @@ export const FACTSHEET_TAG = "factsheet";
 export class FactsheetNotFound extends Error {}
 
 async function readJson(path: string, search?: Record<string, string>): Promise<unknown> {
-  const url = new URL(`${apiOrigin()}/api/v1${path}`);
+  const url = new URL(`${serverApiOrigin()}/api/v1${path}`);
   for (const [key, value] of Object.entries(search ?? {})) url.searchParams.set(key, value);
 
   const response = await fetch(url, {

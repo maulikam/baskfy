@@ -378,7 +378,7 @@ export function useSleeveMap(ids: number[], initial?: Record<number, SleeveListO
         const { data, error } = await browserApi().GET("/api/v1/portfolios/{portfolio_id}/sleeves", {
           params: { path: { portfolio_id: id } },
         });
-        if (!data) throw ApiError.from(error, "The sleeves could not be loaded.");
+        if (!data) throw ApiError.from(error, "The allocations could not be loaded.");
         return data;
       },
       ...(initial?.[id] ? { initialData: initial[id] } : {}),
@@ -396,7 +396,7 @@ export function useSleeves(id: number, initial?: SleeveListOut) {
       const { data, error } = await browserApi().GET("/api/v1/portfolios/{portfolio_id}/sleeves", {
         params: { path: { portfolio_id: id } },
       });
-      if (!data) throw ApiError.from(error, "The sleeves could not be loaded.");
+      if (!data) throw ApiError.from(error, "The allocations could not be loaded.");
       return data;
     },
     ...(initial ? { initialData: initial } : {}),
@@ -425,7 +425,7 @@ export function useSaveSleeves(id: number) {
         params: { path: { portfolio_id: id } },
         body: { sleeves },
       });
-      if (!data) throw ApiError.from(error, "The sleeves could not be saved.");
+      if (!data) throw ApiError.from(error, "The allocations could not be saved.");
       return data;
     },
     onSuccess: async (data) => {

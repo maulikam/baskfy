@@ -1,6 +1,6 @@
 import "server-only";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { ServerFetchTimeoutError, serverFetchJson } from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 
@@ -80,7 +80,7 @@ async function readJson(path: string): Promise<unknown> {
   })();
   try {
     return await serverFetchJson({
-      url: `${apiOrigin()}/api/v1${path}`,
+      url: `${serverApiOrigin()}/api/v1${path}`,
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       // Live basket build can be heavy (M30); still hard-cap so RSC never hangs.
       timeoutMs: basketTimeoutMs,
@@ -96,9 +96,9 @@ async function readJson(path: string): Promise<unknown> {
 }
 
 export async function fetchBasket(): Promise<Basket> {
-  return (await readJson("/baskets")) as Basket;
+  return (await readJson("/discover")) as Basket;
 }
 
 export async function fetchLatestPlan(): Promise<Plan> {
-  return (await readJson("/baskets/plan")) as Plan;
+  return (await readJson("/discover/plan")) as Plan;
 }

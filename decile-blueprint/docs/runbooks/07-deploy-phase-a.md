@@ -136,11 +136,27 @@ Then:
 
 ```bash
 docker compose -f compose.prod.yml --env-file .env.staging.compose run --rm migrate   # alembic upgrade head
+docker compose -f compose.prod.yml --env-file .env.staging.compose run --rm seed      # reference data
 docker compose -f compose.prod.yml --env-file .env.staging.compose up -d
 ```
 
 Migrations are a **separate, explicit step** and not a `depends_on`. A migration that runs on
 every container restart is a migration that runs during an outage, on a box already unhappy.
+
+**The `seed` line was missing until 27 Aug 2026, and its absence is a bug this runbook caused.**
+A migrated database is an empty one: `plan`, `cb_collection`, the universes and the factor
+registry are all populated by `baskfy_api.seed`, and nothing here ran it. What that looked like
+from the outside was `/pricing` rendering its "Before you buy" preamble with no plan cards
+underneath — `GET /plans` answering `{"data":[]}` — and `/discover/collections` rendering an empty
+directory. Two pages reported as broken; one empty table each, under code that was working.
+
+`seed all` is idempotent (house rule 7), so run it on every deploy rather than only the first.
+Verify it took, because a silent no-op here is exactly the failure it just caused:
+
+```bash
+docker exec baskfy-staging-postgres-1 psql -U baskfy -d baskfy \
+  -c "select (select count(*) from plan) plans, (select count(*) from cb_collection) shelves;"
+```
 
 ## 5. Verify
 

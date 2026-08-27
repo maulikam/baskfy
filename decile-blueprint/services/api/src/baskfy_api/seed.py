@@ -684,7 +684,18 @@ async def _run(command: str, database_url: str | None) -> dict[str, int]:
         if command in ("all", "fixture"):
             await seed_exchange(session)
             counts["factor_daily"] = await seed_reference_fixture(session)
-            counts["cb_momentum_scan"] = await seed_momentum_scan_basket(session)
+            # Ranked from the reference export, exactly as the `e2e` branch below does and for
+            # the same reason — this line was the half of M46.6 that never got fixed.
+            #
+            # The default `scan_projection.FIXTURE_SCAN_SYMBOLS` is fifteen large caps (RELIANCE,
+            # TCS, INFY, …), none of which is in the 271-row export. `seed_momentum_scan_basket`
+            # returns 0 when fewer than `top_n` of its ranked symbols exist, so `make seed` — the
+            # command the deploy runbook now tells you to run — produced **four collections and no
+            # baskets**, and every shelf rendered as an empty box. The e2e database was fixed in
+            # M46.6; staging, which runs `all`, was not. `docs/DECISIONS-MERGE.md` M48.
+            counts["cb_momentum_scan"] = await seed_momentum_scan_basket(
+                session, ranked_symbols=tuple(row.symbol for row in to_rows().instruments)
+            )
         if command in ("all", "bars"):
             await seed_exchange(session)
             counts["ohlcv_daily"] = await seed_fixture_bars(session)

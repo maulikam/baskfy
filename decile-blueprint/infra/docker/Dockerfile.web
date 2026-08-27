@@ -1,0 +1,109 @@
+# syntax=docker/dockerfile:1.9
+#
+# `web` — the Next.js 15 app, as `docs/08-aws-architecture.md` §5 specifies it: "Next.js 15
+# `output: 'standalone'` in a container. This is the deployment mode the Next team documents as
+# supporting everything; Amplify Hosting is explicitly avoided (SSE buffering, version lag)."
+#
+# BUILD CONTEXT IS `decile-blueprint/`, NOT `apps/web/`
+# ----------------------------------------------------
+# `apps/web` is one member of a pnpm workspace and imports `@baskfy/api-client` from another.
+# A context rooted at `apps/web` cannot see it, and the build fails at module resolution rather
+# than anywhere informative. Build with:
+#
+#     docker build -f infra/docker/Dockerfile.web -t baskfy-web decile-blueprint
+#
+# TARGET ARCHITECTURE
+# -------------------
+# `linux/arm64`. The Phase A box is a `t4g.large` (Graviton), and an amd64 image would run under
+# emulation at a fraction of the speed. Apple Silicon builds this natively, so what is verified
+# on the laptop is the same artefact the box runs.
+
+# ---------------------------------------------------------------------------- deps
+FROM node:22-slim AS deps
+WORKDIR /repo
+
+# corepack pins pnpm to the version in the root package.json's `packageManager` field, so the
+# image cannot silently resolve a different pnpm than the lockfile was written by.
+RUN corepack enable
+
+# Only the manifests first: this layer is the expensive one and it must not be invalidated by a
+# source edit. Every workspace member's package.json has to be present before `--frozen-lockfile`
+# will agree the lockfile matches.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json apps/web/
+COPY packages/api-client/package.json packages/api-client/
+
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile
+
+# ---------------------------------------------------------------------------- build
+FROM node:22-slim AS build
+WORKDIR /repo
+RUN corepack enable
+
+COPY --from=deps /repo/node_modules ./node_modules
+COPY --from=deps /repo/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /repo/packages/api-client/node_modules ./packages/api-client/node_modules
+COPY . .
+
+# NEXT_PUBLIC_* is inlined into the client bundle at build time, so it is a build arg and not a
+# runtime env var. Getting this wrong produces a container that reads its own default forever no
+# matter what the compose file says — the classic Next-in-Docker trap.
+ARG NEXT_PUBLIC_SITE_URL=https://staging.baskfy.com
+ARG NEXT_PUBLIC_API_ORIGIN=https://staging.baskfy.com
+ARG NEXT_PUBLIC_API_URL=https://staging.baskfy.com/api/v1
+ARG NEXT_PUBLIC_DESK_URL=
+ARG BASKFY_RELEASE=dev
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+    NEXT_PUBLIC_API_ORIGIN=$NEXT_PUBLIC_API_ORIGIN \
+    NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_DESK_URL=$NEXT_PUBLIC_DESK_URL \
+    BASKFY_RELEASE=$BASKFY_RELEASE \
+    NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=production
+
+# `BASKFY_WEB_DIST_DIR` is deliberately left unset: the dev-server guard uses it to keep two
+# branches apart, and a build directory that is not `.next` would put the standalone output
+# somewhere the COPY lines below do not look.
+WORKDIR /repo/apps/web
+RUN pnpm exec next build
+
+# ---------------------------------------------------------------------------- runtime
+FROM node:22-slim AS runtime
+WORKDIR /app
+
+# Re-declared, because an ARG does not cross a stage boundary. The build stage above sets
+# `BASKFY_RELEASE` so the client bundle can carry it, and until now that was the *only* stage
+# that had it — the runtime image shipped without it, and `compose.prod.yml` papered over the
+# hole with `${BASKFY_RELEASE:-dev}`, which resolved to the literal string `dev` on every
+# deploy because nothing sets that variable in the env file.
+#
+# The result was a box that answered "dev" to "which commit are you running?", which is the
+# first question of every deploy verification. Twice on 27 Aug 2026 that had to be settled by
+# comparing image digests by hand. The image should simply know.
+ARG BASKFY_RELEASE=dev
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0 \
+    TZ=Asia/Kolkata \
+    BASKFY_RELEASE=$BASKFY_RELEASE
+
+# Non-root, with a fixed uid so a bind-mounted volume's ownership is predictable.
+RUN groupadd --system --gid 1001 nodejs \
+ && useradd --system --uid 1001 --gid nodejs --home /app nextjs
+
+# Standalone carries `server.js` plus the traced `node_modules`, and **nothing else**. `public/`
+# and `.next/static/` are documented exclusions, so they are copied by hand. Miss either and the
+# container boots happily and serves unstyled HTML with broken images — which is why
+# `tools/deploy/verify-web-image.sh` asserts a real stylesheet loads rather than a 200.
+COPY --from=build --chown=nextjs:nodejs /repo/apps/web/.next/standalone ./
+COPY --from=build --chown=nextjs:nodejs /repo/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build --chown=nextjs:nodejs /repo/apps/web/public ./apps/web/public
+
+USER nextjs
+EXPOSE 3000
+
+# Standalone's `server.js` lands under the workspace path it was traced from.
+CMD ["node", "apps/web/server.js"]

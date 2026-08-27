@@ -1,0 +1,107 @@
+# syntax=docker/dockerfile:1.9
+#
+# One image for `api`, `worker` and `beat`.
+#
+# WHY ONE IMAGE AND NOT THREE
+# ---------------------------
+# They are three commands over the same uv workspace, not three programs. `docs/08` §5 lists them
+# as separate *services* — separate scaling, separate queues, `beat` at desired-count 1 — which is
+# a runtime concern the compose file and the ECS task definitions express. Three Dockerfiles that
+# install the same five packages would be three things to keep in step, and the day they drift is
+# the day the worker runs different code than the API that enqueued the job.
+#
+# BUILD CONTEXT IS `decile-blueprint/`
+# ------------------------------------
+#     docker build -f infra/docker/Dockerfile.python -t baskfy-py decile-blueprint
+#
+# WHY uv AND NOT pip
+# ------------------
+# `pyproject.toml` declares `[tool.uv.workspace]` with five members and `[tool.uv.sources]`
+# pointing each at the workspace. `pip install .` cannot resolve those; it fails looking for
+# `baskfy-core` on PyPI, where it does not exist and must never be published.
+
+ARG PYTHON_VERSION=3.12
+
+# ---------------------------------------------------------------------------- build
+FROM python:${PYTHON_VERSION}-slim-bookworm AS build
+
+# Pinned, not `:latest`: the resolver is part of the build's reproducibility, and a silently
+# upgraded uv can produce a different environment from the same lockfile.
+COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
+
+WORKDIR /repo
+
+# Build-only toolchain. Not carried into the runtime image — a compiler on a box that reaches the
+# order path is attack surface for no benefit.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends build-essential \
+ && rm -rf /var/lib/apt/lists/*
+
+# Manifests first so the dependency layer survives a source edit. Every workspace member's
+# pyproject must be present or `uv sync --frozen` refuses the lockfile.
+COPY pyproject.toml uv.lock ./
+COPY packages/core/pyproject.toml packages/core/
+COPY packages/execution/pyproject.toml packages/execution/
+COPY packages/providers/pyproject.toml packages/providers/
+COPY services/api/pyproject.toml services/api/
+COPY services/worker/pyproject.toml services/worker/
+
+# `--no-install-workspace` installs the *dependencies* only. The workspace members themselves land
+# in the next layer, so editing our own source does not re-resolve numpy.
+# `--no-dev` keeps pytest, mypy and ruff out of a production image.
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    uv sync --frozen --no-dev --no-install-workspace
+
+COPY packages/ packages/
+COPY services/ services/
+
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    uv sync --frozen --no-dev
+
+# ---------------------------------------------------------------------------- runtime
+FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
+
+ENV PATH="/repo/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    TZ=Asia/Kolkata \
+    # docs/08 §1: "The IST clock. The nightly chain (18:45), publish deadline (20:15), alerts
+    # (20:30) ... Everything schedules in Asia/Kolkata; nothing depends on machine-local time."
+    # Set here as well as in the app so a bare `docker exec` sees the same clock the schedule does.
+    BASKFY_ENVIRONMENT=staging \
+    # Root CLAUDE.md safety rail: "DRY_RUN=true is the default in every environment an agent
+    # creates." Baked into the image so that forgetting it in an env file cannot arm anything.
+    DRY_RUN=true
+
+WORKDIR /repo
+
+# tzdata is not in the slim base and TZ silently does nothing without it — the schedule would run
+# on UTC and every IST deadline would fire five and a half hours late.
+# curl is the healthcheck.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tzdata curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 1001 baskfy \
+ && useradd --system --uid 1001 --gid baskfy --home /repo baskfy \
+ # Celery Beat persists its "last run" state to a shelve file, and defaults to writing it into
+ # the working directory — which is root-owned here, so Beat crash-looped on
+ # `[Errno 13] Permission denied: 'celerybeat-schedule'`. It needs one writable directory, and
+ # exactly one: a Beat that cannot persist its schedule re-fires everything it already ran the
+ # moment it restarts, including the nightly chain.
+ && install -d -o baskfy -g baskfy /var/lib/baskfy
+
+COPY --from=build --chown=baskfy:baskfy /repo/.venv /repo/.venv
+COPY --from=build --chown=baskfy:baskfy /repo/packages /repo/packages
+COPY --from=build --chown=baskfy:baskfy /repo/services /repo/services
+COPY --chown=baskfy:baskfy pyproject.toml uv.lock /repo/
+
+USER baskfy
+EXPOSE 8000
+
+# Overridden per service in compose / the ECS task definition. The API is the default because it
+# is the one that has to answer a health check.
+CMD ["uvicorn", "baskfy_api.app:get_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

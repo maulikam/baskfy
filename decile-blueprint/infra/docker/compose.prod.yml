@@ -83,7 +83,15 @@ services:
       BASKFY_JWT_SECRET: ${BASKFY_JWT_SECRET:?set BASKFY_JWT_SECRET}
       BASKFY_JWT_ISSUER: ${BASKFY_JWT_ISSUER:-baskfy}
       BASKFY_JWT_AUDIENCE: ${BASKFY_JWT_AUDIENCE:-baskfy-web}
-      BASKFY_RELEASE: ${BASKFY_RELEASE:-dev}
+      # BASKFY_RELEASE is deliberately NOT set here. `Dockerfile.web` bakes it at build time from
+      # `push-images.sh`'s `--build-arg BASKFY_RELEASE=$(git rev-parse --short HEAD)`, so the image
+      # already knows which commit it is. This line used to read `${BASKFY_RELEASE:-dev}`, and
+      # since nothing sets that variable in `.env.staging.compose` it resolved to `dev` on every
+      # deploy — a runtime default silently clobbering a correct build-time value.
+      #
+      # The cost was not cosmetic: "which commit is actually running?" is the first question of
+      # every deploy verification, and the box answered `dev` to it. Twice this session that had
+      # to be established by comparing image digests by hand instead.
       NEXTAUTH_URL: ${BASKFY_PUBLIC_URL:?set BASKFY_PUBLIC_URL}
       AUTH_SECRET: ${BASKFY_JWT_SECRET}
       AUTH_TRUST_HOST: "true"
@@ -224,7 +232,17 @@ services:
     profiles: [tools]
     restart: "no"
     working_dir: /repo/services/api
-    command: [python, -m, baskfy_api.seed, all]
+    # `reference`, not `all`. `all` additionally loads the 271-row reference export from
+    # `tests/fixtures/`, which is **deliberately not in the production image** — it is a test
+    # answer key of random-walk bars, and shipping it to a box that holds real closes would be
+    # worse than not seeding at all. On the box it fails outright:
+    #     FileNotFoundError: reference-screen-export-2026-08-18.csv not found
+    #
+    # `reference` is the branch that holds the data a deployment actually needs and cannot derive:
+    # the exchange, the index definitions, the three plans, the example screens, the curated
+    # managers and the collection shelves. Everything else — bars, factors, baskets — comes from
+    # the pipeline against real data, which is where it should come from.
+    command: [python, -m, baskfy_api.seed, reference]
     depends_on:
       postgres: {condition: service_healthy}
 

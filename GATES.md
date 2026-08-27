@@ -13,7 +13,7 @@ no cards because **the staging database was never seeded**. Collections is the s
 - [x] G2: `/pricing` renders a priced card per plan, not just the "Before you buy" preamble
   CHECK: curl -s --max-time 25 https://staging.baskfy.com/pricing | grep -oE "₹[0-9,]+" | sort -u | tr '\n' ' '
   EXPECT: /₹[0-9]/
-  EVIDENCE: /pricing renders ₹500 ₹3,999 ₹14,999 (and the struck-through ₹899 ₹5,999 ₹19,999) — live
+  EVIDENCE: Visible text with <script>/<style> stripped contains Monthly, Yearly, Forever and ₹500, ₹3,999, ₹14,999 — three real plan cards. (First evidence was a bare ₹ grep over raw HTML; the adversarial re-read found the page streams a 'Loading page…' shell, so the grep could have been matching payload rather than rendered cards. It was not, but the stronger check is what is recorded.)
 
 - [x] G3: `/discover/collections` has shelves to render — an empty catalogue is the defect, not a pass
   CHECK: curl -s --max-time 25 -w "\nHTTP:%{http_code}" https://staging.baskfy.com/api/v1/explore/collections | python3 -c "import sys; b=sys.stdin.read(); code=b.rsplit('HTTP:',1)[1].strip(); body=b.rsplit(chr(10)+'HTTP:',1)[0]; import json; assert code=='200', 'HTTP '+code; print('COLLECTIONS', len(json.loads(body)['items']))"
@@ -44,7 +44,7 @@ no cards because **the staging database was never seeded**. Collections is the s
   EVIDENCE: pytest services/api/tests packages/core/tests — 2 failed: test_api_run::TestCsvExport and test_curated_schema. Both reproduce at HEAD in a clean worktree (verified earlier this session); no new failures.
 
 - [x] G9: deployed to AWS — the running web image is the commit that carries these fixes
-  EVIDENCE: Running web image digest sha256:bf10d4b75e54b1a0c82d33692118f9d80f426a026de44d5192ff1ae06d13938e == the digest pushed for commit 6195b57. All 8 containers up, API healthy. (BASKFY_RELEASE reports 'dev' on the box — unset in .env.staging.compose; verified by digest instead, and the gap is recorded below.)
+  EVIDENCE: BASKFY_RELEASE = aa2165f on the box == local HEAD aa2165f. 8 containers up. The box reports its own commit now: it answered 'dev' before, because Dockerfile.web declared the ARG in the build stage only and compose overrode it with ${BASKFY_RELEASE:-dev}. Both fixed in M48.1.
 
 - [x] G10: no regression in what was fixed earlier today — sign-out still lands on the public origin, legal pages still public, no password challenge
   CHECK: curl -sI --max-time 20 https://staging.baskfy.com/logout | grep -i "^location" | tr -d '\r'

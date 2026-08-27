@@ -23,7 +23,6 @@ from fastapi import APIRouter, Path, Query
 from pydantic import BaseModel, Field
 
 from baskfy_api.auth import AuthenticatedDep
-from baskfy_api.settings import get_settings
 from baskfy_api.broker_holdings import (
     HoldingsResult,
     HoldingsSource,
@@ -39,6 +38,7 @@ from baskfy_api.broker_oauth import (
     token_store_for,
 )
 from baskfy_api.problems import Problem, ProblemType
+from baskfy_api.settings import get_settings
 from baskfy_core.broker_connections import (
     BROKER_OAUTH_REVIEW,
     BrokerDef,

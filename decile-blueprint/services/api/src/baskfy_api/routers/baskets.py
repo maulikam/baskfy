@@ -31,19 +31,20 @@ import asyncio
 import datetime as dt
 import json
 from decimal import Decimal
-from typing import Annotated, Final
+from typing import Annotated
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError
 
 from baskfy_api.db import SessionDep
+from baskfy_api.desk_schema import DESK_SCHEMA, is_missing_desk_data
 from baskfy_api.problems import Problem, ProblemType
 
 router = APIRouter(tags=["baskets"])
 
 #: The schema M19's cutover put the desk's own records in.
-DESK_SCHEMA: Final = "desk"
 
 
 class BasketRowOut(BaseModel):
@@ -162,19 +163,31 @@ async def current_basket(
 @router.get("/baskets/plan", response_model=RebalancePlanOut)
 async def latest_plan(session: SessionDep) -> RebalancePlanOut:
     """The desk's most recent rebalance plan, read from the `desk` schema."""
-    version = (
-        (
-            await session.execute(
-                text(
-                    f"select version_id, created_ts, note, evaluation_id, "
-                    f"constituents_json, weights_json "
-                    f'from "{DESK_SCHEMA}".rebalance_versions order by created_ts desc limit 1'
+    try:
+        version = (
+            (
+                await session.execute(
+                    text(
+                        f"select version_id, created_ts, note, evaluation_id, "
+                        f"constituents_json, weights_json "
+                        f'from "{DESK_SCHEMA}".rebalance_versions order by created_ts desc limit 1'
+                    )
                 )
             )
+            .mappings()
+            .first()
         )
-        .mappings()
-        .first()
-    )
+    except ProgrammingError as error:
+        # A deployment with no `desk` schema has no plans, which is the same answer as a
+        # deployment whose desk has recorded none — and a very different answer from "we broke".
+        # Staging has never had the schema (it arrives by a separate migration of the desk's
+        # SQLite, docs/08 D8), so this endpoint answered 500 there for as long as it has existed.
+        # `baskfy_api.desk_schema` explains why the match is narrow.
+        if not is_missing_desk_data(error):
+            raise
+        raise Problem(
+            ProblemType.NOT_FOUND, detail="the desk has recorded no plans yet."
+        ) from error
     if version is None:
         raise Problem(ProblemType.NOT_FOUND, detail="the desk has recorded no plans yet.")
 

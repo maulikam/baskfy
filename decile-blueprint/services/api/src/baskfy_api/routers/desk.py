@@ -43,17 +43,26 @@ from collections.abc import Mapping
 from decimal import Decimal
 from typing import Annotated, Final
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import RowMapping, text
 
 from baskfy_api.db import SessionDep
+from baskfy_api.desk_schema import DESK_SCHEMA, require_desk_schema
 from baskfy_api.problems import Problem, ProblemType
 
-router = APIRouter(prefix="/desk", tags=["desk"])
+# Every route here reads the `desk` schema, so the check is on the router rather than repeated
+# six times. A deployment without that schema — staging, which has never had the desk's migrated
+# SQLite (docs/08 D8) — answered **500** on all of them until now, because asyncpg's
+# `UndefinedTableError` reached the client as an unhandled error. "We broke" and "there is no desk
+# history here" are different sentences and different pages. `baskfy_api.desk_schema`.
+router = APIRouter(
+    prefix="/desk",
+    tags=["desk"],
+    dependencies=[Depends(require_desk_schema)],
+)
 
 #: The schema M19's cutover put the desk's own records in.
-DESK_SCHEMA: Final = "desk"
 
 #: The benchmark the desk measures itself against (docs/01 §8).
 BENCHMARK: Final = "NIFTY500MOMENTM50"

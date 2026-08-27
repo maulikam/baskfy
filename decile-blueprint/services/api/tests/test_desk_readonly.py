@@ -68,7 +68,17 @@ class TestItCannotReachTheOrderPath:
 
     def test_it_reads_only_from_the_desk_schema(self) -> None:
         source = inspect.getsource(desk)
-        assert 'DESK_SCHEMA: Final = "desk"' in source
+        # The constant used to be declared here, and this asserted that literal. It now lives in
+        # `baskfy_api.desk_schema` — it was written out separately in four routers, and four
+        # copies of "which schema is the desk's" is three chances to disagree. What matters to
+        # this test is unchanged: every query in this module is qualified by it.
+        assert "from baskfy_api.desk_schema import" in source
+        assert "DESK_SCHEMA" in source
+        assert desk.DESK_SCHEMA == "desk"
+        # No query may name a schema this router is not supposed to read.
+        assert 'from "' not in source.replace('from "{DESK_SCHEMA}"', ""), (
+            "a query names a schema literally instead of going through DESK_SCHEMA"
+        )
         # Every statement is a SELECT. A stray INSERT/UPDATE/DELETE in an f-string would not be
         # caught by the decorator check above, because it needs no decorator.
         lowered = source.lower()
@@ -86,3 +96,66 @@ class TestTheSurfaceStaysHonest:
         source = inspect.getsource(desk)
         assert "live broker state" in source
         assert "D3" in source
+
+
+class TestADeploymentWithNoDeskHistory:
+    """The failure this suite did not cover: a box that has no `desk` schema at all.
+
+    Staging is one. It is migrated with alembic, which owns the application's own tables; the
+    desk's schema arrives by a separate migration of its SQLite (docs/08 D8) that has never run
+    there. Nothing is wrong with that box — it simply has no desk history.
+
+    What was wrong is how it read. asyncpg raises `UndefinedTableError`, SQLAlchemy wraps it as
+    `ProgrammingError`, and it reached the client unhandled: **`/desk/*`, `/baskets/plan` and
+    `/baskets/plan/kite` all answered 500 on staging**, for as long as staging has existed. "We
+    broke" and "there is no desk history here" are different sentences to a reader and different
+    pages to build.
+    """
+
+    def test_the_missing_schema_predicate_is_narrow(self) -> None:
+        """It must match a missing table and nothing else.
+
+        A permissions error, a dead connection or a genuine query bug has to keep surfacing as a
+        500. Hiding those behind "nothing here yet" turns an outage into an empty page that
+        nobody investigates, which is strictly worse than the 500 it replaced.
+        """
+        from sqlalchemy.exc import ProgrammingError
+
+        from baskfy_api.desk_schema import is_missing_desk_data
+
+        class UndefinedTableError(Exception):
+            pass
+
+        class InsufficientPrivilegeError(Exception):
+            pass
+
+        missing = ProgrammingError("select 1", {}, UndefinedTableError("no such relation"))
+        denied = ProgrammingError("select 1", {}, InsufficientPrivilegeError("permission denied"))
+
+        assert is_missing_desk_data(missing) is True
+        assert is_missing_desk_data(denied) is False
+        # Not a database error at all.
+        assert is_missing_desk_data(ValueError("something else")) is False
+
+    def test_every_desk_route_is_gated_on_the_schema_existing(self) -> None:
+        """On the router, not repeated per endpoint — so the seventh route cannot forget it."""
+        from baskfy_api.routers.desk import router
+
+        names = [
+            getattr(d.dependency, "__name__", "") for d in (router.dependencies or [])
+        ]
+        assert "require_desk_schema" in names, names
+
+    def test_one_definition_of_which_schema_the_desk_is(self) -> None:
+        """It was written out as a string literal in four routers. Three chances to disagree."""
+        import inspect as _inspect
+
+        from baskfy_api.desk_schema import DESK_SCHEMA
+        from baskfy_api.routers import baskets as baskets_router
+
+        assert DESK_SCHEMA == "desk"
+        for module in (desk, baskets_router):
+            source = _inspect.getsource(module)
+            assert 'DESK_SCHEMA: Final = "desk"' not in source, (
+                f"{module.__name__} re-declares DESK_SCHEMA instead of importing it"
+            )

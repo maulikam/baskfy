@@ -136,7 +136,7 @@ Then:
 
 ```bash
 docker compose -f compose.prod.yml --env-file .env.staging.compose run --rm migrate   # alembic upgrade head
-docker compose -f compose.prod.yml --env-file .env.staging.compose run --rm seed      # reference data
+docker compose -f compose.prod.yml --env-file .env.staging.compose run --rm seed      # `baskfy_api.seed reference`
 docker compose -f compose.prod.yml --env-file .env.staging.compose up -d
 ```
 
@@ -150,7 +150,14 @@ from the outside was `/pricing` rendering its "Before you buy" preamble with no 
 underneath — `GET /plans` answering `{"data":[]}` — and `/discover/collections` rendering an empty
 directory. Two pages reported as broken; one empty table each, under code that was working.
 
-`seed all` is idempotent (house rule 7), so run it on every deploy rather than only the first.
+**It seeds `reference`, not `all`.** `all` also loads the 271-row export from `tests/fixtures/`,
+which is not in the production image and fails with `FileNotFoundError` on the box — correctly, as
+that fixture is a random-walk answer key and has no business near real closes. `reference` carries
+what a deployment cannot derive: the exchange, index definitions, the three plans, the example
+screens, the curated managers and the collection shelves. Bars, factors and baskets come from the
+pipeline.
+
+Seeding is idempotent (house rule 7), so run it on every deploy rather than only the first.
 Verify it took, because a silent no-op here is exactly the failure it just caused:
 
 ```bash

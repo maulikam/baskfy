@@ -33,7 +33,7 @@ export function TradeLog({ trades, loading, truncated }: TradeLogProps) {
     return (
       <EmptyState
         title="No fills"
-        reason="This configuration never traded — the screen returned nothing on every rebalance date, or the book could not afford a single whole share."
+        reason="This configuration never traded — the screen returned nothing on every rebalance date, or the portfolio could not afford a single whole share."
       />
     );
   }

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { auth } from "@/lib/auth";
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { serverFetchJsonOrNull } from "@/lib/api/server-fetch";
 
 /**
@@ -113,7 +113,7 @@ async function authHeaders(): Promise<HeadersInit> {
 
 async function tryJson(path: string): Promise<unknown> {
   return serverFetchJsonOrNull({
-    url: `${apiOrigin()}/api/v1${path}`,
+    url: `${serverApiOrigin()}/api/v1${path}`,
     headers: await authHeaders(),
   });
 }

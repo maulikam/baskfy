@@ -2,7 +2,7 @@ import "server-only";
 
 import type { ScreenRunResponse, ScreenRunRowOut } from "@baskfy/api-client";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { PUBLISHED_DATA_TAG } from "@/lib/market/fetch";
 
 /**
@@ -35,7 +35,24 @@ export const SAMPLE_SCREEN_NAME = "Investing 001";
 export const SAMPLE_SCREEN_UNIVERSE = "NIFTY TOTAL MARKET";
 export const SAMPLE_SCREEN_FACTOR = "Average Sharpe return, 12/6/3/1 months";
 
-const SAMPLE_COLUMNS = ["close_raw", "marketcap_cr", "ret_12m", "sharpe_12m", "vol_12m"] as const;
+/**
+ * Only columns the free tier may request.
+ *
+ * `marketcap_cr` and `sharpe_12m` sit outside `DEFAULT_COLUMNS` + `DEFAULT_RESULT_COLUMNS`, so
+ * `routers/screens.py` demands the `custom_columns` entitlement for them — and the visitor this
+ * table exists for has no account at all. The page therefore rendered "The sample screen could
+ * not be loaded" on the one surface a stranger can reach (`NEEDS-MAULIK` §18).
+ *
+ * Two ways out, and the paywall is not ours to move: widening the entitlement is a commercial
+ * decision (D7-adjacent) that a code change cannot make on its own. Dropping the two columns is
+ * reversible in one line, and it costs the reader almost nothing today — `marketcap_cr` is NULL
+ * for every instrument until `fundamental_daily` is filled (`NEEDS-MAULIK` §15), so the column
+ * the entitlement was protecting renders as a row of em dashes.
+ *
+ * The screen is still *ranked* by the Sharpe blend named in `SAMPLE_SCREEN_FACTOR`; only the
+ * per-name Sharpe column is withheld. Put both names back here the day the entitlement changes.
+ */
+const SAMPLE_COLUMNS = ["close_raw", "ret_12m", "vol_12m"] as const;
 
 const SAMPLE_DEFINITION = {
   index: "nifty-total-market",
@@ -113,9 +130,7 @@ function toRow(row: ScreenRunRowOut): SampleRow {
     rank: row.rank,
     symbol: row.symbol,
     name: row.name,
-    values: Object.fromEntries(
-      SAMPLE_COLUMNS.map((key) => [key, numeric(source[key])]),
-    ) as Record<string, number | null>,
+    values: Object.fromEntries(SAMPLE_COLUMNS.map((key) => [key, numeric(source[key])])),
     cells: SAMPLE_COLUMNS.map((key) => ({
       key,
       label: SAMPLE_COLUMN_LABELS[key] ?? key,
@@ -126,7 +141,7 @@ function toRow(row: ScreenRunRowOut): SampleRow {
 
 export async function fetchSampleScreen(): Promise<SampleScreen | null> {
   try {
-    const response = await fetch(`${apiOrigin()}/api/v1/screens/preview`, {
+    const response = await fetch(`${serverApiOrigin()}/api/v1/screens/preview`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ definition: SAMPLE_DEFINITION, columns: [...SAMPLE_COLUMNS] }),

@@ -99,10 +99,22 @@ export function CommandPalette() {
     };
   }, [query]);
 
+  /**
+   * Nav destinations matching the query, by their current name **or the one they used to have**.
+   *
+   * `formerly` has been on `NavItem` since Tree 6 and was only ever rendered. It has to be
+   * searched too: the moment "Baskets" became "Discover", every reader who knew the old word
+   * typed it into this palette and got nothing back. A rename is not supposed to orphan the
+   * people who learned the previous name — that is the entire reason the field exists.
+   */
   const navMatches = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return NAV_ITEMS;
-    return NAV_ITEMS.filter((item) => item.label.toLowerCase().includes(needle));
+    return NAV_ITEMS.filter(
+      (item) =>
+        item.label.toLowerCase().includes(needle) ||
+        (item.formerly?.toLowerCase().includes(needle) ?? false),
+    );
   }, [query]);
 
   const dismiss = useCallback(() => {
@@ -158,8 +170,16 @@ export function CommandPalette() {
   }, [current]);
 
   const showRecents = trimmed.length < MIN_QUERY_LENGTH && recents.length > 0;
+  /*
+   * "Nothing matches" is only true when the search actually answered. On `failed` or
+   * `not-implemented` the palette already says what happened, and stacking a second message under
+   * it would tell the user their query found nothing when in fact nothing was asked.
+   */
   const nothingFound =
-    !searching && trimmed.length >= MIN_QUERY_LENGTH && grouped.length === 0 && !navMatches.length;
+    !searching &&
+    current?.status === "ok" &&
+    grouped.length === 0 &&
+    navMatches.length === 0;
 
   return (
     <CommandDialog

@@ -116,7 +116,7 @@ describe("the scrolling pills", () => {
   it("names all three halves of the product, not just the screener", () => {
     const joined = PRODUCT_PILLS.join(" | ").toLowerCase();
     expect(joined, "manager baskets are missing").toMatch(/basket/);
-    expect(joined, "the portfolio half is missing").toMatch(/sleeve|portfolio/);
+    expect(joined, "the portfolio half is missing").toMatch(/allocation|portfolio/);
     expect(joined, "building your own is missing").toMatch(/screen|backtest/);
   });
 
@@ -174,9 +174,9 @@ describe("the four categories", () => {
     expect(baskets?.body).toMatch(/nothing is pooled/i);
   });
 
-  it("says a portfolio can nest, because sub-portfolios are the point", () => {
+  it("says a portfolio can hold others, because sub-portfolios are the point", () => {
     const portfolios = LANDING_CATEGORIES.find((category) => category.title === "Portfolios");
-    expect(portfolios?.body).toMatch(/sleeves/i);
+    expect(portfolios?.body).toMatch(/allocations/i);
   });
 
   it("keeps the non-negotiable that this site never places the order", () => {

@@ -19,7 +19,7 @@ export type ScreenDefaultView = "basket" | "table";
  * `basket` to restore the basket-first default Tree 6 §5 shipped. Anything else reads as `table`,
  * because a typo must not decide what the page opens on.
  *
- * Only the *editor's* default moves. `/baskets`, `/basket/[slug]` and the build list cards are
+ * Only the *editor's* default moves. `/discover`, `/basket/[slug]` and the build list cards are
  * basket-first regardless of this flag; none of them reads it.
  */
 export function screenDefaultView(): ScreenDefaultView {

@@ -14,7 +14,7 @@ import { serverApi } from "@/lib/api/server";
  * **Amounts and weights only.** No share counts, and no control that could place anything.
  */
 export const metadata: Metadata = {
-  title: "Sleeves",
+  title: "Allocations",
   robots: { index: false, follow: false },
 };
 

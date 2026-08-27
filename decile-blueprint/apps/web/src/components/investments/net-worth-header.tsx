@@ -11,7 +11,7 @@ import { EMPTY_CELL, formatNumber } from "@/lib/format";
  * Net-worth header with eye-toggle — docs/smallcase/05 §6.8, and §6.1's home headline.
  *
  * One component for both surfaces rather than two. `/home` shows the same figure as
- * `/me/investments` and reads it from the same payload; a second net-worth block with its own
+ * `/portfolio/overview` and reads it from the same payload; a second net-worth block with its own
  * copy of the formatting is how two pages start disagreeing about the same person's money.
  * `href` is what §6.1 calls the chevron — on home it opens the full ledger, on the ledger page
  * itself there is nowhere to go and it is omitted.

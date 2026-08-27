@@ -17,7 +17,7 @@ import {
 
 /**
  * SC8 create form — private basket, ≥2 instruments, equal/custom weights normalize to 1.0.
- * Saves via `POST /api/v1/cb/baskets` (leaf 3.4). Preview stubbed.
+ * Saves via `POST /api/v1/cb/discover` (leaf 3.4). Preview stubbed.
  * No order route — invest later via the SC3 plan path.
  */
 
@@ -158,7 +158,7 @@ export function CreateBasketForm() {
             setName(e.target.value);
             setSaved(null);
           }}
-          placeholder="My momentum sleeve"
+          placeholder="My momentum basket"
           autoComplete="off"
         />
       </div>

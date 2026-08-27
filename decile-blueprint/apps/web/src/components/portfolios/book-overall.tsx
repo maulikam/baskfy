@@ -7,18 +7,19 @@ function rupees(value: string | null): string {
 }
 
 /**
- * The roll-up across every box. Basket marks and sleeve capital are shown as two figures because
+ * The roll-up across every portfolio. Basket marks and allocation capital are shown as two
+ * figures because
  * they are two ledgers — adding them is not a combined NAV.
  */
 export function BookOverall({ totals }: { totals: BookTotals }) {
   const boxLabel =
     totals.boxCount === 0
-      ? "No boxes yet"
-      : `${totals.boxCount} box${totals.boxCount === 1 ? "" : "es"}`;
+      ? "No portfolios yet"
+      : `${totals.boxCount} portfolio${totals.boxCount === 1 ? "" : "s"}`;
 
   return (
     <section
-      aria-label="Overall book"
+      aria-label="Overall totals"
       data-testid="book-overall"
       className="rounded-xl border border-border/70 bg-card p-4 sm:p-5"
     >
@@ -31,17 +32,17 @@ export function BookOverall({ totals }: { totals: BookTotals }) {
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Capital assigned across sleeves</p>
+          <p className="text-xs text-muted-foreground">Capital assigned across allocations</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">
             {rupees(totals.sleeveCapital)}
           </p>
         </div>
       </div>
       <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-        {boxLabel}. Shares stay in your demat, across whichever brokers you use. Basket marks and
-        sleeve capital are tracked separately — adding them is not a combined figure.
+        {boxLabel}. Basket marks and allocation capital are tracked separately — adding them is
+        not a combined figure.
         {totals.hasLiveMarks
-          ? " Returns on a box are price returns, not total returns including dividends."
+          ? " Returns on a portfolio are price returns, not total returns including dividends."
           : ""}
       </p>
     </section>

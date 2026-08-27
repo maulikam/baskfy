@@ -7,7 +7,7 @@ import { SECTION_TABS, type SectionKey } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 /**
- * In-page segmented control for Market / Baskets / Build / Me hubs (Tree 6).
+ * In-page segmented control for the Market / Discover / Build / Portfolio hubs.
  * Lives under the page header, never in the global nav.
  */
 export function SectionTabs({ section }: { section: SectionKey }) {
@@ -20,8 +20,8 @@ export function SectionTabs({ section }: { section: SectionKey }) {
         {tabs.map((tab) => {
           const active =
             pathname === tab.href ||
-            (tab.href !== "/baskets" && pathname.startsWith(`${tab.href}/`)) ||
-            (tab.href === "/baskets" && pathname === "/baskets");
+            (tab.href !== "/discover" && pathname.startsWith(`${tab.href}/`)) ||
+            (tab.href === "/discover" && pathname === "/discover");
           return (
             <li key={tab.href}>
               <Link

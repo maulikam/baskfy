@@ -12,7 +12,7 @@ import { hrefFor, KIND_LABELS, KIND_ORDER } from "@/lib/search/hrefs";
  * resolves to a route directory that actually exists in `src/app`.
  *
  * That is the failure this file exists to catch. Tree 6 moved `/screens/{id}` to `/build/{id}` and
- * `/explore` to `/baskets`; a palette that keeps sending people to the old paths would look
+ * `/explore` to `/discover`; a palette that keeps sending people to the old paths would look
  * perfectly healthy in a typecheck and 404 for every user.
  */
 /* From the package root: vitest runs with `apps/web` as its working directory. */
@@ -47,7 +47,7 @@ describe("hrefFor", () => {
 
   it("routes an index to the dashboard filtered to that index", () => {
     /* There is no index detail page; `/market/today` is the ~145-row table and its search box is
-       URL state, so `?q=` lands on that index's row. DECISIONS-MERGE M40.2. */
+       URL state, so `?q=` lands on that index's row. DECISIONS-MERGE M46.2. */
     expect(hrefFor({ kind: "index", id: "nifty-midcap-150" })).toBe(
       "/market/today?q=nifty-midcap-150",
     );

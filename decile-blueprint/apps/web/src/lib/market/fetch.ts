@@ -7,7 +7,7 @@ import type {
   MarketHealthOut,
 } from "@baskfy/api-client";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 
 /**
  * Server-side reads for the market-data surfaces — docs/07 §"Market data surfaces".
@@ -29,8 +29,22 @@ const TAG = "factsheet";
 
 export class MarketDataUnavailable extends Error {}
 
+/**
+ * The API's own word for "I have nothing trustworthy to show you yet".
+ *
+ * `docs/07`'s problem catalogue answers `503 pipeline-degraded` when no `pipeline_run` has been
+ * published, which is a *state*, not a fault: the pipeline has not run, or last night's run did
+ * not pass its gate. docs/11 §Reliability calls the correct response "graceful degradation" —
+ * serve the page, say so.
+ *
+ * Only 503. A 500 is a bug and must stay loud; a 404 means the route moved and must stay loud.
+ * Swallowing those would turn every backend defect into a quiet empty state, which is the
+ * failure mode this distinction exists to avoid.
+ */
+const DEGRADED_STATUS = 503;
+
 async function readJson(path: string, search: Record<string, string> = {}): Promise<unknown> {
-  const url = new URL(`${apiOrigin()}/api/v1${path}`);
+  const url = new URL(`${serverApiOrigin()}/api/v1${path}`);
   for (const [key, value] of Object.entries(search)) url.searchParams.set(key, value);
 
   const response = await fetch(url, {
@@ -40,8 +54,44 @@ async function readJson(path: string, search: Record<string, string> = {}): Prom
   return response.json();
 }
 
+/**
+ * Read, or answer `null` when the pipeline has nothing published.
+ *
+ * The throwing {@link readJson} stays, and so does every caller that wants it: a page whose whole
+ * reason to exist is the data may reasonably fail. This is for the pages that can say something
+ * useful without it.
+ */
+async function readJsonOrDegraded(
+  path: string,
+  search: Record<string, string> = {},
+  // `unknown`, not `unknown | null`: `unknown` already admits null, and spelling the union out
+  // reads as a promise the type does not make. The nullability that matters is on the exported
+  // wrappers, where it is `IndexDashboardOut | null` and does mean something.
+): Promise<unknown> {
+  try {
+    return await readJson(path, search);
+  } catch (error) {
+    if (error instanceof MarketDataUnavailable && error.message.endsWith(`${DEGRADED_STATUS}`)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export async function fetchIndexDashboard(): Promise<IndexDashboardOut> {
   return (await readJson("/indices/dashboard")) as IndexDashboardOut;
+}
+
+/**
+ * The index dashboard, or `null` while the pipeline has published nothing.
+ *
+ * `/market/today` used to call the throwing variant, so a brand-new deployment — where no
+ * pipeline has ever run — answered a full-page "Application error: a server-side exception has
+ * occurred", digest and all. The API was behaving correctly and saying so precisely; the page
+ * turned a 503 into a 500.
+ */
+export async function fetchIndexDashboardOrDegraded(): Promise<IndexDashboardOut | null> {
+  return (await readJsonOrDegraded("/indices/dashboard")) as IndexDashboardOut | null;
 }
 
 export async function fetchMarketHealth(universe: string): Promise<MarketHealthOut> {

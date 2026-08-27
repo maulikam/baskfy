@@ -133,8 +133,9 @@ export function brokerAccountLabel(
  * What this row may say about its broker.
  *
  * `broker_account_id === null` is a **roll-up container**: it declares nothing about where the
- * shares are, and the money underneath it may sit at several accounts. It gets "Spans N brokers"
- * when a roll-up has been read for it and "Spans brokers" when one has not — never the name of
+ * shares are, and the money underneath it may sit at several accounts. It gets "Connected to N
+ * brokers" when a roll-up has been read for it and "Connected to your brokers" when one has not —
+ * never the name of
  * one broker, which is the false single attribution this whole leaf exists to remove.
  */
 export function attributionFor(
@@ -156,16 +157,16 @@ export function attributionFor(
   }
   const lines = options.rollup?.by_broker;
   if (lines === undefined) {
-    return { kind: "spans", brokerCount: null, label: "Spans brokers" };
+    return { kind: "spans", brokerCount: null, label: "Connected to your brokers" };
   }
   const count = lines.length;
   if (count === 0) {
-    return { kind: "spans", brokerCount: 0, label: "Spans brokers · nothing filed yet" };
+    return { kind: "spans", brokerCount: 0, label: "Connected to your brokers · nothing here yet" };
   }
   return {
     kind: "spans",
     brokerCount: count,
-    label: `Spans ${count} broker${count === 1 ? "" : "s"}`,
+    label: `Connected to ${count} broker${count === 1 ? "" : "s"}`,
   };
 }
 
@@ -180,7 +181,7 @@ export function describeOwnHoldings(row: PortfolioTreeRow): string {
   const count = row.node.holdings_count;
   const noun = `${count} holding${count === 1 ? "" : "s"}`;
   if (!row.hasChildren) return `${noun} filed here`;
-  return `${noun} filed here · portfolios under this one are counted separately`;
+  return `${noun} filed here · portfolios inside this one are counted separately`;
 }
 
 /** Every id at or below this node — the set a move may not land inside. */

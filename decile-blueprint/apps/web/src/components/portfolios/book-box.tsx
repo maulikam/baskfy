@@ -35,7 +35,8 @@ function Stat({
 }
 
 /**
- * One slice of the book. Stats that exist on this ledger are on the card; missing marks stay as
+ * One slice of the portfolio group. Stats that exist on this ledger are on the card; missing
+ * marks stay as
  * an em dash rather than a made-up NAV.
  */
 export function BookBoxCard({ box }: { box: BookBox }) {
@@ -51,7 +52,7 @@ export function BookBoxCard({ box }: { box: BookBox }) {
     : box.capital !== null
       ? "Assigned capital"
       : box.holdingsCount !== null
-        ? "Names in this box"
+        ? "Names in this portfolio"
         : "No figure yet";
 
   return (
@@ -87,8 +88,8 @@ export function BookBoxCard({ box }: { box: BookBox }) {
         ) : (
           <p className="mt-auto text-xs leading-relaxed text-muted-foreground">
             {box.capital !== null
-              ? "Assigned capital, not a live mark. The shares stay in your demat."
-              : "Names you uploaded. No live mark on this box yet."}
+              ? "Assigned capital, not a live mark."
+              : "Names you uploaded. No live mark on this portfolio yet."}
           </p>
         )}
       </Link>

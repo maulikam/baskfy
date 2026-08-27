@@ -108,7 +108,7 @@ describe("the consolidated view never presents a total that quietly omits a brok
   it("names the brokers that did contribute, so the figure is checkable", () => {
     render(<BrokerRollup view={consolidate({ rollup: rollup(), catalog: CATALOG })} />);
     expect(screen.getByTestId("rollup-coverage")).toHaveTextContent(
-      /Filed under 2 broker accounts: Zerodha · main and Zerodha · family/,
+      /Held at 2 broker accounts: Zerodha · main and Zerodha · family/,
     );
   });
 

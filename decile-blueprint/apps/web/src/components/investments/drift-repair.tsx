@@ -74,7 +74,7 @@ export function DriftRepair({ investmentId }: { investmentId: string }) {
       <div className="space-y-1">
         <h3 className="text-sm font-semibold text-foreground">Repair drift</h3>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Paste what the broker shows. Fix now updates Baskfy&apos;s book to match. It does not
+          Paste what the broker shows. Fix now updates Baskfy&apos;s record to match. It does not
           send instructions to the broker.
         </p>
       </div>
@@ -93,7 +93,7 @@ export function DriftRepair({ investmentId }: { investmentId: string }) {
         <ul className="space-y-1 text-sm">
           {scan.deltas.map((row) => (
             <li key={row.symbol} className="tabular-nums">
-              {row.symbol}: book {row.ledger_qty} vs broker {row.broker_qty}
+              {row.symbol}: recorded {row.ledger_qty} vs broker {row.broker_qty}
             </li>
           ))}
         </ul>

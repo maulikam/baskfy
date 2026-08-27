@@ -27,10 +27,13 @@ import { DEFAULT_DESTINATION, E2E_EMAIL, E2E_PASSWORD, SIGNED_OUT } from "./help
  */
 const GATED = [
   "/build",
-  "/baskets",
+  "/discover",
   "/holdings",
-  "/me/portfolios",
-  "/me/watchlist",
+  "/portfolio/overview",
+  "/portfolio/portfolios",
+  "/portfolio/holdings",
+  "/portfolio/activity",
+  "/portfolio/watchlist",
   "/market/today",
   "/market/mood",
   "/market/listings",
@@ -44,8 +47,10 @@ const LEGACY = [
   ["/dashboard", "/market/today"],
   ["/market-health", "/market/mood"],
   ["/listings", "/market/listings"],
-  ["/explore", "/baskets"],
-  ["/portfolios", "/me/portfolios"],
+  ["/explore", "/discover"],
+  ["/portfolios", "/portfolio/portfolios"],
+  ["/me/investments", "/portfolio/overview"],
+  ["/me/watchlist", "/portfolio/watchlist"],
 ] as const;
 
 const PUBLIC = ["/", "/pricing", "/faq", "/about", "/privacy-policy", "/terms-conditions"] as const;
@@ -155,13 +160,13 @@ test.describe("signed in", () => {
   });
 
   test("a URL copied while signed in is useless once signed out", async ({ page }) => {
-    await page.goto("/me/portfolios");
+    await page.goto("/portfolio/portfolios");
     const copied = page.url();
 
     await page.goto("/logout");
     await page.waitForURL("/", { timeout: 30_000 });
 
     await page.goto(copied);
-    expect(where(page)).toBe(`/login?next=${encodeURIComponent("/me/portfolios")}`);
+    expect(where(page)).toBe(`/login?next=${encodeURIComponent("/portfolio/portfolios")}`);
   });
 });

@@ -48,7 +48,7 @@ export const RANKING_WINDOWS = ["1 month", "3 months", "6 months", "9 months", "
  * It used to scroll the fourteen index names, and the row below it scrolled the factor keys. Both
  * described the data plant — the tables underneath — and neither described the product. A visitor
  * reading "NIFTY Midcap 150 · NIFTY Smallcap 250 · ret_12m" learns that we hold market data, which
- * every competitor also does, and learns nothing about baskets, sleeves, brokers or plans.
+ * every competitor also does, and learns nothing about baskets, allocations, brokers or plans.
  *
  * So this row names capabilities and the one below names what they reach. Every entry is a surface
  * that exists in this codebase today; nothing here is a roadmap item wearing the present tense.
@@ -57,8 +57,8 @@ export const PRODUCT_PILLS: readonly string[] = [
   "Manager baskets",
   "Build your own screen",
   "Point-in-time backtests",
-  "Portfolio sleeves",
-  "Capital per sleeve",
+  "Portfolio allocations",
+  "Capital per allocation",
   "Rebalance diffs",
   "Order plans you confirm",
   "Watchlists",
@@ -117,7 +117,7 @@ export const LANDING_CATEGORIES: readonly LandingCategory[] = [
   },
   {
     title: "Portfolios",
-    body: "One account, many portfolios, and sleeves inside them. A momentum basket can sit beside a long-term core and still be read as one position.",
+    body: "One account, many portfolios, and allocations inside them. A momentum basket can sit beside a long-term core and still be read as one position.",
   },
   {
     title: "Brokers",

@@ -5,7 +5,7 @@ import { ChevronDown, Plus, RotateCcw, X } from "lucide-react";
 import * as React from "react";
 import { useMemo, useState } from "react";
 
-import { FactorCombobox } from "@/components/data/factor-combobox";
+import { FactorList } from "@/components/data/factor-combobox";
 import {
   renderFilterGroup,
   type FilterGroupContext,
@@ -322,15 +322,30 @@ export function FilterChipBar({
             <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
           </ChipButton>
         </PopoverTrigger>
-        <PopoverContent className="w-80 p-3" align="start">
-          <p id="chip-sort-by-label" className="mb-1.5 text-xs font-medium text-muted-foreground">
+        {/*
+          The list renders **inline**, not as a second popover inside this one.
+
+          `FactorCombobox` opens a popover of its own, and a Radix popover portals its content to
+          `document.body` — outside this popover's DOM subtree. Every click in that nested list was
+          therefore an *outside* click as far as this chip was concerned: the chip closed, the list
+          unmounted with it, and the factors appeared and vanished before one could be picked. It
+          was the only place in the app that nested them, which is why the same control has always
+          worked in the filter panel.
+
+          `w-96` rather than `w-80`: the list is now inside this width instead of sizing itself to
+          its own trigger, and factor labels like "12-month return, skipping the last month" need
+          the room. `FactorList` bounds its own height and scrolls.
+        */}
+        <PopoverContent className="w-96 p-0" align="start">
+          <p
+            id="chip-sort-by-label"
+            className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground"
+          >
             Sort By (Factor)
           </p>
-          <FactorCombobox
+          <FactorList
             factors={factors}
             value={definition.sort_by}
-            labelledBy="chip-sort-by-label"
-            disabled={disabled}
             onChange={(key) => {
               patch({ sort_by: key });
               setOpenChip(null);

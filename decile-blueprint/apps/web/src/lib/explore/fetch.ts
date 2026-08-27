@@ -1,6 +1,6 @@
 import "server-only";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { ServerFetchTimeoutError, serverFetchJson } from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 
@@ -102,7 +102,7 @@ export async function readExploreJson(path: string): Promise<unknown> {
   const token = session?.accessToken;
   try {
     return await serverFetchJson({
-      url: `${apiOrigin()}/api/v1${path}`,
+      url: `${serverApiOrigin()}/api/v1${path}`,
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
   } catch (error) {

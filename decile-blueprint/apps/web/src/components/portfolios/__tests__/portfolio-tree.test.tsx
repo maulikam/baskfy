@@ -72,7 +72,9 @@ describe("the portfolio list renders nesting rather than a flat row", () => {
 
   it("says a parent's holdings count is its own and not its subtree's", () => {
     render(<PortfolioTree forest={FOREST} />);
-    expect(screen.getByText(/2 holdings filed here · portfolios under this one/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/2 holdings filed here · portfolios inside this one/),
+    ).toBeInTheDocument();
     expect(screen.getByText("12 holdings filed here")).toBeInTheDocument();
   });
 
@@ -117,7 +119,7 @@ describe("every row says which broker account it is attributed to", () => {
     const badge = within(root!).getByTestId("broker-attribution");
     expect(badge).toHaveAttribute("data-attribution", "spans");
     expect(badge).toHaveAttribute("data-broker-count", "2");
-    expect(badge).toHaveTextContent("Spans 2 brokers");
+    expect(badge).toHaveTextContent("Connected to 2 brokers");
     expect(badge).not.toHaveTextContent("Zerodha · main");
   });
 
@@ -125,7 +127,9 @@ describe("every row says which broker account it is attributed to", () => {
     render(<PortfolioTree forest={FOREST} />);
     const root = screen.getAllByTestId("portfolio-tree-row")[0];
     expect(root).toBeDefined();
-    expect(within(root!).getByTestId("broker-attribution")).toHaveTextContent("Spans brokers");
+    expect(within(root!).getByTestId("broker-attribution")).toHaveTextContent(
+      "Connected to your brokers",
+    );
   });
 
   it("offers every row a way through to the per-broker split", () => {
@@ -170,7 +174,7 @@ describe("the tree is where nesting is made, and it can express both moves", () 
   it("files a portfolio under a parent by sending that parent's id", () => {
     const onMove = vi.fn();
     render(<PortfolioTree forest={FOREST} onMove={onMove} />);
-    const control = screen.getByLabelText("File Momentum under");
+    const control = screen.getByLabelText("Move Momentum to a group");
     fireEvent.change(control, { target: { value: "1" } });
     expect(onMove).toHaveBeenCalledWith({ id: 2, parentId: 1 });
   });
@@ -178,7 +182,7 @@ describe("the tree is where nesting is made, and it can express both moves", () 
   it("promotes to a root by sending an explicit null, not by omitting the field", () => {
     const onMove = vi.fn();
     render(<PortfolioTree forest={FOREST} onMove={onMove} />);
-    fireEvent.change(screen.getByLabelText("File Momentum under"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Move Momentum to a group"), { target: { value: "" } });
     const call: unknown = onMove.mock.calls[0]?.[0];
     expect(call).toEqual({ id: 2, parentId: null });
     expect(Object.keys(call as object)).toContain("parentId");
@@ -189,13 +193,13 @@ describe("the tree is where nesting is made, and it can express both moves", () 
     // "Everything" is the root and "Momentum" is its child, so both are inside its own subtree:
     // top level is the only place it could go, and re-parenting under its own child — the cycle
     // the server refuses — is never offered.
-    const root = within(screen.getByLabelText("File Everything under"))
+    const root = within(screen.getByLabelText("Move Everything to a group"))
       .getAllByRole("option")
       .map((option) => option.textContent);
     expect(root).toEqual(["Top level"]);
 
     // The child, which has nothing beneath it, may go under the root or up to the top level.
-    const child = within(screen.getByLabelText("File Momentum under"))
+    const child = within(screen.getByLabelText("Move Momentum to a group"))
       .getAllByRole("option")
       .map((option) => option.textContent);
     expect(child).toEqual(["Top level", "Everything"]);
@@ -203,6 +207,6 @@ describe("the tree is where nesting is made, and it can express both moves", () 
 
   it("disables the control while a move is in flight", () => {
     render(<PortfolioTree forest={FOREST} onMove={vi.fn()} moving />);
-    expect(screen.getByLabelText("File Momentum under")).toBeDisabled();
+    expect(screen.getByLabelText("Move Momentum to a group")).toBeDisabled();
   });
 });

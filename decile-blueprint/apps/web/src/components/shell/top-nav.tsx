@@ -10,11 +10,11 @@ import { SearchButton } from "@/components/shell/search-button";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { UserMenu, type UserMenuProps } from "@/components/shell/user-menu";
 import { Wordmark } from "@/components/shell/wordmark";
-import { PRIMARY_NAV, primarySection, type ReadyNavItem } from "@/lib/nav";
+import { PRIMARY_NAV, SECTION_LABEL, primarySection, type ReadyNavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 /**
- * Tree 6 consumer chrome: logo · 4 destinations · search · date · theme · avatar.
+ * Tree 6 consumer chrome: logo · 5 destinations · search · date · theme · avatar.
  * Mobile bottom tabs live in `BottomTabBar`; this header shrinks to logo · search · avatar under md.
  *
  * **The sliding pill is gone, and it was a bug as well as a mismatch.** A measured indicator read
@@ -28,17 +28,17 @@ export interface TopNavProps {
   user: UserMenuProps;
 }
 
+/*
+  The section → label map used to be inlined here and again in `BottomTabBar`, and the two had
+  drifted: the bar still said `discover: "Baskets"` after the hub was renamed, so that tab never
+  lit. `SECTION_LABEL` in `lib/nav` is the one record both read now. A section with no primary
+  destination (`me`, since PORTFOLIO_REDESIGN.md §2 moved the money out of it) simply matches
+  nothing, which is the right answer: it is drawn in the user menu, not the pill row.
+*/
 function sectionHref(item: ReadyNavItem, pathname: string): boolean {
   const section = primarySection(pathname);
   if (!section) return pathname === item.href || pathname.startsWith(`${item.href}/`);
-  const map = {
-    home: "Home",
-    market: "Market",
-    baskets: "Baskets",
-    build: "Build",
-    me: "Me",
-  } as const;
-  return item.label === map[section];
+  return item.label === SECTION_LABEL[section];
 }
 
 export function TopNav({ user }: TopNavProps) {

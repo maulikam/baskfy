@@ -168,7 +168,7 @@ export function SizingControls({
 
       <fieldset className="flex flex-col gap-2">
         <legend className="text-sm font-medium">Cash</legend>
-        <div className="flex flex-col gap-2" role="radiogroup" aria-label="Cash sleeve">
+        <div className="flex flex-col gap-2" role="radiogroup" aria-label="Cash allocation">
           <label className="flex cursor-pointer items-start gap-2 text-sm">
             <input
               type="radio"
@@ -179,7 +179,7 @@ export function SizingControls({
               className="mt-1"
             />
             <span>
-              <span className="font-medium">Keep a cash sleeve</span>
+              <span className="font-medium">Keep a cash allocation</span>
               <span className="mt-1 block text-xs text-muted-foreground">
                 Suggested {suggestedCashPct}%. You can change it.
               </span>
@@ -236,7 +236,7 @@ export function SizingControls({
             <span>
               <span className="font-medium">Use all of it for stocks</span>
               <span className="mt-1 block text-xs text-muted-foreground">
-                No cash sleeve — only the small rounding remainder stays uninvested.
+                No cash allocation — only the small rounding remainder stays uninvested.
               </span>
             </span>
           </label>

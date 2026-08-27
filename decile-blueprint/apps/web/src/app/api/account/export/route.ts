@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { auth } from "@/lib/auth";
 
 /**
@@ -17,7 +17,7 @@ export async function GET(): Promise<NextResponse> {
   const token = session?.accessToken;
   if (!token) return NextResponse.json({ error: "not signed in" }, { status: 401 });
 
-  const response = await fetch(`${apiOrigin()}/api/v1/me/export`, {
+  const response = await fetch(`${serverApiOrigin()}/api/v1/me/export`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });

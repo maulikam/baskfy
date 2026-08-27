@@ -2,7 +2,7 @@ import "server-only";
 
 import type { MeOut } from "@baskfy/api-client";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { serverFetchJsonOrNull } from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 
@@ -21,7 +21,7 @@ export async function fetchMe(): Promise<MeOut | null> {
   if (!token) return null;
 
   const data = await serverFetchJsonOrNull({
-    url: `${apiOrigin()}/api/v1/me`,
+    url: `${serverApiOrigin()}/api/v1/me`,
     headers: { Authorization: `Bearer ${token}` },
   });
   return (data as MeOut | null) ?? null;
@@ -46,7 +46,7 @@ export async function callMe(
       process.env.BASKFY_SERVER_FETCH_TIMEOUT_MS?.trim() || "2500",
       10,
     );
-    const response = await fetch(`${apiOrigin()}/api/v1${path}`, {
+    const response = await fetch(`${serverApiOrigin()}/api/v1${path}`, {
       method,
       headers: { "content-type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),

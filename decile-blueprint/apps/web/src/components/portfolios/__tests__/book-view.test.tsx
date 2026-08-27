@@ -15,7 +15,7 @@ const managerBox: BookBox = {
   xirr: "11.2",
   holdingsCount: null,
   valueIsLiveMark: true,
-  href: "/me/investments/1",
+  href: "/portfolio/1",
 };
 
 const ruleBox: BookBox = {
@@ -50,7 +50,7 @@ describe("book boxes put their own stats on the card", () => {
   it("shows assigned capital and not a live mark for a screen sleeve", () => {
     render(<BookBoxCard box={ruleBox} />);
     expect(screen.getByTestId("book-box")).toHaveAttribute("data-kind", "rule");
-    expect(screen.getByText("Your rule")).toBeInTheDocument();
+    expect(screen.getByText("My screen")).toBeInTheDocument();
     expect(screen.getByText("Assigned capital")).toBeInTheDocument();
     expect(screen.getByText("₹5,00,000")).toBeInTheDocument();
     expect(screen.getByText(/not a live mark/i)).toBeInTheDocument();
@@ -73,9 +73,9 @@ describe("the overall roll-up keeps two ledgers apart", () => {
     expect(screen.getByTestId("book-overall")).toBeInTheDocument();
     expect(screen.getByText("Current value in baskets you hold")).toBeInTheDocument();
     expect(screen.getByText("₹36,00,000")).toBeInTheDocument();
-    expect(screen.getByText("Capital assigned across sleeves")).toBeInTheDocument();
+    expect(screen.getByText("Capital assigned across allocations")).toBeInTheDocument();
     expect(screen.getByText("₹5,00,000")).toBeInTheDocument();
-    expect(screen.getByText(/3 boxes/)).toBeInTheDocument();
+    expect(screen.getByText(/3 portfolios/)).toBeInTheDocument();
     expect(screen.getByText(/not a combined figure/i)).toBeInTheDocument();
     expect(screen.getByText(/price returns/i)).toBeInTheDocument();
   });

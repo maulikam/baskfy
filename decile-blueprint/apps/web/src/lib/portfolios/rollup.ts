@@ -147,8 +147,8 @@ export function describeCoverage(
 
   const filed =
     contributing.length === 0
-      ? "No broker account has holdings filed under this portfolio yet."
-      : `Filed under ${contributing.length} broker account${contributing.length === 1 ? "" : "s"}: ${nameList(contributing.map((line) => line.label))}.`;
+      ? "No broker account has holdings in this portfolio yet."
+      : `Held at ${contributing.length} broker account${contributing.length === 1 ? "" : "s"}: ${nameList(contributing.map((line) => line.label))}.`;
 
   const syncing =
     canSync.length === 0

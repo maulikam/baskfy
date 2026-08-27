@@ -89,7 +89,7 @@ export function WeightMethodControls({
       {method === "CUSTOM" ? (
         <div className="flex flex-col gap-2" data-testid="custom-weights">
           <p className="text-xs text-muted-foreground">
-            Share of the stocks sleeve. Numbers are scaled to 100 — they do not have to add up
+            Share of the stocks allocation. Numbers are scaled to 100 — they do not have to add up
             while you type. Current total {typedTotal.toFixed(1)}.
           </p>
           <div className="w-full min-w-0 overflow-hidden rounded-lg border border-border/70">

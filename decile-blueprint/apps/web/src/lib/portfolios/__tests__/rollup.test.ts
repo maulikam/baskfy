@@ -154,7 +154,7 @@ describe("the consolidated view names which brokers it covers", () => {
       "Zerodha · main",
       "Zerodha · family",
     ]);
-    expect(coverage.sentence).toMatch(/Filed under 2 broker accounts/);
+    expect(coverage.sentence).toMatch(/Held at 2 broker accounts/);
   });
 
   it("says coverage is unknown when the broker catalog could not be read", () => {
@@ -165,9 +165,9 @@ describe("the consolidated view names which brokers it covers", () => {
     expect(coverage.sentence).not.toMatch(/only broker/);
   });
 
-  it("says so plainly when nothing has been filed under the portfolio", () => {
+  it("says so plainly when the portfolio holds nothing yet", () => {
     const coverage = describeCoverage(rollup({ by_broker: [] }), CATALOG);
-    expect(coverage.sentence).toMatch(/No broker account has holdings filed/);
+    expect(coverage.sentence).toMatch(/No broker account has holdings in this portfolio/);
   });
 });
 

@@ -63,8 +63,8 @@ export default async function PortfolioBrokersPage({
       <header className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">{name ?? "Whose money is where"}</h1>
         <p className="text-sm text-muted-foreground">
-          Holdings filed under this portfolio and everything nested beneath it, split by the broker
-          account each row names. Nothing on this page places an order.
+          Holdings in this portfolio and in every portfolio inside it, split by the broker account
+          each row names. Nothing on this page places an order.
         </p>
       </header>
 

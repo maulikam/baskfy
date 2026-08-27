@@ -149,9 +149,9 @@ test("the route table is not empty and covers the analytics surfaces", () => {
   const analytics = ROUTES.filter((route) => route.analytics).map((route) => route.path);
   for (const required of [
     "/market/today",
-    "/baskets",
+    "/discover",
     "/build",
-    "/me/investments",
+    "/portfolio/overview",
     `/instruments/${SAMPLE_SYMBOL}`,
   ]) {
     expect(analytics, `${required} is not in the swept analytics set`).toContain(required);

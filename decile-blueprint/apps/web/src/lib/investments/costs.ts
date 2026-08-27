@@ -1,7 +1,7 @@
 import "server-only";
 
 import { auth } from "@/lib/auth";
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { serverFetchJsonOrNull } from "@/lib/api/server-fetch";
 
 /**
@@ -31,7 +31,7 @@ export async function fetchInvestmentCosts(id: string): Promise<CostsPayload | n
   const session = await auth();
   const token = session?.accessToken;
   const data = await serverFetchJsonOrNull({
-    url: `${apiOrigin()}/api/v1/cb/investments/${encodeURIComponent(id)}/costs`,
+    url: `${serverApiOrigin()}/api/v1/cb/investments/${encodeURIComponent(id)}/costs`,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (data === null) return null;

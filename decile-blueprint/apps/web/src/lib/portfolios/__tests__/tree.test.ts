@@ -148,12 +148,20 @@ describe("broker attribution never invents a single broker", () => {
         ],
       }),
     });
-    expect(attribution).toEqual({ kind: "spans", brokerCount: 2, label: "Spans 2 brokers" });
+    expect(attribution).toEqual({
+      kind: "spans",
+      brokerCount: 2,
+      label: "Connected to 2 brokers",
+    });
   });
 
   it("says only that it spans when no roll-up has been read, never a broker name", () => {
     const attribution = attributionFor(node({ id: 1, name: "Everything" }));
-    expect(attribution).toEqual({ kind: "spans", brokerCount: null, label: "Spans brokers" });
+    expect(attribution).toEqual({
+      kind: "spans",
+      brokerCount: null,
+      label: "Connected to your brokers",
+    });
     expect(attribution.label).not.toMatch(/zerodha/i);
   });
 
@@ -162,7 +170,7 @@ describe("broker attribution never invents a single broker", () => {
       rollup: rollup({ portfolio_id: 1 }),
     });
     expect(attribution).toMatchObject({ kind: "spans", brokerCount: 0 });
-    expect(attribution.label).toMatch(/nothing filed yet/);
+    expect(attribution.label).toMatch(/nothing here yet/);
   });
 
   it("asks the server only about the containers that declare no broker account", () => {

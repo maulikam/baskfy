@@ -182,6 +182,21 @@ describe("when the search cannot answer", () => {
     expect(await screen.findByText(/not available on this server/i)).toBeTruthy();
   });
 
+  it("does not stack \u201cnothing matches\u201d under an error it already explained", async () => {
+    /* Two messages saying different things about the same request. The palette says what
+       happened; "nothing matches" would claim the query was answered and found nothing. */
+    searchCatalog.mockResolvedValue({ status: "failed" });
+    await openAndType("zzzzznotanavlabel");
+    expect(await screen.findByText(/unavailable right now/i)).toBeTruthy();
+    expect(screen.queryByText(/Nothing matches/i)).toBeNull();
+  });
+
+  it("does say nothing matches when the search genuinely found nothing", async () => {
+    searchCatalog.mockResolvedValue({ status: "ok", query: "zzzzznotanavlabel", hits: [] });
+    await openAndType("zzzzznotanavlabel");
+    expect(await screen.findByText(/Nothing matches/i)).toBeTruthy();
+  });
+
   it("never renders an answer to a prefix the user has already finished typing", async () => {
     /* A typeahead that renders whatever arrives last shows results for "bask" under "baskets".
        The slow response is released only after the input has moved on. */

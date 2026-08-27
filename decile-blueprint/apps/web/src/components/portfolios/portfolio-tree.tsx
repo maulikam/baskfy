@@ -22,7 +22,8 @@ import { cn } from "@/lib/utils";
  * every row says two things the flat list could not:
  *
  * 1. **Which broker account it is attributed to.** `broker_account_id === null` is not "no
- *    broker" — it is a container that spans them, and it says "Spans N brokers" rather than
+ *    broker" — it is a container that reaches across them, and it says "Connected to N brokers"
+ *    rather than
  *    picking one of the N and printing its name. A false single attribution is the specific bug
  *    this row exists to prevent.
  * 2. **What its holdings count counts.** `holdings_count` is this portfolio's own rows. It was
@@ -35,7 +36,7 @@ import { cn } from "@/lib/utils";
  * walked roots would drop them silently, and holdings disappearing from a page with nobody told
  * is worse than an ugly warning.
  *
- * The "File under" control is where the nesting is made, and it has to express two different
+ * The "Move to group" control is where the grouping is made, and it has to express two different
  * requests: choosing a parent sends that id, and choosing **Top level** sends an explicit `null`
  * that promotes the portfolio to a root. Omitting the field would mean "leave the parent alone",
  * which is a third thing. `onMove` therefore takes `number | null` and never `undefined`.
@@ -116,9 +117,9 @@ function TreeRow({
           </Link>
           {onMove ? (
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span>File under</span>
+              <span>Move to group</span>
               <select
-                aria-label={`File ${row.node.name} under`}
+                aria-label={`Move ${row.node.name} to a group`}
                 data-testid="move-portfolio"
                 data-portfolio-id={row.node.id}
                 disabled={moving}
@@ -163,10 +164,10 @@ export function PortfolioTree({ forest, rollups, onMove, moving = false }: Portf
   return (
     <section aria-label="Your portfolios" data-testid="portfolio-tree" className="space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold">How your portfolios nest</h2>
+        <h2 className="text-sm font-semibold">How your portfolios are grouped</h2>
         <p className="text-xs text-muted-foreground" data-testid="portfolio-tree-summary">
           {total} portfolio{total === 1 ? "" : "s"}
-          {deepest > 0 ? `, nested ${deepest + 1} deep` : ", none nested yet"}
+          {deepest > 0 ? `, ${deepest + 1} levels deep` : ", all at the top level"}
         </p>
       </div>
 

@@ -6,7 +6,7 @@ import { accessToken } from "@/lib/api/browser";
 import { apiOrigin } from "@/lib/api/config";
 
 /**
- * Client POST for SC8 `/create` → `POST /api/v1/cb/baskets` (leaf 3.4 / leaf 2.2 API).
+ * Client POST for SC8 `/create` → `POST /api/v1/cb/discover` (leaf 3.4 / leaf 2.2 API).
  *
  * Bearer auth via Auth.js session token — same pattern as instrument search / export.
  * No order path: create persists a PRIVATE MANUAL basket only.
@@ -137,7 +137,7 @@ export async function createPrivateBasket(
   body: CreateBasketRequest,
 ): Promise<CreateBasketResponse> {
   return post<CreateBasketResponse>(
-    "/api/v1/cb/baskets",
+    "/api/v1/cb/discover",
     body,
     "Sign in to save a private basket.",
   );

@@ -205,6 +205,29 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
 
+  # One-shot, and the step this file was missing. Run it after `migrate`, before traffic:
+  #     docker compose -f infra/docker/compose.prod.yml run --rm seed
+  #
+  # WHY THIS EXISTS (M48)
+  # A migrated database is an *empty* database. Every table that holds reference data — `plan`,
+  # `cb_collection`, universes, the factor registry — is populated by `baskfy_api.seed`, and
+  # nothing in the deploy sequence ran it. The visible result on 27 Aug 2026 was `/pricing`
+  # rendering its preamble and no plan cards at all (`GET /plans` returned `{"data":[]}`), and
+  # `/discover/collections` rendering an empty directory. Both read as broken pages; both were an
+  # empty table under a working page.
+  #
+  # `seed all` is idempotent by design (house rule 7: "re-running any day's job produces identical
+  # rows"), so running it on every deploy is safe and is the intended habit. A profile rather than
+  # a `depends_on` for the same reason `migrate` is one.
+  seed:
+    <<: *python-image
+    profiles: [tools]
+    restart: "no"
+    working_dir: /repo/services/api
+    command: [python, -m, baskfy_api.seed, all]
+    depends_on:
+      postgres: {condition: service_healthy}
+
   # ------------------------------------------------------------------ data
   postgres:
     # §3: "Keep the Timescale container image in Phase A ... The Timescale exit happens once, at

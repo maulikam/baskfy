@@ -14,7 +14,7 @@ import { useAllocation, useSaveSleeves, useSleeves } from "@/lib/portfolios/quer
 import { allocationUnits } from "@/lib/portfolios/units";
 
 /**
- * Dividing a portfolio across screens, with a slice you run yourself — M34.
+ * Splitting a portfolio across screens, with a slice you run yourself — M34.
  *
  * The Rebalance Tracker answers "which symbols changed". This answers the other question: **how
  * much goes where**. Each sleeve carries its own capital and its own source, and a `manual` sleeve
@@ -133,10 +133,10 @@ export function SleevePlanner({
   return (
     <div className="flex flex-col gap-5">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Sleeves</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Allocations</h1>
         <p className="text-sm text-muted-foreground">
-          Divide the portfolio across screens, and keep a slice you run yourself. Each sleeve gets
-          its own capital; the names come from its screen.
+          Split the portfolio across screens, and keep a slice you run yourself. Each allocation
+          gets its own capital; the names come from its screen.
         </p>
       </header>
 
@@ -165,7 +165,7 @@ export function SleevePlanner({
               onChange={(event) => void setApplyCap(event.target.checked)}
               className="size-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
-            Size my screen sleeves to this cap
+            Size my screen allocations to this cap
           </label>
           {stance.reasons.length > 0 && (
             <ul className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
@@ -179,7 +179,7 @@ export function SleevePlanner({
 
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">How the portfolio is divided</h2>
+          <h2 className="text-sm font-semibold">How the portfolio is split</h2>
           <span className="text-sm tabular-nums text-muted-foreground">
             Total {money(total)}
           </span>
@@ -200,7 +200,7 @@ export function SleevePlanner({
               {editing.length === 0 && (
                 <tr>
                   <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
-                    No sleeves yet. Add one to divide this portfolio.
+                    No allocations yet. Add one to split this portfolio.
                   </td>
                 </tr>
               )}
@@ -208,7 +208,7 @@ export function SleevePlanner({
                 <tr key={row.key} className="border-b last:border-0">
                   <td className="py-2 pr-3">
                     <input
-                      aria-label="Sleeve name"
+                      aria-label="Allocation name"
                       value={row.name}
                       onChange={(event) => update(index, { name: event.target.value })}
                       autoComplete="off"
@@ -218,7 +218,7 @@ export function SleevePlanner({
                   </td>
                   <td className="py-2 pr-3">
                     <select
-                      aria-label="Sleeve source"
+                      aria-label="Allocation source"
                       value={row.screen_public_id ?? "manual"}
                       onChange={(event) => {
                         const value = event.target.value;
@@ -299,7 +299,7 @@ export function SleevePlanner({
                 ...editing,
                 {
                   key: `new-${nextKey()}`,
-                  name: `Sleeve ${editing.length + 1}`,
+                  name: `Allocation ${editing.length + 1}`,
                   kind: "manual",
                   capital: "0",
                   screen_public_id: null,
@@ -308,7 +308,7 @@ export function SleevePlanner({
               ])
             }
           >
-            <Plus className="mr-1 size-4" /> Add Sleeve
+            <Plus className="mr-1 size-4" /> Add allocation
           </Button>
           <Button
             size="sm"
@@ -329,7 +329,7 @@ export function SleevePlanner({
               });
             }}
           >
-            {save.isPending ? "Saving…" : "Save Sleeves"}
+            {save.isPending ? "Saving…" : "Save allocations"}
           </Button>
         </div>
         {/*
@@ -354,7 +354,7 @@ export function SleevePlanner({
               </Button>
             </span>
           )}
-          {save.isSuccess && !undo && <span className="text-muted-foreground">Sleeves saved.</span>}
+          {save.isSuccess && !undo && <span className="text-muted-foreground">Allocations saved.</span>}
         </div>
         {save.isError && <ErrorState error={save.error} />}
       </section>
@@ -362,7 +362,7 @@ export function SleevePlanner({
       {allocation.data && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">What each sleeve would hold</h2>
+            <h2 className="text-sm font-semibold">What each allocation would hold</h2>
             <span className="text-sm tabular-nums text-muted-foreground">
               {money(allocation.data.deployed)} deployed · {money(allocation.data.cash)} cash
             </span>

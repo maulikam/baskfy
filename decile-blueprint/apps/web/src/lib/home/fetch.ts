@@ -1,6 +1,6 @@
 import "server-only";
 
-import { apiOrigin } from "@/lib/api/config";
+import { serverApiOrigin } from "@/lib/api/config";
 import { serverFetchJsonOrNull } from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 import {
@@ -22,7 +22,7 @@ import { fetchInvestments, type InvestmentList } from "@/lib/investments/fetch";
  *
  * **One source of truth per number.** Net worth and pending actions are *not* fetched again
  * here; they come from `fetchInvestments`, the same `GET /cb/investments` payload
- * `/me/investments` renders. A second net-worth computation is how two pages start disagreeing
+ * `/portfolio/overview` renders. A second net-worth computation is how two pages start disagreeing
  * about the same person's money.
  *
  * **Every read degrades to an empty shape.** Home is where somebody lands. A single unreachable
@@ -43,7 +43,7 @@ async function authHeaders(): Promise<HeadersInit> {
 
 async function tryJson(path: string): Promise<unknown> {
   return serverFetchJsonOrNull({
-    url: `${apiOrigin()}/api/v1${path}`,
+    url: `${serverApiOrigin()}/api/v1${path}`,
     headers: await authHeaders(),
   });
 }
@@ -59,7 +59,7 @@ export async function fetchTrending(): Promise<Trending> {
 /**
  * The "Take your pick" shelves, through `lib/collections/fetch` — **not** a second reader.
  *
- * `/baskets` already reads `GET /explore/collections` through that module and renders the same
+ * `/discover` already reads `GET /explore/collections` through that module and renders the same
  * rows as full shelves. Home wants a compact grid of entry points rather than shelves, which is
  * a different *component*, not a different *source*: a second fetcher here would be two readers
  * of one endpoint drifting apart the moment its shape changes.

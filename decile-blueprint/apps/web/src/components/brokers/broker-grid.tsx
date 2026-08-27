@@ -115,7 +115,7 @@ export function BrokerGrid({ brokers, gate }: BrokerGridProps) {
               </li>
               <li>
                 <span className="font-medium text-foreground">3.</span> Return here — we sync the
-                book into your portfolio.
+                holdings into your portfolio.
               </li>
             </ol>
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -143,7 +143,7 @@ export function BrokerGrid({ brokers, gate }: BrokerGridProps) {
               <p className="text-xs leading-relaxed text-muted-foreground">
                 Live login stays closed until Baskfy&apos;s regulatory posture is recorded. Until
                 then, import a holdings CSV on{" "}
-                <Link href="/portfolios" className="text-accent underline-offset-4 hover:underline">
+                <Link href="/portfolio/portfolios" className="text-accent underline-offset-4 hover:underline">
                   My portfolios
                 </Link>
                 .

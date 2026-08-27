@@ -29,14 +29,14 @@ test.describe("the primary navigation", () => {
     expect(PRIMARY_NAV.map((item) => item.label)).toEqual([
       "Home",
       "Market",
-      "Baskets",
+      "Discover",
       "Build",
-      "Me",
+      "Portfolio",
     ]);
   });
 
   for (const width of [768, 1024, 1280] as const) {
-    test(`desktop nav shows Home · Market · Baskets · Build · Me at ${width}px`, async ({ page }) => {
+    test(`desktop nav shows Home · Market · Discover · Build · Portfolio at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/market/today");
 
@@ -115,7 +115,7 @@ test.describe("the home surface is the signed-in landing page", () => {
     await page.goto("/market/today");
 
     await page.getByRole("link", { name: "Baskfy — home" }).click();
-    await page.waitForURL(/\/home$/);
+    await page.waitForURL(/\/build$/);
 
     const nav = page.locator(`#${PRIMARY_NAV_ID}`);
     await expect(nav.getByRole("link", { name: "Home", exact: true })).toHaveAttribute(

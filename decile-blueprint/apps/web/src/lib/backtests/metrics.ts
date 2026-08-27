@@ -114,7 +114,7 @@ export const METRIC_ROWS: readonly MetricRow[] = [
     key: "annual_turnover",
     label: "Annual turnover",
     unit: "ratio",
-    hint: "One-way traded notional over average equity, per year. 1.0 means the book turned over once.",
+    hint: "One-way traded notional over average equity, per year. 1.0 means the portfolio turned over once.",
   },
   {
     key: "total_costs",
@@ -126,7 +126,7 @@ export const METRIC_ROWS: readonly MetricRow[] = [
     key: "exposure",
     label: "Exposure",
     unit: "percent",
-    hint: "Average share of the book that was invested rather than in cash.",
+    hint: "Average share of the portfolio that was invested rather than in cash.",
   },
   {
     key: "best_month",

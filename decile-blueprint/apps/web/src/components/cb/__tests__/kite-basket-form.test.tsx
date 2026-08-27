@@ -34,7 +34,12 @@ function forms(): HTMLFormElement[] {
 }
 
 function dataOf(el: HTMLFormElement): KiteBasketItem[] {
-  return JSON.parse(el.querySelector('input[name="data"]')?.getAttribute("value") ?? "[]");
+  // Typed rather than returned raw from `JSON.parse`: the point of these assertions is the shape
+  // of what gets posted to a broker, and `any` would let a wrong shape through silently.
+  const raw: unknown = JSON.parse(
+    el.querySelector('input[name="data"]')?.getAttribute("value") ?? "[]",
+  );
+  return raw as KiteBasketItem[];
 }
 
 describe("the hand-off posts to Kite and nowhere else", () => {

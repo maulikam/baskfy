@@ -1498,6 +1498,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/explore/{slug}/kite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A curated basket at a chosen amount, as a Kite Publisher basket
+         * @description Turn a basket's *weights* into *quantities* for a given amount, then into a Kite basket.
+         *
+         *     WHY THIS EXISTS BESIDE `/baskets/plan/kite`
+         *     -------------------------------------------
+         *     That one hands over **the desk's** rebalance plan, which is the desk owner's orders for the
+         *     desk owner's book. Offering it to a signed-in stranger was always the wrong semantics — it is
+         *     the finding recorded as `NEEDS-MAULIK.md` §27. This is the one a user actually wants: *this
+         *     basket, this much money, what do I buy?*
+         *
+         *     NOTHING HERE IS RE-DERIVED
+         *     --------------------------
+         *     Weights → quantities is `baskfy_core.curated_plans.build_invest_plan`, the same pure function
+         *     `POST /cb/plans/invest` calls. It already handles the arithmetic that looks trivial and is not:
+         *     whole shares only, the remainder that cannot be spent, and a weight whose share price exceeds
+         *     its slice of the amount. Writing a second version of that here would have produced a basket
+         *     that disagreed with the plan preview the user had just been shown, in rupees.
+         *
+         *     Prices are the latest `close_raw` on or before today — the exchange print, per house rule 6,
+         *     because this figure becomes a share count somebody buys. They are a *reference*: the basket
+         *     goes to Kite as MARKET orders and the user sees live prices there before confirming.
+         */
+        get: operations["basketAsKiteBasket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/indices/dashboard": {
         parameters: {
             query?: never;
@@ -16939,6 +16978,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BasketCardOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    basketAsKiteBasket: {
+        parameters: {
+            query: {
+                /** @description Rupees to invest */
+                amount: number | string;
+            };
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KiteBasketOut"];
                 };
             };
             /** @description Invalid screen definition */

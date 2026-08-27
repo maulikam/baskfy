@@ -21,6 +21,7 @@ from baskfy_providers.kite import KiteProvider
 from baskfy_providers.nse import NSEProvider
 from baskfy_providers.ports import (
     BARS_CAPABILITIES,
+    HOLDINGS_CAPABILITIES,
     REFERENCE_CAPABILITIES,
     BarsProvider,
     Capability,
@@ -63,9 +64,15 @@ class TestProtocolConformance:
         for capability in REFERENCE_CAPABILITIES:
             assert hasattr(ReferenceProvider, capability.value)
 
-    def test_the_two_capability_sets_are_disjoint_and_complete(self) -> None:
+    def test_the_capability_sets_are_disjoint_and_complete(self) -> None:
+        """Three sets now: bars, reference, and the read-only broker ledger (§4.6 layer 1).
+
+        The holdings pair is asserted in full in ``test_holdings_port.py``; what matters here is
+        that ``Capability`` has no member belonging to no set, which is how a capability that
+        nothing can route would slip in.
+        """
         assert BARS_CAPABILITIES.isdisjoint(REFERENCE_CAPABILITIES)
-        assert set(Capability) == BARS_CAPABILITIES | REFERENCE_CAPABILITIES
+        assert set(Capability) == BARS_CAPABILITIES | REFERENCE_CAPABILITIES | HOLDINGS_CAPABILITIES
 
 
 class TestInstrumentRecord:

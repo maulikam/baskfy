@@ -1,6 +1,6 @@
 """baskfy_providers — market-data adapters behind the ports in docs/09 §"Provider ports".
 
-    KiteProvider       bars           (docs/02: Kite gives candles and nothing else)
+    KiteProvider       bars + the read-only broker ledger (holdings, cash)
     NSEProvider        reference      (constituents, index snapshots, corp actions, listings,
                                        bhavcopy)
     CompositeProvider  routes by capability, one circuit breaker per provider
@@ -34,14 +34,20 @@ from baskfy_providers.errors import (
     UnexpectedPayload,
     UpstreamUnavailable,
 )
-from baskfy_providers.fixtures import FixtureProvider, default_fixture_dir
+from baskfy_providers.fixtures import (
+    FixtureHoldingsProvider,
+    FixtureProvider,
+    default_fixture_dir,
+)
 from baskfy_providers.kite import KiteProvider, KiteRuntime
 from baskfy_providers.nse import NSEProvider, NSERuntime
 from baskfy_providers.ports import (
     BARS_CAPABILITIES,
+    HOLDINGS_CAPABILITIES,
     REFERENCE_CAPABILITIES,
     BarsProvider,
     Capability,
+    HoldingsProvider,
     ProviderHealth,
     ReferenceProvider,
 )
@@ -49,6 +55,8 @@ from baskfy_providers.ratelimit import RateLimiter, RedisTokenBucket, TokenBucke
 from baskfy_providers.records import (
     BHAVCOPY_SCHEMA,
     DAILY_BARS_SCHEMA,
+    BrokerAccountRef,
+    BrokerHoldingRecord,
     CorporateAction,
     IndexSnapshot,
     InstrumentRecord,
@@ -62,12 +70,15 @@ __all__ = [
     "BARS_CAPABILITIES",
     "BHAVCOPY_SCHEMA",
     "DAILY_BARS_SCHEMA",
+    "HOLDINGS_CAPABILITIES",
     "REFERENCE_CAPABILITIES",
     "AccessToken",
     "AccessTokenExpired",
     "AccessTokenStore",
     "ArchiveError",
     "BarsProvider",
+    "BrokerAccountRef",
+    "BrokerHoldingRecord",
     "Capability",
     "CapabilityNotAvailable",
     "CircuitBreaker",
@@ -76,7 +87,9 @@ __all__ = [
     "CompositeProvider",
     "CorporateAction",
     "CredentialsMissing",
+    "FixtureHoldingsProvider",
     "FixtureProvider",
+    "HoldingsProvider",
     "IndexSnapshot",
     "InstrumentRecord",
     "KiteProvider",

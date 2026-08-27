@@ -114,23 +114,57 @@ class TestTheCatalogDoesNotOverclaim:
             "correct the label."
         )
 
-    def test_every_wired_broker_says_ready(self) -> None:
+    #: Brokers with a wired adapter that the catalog still does not advertise, and why.
+    #:
+    #: This set exists because "the codebase has an adapter" and "a reader can use it" were the
+    #: same fact until M55 and are not any more. Zerodha's Kite adapter is real and has been
+    #: fetching holdings since Tree-3 — but it is a **Kite Connect** adapter, and Baskfy
+    #: integrates with **Kite Publisher**, which links no account and hands back no session to
+    #: fetch anything with. Kite Connect is ₹2,000/month and licensed for the app owner's own
+    #: account, which is the wrong shape for a product other people sign into.
+    #:
+    #: An entry here is a deliberate *under*-claim and must stay rare. The over-claim direction —
+    #: advertising a sync with no adapter behind it — is still forbidden outright below.
+    UNREACHABLE_ADAPTERS = {
+        "zerodha": "integrated through Kite Publisher, which cannot read holdings",
+    }
+
+    def test_every_wired_broker_either_says_ready_or_says_why_not(self) -> None:
         """The honest case must not become collateral damage of the fix.
 
-        Relabelling everything "planned" would satisfy the assertion above and lie about
-        Zerodha, whose Kite adapter has been fetching holdings since Tree-3.
+        Relabelling everything "planned" would satisfy the anti-over-claim assertion above while
+        lying in the other direction. So a wired adapter must either be advertised, or be named
+        here with a reason — silence is what this forbids.
         """
         for broker_id in sorted(_HOLDINGS_WIRED):
             broker = next(b for b in BROKERS if b.id == broker_id)
+            if broker_id in self.UNREACHABLE_ADAPTERS:
+                assert broker.capabilities.holdings_sync == "not_available", (
+                    f"{broker_id} is recorded as unreachable "
+                    f"({self.UNREACHABLE_ADAPTERS[broker_id]}) but the catalog says "
+                    f"{broker.capabilities.holdings_sync!r}"
+                )
+                continue
             assert broker.capabilities.holdings_sync == "ready", (
                 f"{broker_id} has a wired holdings adapter but the catalog says "
                 f"{broker.capabilities.holdings_sync!r}"
             )
 
-    def test_holdings_sync_is_exactly_the_wired_set(self) -> None:
-        """Stated as an equality, so neither direction can drift alone."""
+    def test_nothing_claims_a_sync_it_has_no_adapter_for(self) -> None:
+        """The direction that matters, stated on its own.
+
+        Was an equality against the wired set, which no longer holds: Zerodha is wired and
+        deliberately silent. A subset is the real guarantee — every broker advertising a holdings
+        sync must have something behind it.
+        """
         claims_ready = {b.id for b in BROKERS if b.capabilities.holdings_sync == "ready"}
-        assert claims_ready == set(_HOLDINGS_WIRED)
+        assert claims_ready <= set(_HOLDINGS_WIRED), (
+            f"advertised with no adapter: {sorted(claims_ready - set(_HOLDINGS_WIRED))}"
+        )
+
+    def test_the_unreachable_list_does_not_outlive_its_reason(self) -> None:
+        """A stale exemption is a lie nobody is watching. Every entry must still be wired."""
+        assert set(self.UNREACHABLE_ADAPTERS) <= set(_HOLDINGS_WIRED)
 
     def test_every_capability_value_is_in_the_declared_vocabulary(self) -> None:
         """A label the UI has never seen renders as whatever the fallback happens to be."""

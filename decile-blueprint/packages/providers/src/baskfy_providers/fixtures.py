@@ -26,6 +26,7 @@ import polars as pl
 from baskfy_providers.errors import ProviderUnavailable, UnexpectedPayload
 from baskfy_providers.ports import (
     BARS_CAPABILITIES,
+    HOLDINGS_CAPABILITIES,
     REFERENCE_CAPABILITIES,
     Capability,
     ProviderHealth,
@@ -33,6 +34,8 @@ from baskfy_providers.ports import (
 from baskfy_providers.records import (
     BHAVCOPY_SCHEMA,
     DAILY_BARS_SCHEMA,
+    BrokerAccountRef,
+    BrokerHoldingRecord,
     CorporateAction,
     EquityFundamental,
     IndexSnapshot,
@@ -43,6 +46,11 @@ from baskfy_providers.records import (
 )
 
 PROVIDER_NAME: Final = "fixture"
+
+#: Deliberately a *different* name from ``FixtureProvider``. ``CompositeProvider`` refuses two
+#: adapters with the same name, and more to the point every log line, health report and error
+#: message that mentions invented holdings should say so in its own words.
+HOLDINGS_PROVIDER_NAME: Final = "fixture-holdings"
 
 _FILES: Final[dict[str, str]] = {
     "instruments": "instruments.parquet",
@@ -314,3 +322,90 @@ def _require_date(value: object, field: str) -> dt.date:
     if parsed is None:
         raise UnexpectedPayload(f"fixture row has no {field}", provider=PROVIDER_NAME)
     return parsed
+
+
+class FixtureHoldingsProvider:
+    """``HoldingsProvider`` served from rows the caller supplies. Zero network, zero disk.
+
+    WHY THIS IS A SEPARATE CLASS AND NOT A METHOD ON ``FixtureProvider``
+    -------------------------------------------------------------------
+    ``FixtureProvider`` sits at the back of the production stack (see
+    ``factory.build_provider_stack``), where its whole job is to answer when the real vendors
+    could not — invented candles for a symbol are a local-development convenience and a wrong
+    chart at worst. Holdings are not that. Tree-5's leaf C1 exists because the API labelled a
+    genuine live Kite fetch "fixture holdings" and told a user their real money was fake; the
+    mirror-image failure, serving invented positions as if they were real, is worse and is the
+    one a registered fallback would cause.
+
+    So this adapter is a separate object that the production factory deliberately does **not**
+    register. A holdings call with no working broker session fails loudly with
+    ``CapabilityNotAvailable`` — the same reasoning ``CompositeProvider`` already applies to
+    ``AccessTokenExpired``, for the same reason: wrong numbers that look right are the worst
+    failure this repository can have.
+
+    Rows are keyed by ``broker_account_id`` because that is what a
+    :class:`~baskfy_providers.records.BrokerAccountRef` names, and because a test that wants to
+    prove per-tenant isolation needs two accounts to be two different answers.
+    """
+
+    def __init__(
+        self,
+        holdings: Mapping[int, Sequence[BrokerHoldingRecord]],
+        cash: Mapping[int, Decimal] | None = None,
+    ) -> None:
+        self._holdings = {account_id: tuple(rows) for account_id, rows in holdings.items()}
+        self._cash = dict(cash or {})
+
+    # --- HealthReporting ------------------------------------------------
+
+    @property
+    def name(self) -> str:
+        return HOLDINGS_PROVIDER_NAME
+
+    def capabilities(self) -> frozenset[Capability]:
+        return HOLDINGS_CAPABILITIES
+
+    def check(self) -> ProviderHealth:
+        """Always available, and always says the numbers are invented."""
+        positions = sum(len(rows) for rows in self._holdings.values())
+        return ProviderHealth(
+            name=self.name,
+            available=True,
+            capabilities=self.capabilities(),
+            detail=(
+                f"{positions} fabricated positions across {len(self._holdings)} broker "
+                "accounts; these are not anyone's real holdings"
+            ),
+        )
+
+    # --- HoldingsProvider -----------------------------------------------
+
+    def broker_holdings(self, account: BrokerAccountRef) -> list[BrokerHoldingRecord]:
+        """The configured rows for ``account``.
+
+        An account this fixture was not given raises rather than returning an empty list. The
+        empty list is a meaningful answer here — "the user sold everything" — so a typo in a
+        test's account id must not be able to impersonate it. Configure ``{account_id: []}``
+        when emptiness is what you meant.
+        """
+        return list(self._rows_for(account))
+
+    def broker_cash(self, account: BrokerAccountRef) -> Decimal | None:
+        """The configured balance, or ``None`` for an account given no cash figure at all.
+
+        ``None`` is not zero: it is the fixture standing in for a broker that publishes no cash,
+        which the sync must leave alone rather than overwrite with a zero.
+        """
+        self._rows_for(account)
+        return self._cash.get(account.broker_account_id)
+
+    def _rows_for(self, account: BrokerAccountRef) -> tuple[BrokerHoldingRecord, ...]:
+        try:
+            return self._holdings[account.broker_account_id]
+        except KeyError as exc:
+            raise ProviderUnavailable(
+                f"this fixture holds no answer for broker account "
+                f"{account.broker_account_id}; configure it explicitly (an empty list means "
+                "the account holds nothing, and must be said rather than inferred)",
+                provider=self.name,
+            ) from exc

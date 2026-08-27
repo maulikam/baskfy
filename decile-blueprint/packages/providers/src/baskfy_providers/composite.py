@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from decimal import Decimal
 from typing import Final
 
 import polars as pl
@@ -38,10 +39,13 @@ from baskfy_providers.ports import (
     BarsProvider,
     Capability,
     HealthReporting,
+    HoldingsProvider,
     ProviderHealth,
     ReferenceProvider,
 )
 from baskfy_providers.records import (
+    BrokerAccountRef,
+    BrokerHoldingRecord,
     CorporateAction,
     EquityFundamental,
     IndexSnapshot,
@@ -229,6 +233,28 @@ class CompositeProvider:
             ),
         )
 
+    # --- HoldingsProvider -------------------------------------------------
+    #
+    # Routed like everything else, with one difference that is not in the code and has to be
+    # said: nothing registers a *fallback* holdings adapter. ``factory.build_provider_stack``
+    # appends ``FixtureProvider`` for bars and reference, and appends no fixture holdings
+    # provider at all, so when the broker session is dead this raises ``CapabilityNotAvailable``
+    # instead of degrading. That is the same judgement the ``AccessTokenExpired`` clause above
+    # records, applied one layer out: substituting invented positions for a user's real money
+    # would be wrong numbers that look right.
+
+    def broker_holdings(self, account: BrokerAccountRef) -> list[BrokerHoldingRecord]:
+        return self.route(
+            Capability.BROKER_HOLDINGS,
+            lambda p: _holdings(p).broker_holdings(account),
+        )
+
+    def broker_cash(self, account: BrokerAccountRef) -> Decimal | None:
+        return self.route(
+            Capability.BROKER_CASH,
+            lambda p: _holdings(p).broker_cash(account),
+        )
+
 
 def _safe_check(provider: HealthReporting) -> ProviderHealth:
     """``check()`` must never raise, but a third-party adapter might; contain it here.
@@ -276,6 +302,16 @@ def _bars(provider: HealthReporting) -> BarsProvider:
     if not isinstance(provider, BarsProvider):
         raise ProviderUnavailable(
             f"{provider.name} advertises a bars capability but does not implement BarsProvider",
+            provider=provider.name,
+        )
+    return provider
+
+
+def _holdings(provider: HealthReporting) -> HoldingsProvider:
+    if not isinstance(provider, HoldingsProvider):
+        raise ProviderUnavailable(
+            f"{provider.name} advertises a holdings capability but does not implement "
+            "HoldingsProvider",
             provider=provider.name,
         )
     return provider

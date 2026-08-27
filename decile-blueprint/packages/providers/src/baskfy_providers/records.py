@@ -136,6 +136,75 @@ class EquityFundamental(_Record):
     div_yield: Decimal | None = None
 
 
+class BrokerAccountRef(_Record):
+    """Which tenant's broker account a read is for.
+
+    Every holdings read names the account it is for, rather than letting an adapter infer it
+    from ambient configuration. That mirrors the multi-tenant clause the two laws already put on
+    the order path — "every order carries ``user_id`` + ``broker_account_id``, and the gateway
+    refuses a mismatch" — and applies it to reads, which is where the same mistake is quieter:
+    an order attributed to the wrong tenant is caught at the broker, while *holdings* attributed
+    to the wrong tenant simply show one person another person's money.
+
+    ``kite_user_id`` is the broker's own client id when it is known. It is carried so an adapter
+    that can cheaply verify the session belongs to this account is able to; nothing here forces
+    a round trip to find out.
+    """
+
+    broker_account_id: int = Field(gt=0)
+    #: Catalog id from ``baskfy_core.broker_connections`` (``zerodha``, ``upstox``, ...).
+    broker_id: str = Field(min_length=1)
+    kite_user_id: str | None = None
+
+
+class BrokerHoldingRecord(_Record):
+    """One equity position as a broker reports it — the physical truth of §4.6's layer 1.
+
+    **Quantity is three numbers, never one** (desk non-negotiable #2, carried verbatim from
+    ``kite-momentum-rebalancer``): the settled quantity, the T1 quantity still in the settlement
+    pipe, and the quantity pledged as collateral. A holding of 100 shares that has 40 pledged
+    reports ``quantity=60, collateral_quantity=40``, and a sync that read ``quantity`` alone
+    would see a sell of 40 shares that never happened and ask the user about it. So the sum is
+    :attr:`total_quantity` and it is the only number the ledger is ever shown.
+
+    ``average_price`` is optional in the type even though Kite always sends one, because §5.2
+    turns on the difference between an unknown buy price and a zero: a broker that does not
+    publish cost basis must produce ``None`` here and not a plausible-looking zero.
+    """
+
+    symbol: str = Field(min_length=1)
+    exchange: str = "NSE"
+    isin: str | None = None
+    #: The settled, freely sellable quantity.
+    quantity: Decimal = Decimal("0")
+    #: Bought yesterday, not yet settled. Still the user's shares.
+    t1_quantity: Decimal = Decimal("0")
+    #: Pledged for margin. Sells directly on Zerodha (desk non-negotiable #3), so it counts.
+    collateral_quantity: Decimal = Decimal("0")
+    average_price: Decimal | None = None
+    last_price: Decimal | None = None
+    product: str = "CNC"
+
+    @field_validator("quantity", "t1_quantity", "collateral_quantity")
+    @classmethod
+    def _non_negative(cls, v: Decimal) -> Decimal:
+        if v < 0:
+            raise ValueError(f"a holding quantity cannot be negative; got {v}")
+        return v
+
+    @field_validator("average_price", "last_price")
+    @classmethod
+    def _non_negative_price(cls, v: Decimal | None) -> Decimal | None:
+        if v is not None and v < 0:
+            raise ValueError(f"a price cannot be negative; got {v}")
+        return v
+
+    @property
+    def total_quantity(self) -> Decimal:
+        """The whole position. Non-negotiable #2's sum, in one place so nobody re-derives it."""
+        return self.quantity + self.t1_quantity + self.collateral_quantity
+
+
 # ---------------------------------------------------------------------------
 # Frame schemas
 #
@@ -206,6 +275,8 @@ __all__ = [
     "BHAVCOPY_SCHEMA",
     "DAILY_BARS_SCHEMA",
     "BarSource",
+    "BrokerAccountRef",
+    "BrokerHoldingRecord",
     "CorporateAction",
     "CorporateActionType",
     "IndexSnapshot",

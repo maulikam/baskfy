@@ -9,11 +9,25 @@ import type { Broker, BrokerGate } from "@/lib/brokers/fetch";
 import { cn } from "@/lib/utils";
 
 /**
- * The connect grid — M41 / P5.8.
+ * The broker grid — M41 / P5.8, rewritten for what Baskfy actually integrates with (M55).
  *
- * Click a tile → detail with the three-step flow. Connect calls the API; when the D3 gate is
- * open and the adapter is wired, the browser redirects to the broker. Holdings sync never
- * places an order from the web.
+ * Click a tile → the detail panel for that broker. **Two different integrations render here and
+ * they are not variations of one thing:**
+ *
+ * **Kite Publisher** (Zerodha, `trading: "handoff"`). Nothing is connected. Baskfy prepares a
+ * basket, the browser posts it to Kite, and the reader confirms it in whatever Zerodha session
+ * they already have. No account link, no stored token, no holdings read back — Publisher is
+ * one-way. This is the integration Baskfy uses, because Kite Connect is ₹2,000/month and
+ * licensed for the app owner's own account, which is the wrong shape for a product other people
+ * sign into.
+ *
+ * **A Connect-style OAuth adapter** (`oauth: "ready"`). Sign in at the broker, authorise a
+ * holdings read, come back. Nothing is wired to this today; the panel still describes it because
+ * the code path exists and a future broker may use it.
+ *
+ * The panel used to describe the second for every broker, including Zerodha — three green "Ready"
+ * labels and a Connect button that could only ever return "app key is not configured".
+ * `docs/DECISIONS-MERGE.md` M55.
  */
 
 export interface BrokerGridProps {
@@ -24,7 +38,25 @@ export interface BrokerGridProps {
 function capabilityLabel(value: string): string {
   if (value === "ready") return "Ready";
   if (value === "partner") return "Partner API";
+  /* M55. Zerodha is Kite Publisher, and the old vocabulary could not say so: it rendered
+     `holdings_sync` as a green "Ready" for a capability that does not exist on this integration
+     and is not coming. "Planned" would have been the other lie. */
+  if (value === "not_applicable") return "Not needed";
+  if (value === "not_available") return "Not available";
+  if (value === "handoff") return "You confirm in Kite";
   return "Planned";
+}
+
+/**
+ * The one-word status under a tile.
+ *
+ * Reading `capabilities.oauth` was right while every row was a Connect adapter. For a hand-off
+ * broker it renders "Not needed", which under a Zerodha tile is a true sentence answering a
+ * question nobody asked. What a reader wants from a tile is what this broker *does*.
+ */
+function tileLabel(broker: Broker): string {
+  if (broker.capabilities.trading === "handoff") return "Basket hand-off";
+  return capabilityLabel(broker.capabilities.oauth);
 }
 
 export function BrokerGrid({ brokers, gate }: BrokerGridProps) {
@@ -79,7 +111,7 @@ export function BrokerGrid({ brokers, gate }: BrokerGridProps) {
                 </span>
                 <span className="text-sm font-medium text-foreground">{broker.short_name}</span>
                 <span className="text-[11px] text-muted-foreground">
-                  {broker.connected ? "Connected" : capabilityLabel(broker.capabilities.oauth)}
+                  {broker.connected ? "Connected" : tileLabel(broker)}
                 </span>
               </button>
             </li>
@@ -104,22 +136,48 @@ export function BrokerGrid({ brokers, gate }: BrokerGridProps) {
               </div>
             </div>
             <p className="text-sm leading-relaxed text-muted-foreground">{selected.blurb}</p>
+            {/*
+              The steps of the flow this broker actually has. For Zerodha that is Kite Publisher:
+              no sign-in here, no authorisation, nothing synced back. The previous three steps
+              described a Kite Connect OAuth — "Authorize Baskfy to read holdings", "we sync the
+              holdings into your portfolio" — which is a different product Baskfy does not use.
+            */}
             <ol className="space-y-2 text-sm text-muted-foreground">
-              <li>
-                <span className="font-medium text-foreground">1.</span> Open {selected.short_name}{" "}
-                and sign in.
-              </li>
-              <li>
-                <span className="font-medium text-foreground">2.</span> Authorize Baskfy to read
-                holdings (orders still need your confirm on a plan).
-              </li>
-              <li>
-                <span className="font-medium text-foreground">3.</span> Return here — we sync the
-                holdings into your portfolio.
-              </li>
+              {selected.capabilities.trading === "handoff" ? (
+                <>
+                  <li>
+                    <span className="font-medium text-foreground">1.</span> Pick a basket and the
+                    amount you want to put in.
+                  </li>
+                  <li>
+                    <span className="font-medium text-foreground">2.</span> Baskfy works out the
+                    share counts and opens them in {selected.short_name} as one basket.
+                  </li>
+                  <li>
+                    <span className="font-medium text-foreground">3.</span> You review every line
+                    and confirm there — nothing is placed from Baskfy.
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li>
+                    <span className="font-medium text-foreground">1.</span> Open{" "}
+                    {selected.short_name} and sign in.
+                  </li>
+                  <li>
+                    <span className="font-medium text-foreground">2.</span> Authorize Baskfy to
+                    read holdings (orders still need your confirm on a plan).
+                  </li>
+                  <li>
+                    <span className="font-medium text-foreground">3.</span> Return here — we sync
+                    the holdings into your portfolio.
+                  </li>
+                </>
+              )}
             </ol>
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <dt>Login</dt>
+              {/* "Login" is the wrong noun for an integration with no login. */}
+              <dt>{selected.capabilities.oauth === "not_applicable" ? "Account link" : "Login"}</dt>
               <dd>{capabilityLabel(selected.capabilities.oauth)}</dd>
               <dt>Holdings sync</dt>
               <dd>{capabilityLabel(selected.capabilities.holdings_sync)}</dd>

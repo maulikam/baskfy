@@ -71,10 +71,17 @@ export default async function BrokersPage() {
           .
         </p>
       ) : (
+        /* This banner used to read "Broker login is open. Connect Zerodha to sync holdings
+           (qty + T1 + collateral)." Every clause was wrong for the integration Baskfy actually
+           uses: Kite Publisher links no account, stores no token and reads nothing back, so there
+           is no login to open and no holdings to sync. `docs/DECISIONS-MERGE.md` M55. */
         <p className="rounded-md border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-          <strong className="font-medium text-foreground">Broker login is open.</strong> Connect
-          Zerodha to sync holdings (qty + T1 + collateral). Baskfy never places an order from this
-          page — plans still need your confirm on the desk. CSV import stays on{" "}
+          <strong className="font-medium text-foreground">
+            Baskfy sends baskets to your broker; it never connects to your account.
+          </strong>{" "}
+          Choose a basket and an amount, and it opens in your own Zerodha as a ready-made order
+          basket for you to review and confirm. Baskfy places no orders and holds no broker
+          credentials. To track what you already own, import a holdings CSV on{" "}
           <Link href="/portfolio/portfolios" className="text-accent underline-offset-4 hover:underline">
             My portfolios
           </Link>

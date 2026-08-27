@@ -16,13 +16,14 @@ from __future__ import annotations
 import os
 import secrets
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Final
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Path, Query
 from pydantic import BaseModel, Field
 
 from baskfy_api.auth import AuthenticatedDep
+from baskfy_api.settings import get_settings
 from baskfy_api.broker_holdings import (
     HoldingsResult,
     HoldingsSource,
@@ -44,6 +45,11 @@ from baskfy_core.broker_connections import (
     broker_catalog,
     get_broker,
 )
+
+#: Where Kite sends the browser back. Declared once, next to the route that serves it and the
+#: value handed to Kite, because a redirect_uri that disagrees with the registered one fails at
+#: the end of a login rather than the start — and the two used to be written out separately.
+OAUTH_CALLBACK_PATH: Final = "/api/v1/brokers/callback"
 
 router = APIRouter(prefix="/brokers", tags=["brokers"])
 
@@ -342,9 +348,22 @@ async def connect_broker(
 
     state = secrets.token_urlsafe(24)
     register_oauth_state(state=state, user_id=user_id, broker_id=broker_id)
-    redirect_uri = os.environ.get(
-        "BASKFY_BROKER_OAUTH_REDIRECT",
-        "https://baskfy.com/brokers/callback",
+    # The fallback was `https://baskfy.com/brokers/callback`, which was wrong twice over and in
+    # ways that only surface at the end of a login the user has already committed to:
+    #
+    #   * `baskfy.com` (the apex) has no DNS record — only `staging.baskfy.com` resolves — so the
+    #     browser would be handed a redirect to a host that does not exist;
+    #   * `/brokers/callback` is not a route. The callback this service serves is
+    #     `/api/v1/brokers/callback`; `/brokers` is the *page*, and an unknown path under it just
+    #     bounces through the sign-in gate.
+    #
+    # Derived from `web_origin` rather than hard-coded, so a deployment that moves host keeps a
+    # coherent redirect without a second setting to remember. `BASKFY_BROKER_OAUTH_REDIRECT` still
+    # overrides, because the value must match what is registered in the Kite console exactly and
+    # only the operator knows what they registered.
+    settings = get_settings()
+    redirect_uri = os.environ.get("BASKFY_BROKER_OAUTH_REDIRECT", "").strip() or (
+        f"{settings.web_origin.rstrip('/')}{OAUTH_CALLBACK_PATH}"
     )
     query = urlencode({"api_key": api_key, "v": "3", "redirect_uri": redirect_uri, "state": state})
     return ConnectOut(

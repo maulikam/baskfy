@@ -627,6 +627,18 @@ class TestConnectDoesNotOverClaimEither:
         assert out.redirect_url is None
         assert "BASKFY_KITE_API_SECRET" in out.reason, out.reason
         assert "Connect" in out.reason and "Publisher" in out.reason, out.reason
+        # One variable missing, so singular. "X and Y is not set" is the kind of sentence that
+        # makes a reader wonder what else here was not read carefully.
+        assert "BASKFY_KITE_API_SECRET is not set" in out.reason, out.reason
+
+    async def test_the_refusal_agrees_in_number_when_both_are_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("BASKFY_KITE_API_KEY", raising=False)
+        monkeypatch.delenv("BASKFY_KITE_API_SECRET", raising=False)
+
+        out = await connect_broker(principal_stub(), "zerodha")
+        assert "BASKFY_KITE_API_KEY and BASKFY_KITE_API_SECRET are not set" in out.reason
 
     @pytest.mark.parametrize("broker_id", ["upstox", "angelone", "fyers", "dhan"])
     async def test_a_login_that_cannot_finish_is_refused_not_redirected(

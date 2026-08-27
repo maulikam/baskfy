@@ -351,20 +351,25 @@ async def connect_broker(
     api_key = os.environ.get("BASKFY_KITE_API_KEY", "").strip()
     api_secret = os.environ.get("BASKFY_KITE_API_SECRET", "").strip()
     if not api_key or not api_secret:
-        missing = " and ".join(
+        absent = [
             name
             for name, value in (
                 ("BASKFY_KITE_API_KEY", api_key),
                 ("BASKFY_KITE_API_SECRET", api_secret),
             )
             if not value
-        )
+        ]
+        missing = " and ".join(absent)
+        # Agreement, because one missing variable and two are both ordinary states here and
+        # "BASKFY_KITE_API_KEY and BASKFY_KITE_API_SECRET is not set" is the kind of sentence that
+        # makes a reader wonder what else was not read carefully.
+        verb = "is" if len(absent) == 1 else "are"
         return ConnectOut(
             broker_id=broker_id,
             oauth_available=False,
             reason=(
                 f"Connecting {broker.name} needs a Kite **Connect** app, and {missing} "
-                f"is not set on this deployment. A Kite **Publisher** key will not do: Publisher "
+                f"{verb} not set on this deployment. A Kite **Publisher** key will not do: Publisher "
                 f"embeds a basket you confirm inside Kite and issues no API secret, so it cannot "
                 f"complete the token exchange this login ends with. Baskfy's basket hand-off uses "
                 f"Publisher and is unaffected."

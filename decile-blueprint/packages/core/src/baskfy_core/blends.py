@@ -38,8 +38,17 @@ BLEND_SHAPES: Final[tuple[tuple[int, ...], ...]] = (
     (12, 9, 3),
 )
 
-#: docs/05 §4: "plus `6·3` for the sharpe family only."
-SHARPE_ONLY_SHAPES: Final[tuple[tuple[int, ...], ...]] = ((6, 3),)
+#: docs/05 §4: "plus `6·3` for the sharpe family only." — and `3·1` and `6·1` since M56.
+#:
+#: Every shape in :data:`BLEND_SHAPES` starts at 12, which makes each of them a *long*-horizon
+#: blend with shorter legs mixed in. `6·3` was already the exception, and the two added here are
+#: the same idea one step further: short-horizon blends that ask what a name has done recently,
+#: with none of the twelve-month history dominating the average.
+#:
+#: `3·1` and `6·1` are Maulik's (27 Aug 2026). Sharpe-only, like `6·3`, because these are the
+#: family where a short window is still meaningful — a one-month *absolute* return is noise, and
+#: a one-month RSI blend already exists in the family that wants it.
+SHARPE_ONLY_SHAPES: Final[tuple[tuple[int, ...], ...]] = ((6, 3), (3, 1), (6, 1))
 
 #: docs/01 §3 "Risk-adjusted-by-beta (5)": the blends applied to sharpe-divided-by-beta.
 BETA_BLEND_SHAPES: Final[tuple[tuple[int, ...], ...]] = (

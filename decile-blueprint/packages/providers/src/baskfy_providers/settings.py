@@ -63,6 +63,15 @@ class ProviderSettings(BaseSettings):
     s3_endpoint_url: str = ""
     s3_region: str = "auto"
     s3_bucket: str = ""
+    #: Where the local raw archive is written when no S3/R2 bucket is configured.
+    #:
+    #: Relative paths resolve against the working directory, which in the deployed image is
+    #: root-owned `/repo` — so the default `.archive` is unwritable there and **every NSE fetch
+    #: fails at the archive step before it can parse anything**. docs/09 requires the archive
+    #: ("Never re-fetch to re-parse: the archive is the reproducibility record"), so that is not a
+    #: step the ingest can skip: it is the whole path being down, silently, on a box where nobody
+    #: had run an NSE ingest yet. `docs/DECISIONS-MERGE.md` M56.
+    raw_archive_dir: str = ""
     s3_access_key_id: str = ""
     s3_secret_access_key: str = ""
 

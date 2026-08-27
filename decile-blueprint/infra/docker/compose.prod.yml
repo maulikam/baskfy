@@ -28,9 +28,19 @@ x-python-image: &python-image
   # file makes the two layouts identical; the repo checkout gets a symlink (see the Makefile
   # target and tools/deploy/bootstrap-local.sh).
   env_file: [.env.staging]
+  volumes:
+    # The raw-file archive docs/09 requires before anything is parsed: "Never re-fetch to
+    # re-parse: the archive is the reproducibility record."
+    #
+    # Without this the archive root defaults to a *relative* `.archive`, which resolves against
+    # the image's root-owned `/repo` — so every NSE fetch died at the archive step with
+    # `Permission denied` before it could parse a row, and the whole bhavcopy path was down on
+    # this box. It went unnoticed because nobody had run an NSE ingest here.
+    - baskfy-archive:/var/lib/baskfy/archive
   environment:
     # docs/08 §1: the whole schedule is IST wall-clock tied to the NSE session.
     TZ: Asia/Kolkata
+    BASKFY_RAW_ARCHIVE_DIR: /var/lib/baskfy/archive
     BASKFY_DATABASE_URL: postgresql+asyncpg://baskfy:${BASKFY_DB_PASSWORD:?set BASKFY_DB_PASSWORD}@postgres:5432/baskfy
     BASKFY_REDIS_URL: redis://redis:6379/0
     # Root CLAUDE.md, non-negotiable 1 and the safety rails. Stated here as well as baked into the
@@ -282,6 +292,7 @@ services:
       retries: 5
 
 volumes:
+  baskfy-archive: {}
   baskfy-pgdata:
   baskfy-redisdata:
   baskfy-beat:

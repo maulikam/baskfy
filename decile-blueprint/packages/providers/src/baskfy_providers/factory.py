@@ -63,7 +63,13 @@ def build_archive(settings: ProviderSettings, *, local_root: Path | None = None)
             aws_secret_access_key=settings.s3_secret_access_key,
         )
         return S3RawArchive(client, settings.s3_bucket)
-    return LocalRawArchive(local_root or Path(LOCAL_ARCHIVE_DIRNAME))
+    # An explicit `local_root` (tests) wins, then the configured directory, then the relative
+    # default. The middle one is what a deployment needs: `.archive` resolves against a
+    # root-owned working directory in the image and fails every write.
+    root = local_root or (
+        Path(settings.raw_archive_dir) if settings.raw_archive_dir else Path(LOCAL_ARCHIVE_DIRNAME)
+    )
+    return LocalRawArchive(root)
 
 
 def build_kite_provider(

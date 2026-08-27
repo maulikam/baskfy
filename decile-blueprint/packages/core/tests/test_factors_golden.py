@@ -25,6 +25,8 @@ make the other pass.
 
 from __future__ import annotations
 
+from typing import Final
+
 import datetime as dt
 import math
 import time
@@ -636,6 +638,17 @@ class TestPerformance:
         )
 
 
+#: Keys added to the registry after docs/01 §3 was written, each with the decision that added it.
+#: Every entry is a deliberate widening; the test below asserts the count so an *accidental* one
+#: still fails.
+FACTORS_ADDED_SINCE_DOCS: Final[dict[str, str]] = {
+    # M56 — short-horizon sharpe blends. Every other blend shape starts at 12, so these are the
+    # only two that ask what a name has done recently without twelve months dominating the mean.
+    "avg_sharpe_3_1": "DECISIONS-MERGE.md M56",
+    "avg_sharpe_6_1": "DECISIONS-MERGE.md M56",
+}
+
+
 class TestRegistry:
     """docs/06 §"The factor registry" (Prompt 5 deliverable 4).
 
@@ -652,10 +665,19 @@ class TestRegistry:
             assert isinstance(factor.higher_is_better, bool)
 
     def test_the_family_counts_match_docs_01_section_3(self) -> None:
-        """docs/01 §3's own per-family numbers: 16 / 17 / 16 / 5 / 2."""
+        """docs/01 §3's own per-family numbers: 16 / 17 / 16 / 5 / 2.
+
+        `sharpe_return` carries the M56 additions on top of its documented 17, which is why it is
+        the one family stated as "documented plus what was added since" rather than as a bare
+        number. The other four are untouched and stay literal — a family that grows without a
+        recorded decision behind it still fails here.
+        """
         counts = family_counts()
+        added_to_sharpe = sum(
+            1 for key in FACTORS_ADDED_SINCE_DOCS if key.startswith("avg_sharpe_")
+        )
         assert counts["absolute_return"] == 16
-        assert counts["sharpe_return"] == 17
+        assert counts["sharpe_return"] == 17 + added_to_sharpe
         assert counts["rsi"] == 16
         assert counts["risk_adjusted"] == 5
         assert counts["skip_month"] == 2
@@ -663,14 +685,21 @@ class TestRegistry:
     def test_the_headline_count_disagrees_with_the_enumeration(self) -> None:
         """docs/01 §3 is headed "The 62 ranking factors" but its last family, labelled
         "Non-momentum sort keys (6)", enumerates eight. 56 + 6 = 62 matches the headline;
-        56 + 8 = 64 matches the list. Both cannot be right.
+        56 + 8 = 64 matched the list. Both cannot be right.
 
-        All 64 named keys are implemented — dropping two sort keys the document names, and which
-        its own column picker also lists, to make a headline number come out would be losing
+        All named keys are implemented — dropping two sort keys the document names, and which its
+        own column picker also lists, to make a headline number come out would be losing
         functionality to arithmetic. Prompt 19's parity audit should settle it.
+
+        **The registry is now 66, and the drift is deliberate rather than a third disagreement.**
+        M56 added `avg_sharpe_3_1` and `avg_sharpe_6_1` at Maulik's request (27 Aug 2026). docs/01
+        §3 predates them, so the documented figure stays 62 and this asserts the *gap* rather than
+        a frozen total: what must not happen is the registry drifting without anyone noticing, and
+        a bare `== 66` would have to be re-pinned by hand on every deliberate addition — which is
+        how a guard becomes a chore and then a rubber stamp.
         """
         assert DOCUMENTED_FACTOR_COUNT == 62
-        assert NAMED_FACTOR_COUNT == 64
+        assert NAMED_FACTOR_COUNT == 64 + len(FACTORS_ADDED_SINCE_DOCS)
         assert family_counts()["non_momentum"] == 8
 
     def test_the_column_picker_count_disagrees_the_same_way(self) -> None:

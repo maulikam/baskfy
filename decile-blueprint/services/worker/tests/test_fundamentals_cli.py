@@ -17,7 +17,7 @@ from helpers import TRADE_DATE, add_bar, make_instrument, requires_db
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import FundamentalDaily
+from baskfy_core.models import FundamentalDaily, PipelineRun
 from baskfy_providers.errors import (
     ArchiveError,
     ProviderError,
@@ -26,7 +26,13 @@ from baskfy_providers.errors import (
     UpstreamUnavailable,
 )
 from baskfy_providers.records import EquityFundamental
-from baskfy_worker.fundamentals_cli import FillOptions, FillReport, fill, fundamentals_scope
+from baskfy_worker.fundamentals_cli import (
+    FillOptions,
+    FillReport,
+    default_date,
+    fill,
+    fundamentals_scope,
+)
 
 QUIET = FillOptions(progress=False)
 
@@ -115,6 +121,70 @@ class TestScope:
             "BBB": "EQ",
             "CCC": "BE",
         }
+
+
+def _run(on: dt.date, status: str, data_version: int | None) -> PipelineRun:
+    """`started_at` is NOT NULL, so a run row cannot be built from the columns under test alone."""
+    return PipelineRun(
+        trade_date=on,
+        status=status,
+        started_at=dt.datetime(2026, 8, 21, 12, 0, tzinfo=dt.UTC),
+        data_version=data_version,
+    )
+
+
+@pytest.mark.db
+@requires_db
+class TestDefaultDate:
+    """Which date the command picks when none is given. The two candidates are not the same
+    date, and picking the wrong one fills a table nobody reads."""
+
+    async def test_it_prefers_the_published_date_over_the_newest_bars(
+        self, session: AsyncSession
+    ) -> None:
+        """The API resolves every as-of through the published date. A fill aimed at the newer
+        bar date leaves every surface on an em dash while `fundamental_daily` looks full."""
+        instrument_id = await make_instrument(session, "AAA")
+        await add_bar(session, instrument_id, TRADE_DATE, "100")
+        newer = TRADE_DATE + dt.timedelta(days=3)
+        await add_bar(session, instrument_id, newer, "101")
+        session.add(_run(TRADE_DATE, "succeeded", 1))
+        await session.flush()
+
+        chosen, why = await default_date(session)
+
+        assert chosen == TRADE_DATE
+        assert chosen != newer
+        assert "published" in why
+
+    async def test_with_nothing_published_it_falls_back_to_the_newest_bars(
+        self, session: AsyncSession
+    ) -> None:
+        """A plant that has never had a green night still has a sensible date to fill."""
+        instrument_id = await make_instrument(session, "AAA")
+        await add_bar(session, instrument_id, TRADE_DATE, "100")
+        await session.flush()
+
+        chosen, why = await default_date(session)
+
+        assert chosen == TRADE_DATE
+        assert "published" in why  # "nothing has been published yet"
+
+    async def test_an_unpublished_run_does_not_count_as_published(
+        self, session: AsyncSession
+    ) -> None:
+        """`data_version IS NULL` is a run that failed or never published; serving it would be
+        serving numbers no gate passed."""
+        instrument_id = await make_instrument(session, "AAA")
+        await add_bar(session, instrument_id, TRADE_DATE, "100")
+        newer = TRADE_DATE + dt.timedelta(days=3)
+        await add_bar(session, instrument_id, newer, "101")
+        session.add(_run(newer, "failed", None))
+        await session.flush()
+
+        chosen, _ = await default_date(session)
+
+        assert chosen == newer  # fell back to bars, not to the failed run
 
 
 @pytest.mark.db

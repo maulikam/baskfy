@@ -49,6 +49,14 @@ def test_each_advertised_count_is_the_registry_count() -> None:
     assert dict(typescript_families()) == registry
 
 
-def test_the_advertised_total_is_sixty_four() -> None:
-    """docs/01 §3 is headed "62 ranking factors" and enumerates 64. We implement all 64."""
-    assert sum(count for _, count in typescript_families()) == 64
+def test_the_advertised_total_is_the_registry_total() -> None:
+    """docs/01 §3 is headed "62 ranking factors" and enumerates 64. We implement all of them.
+
+    Was a literal 64. Stated against the registry now, because the marketing page and the registry
+    disagreeing is the *only* failure this can usefully catch — and a hard-coded total has to be
+    re-pinned by hand on every deliberate addition, which is how a guard becomes a chore and then
+    a rubber stamp. M56 added two (`avg_sharpe_3_1`, `avg_sharpe_6_1`); the count the page shows
+    a visitor must move with them.
+    """
+    registry_total = sum(len(factors) for factors in by_family().values())
+    assert sum(count for _, count in typescript_families()) == registry_total

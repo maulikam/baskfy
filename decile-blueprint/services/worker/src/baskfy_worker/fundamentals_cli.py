@@ -43,7 +43,7 @@ from typing import Final
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import FundamentalDaily, Instrument, OhlcvDaily
+from baskfy_core.models import FundamentalDaily, Instrument, OhlcvDaily, PipelineRun
 from baskfy_providers.errors import ProviderError
 from baskfy_providers.records import EquityFundamental
 from baskfy_worker.db import run_checkpointed
@@ -128,9 +128,28 @@ class FillReport:
         return "\n".join(lines)
 
 
-async def latest_published_date(session: AsyncSession) -> dt.date | None:
-    """The most recent date the plant actually has bars for."""
-    return (await session.execute(select(func.max(OhlcvDaily.date)))).scalar_one_or_none()
+async def default_date(session: AsyncSession) -> tuple[dt.date | None, str]:
+    """The date to fill when the operator names none, and why that one.
+
+    **The published date, not the newest bars.** These differ — 2026-08-18 and 2026-08-21 when
+    this was written — and the difference decides whether anyone sees anything: the API resolves
+    every as-of through `max(pipeline_run.trade_date)` where `data_version IS NOT NULL`, so
+    filling the newer date leaves every surface on an em dash while the table looks full. That
+    trap is easy to walk into and expensive to notice, so the default avoids it and the command
+    says out loud which date it picked.
+
+    Falls back to the newest bar date when nothing has been published yet, which is the only
+    sensible answer for a plant that has never had a green night.
+    """
+    published = (
+        await session.execute(
+            select(func.max(PipelineRun.trade_date)).where(PipelineRun.data_version.is_not(None))
+        )
+    ).scalar_one_or_none()
+    if published is not None:
+        return published, "the latest published date (what the API serves)"
+    newest = (await session.execute(select(func.max(OhlcvDaily.date)))).scalar_one_or_none()
+    return newest, "the newest bar date (nothing has been published yet)"
 
 
 async def already_stored(session: AsyncSession, on: dt.date) -> set[str]:
@@ -238,13 +257,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     subcommands = parser.add_subparsers(dest="command", required=True)
     fill_cmd = subcommands.add_parser("fill", help="fetch NSE fundamentals for one date")
-    fill_cmd.add_argument("--date", help="ISO date; defaults to the latest date with bars")
+    fill_cmd.add_argument(
+        "--date",
+        help="ISO date; defaults to the latest PUBLISHED date, which is what the API serves",
+    )
     fill_cmd.add_argument(
         "--resume",
         action="store_true",
         help="skip symbols already stored for the date, so an interrupted run can be restarted",
     )
-    fill_cmd.add_argument("--limit", type=int, help="stop after N symbols (for a smoke run)")
+    fill_cmd.add_argument(
+        "--limit",
+        type=int,
+        # Narrows the *scope* to the first N symbols alphabetically, before --resume filters it.
+        # So `--limit 130 --resume` means "the first 130 names, minus those already stored",
+        # not "fetch 130 more". That keeps a smoke run repeatable over the same names.
+        help="narrow the scope to the first N symbols alphabetically (for a smoke run)",
+    )
     fill_cmd.add_argument(
         "--dry-run",
         action="store_true",
@@ -255,9 +284,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     provider = build_pipeline_dependencies().provider
 
     async def operation(session: AsyncSession) -> FillReport:
-        on = dt.date.fromisoformat(args.date) if args.date else await latest_published_date(session)
-        if on is None:
-            raise LookupError("no bars in ohlcv_daily, so there is no date to fill")
+        if args.date:
+            on = dt.date.fromisoformat(args.date)
+        else:
+            resolved, why = await default_date(session)
+            if resolved is None:
+                raise LookupError("no bars in ohlcv_daily, so there is no date to fill")
+            on = resolved
+            print(f"no --date given; filling {on.isoformat()} — {why}", flush=True)
         return await fill(
             session,
             provider,

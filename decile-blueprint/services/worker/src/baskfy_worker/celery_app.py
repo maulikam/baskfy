@@ -63,6 +63,10 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     "baskfy.desk.*": {"queue": QUEUE_DEFAULT},
     # SC2: curated-basket EOD metrics. Compute-bound over price history; same queue as factors.
     "baskfy.cb.*": {"queue": QUEUE_COMPUTE},
+    # PORTFOLIO_REDESIGN.md §5.1. The nightly EOD NAV job values every user's holdings against
+    # the day's closes: compute-bound over price history, exactly like the factor and curated
+    # metric steps, and it must not sit behind a backfill chunk on the ingest queue.
+    "baskfy.portfolio.*": {"queue": QUEUE_COMPUTE},
 }
 
 #: docs/09 §Schedule (IST), weekdays. Times are the doc's; the task names are docs/03's.
@@ -178,6 +182,24 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         # Idempotent; synthetic cb-sim-* ids are skipped.
         "task": "baskfy.cb.sync_batches",
         "schedule": crontab(minute="*/15", day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
+    # --- PORTFOLIO_REDESIGN.md §5.1: the official end-of-day NAV series ---------
+    "portfolio-eod-nav": {
+        # After the pipeline has published. docs/11 §Reliability puts the publish deadline at
+        # 20:15 IST, and the two jobs that write rows this one must see run at 20:20 (curated
+        # metrics) and 20:25 (dividends, which are portfolio cash flows). 20:35 is after all of
+        # them and before nothing — the NAV series is read the next morning, not tonight.
+        #
+        # Deliberately not chained onto the pipeline task. §5.1's NAV is a claim about a *date*,
+        # and a date whose bars never landed must produce no rows at all rather than a retry
+        # storm; the job checks for a close itself and is silent when there is none, so a missed
+        # or failed publish costs one empty run instead of a false series.
+        #
+        # Idempotent per (user_id, date, portfolio_id), so a manual re-run for the same date —
+        # after a late ingest, say — corrects the day instead of duplicating it.
+        "task": "baskfy.portfolio.eod_nav",
+        "schedule": crontab(hour=20, minute=35, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_COMPUTE},
     },
     # --- T8.3: one email per REBALANCE_AVAILABLE (payload.notified_at) -----------

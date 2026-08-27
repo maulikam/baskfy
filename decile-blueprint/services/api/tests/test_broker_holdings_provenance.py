@@ -597,8 +597,36 @@ class TestConnectDoesNotOverClaimEither:
 
     @pytest.fixture(autouse=True)
     def _a_configured_zerodha_app(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # BOTH. The route needs a key *and* a secret, because the login it starts ends at
+        # `session/token`, whose checksum is SHA256(api_key + request_token + api_secret). This
+        # fixture set only the key, so "configured" here meant something the real flow would have
+        # rejected halfway through — see `test_a_publisher_key_alone_is_not_a_connect_app`.
         monkeypatch.setenv("BASKFY_KITE_API_KEY", "zerodha-app-key")
+        monkeypatch.setenv("BASKFY_KITE_API_SECRET", "zerodha-app-secret")
         clear_oauth_states()
+
+    async def test_a_publisher_key_alone_is_not_a_connect_app(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Kite sells two products and only one of them can finish this login.
+
+        **Publisher** is free and embeds a basket the user confirms inside Kite; it issues no API
+        secret. **Connect** is the paid REST API and the only one that can redeem a request_token.
+        A Publisher key is a perfectly valid credential that can never satisfy this route.
+
+        The refusal used to read "The Zerodha app key is not configured on this deployment",
+        which says *nobody pasted a key* — and on 27 Aug 2026 it was shown to someone who had
+        pasted two, both correct, neither of the kind this needs. So the message is asserted, not
+        just the refusal: an error that does not say what to do next costs more than the outage.
+        """
+        monkeypatch.setenv("BASKFY_KITE_API_KEY", "a-publisher-key")
+        monkeypatch.delenv("BASKFY_KITE_API_SECRET", raising=False)
+
+        out = await connect_broker(principal_stub(), "zerodha")
+        assert out.oauth_available is False
+        assert out.redirect_url is None
+        assert "BASKFY_KITE_API_SECRET" in out.reason, out.reason
+        assert "Connect" in out.reason and "Publisher" in out.reason, out.reason
 
     @pytest.mark.parametrize("broker_id", ["upstox", "angelone", "fyers", "dhan"])
     async def test_a_login_that_cannot_finish_is_refused_not_redirected(

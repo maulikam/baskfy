@@ -338,12 +338,37 @@ async def connect_broker(
             ),
         )
 
+    # Both, and named separately, because the two failures are the same sentence to the code and
+    # completely different sentences to whoever has to fix it.
+    #
+    # The old message was "The {broker} app key is not configured on this deployment." It reads as
+    # "nobody pasted a key" — and on 27 Aug 2026 it was shown to someone who had pasted two, both
+    # correct, neither of them the kind this endpoint needs. Kite sells two products: **Publisher**
+    # (free; embeds a basket the user confirms in their own Kite) and **Connect** (paid; the REST
+    # API, and the only one that can redeem a request_token at `session/token`). A Publisher key is
+    # a perfectly good credential that can never satisfy this route, and the message said nothing
+    # that would tell you so.
     api_key = os.environ.get("BASKFY_KITE_API_KEY", "").strip()
-    if not api_key:
+    api_secret = os.environ.get("BASKFY_KITE_API_SECRET", "").strip()
+    if not api_key or not api_secret:
+        missing = " and ".join(
+            name
+            for name, value in (
+                ("BASKFY_KITE_API_KEY", api_key),
+                ("BASKFY_KITE_API_SECRET", api_secret),
+            )
+            if not value
+        )
         return ConnectOut(
             broker_id=broker_id,
             oauth_available=False,
-            reason=f"The {broker.name} app key is not configured on this deployment.",
+            reason=(
+                f"Connecting {broker.name} needs a Kite **Connect** app, and {missing} "
+                f"is not set on this deployment. A Kite **Publisher** key will not do: Publisher "
+                f"embeds a basket you confirm inside Kite and issues no API secret, so it cannot "
+                f"complete the token exchange this login ends with. Baskfy's basket hand-off uses "
+                f"Publisher and is unaffected."
+            ),
         )
 
     state = secrets.token_urlsafe(24)

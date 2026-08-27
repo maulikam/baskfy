@@ -46,6 +46,7 @@ from baskfy_worker.tasks.curated_dividends import run_curated_dividends
 from baskfy_worker.tasks.curated_metrics import run_curated_metrics
 from baskfy_worker.tasks.curated_rebalance_notify import run_curated_rebalance_notify
 from baskfy_worker.tasks.curated_sip import run_curated_sip_reminders
+from baskfy_worker.tasks.portfolio_nav_job import run_portfolio_nav
 from baskfy_worker.tasks.purge_accounts import run_purge_accounts
 
 #: docs/09 §"Kite specifics" — a rate-limited or flaky upstream is worth retrying; a malformed
@@ -389,3 +390,19 @@ def curated_batch_sync_task() -> JsonObject:
 def curated_rebalance_notify_task() -> JsonObject:
     """T8.3: email once per open REBALANCE_AVAILABLE lacking payload.notified_at."""
     return run_in_session(run_curated_rebalance_notify)
+
+
+@shared_task(name="baskfy.portfolio.eod_nav", acks_late=True)
+def portfolio_eod_nav_task(as_of: str | None = None) -> JsonObject:
+    """PORTFOLIO_REDESIGN.md §5.1: the official end-of-day NAV for every user, for one date.
+
+    Idempotent per ``(user_id, date, portfolio_id)``, so re-running a date after a late ingest
+    corrects the day rather than duplicating it. Writes no rows at all on a date the market did
+    not print, which is why it is not auto-retried: "no close exists" is an answer, not a failure,
+    and a retry loop would only ask it again.
+
+    Never places an order and reaches no broker. Defaults to today in IST when Beat fires without
+    an argument.
+    """
+    day = dt.date.fromisoformat(as_of) if as_of else dt.datetime.now(tz=IST).date()
+    return run_in_session(lambda session: run_portfolio_nav(session, day)).as_json()

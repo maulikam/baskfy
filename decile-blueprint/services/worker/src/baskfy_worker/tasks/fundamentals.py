@@ -55,9 +55,24 @@ async def fundamentals_scope(session: AsyncSession, on: dt.date) -> list[tuple[s
         select(Instrument.symbol, Instrument.series)
         .join(OhlcvDaily, OhlcvDaily.instrument_id == Instrument.id)
         .where(OhlcvDaily.date == on)
-        .order_by(Instrument.symbol)
+        .order_by(Instrument.symbol, Instrument.series)
     )
-    return [(str(row[0]), row[1]) for row in rows.tuples()]
+    # One entry per symbol, deterministically the first series. The unique constraint is
+    # (exchange_id, symbol, series), so the same symbol under two series is *permitted* — no
+    # such row exists today, but if one appeared, `store_fundamentals` would map both quotes
+    # onto the one instrument_id its symbol lookup returns and the batch's single
+    # ON CONFLICT DO UPDATE would try to touch that row twice, which PostgreSQL refuses. That
+    # is a crashed batch for a data condition the schema allows, so it is collapsed here rather
+    # than left as a latent trap.
+    seen: set[str] = set()
+    scope: list[tuple[str, str | None]] = []
+    for row in rows.tuples():
+        symbol = str(row[0])
+        if symbol in seen:
+            continue
+        seen.add(symbol)
+        scope.append((symbol, row[1]))
+    return scope
 
 
 async def run_fetch_fundamentals(

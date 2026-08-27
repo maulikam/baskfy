@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars (gitignored) and fill in. Only one value has no default.
+
+# Where the budget alarm goes. docs/08 §7 sets the limit at $75/mo, which is the number below
+# which the architecture promises to stay until the SEBI gate is passed.
+budget_notification_email = "you@example.com"
+
+# Set false if a Route 53 hosted zone for baskfy.com already exists. Creating a second one gives
+# you a second set of nameservers and whichever the registrar points at wins — a confusing outage.
+# create_hosted_zone = false
+
+# Break-glass SSH. Leave empty. docs/08 §3 is "No SSH keys — SSM Session Manager", and the AMI is
+# launched without a key pair, so an open port 22 would not even let you in.
+# admin_cidrs = []

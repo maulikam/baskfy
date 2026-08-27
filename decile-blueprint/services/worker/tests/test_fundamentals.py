@@ -154,3 +154,20 @@ class TestFetchTask:
         await session.flush()
 
         assert await fundamentals_scope(session, TRADE_DATE) == [("TRADED", "EQ")]
+
+    async def test_a_symbol_listed_under_two_series_appears_once(
+        self, session: AsyncSession
+    ) -> None:
+        """(exchange_id, symbol, series) is the unique key, so this is a legal row pair. Left
+        alone, both quotes map onto the one instrument_id the symbol lookup returns and the
+        batch's ON CONFLICT DO UPDATE touches that row twice, which PostgreSQL refuses."""
+        eq = await make_instrument(session, "TWICE", series="EQ")
+        be = await make_instrument(session, "TWICE", series="BE")
+        await add_bar(session, eq, TRADE_DATE, "100")
+        await add_bar(session, be, TRADE_DATE, "100")
+        await session.flush()
+
+        scope = await fundamentals_scope(session, TRADE_DATE)
+
+        assert [symbol for symbol, _ in scope].count("TWICE") == 1
+        assert ("TWICE", "BE") in scope  # deterministic: first series alphabetically

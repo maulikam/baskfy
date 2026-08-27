@@ -32,8 +32,8 @@ export const FACTOR_FAMILIES: readonly FactorFamilySummary[] = [
     key: "sharpe_return",
     label: "Sharpe return",
     description:
-      "Return divided by the realised volatility of daily log returns over the same window — five windows, plus twelve averages.",
-    count: 17,
+      "Return divided by the realised volatility of daily log returns over the same window — five windows, plus fourteen averages. Two of those are short-horizon blends (3·1 and 6·1) that ask what a name has done recently, without twelve months of history dominating the mean.",
+    count: 19,
   },
   {
     key: "rsi",

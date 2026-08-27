@@ -31,6 +31,7 @@ const CATALOG: BrokerListOut = {
   adapters_wired: 1,
   gate: {
     decision_reference: "D3",
+    connect_configured: false,
     live_oauth_enabled: false,
     requirement: "counsel sign-off",
     signed_off: false,

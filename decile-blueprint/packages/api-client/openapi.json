@@ -2131,6 +2131,11 @@
       },
       "BrokerGateOut": {
         "properties": {
+          "connect_configured": {
+            "default": false,
+            "title": "Connect Configured",
+            "type": "boolean"
+          },
           "decision_reference": {
             "title": "Decision Reference",
             "type": "string"

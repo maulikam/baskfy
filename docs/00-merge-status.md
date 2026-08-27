@@ -970,3 +970,51 @@ own list — is closed. Decisions are `docs/DECISIONS-MERGE.md` §M40–M40.6, a
    `instrument` — and none of them is in the 271-row reference export, so the branch was silently
    taken on every `seed e2e`. Every catalog surface in the browser suite has been running against
    an empty catalog. The `e2e` seed now ranks from the export itself (M40.6).
+
+## The landing flow diagram was rebuilt in normal flow, and lost its cost box (27 Aug 2026)
+
+**Maulik's instruction, not an agent judgement** — written down in `FLOW-REFINE-PROMPT.md` at the
+repo root, gated by `gates/marketing-flow-responsive.md`, recorded as **MKT3** in
+`docs/DECISIONS-MERGE.md`. It **reverses G1 of `gates/marketing-flow-refresh.md`**, which is why
+that file now carries a superseded banner instead of quietly disagreeing with the code.
+
+He reviewed the rendered "From intent to result" section and rejected it on four counts. All four
+were the same root cause and all four are fixed:
+
+- **It was not mobile responsive.** The stage was a hard-coded `1360 × 420` canvas inside an
+  `overflow-x-auto` wrapper — it side-scrolled on a phone, at 11px bodies and 8px eyebrows.
+  It is now one CSS grid: seven columns from `lg` up, one column below it, no fixed size, no
+  horizontal scroll at any width, and nothing rendering below 12px.
+- **Everything was overlaid.** Every card was `absolute`-positioned over one full-bleed SVG wire
+  layer at hand-measured `top` offsets, and the file's own comments recorded the failure mode:
+  add a line of copy and a card slides out from under its connector. Nothing is positioned now.
+  Connectors are **grid cells** — each an independent 56 × 56 SVG in the gap between two nodes,
+  swapping a horizontal path for a vertical one at the breakpoint. A connector cannot drift from
+  what it connects because it has no coordinates of its own.
+- **The cost box is gone**, along with the attribution line that existed only to caveat it. The
+  engine is the four stages that ship: screen → basket → organize → plan. **The heading changed
+  in the same commit** — "with the cost visible before it runs" became "nothing runs until you
+  confirm" — because a heading has to be something the picture underneath actually draws. The fee
+  itself did not move: `fee-faq.tsx`, the numbered "Confirm" step and the section blurb all still
+  carry 1.5% of a buy, capped at ₹100, plus GST, nothing on a rebalance or an exit.
+- **The animation had no story.** Eight dashes on unrelated durations (1.8 s, 2.2 s, 6 s) looped
+  forever: `animation-delay` offsets only the *first* iteration, so they drifted into permanently
+  arbitrary phase and read as specks. Every animated element now shares one period
+  (`--flow-cycle: 11s`, mirrored as `FLOW_CYCLE_SECONDS` and asserted against the CSS file), so
+  the delays are a fixed relationship. One pulse walks You → engine, stage by stage → rails →
+  portfolios → the dashed sweep home, with a beat of rest; stages acknowledge it as it passes, in
+  opacity and transform only. `prefers-reduced-motion` removes every pulse and acknowledgment.
+
+**Tests were rewritten to the new spec, not weakened** (house rule 2 cuts both ways). 23 tests
+became 38. Gone: the geometry suite that re-derived every wire's length against the 1360-unit
+canvas — the geometry it guarded no longer exists. Added: structural greps that fail if
+`absolute`, a fixed width or an `overflow-x-auto` wrapper ever return; a DOM-order check that the
+narrative order is the source order; a check that the choreography is a strictly increasing
+sequence that finishes inside its own cycle; and the inverse of the old cost tests — **no rupee
+sign, percentage, "GST", "fee", "brokerage" or "statutory" may appear on the stage at all**, while
+the fee's three numbers are asserted to still be in the numbered steps.
+
+**What is NOT done here.** MKT1's open item stands unchanged: no surface in the web app shows a
+per-plan brokerage/STT estimate before a confirm. `baskfy_core.costs` models the six Zerodha CNC
+components and is fed to backtests, not to a pre-trade screen. Removing the cost box does not
+close that gap — it stops the landing page from implying the gap is closed.

@@ -5721,3 +5721,71 @@ holds no state. `BASKFY_KITE_PUBLISHER_API_KEY` empty already disables it — th
 rendered rather than rendered dead.
 
 **Blocked on:** the Publisher **API key**. `NEEDS-MAULIK.md` §26.
+
+## MKT3 — the cost box leaves the landing diagram, and the heading leaves with it
+
+**Not tagged `⚠ UNREVIEWED`, deliberately.** This is not an agent's judgement call under the
+autonomy charter; it is a direct instruction from Maulik on 27 Aug 2026, written down in
+`FLOW-REFINE-PROMPT.md` at the repo root. It is recorded here because it **reverses G1 of
+`gates/marketing-flow-refresh.md`** and reverses half of **MKT1** above, and a gate that quietly
+disagrees with the code is worse than no gate.
+
+**Context.** Maulik reviewed the rendered "From intent to result" section and rejected it on four
+counts: it was not mobile responsive (a fixed `1360 × 420` canvas inside `overflow-x-auto`, 11px
+bodies, 8px eyebrows); its cards were `absolute`-positioned over a full-bleed SVG wire layer and
+piled onto each other; the engine had a `cost` box that should not be there; and the animation —
+eight travelling dashes on unrelated durations — read as disconnected specks rather than as a
+story. The first two are the same fault: a fixed canvas has no other way to behave, and
+coordinates that must agree with copy stop agreeing with copy.
+
+**Taken.**
+
+1. **The `cost` stage is deleted from the engine**, and the `ATTRIBUTION` line that existed only
+   to caveat it goes with it. The engine is now the four stages that ship: screen → basket →
+   organize → plan.
+2. **The section heading changed in the same commit**, from *"From intent to result, with the cost
+   visible before it runs."* to *"From intent to result — nothing runs until you confirm."* This
+   is the part that is not optional. MKT1's argument was that a heading promising a cost must be
+   drawn on the stage; removing the drawing without removing the promise would leave the page
+   making a claim its own illustration refutes. Every promise in the new heading — nothing runs,
+   you confirm — is drawn: the plan stage says *read-only, expires in 30 minutes*, and the rails
+   connector is captioned *you confirm at your broker*.
+3. **The fee itself did not move an inch.** It is stated in `components/investments/fee-faq.tsx`,
+   in the numbered "Confirm" step under the stage, and in the section blurb: 1.5% of a buy, capped
+   at ₹100, plus GST, and nothing at all on a rebalance or an exit. The blurb still attributes
+   brokerage and statutory charges to the broker, which was MKT1's real finding and remains true.
+   `how-it-works-flow.test.tsx` asserts the fee's three numbers **in the steps**, and separately
+   asserts that no rupee sign, percentage, "GST", "fee", "brokerage" or "statutory" appears on the
+   stage at all — so the box cannot creep back and the fee cannot vanish.
+4. **The stage was rebuilt in normal document flow.** One CSS grid, no absolute positioning, no
+   fixed size, no overlay, no runtime measurement. Connectors are *cells of the grid*, each an
+   independent 56 × 56 SVG in the gap between two nodes, swapping a horizontal path for a vertical
+   one below `lg`. A connector can no longer drift away from what it connects because it has no
+   coordinates of its own to drift in. Nothing renders below 12px; there is no horizontal scroll
+   at any width.
+5. **The animation became one schedule.** Every animated element runs at one shared period
+   (`--flow-cycle: 11s`, mirrored as `FLOW_CYCLE_SECONDS`) and differs only by `animation-delay`.
+   That is the fix for the old version's real bug: `animation-delay` offsets only the first
+   iteration, so wires given 1.8 s, 2.2 s and 6 s durations and looped forever drift into
+   permanently arbitrary phase. Equal durations make the delays a fixed relationship, and the
+   pulse now walks You → engine, stage by stage → rails → portfolios → the dashed sweep home, with
+   a beat of rest. Stages acknowledge it as it passes, in opacity and transform only.
+   `prefers-reduced-motion` removes every pulse and every acknowledgment outright.
+
+**Rejected.** (a) Keeping the cost box and only fixing the layout — the instruction was explicit
+and it is Maulik's page. (b) Keeping the old heading and letting the picture fall short of it —
+the exact failure MKT1 was written to end. (c) A hidden-on-mobile diagram with a separate mobile
+markup tree, which is two things to keep in sync and one of them never gets looked at. (d) A
+resize observer feeding real coordinates to one full-bleed SVG: it makes this a client component,
+adds a layout read on every breakpoint, and solves a problem that grid removes for free.
+
+**What this costs.** The geometry tests that re-derived every wire's length against the 1360-unit
+canvas are gone, because the geometry is gone. They guarded a real class of bug and their
+replacement is structural rather than arithmetic: greps that fail if `absolute`, a fixed width or
+an `overflow-x-auto` wrapper ever return, plus a schedule test that fails if the choreography
+stops being a strictly ordered sequence inside one cycle.
+
+**Reversal.** Restore `ENGINE`'s fifth entry and `ATTRIBUTION` from git, and put the heading back.
+The layout and the animation are independent of the cost decision and would not need reverting
+with it; they are a separate `git revert` of the same commit's hunks in
+`how-it-works-flow.tsx` and `globals.css`.

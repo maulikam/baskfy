@@ -318,12 +318,89 @@
  * The paths carry `pathLength="100"`, which normalises every wire to the same nominal length, so
  * these two numbers are the whole animation regardless of how long the wire really is.
  */
-@keyframes flow-dash {
-  from {
+/*
+ * The landing flow's choreography, expressed as three keyframe tracks that share ONE period.
+ *
+ * The version this replaces gave every wire its own `animation-duration` (1.8 s, 2.2 s, 6 s) and
+ * an `animation-delay`, then looped all of them forever. A delay only offsets the *first*
+ * iteration, so after one pass the wires drifted out of phase permanently and the diagram read as
+ * eight unrelated specks -- which is exactly the note it was rejected on. Here every animated
+ * element runs at `--flow-cycle` and differs only by `animation-delay`, so the offsets are a
+ * fixed phase relationship that survives every loop. The *when* of each beat therefore lives in
+ * the percentages below, not in the duration.
+ *
+ * A segment's pulse occupies 13% of the cycle and the return sweep 30%; the rest of each track is
+ * held at `opacity: 0` so nothing is parked on a wire between beats. Offsets are chosen to make
+ * `stroke-dashoffset` move at a constant rate across its whole window -- the fades are opacity
+ * only, so the dot never appears to slow down at either end.
+ */
+@keyframes flow-segment {
+  0% {
     stroke-dashoffset: 100;
+    opacity: 0;
   }
-  to {
+  2% {
+    stroke-dashoffset: 84.6;
+    opacity: 1;
+  }
+  11% {
+    stroke-dashoffset: 15.4;
+    opacity: 1;
+  }
+  13% {
     stroke-dashoffset: 0;
+    opacity: 0;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes flow-sweep {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0;
+  }
+  3% {
+    stroke-dashoffset: 90;
+    opacity: 0.85;
+  }
+  27% {
+    stroke-dashoffset: 10;
+    opacity: 0.85;
+  }
+  30% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+/*
+ * A stage acknowledging the pulse as it passes. Opacity and transform only -- docs/08 §Motion,
+ * and the two properties a compositor can animate without touching layout or paint. The rest
+ * state is the eyebrow's ordinary muted weight, so a browser that never runs this loses nothing.
+ */
+@keyframes flow-ack {
+  0% {
+    opacity: 0.7;
+    transform: translateY(0);
+  }
+  2% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+  7% {
+    opacity: 0.7;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0.7;
+    transform: translateY(0);
   }
 }
 
@@ -562,31 +639,60 @@
     will-change: transform;
   }
 
+  /*
+   * One period for the whole diagram, declared on the stage rather than on `:root` so the number
+   * a reader of the component sees (`FLOW_CYCLE_SECONDS`) and the number the browser uses are the
+   * same edit. `how-it-works-flow.test.tsx` reads this file and fails if the two drift apart.
+   */
+  .flow-stage {
+    --flow-cycle: 11s;
+  }
+
   .flow-track {
     fill: none;
     stroke: currentColor;
     stroke-width: 1.25;
+    stroke-linecap: round;
     opacity: 0.45;
   }
 
-  .flow-pulse {
+  .flow-pulse,
+  .flow-sweep {
     fill: none;
     stroke: var(--accent);
     stroke-width: 2.5;
     stroke-linecap: round;
-    stroke-dasharray: 3 97;
     stroke-dashoffset: 100;
-    animation-name: flow-dash;
+    opacity: 0;
     animation-timing-function: linear;
     animation-iteration-count: infinite;
+    animation-duration: var(--flow-cycle, 11s);
+  }
+
+  .flow-pulse {
+    animation-name: flow-segment;
+  }
+
+  .flow-sweep {
+    stroke-width: 2;
+    animation-name: flow-sweep;
+  }
+
+  .flow-ack {
+    opacity: 0.7;
+    animation-name: flow-ack;
+    animation-timing-function: ease-out;
+    animation-iteration-count: infinite;
+    animation-duration: var(--flow-cycle, 11s);
   }
 }
 
 /*
  * Unlayered on purpose: `@layer base`'s blanket reduce rule shortens every animation to 0.01 ms,
- * which for these two would *finish* them — the marquee parked at -50% and a dash sitting at the
- * far end of every wire, both of which read as a bug rather than as stillness. Unlayered
- * declarations outrank any `@layer`, so these win without an `!important` arms race.
+ * which for these would *finish* them rather than stop them — the marquee parked at -50%, a dash
+ * sitting at the far end of every connector, an eyebrow frozen a pixel above where it belongs.
+ * All three read as a bug rather than as stillness. Unlayered declarations outrank any `@layer`,
+ * so these win without an `!important` arms race.
  */
 @media (prefers-reduced-motion: reduce) {
   .marquee-track {
@@ -594,8 +700,21 @@
     transform: none;
   }
 
-  .flow-pulse {
+  /*
+   * Every travelling pulse and every acknowledgment goes, rather than being shortened to 0.01 ms
+   * by `@layer base`'s blanket rule -- which would *finish* them, parking a dot at the end of each
+   * wire and freezing four eyebrows mid-lift. What is left is the static hairlines and their
+   * arrowheads, which is the whole diagram minus the motion.
+   */
+  .flow-pulse,
+  .flow-sweep {
     display: none;
+  }
+
+  .flow-ack {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 }
 

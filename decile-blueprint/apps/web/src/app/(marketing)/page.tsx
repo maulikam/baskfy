@@ -185,29 +185,37 @@ export default async function LandingPage() {
         Directly under the photograph, and that placement is the argument the page is making.
         It used to sit six sections down, after the catalog grid, where a reader who had already
         decided the site was another signal shop would never reach it. The one sentence that
-        distinguishes this product — *nothing here executes anything, and the cost is on screen
-        before you confirm* — is now the first thing said after the image.
+        distinguishes this product — *nothing here executes anything, and nothing runs until you
+        confirm it at your own broker* — is now the first thing said after the image.
       */}
       <section
         aria-labelledby="how-it-works"
         className="vaaya-surface vaaya-shell border-b border-border"
       >
         <div className="mx-auto max-w-6xl px-6 pt-16">
-          <h2 id="how-it-works" className="vaaya-display max-w-[20ch] text-[2.25rem] sm:text-[3rem]">
-            From intent to result, with the cost visible before it runs.
+          <h2 id="how-it-works" className="vaaya-display max-w-[24ch] text-[2.25rem] sm:text-[3rem]">
+            From intent to result — nothing runs until you confirm.
           </h2>
           {/*
-            Reworded 26 Aug 2026. It used to say the step's cost "in brokerage and statutory
-            charges is on screen before you press it", and that was not true: no plan surface in
-            this app renders a brokerage or STT line — `curated_plans.py` and the investment
-            routers carry no cost field at all, and `/portfolio/[id]/costs` is accrued platform
-            fees. Our fee is ours to state and is stated; the broker's charges are the broker's,
-            and the broker shows them. Saying so is the version that survives a reader checking.
+            Retitled and reworded 27 Aug 2026, with the cost box that left the diagram
+            (`FLOW-REFINE-PROMPT.md`, `gates/marketing-flow-responsive.md`). The heading used to
+            read "with the cost visible before it runs" and the stage drew a cost card to keep it;
+            the card is gone on Maulik's instruction, so the promise goes with it — a heading has
+            to be something the picture underneath actually draws.
+
+            The fee itself does not go anywhere: it is stated here, in the numbered "Confirm" step
+            under the stage, and in full in `fee-faq.tsx`. What this paragraph still must not say
+            is that brokerage and STT are on screen *here* — no plan surface in this app renders
+            either. `curated_plans.py` and the investment routers carry no cost field at all, and
+            `/portfolio/[id]/costs` is accrued platform fees. Our fee is ours to state and is
+            stated; the broker's charges are the broker's, and the broker shows them.
           */}
           <p className="mt-7 max-w-[64ch] text-[15px] leading-relaxed text-muted-foreground">
             Nothing on this site executes anything. Every step is reversible up to the moment you
-            confirm, our fee for the step is on screen before you get there, and the brokerage and
-            statutory charges are your broker&rsquo;s — shown at the broker, on the order you
+            confirm, and what reaches your broker is a read-only order plan that expires in thirty
+            minutes if you leave it. Our fee rides on it &mdash; 1.5% of a buy, capped at
+            &#8377;100, plus GST, and nothing at all on a rebalance or an exit. Brokerage and
+            statutory charges are your broker&rsquo;s, shown at the broker on the order you
             confirm yourself.
           </p>
         </div>

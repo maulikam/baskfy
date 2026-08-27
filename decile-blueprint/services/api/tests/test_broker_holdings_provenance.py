@@ -19,6 +19,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import cast
 from unittest.mock import MagicMock
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
@@ -35,11 +36,13 @@ from baskfy_api.broker_oauth import clear_oauth_states, register_oauth_state
 from baskfy_api.problems import Problem
 from baskfy_api.routers import brokers as brokers_router
 from baskfy_api.routers.brokers import (
+    OAUTH_CALLBACK_PATH,
     SyncHoldingsOut,
     connect_broker,
     oauth_callback,
     sync_holdings,
 )
+from baskfy_api.settings import get_settings
 from baskfy_providers.errors import AccessTokenExpired
 
 WIRED = "zerodha"
@@ -627,6 +630,27 @@ class TestConnectDoesNotOverClaimEither:
         assert out.redirect_url is not None
         assert out.redirect_url.startswith("https://kite.zerodha.com/connect/login?")
         assert out.state
+
+    async def test_the_redirect_uri_points_at_a_route_that_exists(self) -> None:
+        """The half of an OAuth flow that fails *after* the user has committed to it.
+
+        The default used to be `https://baskfy.com/brokers/callback`, wrong twice over: the apex
+        has no DNS record (only `staging.baskfy.com` resolves), and `/brokers/callback` is not a
+        route — `/brokers` is the page, and the callback this service serves is
+        `/api/v1/brokers/callback`. Neither shows up until Kite sends the browser back, by which
+        point the user has already signed in at Zerodha and authorised the app.
+
+        So this asserts the redirect against the path constant the callback route is registered
+        under, rather than against a string typed out a second time.
+        """
+        out = await connect_broker(principal_stub(), "zerodha")
+        assert out.redirect_url is not None
+        redirect_uri = parse_qs(urlparse(out.redirect_url).query)["redirect_uri"][0]
+
+        assert redirect_uri.endswith(OAUTH_CALLBACK_PATH), redirect_uri
+        # ...and it is absolute against a host we actually serve, not the unresolvable apex.
+        assert redirect_uri.startswith(get_settings().web_origin.rstrip("/")), redirect_uri
+        assert "//brokers/callback" not in redirect_uri
 
     async def test_a_callback_for_a_broker_we_cannot_exchange_for_is_refused(self) -> None:
         """The token store is one shared blob; honouring this would file it under a lie."""

@@ -1101,3 +1101,48 @@ says "Execution stays in the desk console". Confirm the wording and the placemen
 small edit.
 
 **Blocks:** nothing. The API route serves today; only the button is unplaced.
+
+---
+
+## §28 — Zerodha connect needs a Kite **Connect** app, and the Publisher key is still missing (M49)
+
+**The message** "The Zerodha app key is not configured on this deployment" comes from
+`POST /brokers/{id}/connect` (`routers/brokers.py`). It is the app refusing to start a login it
+cannot finish, which is correct behaviour, not a bug.
+
+**Both Kite variables are empty on the box**, confirmed 27 Aug 2026:
+
+| Variable | State | What it is for |
+|---|---|---|
+| `BASKFY_KITE_API_KEY` | **empty** | Kite **Connect** — `/brokers` connect + holdings sync |
+| `BASKFY_KITE_API_SECRET` | **empty** | Kite Connect — redeems the `request_token` |
+| `BASKFY_KITE_PUBLISHER_API_KEY` | **unset** | Kite **Publisher** — the basket hand-off (§26) |
+
+**These are two different Zerodha products and one does not substitute for the other.** The
+Publisher app created on 27 Aug 2026 is the basket widget; it issues no api_secret and cannot
+redeem a `request_token`, so it can never satisfy `/brokers`. Kite Connect is the paid product
+(₹2000/month per app).
+
+**Three options, and they are genuinely different decisions:**
+
+1. **Create a Kite Connect app for Baskfy** and set both variables. The proper answer for a
+   multi-tenant product.
+2. **Reuse the desk's Connect credentials** — they exist (`kite-momentum-rebalancer/.env`,
+   `KITE_API_KEY` 16 chars, `KITE_API_SECRET` 32). But that app is wired to one account for
+   single-user live execution, and `CLAUDE.md` still lists **P4.2 two-token OAuth as not done**.
+   Pointing multi-tenant web OAuth at the desk's app is a decision to take deliberately.
+3. **Do neither for now.** `/brokers` keeps saying it is not configured — which is honest — and
+   the Publisher basket hand-off (§26) covers "let the user trade this", needing only the free
+   Publisher key. Given the hand-off is built and the Connect flow is not needed for it, this is
+   the cheapest coherent state.
+
+**Fixed while looking at this (M49):** the OAuth `redirect_uri` default was
+`https://baskfy.com/brokers/callback`, wrong twice over — the apex has **no DNS record** (only
+`staging.baskfy.com` resolves), and `/brokers/callback` is not a route at all; the callback this
+service serves is `/api/v1/brokers/callback`. Neither would have surfaced until Kite sent the
+browser back, *after* the user had signed in at Zerodha and authorised the app. It is now derived
+from `web_origin` plus the path constant the callback route is registered under, so the two cannot
+drift, and a test asserts it.
+
+**Whichever option you pick, the redirect URI registered in the Kite console must be exactly:**
+`https://staging.baskfy.com/api/v1/brokers/callback`

@@ -3965,6 +3965,11 @@ export interface components {
         };
         /** BrokerGateOut */
         BrokerGateOut: {
+            /**
+             * Connect Configured
+             * @default false
+             */
+            connect_configured: boolean;
             /** Decision Reference */
             decision_reference: string;
             /** Live Oauth Enabled */

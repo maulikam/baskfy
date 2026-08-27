@@ -37,6 +37,12 @@ export interface BrokerGate {
   requirement: string;
   signed_off: boolean;
   decision_reference: string;
+  /**
+   * Whether this deployment holds Kite **Connect** credentials — separate from the D3 policy
+   * gate above, which says only that connecting is *allowed*. Baskfy runs on Kite Publisher,
+   * which issues no API secret, so this is false and the grid offers no login it cannot finish.
+   */
+  connect_configured: boolean;
 }
 
 export interface BrokerCatalog {

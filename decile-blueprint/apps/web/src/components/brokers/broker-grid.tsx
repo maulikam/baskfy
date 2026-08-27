@@ -126,33 +126,62 @@ export function BrokerGrid({ brokers, gate }: BrokerGridProps) {
               <dt>Trading</dt>
               <dd>{capabilityLabel(selected.capabilities.trading)}</dd>
             </dl>
-            <Button
-              type="button"
-              disabled={pending}
-              onClick={() => onConnect(selected.id)}
-              className="w-full"
-            >
-              {pending ? "Starting…" : `Connect ${selected.short_name}`}
-            </Button>
-            {message ? (
-              <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                {message}
-              </p>
-            ) : null}
-            {!gate.live_oauth_enabled ? (
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                Live login stays closed until Baskfy&apos;s regulatory posture is recorded. Until
-                then, import a holdings CSV on{" "}
-                <Link href="/portfolio/portfolios" className="text-accent underline-offset-4 hover:underline">
-                  My portfolios
-                </Link>
-                .
-              </p>
+            {/*
+              The Connect button is shown only when this deployment can actually finish the login.
+
+              Baskfy runs on Kite **Publisher**, the free product that hands a basket to the user's
+              own Kite for them to confirm. Publisher issues no API secret, and the login this
+              button starts ends at `session/token`, whose checksum needs one — so on a
+              Publisher-only deployment the button could only ever produce an error about a missing
+              credential. It did, twice, to Maulik, each time after he had pasted a perfectly good
+              key. An affordance that cannot succeed is worse than no affordance: it teaches the
+              reader that the product is broken rather than that this route is not the one they
+              want. `NEEDS-MAULIK.md` §28.
+            */}
+            {gate.connect_configured ? (
+              <>
+                <Button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => onConnect(selected.id)}
+                  className="w-full"
+                >
+                  {pending ? "Starting…" : `Connect ${selected.short_name}`}
+                </Button>
+                {message ? (
+                  <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                    {message}
+                  </p>
+                ) : null}
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  After connect, holdings sync reads quantity + T1 + collateral. Orders still
+                  require an explicit confirm on a plan — this page never executes.
+                </p>
+              </>
             ) : (
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                After connect, holdings sync reads quantity + T1 + collateral. Orders still require
-                an explicit confirm on a plan — this page never executes.
-              </p>
+              <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/50 px-3 py-3">
+                <p className="text-xs font-medium text-foreground">
+                  You don&apos;t need to connect {selected.short_name} to invest.
+                </p>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Open any basket, choose an amount, and Baskfy hands it to your own Kite as a
+                  ready-made order basket. You review every line and confirm it there — Baskfy
+                  never places an order and never holds your broker credentials.
+                </p>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  <Link href="/discover" className="text-accent underline-offset-4 hover:underline">
+                    Browse baskets
+                  </Link>
+                  {" · "}
+                  <Link
+                    href="/portfolio/portfolios"
+                    className="text-accent underline-offset-4 hover:underline"
+                  >
+                    Import a holdings CSV
+                  </Link>{" "}
+                  to track what you already own.
+                </p>
+              </div>
             )}
           </>
         ) : (

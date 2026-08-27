@@ -103,6 +103,14 @@ class BrokerGateOut(BaseModel):
     requirement: str
     signed_off: bool
     decision_reference: str
+    #: Whether this deployment actually holds Kite **Connect** credentials.
+    #:
+    #: Separate from ``live_oauth_enabled``, which is the D3 *policy* gate, because they answer
+    #: different questions and used to be conflated. D3 says "connecting a broker is allowed";
+    #: this says "we have the credential to do it". Baskfy runs on Kite **Publisher** — the free
+    #: product that hands a basket to the user's own Kite — and Publisher issues no API secret, so
+    #: this is `false` and the grid must not offer a login it cannot finish. `NEEDS-MAULIK.md` §28.
+    connect_configured: bool = False
 
 
 class BrokerListOut(BaseModel):
@@ -179,6 +187,18 @@ class SyncHoldingsOut(BaseModel):
     )
 
 
+def _connect_configured() -> bool:
+    """Both halves, because the login ends at ``session/token`` and its checksum needs the secret.
+
+    Read at call time rather than at import: the process is long-lived and an operator who adds
+    the credential should not have to restart the API to make the grid tell the truth.
+    """
+    return bool(
+        os.environ.get("BASKFY_KITE_API_KEY", "").strip()
+        and os.environ.get("BASKFY_KITE_API_SECRET", "").strip()
+    )
+
+
 def _gate_out() -> BrokerGateOut:
     review = BROKER_OAUTH_REVIEW
     return BrokerGateOut(
@@ -186,6 +206,7 @@ def _gate_out() -> BrokerGateOut:
         requirement=review.requirement,
         signed_off=review.signed_off,
         decision_reference=review.decision_reference,
+        connect_configured=_connect_configured(),
     )
 
 

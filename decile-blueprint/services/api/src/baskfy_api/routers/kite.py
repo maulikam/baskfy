@@ -80,6 +80,11 @@ class KiteBasketOut(BaseModel):
     #: False when no key is configured. The button is not rendered; it is never rendered dead.
     configured: bool
     items: list[KiteBasketItemOut]
+    #: The same items split into baskets Kite will accept — at most ten each, which is Kite's
+    #: documented limit (https://kite.trade/docs/connect/v3/publisher/). The ordinary momentum
+    #: basket is fifteen names, so this is the normal path and not an edge case: the browser
+    #: renders one form per batch rather than posting a basket Kite would refuse.
+    batches: list[list[KiteBasketItemOut]] = Field(default_factory=list)
     #: Symbols the guard or the sanity checks dropped. Surfaced so the interface can say "nine of
     #: ten, and here is the tenth" rather than quietly presenting a short basket as a whole one.
     excluded: list[str] = Field(default_factory=list)
@@ -106,5 +111,8 @@ async def plan_as_kite_basket(session: SessionDep, settings: SettingsDep) -> Kit
         api_key=payload.api_key,
         configured=payload.configured,
         items=[KiteBasketItemOut(**item.as_dict()) for item in payload.items],
+        batches=[
+            [KiteBasketItemOut(**item.as_dict()) for item in batch] for batch in payload.batches
+        ],
         excluded=list(payload.excluded),
     )

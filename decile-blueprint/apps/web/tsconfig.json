@@ -40,9 +40,11 @@
     "**/*.tsx",
     ".next-build/types/**/*.ts",
     ".next-e2e/types/**/*.ts",
+    ".next-gate/types/**/*.ts",
+    ".next-tree4/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-gate/types/**/*.ts"
+    ".next-secaudit/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

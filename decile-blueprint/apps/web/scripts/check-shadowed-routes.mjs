@@ -5,14 +5,28 @@
  * Next evaluates `redirects()` *before* the filesystem routes, so a page file at a redirected
  * path is unreachable — it compiles, ships and is never rendered. Tree 6 moved the whole consumer
  * IA (`/dashboard` → `/market/today`, `/screens` → `/build`, …) and left a redirect stub at each
- * old path deliberately, as a second line of defence for a client-side navigation that never
- * reaches the edge. A stub is fine. A *page* is not: it is content someone will keep editing
- * without ever being able to see it.
+ * old path as a second line of defence for a client-side navigation that never reaches the edge.
  *
- * So the rule this asserts is not "no file at a redirected path" but "nothing but a redirect at a
- * redirected path".
+ * **That rationale was measured and does not hold.** Every redirected path returns 308 from the
+ * edge on a plain GET *and* on `RSC: 1` + `Next-Router-Prefetch: 1` — the request the App Router
+ * client makes on a soft navigation — and `next.config.ts` sets no `output:` mode, so
+ * `redirects()` always runs. The stubs were unreachable, which makes them dead code that cannot
+ * be exercised or tested. They were deleted (25 Aug 2026); this script now asserts they stay gone.
+ *
+ * So the rule is: **a redirected path must hold no page file at all.** A page there is content
+ * someone will keep editing without ever being able to see it — which is exactly what happened
+ * to `/investments/[id]`, three *real* pages shadowed by `/investments/:path*` and silently
+ * skipped by the wildcard hole this script used to have.
+ *
+ * **What this script must never be read as licence to delete.** "Unreachable" is not the same as
+ * "unfinished". A page that resolves but is deliberately thin — waiting on a dependency, holding
+ * a route open so detail tabs and nav links already work — is *load-bearing*, and deleting it
+ * breaks navigation that exists today. `/basket/[slug]/constituents` is the standing example: an
+ * SC5 stub whose rebalance timeline and holdings distribution land when SC3 publishes immutable
+ * constituent versions. It sits at no redirected path, renders real content, and this check
+ * correctly ignores it. The test is the redirect table, never how finished a page looks.
  */
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -31,43 +45,66 @@ function redirectSources() {
   return sources;
 }
 
-/** `/screens/:id/columns` → `src/app/(app)/screens/[id]/columns/page.tsx`. Null when unmappable. */
+/** `/screens/:id/columns` → `src/app/(app)/screens/[id]/columns/page.tsx`. */
 function pageFileFor(source) {
-  if (source.includes(":path*") || source.includes("*")) return null;
   const segments = source
     .split("/")
     .filter(Boolean)
-    .map((segment) => (segment.startsWith(":") ? `[${segment.slice(1)}]` : segment));
+    .map((segment) => (segment.startsWith(":") ? `[${segment.slice(1).replace(/\*$/, "")}]` : segment));
   return join(APP_DIR, ...segments, "page.tsx");
 }
 
-/** A file is a stub when it renders nothing and only calls `redirect`. */
-function isRedirectStub(file) {
-  const body = readFileSync(file, "utf8");
-  if (!/\bredirect\(/.test(body)) return false;
-  // Any JSX means it is rendering something a reader will never see.
-  return !/<[A-Za-z]/.test(body);
+/** The directory a wildcard source shadows: `/investments/:path*` → `.../(app)/investments`. */
+function wildcardDirFor(source) {
+  if (!source.includes("*")) return null;
+  const segments = source.split("/").filter(Boolean);
+  segments.pop(); // drop the `:path*` segment itself
+  return segments.length ? join(APP_DIR, ...segments) : null;
+}
+
+/** Every `page.tsx` at or beneath `dir`, relative to the web root. */
+function pagesUnder(dir) {
+  const found = [];
+  const walk = (current) => {
+    if (!existsSync(current)) return;
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const next = join(current, entry.name);
+      if (entry.isDirectory()) walk(next);
+      else if (entry.name === "page.tsx") found.push(next);
+    }
+  };
+  walk(dir);
+  return found;
 }
 
 const offenders = [];
-let checked = 0;
+
 for (const source of redirectSources()) {
+  // The exact path a source shadows.
   const file = pageFileFor(source);
-  if (!file || !existsSync(file)) continue;
-  checked += 1;
-  if (!isRedirectStub(file)) {
+  if (existsSync(file)) {
     offenders.push(`${source} -> ${file.replace(`${WEB_DIR}/`, "")}`);
+  }
+
+  // A wildcard source shadows everything beneath it. This used to `return null` and skip the
+  // source entirely, which is how three real pages under `/investments/:path*` stayed invisible.
+  const dir = wildcardDirFor(source);
+  if (dir) {
+    for (const shadowed of pagesUnder(dir)) {
+      offenders.push(`${source} -> ${shadowed.replace(`${WEB_DIR}/`, "")}`);
+    }
   }
 }
 
 if (offenders.length) {
-  console.error("routes that redirect away but still hold a real page:");
+  console.error("page files at paths that next.config.ts redirects away:");
   for (const offender of offenders) console.error(`  ${offender}`);
   console.error(
-    "\nA page at a redirected path never renders: Next runs redirects() before the filesystem\n" +
-      "routes. Move the content to the new path, or reduce the file to a redirect stub.",
+    "\nNone of these can ever render: Next runs redirects() before the filesystem routes, on\n" +
+      "plain GETs and on RSC prefetches alike. Move the content to the destination path, or\n" +
+      "delete the file. A redirect stub is not an exception — it is unreachable too.",
   );
   process.exit(1);
 }
 
-console.log(`ok — ${checked} redirected route(s) hold a redirect stub and nothing else`);
+console.log(`ok — ${redirectSources().length} redirected source(s), no page file shadowed by any of them`);

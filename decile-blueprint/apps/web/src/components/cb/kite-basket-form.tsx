@@ -50,6 +50,11 @@ export interface KiteBasketFormProps {
   apiKey: string;
   configured: boolean;
   items: readonly KiteBasketItem[];
+  /**
+   * The items split into baskets Kite will accept — at most ten each, which is Kite's documented
+   * limit (https://kite.trade/docs/connect/v3/publisher/). One form is rendered per batch.
+   */
+  batches?: readonly (readonly KiteBasketItem[])[];
   /** Symbols the API's guard refused. Named, never merely counted — see below. */
   excluded?: readonly string[];
   className?: string;
@@ -60,9 +65,18 @@ export function KiteBasketForm({
   apiKey,
   configured,
   items,
+  batches,
   excluded = [],
   className,
 }: KiteBasketFormProps) {
+  /* Fall back to a single basket when the caller passes none, so an older caller keeps working —
+     but respect the cap either way rather than posting something Kite refuses. */
+  const groups: readonly (readonly KiteBasketItem[])[] =
+    batches && batches.length > 0
+      ? batches
+      : items.length === 0
+        ? []
+        : chunk(items, MAX_BASKET_ITEMS);
   /* Not configured, or nothing survived the guard: render the reason, never a dead button. A
      button that posts an empty basket lands the user on an error page inside Kite, which reads
      as Baskfy being broken rather than as Baskfy having nothing to send. */
@@ -80,14 +94,30 @@ export function KiteBasketForm({
   const sell = items.length - buy;
 
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
-      <form action={url} method="POST" target="_blank" rel="noopener noreferrer">
-        <input type="hidden" name="api_key" value={apiKey} />
-        <input type="hidden" name="data" value={JSON.stringify(items)} />
-        <Button type="submit" variant="primary" size="sm">
-          Review {items.length} order{items.length === 1 ? "" : "s"} in Kite
-        </Button>
-      </form>
+    <div className={cn("flex flex-col gap-3", className)}>
+      {/*
+        One form per basket. Kite accepts at most ten instruments per basket, and the ordinary
+        momentum basket is fifteen — so two buttons is the normal case here, not an edge case.
+        Batching rather than truncating: dropping five names silently is the worst option, and
+        naming them while still dropping them leaves the user to place them by hand.
+      */}
+      {groups.map((group, index) => (
+        <form
+          key={group.map((item) => item.tradingsymbol).join(",")}
+          action={url}
+          method="POST"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <input type="hidden" name="api_key" value={apiKey} />
+          <input type="hidden" name="data" value={JSON.stringify(group)} />
+          <Button type="submit" variant={index === 0 ? "primary" : "outline"} size="sm">
+            {groups.length === 1
+              ? `Review ${group.length} order${group.length === 1 ? "" : "s"} in Kite`
+              : `Review basket ${index + 1} of ${groups.length} (${group.length} orders)`}
+          </Button>
+        </form>
+      ))}
 
       <p className="text-sm leading-relaxed text-muted-foreground">
         {buy > 0 && sell > 0
@@ -97,6 +127,9 @@ export function KiteBasketForm({
             : `${sell} to sell. `}
         Kite opens in a new tab with the basket ready. You review and confirm it there — nothing
         is placed from this page.
+        {groups.length > 1
+          ? ` Kite takes ten instruments at a time, so this plan is split across ${groups.length} baskets.`
+          : ""}
       </p>
 
       {/*
@@ -117,4 +150,16 @@ export function KiteBasketForm({
       ) : null}
     </div>
   );
+}
+
+/** Kite's documented ceiling: https://kite.trade/docs/connect/v3/publisher/ */
+const MAX_BASKET_ITEMS = 10;
+
+function chunk(
+  items: readonly KiteBasketItem[],
+  size: number,
+): readonly (readonly KiteBasketItem[])[] {
+  const out: KiteBasketItem[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push([...items.slice(i, i + size)]);
+  return out;
 }

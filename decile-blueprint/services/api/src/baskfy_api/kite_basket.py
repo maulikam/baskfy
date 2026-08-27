@@ -47,6 +47,18 @@ from typing import Final, Literal
 #: account-scoped basket is a phishing target with a config file.
 KITE_BASKET_URL: Final = "https://kite.zerodha.com/connect/basket"
 
+#: Kite's own limit: "You can add one or more stocks to the basket (**maximum 10**)"
+#: — https://kite.trade/docs/connect/v3/publisher/
+#:
+#: This matters more than it looks. `DEFAULT_SCAN_TOP_N` is 15, so the *ordinary* momentum basket
+#: is half again the limit, and a rebalance plan carries sells as well as buys. Sending 15 rows
+#: would have been a broken hand-off on the normal path, every time.
+#:
+#: Batched rather than truncated. Dropping five names silently is the worst option; naming them
+#: and dropping them anyway still leaves the user to place them by hand. Two baskets is two
+#: clicks, and they get the whole plan.
+MAX_BASKET_ITEMS: Final = 10
+
 #: docs — the desk's non-negotiable #5: CNC-only. MIS needs ``INTRADAY_ENABLED`` and NFO/BFO needs
 #: ``OPTIONS_ENABLED``, neither of which has any meaning in a hand-off the user confirms in Kite.
 #: Hard-coded rather than a parameter for the same reason the untouchable list is hard-coded.
@@ -107,6 +119,19 @@ class BasketPayload:
     def configured(self) -> bool:
         """False when no publisher key is set: the hand-off is off, not permissive."""
         return bool(self.api_key)
+
+    @property
+    def batches(self) -> tuple[tuple[BasketItem, ...], ...]:
+        """The items split into baskets Kite will accept — at most :data:`MAX_BASKET_ITEMS` each.
+
+        Order is preserved across the split, so a plan the desk ordered sells-first stays that
+        way and the second basket continues where the first stopped. A caller with ten or fewer
+        items gets exactly one batch, which keeps the common case a single button.
+        """
+        return tuple(
+            self.items[i : i + MAX_BASKET_ITEMS]
+            for i in range(0, len(self.items), MAX_BASKET_ITEMS)
+        )
 
 
 def _normalise_side(side: str) -> Side | None:

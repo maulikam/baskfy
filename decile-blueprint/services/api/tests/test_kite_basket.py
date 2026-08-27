@@ -11,6 +11,7 @@ import pytest
 from baskfy_api.kite_basket import (
     EXCHANGE,
     KITE_BASKET_URL,
+    MAX_BASKET_ITEMS,
     ORDER_TYPE,
     PRODUCT,
     VARIETY,
@@ -151,3 +152,36 @@ class TestWhenItIsNotConfigured:
         hand-off unavailable" rather than showing an empty panel with no reason."""
         payload = build_basket([("INFY", "BUY", 1)], api_key="")
         assert symbols(payload) == ["INFY"]
+
+
+class TestKitesTenInstrumentLimit:
+    """https://kite.trade/docs/connect/v3/publisher/ — "maximum 10".
+
+    Not an edge case. `DEFAULT_SCAN_TOP_N` is 15, so the *ordinary* momentum basket is half again
+    the limit, and a rebalance plan carries sells as well as buys. Before this cap existed the
+    hand-off would have posted fifteen rows on the normal path, every time.
+    """
+
+    def test_a_plan_larger_than_the_limit_is_batched(self) -> None:
+        payload = build_basket([(f"SYM{i}", "BUY", 1) for i in range(15)], api_key=KEY)
+        assert [len(b) for b in payload.batches] == [10, 5]
+        assert all(len(b) <= MAX_BASKET_ITEMS for b in payload.batches)
+
+    def test_batching_loses_nothing_and_keeps_the_order(self) -> None:
+        """Truncating would drop names silently; the desk ordered the plan sells-first and the
+        second basket has to continue where the first stopped, not restart."""
+        given = [(f"SYM{i}", "BUY", 1) for i in range(23)]
+        payload = build_basket(given, api_key=KEY)
+        flat = [item.tradingsymbol for batch in payload.batches for item in batch]
+        assert flat == [symbol for symbol, _, _ in given]
+
+    def test_a_plan_that_fits_is_one_basket(self) -> None:
+        """The common case stays a single button."""
+        payload = build_basket([(f"SYM{i}", "BUY", 1) for i in range(10)], api_key=KEY)
+        assert len(payload.batches) == 1
+
+    def test_an_empty_plan_has_no_batches(self) -> None:
+        assert build_basket([], api_key=KEY).batches == ()
+
+    def test_the_limit_is_kites_documented_one(self) -> None:
+        assert MAX_BASKET_ITEMS == 10

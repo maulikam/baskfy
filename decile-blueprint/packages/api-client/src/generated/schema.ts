@@ -5800,6 +5800,8 @@ export interface components {
         KiteBasketOut: {
             /** Api Key */
             api_key: string;
+            /** Batches */
+            batches?: components["schemas"]["KiteBasketItemOut"][][];
             /** Configured */
             configured: boolean;
             /** Excluded */

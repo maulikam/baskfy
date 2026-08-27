@@ -7118,6 +7118,16 @@
             "title": "Api Key",
             "type": "string"
           },
+          "batches": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/KiteBasketItemOut"
+              },
+              "type": "array"
+            },
+            "title": "Batches",
+            "type": "array"
+          },
           "configured": {
             "title": "Configured",
             "type": "boolean"

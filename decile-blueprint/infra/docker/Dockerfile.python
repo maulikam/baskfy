@@ -92,7 +92,14 @@ RUN apt-get update \
  # `[Errno 13] Permission denied: 'celerybeat-schedule'`. It needs one writable directory, and
  # exactly one: a Beat that cannot persist its schedule re-fires everything it already ran the
  # moment it restarts, including the nightly chain.
- && install -d -o baskfy -g baskfy /var/lib/baskfy
+ && install -d -o baskfy -g baskfy /var/lib/baskfy \
+ # The raw-file archive docs/09 requires before anything is parsed. Created here, owned by the
+ # runtime user, because Docker copies a directory's ownership into a named volume the first time
+ # it populates one — and a volume mounted over a path the image does not contain is created
+ # root-owned, which the non-root user below cannot write. That is the same trap `beat` hit with
+ # `celerybeat-schedule`, and it presents identically: the container starts, then every write
+ # fails with Permission denied. `docs/DECISIONS-MERGE.md` M56.
+ && install -d -o baskfy -g baskfy /var/lib/baskfy/archive
 
 COPY --from=build --chown=baskfy:baskfy /repo/.venv /repo/.venv
 COPY --from=build --chown=baskfy:baskfy /repo/packages /repo/packages

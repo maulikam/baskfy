@@ -147,3 +147,79 @@ class TestTheScheduleRespectsTheCalendar:
         # `scalar` returns None for a date with no row; `bool(None)` is False. An `is True`
         # comparison or a default of True would both run the pipeline on an unknown day.
         assert "bool(found)" in code, "an absent row must be falsy, not an error or a default"
+
+
+class TestItDoesNotAskTenThousandTimes:
+    """`CredentialsMissing` is a fact about the deployment, not about the instrument.
+
+    Without this, an unconfigured Kite made the step attempt every one of 10,514 instruments —
+    each through the retry policy's backoff — before failing anyway. A hand-run of the pipeline
+    looked like a hang: no output, no run row (the CLI commits at the end), and many minutes of
+    nothing. Rate-limit and payload errors are deliberately *not* treated this way, because those
+    are per-symbol and the next instrument may succeed.
+    """
+
+    async def test_it_stops_after_the_first_credentials_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from baskfy_providers.errors import CredentialsMissing
+
+        attempts: list[str] = []
+
+        class _Unconfigured:
+            def daily_bars(self, token, start, end):  # noqa: ANN001, ANN202
+                attempts.append(str(token))
+                raise CredentialsMissing("BASKFY_KITE_API_KEY is empty")
+
+            def bhavcopy(self, on):  # noqa: ANN001, ANN202
+                raise AssertionError("not reached in this test")
+
+        async def fake_backfill(provider, window, **kwargs):  # noqa: ANN001, ANN003
+            return _Report(bars_written=2516, days_written=1)
+
+        monkeypatch.setattr(
+            "baskfy_worker.bhavcopy_backfill.backfill_bars_from_bhavcopy", fake_backfill
+        )
+        instruments = [(i, f"SYM{i}", i) for i in range(500)]
+        outcome = StepOutcome()
+
+        await run_fetch_daily_bars(
+            session=None,
+            provider=_Unconfigured(),
+            outcome=outcome,
+            instruments=instruments,
+            window=WINDOW,
+        )
+        assert len(attempts) == 1, f"asked {len(attempts)} times for one deployment-wide fact"
+
+    async def test_a_per_symbol_error_does_not_stop_the_sweep(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The other side. One bad symbol must not abandon the other 499."""
+        from baskfy_providers.errors import ProviderError
+
+        attempts: list[str] = []
+
+        class _OneBadSymbol:
+            def daily_bars(self, token, start, end):  # noqa: ANN001, ANN202
+                attempts.append(str(token))
+                raise ProviderError("rate limited")
+
+            def bhavcopy(self, on):  # noqa: ANN001, ANN202
+                raise AssertionError("not reached")
+
+        async def fake_backfill(provider, window, **kwargs):  # noqa: ANN001, ANN003
+            return _Report(bars_written=0, days_written=0)
+
+        monkeypatch.setattr(
+            "baskfy_worker.bhavcopy_backfill.backfill_bars_from_bhavcopy", fake_backfill
+        )
+        instruments = [(i, f"SYM{i}", i) for i in range(20)]
+        await run_fetch_daily_bars(
+            session=None,
+            provider=_OneBadSymbol(),
+            outcome=StepOutcome(),
+            instruments=instruments,
+            window=WINDOW,
+        )
+        assert len(attempts) == 20, "a per-symbol failure must not abandon the sweep"

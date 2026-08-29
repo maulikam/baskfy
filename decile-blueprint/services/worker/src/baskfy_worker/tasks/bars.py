@@ -20,7 +20,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import OhlcvDaily
-from baskfy_providers.errors import ProviderError
+from baskfy_providers.errors import CredentialsMissing, ProviderError
 from baskfy_worker.steps import StepOutcome
 from baskfy_worker.window import DateWindow
 
@@ -46,6 +46,18 @@ async def run_fetch_daily_bars(
     failures: dict[str, str] = {}
     skipped_no_token = 0
     for instrument_id, symbol, token in instruments:
+        if _credentials_are_missing(failures):
+            # Stop after the first credentials failure instead of asking 10,514 times.
+            #
+            # `CredentialsMissing` is a property of the *deployment*, not of the instrument: it
+            # will be raised identically for every remaining name, each one through the retry
+            # policy's backoff. On this box that turned a step that should fail in a second into
+            # one that ran for many minutes and then failed anyway — which is why a hand-run of
+            # the pipeline appeared to hang with no output.
+            #
+            # Rate-limit and payload errors are *not* treated this way: those are per-symbol and
+            # the next instrument may well succeed.
+            break
         if token is None:
             # docs/02: Kite does not carry every NSE listing. Not an error — the instrument
             # simply has no bar source yet, and its factors will be NULL (docs/05).
@@ -53,6 +65,11 @@ async def run_fetch_daily_bars(
             continue
         try:
             frame = fetch(token, window.start, window.end)
+        except CredentialsMissing as exc:
+            # Recorded like any other failure so the note still names it, then caught by the
+            # guard at the top of the next iteration.
+            failures[symbol] = f"CredentialsMissing: {exc}"
+            continue
         except ProviderError as exc:
             failures[symbol] = str(exc)
             continue
@@ -123,6 +140,15 @@ async def upsert_bars(session: AsyncSession, instrument_id: int, frame: pl.DataF
         )
         written += len(chunk)
     return written
+
+
+def _credentials_are_missing(failures: dict[str, str]) -> bool:
+    """Has the provider already told us it has no credentials?
+
+    Read off the recorded failures rather than held in a flag, so the note the operator reads
+    afterwards and the decision to stop are the same fact rather than two that can disagree.
+    """
+    return any(message.startswith("CredentialsMissing") for message in failures.values())
 
 
 async def _fetch_from_bhavcopy(

@@ -10,6 +10,16 @@ dependencies = [
     # docs/02 §"The decision in one table": "Polars (primary) + NumPy". Wilder's RSI recursion
     # and the Wasserstein distances are the two places the doc's "+ NumPy" earns its keep.
     "numpy>=2.1",
+    # Same row of docs/02: "pandas only at boundaries". `score.py` and `basket.py` are those
+    # boundaries — the momentum scan's frames cross into this package as pandas.
+    #
+    # It was declared **only** in the root `[dependency-groups]`, which is the dev group. Both
+    # modules import it at module scope, so it is a runtime dependency of this package that
+    # happened to be satisfied everywhere a developer or a test runs and nowhere else. The
+    # production image installs runtime dependencies only, so `refresh_basket` — step 11, past
+    # the quality gate — died on `ModuleNotFoundError: No module named 'pandas'` the first time
+    # a nightly run ever got that far. `docs/DECISIONS-MERGE.md` M57.
+    "pandas>=2.2",
 ]
 
 [build-system]

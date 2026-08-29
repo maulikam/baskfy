@@ -38,8 +38,9 @@ async def run_fetch_daily_bars(
     """Fetch and upsert raw bars for ``instruments`` over ``window``."""
     fetch = getattr(provider, "daily_bars", None)
     if not callable(fetch):
-        outcome.note(reason="no provider offers daily_bars")
-        return 0
+        return await _fetch_from_bhavcopy(
+            session, provider, outcome, window, reason="no provider offers daily_bars"
+        )
 
     written = 0
     failures: dict[str, str] = {}
@@ -68,6 +69,14 @@ async def run_fetch_daily_bars(
         # Loud but not fatal: docs/09 leaves "is this day publishable" to the quality gate, which
         # sees the resulting bar count and decides.
         outcome.note(failure_count=len(failures))
+
+    if written == 0 and instruments:
+        # Every instrument failed, or none had a Kite token. Either way this day has no bars and
+        # the quality gate is about to refuse the run — so try the source that does not need Kite
+        # before giving up on the night.
+        return await _fetch_from_bhavcopy(
+            session, provider, outcome, window, reason="daily_bars produced no rows"
+        )
     return written
 
 
@@ -114,3 +123,49 @@ async def upsert_bars(session: AsyncSession, instrument_id: int, frame: pl.DataF
         )
         written += len(chunk)
     return written
+
+
+async def _fetch_from_bhavcopy(
+    session: AsyncSession,
+    provider: object,
+    outcome: StepOutcome,
+    window: DateWindow,
+    *,
+    reason: str,
+) -> int:
+    """Fall back to the NSE bhavcopy when Kite cannot serve the day's bars.
+
+    WHY THIS EXISTS
+    ---------------
+    `daily_bars` is Kite's, and Kite needs credentials this deployment does not have. On
+    2026-08-28 the step recorded *"no provider could serve 'daily_bars' … kite:
+    BASKFY_KITE_API_KEY is …"*, wrote zero bars, and the quality gate then failed the run on
+    "0 bars against a 10-day median of 2532". The nightly pipeline had not published since
+    18 Aug for that reason, and the whole app was serving a ten-day-old session.
+
+    The bhavcopy needs no credentials, and `baskfy_worker.bhavcopy_backfill` already knows how to
+    turn one into rows — this calls that rather than restating it. It is also the *better* source
+    for this window: it carries `turnover` and both circuit bands natively, which Kite does not
+    (docs/05 §12, §13).
+
+    **A fallback, not a replacement.** Kite stays first because it reaches back before 2024, where
+    the bhavcopy's UDiFF archive begins. A deployment with Kite configured never gets here.
+    """
+    from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
+
+    if not callable(getattr(provider, "bhavcopy", None)):
+        outcome.note(reason=reason, fallback="unavailable: no provider offers bhavcopy")
+        return 0
+
+    report = await backfill_bars_from_bhavcopy(provider, window, progress_every=0)
+    outcome.rows_out = report.bars_written
+    outcome.note(
+        fallback="bhavcopy",
+        fallback_reason=reason,
+        window=str(window),
+        days_written=report.days_written,
+        missing_days=[d.isoformat() for d in report.missing_days] or None,
+        unmatched_symbol_count=len(report.unmatched_symbols) or None,
+        failures=report.failures or None,
+    )
+    return report.bars_written

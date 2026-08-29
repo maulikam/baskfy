@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useTransition } from "react";
 
 import { connectBrokerAction } from "@/app/actions/brokers";
@@ -217,29 +216,22 @@ export function BrokerGrid({ brokers, gate }: BrokerGridProps) {
                 </p>
               </>
             ) : (
-              <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/50 px-3 py-3">
-                <p className="text-xs font-medium text-foreground">
-                  You don&apos;t need to connect {selected.short_name} to invest.
-                </p>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  Open any basket, choose an amount, and Baskfy hands it to your own Kite as a
-                  ready-made order basket. You review every line and confirm it there — Baskfy
-                  never places an order and never holds your broker credentials.
-                </p>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  <Link href="/discover" className="text-accent underline-offset-4 hover:underline">
-                    Browse baskets
-                  </Link>
-                  {" · "}
-                  <Link
-                    href="/portfolio/portfolios"
-                    className="text-accent underline-offset-4 hover:underline"
-                  >
-                    Import a holdings CSV
-                  </Link>{" "}
-                  to track what you already own.
-                </p>
-              </div>
+              /*
+                Deliberately nothing here.
+
+                This was a panel repeating "You don't need to connect Zerodha to invest", how the
+                basket hand-off works, and two links. Every word of it was true and it was in the
+                wrong place: the page's own banner already opens with "Baskfy sends baskets to your
+                broker; it never connects to your account", so the detail panel said it a second
+                time, at greater length, directly under a heading naming the broker. Read in
+                sequence it stops sounding like a design and starts sounding like an apology for a
+                missing feature (Maulik, 29 Aug 2026).
+
+                What a reader needs from this panel when there is no login to offer is already
+                above it: the capability rows say Account link "Not needed", Holdings sync "Not
+                available", Trading "You confirm in Kite". `docs/DECISIONS-MERGE.md` M57.
+              */
+              null
             )}
           </>
         ) : (

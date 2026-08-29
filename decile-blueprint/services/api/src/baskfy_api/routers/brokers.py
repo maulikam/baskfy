@@ -188,15 +188,37 @@ class SyncHoldingsOut(BaseModel):
 
 
 def _connect_configured() -> bool:
-    """Both halves, because the login ends at ``session/token`` and its checksum needs the secret.
+    """Can a **user** complete a broker login *here*? Three things, not two.
 
-    Read at call time rather than at import: the process is long-lived and an operator who adds
-    the credential should not have to restart the API to make the grid tell the truth.
+    The key and the secret are necessary — the login ends at ``session/token`` and its checksum
+    needs both. They are not sufficient, and treating them as such is a trap this deployment walks
+    straight into.
+
+    **The redirect has to come back to us.** Baskfy uses the momentum desk's Kite app (one app,
+    one registered redirect, pointed at ``desk.modelbasket.in/callback``) so that its *data* paths
+    — the deep backfill, `fetch_daily_bars` — can run on the desk's daily session, carried across
+    by `baskfy_worker.kite_session_cli`. Those credentials being present says nothing about
+    whether a person clicking "Connect" lands back on Baskfy. They would land on the desk.
+
+    So configuring Kite for the bridge must not switch on a user-facing button that cannot
+    finish. That is the exact failure this field was added to prevent, and it would have been
+    reintroduced by the thing that made the bridge work. `docs/DECISIONS-MERGE.md` M57.
+
+    Read at call time rather than at import: the process is long-lived and an operator who adds a
+    credential should not have to restart the API to make the grid tell the truth.
     """
-    return bool(
+    if not (
         os.environ.get("BASKFY_KITE_API_KEY", "").strip()
         and os.environ.get("BASKFY_KITE_API_SECRET", "").strip()
+    ):
+        return False
+
+    settings = get_settings()
+    redirect = (
+        os.environ.get("BASKFY_BROKER_OAUTH_REDIRECT", "").strip()
+        or f"{settings.web_origin.rstrip('/')}{OAUTH_CALLBACK_PATH}"
     )
+    return redirect.startswith(settings.web_origin.rstrip("/"))
 
 
 def _gate_out() -> BrokerGateOut:

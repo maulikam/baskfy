@@ -79,6 +79,25 @@ RUNBOOKS: Final[dict[AlertName, str]] = {
 # ---------------------------------------------------------------------------
 
 
+async def is_trading_day(session: AsyncSession, day: dt.date) -> bool:
+    """Whether the exchange had a session on *day*, per the ``trading_day`` calendar.
+
+    Read from the calendar rather than derived from the weekday, because holidays are the case
+    that matters and no weekday rule knows them: 2026-08-28 was a Friday and shut.
+
+    **A date the calendar does not carry is not a trading day.** The nightly task runs unattended,
+    and the two ways to be wrong are not symmetric — skipping a real session delays a publish by a
+    day and is visible in the data-freshness pill, while running a phantom one produces a failed
+    run and a CRITICAL alert for a day the exchange was closed. The calendar is seeded years ahead
+    (`trading_day` currently reaches 2026-12-31), so an absent row means the far future or a gap,
+    and in both cases not running is the safe answer.
+    """
+    found = await session.scalar(
+        select(TradingDay.is_trading_day).where(TradingDay.date == day)
+    )
+    return bool(found)
+
+
 async def begin_run(session: AsyncSession, trade_date: dt.date) -> int:
     """Insert (or reuse) the ``pipeline_run`` row for ``trade_date`` and return its id.
 

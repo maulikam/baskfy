@@ -671,6 +671,44 @@ class TestConnectDoesNotOverClaimEither:
         assert out.redirect_url.startswith("https://kite.zerodha.com/connect/login?")
         assert out.state
 
+    def test_kite_credentials_alone_do_not_switch_on_the_connect_button(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The trap that making the *data* bridge work would otherwise spring.
+
+        Baskfy uses the momentum desk's Kite app so its backfill and `fetch_daily_bars` can run on
+        the desk's daily session (`baskfy_worker.kite_session_cli`). One app means one registered
+        redirect, and it points at `desk.modelbasket.in/callback`. So the key and the secret being
+        present says nothing about whether a person clicking "Connect" lands back on Baskfy — they
+        would land on the desk.
+
+        `connect_configured` therefore asks three questions, not two. Without the third, wiring
+        Kite for data would have reinstated exactly the dead button that field exists to prevent.
+        """
+        from baskfy_api.routers.brokers import _connect_configured
+
+        monkeypatch.setenv("BASKFY_KITE_API_KEY", "desk-app-key")
+        monkeypatch.setenv("BASKFY_KITE_API_SECRET", "desk-app-secret")
+        monkeypatch.setenv("BASKFY_BROKER_OAUTH_REDIRECT", "https://desk.modelbasket.in/callback")
+        assert _connect_configured() is False
+
+    def test_a_redirect_that_does_come_back_to_us_does_switch_it_on(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The other direction, so this is a gate rather than an off switch.
+
+        A Baskfy-owned Connect app would set a redirect on our own origin, and the button must
+        return without a code change.
+        """
+        from baskfy_api.routers.brokers import _connect_configured
+        from baskfy_api.settings import get_settings
+
+        monkeypatch.setenv("BASKFY_KITE_API_KEY", "our-app-key")
+        monkeypatch.setenv("BASKFY_KITE_API_SECRET", "our-app-secret")
+        monkeypatch.delenv("BASKFY_BROKER_OAUTH_REDIRECT", raising=False)
+        get_settings.cache_clear()
+        assert _connect_configured() is True
+
     async def test_the_redirect_uri_points_at_a_route_that_exists(self) -> None:
         """The half of an OAuth flow that fails *after* the user has committed to it.
 

@@ -73,6 +73,26 @@ def nightly_pipeline(trade_date: str | None = None) -> JsonObject:
        ``baskfy.ops.reap_abandoned_runs`` is for.
     """
     day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
+
+    # Prompt 3 deliverable 7: "never attempt to ingest or compute for a non-trading day."
+    #
+    # The schedule fires every evening, and until now the task took whatever date that was. On
+    # 2026-08-28 — a holiday — it ran the full chain against a day with no session, wrote zero
+    # bars, and the quality gate correctly refused it: "0 bars against a 10-day median of 2532".
+    # That is a **failed run and a CRITICAL alert for a day the exchange was shut**, which trains
+    # an operator to ignore the alert that matters. Every weekend did the same.
+    #
+    # An explicit `trade_date` is honoured regardless: a human asking for a specific day has a
+    # reason, and refusing them here would make a backfill impossible to drive by hand.
+    if trade_date is None and not run_in_session(
+        lambda session: ops.is_trading_day(session, day)
+    ):
+        return {
+            "trade_date": day.isoformat(),
+            "status": "skipped",
+            "reason": "not a trading day",
+        }
+
     deps = build_pipeline_dependencies()
     run_id: int = run_in_session(lambda session: ops.begin_run(session, day))
 

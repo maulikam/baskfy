@@ -49,18 +49,25 @@ describe("when this deployment has no Kite Connect credentials", () => {
     expect(screen.queryByRole("button", { name: /^Connect Zerodha$/ })).toBeNull();
   });
 
-  it("says what the user should do instead, in the product's own terms", () => {
-    /* Not "unavailable". A reader who is told a thing is unavailable waits for it; a reader who
-       is told they do not need it goes and does the thing that works. */
+  it("does not repeat the page banner's message in the detail panel", () => {
+    /* The panel used to restate "You don't need to connect Zerodha to invest" with the whole
+       hand-off explanation under it. The page banner already opens with that, so the detail panel
+       said it a second time at greater length, directly under a heading naming the broker — which
+       reads as an apology for a missing feature rather than a design (Maulik, 29 Aug 2026).
+
+       What a reader needs is still on screen: the capability rows below. */
     render(<BrokerGrid brokers={[ZERODHA]} gate={gate()} />);
-    expect(screen.getByText(/don.t need to connect Zerodha to invest/i)).toBeInTheDocument();
-    expect(screen.getByText(/hands it to your own Kite/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /browse baskets/i })).toBeInTheDocument();
+    expect(screen.queryByText(/don.t need to connect Zerodha to invest/i)).toBeNull();
+    expect(screen.queryByRole("link", { name: /browse baskets/i })).toBeNull();
   });
 
-  it("still promises that Baskfy holds no broker credentials", () => {
+  it("still tells the reader what this broker can and cannot do", () => {
+    /* Removing the panel must not remove the answer. These three rows are what is left, and they
+       are the honest version of it. */
     render(<BrokerGrid brokers={[ZERODHA]} gate={gate()} />);
-    expect(screen.getByText(/never holds your broker credentials/i)).toBeInTheDocument();
+    expect(screen.getByText("Not needed")).toBeInTheDocument();
+    expect(screen.getByText("Not available")).toBeInTheDocument();
+    expect(screen.getByText("You confirm in Kite")).toBeInTheDocument();
   });
 });
 

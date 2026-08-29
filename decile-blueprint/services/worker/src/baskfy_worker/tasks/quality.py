@@ -278,6 +278,26 @@ async def check_factor_rows_match_bars(session: AsyncSession, ctx: GateContext) 
 # --- assertion 5 -------------------------------------------------------------
 
 
+#: Selectable universes that nothing in this codebase populates, with the reason for each.
+#:
+#: These are **not** exemptions from the quality bar; they are an admission that two of the
+#: fourteen universes have no membership source, which is a product gap and not a bad night. The
+#: distinction matters because the gate is a publish blocker: on 2026-08-27 every other check
+#: passed — 2546 bars against a median of 2532, factor rows matching bars, no null prices — and
+#: the run was refused, and the whole product served a nine-day-old session, because two niche
+#: universes were empty. They had been empty every day since the box was built.
+#:
+#: An entry here must be *sourceless*, not merely empty. A universe that has a source and comes
+#: back empty is a real failure and still fails: `test_quality_universe_sources.py` asserts that,
+#: and asserts this list cannot grow to cover one.
+#:
+#: ``etf``        `membership.DERIVED_BY_RULE` selects `instrument.instrument_type == "ETF"`, and
+#:                nothing ever writes that type — the instrument table holds only EQ and INDEX.
+#:                Fixing it means classifying ETFs during the listings ingest.
+#: ``nifty-fno``  needs NSE's F&O constituent file, which no provider fetches.
+NO_MEMBERSHIP_SOURCE: frozenset[str] = frozenset({"etf", "nifty-fno"})
+
+
 async def check_universe_sizes(session: AsyncSession, ctx: GateContext) -> CheckResult:
     """docs/09 5: every selectable universe has a membership set within 5% of its nominal size.
 
@@ -298,6 +318,7 @@ async def check_universe_sizes(session: AsyncSession, ctx: GateContext) -> Check
     )
 
     problems: list[str] = []
+    unsourced: list[str] = []
     observed: JsonObject = {}
     for universe in UNIVERSES:
         actual = int(counts.get(universe.index_id, 0))
@@ -305,18 +326,34 @@ async def check_universe_sizes(session: AsyncSession, ctx: GateContext) -> Check
         nominal = NOMINAL_SIZES.get(universe.slug)
         if nominal is None:
             if actual == 0:
-                problems.append(f"{universe.slug} has no members")
+                if universe.slug in NO_MEMBERSHIP_SOURCE:
+                    # Empty because nothing populates it, not because today went wrong. Reported,
+                    # never fatal — see NO_MEMBERSHIP_SOURCE.
+                    unsourced.append(universe.slug)
+                else:
+                    problems.append(f"{universe.slug} has no members")
             continue
         if abs(actual - nominal) > nominal * tolerance:
             problems.append(f"{universe.slug}: {actual} members against a nominal {nominal}")
 
     status = CheckStatus.PASSED if not problems else CheckStatus.FAILED
+    if problems:
+        message = "; ".join(problems)
+    elif unsourced:
+        # Said on every passing run, deliberately. A known gap that stops being mentioned is a
+        # known gap that stops being known.
+        message = (
+            "every sourced universe is within tolerance; "
+            f"no membership source wired for: {', '.join(sorted(unsourced))}"
+        )
+    else:
+        message = "every universe is within tolerance"
     return CheckResult(
         "universe_sizes",
         5,
         status,
-        "; ".join(problems) if problems else "every universe is within tolerance",
-        {"counts": observed, "tolerance": tolerance},
+        message,
+        {"counts": observed, "tolerance": tolerance, "unsourced": sorted(unsourced) or None},
     )
 
 

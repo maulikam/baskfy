@@ -1182,4 +1182,22 @@ newer.
   chain is automatic from the desk's token onward, not from end to end.
 - **Two secrets pasted into an agent transcript on 27 Aug still need rotating**: the Google
   client secret and the RENIL Kite api_secret. The box does not hold the Kite secret, which
-  limits the blast radius but does not remove the need.
+  limits the blast radius but does not remove the need. A third, the desk's Kite *access* token,
+  was printed into the 30 Aug transcript by an agent command whose stdout was the token; it
+  expires overnight and re-logging in on the desk retires it.
+
+**One consequence to watch, deliberately not acted on tonight.** Configuring Kite changes which
+source the nightly uses for the day's bars, because `fetch_daily_bars` is Kite-first and the
+bhavcopy is its fallback. `bars.py` says in its own words that the bhavcopy is *"the better source
+for this window: it carries `turnover` and both circuit bands natively, which Kite does not"* — and
+it is one file per day against 2546 rate-limited calls (~14 minutes, measured). What Kite-sourced
+days lose is exchange turnover, so `vol_day_val` falls back to `close_raw x volume_raw`; that
+fallback is docs/05 §13's own instruction and is recorded per row in `turnover_source`, so it is a
+documented degradation rather than silent loss. Existing rows are safe: the upsert's `set_` clause
+deliberately omits `turnover`, so a Kite refetch preserves what the bhavcopy wrote.
+
+The likely right answer is to invert the preference — bhavcopy for dates it covers (2024 onward),
+Kite for the deep history it alone reaches. That was **not** done tonight on purpose: it changes
+the primary ingest path hours before the first unattended run, which is the worst possible moment
+to introduce an untested inversion. Monday's run measures the real cost, and that is the evidence
+to decide on.

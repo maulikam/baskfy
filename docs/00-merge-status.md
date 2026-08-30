@@ -33,8 +33,24 @@ generated-scan flag **off**. 9M and 12M did not move because their residual is t
 length**, not the adjustment — the seeded calendar is short about nine lunar-calendar holidays a
 year. M27 predicted that before M28 ran.
 
+**Tree 3 Fundamentals (25 Aug 2026).** The reason `fundamental_daily` was empty was **not** that
+no night had run: NSE had **retired** `/api/quote-equity`, which now answers 403 from AkamaiGHost
+— a removed route that reads like a bot block. T9.1's parser was aimed at a dead endpoint and a
+dead payload shape, so a night would have archived deny pages and reported success. The provider
+now calls `GetQuoteApi` (`functionName=getSymbolData`), the retired shape still parses out of the
+archive, and `fundamental_daily` is filled for the **published** date — which is
+`max(pipeline_run.trade_date)` where `data_version IS NOT NULL`, *not* `max(ohlcv_daily.date)`;
+filling only the newer one leaves every surface on an em dash while the table looks full. The
+instrument factsheet serves real M-cap and P/E again and decile bucketing is no longer one giant
+tie. Three defects found on the way: step 6 was fetching all 10,481 instruments instead of the
+day's ~2,540 traded names (hours per night), a symbol listed under two series would have crashed a
+batch, and the P/E was being stored with the fetch day's price inside a past date's row (house
+rule 5). Open and filed: the NSE fetch stalls roughly every 600 requests and the nightly path can
+now hit it (`NEEDS-MAULIK.md` §17), and the landing page's M-cap column is 402-gated by
+`custom_columns` rather than by data (§18). `DECISIONS-MERGE.md` §T3F.1–T3F.6.
+
 **Tree 3 Numbers (24 Aug 2026).** T9.1–T9.5: NSE quote-equity → `fundamental_daily` (folded into
-snapshots; live table still empty until a night runs). Nightly calendar reconcile looks back 400
+snapshots; **superseded above** — the live table is no longer empty). Nightly calendar reconcile looks back 400
 days so 9M/12M stop resolving long. `SCAN_SOURCE_DEFAULT` stays `upload`. `deep_backfill`
 defaults to 2011-01-01 (data still starts 2017 until the job is run). Backtest Sharpe subtracts
 OECD IR3TIB; factor Sharpe is still `ret/vol`.
@@ -684,7 +700,8 @@ Priority audit from Maulik's brief. Gates in `gates/tree5-existential.md`.
 | `portfolio.db` backup | **restore drill green** | `scripts/restore_drill.py` · backup **20260823-233103** · manifest parity · integrity ok |
 | Fresh backup | **taken** | `python -m scripts.backup` 23 Aug 2026 |
 
-**NOT done (existential list, deferred):** fundamentals pipeline (0 rows), backfill to 2011,
+**NOT done (existential list, deferred):** ~~fundamentals pipeline (0 rows)~~ — **done, see Tree 3
+Fundamentals above**; backfill to 2011,
 `cb_metrics`, parity test green, counsel/compliance checklist, staging, R2 WAL, route-sweep in CI.
 
 **Note:** live `rebalance_orders` count dropped 259 → 133 between the 22 Aug and 23 Aug backups
@@ -928,11 +945,17 @@ alongside the change.
 
 ---
 
-## M40 — catalog search: ⌘K now covers stocks, indices, baskets and screens (25 Aug 2026)
+## M46 — catalog search: ⌘K now covers stocks, indices, baskets and screens (25 Aug 2026)
 
 `baskfynavrefactorreport.md` §F11's open item — "full ⌘K search deferred", item 5 on that report's
-own list — is closed. Decisions are `docs/DECISIONS-MERGE.md` §M40–M40.6, all ⚠ UNREVIEWED. Gates:
-`gates/tree3-catalog-search.md`.
+own list — is closed. Decisions are `docs/DECISIONS-MERGE.md` §M46–M46.7, all ⚠ UNREVIEWED. Gates:
+`gates/tree3-catalog-search.md` — 26 of 26 met, ledger in the file, one ABANDON line for the half
+of `pnpm run lint` this sitting does not own.
+
+Written and committed as M40, then renumbered: `## M40 — the palette is the broker screen's`
+already existed with its own M40.1–M40.4 (a different palette — the colour one), from a tree
+running concurrently in this same working tree. M46.7 records the renumber and the one-line check
+that would have caught it.
 
 **Shipped.**
 
@@ -949,11 +972,11 @@ own list — is closed. Decisions are `docs/DECISIONS-MERGE.md` §M40–M40.6, a
 
 - **No index detail page.** An index hit lands on `/market/today?q=<slug>` — the ~145-row dashboard
   filtered to that row. There is no `/indices/{slug}` anywhere in the app and F11 did not ask for
-  one. `hrefs.test.ts` pins the current answer so replacing it is a visible change (M40.2).
+  one. `hrefs.test.ts` pins the current answer so replacing it is a visible change (M46.2).
 - **The indices table keeps its own local search box.** F11 says the palette "replaces both
   existing scoped search boxes **as the primary entry**" — the header's stock-only box is gone,
   and filtering a table you are already looking at is not a second global search.
-- Recents are per browser and are not synced (M40.3).
+- Recents are per browser and are not synced (M46.3).
 
 **Two pre-existing defects found while doing this, both fixed here because they blocked the work.**
 
@@ -964,12 +987,109 @@ own list — is closed. Decisions are `docs/DECISIONS-MERGE.md` §M40–M40.6, a
    added to `BacktestConfig` since the artifact was last generated, Pydantic emits `prefixItems`
    for a tuple, and the value `openapi-fetch` hands back is structurally widened. Measured: 94 web
    typecheck errors on the stale artifact, 2 on the fresh one, 0 with the `WithJsonSchema`
-   override now in `baskfy_core.backtest`. Validation is unchanged (M40.4).
+   override now in `baskfy_core.backtest`. Validation is unchanged (M46.4).
 2. **The e2e database had never contained a single basket.** `seed_momentum_scan_basket` returns 0
    when fewer than `top_n` of its fifteen hard-coded large caps (RELIANCE, TCS, INFY, …) exist in
    `instrument` — and none of them is in the 271-row reference export, so the branch was silently
    taken on every `seed e2e`. Every catalog surface in the browser suite has been running against
-   an empty catalog. The `e2e` seed now ranks from the export itself (M40.6).
+   an empty catalog. The `e2e` seed now ranks from the export itself (M46.6).
+
+## Collections, second pass — the shelves stopped lying about a thin catalogue (COL5–COL8)
+
+Four collections existed and three of them rendered the same single basket, one after another,
+with `quarterly` below them as a dashed empty box. Every row behind that page was true; the page
+still read as broken. The fix is at the rendering layer plus two real defects found by measuring.
+
+**Done.**
+
+- `apps/web/src/lib/collections/select.ts` — `selectShelves` drops a shelf that is empty, or that
+  holds exactly the baskets of a shelf already kept in curator order. Fewer than two survivors and
+  the caller renders the directory instead of stacking. Suppression is presentation-only and a
+  test asserts kept + suppressed is the whole input (COL5).
+- `CollectionShelves` picks between the two presentations on `/baskets`;
+  `CollectionDirectory` + `CollectionTile` are the doors, shared with home's grid (COL6).
+- `/baskets/collections` is now a complete directory — every shelf including the empty ones —
+  instead of a stack that repeated cards. Each shelf's own page is unchanged and still renders
+  `CollectionShelf`'s honest empty state (COL6).
+- `CollectionSeed.limit`; `start-here` capped at 6. A shelf with no predicate and no cap is the
+  catalogue under a second title, and a test now asserts no seed row can be one (COL7).
+- `_collection_member_ids` joins `cb_metrics` through a latest-`as_of_date` subquery, and
+  `_collection_out` de-duplicates `basket_ids`. The plain join was fanning `momentum-scan` out
+  once per metrics row, so `start-here` was stored as `[1, 25, 27, 1, 28, 29]` (COL8).
+
+**Not done, and deliberately so.**
+
+- **No basket was invented to fill `quarterly`.** It is empty when nothing rebalances quarterly,
+  and that is the honest answer; the shelf is listed as a tile that says so.
+- **Home's "Take your pick" grid still lists all four shelves,** including ones `/baskets` would
+  suppress. A directory's job is completeness (COL6); only stacked renders suppress.
+
+**Blocking anyone who runs the db-backed API suites right now, and not this tree's to fix.**
+`seed_reference()` calls `seed_catalogue` (untracked `curated_catalogue.py`) *before* the test
+fixture's `publish_run`, so `resolve_as_of` raises `NoPublishedData` and **every** db-backed API
+suite errors during setup, including suites that predate the file. Measured on
+`test_explore_http.py` as well as `test_collections.py`. This tree's Python was verified by
+running with a throwaway pytest plugin that stubs that one step (47 passed) — no repo file was
+edited to work around it. `mypy services/api/src` also reports 3 errors, all in that same file.
+
+## Baskets became Discover — an investment-discovery workspace (DSC1–DSC5)
+
+The brief asked for eleven sections of product. This run built the spine — Discover → Understand
+→ Compare — and wrote down, precisely, what the rest is blocked on.
+
+**Done.**
+
+- **`/baskets*` → `/discover*`**, moved (the shadowed-route rule forbids a page at a redirected
+  path) with five redirects in `next.config.ts` and `LEGACY_REDIRECTS`. Tabs: For you · All
+  baskets · Collections · Compare · Saved. Create moved to Build, where it belongs.
+- **A card that answers four questions** — `components/discover/basket-card.tsx`. Drawn strategy
+  marks instead of two-letter monograms, volatility *before* return, units on every figure, the
+  return convention at the number, and View analysis · Compare · Save as real controls. The card
+  is no longer one giant anchor, which is why it had no room for an action before.
+- **Compare** — `/discover/compare`, selection in the URL so a comparison is a link. Every return
+  measured over the longest window all the selected baskets share, and it says when it shortened
+  and why. Portfolio overlap is implemented and tested, waiting only on a constituents route.
+- **The goal composer and three starting choices** — filter language throughout, with the match
+  written out as "matches 3 of 4 preferences that could be checked", naming them.
+- **The workspace** — `/discover/all` uses the full 104rem the shell already allows instead of a
+  5xl column: sticky filters, results as Cards or Table, and a rail explaining the numbers.
+- **Four defects from the brief's list, fixed at the mechanism.** The missing `%` was a
+  `typeof value === "number"` branch that could never run in production (the API sends a
+  `Decimal`, which is a JSON string). "Swing" is gone everywhere, and the volatility chip no
+  longer colours calm green — volatility has no direction. The December-2026 banner pointed at
+  `/blog` instead of its own page.
+
+**Found while doing it, not asked for, fixed.**
+
+- The ⌘K palette matched nav items on `label` only, so renaming Baskets to Discover orphaned
+  every reader who typed the word they knew. `NavItem.formerly` existed since Tree 6 and was
+  never searched. It is now.
+- The catalogue's "Featured" tab was never a featured list — it renders the house strategy's own
+  output. Retitled, and it now carries a disclosure block it was missing entirely.
+
+**Corrected in the brief, with evidence** — `docs/DISCOVER-AUDIT.md` checks all sixteen claims
+against the code. Four are wrong or half right: 1Y is *not* over-emphasised (the card already
+prefers 5Y CAGR then 3Y then 1Y and only shows 1Y for a young basket); the December-2026
+announcement does not conflict with the August data date (it is a roadmap note about future
+work); the watchlist already exists end to end and only lacked a control on the card; and the
+repeated-baskets problem is a six-basket catalogue, not a rendering bug.
+
+**Not done, and deliberately so.**
+
+- **The risk-return explorer.** Six baskets that are all momentum sit in one corner of a
+  return-versus-volatility plane; the chart would be decoration. Worth building when the
+  catalogue spreads, or when maximum drawdown exists for the x-axis.
+- **Most of §4's card table, §5's advanced filters, §6's Consistency and Portfolio sections and
+  §7's risk page.** `cb_metrics` holds no drawdown, recovery, Sharpe, Sortino, turnover,
+  benchmark delta or concentration. `docs/DISCOVER-METRICS-GAP.md` is the register: twelve
+  figures, where each would come from, what it blocks, and the order worth building them in. The
+  UI renders each as a labelled blank rather than dropping the row, because a dropped row reads
+  as "these baskets are alike on this".
+- **§10's broker connection, order preview and rebalance execution.** Non-negotiable #1 and D3.
+  The web app does not gain an execute route.
+- **The brief's orange accent and per-category colours.** Declined against `app/globals.css`,
+  which reserves colour for meaning and is enforced by `contrast.test.ts` — DSC2. Form carries
+  the distinction instead.
 
 ## The landing flow diagram was rebuilt in normal flow, and lost its cost box (27 Aug 2026)
 
@@ -1018,3 +1138,48 @@ the fee's three numbers are asserted to still be in the numbered steps.
 per-plan brokerage/STT estimate before a confirm. `baskfy_core.costs` models the six Zerodha CNC
 components and is fed to backtests, not to a pre-trade screen. Removing the cost box does not
 close that gap — it stops the landing page from implying the gap is closed.
+
+---
+
+## M58 — the daily Kite session pulls itself (30 Aug 2026)
+
+**Done.** The box no longer needs a human to give it a Kite session. `kite_session_cli pull`
+fetches the desk's access token over SSH, verifies it against Kite, and stores it;
+`nightly_pipeline` calls it as its first act, so the session is renewed as part of the night.
+The desk side is one read-only script and one `authorized_keys` line bound to a forced command —
+no desk application file was touched, and its suite is unchanged at 1330 passed.
+
+**Three things were broken on the box that a token alone would not have fixed**, and all three
+are why Kite had never worked here:
+
+1. `BASKFY_KITE_API_KEY` was empty. `KiteProvider` refuses without it, token or no token.
+2. `BASKFY_KITE_TOKEN_ENCRYPTION_KEY` was empty, so the store refused to write at all.
+3. `BASKFY_KITE_TOKEN_PATH` was the *relative* default `.secrets/kite-token.enc`, which resolves
+   against the image's root-owned `/repo`. Identical in shape to the archive-directory failure
+   that had silently disabled the entire NSE ingest path until 27 Aug. It is now an absolute path
+   on a named volume.
+
+The api **secret** is deliberately still empty. `KiteProvider` needs only the api key and an
+access token; the secret is what exchanges a request token for a session, which is the desk's job.
+Leaving it unset means this box cannot create a Kite session even in principle — it can only use
+the one the desk already made.
+
+**Also confirmed here, closing the open item from 27 Aug.** The pipeline *did* publish:
+`pipeline_run` id 9, trade_date 2026-08-27, status succeeded, **data_version 2** (up from 1 at
+2026-08-18). Bars, factors and fundamentals all reach 2026-08-27, and `trading_day` shows that is
+the latest session — 28 Aug is a holiday, 29–30 Aug the weekend. The site is current, not merely
+newer.
+
+**What is NOT done.**
+
+- **The first unattended nightly has not run yet.** The next session is Monday 31 Aug; the 18:45
+  IST schedule is the real test of whether any of this is automatic. Until that run is green,
+  "daily data arrives on its own" is a design claim, not an observation.
+- **The deep backfill to 2011 (D5) has still never run.** The session this unlocks is the
+  precondition, not the work.
+- **The desk's login is still manual.** If nobody logs in to the desk on a given morning, the
+  pull correctly refuses (Kite answers 403) and the night falls back to the bhavcopy. So the
+  chain is automatic from the desk's token onward, not from end to end.
+- **Two secrets pasted into an agent transcript on 27 Aug still need rotating**: the Google
+  client secret and the RENIL Kite api_secret. The box does not hold the Kite secret, which
+  limits the blast radius but does not remove the need.

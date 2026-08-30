@@ -37,7 +37,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import IndexMemberDaily, Instrument, OhlcvDaily
-from baskfy_core.universes import UNIVERSES, Universe
+from baskfy_core.universes import SME_SERIES, UNIVERSES, Universe
 from baskfy_providers.errors import ProviderError, UnexpectedPayload
 from baskfy_worker.steps import StepOutcome
 
@@ -46,7 +46,7 @@ SOURCE_RECONSTRUCTED = "reconstructed"
 SOURCE_DERIVED = "derived"
 
 #: docs/06 §"Step 2" — universes defined by rule rather than by a published file.
-DERIVED_BY_RULE: frozenset[str] = frozenset({"nifty-allcap", "etf"})
+DERIVED_BY_RULE: frozenset[str] = frozenset({"nifty-allcap", "etf", "nse-sme-emerge"})
 
 #: docs/09 §Backfill: NSE constituent files are unavailable "pre-2018". Before this, membership
 #: can only be reconstructed, and is marked as such.
@@ -176,19 +176,27 @@ def _from_provider(provider: object, universe: Universe, on: dt.date) -> list[st
 
 
 async def _derived_members(session: AsyncSession, universe: Universe, on: dt.date) -> list[str]:
-    """docs/06 §"Step 2": allcap is every EQ instrument with a bar on ``on``; etf every ETF.
+    """docs/06 §"Step 2": allcap is every EQ instrument with a bar on ``on``; etf every ETF;
+    ``nse-sme-emerge`` every EQ instrument whose series the Emerge register carries.
 
     Requiring a bar is what keeps a suspended, delisted or not-yet-listed name out of the universe
     on that date — which is the same point-in-time discipline the file-backed universes get for
-    free from the file itself.
+    free from the file itself. It matters more for SME than for anything else: Emerge names go
+    untraded for days at a time, and a name that did not trade has no business being screened as
+    though it had.
     """
     instrument_type = "ETF" if universe.slug == "etf" else "EQ"
-    rows = await session.execute(
+    query = (
         select(Instrument.symbol)
         .join(OhlcvDaily, OhlcvDaily.instrument_id == Instrument.id)
         .where(Instrument.instrument_type == instrument_type, OhlcvDaily.date == on)
         .distinct()
     )
+    # SME is a *platform*, not an index: its membership is exactly "listed on Emerge", which the
+    # series records. allcap deliberately keeps no such filter, so it spans both boards.
+    if universe.slug == "nse-sme-emerge":
+        query = query.where(Instrument.series.in_(sorted(SME_SERIES)))
+    rows = await session.execute(query)
     return [row[0] for row in rows]
 
 

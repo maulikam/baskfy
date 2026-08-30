@@ -331,7 +331,8 @@ EXAMPLE_SCREENS: Final[tuple[ScreenSeed, ...]] = (
 
 
 def index_def_rows() -> list[JsonObject]:
-    """``index_def`` rows for the 14 selectable universes (docs/01 §2.1)."""
+    """``index_def`` rows for the selectable universes — docs/01 §2.1's fourteen, plus any
+    Baskfy has added since (M59's ``nse-sme-emerge``)."""
     return [
         {
             "id": u.index_id,

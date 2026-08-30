@@ -44,7 +44,7 @@ import polars as pl
 
 from baskfy_core.blends import shape_suffix
 from baskfy_core.precision import PERCENT_DP, PRICE_DP, RATIO_DP, RSI_DP
-from baskfy_core.universes import UNIVERSES
+from baskfy_core.universes import REFERENCE_EXPORT_UNIVERSES
 
 #: Half of the last decimal place each family is stored at (docs/13 §4).
 HALF_ULP: Final[dict[int, Decimal]] = {
@@ -609,7 +609,9 @@ def check_top_risk_flag_monotonicity(frame: pl.DataFrame) -> CheckResult:
     disagreements: list[Disagreement] = []
     cells = 0
     notes: list[str] = []
-    for universe in UNIVERSES:
+    # The reference export's own fourteen: this reconciles against that file, and a universe
+    # Baskfy added has no `is_*` column in it to reconcile.
+    for universe in REFERENCE_EXPORT_UNIVERSES:
         slug = _slug(universe.slug)
         members = [r for r in frame.iter_rows(named=True) if r[f"is_{slug}"] == 1]
         if not members:

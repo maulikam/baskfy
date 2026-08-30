@@ -5850,3 +5850,78 @@ or hold a credential of its own. Non-negotiable #1 is untouched.
 unset `BASKFY_KITE_DESK_SSH_TARGET`; `desk_session_pull_configured()` then returns False and
 `pull` refuses with a message pointing at `deposit`. Delete `/opt/baskfy/secrets/ssh` to destroy
 the key. Nothing else in the pipeline changes: the bhavcopy path is what runs today either way.
+
+---
+
+## M59 — NSE Emerge (SME) as a screenable universe ⚠ UNREVIEWED
+
+**Context.** Maulik asked for "NSE micro-cap index in the filter … companies less than 2,000
+crores" and then clarified: *SME stocks*. Investigation showed the request could not be met by
+any existing control, and that the reason was upstream of the UI:
+
+| Universe (staging, 2026-08-27) | Members | Min mcap | Under ₹2,000 cr |
+|---|---|---|---|
+| NIFTY MICROCAP 250 | 250 | ₹1,844 cr | 1 |
+| NIFTY TOTAL MARKET | 750 | ₹1,844 cr | 1 |
+| All NSE Listed Stocks | 2,544 | ₹0 cr | 1,336 |
+
+NSE's "MICROCAP 250" is not micro-cap in the sense meant — it is the 501st–750th name of the
+Total Market index and floors at ₹1,844 cr. More to the point, **no NIFTY index contains an SME
+company at all**: Emerge is a separate NSE *platform* with its own listing register.
+
+The data was already arriving and being discarded. The daily bhavcopy carries ~457 Emerge rows
+(358 `SM` + 99 `ST` on 2026-08-27); `bhavcopy_backfill.EQUITY_SERIES` admitted only `EQ/BE/BZ`,
+and its comment recorded the exclusion as deliberate — "those are not equity". They are equity;
+they are a different board. Separately, `NSEProvider.listings` reads `EQUITY_L.csv`, which is
+main-board only (2,559 rows), so no SME symbol had an `instrument` row to join a bar to.
+
+**Choice taken.** Make Emerge a first-class, screener-only universe.
+
+1. `NSEProvider.sme_listings()` reads `/emerge/corporates/content/SME_EQUITY_L.csv` (565 rows
+   verified live, 30 Aug 2026). **Not** `/content/equities/SME_EQUITY_L.csv`, which still
+   resolves but has been frozen at a single stale row (THEJO, 2012) for years.
+2. `SERIES_VALUES` widens from `("EQ","BE")` to `("EQ","BE","SM","ST","SZ")` — a public API
+   contract change, mirrored in the Zod schema and pinned by the parity tests. Default stays
+   `["EQ"]`, so **no existing screen changes meaning**.
+3. A 15th universe `nse-sme-emerge` ("NSE SME (Emerge)"), derived by rule from the series rather
+   than from a constituent file, because NSE publishes no Emerge constituent list.
+4. `EQUITY_SERIES` admits `SM/ST/SZ`. `GS/GB/TB/N0–NF` stay excluded: not equity, and
+   non-negotiable #7 blocks G-sec at the lowest layer.
+5. Emerge names carry `instrument_type='EQ'`, so allcap's "every EQ instrument with a bar" rule
+   takes them in automatically — SME and main board can be screened together.
+
+**Why screener-only, and why that is load-bearing.** SME trades in fixed lots with a minimum
+order value, and the Emerge register **has no MARKET_LOT column** — nothing published tells us
+the lot size. `packages/core/basket_sizing` sizes in whole shares. Feeding an SME name to the
+execution path would compute a quantity the exchange will reject at best, and mis-size a real
+position at worst. Nothing in this module touches `packages/execution`, and the series filter
+renders a standing note in the UI saying Baskfy screens these names and does not size or place
+orders in them. **Non-negotiables #1 and #7 are untouched.**
+
+**Rejected alternatives.**
+
+- *Market-cap band presets (Large/Mid/Small/Micro) on the existing marketcap filter.* Was the
+  first proposal, and it was wrong: it answers "small company" when the ask was "SME platform".
+  It would have shipped a filter that still could not surface a single Emerge name.
+- *Fold SME into `nifty-allcap` only, with no dedicated universe.* Happens anyway (point 5), but
+  leaves no way to screen Emerge alone, which is the actual request.
+- *Add `sme_listings` to the `ReferenceProvider` protocol.* It is `runtime_checkable`; every
+  implementor and every test fake would have to grow a method about one exchange's platform.
+  Duck-typed via `getattr` instead, the same shape `refresh_listings` already uses for
+  `listings`.
+- *Add `is_nse_sme_emerge` columns to the reference export.* `reference_export.py` reads
+  momoindiascreener.in's file, which is the read-only regression corpus and has fourteen
+  universes by construction. `REFERENCE_EXPORT_UNIVERSES` now separates "the reference product's
+  universes" from "ours"; our CSV header is `EXPORT_COLUMNS`, so **the export schema is
+  unchanged**.
+
+**Known gaps, honestly.** Emerge names are illiquid — `SHAIVAL` and `AHIMSA` both returned
+`last_price=0 → marketcap_cr=None` on probe, and a name with no marketcap cannot be decile-
+bucketed (`DECILE_RANK_KEY`). 461 of 565 listed >400 days ago, so ~104 have too little history
+for 12-month momentum. Both are properties of the asset class, not bugs, but a user screening
+Emerge will see a smaller result set than 565.
+
+**Reversal.** Remove the `Universe(15, …)` row, narrow `SERIES_VALUES` and `EQUITY_SERIES` back,
+regenerate the schema/corpus/openapi artefacts. Ingested SME `instrument` and `ohlcv_daily` rows
+are additive and harmless if left; `index_def` row 15 can stay, since `is_universe` rows are read
+through `baskfy_core.universes`, not the table.

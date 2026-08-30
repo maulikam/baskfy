@@ -216,6 +216,19 @@ class CompositeProvider:
     def listings(self) -> list[ListingRecord]:
         return self.route(Capability.LISTINGS, lambda p: _reference(p).listings())
 
+    def sme_listings(self) -> list[ListingRecord]:
+        """The NSE Emerge register, from whichever routed provider publishes one.
+
+        Duck-typed rather than part of :class:`ReferenceProvider`: Emerge is one exchange's
+        platform, and a vendor that serves bars and listings should not have to grow a method
+        about it to stay a reference provider. A provider without one contributes nothing here,
+        which is the same shape ``refresh_listings`` already handles.
+        """
+        return self.route(
+            Capability.LISTINGS,
+            lambda p: list(getattr(p, "sme_listings", list)()),
+        )
+
     def bhavcopy(self, on: dt.date) -> pl.DataFrame:
         return self.route(Capability.BHAVCOPY, lambda p: _reference(p).bhavcopy(on))
 

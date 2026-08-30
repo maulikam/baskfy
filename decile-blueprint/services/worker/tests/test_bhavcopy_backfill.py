@@ -124,7 +124,22 @@ class TestTheSeriesFilter:
         assert unmatched == set()
 
     def test_the_default_series_are_the_ones_the_register_holds(self) -> None:
-        assert EQUITY_SERIES == ("EQ", "BE", "BZ")
+        """Main board plus the Emerge platform — the two registers `refresh_listings` reads."""
+        assert EQUITY_SERIES == ("EQ", "BE", "BZ", "SM", "ST", "SZ")
+
+    def test_sme_series_are_ingested(self) -> None:
+        """M59: the bhavcopy has carried ~457 Emerge rows a day all along and dropped every one.
+
+        The regression this guards is the cheap fix for the opposite bug — narrowing the tuple
+        back to the main board would make an SME screen silently return nothing rather than fail.
+        """
+        frame = pl.concat(
+            [bhavcopy(symbol="AGUL", series="SM"), bhavcopy(symbol="AATMAJ", series="ST")]
+        )
+        ids = {("AGUL", "SM"): 11, ("AATMAJ", "ST"): 12}
+        rows, unmatched = _rows_for_day(frame, ids, EQUITY_SERIES)
+        assert sorted(r["instrument_id"] for r in rows) == [11, 12]
+        assert unmatched == set()
 
 
 class TestTheReport:

@@ -5789,3 +5789,64 @@ stops being a strictly ordered sequence inside one cycle.
 The layout and the animation are independent of the cost decision and would not need reverting
 with it; they are a separate `git revert` of the same commit's hunks in
 `how-it-works-flow.tsx` and `globals.css`.
+
+---
+
+## M58 — the daily Kite session pulls itself ⚠ UNREVIEWED
+
+**Context.** M57 built a bridge around Kite's one-redirect-URL constraint: `kite_session_cli
+deposit --token` puts the desk's access token where `KiteProvider` reads it. It works, but it is
+a chore — a Kite token dies overnight, so someone had to paste a fresh one every trading morning.
+Maulik's instruction on 30 Aug 2026 was to remove the human: *"we can have the daily data as well
+in our system. Otherwise, we have to do it repetitively, and this is very time-consuming."*
+
+**Choice taken.** The box fetches the token from the desk over SSH, using a key the desk binds to
+a **forced command** that prints the token and exits. `nightly_pipeline` calls
+`kite_session_cli.refresh_quietly()` before the chain, so the session is renewed as part of the
+night rather than in preparation for it.
+
+Three properties are the whole design, and each is enforced somewhere other than in prose:
+
+1. **The credential is a capability, not an account.** `restrict,command="…",from="3.108.148.38"`
+   in the desk's `authorized_keys` means the key cannot open a shell, forward a port, or run
+   anything else — from anywhere else. sshd enforces that, not Baskfy. So the blast radius of
+   this key leaking is "someone at the box's IP can read a token that expires tonight", not
+   "someone has a login on the box that places live orders".
+2. **The private key is generated on the box and never moves.** `install-kite-session.sh` runs
+   `ssh-keygen` there and prints only the public half. There is no transport step to get wrong —
+   which matters, because `box.sh` correctly refuses secrets as arguments (`ssm send-command`
+   parameters are retained in CloudTrail) and every alternative channel would have left a copy
+   somewhere else.
+3. **A failed pull cannot stop the night.** The day's bars come from the NSE bhavcopy, which
+   needs no credential. What a missing Kite session costs is history before 2024, holdings sync
+   and instrument metadata — real, but not the day's data. `refresh_quietly` therefore reports to
+   stderr and returns `False`, and two tests assert the pipeline continues.
+
+**Rejected alternatives.**
+
+- *Repoint the Kite app's redirect URL at Baskfy.* Breaks the desk's login, and the desk places
+  live orders. Non-starter.
+- *A second Kite Connect app.* ₹2,000/month for a second copy of a session we already have, and
+  Maulik had already ruled the paid Connect app out for this product.
+- *An HTTP endpoint on the desk that returns the token.* A route that hands out a live broker
+  credential is a route that can be tricked into handing it out. SSH with a forced command gives
+  the same result with authentication that predates the problem.
+- *Deploy new application code to the desk.* Rejected under the root safety rail — "the desk must
+  be able to rebalance on any Friday". What was added there is one read-only shell script and one
+  `authorized_keys` line; **no desk application file was touched.**
+- *Trust-on-first-use for the desk's host key* (`StrictHostKeyChecking=accept-new`). "First use"
+  for an unattended nightly job is whatever host answered, which is a decision no human is
+  present to make. The host key is pinned instead, and was verified against the fingerprint this
+  laptop already trusted before being written to the box.
+- *Push from the desk to AWS Parameter Store.* Would need AWS credentials on the trading box —
+  a strictly larger secret in a strictly more sensitive place, to solve a problem the pull
+  direction does not have.
+
+**What it does not do.** It does not make daily data *depend* on Kite; that was deliberate and is
+the point of the fallback. It does not give Baskfy the ability to log in to Kite, place an order,
+or hold a credential of its own. Non-negotiable #1 is untouched.
+
+**Reversal.** Remove the `authorized_keys` line on the desk (a backup is written beside it) and
+unset `BASKFY_KITE_DESK_SSH_TARGET`; `desk_session_pull_configured()` then returns False and
+`pull` refuses with a message pointing at `deposit`. Delete `/opt/baskfy/secrets/ssh` to destroy
+the key. Nothing else in the pipeline changes: the bhavcopy path is what runs today either way.

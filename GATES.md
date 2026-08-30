@@ -43,23 +43,76 @@ rather than silently narrowed.
   EVIDENCE: pending
 
 ## Leaf D — the brokers page stops saying "you don't need to connect"
-- [ ] D1: the "You don't need to connect Zerodha to invest" panel is gone when Connect is available
+- [x] D1: the "You don't need to connect Zerodha to invest" panel is gone when Connect is available
   CHECK: cd decile-blueprint/apps/web && pnpm exec vitest run src/components/brokers --reporter=basic 2>&1 | tail -3
   EXPECT: /Tests {2}[0-9]+ passed/
-  EVIDENCE: pending
+  EVIDENCE: broker-grid.test.tsx — Tests 11 passed (11). The panel is removed; two tests assert it is gone AND that the capability rows still answer what the broker can do, so removing the message did not remove the answer.
 
 ## Integration (the branch gate — leaves passing is not the product working)
-- [ ] I1: web suite green
+- [x] I1: web suite green
   CHECK: cd decile-blueprint/apps/web && pnpm exec vitest run --reporter=basic 2>&1 | tail -3
   EXPECT: /Tests {2}[0-9]+ passed \([0-9]+\)/
-  EVIDENCE: pending
-- [ ] I2: API + core show no NEW failures (2 are pre-existing and proven at HEAD)
+  EVIDENCE: vitest full run — Test Files 114 passed, Tests 1986 passed (1986). tsc clean.
+- [x] I2: API + core show no NEW failures (2 are pre-existing and proven at HEAD)
   CHECK: cd decile-blueprint && BASKFY_TEST_DATABASE_URL="postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_test" uv run pytest services/api/tests packages/core/tests -q -p no:randomly 2>&1 | tail -3
   EXPECT: /2 failed|passed/
-  EVIDENCE: pending
-- [ ] I3: the desk's own suite is still green (safety rail: it must rebalance on any Friday)
+  EVIDENCE: pytest services/api/tests packages/core/tests — 2 failed: test_api_run::TestCsvExport and test_curated_schema. Both proven at HEAD in a clean worktree earlier this session. services/worker/tests fully green (0 failed), including 14 new tests.
+- [x] I3: the desk's own suite is still green (safety rail: it must rebalance on any Friday)
   CHECK: cd kite-momentum-rebalancer && uv run pytest tests -q -p no:randomly 2>&1 | tail -2
   EXPECT: /passed/
+  EVIDENCE: kite-momentum-rebalancer: 1330 passed, 17 skipped. `git status` shows no file under kite-momentum-rebalancer/ modified by this work (only a pre-existing .gitignore edit).
+- [x] I4: deployed — the running image is the commit carrying these changes
+  EVIDENCE: Box BASKFY_RELEASE = 4058bb0 == local HEAD 4058bb0, all containers up.
+
+---
+
+# Tree 5 — the daily Kite session becomes automatic (30 Aug 2026)
+
+**Goal.** The AWS box gets a live Kite access token every day without a human pasting one, so
+daily data arrives on its own. Maulik has whitelisted the box's IP on the Kite app; the desk
+(65.0.226.77) already obtains a token each morning through the redirect it owns.
+
+**Constraint that shapes the design.** The desk is the live trading box. Nothing here deploys
+desk *application* code: the desk side is one read-only script plus one `authorized_keys` line,
+so the trading app is untouched (root CLAUDE.md — "the desk must be able to rebalance on any
+Friday").
+
+## Leaf A — the pull mechanism (Baskfy side)
+- [ ] A1: `kite_session_cli pull` fetches the desk's token over SSH and deposits it
+  CHECK: cd decile-blueprint && uv run pytest services/worker/tests/test_kite_session_bridge.py -q -p no:randomly 2>&1 | tail -3
+  EXPECT: /passed/
   EVIDENCE: pending
-- [ ] I4: deployed — the running image is the commit carrying these changes
+- [ ] A2: the token is never printed, logged, or placed on a command line
+  CHECK: cd decile-blueprint && uv run pytest services/worker/tests/test_kite_session_bridge.py -q -k "Exposed" -p no:randomly 2>&1 | tail -3
+  EXPECT: /passed/
   EVIDENCE: pending
+- [x] A3: the worker image can actually run ssh
+  CHECK: grep -c "openssh-client" decile-blueprint/infra/docker/Dockerfile.python
+  EXPECT: /^[1-9]/
+  EVIDENCE: Dockerfile.python:86 — `apt-get install ... tzdata curl openssh-client`. Proven necessary, not assumed: running the pull against the OLD image returned `sh: 1: ssh: not found` (exit 127).
+
+## Leaf B — the desk side (least privilege)
+- [x] B1: a dedicated key on the desk can emit the token and do nothing else
+  EVIDENCE: `/home/desk/bin/emit-kite-token` (mode 0500) returns len=32 sha8=3d307c2d — identical to the fingerprint of the token in `data/.kite_token.json`, and that token authenticates to Kite: GET /user/profile → `{"status":"success", user_id YP8452}`. No desk application file was modified (`git status kite-momentum-rebalancer/` shows only a pre-existing .gitignore edit).
+- [x] B2: the key is restricted to the box's IP, no pty, no forwarding
+  EVIDENCE: authorized_keys line reads `restrict,command="/home/desk/bin/emit-kite-token",from="3.108.148.38" ssh-ed25519 ...`. `restrict` disables pty, agent, port and X11 forwarding; the forced command replaces whatever the client sends. Box egress IP confirmed as 3.108.148.38 (`curl checkip.amazonaws.com` from the box), so the `from=` is the address the desk will actually see. A timestamped backup of authorized_keys was written first.
+
+## Leaf C — it works end to end on AWS
+- [ ] C1: the box holds a live, unexpired token pulled automatically
+  EVIDENCE: pending
+- [ ] C2: KiteProvider fetches real bars from the box — the IP whitelist is proven, not assumed
+  EVIDENCE: pending
+- [ ] C3: the nightly pipeline refreshes the session itself before it runs
+  EVIDENCE: pending
+
+## Integration
+- [ ] I1: worker + core + api suites show no NEW failures
+  EVIDENCE: pending
+- [x] I2: the desk's own suite still green, and no desk app file changed
+  CHECK: cd kite-momentum-rebalancer && uv run pytest tests -q -p no:randomly 2>&1 | tail -2
+  EXPECT: /passed/
+  EVIDENCE: 1330 passed, 17 skipped, 12 subtests passed in 43.30s — identical to the count before this work. The desk changes are one new file (~desk/bin/emit-kite-token) and one authorized_keys line, neither of which the app imports.
+- [ ] I3: deployed — running image is the commit carrying this
+  EVIDENCE: pending
+- [x] I4: a full pipeline run publishes; the UI stops showing 18 Aug 2026
+  EVIDENCE: `pipeline_run` id 9 — trade_date 2026-08-27, status **succeeded**, data_version **2** (the previous published version was 1, at 2026-08-18). ohlcv_daily max date 2026-08-27 with 2546 rows; factor_daily and fundamental_daily both max 2026-08-27. `trading_day` confirms 27 Aug is the latest session: 28 Aug is a holiday and 29-30 Aug the weekend, so the data is current rather than merely newer.

@@ -40,6 +40,25 @@ class ProviderSettings(BaseSettings):
     #: docs/09: "run with bounded concurrency (<= 3)".
     kite_max_concurrency: int = Field(default=3, gt=0)
 
+    # --- Kite session bridge --------------------------------------------
+    # A Kite Connect app has one redirect URL, and the RENIL app's belongs to the momentum desk.
+    # Baskfy therefore cannot log in; it borrows the session the desk already holds. These three
+    # settings are the whole of that bridge (`baskfy_worker.kite_session_cli pull`).
+    #: `user@host` of the desk that performs the daily Kite login. Empty disables the pull.
+    kite_desk_ssh_target: str = ""
+    #: Private key authorised on the desk against a forced command that emits only the token.
+    #: The key is a capability, not an account: it cannot open a shell (`docs/DECISIONS-MERGE.md`
+    #: M58).
+    kite_desk_ssh_key_path: str = "/var/lib/baskfy/.ssh/kite-session"
+    #: The desk's host key, pinned. Not trust-on-first-use: the pull runs unattended on a
+    #: schedule, and "first use" for an unattended job is whatever host answered — which is a
+    #: decision no human is present to make. A missing file fails the pull, which costs history
+    #: and nothing else.
+    kite_desk_known_hosts_path: str = "/var/lib/baskfy/.ssh/known_hosts"
+    #: Seconds to wait for the desk. Short: the pipeline must not hang on an unreachable box, and
+    #: the bhavcopy path covers the day either way.
+    kite_desk_ssh_timeout_seconds: float = Field(default=20.0, gt=0)
+
     # --- Retry ----------------------------------------------------------
     provider_max_attempts: int = Field(default=5, ge=1)
     provider_backoff_base_seconds: float = Field(default=0.5, gt=0)
@@ -87,6 +106,15 @@ class ProviderSettings(BaseSettings):
 
     def token_encryption_configured(self) -> bool:
         return bool(self.kite_token_encryption_key)
+
+    def desk_session_pull_configured(self) -> bool:
+        """Can this deployment fetch the desk's token by itself?
+
+        Both halves are required. A target with no key would prompt for a password on a box with
+        no terminal — which does not fail, it *hangs*, and a nightly job that hangs is worse than
+        one that skips.
+        """
+        return bool(self.kite_desk_ssh_target and self.kite_desk_ssh_key_path)
 
 
 @lru_cache(maxsize=1)

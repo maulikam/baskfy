@@ -83,7 +83,7 @@ WORKDIR /repo
 # on UTC and every IST deadline would fire five and a half hours late.
 # curl is the healthcheck.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends tzdata curl \
+ && apt-get install -y --no-install-recommends tzdata curl openssh-client \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system --gid 1001 baskfy \
  && useradd --system --uid 1001 --gid baskfy --home /repo baskfy \

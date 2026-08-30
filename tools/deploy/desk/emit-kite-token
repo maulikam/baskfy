@@ -1,0 +1,12 @@
+#!/bin/sh
+# Emit the desk's current Kite access token on stdout. Nothing else.
+#
+# This is the forced command bound to Baskfy's pull key in ~/.ssh/authorized_keys, so that key is
+# a capability — "read one string" — and not a login on a box that places live orders. sshd
+# enforces it: whatever command the client sends is discarded in favour of this one.
+#
+# Read-only by construction: it opens one file and prints one field. It cannot write the token,
+# refresh it, or reach the trading app. Baskfy borrows the session the desk's morning login
+# already produced; it never starts one.
+set -eu
+exec /usr/bin/python3 -c 'import json,sys; sys.stdout.write(json.load(open("/home/desk/kite-momentum-rebalancer/data/.kite_token.json"))["access_token"])'

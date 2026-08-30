@@ -12,6 +12,7 @@ from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.seed_data import EXAMPLE_SCREENS, PLANS, index_def_rows
 from baskfy_core.universes import (
     CONTAINMENT_IDENTITIES,
+    REFERENCE_EXPORT_UNIVERSES,
     FIRST_NON_UNIVERSE_INDEX_ID,
     MARKET_HEALTH_SLUGS,
     UNION_IDENTITIES,
@@ -21,21 +22,44 @@ from baskfy_core.universes import (
 
 
 class TestUniverses:
-    def test_fourteen_selectable_universes(self) -> None:
-        """docs/01 §2.1 lists exactly 14 values in the `index` select."""
-        assert len(UNIVERSES) == 14
+    def test_the_reference_products_fourteen_universes_are_all_present(self) -> None:
+        """docs/01 §2.1 lists exactly 14 values in the `index` select.
+
+        Baskfy may add universes of its own (M59 added `nse-sme-emerge`); it may never lose one
+        of the reference product's, because a screen saved against one must keep resolving.
+        """
+        assert len(REFERENCE_EXPORT_UNIVERSES) == 14
+        assert len(UNIVERSES) >= 14
 
     def test_twelve_market_health_universes(self) -> None:
-        """docs/01 §6 lists 12 — the 14 minus nifty-fno and etf, not 12 extra rows."""
+        """docs/01 §6 lists 12 — the 14 minus nifty-fno and etf, not 12 extra rows.
+
+        `nse-sme-emerge` is excluded too: docs/01 §6's breadth surfaces are index breadth, and
+        Emerge is a platform NSE publishes no breadth series for.
+        """
         assert len(MARKET_HEALTH_SLUGS) == 12
         assert set(MARKET_HEALTH_SLUGS) < {u.slug for u in UNIVERSES}
-        assert set(MARKET_HEALTH_SLUGS) == {u.slug for u in UNIVERSES} - {"nifty-fno", "etf"}
+        assert set(MARKET_HEALTH_SLUGS) == {u.slug for u in UNIVERSES} - {
+            "nifty-fno",
+            "etf",
+            "nse-sme-emerge",
+        }
 
     def test_csv_flags_match_the_reference_export(self) -> None:
-        """docs/13 §1: 14 `is_*` columns. Ours must be spelled exactly as the file spells them."""
-        assert [u.csv_flag for u in UNIVERSES] == [
+        """docs/13 §1: 14 `is_*` columns. Ours must be spelled exactly as the file spells them.
+
+        Only the fourteen: the export is the reference product's own file and the regression
+        corpus is read-only, so a universe Baskfy added has no column there by construction.
+        """
+        assert [u.csv_flag for u in REFERENCE_EXPORT_UNIVERSES] == [
             c for c in EXPORT_COLUMNS if _is_universe_flag(c)
         ]
+
+    def test_universes_we_added_are_absent_from_the_reference_export(self) -> None:
+        """The other half of the rule above, so neither can drift alone."""
+        added = [u for u in UNIVERSES if not u.in_reference_export]
+        assert [u.slug for u in added] == ["nse-sme-emerge"]
+        assert not any(u.csv_flag in EXPORT_COLUMNS for u in added)
 
     def test_mask_bits_are_dense_and_unique(self) -> None:
         assert sorted(u.mask_bit for u in UNIVERSES) == list(range(len(UNIVERSES)))
@@ -53,7 +77,7 @@ class TestUniverses:
 
     def test_index_def_rows_are_all_universes(self) -> None:
         rows = index_def_rows()
-        assert len(rows) == 14
+        assert len(rows) == len(UNIVERSES)
         assert all(row["is_universe"] is True for row in rows)
 
     @pytest.mark.parametrize(("parent", "children"), UNION_IDENTITIES)

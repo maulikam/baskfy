@@ -7675,7 +7675,7 @@ export interface components {
              * Index
              * @enum {string}
              */
-            index: "nifty-50" | "nifty-next-50" | "nifty-100" | "nifty-200" | "nifty-500" | "nifty-total-market" | "nifty-large-mid-250" | "nifty-midcap-150" | "nifty-smallcap-250" | "nifty-microcap-250" | "nifty-mid-small-400" | "nifty-allcap" | "nifty-fno" | "etf";
+            index: "nifty-50" | "nifty-next-50" | "nifty-100" | "nifty-200" | "nifty-500" | "nifty-total-market" | "nifty-large-mid-250" | "nifty-midcap-150" | "nifty-smallcap-250" | "nifty-microcap-250" | "nifty-mid-small-400" | "nifty-allcap" | "nifty-fno" | "etf" | "nse-sme-emerge";
             marketcap?: components["schemas"]["RangeFilter-Input"];
             /** Median Volume 1Y */
             median_volume_1y?: number | null;
@@ -7730,7 +7730,7 @@ export interface components {
              * Index
              * @enum {string}
              */
-            index: "nifty-50" | "nifty-next-50" | "nifty-100" | "nifty-200" | "nifty-500" | "nifty-total-market" | "nifty-large-mid-250" | "nifty-midcap-150" | "nifty-smallcap-250" | "nifty-microcap-250" | "nifty-mid-small-400" | "nifty-allcap" | "nifty-fno" | "etf";
+            index: "nifty-50" | "nifty-next-50" | "nifty-100" | "nifty-200" | "nifty-500" | "nifty-total-market" | "nifty-large-mid-250" | "nifty-midcap-150" | "nifty-smallcap-250" | "nifty-microcap-250" | "nifty-mid-small-400" | "nifty-allcap" | "nifty-fno" | "etf" | "nse-sme-emerge";
             marketcap?: components["schemas"]["RangeFilter-Output"];
             /** Median Volume 1Y */
             median_volume_1y?: number | null;

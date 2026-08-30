@@ -61,6 +61,24 @@ async def run_refresh_listings(
         outcome.note(error=str(exc))
         raise
 
+    # The Emerge (SME) register is a second file, and it is additive: every symbol in it is one
+    # the main register does not carry. A failure to read it must not cost us the main-board
+    # refresh, so it is recorded and carried rather than raised — but it IS recorded, because a
+    # silently short SME universe looks exactly like a quiet day on Emerge.
+    sme_error: str | None = None
+    sme_count = 0
+    fetch_sme = getattr(provider, "sme_listings", None)
+    if callable(fetch_sme):
+        try:
+            sme = list(fetch_sme())
+        except ProviderError as exc:
+            sme_error = str(exc)
+        else:
+            sme_count = len(sme)
+            records.extend(sme)
+    else:
+        sme_error = "no provider offers sme_listings"
+
     result = await store_listings(session, records)
     outcome.rows_in = result.rows_in
     outcome.rows_out = result.rows_written
@@ -69,6 +87,8 @@ async def run_refresh_listings(
         # to show. Worth surfacing rather than silently absorbing.
         new_symbols=result.new_symbols[:50] or None,
         new_symbol_count=len(result.new_symbols),
+        sme_rows=sme_count,
+        sme_error=sme_error,
     )
     return result.rows_written
 

@@ -46,6 +46,11 @@ class Universe:
     name: str
     ui_order: int
     market_health: bool
+    #: Whether the reference product's CSV export carries this universe's ``is_*`` flag columns.
+    #: False for anything Baskfy defines that momoindiascreener.in never had — the export is a
+    #: fixed 14-universe artefact and the regression corpus is read-only, so a universe of ours
+    #: must not make :mod:`baskfy_core.reference_export` look for a column that cannot exist.
+    in_reference_export: bool = True
 
     @property
     def mask_bit(self) -> int:
@@ -77,12 +82,21 @@ UNIVERSES: Final[tuple[Universe, ...]] = (
     Universe(12, "nifty-allcap", "All NSE Listed Stocks", 13, market_health=True),
     Universe(13, "nifty-fno", "NIFTY FNO", 12, market_health=False),
     Universe(14, "etf", "All NSE Listed ETFs", 14, market_health=False),
+    Universe(
+        15, "nse-sme-emerge", "NSE SME (Emerge)", 15, market_health=False,
+        in_reference_export=False,
+    ),
 )
 
 UNIVERSE_BY_SLUG: Final[dict[str, Universe]] = {u.slug: u for u in UNIVERSES}
 UNIVERSE_SLUGS: Final[tuple[str, ...]] = tuple(u.slug for u in UNIVERSES)
 UNIVERSE_MASK_BIT: Final[dict[str, int]] = {u.slug: u.mask_bit for u in UNIVERSES}
 MARKET_HEALTH_SLUGS: Final[tuple[str, ...]] = tuple(u.slug for u in UNIVERSES if u.market_health)
+
+#: The universes the reference export's ``is_*`` columns cover, in mask-bit order.
+REFERENCE_EXPORT_UNIVERSES: Final[tuple[Universe, ...]] = tuple(
+    u for u in UNIVERSES if u.in_reference_export
+)
 
 #: NSE publishes index names as free text. This is how one becomes a stable slug — shared, because
 #: the nightly step registers indices by it, the fixture builder writes it, and the seed CLI reads
@@ -107,6 +121,12 @@ UNION_IDENTITIES: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
     ("nifty-mid-small-400", ("nifty-midcap-150", "nifty-smallcap-250")),
 )
 
+#: The NSE Emerge (SME) series. An SME company is not a small main-board company — it listed
+#: under a separate NSE platform with its own register, its own lot-size regime and its own
+#: circuit bands. No NIFTY index contains one, which is why `nse-sme-emerge` is derived by series
+#: rather than fetched as a constituent file, and why it sits in no `UNION_IDENTITIES` row.
+SME_SERIES: Final[frozenset[str]] = frozenset({"SM", "ST", "SZ"})
+
 #: Each pair is (subset, superset).
 CONTAINMENT_IDENTITIES: Final[tuple[tuple[str, str], ...]] = (
     ("nifty-50", "nifty-100"),
@@ -116,4 +136,8 @@ CONTAINMENT_IDENTITIES: Final[tuple[tuple[str, str], ...]] = (
     ("nifty-total-market", "nifty-allcap"),
     ("nifty-next-50", "nifty-100"),
     ("nifty-microcap-250", "nifty-total-market"),
+    # Emerge names carry `instrument_type = 'EQ'`, so allcap's "every EQ instrument with a bar"
+    # rule takes them in as soon as they have bars. That containment is the whole reason a
+    # user can screen SME and main board together.
+    ("nse-sme-emerge", "nifty-allcap"),
 )

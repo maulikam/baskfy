@@ -433,7 +433,14 @@ export function PeFilter({ definition, patch, disabled }: SectionProps) {
 const SERIES_HINTS: Record<(typeof SERIES_VALUES)[number], string> = {
   EQ: "Delivery and intraday.",
   BE: "Delivery only (trade-to-trade).",
+  SM: "NSE Emerge (SME platform).",
+  ST: "NSE Emerge, trade-to-trade.",
+  SZ: "NSE Emerge, surveillance.",
 };
+
+/** The Emerge series. Grouped apart because they are a different platform, not a main-board
+ *  sub-category, and because they trade in lots — see the note the section renders. */
+const SME_SERIES: readonly (typeof SERIES_VALUES)[number][] = ["SM", "ST", "SZ"];
 
 export function SeriesFilter({ definition, patch, disabled }: SectionProps) {
   const toggle = (value: (typeof SERIES_VALUES)[number], checked: boolean) => {
@@ -464,6 +471,12 @@ export function SeriesFilter({ definition, patch, disabled }: SectionProps) {
       <p className="text-xs text-muted-foreground">
         At least one series stays selected — a screen with neither would match nothing.
       </p>
+      {definition.series.some((entry) => SME_SERIES.includes(entry)) ? (
+        <p className="text-xs text-muted-foreground">
+          SME (Emerge) names trade in fixed lots with a minimum order value, and many go days
+          without a trade. Baskfy screens them; it does not size or place orders in them.
+        </p>
+      ) : null}
     </>
   );
 }

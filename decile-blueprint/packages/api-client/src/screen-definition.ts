@@ -21,9 +21,11 @@ export const IGNORE_ABOVE_BETA_IGNORE = 100;
 export const MAX_CUSTOM_FILTERS = 3;
 
 /** docs/01 §2.9 */
-export const SERIES_VALUES = ["EQ", "BE"] as const;
+// Mirrors `SERIES_VALUES` in packages/core/src/baskfy_core/screen_definition.py.
+// EQ/BE are the main board; SM/ST/SZ the NSE Emerge (SME) platform (M59).
+export const SERIES_VALUES = ["EQ", "BE", "SM", "ST", "SZ"] as const;
 
-/** docs/01 §2.1 — the 14 selectable universes. Mirrors baskfy_core.universes.UNIVERSE_SLUGS. */
+/** docs/01 §2.1 — the 15 selectable universes. Mirrors baskfy_core.universes.UNIVERSE_SLUGS. */
 export const UNIVERSE_SLUGS = [
   "nifty-50",
   "nifty-next-50",
@@ -39,6 +41,7 @@ export const UNIVERSE_SLUGS = [
   "nifty-allcap",
   "nifty-fno",
   "etf",
+  "nse-sme-emerge",
 ] as const;
 
 /**

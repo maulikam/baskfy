@@ -101,10 +101,29 @@ INDEX_SLUG_TO_NSE_NAME: Final[Mapping[str, str]] = {
 }
 
 #: Slugs that are not published as an NSE constituent file at all. docs/06 §"Step 2" already
-#: defines them by rule: `nifty-allcap` is every EQ instrument with a bar, `etf` is every ETF.
+#: defines them by rule: `nifty-allcap` is every EQ instrument with a bar, `etf` is every ETF,
+#: `nse-sme-emerge` is every instrument whose series the SME register carries.
 #: docs/01 §2.1 lists `nifty-fno` as a universe but NSE publishes it as a derivatives list, not
 #: an index constituent file, so it is resolved by the pipeline rather than fetched here.
-DERIVED_UNIVERSES: Final[frozenset[str]] = frozenset({"nifty-allcap", "etf", "nifty-fno"})
+DERIVED_UNIVERSES: Final[frozenset[str]] = frozenset(
+    {"nifty-allcap", "etf", "nifty-fno", "nse-sme-emerge"}
+)
+
+#: The NSE Emerge (SME platform) series, as the SME register itself spells them: `SM` is the
+#: normal segment, `ST` trade-for-trade, `SZ` the suspended//surveillance tail. These are real
+#: listed equities on a separate NSE *platform*, not a separate exchange — they clear the same
+#: CM segment, which is why one bhavcopy carries them alongside `EQ`.
+SME_SERIES: Final[frozenset[str]] = frozenset({"SM", "ST", "SZ"})
+
+#: The Emerge register. NOT the same file as `/content/equities/SME_EQUITY_L.csv`, which still
+#: resolves but has been frozen at a single stale row (THEJO, 2012) for years — reading that one
+#: instead is how you get an SME universe of size one. Verified live 30 Aug 2026: 565 rows.
+#:
+#: Its columns differ from the main register's: underscore-separated rather than space-separated,
+#: and **no MARKET_LOT column** — which matters, because SME trades in lots and nothing else
+#: publishes that lot size. See `DECISIONS-MERGE.md` M59 on why that keeps SME screener-only.
+SME_LISTINGS_PATH: Final = "/emerge/corporates/content/SME_EQUITY_L.csv"
+KIND_SME_LISTINGS: Final = "sme-listings"
 
 
 class HttpResponseLike(Protocol):
@@ -286,13 +305,30 @@ class NSEProvider:
         return actions
 
     def listings(self) -> list[ListingRecord]:
-        """The NSE listings register (docs/01 §1: 3,524 rows on /listings)."""
-        payload = self._archived(
-            KIND_LISTINGS,
-            dt.date.today(),
-            f"{self._settings.nse_archive_url}/content/equities/EQUITY_L.csv",
+        """The NSE main-board listings register (docs/01 §1: 3,524 rows on /listings).
+
+        Main board only. The Emerge (SME) platform has a register of its own — a name appears in
+        exactly one of the two — and :meth:`sme_listings` reads it.
+        """
+        return self._listings_from(
+            KIND_LISTINGS, "/content/equities/EQUITY_L.csv", context="listings"
         )
-        frame = _read_csv(payload, context="listings")
+
+    def sme_listings(self) -> list[ListingRecord]:
+        """The NSE Emerge (SME) register — the other half of the listing universe.
+
+        Separate from :meth:`listings` rather than merged into it so that an Emerge outage is a
+        fact the pipeline step can record and carry, instead of an exception this layer would
+        have to swallow to keep 2,559 main-board rows refreshing. Same reason the two are
+        separate archive kinds: one can be re-read without re-reading the other.
+        """
+        return self._listings_from(KIND_SME_LISTINGS, SME_LISTINGS_PATH, context="sme listings")
+
+    def _listings_from(self, kind: str, path: str, *, context: str) -> list[ListingRecord]:
+        """One listings register. The two files spell their headers differently, so every
+        lookup below names both spellings."""
+        payload = self._archived(kind, dt.date.today(), f"{self._settings.nse_archive_url}{path}")
+        frame = _read_csv(payload, context=context)
         records: list[ListingRecord] = []
         for row in frame.iter_rows(named=True):
             symbol = str(_first(row, ("SYMBOL", "Symbol")) or "").strip()
@@ -304,10 +340,15 @@ class NSEProvider:
                     name=str(_first(row, ("NAME OF COMPANY", "NAME_OF_COMPANY")) or symbol).strip(),
                     series=_clean(_first(row, (" SERIES", "SERIES"))),
                     isin=_clean(_first(row, (" ISIN NUMBER", "ISIN NUMBER", "ISIN_NUMBER"))),
-                    listed_on=_date(_first(row, (" DATE OF LISTING", "DATE OF LISTING"))),
-                    face_value=_decimal(_first(row, (" FACE VALUE", "FACE VALUE"))),
-                    paid_up_value=_decimal(_first(row, (" PAID UP VALUE", "PAID UP VALUE"))),
-                    market_lot=_int(_first(row, (" MARKET LOT", "MARKET LOT"))),
+                    listed_on=_date(
+                        _first(row, (" DATE OF LISTING", "DATE OF LISTING", "DATE_OF_LISTING"))
+                    ),
+                    face_value=_decimal(_first(row, (" FACE VALUE", "FACE VALUE", "FACE_VALUE"))),
+                    paid_up_value=_decimal(
+                        _first(row, (" PAID UP VALUE", "PAID UP VALUE", "PAID_UP_VALUE"))
+                    ),
+                    # Absent from the Emerge register entirely; None, never a guessed 1.
+                    market_lot=_int(_first(row, (" MARKET LOT", "MARKET LOT", "MARKET_LOT"))),
                 )
             )
         return records

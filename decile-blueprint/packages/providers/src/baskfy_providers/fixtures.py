@@ -208,6 +208,12 @@ class FixtureProvider:
             for row in frame.iter_rows(named=True)
         ]
 
+    def sme_listings(self) -> list[ListingRecord]:
+        """The local fixture set is a main-board sample (docs/03 §Environments), so it carries
+        no Emerge register. Empty, not absent: the pipeline step must see "no SME rows today"
+        rather than "this provider cannot do SME"."""
+        return []
+
     def bhavcopy(self, on: dt.date) -> pl.DataFrame:
         frame = self._frame("bhavcopy").filter(pl.col("date") == on)
         if frame.height == 0:

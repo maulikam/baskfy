@@ -696,8 +696,184 @@
   {
     "materialised": null,
     "name": "series-unknown",
-    "reason": "docs/01 §2.9: the screener switches on EQ and BE only",
+    "reason": "docs/01 §2.9 as widened by M59: EQ/BE main board, SM/ST/SZ Emerge, nothing else",
     "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "series": [
+        "EQ",
+        "GS"
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "series": [
+        "SM",
+        "ST"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "series-sme",
+    "reason": "M59: an Emerge-only screen is expressible",
+    "valid": true,
+    "value": {
+      "index": "nifty-500",
+      "series": [
+        "SM",
+        "ST"
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "series": [
+        "EQ",
+        "SM"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "series-sme-and-main-board",
+    "reason": "M59: SME and main board screen together under `nifty-allcap`",
+    "valid": true,
     "value": {
       "index": "nifty-500",
       "series": [

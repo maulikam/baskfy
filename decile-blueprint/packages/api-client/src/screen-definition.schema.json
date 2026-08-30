@@ -396,7 +396,8 @@
         "nifty-mid-small-400",
         "nifty-allcap",
         "nifty-fno",
-        "etf"
+        "etf",
+        "nse-sme-emerge"
       ],
       "title": "Index",
       "type": "string"

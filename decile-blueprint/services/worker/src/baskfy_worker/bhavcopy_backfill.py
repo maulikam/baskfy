@@ -68,11 +68,15 @@ from baskfy_worker.window import DateWindow
 #: docs/04's ``ohlcv_daily.source`` CHECK admits 'kite' and 'nse'. These rows are the latter.
 BAR_SOURCE = "nse"
 
-#: The equity series the listings register actually holds (EQ, BE, BZ as at 2026-08-18). The
-#: bhavcopy also carries SM/ST (SME), GS/GB (government securities) and N0 (debt); those are not
-#: equity and no ``instrument`` row matches them, so they would be dropped by the join anyway.
-#: Naming them here makes the intent explicit rather than incidental.
-EQUITY_SERIES: tuple[str, ...] = ("EQ", "BE", "BZ")
+#: The equity series the listings register holds. ``EQ``/``BE``/``BZ`` are the main board;
+#: ``SM``/``ST``/``SZ`` are the NSE Emerge (SME) platform, admitted by M59 now that
+#: ``NSEProvider.listings`` reads the Emerge register and those symbols have ``instrument`` rows
+#: to join against. Before M59 the bhavcopy's ~457 daily SME rows were read and silently dropped.
+#:
+#: Still excluded, and deliberately: ``GS``/``GB`` (government securities), ``TB`` (T-bills) and
+#: ``N0`` to ``NF`` (debt). Those are not equity, and the desk's non-negotiable #7 blocks SGB/G-sec
+#: at the lowest layer — a bar for one has no business existing here.
+EQUITY_SERIES: tuple[str, ...] = ("EQ", "BE", "BZ", "SM", "ST", "SZ")
 
 #: Rows per INSERT. Same value ``baskfy_worker.tasks.bars`` uses.
 UPSERT_CHUNK = 1000

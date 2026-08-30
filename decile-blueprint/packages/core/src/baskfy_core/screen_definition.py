@@ -41,8 +41,15 @@ MAX_CUSTOM_FILTERS: Final = 3
 #: A percentage filter's upper bound. Positive-days values are a share of the window.
 PERCENT_MAX: Final = 100
 
-#: docs/01 §2.9 — the two NSE series the screener switches on.
-SERIES_VALUES: Final[tuple[str, ...]] = ("EQ", "BE")
+#: docs/01 §2.9 — the NSE series the screener switches on. `EQ`/`BE` are the main board; `SM`,
+#: `ST` and `SZ` are the Emerge (SME) platform, added by M59 so an SME screen is expressible.
+#: Widening this is a public API contract change: the Zod mirror in
+#: `packages/api-client/src/screen-definition.ts` carries the same list and the parity tests fail
+#: if the two drift. Default stays `["EQ"]`, so no existing screen changes meaning.
+SERIES_VALUES: Final[tuple[str, ...]] = ("EQ", "BE", "SM", "ST", "SZ")
+
+#: The subset of :data:`SERIES_VALUES` that is the Emerge platform rather than the main board.
+SME_SERIES_VALUES: Final[tuple[str, ...]] = ("SM", "ST", "SZ")
 
 SortDirection = Literal["asc", "desc"]
 ApplyFiltersOn = Literal[
@@ -109,6 +116,7 @@ UniverseSlug = Literal[
     "nifty-allcap",
     "nifty-fno",
     "etf",
+    "nse-sme-emerge",
 ]
 
 

@@ -160,8 +160,22 @@ CASES: Final[tuple[Case, ...]] = (
     ),
     Case(
         name="series-unknown",
-        reason="docs/01 §2.9: the screener switches on EQ and BE only",
+        reason="docs/01 §2.9 as widened by M59: EQ/BE main board, SM/ST/SZ Emerge, nothing else",
         valid=False,
+        # `GS` is a government security. Non-negotiable #7 blocks SGB/G-sec at the lowest layer,
+        # so a screen that could even name one must not validate.
+        value=_base(series=["EQ", "GS"]),
+    ),
+    Case(
+        name="series-sme",
+        reason="M59: an Emerge-only screen is expressible",
+        valid=True,
+        value=_base(series=["SM", "ST"]),
+    ),
+    Case(
+        name="series-sme-and-main-board",
+        reason="M59: SME and main board screen together under `nifty-allcap`",
+        valid=True,
         value=_base(series=["EQ", "SM"]),
     ),
     Case(

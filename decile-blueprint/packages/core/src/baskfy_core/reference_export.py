@@ -25,7 +25,7 @@ from typing import Final
 
 import polars as pl
 
-from baskfy_core.universes import UNIVERSES, Universe
+from baskfy_core.universes import REFERENCE_EXPORT_UNIVERSES, Universe
 
 #: The export is UTF-8 **with BOM** and quotes only the ``name`` field (docs/13 §1). Reproduce
 #: both in Prompt 9's CSV writer.
@@ -265,8 +265,15 @@ def _as_int(value: object) -> int:
 
 
 def _mask(row: dict[str, object], suffix: str) -> int:
+    """The mask this export row implies.
+
+    Walks ``REFERENCE_EXPORT_UNIVERSES``, not ``UNIVERSES``: the export is momoindiascreener.in's
+    file and carries its fourteen. A universe Baskfy has since defined (``nse-sme-emerge``) has no
+    column here and cannot — the file is the read-only regression corpus — so its bit stays 0,
+    which is the truthful answer for a row the reference product never classified.
+    """
     mask = 0
-    for universe in UNIVERSES:
+    for universe in REFERENCE_EXPORT_UNIVERSES:
         if _as_int(row[_flag(universe, suffix)]) == 1:
             mask |= universe.mask_value
     return mask
@@ -304,7 +311,8 @@ def to_rows(frame: pl.DataFrame | None = None) -> ReferenceRows:
         factor_row["top_volatility_mask"] = _mask(record, "_top_volatility")
         factors.append(factor_row)
 
-        for universe in UNIVERSES:
+        # Same reason as `_mask`: only the universes this file actually has columns for.
+        for universe in REFERENCE_EXPORT_UNIVERSES:
             if _as_int(record[_flag(universe)]) == 1:
                 memberships.append(MembershipRow(universe.slug, symbol, as_of))
 

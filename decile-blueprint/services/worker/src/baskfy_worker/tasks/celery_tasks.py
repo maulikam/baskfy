@@ -26,7 +26,7 @@ from baskfy_api.screener import (
 )
 from baskfy_core.models.base import JsonObject
 from baskfy_providers.errors import TransientProviderError
-from baskfy_worker import ops
+from baskfy_worker import kite_session_cli, ops
 from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
 from baskfy_worker.celery_app import IST, QUEUES
 from baskfy_worker.db import run_in_session
@@ -92,6 +92,16 @@ def nightly_pipeline(trade_date: str | None = None) -> JsonObject:
             "status": "skipped",
             "reason": "not a trading day",
         }
+
+    # Borrow the desk's Kite session before the chain starts (`kite_session_cli`, M58). A Kite
+    # access token dies overnight, so the one stored yesterday is already useless; this is the
+    # moment to replace it, while the desk's morning login is still current.
+    #
+    # Best-effort **by design**. The day's bars come from the NSE bhavcopy, which needs no
+    # credential — what a missing session costs is history before 2024, holdings sync and
+    # instrument metadata. Letting an unreachable desk fail the night would trade a working
+    # pipeline for a broker login, which is the wrong way round.
+    kite_session_cli.refresh_quietly()
 
     deps = build_pipeline_dependencies()
     run_id: int = run_in_session(lambda session: ops.begin_run(session, day))

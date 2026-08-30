@@ -37,9 +37,28 @@ x-python-image: &python-image
     # `Permission denied` before it could parse a row, and the whole bhavcopy path was down on
     # this box. It went unnoticed because nobody had run an NSE ingest here.
     - baskfy-archive:/var/lib/baskfy/archive
+    # The Kite session bridge (M58). Read-only, and deliberately from the host rather than the
+    # image: a private key baked into an image is a private key in every registry that ever
+    # pulls it. Holds `kite-session` (the key) and `known_hosts` (the desk's pinned host key);
+    # both paths are `ProviderSettings` defaults, so nothing else needs configuring.
+    #
+    # Created by tools/deploy/install-kite-session.sh, owned by uid 1001 — the container's
+    # `baskfy` user. ssh refuses a key it considers world-readable, and refuses one it cannot
+    # read at all, so the ownership is load-bearing rather than tidiness.
+    - /opt/baskfy/secrets/ssh:/var/lib/baskfy/.ssh:ro
+    # The encrypted Kite token. A named volume because it must outlive a container and be the
+    # same file for worker, ingest-worker and beat — and because the setting's default is the
+    # *relative* `.secrets/kite-token.enc`, which resolves against the image's root-owned `/repo`
+    # and cannot be written. That is the same failure that silently disabled the whole NSE
+    # archive path until 27 Aug; naming it here is what stops it recurring for the token.
+    - baskfy-state:/var/lib/baskfy/state
   environment:
     # docs/08 §1: the whole schedule is IST wall-clock tied to the NSE session.
     TZ: Asia/Kolkata
+    # Where the nightly pipeline borrows a Kite session from. Empty would disable the pull; the
+    # day's bars would still arrive from the bhavcopy, but history and holdings would not.
+    BASKFY_KITE_DESK_SSH_TARGET: ${BASKFY_KITE_DESK_SSH_TARGET:-desk@65.0.226.77}
+    BASKFY_KITE_TOKEN_PATH: /var/lib/baskfy/state/kite-token.enc
     BASKFY_RAW_ARCHIVE_DIR: /var/lib/baskfy/archive
     BASKFY_DATABASE_URL: postgresql+asyncpg://baskfy:${BASKFY_DB_PASSWORD:?set BASKFY_DB_PASSWORD}@postgres:5432/baskfy
     BASKFY_REDIS_URL: redis://redis:6379/0
@@ -293,6 +312,7 @@ services:
 
 volumes:
   baskfy-archive: {}
+  baskfy-state: {}
   baskfy-pgdata:
   baskfy-redisdata:
   baskfy-beat:

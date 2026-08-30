@@ -99,7 +99,12 @@ RUN apt-get update \
  # root-owned, which the non-root user below cannot write. That is the same trap `beat` hit with
  # `celerybeat-schedule`, and it presents identically: the container starts, then every write
  # fails with Permission denied. `docs/DECISIONS-MERGE.md` M56.
- && install -d -o baskfy -g baskfy /var/lib/baskfy/archive
+ && install -d -o baskfy -g baskfy /var/lib/baskfy/archive \
+ # The encrypted Kite token's home. Declared here so the named volume that mounts over it
+ # inherits this ownership: Docker copies an image directory's owner when it initialises an
+ # empty volume, and creates a root-owned one when the directory does not exist. The container
+ # runs as `baskfy`, so the second case is a volume it cannot write.
+ && install -d -o baskfy -g baskfy /var/lib/baskfy/state
 
 COPY --from=build --chown=baskfy:baskfy /repo/.venv /repo/.venv
 COPY --from=build --chown=baskfy:baskfy /repo/packages /repo/packages

@@ -301,8 +301,10 @@ NO_MEMBERSHIP_SOURCE: frozenset[str] = frozenset({"etf", "nifty-fno"})
 async def check_universe_sizes(session: AsyncSession, ctx: GateContext) -> CheckResult:
     """docs/09 5: every selectable universe has a membership set within 5% of its nominal size.
 
-    The three universes with no fixed size — ``nifty-total-market``, ``nifty-allcap``, ``etf`` —
-    are checked for non-emptiness instead, since "within 5% of nominal" is undefined for them.
+    The universes with no fixed size — ``nifty-total-market``, ``nifty-allcap``, ``etf`` and
+    ``nse-sme-emerge`` — are checked for non-emptiness instead, since "within 5% of nominal" is
+    undefined for them. Emerge in particular has no nominal size at all: companies list and
+    migrate to the main board continuously, so its count is a fact, not a target.
     """
     tolerance = ctx.settings.gate_membership_tolerance
     counts = dict(

@@ -168,9 +168,23 @@ BROKERS: Final[tuple[BrokerDef, ...]] = (
         api_name="Kite Publisher",
         docs_url="https://kite.trade/docs/connect/v3/publisher/",
         capabilities=BrokerCapability(
-            # No account is linked and no token is stored: Publisher opens a basket in whatever
-            # Zerodha session the browser already has.
-            oauth="not_applicable",
+            # M55 set this to `not_applicable` on the reasoning that Baskfy uses Publisher, which
+            # links no account — and that Kite Connect at Rs 2,000/month was the wrong shape for a
+            # product other people sign into. Maulik corrected both premises on 1 Sep 2026: the
+            # RENIL app IS a Connect app, already paid for, and the plan is to serve multiple
+            # tenants from that one app rather than buy another.
+            #
+            # So a real login can complete here now. `_connect_configured()` wants three things
+            # and has all of them: BASKFY_KITE_API_KEY, BASKFY_KITE_API_SECRET, and a redirect
+            # that comes back to Baskfy — the last satisfied when the console redirect moved to
+            # staging.baskfy.com.
+            #
+            # Consequence recorded where the next reader will meet it: one app, one user, one live
+            # access token. Completing a connect here issues a new one and invalidates the desk's,
+            # so on a day this button is used the desk must log in again before it trades. The
+            # Caddy rule still routes a bare morning login (no `state`) to the desk, so the two
+            # flows coexist — they just cannot both hold a session at once. M64.
+            oauth="ready",
             # Publisher itself is one-way — it hands orders *to* Kite and reads nothing back.
             # But Baskfy does hold a Kite session after all, and not through Publisher: the M58
             # bridge borrows the one the desk's morning login produces, and

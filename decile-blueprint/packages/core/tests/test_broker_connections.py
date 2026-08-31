@@ -50,7 +50,7 @@ class TestTheCatalog:
             assert broker.color.startswith("#")
             assert len(broker.color) in (4, 7)
 
-    def test_zerodha_is_a_publisher_handoff_and_says_so(self) -> None:
+    def test_zerodha_hands_the_basket_off_and_can_also_link_an_account(self) -> None:
         """Zerodha is **Kite Publisher**, not Kite Connect, and the row must not blur them.
 
         This asserted three "ready"s, which was true of the Kite *Connect* adapter in this
@@ -67,8 +67,12 @@ class TestTheCatalog:
         zerodha = get_broker("zerodha")
         assert zerodha is not None
         assert zerodha.api_name == "Kite Publisher"
-        # Nothing is linked: the basket opens in the session the browser already has.
-        assert zerodha.capabilities.oauth == "not_applicable"
+        # M55 asserted `not_applicable`, on two premises Maulik corrected on 1 Sep 2026: that
+        # Baskfy would need its own Kite Connect app, and that Rs 2,000/month made Connect the
+        # wrong shape here. The RENIL app is already a Connect app he pays for, and the plan is
+        # to serve multiple tenants from it. `_connect_configured()` now returns True on the
+        # deployment — key, secret and a redirect that returns to Baskfy.
+        assert zerodha.capabilities.oauth == "ready"
         # M55 asserted `not_available` here, on the reasoning that Publisher is one-way and there
         # would never be a session to read holdings with. M57/M58 made that false: the desk's
         # morning Kite login produces a Connect session, the bridge borrows it, and

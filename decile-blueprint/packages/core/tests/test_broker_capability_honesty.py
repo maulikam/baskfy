@@ -36,6 +36,8 @@ import re
 from pathlib import Path
 from typing import get_args
 
+from typing import ClassVar
+
 import pytest
 
 from baskfy_api.broker_holdings import _HOLDINGS_WIRED
@@ -135,7 +137,7 @@ class TestTheCatalogDoesNotOverclaim:
     #:
     #: Publisher is still how an ORDER reaches Kite, and `trading` stays `handoff`. What changed
     #: is only that "no session to read with" is no longer a fact about this deployment.
-    UNREACHABLE_ADAPTERS: dict[str, str] = {}
+    UNREACHABLE_ADAPTERS: ClassVar[dict[str, str]] = {}
 
     def test_every_wired_broker_either_says_ready_or_says_why_not(self) -> None:
         """The honest case must not become collateral damage of the fix.

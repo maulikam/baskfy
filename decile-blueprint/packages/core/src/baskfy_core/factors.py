@@ -71,6 +71,21 @@ from baskfy_core.windows import (
 TRADING_DAYS_PER_YEAR: Final = 252
 _SQRT_YEAR: Final = math.sqrt(TRADING_DAYS_PER_YEAR)
 
+#: docs/05 §2 — the **population** standard deviation. Amended 2026-08-31 from ``ddof=1``.
+#:
+#: docs/05 §2 said "sample stdev (ddof=1)" in words for a year, and nothing had ever checked it
+#: because the reproduction test needed price history the repository did not carry. Measured
+#: against the 271-row reference export (docs/PARITY-M11.md §4B) the ratio published/computed is
+#: constant at ``sqrt((N-1)/N)`` to seven significant figures, with a p05-to-p95 spread of
+#: 4e-6 across 271 independent instruments — the signature of ``ddof`` and of nothing else.
+#: Sweeping the alternatives, ``ddof=0`` lands the median absolute error at 1.6e-7 against
+#: 6e-3 for an ``N-1`` return count and 1.3e-3 for a sqrt(250) annualisation.
+#:
+#: This is a **spec amendment**, taken by Maulik on 2026-08-31 in answer to a question that named
+#: the consequence: ``volatility_one_year`` feeds ``stop_from_vol``, so it moves live GTT stop
+#: prices. See docs/DECISIONS-MERGE.md and docs/05 §2.
+_VOL_DDOF: Final = 0
+
 #: docs/05 §3's guard is "if vol_N == 0 ... -> sharpe_N = NULL", but a constant-return series has
 #: a *floating-point* standard deviation around 1e-17 rather than exactly zero, so an equality
 #: test never fires and the ratio explodes to ~1e14.
@@ -297,10 +312,14 @@ def _with_window_factors(
             .alias(f"ret_{key}")
         )
 
-        # §2: sample stdev (ddof=1) of the window's N daily returns, annualised.
+        # §2: population stdev (ddof=0) of the window's N daily returns, annualised. See
+        # _VOL_DDOF for why it is 0 and on whose authority it was changed from 1.
         # Stored as a FRACTION (docs/13 §2 finding 4), so no x100 here.
         expressions.append(
-            (pl.col("daily_return").rolling_std(window_size=n, min_samples=n, ddof=1) * _SQRT_YEAR)
+            (
+                pl.col("daily_return").rolling_std(window_size=n, min_samples=n, ddof=_VOL_DDOF)
+                * _SQRT_YEAR
+            )
             .over("instrument_id")
             .alias(f"vol_{key}")
         )
@@ -424,14 +443,27 @@ def _with_liquidity(frame: pl.DataFrame) -> pl.DataFrame:
 
 
 def _with_rsi(frame: pl.DataFrame, windows: dict[int, FactorWindow]) -> pl.DataFrame:
-    """docs/05 §5 — Wilder's RSI with period = the window's trading-day count.
+    """docs/05 §5 — Cutler's RSI with period = the number of RETURNS inside the window, ``N-1``.
 
-    "so 'RSI 1 year' is a 252-period RSI, not a 14-period RSI sampled yearly".
+    "so 'RSI 1 year' is a 252-period RSI, not a 14-period RSI sampled yearly" still holds: the
+    period is the window, not a fixed 14. Two things about it were amended on 2026-08-31, both
+    measured rather than argued (docs/PARITY-M11.md §4C):
 
-    Seeded with a simple mean over the first ``N`` observations of the available history and then
-    smoothed forward, exactly as docs/05 specifies. That seeding is why this cannot be Polars'
-    ``ewm_mean``, which seeds with the first observation: at N=247 the two answers are still ~36%
-    apart a year later.
+    * **the smoothing family.** Sweeping method x period against the 271-row reference export,
+      Wilder at its best period reproduces 1/271 exact cells for ``rsi_one_month`` and 0/270 for
+      ``rsi_three_months``; Cutler — a plain simple mean of gains and losses — reproduces 267/271
+      and 263/270. That is not a tuning difference, it is a different formula.
+    * **the period.** ``N-1``, not ``N``. A window of ``N`` bars spans ``N-1`` returns, which is
+      the same ``N-1`` that ``ret_N = P_t / P_{t-(N-1)} - 1`` already uses.
+
+    Cutler's is also **path-independent** — it reads only the window. Wilder's is seeded from the
+    first ``N`` observations of whatever history it is handed and smoothed forward from there, so
+    its answer depends on where the series was cut, and it could never reproduce the reference
+    without history back to the listing date. Losing that dependency is the second reason to
+    prefer it, independent of the parity numbers.
+
+    Spec amendment, authorised by Maulik on 2026-08-31 with the consequence named: ``rsi_1m``
+    drives the desk's RSI bands (>78 wait or tranche, >82 trim to runner) and the F-penalty.
     """
     empty = [pl.lit(None, dtype=pl.Float64).alias(f"rsi_{months}m") for months in windows]
     if frame.height == 0:
@@ -440,7 +472,7 @@ def _with_rsi(frame: pl.DataFrame, windows: dict[int, FactorWindow]) -> pl.DataF
     pivot = frame.pivot(on="instrument_id", index="date", values="close", aggregate_function=None)
     dates = pivot["date"].to_list()
     columns = [c for c in pivot.columns if c != "date"]
-    # A single bar yields no daily changes, so there is nothing for Wilder to smooth. Returning
+    # A single bar yields no daily changes, so there is no gain or loss to average. Returning
     # NULL is docs/05's own answer for a window without enough history.
     if len(dates) < 2:  # noqa: PLR2004 - two bars are the minimum for one change
         return frame.with_columns(empty)
@@ -452,7 +484,8 @@ def _with_rsi(frame: pl.DataFrame, windows: dict[int, FactorWindow]) -> pl.DataF
 
     additions: list[pl.DataFrame] = []
     for months, window in windows.items():
-        rsi = _wilder_rsi(gains, losses, window.length)
+        # docs/05 §5: the period is the count of RETURNS inside the window, N - 1, not N bars.
+        rsi = _cutler_rsi(gains, losses, window.length - 1)
         additions.append(
             pl.DataFrame({"date": dates[1:], **{col: rsi[:, i] for i, col in enumerate(columns)}})
             .unpivot(index="date", variable_name="instrument_id", value_name=f"rsi_{months}m")
@@ -464,29 +497,30 @@ def _with_rsi(frame: pl.DataFrame, windows: dict[int, FactorWindow]) -> pl.DataF
     return frame
 
 
-def _wilder_rsi(gains: np.ndarray, losses: np.ndarray, period: int) -> np.ndarray:
-    """Wilder RSI over a ``(time, instrument)`` matrix. One loop over time, all instruments at once.
+def _cutler_rsi(gains: np.ndarray, losses: np.ndarray, period: int) -> np.ndarray:
+    """Cutler's RSI over a ``(time, instrument)`` matrix — a rolling SIMPLE mean, no recursion.
 
-    NaN before the seed is complete, which becomes NULL on the way back into Polars — docs/05's
-    rule that an instrument without a full window gets no value.
+    ``avg_gain_t = mean(gain_{t-period+1 .. t})``, likewise for losses, then docs/05 §5's
+    ``RSI = 100 - 100/(1 + RS)``. Written as a difference of cumulative sums so the whole matrix
+    is one pass instead of a Python loop over time — the same vectorisation the recursive version
+    could not have, and one the cross-validation oracle deliberately does not share.
+
+    Row ``period - 1`` is the first with a full window; everything before it is NaN, which becomes
+    NULL on the way back into Polars — docs/05's rule that an instrument without a full window
+    gets no value. ``period < 1`` (a one-bar window, so no returns at all) is entirely NaN for the
+    same reason.
     """
     steps, instruments = gains.shape
     out = np.full((steps, instruments), np.nan, dtype=float)
-    if steps < period or period < 1:
+    if period < 1 or steps < period:
         return out
 
-    with np.errstate(invalid="ignore"):
-        avg_gain = np.nanmean(gains[:period], axis=0)
-        avg_loss = np.nanmean(losses[:period], axis=0)
-    out[period - 1] = _rsi_from(avg_gain, avg_loss)
-
-    # docs/05 §5: avg_x_t = (avg_x_{t-1} x (N-1) + x_t) / N
-    decay = (period - 1) / period
-    increment = 1.0 / period
-    for step in range(period, steps):
-        avg_gain = avg_gain * decay + gains[step] * increment
-        avg_loss = avg_loss * decay + losses[step] * increment
-        out[step] = _rsi_from(avg_gain, avg_loss)
+    zero = np.zeros((1, instruments), dtype=float)
+    cumulative_gain = np.cumsum(np.vstack((zero, gains)), axis=0)
+    cumulative_loss = np.cumsum(np.vstack((zero, losses)), axis=0)
+    avg_gain = (cumulative_gain[period:] - cumulative_gain[:-period]) / period
+    avg_loss = (cumulative_loss[period:] - cumulative_loss[:-period]) / period
+    out[period - 1 :] = _rsi_from(avg_gain, avg_loss)
     return out
 
 

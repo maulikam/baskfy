@@ -9,10 +9,10 @@ The point of an oracle is that it shares no code with the thing it checks. So th
 * imports nothing from :mod:`baskfy_core` except the *constants* that are part of docs/05's
   statement of the problem (window lengths, band tolerances) — never an expression, never a
   helper, never a Polars call;
-* loops in Python, one instrument at a time, one bar at a time where the formula is a recursion.
-  Every performance decision the engine makes (window expressions ``.over("instrument_id")``, the
-  NumPy RSI matrix, the rolling-moment beta) is deliberately *not* made here. If the two agree,
-  those optimisations preserved the arithmetic;
+* loops in Python, one instrument at a time, one bar at a time, summing explicit slices. Every
+  performance decision the engine makes (window expressions ``.over("instrument_id")``, the
+  cumulative-sum RSI matrix, the rolling-moment beta) is deliberately *not* made here. If the two
+  agree, those optimisations preserved the arithmetic;
 * transcribes each formula from docs/05 in the document's own notation, section by section, rather
   than from :mod:`baskfy_core.factors`.
 
@@ -64,14 +64,19 @@ def _returns(closes: list[float]) -> list[float | None]:
     return out
 
 
-def _sample_stdev(values: list[float]) -> float:
-    """Sample standard deviation, ddof=1, written out longhand."""
+def _population_stdev(values: list[float]) -> float:
+    """docs/05 §2 — POPULATION standard deviation, ddof=0, written out longhand.
+
+    Was ``ddof=1`` until the 2026-08-31 amendment; §2 carries the measurement that moved it and
+    the authority for it. Transcribed from the document, as everything in this oracle is — the
+    engine's ``rolling_std(..., ddof=_VOL_DDOF)`` is not consulted, which is the whole point.
+    """
     n = len(values)
     mean = sum(values) / n
     total = 0.0
     for v in values:
         total += (v - mean) ** 2
-    return math.sqrt(total / (n - 1))
+    return math.sqrt(total / n)
 
 
 def _median(values: list[float]) -> float:
@@ -83,15 +88,16 @@ def _median(values: list[float]) -> float:
     return (ordered[middle - 1] + ordered[middle]) / 2.0
 
 
-def _wilder_rsi_at(closes: list[float], index: int, period: int) -> float | None:
-    """docs/05 §5, transcribed literally and run forward from the very first bar.
+def _cutler_rsi_at(closes: list[float], index: int, period: int) -> float | None:
+    """docs/05 §5, transcribed literally after the 2026-08-31 amendment.
 
-    "Seed with a simple mean over the first N observations, then
-     avg_x_t = (avg_x_{t-1} x (N-1) + x_t) / N".
+    "avg_gain = mean(gain_{t-(N-1)+1 ... t}); avg_loss = mean(loss_{t-(N-1)+1 ... t})" — a plain
+    simple mean over the last ``period`` changes, no seed and no recursion. The caller passes
+    ``period = N - 1``, §5's count of returns inside an ``N``-bar window.
 
-    One Python loop per instrument per window. The engine does this over a
-    ``(time, instrument)`` NumPy matrix; agreeing with this loop is the evidence that the
-    vectorisation did not change the recursion.
+    A plain Python sum over an explicit slice, one instrument and one window at a time. The engine
+    does this over a ``(time, instrument)`` NumPy matrix as a difference of cumulative sums;
+    agreeing with this slice is the evidence that the vectorisation did not change the arithmetic.
     """
     changes: list[float] = []
     for i in range(1, index + 1):
@@ -99,14 +105,12 @@ def _wilder_rsi_at(closes: list[float], index: int, period: int) -> float | None
     if len(changes) < period or period < 1:
         return None
 
-    gains = [c if c > 0 else 0.0 for c in changes]
-    losses = [-c if c < 0 else 0.0 for c in changes]
+    recent = changes[len(changes) - period :]
+    gains = [c if c > 0 else 0.0 for c in recent]
+    losses = [-c if c < 0 else 0.0 for c in recent]
 
-    avg_gain = sum(gains[:period]) / period
-    avg_loss = sum(losses[:period]) / period
-    for step in range(period, len(changes)):
-        avg_gain = (avg_gain * (period - 1) + gains[step]) / period
-        avg_loss = (avg_loss * (period - 1) + losses[step]) / period
+    avg_gain = sum(gains) / period
+    avg_loss = sum(losses) / period
 
     if avg_loss == 0:
         return 50.0 if avg_gain == 0 else 100.0
@@ -239,7 +243,7 @@ def compute_factors_pandas(
             if t - n + 1 < 1 or len(window_returns) < n:
                 values[f"vol_{key}"] = None
             else:
-                values[f"vol_{key}"] = _sample_stdev(window_returns) * SQRT_TRADING_YEAR
+                values[f"vol_{key}"] = _population_stdev(window_returns) * SQRT_TRADING_YEAR
 
             # §11: pos_days_N = count(r_i > 0) / N x 100
             if t - n + 1 < 1 or len(window_returns) < n:
@@ -262,8 +266,8 @@ def compute_factors_pandas(
             else:
                 values[f"sharpe_{key}"] = ret / (vol * 100)
 
-            # §5: RSI with period = the window's trading-day count
-            values[f"rsi_{key}"] = _wilder_rsi_at(closes, t, n)
+            # §5: RSI with period = the count of returns inside the window, N - 1
+            values[f"rsi_{key}"] = _cutler_rsi_at(closes, t, n - 1)
 
             # docs/05's rule: a short window nulls everything derived from it.
             if values[f"vol_{key}"] is None or values[f"ret_{key}"] is None:

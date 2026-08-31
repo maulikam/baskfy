@@ -89,15 +89,46 @@ as the window lengthens, which is drift between our trading calendar and the ref
 second formula defect — see `docs/DECISIONS.md` §21.7 and the merge's `DECISIONS-MERGE.md` M10.1
 and M11.1.
 
-## 2. Volatility — annualised, per window
+## 2. Volatility — annualised, per window — AMENDED 2026-08-31 (`ddof=1` → `ddof=0`)
 
 ```
-vol_N = stdev(r_{t-N+1 … t}) × sqrt(252) × 100        (sample stdev, ddof=1)
+vol_N = stdev(r_{t-N+1 … t}) × sqrt(252) × 100        (POPULATION stdev, ddof=0)
 ```
 
 Each window is annualised, so `vol_1m` and `vol_12m` are on the same scale. This is confirmed
 by the site exposing `Volatility 1y/9m/6m/3m/1m` values that are all in the 20–60 range for the
 same stock, which is only possible under per-window annualisation.
+
+**What changed, and why.** This section said "sample stdev, ddof=1" in words from the day it was
+written, and nothing had ever checked it: the row-by-row reproduction test needed adjusted price
+history the repository does not carry, so it skipped, and a skipped test is never run. Measured
+against the 271-row reference export (`docs/PARITY-M11.md` §4B) the ratio published/computed is
+**constant at `√((N−1)/N)` to seven significant figures**, with a p05→p95 spread of 4×10⁻⁶ across
+271 independent instruments:
+
+| window | measured ratio (p05 / median / p95) | `√((N−1)/N)` |
+|---|---|---|
+| 1M (N=22) | 0.977006 / **0.977008** / 0.977010 | **0.977008421** |
+| 3M (N=64) | 0.992156 / **0.992157** / 0.992158 | **0.992156742** |
+
+That is the signature of `ddof` and of nothing else. Sweeping the alternatives, `ddof=0` with
+`m=N` returns and √252 annualisation gives a median absolute error of **1.6×10⁻⁷**, against
+6×10⁻³ for `m=N−1` and 1.3×10⁻³ for √250 — a factor of 40,000.
+
+**On whose authority.** This is a deliberate **spec amendment**, not a bug fix: the prose above
+was explicit and the code faithfully implemented it. Maulik took the decision on **2026-08-31**,
+in answer to a question that named the consequence — `vol_12m` is the input to the desk's GTT
+stop sizing (non-negotiable #4), so amending it moves live stop prices. It was landed together
+with the §5 RSI amendment, in one change with one fixture regeneration, so stops move once rather
+than twice in a week. `sharpe_N` (§3) moves with it by construction.
+
+**A residual that this does not close, and cannot.** Even at `ddof=0` the reproduction error is
+~1.6×10⁻⁷, while `COLUMN_TOLERANCE["volatility_*"]` in the parity harness is 5×10⁻¹¹. The export
+stores volatility to 8 decimals and our `close` is the adjusted price rounded to 2 dp at write
+time (house rule 8), which injects ~10⁻⁵ relative noise per return and lands at ~10⁻⁷ in
+annualised volatility. **`volatility_*` cannot reproduce to 5×10⁻¹¹ from stored data at any
+`ddof`.** That is a tolerance defect, recorded here and in `docs/PARITY-M11.md` §8 rather than
+silently loosened.
 
 ## 3. "Sharpe return" — **VERIFIED EXACTLY**
 
@@ -156,20 +187,52 @@ The eleven blend shapes used by all three families (absolute / sharpe / rsi):
 `12·9·6·3·1`, `12·9·6·3`, `12·9·6`, `12·9`, `12·6·3·1`, `12·6·3`, `12·6`, `12·3·1`, `12·3`,
 `12·9·3·1`, `12·9·3` — plus `6·3` for the sharpe family only.
 
-## 5. RSI over a window
+## 5. RSI over a window — AMENDED 2026-08-31 (Wilder@N → **Cutler@N−1**)
 
-Wilder's RSI with period = the window's trading-day count (so "RSI 1 year" is a 252-period RSI,
-not a 14-period RSI sampled yearly):
+**Cutler's RSI** with period = the number of **returns inside** the window, `N−1` (so "RSI 1 year"
+is still a ~246-period RSI, not a 14-period RSI sampled yearly):
 
 ```
 gain_t = max(P_t - P_{t-1}, 0);   loss_t = max(P_{t-1} - P_t, 0)
-avg_gain = Wilder EMA(gain, N);   avg_loss = Wilder EMA(loss, N)
+avg_gain = mean(gain_{t-(N-1)+1 … t});   avg_loss = mean(loss_{t-(N-1)+1 … t})
 RS  = avg_gain / avg_loss
-RSI = 100 - 100 / (1 + RS)        (RSI = 100 when avg_loss == 0)
+RSI = 100 - 100 / (1 + RS)        (RSI = 100 when avg_loss == 0, 50 when both are 0)
 ```
 
-Seed with a simple mean over the first `N` observations, then
-`avg_x_t = (avg_x_{t-1} × (N-1) + x_t) / N`.
+A plain simple moving average of gains and losses. There is no seed and no recursion: the value
+at `t` reads the window and nothing before it.
+
+**What changed, and why.** This section previously specified Wilder's recursive smoothing
+(`avg_x_t = (avg_x_{t-1} × (N-1) + x_t) / N`, seeded with a simple mean over the first `N`
+observations) at period `N`. Sweeping method × period against the reference export
+(`docs/PARITY-M11.md` §4C):
+
+| column | Wilder, best period | Cutler, best period |
+|---|---|---|
+| `rsi_one_month` (N=22) | p=22 → **1/271** exact | **p=21 → 267/271** exact |
+| `rsi_three_months` (N=64) | p=67 → **0/270** exact | **p=63 → 263/270** exact |
+
+Two findings in one, and neither is a tuning difference. The smoothing family is a different
+formula, and the period is `N−1`. `N−1` is internally consistent with §Notation and §1: a window
+of `N` bars spans `N−1` returns, which is the same `N−1` that `ret_N = P_t / P_{t-(N-1)} - 1`
+already uses. (The reference is not itself fully self-consistent — §11's `positive_days_percent`
+is `k/N` over `N` returns, one of which reaches back before the window. Reproducing the reference
+product is the job, so that inconsistency is reproduced too.)
+
+Cutler's is also **path-independent**, which is the second, independent reason to prefer it:
+Wilder's is seeded from the first `N` observations of whatever history it is handed, so its answer
+depends on where the series was cut and it could never reproduce the reference without history
+back to the listing date.
+
+**Consequences of `N−1`.** A window that resolves to `N = 1` trading day spans zero returns, so
+its RSI is **NULL**. Under Wilder@N that degenerate case returned 100 or 0 off a one-observation
+seed; there is nothing to average now, and NULL is §Notation's own answer for a window without
+enough history.
+
+**On whose authority.** A deliberate **spec amendment**, taken by Maulik on **2026-08-31** with
+the consequence named: `rsi_1m` is a live strategy input — the desk's RSI bands (>78 wait or
+tranche, >82 trim a held position to a runner) and the F-penalty read it. Landed together with the
+§2 volatility amendment in one change with one fixture regeneration.
 
 Sanity: CUPID `rsi_12m = 67.41`, `rsi_1m = 75.48` — consistent with a strongly trending stock.
 

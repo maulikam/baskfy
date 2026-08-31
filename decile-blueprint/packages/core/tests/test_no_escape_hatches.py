@@ -56,6 +56,14 @@ def test_there_are_python_files_to_scan() -> None:
 
 
 def test_no_type_ignore_comments() -> None:
+    """A LINE SCAN, so it cannot tell the escape hatch from prose about the escape hatch.
+
+    That is not a defect to be fixed by teaching it to skip comments: the hatch *is* a comment,
+    and any exemption wide enough to admit a docstring discussing one is wide enough to hide a
+    real one. The house convention handles it instead — a comment that needs to name the hatch
+    writes it WITHOUT the leading hash (``screener.py:102``, ``plan_store.py:91``), which does
+    not match this pattern and reads no worse.
+    """
     assert _offenders(re.compile(r"#\s*type:\s*ignore")) == []
 
 

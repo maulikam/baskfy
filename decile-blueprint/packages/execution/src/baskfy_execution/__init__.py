@@ -15,6 +15,11 @@ Each of the desk's seven non-negotiables has a named test in
 `packages/execution/tests/test_non_negotiables.py` that fails if it is "improved" away.
 """
 
+from baskfy_execution.client_ids import (
+    CLIENT_ID_SEPARATOR,
+    mint_client_id,
+    parse_client_id,
+)
 from baskfy_execution.gateway import (
     FAILED_STATUSES,
     JOURNAL,
@@ -32,6 +37,7 @@ from baskfy_execution.ratelimit import KiteLimits
 from baskfy_execution.risk import RiskConfig, RiskManager
 
 __all__ = [
+    "CLIENT_ID_SEPARATOR",
     "FAILED_STATUSES",
     "JOURNAL",
     "KiteLimits",
@@ -44,5 +50,7 @@ __all__ = [
     "UntouchableInstrumentError",
     "assert_not_overnight_option",
     "assert_tradeable",
+    "mint_client_id",
+    "parse_client_id",
     "refuse_cross_tenant",
 ]

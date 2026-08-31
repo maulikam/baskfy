@@ -14,7 +14,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-__all__ = ["HoldingRow", "normalize_holding", "total_quantity"]
+__all__ = ["HoldingRow", "OAuthStart", "normalize_holding", "total_quantity"]
+
+
+@dataclass(frozen=True, slots=True)
+class OAuthStart:
+    """Where to send the browser to begin a broker login, and the state that ties it back.
+
+    Referenced by `adapters.py` since ef50c09 but never defined — an ImportError that aborted
+    collection for the whole of `packages/execution/tests`, unnoticed because that directory was
+    missing from `testpaths`. Restored here, beside the other wire shape this module owns.
+
+    ``state`` is carried rather than re-derived: the callback validates the value the authorize
+    URL actually went out with, and a state regenerated at check time would validate nothing.
+    """
+
+    authorize_url: str
+    state: str
 
 
 @dataclass(frozen=True, slots=True)

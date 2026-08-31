@@ -125,9 +125,17 @@ class TestTheCatalogDoesNotOverclaim:
     #:
     #: An entry here is a deliberate *under*-claim and must stay rare. The over-claim direction —
     #: advertising a sync with no adapter behind it — is still forbidden outright below.
-    UNREACHABLE_ADAPTERS = {
-        "zerodha": "integrated through Kite Publisher, which cannot read holdings",
-    }
+    #: EMPTY as of 1 Sep 2026, and `test_the_unreachable_list_does_not_outlive_its_reason`
+    #: is why. Zerodha's entry read "integrated through Kite Publisher, which cannot read
+    #: holdings". That was true while Publisher was the only integration. It stopped being true
+    #: when M57/M58 built the token bridge: the desk's morning Kite login produces a Connect
+    #: session, `kite_session_cli pull` borrows it, and `broker_holdings.fetch_kite_holdings`
+    #: reads `GET /portfolio/holdings` with it. Measured 1 Sep 2026 — 18 positions, `source:
+    #: live`, `degraded: False`.
+    #:
+    #: Publisher is still how an ORDER reaches Kite, and `trading` stays `handoff`. What changed
+    #: is only that "no session to read with" is no longer a fact about this deployment.
+    UNREACHABLE_ADAPTERS: dict[str, str] = {}
 
     def test_every_wired_broker_either_says_ready_or_says_why_not(self) -> None:
         """The honest case must not become collateral damage of the fix.

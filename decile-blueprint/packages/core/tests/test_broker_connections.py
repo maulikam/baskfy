@@ -69,8 +69,13 @@ class TestTheCatalog:
         assert zerodha.api_name == "Kite Publisher"
         # Nothing is linked: the basket opens in the session the browser already has.
         assert zerodha.capabilities.oauth == "not_applicable"
-        # Publisher is one-way. There is no session to read holdings with, and there will not be.
-        assert zerodha.capabilities.holdings_sync == "not_available"
+        # M55 asserted `not_available` here, on the reasoning that Publisher is one-way and there
+        # would never be a session to read holdings with. M57/M58 made that false: the desk's
+        # morning Kite login produces a Connect session, the bridge borrows it, and
+        # `broker_holdings` reads GET /portfolio/holdings with it (18 live positions, 1 Sep 2026).
+        # Publisher is still one-way and still how an order reaches Kite — hence `handoff` below,
+        # unchanged. Only the claim about holdings moved.
+        assert zerodha.capabilities.holdings_sync == "ready"
         # The user trades, in their own terminal, after reviewing every line.
         assert zerodha.capabilities.trading == "handoff"
 

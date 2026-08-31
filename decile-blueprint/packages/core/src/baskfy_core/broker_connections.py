@@ -161,16 +161,29 @@ BROKERS: Final[tuple[BrokerDef, ...]] = (
         short_name="Zerodha",
         mark="Z",
         color="#387ed1",
-        blurb="Kite Publisher — send a basket to your own Kite and confirm it there.",
+        blurb=(
+            "Kite Publisher — send a basket to your own Kite and confirm it there. "
+            "Holdings are read back from the session your morning Kite login produces."
+        ),
         api_name="Kite Publisher",
         docs_url="https://kite.trade/docs/connect/v3/publisher/",
         capabilities=BrokerCapability(
             # No account is linked and no token is stored: Publisher opens a basket in whatever
             # Zerodha session the browser already has.
             oauth="not_applicable",
-            # Publisher is one-way. It hands orders *to* Kite and reads nothing back, so there is
-            # no session to fetch holdings with. CSV import is the path, and the UI says so.
-            holdings_sync="not_available",
+            # Publisher itself is one-way — it hands orders *to* Kite and reads nothing back.
+            # But Baskfy does hold a Kite session after all, and not through Publisher: the M58
+            # bridge borrows the one the desk's morning login produces, and
+            # `broker_holdings.fetch_kite_holdings` reads `GET /portfolio/holdings` with it.
+            # Verified live 1 Sep 2026 — 18 positions, `source: live`, quantities carrying
+            # `collateral_quantity` per non-negotiable #2.
+            #
+            # "ready" is honest but conditional, and the condition is Kite's not ours: an access
+            # token expires overnight and Kite Connect issues no refresh token, so holdings are
+            # available on any day a session has been pulled and stale on any day it has not.
+            # `holdings_for_broker` already reports that truthfully — it returns a tagged
+            # `_degraded_holdings` rather than silence when the stored session is unusable.
+            holdings_sync="ready",
             # The user trades, in their own terminal, after reviewing every line. Baskfy places
             # nothing — desk non-negotiable #1 is untouched by this.
             trading="handoff",

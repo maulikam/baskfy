@@ -22,6 +22,7 @@ from baskfy_core.factors import (
     TOP_RISK_FLAG_PERCENTILE,
     FactorConfig,
     FactorResult,
+    compute_factors,
     compute_factors_unrounded,
 )
 from baskfy_core.windows import WINDOW_MONTHS
@@ -262,63 +263,109 @@ class TestTheTurnoverSourceIsRecorded:
         assert result["vol_day_val"][0] == pytest.approx(0.5)
 
 
-class TestWildersSeedingAtTheEdges:
-    """Kills the guards and the seed-row index in ``_wilder_rsi`` (docs/05 §5).
+class TestCutlersWindowAtTheEdges:
+    """Kills the guards and the first-full-row index in ``_cutler_rsi`` (docs/05 §5).
 
-    docs/05 §5 is unusually specific about the seeding — "Seed with a simple mean over the first
-    N observations, then avg_x_t = (avg_x_{t-1} x (N-1) + x_t) / N" — and explains in the engine's
-    own docstring why Polars' ``ewm_mean`` cannot be used instead (it seeds with the first
-    observation, and at N=247 the two answers are still ~36% apart a year later). Every test
-    before this one ran on 765 bars against windows of at most 247, where the seed row is
-    hundreds of steps behind the row being read and its exact placement is invisible.
+    docs/05 §5 was amended on 2026-08-31 from Wilder's recursion at period ``N`` to **Cutler's
+    simple mean at period ``N - 1``** — the count of returns inside an ``N``-bar window. Every
+    test before this one runs on 765 bars against windows of at most 247, where the first
+    fully-populated row is hundreds of steps behind the row being read and its exact placement is
+    invisible.
 
-    Both cases below make the seed row *be* the row under inspection, which is the only way the
-    off-by-one is observable at all.
+    The cases below make that row *be* the row under inspection, which is the only way the
+    off-by-one is observable at all, and pin the two properties that distinguish Cutler's from
+    what was there before: the degenerate ``N = 1`` window is now NULL, and the value does not
+    depend on how much history precedes the window.
     """
 
-    def test_a_history_of_exactly_one_more_bar_than_the_window_still_has_an_rsi(self) -> None:
-        """``steps == period``: the seed completes on the very last bar and nothing smooths it.
+    def test_a_history_of_exactly_the_window_length_still_has_an_rsi(self) -> None:
+        """``steps == period``: the window fills exactly on the last bar and nothing precedes it.
 
-        Kills ``steps < period`` -> ``<=`` (which would return all-NaN) and the two mutants on
-        ``out[period - 1]`` (which would write the seed to the wrong row and leave the last one
-        NaN).
+        An ``N``-bar history yields ``N - 1`` changes, which is exactly ``period``. Kills
+        ``steps < period`` -> ``<=`` (which would return all-NaN) and the two mutants on
+        ``out[period - 1 :]`` (which would start the block on the wrong row and leave the last
+        one NaN).
         """
         days = weekdays(40)
         n = compute_factors_unrounded(
             bars([100.0 + i for i in range(len(days))], days), AS_OF, days, config=SHORT
         ).window_lengths[1]
 
-        # Exactly n + 1 bars, ending on as_of: n daily changes, so Wilder's seed is complete on
-        # the final bar and the smoothing loop never runs.
-        short_days = days[-(n + 1) :]
+        # Exactly n bars, ending on as_of: n - 1 changes, so the mean has precisely enough terms
+        # on the final bar and not one to spare.
+        short_days = days[-n:]
         rising = [100.0 + i for i in range(len(short_days))]
         frame = compute_factors_unrounded(bars(rising, short_days), AS_OF, days, config=SHORT).frame
         # A monotonically rising series has no losses at all, so docs/05 §5's "RSI = 100 when
-        # avg_loss == 0" applies — and it can only apply if the seed row was written.
+        # avg_loss == 0" applies — and it can only apply if that row was written.
         assert frame["rsi_1m"][0] == 100.0
 
-    def test_a_window_of_a_single_trading_day(self) -> None:
-        """``period == 1``: the degenerate window docs/05 §Notation permits but never discusses.
+    def test_one_bar_short_of_the_window_has_no_rsi(self) -> None:
+        """``steps == period - 1``: one change too few, so there is nothing to average.
 
-        A calendar with one trading day in the last month resolves the 1-month window to N = 1.
-        Wilder's period is then 1, the seed is a mean of one observation, and the RSI is defined.
-        Kills ``period < 1`` -> ``<= 1``, ``period < 1`` -> ``< 2``, and the ``len(dates) < 2``
-        guard's two mutants, all of which would return NULL instead.
+        The mirror of the test above, and the half that fails if ``steps < period`` is relaxed.
+        """
+        days = weekdays(40)
+        n = compute_factors_unrounded(
+            bars([100.0 + i for i in range(len(days))], days), AS_OF, days, config=SHORT
+        ).window_lengths[1]
+
+        short_days = days[-(n - 1) :]
+        rising = [100.0 + i for i in range(len(short_days))]
+        # The ROUNDED result, because "no value" is a NULL in storage (baskfy_core.precision turns
+        # the engine's in-flight NaN into one). That is the contract every reader downstream sees.
+        frame = compute_factors(bars(rising, short_days), AS_OF, days, config=SHORT).frame
+        assert frame["rsi_1m"][0] is None
+
+    def test_a_window_of_a_single_trading_day_has_no_rsi(self) -> None:
+        """``N == 1``, so ``period == 0``: the degenerate window docs/05 §Notation permits.
+
+        A calendar with one trading day in the last month resolves the 1-month window to N = 1,
+        which spans **zero returns**. There is no gain and no loss to average, so §5's amended
+        text makes it NULL. Under the pre-2026-08-31 Wilder@N spec this returned 100 off a
+        one-observation seed; §5 records the change and why.
+
+        Kills ``period < 1`` -> ``period < 0`` and -> ``period < 2``, and the ``len(dates) < 2``
+        guard's two mutants.
         """
         # Two trading days seven months apart: `as_of - 1 month` snaps forward to as_of itself.
         calendar = [dt.date(2026, 1, 5), AS_OF]
-        result = compute_factors_unrounded(
-            bars([100.0, 150.0], calendar), AS_OF, calendar, config=SHORT
-        )
+        result = compute_factors(bars([100.0, 150.0], calendar), AS_OF, calendar, config=SHORT)
         assert result.window_lengths[1] == 1
-        # One change, and it is a gain: no losses, so docs/05 §5 gives 100.
-        assert result.frame["rsi_1m"][0] == 100.0
+        assert result.frame["rsi_1m"][0] is None
 
-    def test_a_single_trading_day_window_that_fell(self) -> None:
-        """The mirror image: one change, and it is a loss, so ``avg_gain == 0`` and RSI is 0."""
+    def test_a_single_trading_day_window_that_fell_has_no_rsi_either(self) -> None:
+        """The mirror image. A zero-return window is NULL whichever way the price went."""
         calendar = [dt.date(2026, 1, 5), AS_OF]
-        result = compute_factors_unrounded(
-            bars([150.0, 100.0], calendar), AS_OF, calendar, config=SHORT
-        )
+        result = compute_factors(bars([150.0, 100.0], calendar), AS_OF, calendar, config=SHORT)
         assert result.window_lengths[1] == 1
-        assert result.frame["rsi_1m"][0] == 0.0
+        assert result.frame["rsi_1m"][0] is None
+
+    def test_the_rsi_does_not_depend_on_history_before_the_window(self) -> None:
+        """Cutler's is **path-independent**: it reads the window and nothing before it.
+
+        This is the property docs/05 §5 gives as the second, independent reason to prefer Cutler's
+        over Wilder's — Wilder's is seeded from the first ``N`` observations of whatever history it
+        is handed and smoothed forward, so its answer moves when the series is cut somewhere else.
+        Feeding the same final window twice, once with a long and violent prelude and once with
+        the bare minimum, must give the same number. A recursive kernel of any kind fails this.
+        """
+        days = weekdays(400)
+        n = compute_factors_unrounded(
+            bars([100.0 + i for i in range(len(days))], days), AS_OF, days, config=SHORT
+        ).window_lengths[1]
+
+        # The last n bars are a fixed zig-zag; everything before them is a wild crash and rally
+        # that a seeded recursion would still be carrying.
+        tail = [100.0 + (7.0 if i % 2 else 0.0) + i for i in range(n)]
+        prelude = [500.0 * (0.4 if i % 3 else 2.5) for i in range(len(days) - n)]
+
+        long_history = compute_factors_unrounded(
+            bars(prelude + tail, days), AS_OF, days, config=SHORT
+        ).frame
+        just_the_window = compute_factors_unrounded(
+            bars(tail, days[-n:]), AS_OF, days, config=SHORT
+        ).frame
+
+        assert long_history["rsi_1m"][0] is not None
+        assert long_history["rsi_1m"][0] == pytest.approx(just_the_window["rsi_1m"][0])

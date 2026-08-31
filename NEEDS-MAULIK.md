@@ -1146,3 +1146,169 @@ drift, and a test asserts it.
 
 **Whichever option you pick, the redirect URI registered in the Kite console must be exactly:**
 `https://staging.baskfy.com/api/v1/brokers/callback`
+
+---
+
+## §29 — Credential inventory and rotation list for the desk→Baskfy cutover (leaf 1.1.3, 31 Aug 2026)
+
+**No value of any credential appears in this section.** Every "status" below was measured with a
+presence/length check, never a read. Lengths are given because they are what lets you confirm a
+rotation actually landed (a rotated secret has a new length or, at minimum, a changed `docker
+compose exec` length read) without anyone ever printing the value.
+
+### 1. The inventory
+
+Three hosts hold credentials, and it matters which is which:
+
+- **desk** — the momentum desk that places live orders, reachable as `desk.modelbasket.in`, SSH
+  user `desk`. Its config is `kite-momentum-rebalancer/app/config.py` reading
+  `kite-momentum-rebalancer/.env` (gitignored at `kite-momentum-rebalancer/.gitignore:4`,
+  confirmed untracked).
+- **box** — the Baskfy Phase-A EC2 box (`ap-south-1`), reached only over SSM
+  (`tools/deploy/box.sh`). Service env comes from `/opt/baskfy/.env.staging` via
+  `env_file: [.env.staging]` (`decile-blueprint/infra/docker/compose.prod.yml:30`); compose
+  *interpolation* values come from `/opt/baskfy/.env.staging.compose`. Both are 0600.
+- **laptop** — this machine, `decile-blueprint/.env` and root `.env.staging`
+  (both gitignored at `.gitignore:18` / `decile-blueprint/.gitignore:18`, confirmed untracked
+  with `git ls-files --error-unmatch`).
+
+#### Kite Connect — the RENIL app (one app, one redirect URL, ₹2,000/month)
+
+| Variable | Which system needs it | Where it lives | Status (measured 31 Aug 2026) |
+|---|---|---|---|
+| `KITE_API_KEY` | desk (`app/config.py:9`) | `kite-momentum-rebalancer/.env` on desk **and** laptop | set, 16 chars (laptop read) |
+| `KITE_API_SECRET` | desk (`app/config.py:10`) — redeems the `request_token` at `GET /callback` (`app/main.py:233`) | same file | set, 32 chars (laptop read) |
+| `TOKEN_FILE` → `data/.kite_token.json` | desk (`app/config.py:40`) | desk `data/`, **plaintext JSON**, 248 bytes | present; a Kite access token dies ~06:00 IST daily |
+| `BASKFY_KITE_API_KEY` | box worker + api (`decile-blueprint/packages/providers/src/baskfy_providers/settings.py`, `kite_api_key`) | `/opt/baskfy/.env.staging`; laptop `decile-blueprint/.env` | **SET, 16 chars** in `worker` and `api` containers; `UNSET` in `web`. Same length as the desk's key — it is the same RENIL app |
+| `BASKFY_KITE_API_SECRET` | box worker + api (`kite_api_secret`) | as above | **SET BUT EMPTY** in `worker` and `api`. Laptop holds a 32-char value. See §29.3 |
+| `BASKFY_KITE_TOKEN_ENCRYPTION_KEY` | box worker + api (`kite_token_encryption_key`) — Fernet key encrypting the daily access token at rest | as above | **SET, 44 chars** in `worker` and `api` (44 = a Fernet key); laptop 44 |
+| `BASKFY_KITE_TOKEN_PATH` | box (`compose.prod.yml:61` → `/var/lib/baskfy/state/kite-token.enc`) | named volume `baskfy-state` | blob present, 248 bytes, `-rw-------  baskfy baskfy`, mtime **31 Aug 16:17** |
+| `BASKFY_KITE_PUBLISHER_API_KEY` | box api (`services/api/.../settings.py`, `kite_publisher_api_key`) — the basket hand-off | nowhere | `UNSET`. **Not a secret** — it travels in the browser form post; see §28 |
+
+`kite_configured()` requires *both* key and secret, so with the secret empty the box currently
+reports Kite as unconfigured — it works only through the M58 bridge below.
+
+#### The M58 desk-session bridge (how the box gets a token today)
+
+| Variable | Which system | Where it lives | Status |
+|---|---|---|---|
+| `BASKFY_KITE_DESK_SSH_TARGET` | box worker + api | `/opt/baskfy/.env.staging` | **SET, 16 chars** in `worker` and `api`; `UNSET` in `web` (correct) |
+| `BASKFY_KITE_DESK_SSH_KEY_PATH` | box worker | not set — pydantic default `/var/lib/baskfy/.ssh/kite-session` applies | `UNSET` in every container, **by design**. The key file exists on the box at `/opt/baskfy/secrets/ssh/kite-session`, 452 bytes, `-rw-------` uid 1001, bind-mounted read-only at `/var/lib/baskfy/.ssh` (`compose.prod.yml:48`) |
+| `BASKFY_KITE_DESK_KNOWN_HOSTS_PATH` | box worker | default `/var/lib/baskfy/.ssh/known_hosts` | `UNSET`; file present, 232 bytes, same directory. The desk's host key is **pinned**, not TOFU |
+| the desk-side `authorized_keys` line | desk | desk `~/.ssh/authorized_keys` (a backup is written beside it) | one line, `restrict,command="/home/desk/bin/emit-kite-token",from="<box ip>"` — a capability, not an account (`tools/deploy/install-kite-session.sh:8`, `docs/DECISIONS-MERGE.md` M58) |
+
+The private half was generated **on the box** and has never moved; `box.sh` refuses secrets as
+arguments because `ssm send-command` parameters are retained in CloudTrail.
+
+#### Google sign-in (M46 — the only way in)
+
+| Variable | Which system | Where it lives | Status |
+|---|---|---|---|
+| `BASKFY_GOOGLE_CLIENT_ID` | box `web` (runs the OAuth exchange) **and** box `api` (uses it as the only `aud` it accepts on a Google ID token) | `/opt/baskfy/.env.staging.compose` **and** `/opt/baskfy/.env.staging` | **SET, 72 chars** in `worker`, `api` and `web`; 72 chars in `.env.staging.compose`. Not a secret |
+| `BASKFY_GOOGLE_CLIENT_SECRET` | box `web` **only** — the API verifies ID-token signatures against Google's public JWKS and needs no secret (`services/api/.../settings.py`, `google_client_secret` docstring) | `/opt/baskfy/.env.staging.compose`; laptop `decile-blueprint/.env` | **SET, 35 chars in `web`**; `UNSET` in `worker` and `api` (correct). 35 chars in `.env.staging.compose`; 35 on the laptop |
+
+Google Cloud console → project `baskfy` → Web application OAuth client. Authorised redirect URIs
+must include `https://staging.baskfy.com/api/auth/callback/google` and
+`http://localhost:3000/api/auth/callback/google` (root `.env.example:378-387`).
+
+#### Session / adjacent secrets the cutover touches
+
+| Variable | Which system | Where | Status |
+|---|---|---|---|
+| `AUTH_SECRET` | box `web` (Auth.js session cookies) | `/opt/baskfy/.env.staging` | **SET, 64 chars** in `web`; empty in `worker`/`api`. Not on the exposure list |
+| `BASKFY_JWT_SECRET` | box api (verifies) + web (mints) | `/opt/baskfy/.env.staging` | **SET, 64 chars** in all three containers. Not on the exposure list |
+| `DESK_PASSWORD` | desk — gates the operator console; loopback is not a boundary on a shared box | desk `.env` | not measured from here (the desk is not reachable over SSM). Root `.env.example:290` documents it |
+| `BASKFY_METRICS_TOKEN` | box api | — | `UNSET` |
+
+### 2. The rotation list — four secrets exposed in agent transcripts
+
+Two were recorded on the status page (`docs/00-merge-status.md`, "What is NOT done"):
+*"Two secrets pasted into an agent transcript on 27 Aug still need rotating: the Google client
+secret and the RENIL Kite api_secret. The box does not hold the Kite secret, which limits the
+blast radius but does not remove the need."* Two more were added on **31 Aug 2026**, when an agent
+echoed a whole settings object and printed the Kite **api_key** and the **token encryption key**
+into its transcript.
+
+A fifth, already closed: the status page also records the desk's Kite **access** token printed
+into the 30 Aug transcript. That token expired overnight and the box's current blob is dated
+**31 Aug 16:17**, so it has been retired by ordinary use. No action.
+
+| # | Secret | What it is | Why it must rotate | What breaks during rotation |
+|---|---|---|---|---|
+| R1 | `KITE_API_SECRET` / `BASKFY_KITE_API_SECRET` (RENIL) | The half of the Kite Connect app credential that redeems a `request_token` into an access token | Pasted into an agent transcript 27 Aug. With the api_key (R3, also exposed) the pair is a complete Kite Connect app credential | Any `request_token` in flight fails. **The desk's login breaks the moment the old secret stops working** — the desk's `.env` and the box must be updated in the same sitting |
+| R2 | `BASKFY_KITE_TOKEN_ENCRYPTION_KEY` | Fernet key encrypting the daily access token at rest on the box | Printed into a transcript 31 Aug. Anyone holding it plus the blob at `/var/lib/baskfy/state/kite-token.enc` can read that day's access token | The existing blob becomes undecryptable. Cost is one day's Kite reads until the next `kite_session_cli pull` re-encrypts. **Nothing else** — the bhavcopy path needs no credential (M58 property 3) |
+| R3 | `KITE_API_KEY` / `BASKFY_KITE_API_KEY` (RENIL) | The Kite Connect app's identity | Printed into a transcript 31 Aug. **Honest assessment: this one is public by design** — it travels in the login URL in every user's browser (`kite.zerodha.com/connect/login?api_key=…`) and Zerodha's own embed snippets put it in page source. Its exposure matters only in combination with R1, which R1's rotation closes | **The api_key cannot be regenerated.** It is the app's identity: changing it means deleting the app and creating a new one — a new ₹2,000/month subscription, a fresh redirect-URL registration, and both `.env` files updated. **Recommendation: do not rotate R3.** Rotate R1 and the pair is dead |
+| R4 | `BASKFY_GOOGLE_CLIENT_SECRET` | Google OAuth web-client secret, used by the `web` service for the code exchange | Pasted into an agent transcript 27 Aug | Google sign-in stops for the seconds it takes to restart `web`. Existing sessions survive (they are Auth.js cookies signed with `AUTH_SECRET`, untouched). The **client ID does not change**, so nothing in `api` needs touching |
+
+**The order to do them in, and why.**
+
+The ordering constraint is not blast radius — it is *leaf 1.1.1*. That leaf is about to decide
+whether `BASKFY_KITE_API_SECRET` gets written to the box at all (§29.3). If it does, it must not
+be the known-exposed value.
+
+1. **R1 first, before or together with 1.1.1's deployment.** Regenerate the secret at
+   `developers.kite.trade`, then write the *fresh* value into the desk's
+   `kite-momentum-rebalancer/.env` and (if 1.1.1 chooses branch A) into `/opt/baskfy/.env.staging`
+   in the same sitting. Doing it in this order means the box never receives a value that has been
+   in a transcript. **Timing has a real conflict, and it is yours to resolve:**
+   - *Rotate tonight (31 Aug):* the box gets a clean secret for the 1 Sep login, but if the desk's
+     `.env` is not updated in the same sitting the desk cannot log in on 1 Sep, and the Friday
+     4 Sep rebalance rail is at risk. Both files, one sitting, outside market hours.
+   - *Rotate on the weekend (5–6 Sep):* one more session on the exposed secret; the box is
+     configured with the exposed value now and re-configured after. Safer for the Friday rail,
+     and the honest cost is a known-exposed secret living five more days.
+2. **R2 next, any time, no coordination.** It touches nothing outside the box. Generate with
+   `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`,
+   write it to `/opt/baskfy/.env.staging`, restart `worker` and `api`, then run
+   `kite_session_cli pull` (or `deposit`) to re-encrypt. Verify by reading the length back as
+   44 and confirming the blob's mtime moved.
+3. **R4 third, independent of everything Kite.** Google Cloud console → the `baskfy` web client →
+   add a new secret, deploy it to `/opt/baskfy/.env.staging.compose`, restart `web`, confirm a
+   sign-in, then delete the old secret in the console. Two-step so there is no outage window at
+   all if you add before you remove.
+4. **R3 last, and probably never.** Only act on it if you are creating a new Kite Connect app for
+   another reason (§28 option 1). Record the decision either way so it stops being an open item.
+
+**Verifying a rotation without printing anything:** re-run the per-container presence check used
+to build this table —
+`AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh` with a loop over `printenv "$v" | wc -c`. It
+reports `UNSET` / `SET_EMPTY` / `SET len=N` and never the value.
+
+### 3. `BASKFY_KITE_API_SECRET` — required or not?
+
+**Measured state:** `SET_EMPTY` in both the `worker` and `api` containers on the box, 31 Aug 2026.
+The laptop's `decile-blueprint/.env` holds a 32-char value; the box does not.
+
+**`docs/DESK-LOGIN-DECISION.md` did not exist when this section was written** (leaf 1.1.1 was
+running concurrently). Both branches are recorded, and this section should be re-read against that
+file once it lands.
+
+- **Branch A — Baskfy owns the redirect. `BASKFY_KITE_API_SECRET` is REQUIRED.**
+  The box redeems the `request_token` itself at `/api/v1/brokers/callback`, so it needs the
+  secret; `kite_configured()` returns False without it and the login cannot complete. Consequence:
+  the **desk's** `GET /callback` never fires again and the desk needs a reverse bridge to get its
+  session from Baskfy.
+  **This is the live state as of now.** `gates/desk-retire-1.1.1.md` records that the Kite app's
+  redirect has already been changed from `https://desk.modelbasket.in/callback` to
+  `https://staging.baskfy.com/api/v1/brokers/callback`. Until the secret is set on the box,
+  *neither* system can obtain a session — which is why 1.1.1 is time-critical.
+- **Branch B — the desk owns the redirect, Baskfy uses the M58 token bridge.
+  `BASKFY_KITE_API_SECRET` is NOT required and should stay empty.**
+  The box never redeems anything; it pulls the desk's already-redeemed access token over SSH
+  (§29.1, M58). This is what M58 was built for, and leaving the secret off the box is a smaller
+  blast radius, not an omission. Requires the redirect to be changed **back** to
+  `https://desk.modelbasket.in/callback`.
+
+Either way, if the secret is written to the box it should be the **rotated** value (R1), not the
+one currently on the laptop.
+
+### 4. What only Maulik's hands can supply
+
+| | What is needed | Why | What it blocks | What was done meanwhile |
+|---|---|---|---|---|
+| **29a** | **Regenerate the RENIL Kite api_secret** at `developers.kite.trade`, and update `kite-momentum-rebalancer/.env` on the desk in the same sitting | R1 — exposed in a 27 Aug transcript; with the exposed api_key it is a complete app credential | Nothing today; the desk still works on the exposed secret. It gates writing a *clean* secret to the box in branch A | The exposure is recorded here and on the status page; the box does not hold the secret at all right now, which is the smaller blast radius |
+| **29b** | **Decide the R1 rotation window** — tonight (clean secret for 1 Sep, desk `.env` must be updated in the same sitting) vs the 5–6 Sep weekend (safer for the Friday 4 Sep rail, five more days of exposure) | Only you can weigh the Friday rebalance rail against five days of a known-exposed secret | The R1 rotation, and therefore R2/R4's ordering | Both options are costed above; neither is being taken autonomously, because the desk's login is outside this repo and the Friday rail is a safety rail |
+| **29c** | **Add a new Google OAuth client secret** in the `baskfy` project and retire the old one after the new one is live | R4 — exposed in a 27 Aug transcript | Nothing; sign-in works. It is an open exposure, not an outage | The two-step add-then-remove procedure is written above so there is no sign-in gap. `BASKFY_GOOGLE_CLIENT_SECRET` was confirmed to reach **only** the `web` container — `worker` and `api` do not have it |
+| **29d** | **Decide whether R3 (the Kite api_key) is rotated at all** — it cannot be regenerated; rotating means a new Connect app at ₹2,000/month, which is also §28 option 1 | The api_key is public by design, so the engineering recommendation is "no action". But it is money and it interacts with §28, so it is not an autonomous call | Nothing. It is an open item, and leaving it open is the cost | The reasoning is written above; R1's rotation kills the exposed *pair* regardless of what is decided here |
+| **29e** | `BASKFY_KITE_TOKEN_ENCRYPTION_KEY` (R2) — **no hands needed**, listed only so it is not lost | Printed into a 31 Aug transcript | Nothing | Fully automatable on the box; the procedure is in §29.2 step 2. An agent can do this one without you |
+

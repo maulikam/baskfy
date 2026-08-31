@@ -269,6 +269,10 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = [
     "packages/core/tests",
+    # Absent until M16 follow-up: `packages/execution` is law #2's "only path to an order",
+    # and its suite was never collected by `make test`. An ImportError sat in `adapters.py`
+    # from ef50c09 until it was found by the GTT port, because nothing ran it.
+    "packages/execution/tests",
     "packages/providers/tests",
     "services/api/tests",
     "services/worker/tests",

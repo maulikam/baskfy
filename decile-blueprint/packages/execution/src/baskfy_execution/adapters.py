@@ -110,7 +110,9 @@ _STUBS: Final[tuple[BrokerAdapter, ...]] = (
     BrokerAdapter(broker_id="angelone", api_key_env="BASKFY_ANGEL_API_KEY", authorize_base=None),
     BrokerAdapter(broker_id="groww", api_key_env="BASKFY_GROWW_API_KEY", authorize_base=None),
     BrokerAdapter(broker_id="fyers", api_key_env="BASKFY_FYERS_API_KEY", authorize_base=None),
-    BrokerAdapter(broker_id="fivepaisa", api_key_env="BASKFY_FIVEPAISA_API_KEY", authorize_base=None),
+    BrokerAdapter(
+        broker_id="fivepaisa", api_key_env="BASKFY_FIVEPAISA_API_KEY", authorize_base=None
+    ),
     BrokerAdapter(broker_id="dhan", api_key_env="BASKFY_DHAN_API_KEY", authorize_base=None),
 )
 

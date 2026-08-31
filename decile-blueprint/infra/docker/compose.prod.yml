@@ -64,7 +64,20 @@ x-python-image: &python-image
     BASKFY_REDIS_URL: redis://redis:6379/0
     # Root CLAUDE.md, non-negotiable 1 and the safety rails. Stated here as well as baked into the
     # image so that reading this file tells you the truth about the box.
-    DRY_RUN: "true"
+    #
+    # Parameterised, default UNCHANGED at "true": a fresh deployment is still dry by default and
+    # reading this file still tells you the truth. Overriding it is now an explicit line in the
+    # env file rather than a hand-edit of this one, so the box cannot silently diverge from git —
+    # which is how the Caddyfile drifted (DECISIONS-MERGE, leaf 1.1.5).
+    #
+    # What DRY_RUN=false actually unlocks in Baskfy, measured 1 Sep 2026 before flipping it:
+    # ONE read-only capability, Kite's `GET /portfolio/holdings` via `broker_holdings.py`.
+    # It cannot reach an order: `services/api` contains zero `.place(` / `place_order` /
+    # `place_gtt` calls, `routers/kite.py` has zero POST routes, and the only two POSTs under
+    # /brokers are OAuth-start (D3-gated) and sync-holdings (read-only). A live token exchange
+    # stays blocked independently by an absent BASKFY_KITE_API_SECRET — which must stay absent,
+    # because the desk redeems the single-use request_token and places the live orders (M64).
+    DRY_RUN: "${BASKFY_DRY_RUN:-true}"
     BASKFY_PUBLIC_API_ENABLED: "false"
     BASKFY_FREE_TIER_ENABLED: "false"
   depends_on:

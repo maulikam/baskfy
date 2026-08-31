@@ -1,4 +1,4 @@
-import type { ScreenDefinition } from "@baskfy/api-client";
+import { UNIVERSE_SLUGS, type ScreenDefinition } from "@baskfy/api-client";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createElement } from "react";
@@ -19,7 +19,8 @@ import {
  * §1.1: the index chip reads `NIFTY Total Market`, at every moment of the page's life.
  *
  * The table below is not a sample. It is the whole of what
- * `GET /api/v1/meta/universes` returned on 23 Aug 2026, transcribed slug and name, and the
+ * `GET /api/v1/meta/universes` returned on 23 Aug 2026 plus M59's Emerge row, transcribed slug
+ * and name, and the
  * expectation beside each one is what §1.1's rule produces for it. A universe added to the seed
  * without a line here is a universe nobody has decided the label for.
  */
@@ -38,15 +39,16 @@ const PUBLISHED: readonly { slug: string; name: string; label: string }[] = [
   { slug: "nifty-fno", name: "NIFTY FNO", label: "NIFTY FNO" },
   { slug: "nifty-allcap", name: "All NSE Listed Stocks", label: "All NSE Listed Stocks" },
   { slug: "etf", name: "All NSE Listed ETFs", label: "All NSE Listed ETFs" },
+  { slug: "nse-sme-emerge", name: "NSE SME (Emerge)", label: "NSE SME (Emerge)" },
 ];
 
 /** Slug-shaped: lower-case words joined by a hyphen or an underscore. */
 const SLUG_SHAPED = /^[a-z0-9]+([-_][a-z0-9]+)*$/;
 
 describe("the published universe list", () => {
-  it("is all fourteen, so nothing below passes by sampling", () => {
-    expect(PUBLISHED).toHaveLength(14);
-    expect(new Set(PUBLISHED.map((u) => u.slug)).size).toBe(14);
+  it("is every published universe, so nothing below passes by sampling", () => {
+    expect(PUBLISHED).toHaveLength(UNIVERSE_SLUGS.length);
+    expect(new Set(PUBLISHED.map((u) => u.slug))).toEqual(new Set(UNIVERSE_SLUGS));
   });
 });
 

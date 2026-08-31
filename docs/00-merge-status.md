@@ -1201,3 +1201,48 @@ Kite for the deep history it alone reaches. That was **not** done tonight on pur
 the primary ingest path hours before the first unattended run, which is the worst possible moment
 to introduce an untested inversion. Monday's run measures the real cost, and that is the evidence
 to decide on.
+
+---
+
+## M59 — NSE Emerge (SME) is screenable (31 Aug 2026)
+
+**Asked for:** "NSE micro-cap index in the filter … companies less than ₹2,000 crores", clarified
+to mean **SME stocks**.
+
+**What was actually wrong.** Not the UI. NIFTY MICROCAP 250 floors at ₹1,844 cr — one constituent
+under ₹2,000 cr — so it was never going to answer the question, and **no NIFTY index contains an
+SME company at all**: Emerge is a separate NSE platform. Meanwhile the data had been arriving
+daily and being discarded — the bhavcopy carries ~457 Emerge rows (358 `SM` + 99 `ST` on
+2026-08-27), `EQUITY_SERIES` admitted only `EQ/BE/BZ`, and `listings()` read `EQUITY_L.csv`, which
+is main-board only, so no SME symbol had an `instrument` row for a bar to join to.
+
+**Done.** `NSEProvider.sme_listings()` reads the Emerge register; `SERIES_VALUES` widens to
+`EQ, BE, SM, ST, SZ` (default still `["EQ"]`, so no saved screen changes meaning); a 15th universe
+`nse-sme-emerge` derived by series; `EQUITY_SERIES` admits `SM/ST/SZ`. `REFERENCE_EXPORT_UNIVERSES`
+separates the reference product's fourteen from ours, so the read-only regression corpus and the
+CSV export schema are both unchanged. Full record in `docs/DECISIONS-MERGE.md` M59.
+
+**On staging** (image `823d05d`): `index_def` row 15 seeded, **565 SME instruments**, **161,334
+bars** over 660 trading days (2024-01-01 → 2026-08-28), zero missing days.
+
+### NOT done — the honest part
+
+- **The factor/membership pipeline run for 2026-08-27 is UNVERIFIED.** It was started twice by
+  mistake (a `nohup` whose empty logfile read as dead, then a detached container); the duplicate
+  blocked on the first one's lock for 90 minutes and was removed. The original was still actively
+  inserting when the AWS SSO token expired. **Until that run is confirmed, SME names will not
+  appear in a screen even though their bars are loaded.** Next session: check `pipeline_run` for a
+  row after 2026-08-30 20:34, confirm `index_member_daily` has rows for `index_id = 15`, then run
+  a screen against `nse-sme-emerge` end to end.
+- **Marketcap coverage will be patchy and that is the asset class, not a bug.** `SHAIVAL` and
+  `AHIMSA` both probe as `last_price=0 → marketcap_cr=None` — illiquid names that did not trade.
+  A name with no marketcap cannot be decile-bucketed (`DECILE_RANK_KEY`).
+- **104 of 565 listed under 400 days ago**, so they have too little history for 12-month momentum.
+- **Screener-only, and this is load-bearing.** The Emerge register publishes **no `MARKET_LOT`**
+  column and SME trades in fixed lots, while `basket_sizing` sizes in whole shares. Nothing in
+  M59 touches `packages/execution`, and the series filter renders a standing note saying Baskfy
+  screens these names and does not size or place orders in them. Non-negotiables #1 and #7 are
+  untouched.
+- **627 unmatched symbols** during the bar backfill — Emerge names that traded historically but
+  have since delisted or migrated to the main board, so the current register has no row for them.
+  Expected; the register is a snapshot, not a history.

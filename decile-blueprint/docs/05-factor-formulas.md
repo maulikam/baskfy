@@ -9,9 +9,30 @@ Windows are **calendar offsets snapped to trading days** — this was recovered 
 reference CSV export (see `docs/13-csv-export-schema.md` §3):
 
 ```
-start = snap_forward_to_trading_day(as_of - relativedelta(months=K))
-window = all trading days in [start, as_of]        # K ∈ {1, 3, 6, 9, 12}
+anniversary = as_of - relativedelta(months=K)
+window      = all trading days in (anniversary, as_of]   # K ∈ {1, 3, 6, 9, 12}
+start       = the first trading day STRICTLY AFTER the anniversary
 ```
+
+> **CORRECTED 2026-08-31 (M11).** This block previously read
+> `start = snap_forward_to_trading_day(as_of - relativedelta(months=K))` with a **closed**
+> interval `[start, as_of]` — the first trading day *on or after* the anniversary. That
+> contradicted the table immediately below, which is the empirically recovered ground truth, and
+> the table wins. The two rules differ by exactly one bar whenever the anniversary is itself a
+> trading day and agree otherwise. Counted against the exchange calendar in `ohlcv_daily`
+> (`docs/PARITY-M11.md`):
+>
+> | K | `(anniversary, as_of]` | `[anniversary, as_of]` | recovered `N` (below) |
+> |---|---:|---:|---:|
+> | 1M | **22** | 22 | 22 |
+> | 3M | **64** | 65 | 64 |
+> | 6M | **121** | 122 | 121 |
+> | 9M | **185** | 186 | 185 |
+> | 12M | **247** | 248 | 247 |
+>
+> The half-open interval reproduces all five; the closed one reproduces one. 1M agreed only by
+> accident — 2026-07-18 was a Saturday — which is why `*_one_month` was the single column family
+> that reproduced before this was fixed.
 
 As of **2026-08-18** those offsets span exactly:
 
@@ -284,8 +305,9 @@ the retired payload shape still parses out of the archive but is never fetched
   `tradeInfo.totalMarketCap` is the fallback when issued size is absent.
 * `pe` = `secInfo.pdSymbolPe`, **re-priced onto the target date**: `quoted_pe × close_raw ÷
   lastPrice`. The quote carries no history, so storing it verbatim into a past date's row would
-  put the fetch day's price inside that date — look-ahead, forbidden by house rule 5. Measured
-  over the 2026-08-18 fill, the largest error this avoids is 3.58%. The EPS vintage is still the
+  put the fetch day's price inside that date — look-ahead, forbidden by house rule 5. Verified
+  against the archived bytes over 120 sampled rows of the 2026-08-18 fill (0 mismatches,
+  `tools/tree3/repricing.sh`); the largest error it avoids in that sample is **11.10%**. The EPS vintage is still the
   fetch day's and cannot be otherwise: NSE publishes no point-in-time EPS series
   (`DECISIONS-MERGE.md` §T3F.3).
 * `pb` and `div_yield` are **not in this payload** and are always NULL. They are kept as columns

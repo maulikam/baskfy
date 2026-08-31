@@ -1,9 +1,28 @@
 """Calendar-offset factor windows (Prompt 5 deliverable 1).
 
-docs/05 §Notation:
+docs/05 §Notation, CORRECTED 2026-08-31 (M11 — the anniversary day is the base, not a
+member of the window):
 
-    start = snap_forward_to_trading_day(as_of - relativedelta(months=K))
-    window = all trading days in [start, as_of]        # K in {1, 3, 6, 9, 12}
+    anniversary = as_of - relativedelta(months=K)
+    window      = all trading days in (anniversary, as_of]   # K in {1, 3, 6, 9, 12}
+    start       = the first trading day STRICTLY AFTER the anniversary
+
+docs/05 §Notation used to say ``snap_forward_to_trading_day(anniversary)`` — the first trading
+day *on or after* the anniversary — which differs by exactly one bar whenever the anniversary
+itself is a trading day, and agrees otherwise. That prose contradicted the table immediately
+below it in the same section, and the table is the empirically recovered ground truth. Measured
+against the exchange calendar in ``ohlcv_daily`` for as-of 2026-08-18 (docs/PARITY-M11.md):
+
+    K     (anniversary, as_of]   [anniversary, as_of]   docs/13 §3 recovered
+    1M    22                     22                     22
+    3M    64                     65                     64
+    6M    121                    122                    121
+    9M    185                    186                    185
+    12M   247                    248                    247
+
+The half-open interval reproduces all five; the closed one reproduces one. 1M agrees only by
+accident: 2026-07-18 was a Saturday, which is why every ``*_one_month`` column was the single
+family that reproduced before this was fixed.
 
 **Not** fixed bar counts. docs/13 §3 recovered this empirically: ``positive_days_percent`` is a
 ratio ``k/N``, so the denominator can be solved for, and only one minimal ``N`` fits each
@@ -98,11 +117,13 @@ class FactorWindow:
 
     months: int
     as_of: dt.date
-    #: ``as_of - relativedelta(months=K)``, before snapping.
+    #: ``as_of - relativedelta(months=K)`` — the anniversary. The window's *base* date: the
+    #: last bar at or before it supplies ``P_{t-N}``, and it is itself excluded from the window.
     calendar_start: dt.date
-    #: The first trading day on or after ``calendar_start`` (docs/05: snap *forward*).
+    #: The first trading day **strictly after** ``calendar_start`` (docs/05 §Notation as
+    #: corrected by M11; see this module's docstring for the measurement).
     start: dt.date
-    #: Every trading day in ``[start, as_of]``, ascending.
+    #: Every trading day in ``(calendar_start, as_of]``, ascending.
     trading_days: tuple[dt.date, ...]
     #: The first day of the calendar this window was resolved against. Not the window's own
     #: start: it is how the window knows whether the calendar reached back far enough.
@@ -147,12 +168,16 @@ def resolve_window(
         raise ValueError(f"{as_of.isoformat()} is not a trading day in the supplied calendar")
 
     calendar_start = subtract_months(as_of, months)
-    # Snap *forward*: docs/05 §Notation. Snapping backwards would let a window start on a day
-    # before the calendar offset and inflate N by one for some instruments but not others.
-    index = bisect.bisect_left(ordered, calendar_start)
+    # STRICTLY AFTER the anniversary: docs/05 §Notation as corrected by M11. ``bisect_right``,
+    # not ``bisect_left`` — the two differ only when the anniversary is itself a trading day,
+    # and on that day ``bisect_left`` admits the anniversary into the window and inflates N by
+    # one. Four of the five windows for as-of 2026-08-18 land on a trading-day anniversary; only
+    # 1M does not (2026-07-18 was a Saturday), which is why 1M was the one family that already
+    # reproduced. See this module's docstring for the measured table.
+    index = bisect.bisect_right(ordered, calendar_start)
     if index >= len(ordered):
         raise ValueError(
-            f"no trading day on or after {calendar_start.isoformat()} in the supplied calendar"
+            f"no trading day after {calendar_start.isoformat()} in the supplied calendar"
         )
     start = ordered[index]
     end_index = bisect.bisect_right(ordered, as_of)

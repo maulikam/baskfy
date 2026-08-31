@@ -1180,11 +1180,30 @@ newer.
 - **The desk's login is still manual.** If nobody logs in to the desk on a given morning, the
   pull correctly refuses (Kite answers 403) and the night falls back to the bhavcopy. So the
   chain is automatic from the desk's token onward, not from end to end.
-- **Two secrets pasted into an agent transcript on 27 Aug still need rotating**: the Google
-  client secret and the RENIL Kite api_secret. The box does not hold the Kite secret, which
-  limits the blast radius but does not remove the need. A third, the desk's Kite *access* token,
-  was printed into the 30 Aug transcript by an agent command whose stdout was the token; it
-  expires overnight and re-logging in on the desk retires it.
+- **Secret exposure — REVIEWED AND ACCEPTED by Maulik, 31 Aug 2026. Not an open item.**
+  Four secrets have appeared in clear text in agent transcripts: the Google client secret and
+  the RENIL Kite api_secret (27 Aug), and the Kite api_key and `BASKFY_KITE_TOKEN_ENCRYPTION_KEY`
+  (31 Aug, printed by an agent that echoed a whole settings object). A fifth, the desk's Kite
+  *access* token, was printed on 30 Aug and retired itself overnight by expiry.
+
+  Maulik reviewed the per-secret risk and decided **not to rotate**. The reasoning, recorded so a
+  later reader does not reopen it as an oversight:
+  - The Kite **api_key** is public by design — it travels in the login URL in every user's
+    browser — and cannot be regenerated without buying a second ₹2,000/month Connect app.
+    Rotating it was never the right answer.
+  - The Kite **api_secret** needs a live single-use `request_token` to be worth anything, and
+    that token is redeemed by the desk within seconds of being issued.
+  - The **token encryption key** decrypts the token blob only for someone who also has the blob,
+    which lives on the box at `/var/lib/baskfy/state/kite-token.enc`, mode 0600.
+  - The transcripts are Maulik's own private Claude sessions, not a published artefact.
+
+  **Nothing is blocked by this decision.** The Google client secret is already set on the web
+  container and sign-in works. `BASKFY_KITE_API_SECRET` is deliberately absent from the Baskfy
+  box and must stay so — see M64: the bridge works *because* Baskfy cannot redeem the
+  single-use `request_token`, leaving it for the desk, which places the live orders.
+  Reversal, should the risk assessment change: rotate the Kite api_secret in the Zerodha console
+  and update the desk's `~/kite-momentum-rebalancer/.env` in the same sitting, and rotate the
+  Google client secret in the Google Cloud console and update the box. Neither needs code.
 
 **One consequence to watch, deliberately not acted on tonight.** Configuring Kite changes which
 source the nightly uses for the day's bars, because `fetch_daily_bars` is Kite-first and the

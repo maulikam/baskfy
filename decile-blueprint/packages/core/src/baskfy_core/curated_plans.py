@@ -4,6 +4,11 @@ Pure arithmetic over holdings, target weights, and prices. No database, no netwo
 ambient clock — callers pass ``now`` so ``expires_at_hint`` is deterministic (desk
 non-negotiable #1: plans expire in 30 minutes). The API layer stamps a synthetic
 ``desk_plan_id``; nothing here reaches ``OrderGateway``.
+
+:func:`plan_is_expired` is that non-negotiable's clock, as a pure predicate beside the
+constant it enforces. It answers the question; it does not hold plans and it does not read a
+clock — the store that does both is ``baskfy_api.plan_store``, because law #1 keeps state, a
+clock and a database out of ``packages/core``.
 """
 
 from __future__ import annotations
@@ -24,6 +29,8 @@ __all__ = [
     "build_customize_plan",
     "build_exit_plan",
     "build_invest_plan",
+    "plan_expires_at",
+    "plan_is_expired",
 ]
 
 PlanKind = Literal["BUY", "REBALANCE", "EXIT", "CUSTOMIZE"]
@@ -54,8 +61,52 @@ class DeskPlan(TypedDict):
 PLAN_TTL: Final = dt.timedelta(minutes=30)
 
 
+def plan_expires_at(issued_at: dt.datetime) -> dt.datetime:
+    """The instant a plan issued at *issued_at* stops being executable.
+
+    One definition, read by both the preview (``expires_at_hint``) and the enforcement
+    (:func:`plan_is_expired`), so the number a caller is shown and the number that refuses
+    them cannot drift apart.
+    """
+    return issued_at + PLAN_TTL
+
+
+def plan_is_expired(*, issued_at: dt.datetime, now: dt.datetime) -> bool:
+    """Non-negotiable #1's clock, as a pure predicate: is this plan too old to execute?
+
+    Pure on purpose. The rule lived at ``kite-momentum-rebalancer/app/main.py:519-524`` as
+    ``time.time() - plan["created_at"] > 1800`` — inside a route handler, reachable only by
+    posting a form, and deleted the day the desk retires. Here it is a function of two
+    arguments with no database, no network and no ambient clock (law #1), which is what lets
+    the boundary be asserted at the second rather than approximated with ``sleep``. The
+    *store* that holds plans and reads a wall clock lives in ``services/``.
+
+    THE BOUNDARY IS CLOSED AT THE START AND OPEN AT THE END: a plan is live over
+    ``[issued_at, issued_at + PLAN_TTL)``. At exactly thirty minutes it is expired. The desk's
+    ``> 1800`` kept it live for that one instant; this is the stricter of the two readings of
+    "plans expire in 30 minutes", it is the safe direction (a refused plan is re-analysed, a
+    stale one is executed against stale prices), and the difference is a single tick nothing
+    can depend on.
+
+    A plan whose ``issued_at`` is in the future is *not* expired — a clock that stepped
+    backwards must not silently invalidate live plans. It is also not a licence to outlive the
+    TTL: the plan expires ``PLAN_TTL`` after the stamp it carries, whenever that arrives.
+
+    :raises ValueError: if one of the two instants is timezone-aware and the other naive.
+        Subtracting them raises ``TypeError`` deep inside a comparison; refusing here says
+        which argument was wrong, and an expiry check must never be the thing that guesses.
+    """
+    if (issued_at.tzinfo is None) != (now.tzinfo is None):
+        raise ValueError(
+            "issued_at and now must both be timezone-aware or both naive; got "
+            f"issued_at={'aware' if issued_at.tzinfo else 'naive'}, "
+            f"now={'aware' if now.tzinfo else 'naive'}"
+        )
+    return now >= plan_expires_at(issued_at)
+
+
 def _expires_at_hint(now: dt.datetime) -> dt.datetime:
-    return now + PLAN_TTL
+    return plan_expires_at(now)
 
 
 def _leg(symbol: str, side: Literal["BUY", "SELL"], quantity: int, ref_price: Decimal) -> PlanLeg:

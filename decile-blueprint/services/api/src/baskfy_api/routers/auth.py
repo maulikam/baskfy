@@ -218,6 +218,19 @@ async def sign_in_with_google(
         log.warning("google sign-in rejected", extra={"reason": str(error)})
         raise unauthenticated("That Google sign-in could not be verified.") from error
 
+    # Authorisation, after authentication. Google has proved the address; this decides whether
+    # this deployment serves it. Checked *before* `link_google_identity` so a barred address
+    # never creates an `app_user` row — a rejected sign-in must leave no trace of an account.
+    #
+    # The same uniform 401 as every other rejection above, deliberately: an error that said
+    # "your address is not on the list" would turn this endpoint into an oracle for who is.
+    if not settings.login_permitted(identity.email):
+        log.warning(
+            "google sign-in refused by allowlist",
+            extra={"reason": "not in BASKFY_LOGIN_ALLOWLIST"},
+        )
+        raise unauthenticated("That Google sign-in could not be verified.")
+
     try:
         user, created = await link_google_identity(
             session,
@@ -278,6 +291,14 @@ async def refresh(
     except InvalidCredentials as error:
         clear_auth_cookies(response, settings)
         raise unauthenticated("That refresh token is not valid.") from error
+
+    # An allowlist that only guarded sign-in would let a session already in flight outlive the
+    # decision to bar it, for as long as the refresh family stays alive. Checked here too, so
+    # removing an address ends its access at the next rotation rather than at its own leisure.
+    if not settings.login_permitted(issued.user.email):
+        clear_auth_cookies(response, settings)
+        log.warning("refresh refused by allowlist", extra={"reason": "not in allowlist"})
+        raise unauthenticated("That refresh token is not valid.")
 
     return _session_response(response, issued, settings)
 

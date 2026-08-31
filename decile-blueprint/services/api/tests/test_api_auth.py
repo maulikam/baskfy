@@ -17,6 +17,7 @@ import datetime as dt
 import json
 from typing import Final
 
+import api_helpers
 import httpx
 import pytest
 from api_helpers import (
@@ -639,3 +640,59 @@ class TestSessionEpoch:
         assert seen == sorted(seen), seen
         assert len(set(seen)) == len(seen), f"a generation was reused: {seen}"
 
+
+class TestTheLoginAllowlist:
+    """M60: `BASKFY_LOGIN_ALLOWLIST` makes a deployment single-tenant by configuration.
+
+    Authorisation, not authentication — Google has already proved the address by the time the
+    list is consulted. What these pin is that an empty list stays open (so the setting cannot
+    quietly lock an existing deployment out), that a barred address gets the *same* 401 as a
+    forged token, and that being barred leaves no `app_user` row behind.
+    """
+
+    def test_an_empty_allowlist_permits_everyone(self) -> None:
+        settings = api_helpers.api_settings("postgresql+asyncpg://x/y")
+        assert settings.allowed_logins == frozenset()
+        assert settings.login_permitted("anyone@example.com")
+
+    def test_the_list_is_parsed_case_insensitively_and_trimmed(self) -> None:
+        settings = api_helpers.api_settings(
+            "postgresql+asyncpg://x/y",
+            login_allowlist="  Owner@Example.COM , second@example.com ",
+        )
+        assert settings.allowed_logins == {"owner@example.com", "second@example.com"}
+        assert settings.login_permitted("OWNER@example.com")
+        assert settings.login_permitted("second@example.com")
+        assert not settings.login_permitted("third@example.com")
+
+    async def test_a_barred_address_is_refused_and_creates_no_account(
+        self, seeded_url: str, screener_session: AsyncSession
+    ) -> None:
+        settings = api_helpers.api_settings(seeded_url, login_allowlist="owner@example.com")
+        async with api_helpers.running_app(settings, screener_session) as client:
+            response = await sign_in(client, email="stranger@example.com")
+        assert response.status_code == 401
+        # The same wording a forged token gets: the endpoint must not become an oracle for who
+        # is on the list.
+        assert "could not be verified" in response.text
+        rows = (
+            (
+                await screener_session.execute(
+                    select(AppUser).where(AppUser.email == "stranger@example.com")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert rows == []
+
+    async def test_an_allowed_address_still_signs_in(
+        self, seeded_url: str, screener_session: AsyncSession
+    ) -> None:
+        settings = api_helpers.api_settings(
+            seeded_url, login_allowlist=f"{EMAIL},someone-else@example.com"
+        )
+        async with api_helpers.running_app(settings, screener_session) as client:
+            response = await sign_in(client)
+        assert response.status_code == 200, response.text
+        assert body_of(response)["email"] == EMAIL

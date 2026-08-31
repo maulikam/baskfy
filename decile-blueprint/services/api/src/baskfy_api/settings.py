@@ -86,6 +86,32 @@ class Settings(BaseSettings):
     #: one env file describes the whole client.
     google_client_secret: str = ""
 
+    #: Comma-separated addresses allowed to hold a session. **Empty means open** — every verified
+    #: Google account may sign in, which is the behaviour before M60 and the right default for a
+    #: deployment that has decided to be public.
+    #:
+    #: Set it and the deployment becomes single-tenant by configuration rather than by code: only
+    #: these addresses can sign in *or* rotate a refresh token, so an existing session belonging
+    #: to someone since removed dies at its next rotation rather than living out its full length.
+    #: Google has already proved the address by the time this is consulted, so this is
+    #: authorisation, never authentication.
+    #:
+    #: A settings value and not a hard-coded constant on purpose: who may use a deployment is a
+    #: property of the deployment, and changing it must not need a rebuild.
+    login_allowlist: str = ""
+
+    @property
+    def allowed_logins(self) -> frozenset[str]:
+        """The allowlist, lower-cased and trimmed. Empty frozenset means "no restriction"."""
+        return frozenset(
+            part.strip().lower() for part in self.login_allowlist.split(",") if part.strip()
+        )
+
+    def login_permitted(self, email: str) -> bool:
+        """Whether ``email`` may hold a session on this deployment."""
+        allowed = self.allowed_logins
+        return not allowed or email.strip().lower() in allowed
+
     # --- Kite Publisher basket hand-off (M47) -------------------------------
     #: The **Publisher** app's api key — not Kite Connect's. It is not a secret: it travels in the
     #: form the user's browser posts to `kite.zerodha.com/connect/basket`, and Zerodha's own

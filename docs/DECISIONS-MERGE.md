@@ -5925,3 +5925,49 @@ Emerge will see a smaller result set than 565.
 regenerate the schema/corpus/openapi artefacts. Ingested SME `instrument` and `ohlcv_daily` rows
 are additive and harmless if left; `index_def` row 15 can stay, since `is_universe` rows are read
 through `baskfy_core.universes`, not the table.
+
+---
+
+## M60 — a login allowlist, so the deployment can be single-tenant ⚠ UNREVIEWED
+
+**Context.** Maulik asked that only `learnwithalacrity@gmail.com` be able to log in. Six accounts
+existed on staging by then, created 26–27 Aug; sign-up is Google-only and had no allowlist, so
+anyone who reached the host and had a Google account could create one.
+
+**Choice taken.** `BASKFY_LOGIN_ALLOWLIST` — a comma-separated setting, **empty means open**, so
+the default is exactly the behaviour before this module and no existing deployment locks itself
+out by upgrading. Enforced in two places:
+
+* `POST /auth/google`, *after* Google verification and *before* `link_google_identity`, so a
+  barred address never creates an `app_user` row — a refused sign-in leaves no trace of an
+  account.
+* `POST /auth/refresh`, so a session already in flight cannot outlive the decision to bar it.
+  Without this, removing an address would end its access whenever its refresh family happened to
+  expire, which is not a guarantee worth having.
+
+Both return the **same 401 as a forged token**. An error reading "your address is not on the
+list" would turn the endpoint into an oracle for who is on it, and the endpoint's own docstring
+already commits to a uniform failure.
+
+**Configuration, not code.** Who may use a deployment is a property of the deployment. A
+hard-coded constant would make "add my other address" a rebuild and a redeploy; an env var makes
+it an edit and a restart. It is also why this is authorisation and never authentication — Google
+has proved the address before the list is consulted.
+
+**Rejected alternatives.**
+
+- *Delete the other five accounts.* Destructive and unnecessary: the allowlist denies access
+  without touching rows, and `mdave.5191@gmail.com` owns two screens that would have gone with it.
+  Deleting data to express a permission is the wrong tool.
+- *A database table of permitted users.* A second source of truth for something that changes
+  about once a year, plus a migration and an admin surface to maintain. The env var is smaller
+  and is visible in the deploy diff.
+- *Gate only sign-in.* Leaves live sessions running for barred addresses. See above.
+
+**Consequence Maulik must weigh.** With the list set to `learnwithalacrity@gmail.com` alone,
+`mdave.5191@gmail.com` — his own primary address, owner of 2 of the 3 real screens — can no
+longer sign in. Nothing is deleted; adding the address back to `BASKFY_LOGIN_ALLOWLIST` restores
+access immediately.
+
+**Reversal.** Unset `BASKFY_LOGIN_ALLOWLIST` and restart. The deployment is open again and no
+data has changed.

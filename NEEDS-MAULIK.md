@@ -1312,3 +1312,49 @@ one currently on the laptop.
 | **29d** | **Decide whether R3 (the Kite api_key) is rotated at all** — it cannot be regenerated; rotating means a new Connect app at ₹2,000/month, which is also §28 option 1 | The api_key is public by design, so the engineering recommendation is "no action". But it is money and it interacts with §28, so it is not an autonomous call | Nothing. It is an open item, and leaving it open is the cost | The reasoning is written above; R1's rotation kills the exposed *pair* regardless of what is decided here |
 | **29e** | `BASKFY_KITE_TOKEN_ENCRYPTION_KEY` (R2) — **no hands needed**, listed only so it is not lost | Printed into a 31 Aug transcript | Nothing | Fully automatable on the box; the procedure is in §29.2 step 2. An agent can do this one without you |
 
+
+## 30. Friday 4 Sep — how the desk logs in now (leaf 1.1.5)
+
+The Kite redirect stays at `https://staging.baskfy.com/api/v1/brokers/callback`, as you decided.
+The desk gets its session through a reverse bridge built on 31 Aug. **Nothing here needs your
+hands on a normal morning** — this section exists so you know what should happen and what to do
+when it does not.
+
+### What should happen
+
+1. Open the Kite login as usual.
+2. Zerodha returns you to `staging.baskfy.com/api/v1/brokers/callback?request_token=…`.
+3. Caddy immediately redirects your browser to `https://desk.modelbasket.in/callback?request_token=…`.
+4. **The desk asks for its basic-auth password.** Have it in the browser, or in your password
+   manager — this is the one place the flow can stall. If you cancel, the request token is *not*
+   spent; log in again.
+5. The desk exchanges the token, updates the running process in place, and lands you on its home
+   page with `logged_in=1`. `https://desk.modelbasket.in/status` should then say `"authed": true`.
+6. Baskfy borrows the access token back on its own schedule. To do it immediately:
+   `AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml exec -T worker python -m baskfy_worker.kite_session_cli pull'`
+
+### If step 3 does not happen
+
+Paste the desk URL by hand — take the `request_token=…` value out of your address bar and open
+`https://desk.modelbasket.in/callback?request_token=<that value>`. That is the whole fallback and
+it needs nothing from this repo.
+
+### If you have no browser to hand
+
+From the Baskfy box, server to server:
+
+    printf '%s' '<request_token>' | sudo /opt/baskfy/bin/baskfy-desk-handoff
+
+It prints a receipt with the Kite user id and a sha256 prefix, never a token.
+
+### Two things to know
+
+* **Do not set `BASKFY_KITE_API_SECRET` on the box while the desk depends on this bridge.** A Kite
+  request token is single-use: if Baskfy redeems it, the desk gets nothing that day. This
+  supersedes §3 branch A above — under the design actually built, the empty secret is a choice,
+  not an outage.
+* The last hop — Kite accepting a *real* request token — is the one thing that could not be
+  exercised without you. Everything either side of it was: the redirect fires, the browser lands
+  on the desk, the forced command drives the desk's own `/callback`, and the desk's
+  `generate_session` was reached and answered by Kite (with `Token is invalid or has expired`, for
+  a synthetic token). The first real login is the first full run.

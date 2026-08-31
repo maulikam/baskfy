@@ -6075,3 +6075,63 @@ succeeded, `data_version` 5, factors now through 2026-08-28 with 449 Emerge memb
 
 **Reversal.** Drop the `published` argument at the orchestrator's call site; behaviour returns to
 pre-M62 exactly. No data change is implied either way.
+
+## 1.1.5 — the reverse Kite bridge carries the request token, not the access token ⚠ UNREVIEWED
+
+**Context.** Maulik moved the Kite Connect app's one registered redirect to
+`https://staging.baskfy.com/api/v1/brokers/callback` and decided (31 Aug 2026) that Baskfy keeps
+it — overriding leaf 1.1.1's recommendation to revert it. The desk at 65.0.226.77 still places
+every live order and must rebalance on Friday 4 Sep, so it needs the session that login produces.
+
+**Choice taken.** The bridge carries the **`request_token`** to the desk and lets the desk
+exchange it, rather than carrying an **access token** into the desk's token file. Two delivery
+paths, sharing the desk's existing `/callback`:
+
+1. **Browser (default).** Caddy on the Baskfy box 302s a bare Kite return — `request_token`
+   present, `state` absent — to `https://desk.modelbasket.in/callback?request_token=…`. A
+   Baskfy-initiated login carries a `state` and falls through to the API untouched.
+2. **Server to server.** `/opt/baskfy/bin/baskfy-desk-handoff` pipes the token on stdin over SSH
+   to a second forced command on the desk, `~desk/bin/accept-kite-request-token`, bound to a
+   second ed25519 key pinned to the box's egress IP.
+
+Baskfy still gets the access token afterwards through M58's unchanged pull.
+
+**Why, over the alternatives.**
+
+* *Write the access token into `data/.kite_token.json`* — rejected. The deployed desk caches its
+  Kite client (`app/main.py:99`) and the order gateway captures `kite().kc`, so a file write is
+  invisible to the process that trades. It would need a restart, and `momentum-web.service` is a
+  root-owned unit with `Restart=on-failure` that the `desk` account cannot restart: a stop the
+  bridge could cause is one it could not undo, on the box that places every live order.
+* *Modify the desk's `kite_client.py` to re-read the token lazily* — rejected. Loading the change
+  needs the same restart, and it is application code on the trading box.
+* *Give Baskfy `DESK_PASSWORD`* — rejected. That is a general capability on a desk whose routes
+  include `/execute`. The forced command reads the password out of the desk's own `.env` instead,
+  so it never leaves the box.
+* *One key with two verbs* — rejected. `SSH_ORIGINAL_COMMAND` would put the choice in the
+  client's hands, which is the property M58's design exists to deny. Two keys, two forced
+  commands, revoked independently.
+
+**Consequences, stated plainly.**
+
+* `BASKFY_KITE_API_SECRET` must stay **empty** on the box while the desk depends on this bridge.
+  Setting it would let Baskfy redeem the request token itself and starve the desk, because a Kite
+  request token is single-use. NEEDS-MAULIK §3 branch A is superseded by this.
+* The desk's Kite account can, in principle, be moved by a request token minted from a different
+  Zerodha login. It cannot be refused — the account is only knowable after the exchange — so the
+  forced command detects it, prints `ALARM`, and writes `ACCOUNT-CHANGED` to
+  `~desk/logs/kite-handoff.log`.
+* Editing `/opt/baskfy/Caddyfile` in place is not enough: the compose bind mount pins the file's
+  *inode*, and an earlier `mv` left the running container reading an orphaned copy that
+  `caddy validate` inside the container happily called valid. The container has to be recreated.
+  Recorded because it is a silent no-op that reports success.
+
+**How to reverse it.** Delete the two added lines and the one added block:
+
+* `~desk/.ssh/authorized_keys` — the `accept-kite-request-token` line (the whole of the
+  revocation); `~desk/backups-1.1.5/` holds the pre-change file.
+* `/opt/baskfy/Caddyfile` — the `@kite_login_return` matcher and its `redir`; the pre-change file
+  is `/opt/baskfy/Caddyfile.bak-1.1.5-20260831T175048`. Recreate the caddy container, do not
+  merely reload.
+* `rm ~desk/bin/accept-kite-request-token`. Nothing else on the desk was touched: no application
+  file, no `portfolio.db`, no restart (`NRestarts=0`, MainPID 67756 since 27 Aug).

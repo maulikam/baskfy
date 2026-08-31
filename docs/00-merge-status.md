@@ -1246,3 +1246,58 @@ bars** over 660 trading days (2024-01-01 → 2026-08-28), zero missing days.
 - **627 unmatched symbols** during the bar backfill — Emerge names that traded historically but
   have since delisted or migrated to the main board, so the current register has no row for them.
   Expected; the register is a snapshot, not a history.
+
+## 1.1.5 — the reverse Kite bridge: Baskfy owns the login, the desk gets the session (31 Aug 2026)
+
+**Why.** Maulik moved the Kite Connect app's one registered redirect to
+`https://staging.baskfy.com/api/v1/brokers/callback` and decided Baskfy keeps it — overriding leaf
+1.1.1's recommendation to revert it. The desk at 65.0.226.77 still places every live order and
+must rebalance on Friday 4 Sep, so it needed the session that login produces.
+
+**Done.** The bridge carries the **request token** to the desk and lets the desk exchange it,
+rather than carrying an access token into the desk's token file. Two delivery paths, both live:
+
+* **Browser.** Caddy on the Baskfy box 302s a bare Kite return (`request_token` present, `state`
+  absent) to `https://desk.modelbasket.in/callback?request_token=…`. A Baskfy-initiated login
+  carries a `state` and falls through to the API untouched.
+* **Server to server.** `/opt/baskfy/bin/baskfy-desk-handoff` pipes the token on stdin over SSH to
+  a second forced command, `~desk/bin/accept-kite-request-token`, bound to a second ed25519 key
+  pinned to the box's egress IP.
+
+Baskfy still borrows the access token back through M58's unchanged pull. Full record in
+`docs/DESK-LOGIN-DECISION.md` §9, `docs/DECISIONS-MERGE.md` 1.1.5, `tools/deploy/desk/README.md`,
+and the morning runbook in `NEEDS-MAULIK.md` §30. Gates: `gates/desk-retire-1.1.5.md`, 7 of 7.
+
+Why the *request* token and not the access token: the deployed desk caches its Kite client
+(`app/main.py:99`) and the order gateway captures `kite().kc`, so a file write is invisible to the
+process that trades — and `momentum-web.service` is a root-owned unit with `Restart=on-failure`
+that the `desk` account cannot restart, so a stop the bridge could cause is one it could not undo.
+`/callback` mutates the cached client in place instead. `tools/deploy/desk/prove-live-token-pickup.py`
+demonstrates both the hazard and the fix against the deployed source, 12/12.
+
+**The desk was not disturbed.** `portfolio.db` byte-identical, `NRestarts=0`, MainPID 67756 since
+27 Aug, newest mtime under `app/` still 25 Aug, `/status` -> `"authed": true`. Kite's own order
+book reports **0 orders today**.
+
+### NOT done — the honest part
+
+- **The last hop is unproven and only a human can prove it.** A genuine Kite-issued
+  `request_token` cannot be minted by an agent. Everything either side of it was exercised for
+  real: the redirect fires, `curl -L` lands on the desk, the forced command drives the desk's own
+  `/callback`, and the desk's `generate_session` was reached and answered by Kite — with
+  `TokenException: Token is invalid or has expired.`, which is the correct answer for a synthetic
+  token. **The first real login is the first full run.**
+- **`BASKFY_KITE_API_SECRET` must stay empty on the box** while the desk depends on this bridge. A
+  Kite request token is single-use: if Baskfy redeems it, the desk gets nothing that day. This
+  supersedes `NEEDS-MAULIK.md` §3 branch A.
+- **Maulik needs the desk's basic-auth password in the browser he logs in with**, or the redirect
+  lands on a 401 he cannot answer. The request token is not spent in that case.
+- **Nothing was committed.** Leaf 1.1.3 had staged work in the index while this ran, so the
+  changes are left in the working tree rather than swept into someone else's commit.
+- **A `request_token` minted from a different Zerodha login would move the desk's account.** It
+  cannot be refused — the account is only knowable after the exchange — so the forced command
+  detects it, prints `ALARM`, and writes `ACCOUNT-CHANGED` to `~desk/logs/kite-handoff.log`.
+- **The automatic path is Caddy, not application code.** The API's `/api/v1/brokers/callback` was
+  not changed and no image was rebuilt: it still requires a signed-in principal and a `state`, and
+  it still refuses to simulate (leaf 1.1.4). If Baskfy is ever meant to complete its own login, the
+  redirect matcher has to come out first, and the desk needs another way to a session.

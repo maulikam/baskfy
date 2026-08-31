@@ -1,5 +1,24 @@
 # M11 — reference parity, measured
 
+> **STATUS UPDATE, 31 Aug 2026 — read before the sections below.**
+> Causes **B (volatility ddof)** and **C (RSI Cutler@N−1)** were authorised by Maulik and
+> **landed as M65**. Sections §4B, §4C and §8 still describe them as "NOT fixed — a spec
+> decision is required"; that wording is stale and is left in place only as the record of what
+> was weighed. Parity went **4,514 → 3,168 of 9,186**.
+>
+> Cause **E (the 2026-02-01 Budget special session)** was the single largest remaining cause and
+> is **now fixed at the data level**: NSE published a full 3,229-row bhavcopy for that Sunday and
+> only 322 bars had been ingested — 301 of them SME bars written earlier the same night, and just
+> 21 main-board bars from Kite's deep-history pass, against 2,310 on 30 Jan. Re-running the
+> bhavcopy backfill for that one date took it to **2,304**. The calendar was never wrong here
+> (unlike 28 Aug / M62); this was a silent partial ingest.
+>
+> Remaining 3,168 breaks down as ~1,355 `volatility_*` sitting on a tolerance floor that cannot
+> be reached (5e-11 against a ~1.6e-7 residual from 2-dp stored closes), the 9M/12M residual that
+> cause E gated and should now recede, 271 from cause D (`MEDIAN_VOL_BARS` 252 → 247, not landed),
+> and the rest cause F (five symbols with unadjusted corporate actions).
+
+
 **Measured at git SHA `7d6b7fb3aa6d23dadb30d645d28884a8b7eb6d84`** (branch `developer`),
 as-of date **2026-08-18**, against the 271-row reference export
 `decile-blueprint/fixtures/reference-screen-export-2026-08-18.csv`.

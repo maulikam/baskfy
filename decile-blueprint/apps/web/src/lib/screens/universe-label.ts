@@ -21,24 +21,31 @@
  * never widen a regex to cover it. A trailing plural is handled here, so `ETF` also covers
  * `ETFs`.
  */
-export const UNIVERSE_ACRONYMS: ReadonlySet<string> = new Set(["NIFTY", "NSE", "ETF", "FNO"]);
+export const UNIVERSE_ACRONYMS: ReadonlySet<string> = new Set([
+  "NIFTY",
+  "NSE",
+  "ETF",
+  "FNO",
+  "SME",
+]);
 
 /** What the chip says when it has neither a usable name nor a usable slug to work from. */
 export const UNIVERSE_LABEL_FALLBACK = "Index universe";
 
 /**
- * The two slugs whose published name cannot be recovered from the slug itself.
+ * The slugs whose published name cannot be recovered from the slug itself.
  *
  * Consulted only while `/meta/universes` is in flight; the server's own name wins the instant it
  * lands. They exist so the loading label is the *same string* as the resolved label — a guess
- * that rewrites itself under the reader is worse than no guess at all — and the test pins all
- * fourteen slug-derived labels against all fourteen name-derived ones, so this cannot quietly
- * drift back into a flicker. Same duplicate-with-a-test-as-the-link trade as
- * `lib/market/universes.ts`.
+ * that rewrites itself under the reader is worse than no guess at all — and the test pins every
+ * slug-derived label against its name-derived one, so this cannot quietly drift back into a
+ * flicker. Same duplicate-with-a-test-as-the-link trade as `lib/market/universes.ts`.
  */
 const SLUG_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
   "nifty-allcap": "All NSE Listed Stocks",
   etf: "All NSE Listed ETFs",
+  // The parentheses are in the published name and cannot be recovered from a slug.
+  "nse-sme-emerge": "NSE SME (Emerge)",
 };
 
 /** Letters and digits, one run at a time, so punctuation between them is carried through. */

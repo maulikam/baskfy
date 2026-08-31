@@ -14,6 +14,7 @@ const UNIVERSE_PHRASE: Readonly<Record<string, string>> = {
   "nifty-microcap-250": "Nifty Microcap 250",
   "nifty-total-market": "the whole market",
   "nifty-allcap": "the all-cap market",
+  "nse-sme-emerge": "the NSE Emerge SME board",
 };
 
 /** Ranking phrases keyed by common sort_by factors. */

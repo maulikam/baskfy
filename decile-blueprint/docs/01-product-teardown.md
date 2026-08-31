@@ -42,7 +42,7 @@ persisted screen object.
 
 | Field | Control | Values |
 |---|---|---|
-| `index` | select | NIFTY 50, NIFTY NEXT 50, NIFTY 100, NIFTY 200, NIFTY 500, NIFTY TOTAL MARKET, NIFTY LARGE MID 250, NIFTY MIDCAP 150, NIFTY SMALLCAP 250, NIFTY MICROCAP 250, NIFTY MID SMALL 400, NIFTY FNO, All NSE Listed Stocks (`nifty-allcap`), All NSE Listed ETFs (`etf`) |
+| `index` | select | NIFTY 50, NIFTY NEXT 50, NIFTY 100, NIFTY 200, NIFTY 500, NIFTY TOTAL MARKET, NIFTY LARGE MID 250, NIFTY MIDCAP 150, NIFTY SMALLCAP 250, NIFTY MICROCAP 250, NIFTY MID SMALL 400, NIFTY FNO, All NSE Listed Stocks (`nifty-allcap`), All NSE Listed ETFs (`etf`) — **plus Baskfy's NSE SME (Emerge) (`nse-sme-emerge`), M59**, which the reference product does not have |
 | `sort_by` | select | 62 factors — see §3 |
 | `sort_direction` | select | Highest to Lowest \| Lowest to Highest |
 | `Show More Filters` | switch | reveals everything below |
@@ -90,6 +90,14 @@ P/E from NSE are **excluded** when this filter is on.
 ### 2.9 Series
 
 `EQ` and/or `BE` switches. EQ = delivery + intraday; BE = delivery only (trade-to-trade).
+
+**Baskfy extends this (M59).** The reference product screens the main board only. Baskfy also
+carries the NSE Emerge (SME) platform, whose series are `SM` (normal), `ST` (trade-to-trade) and
+`SZ` (surveillance), so the switch set is `EQ, BE, SM, ST, SZ`. The default is unchanged —
+`["EQ"]` — so no screen written against the reference product changes meaning. Emerge is a
+separate NSE *platform* with its own listing register, contained in no NIFTY index; the
+`nse-sme-emerge` universe is a 15th entry in §2.1's select and is derived from these series.
+SME names are screenable but never sizeable: see `docs/DECISIONS-MERGE.md` M59.
 
 ### 2.10 Ignore Top Beta / Volatility
 

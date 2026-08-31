@@ -1223,6 +1223,70 @@ to decide on.
 
 ---
 
+## M65 / M66 — the two amendments Maulik authorised on 31 Aug, and what they cost
+
+**M65 — RSI to Cutler@N−1, volatility to ddof=0.** Diagnosed by the M11 leaf and deliberately
+left unlanded, because each contradicts explicit `docs/05` prose and needed a decision rather
+than a fix. Landed together on purpose: volatility feeds `stop_from_vol`, and moving real GTT
+stop prices twice in one week is worse than once.
+
+Parity **4,514 → 3,168 of 9,186** (−29.8%); cumulative for the night **6,396 → 3,168**, against
+a status-page figure of 6,934 that had never been executed at all.
+
+*The number that mattered before landing it:* **132 of 269 GTT stops move, every one upward**
+(ddof=0 gives a smaller sd, so a narrower stop distance, so a higher stop on a long), median
+**0.0239%**, max **0.1468%** — and **no name crosses the 8%/12% clamp in either direction**. The
+clamp census is 24 at the floor and 97 at the ceiling both before and after. Non-negotiable #4 is
+intact, and stops differing from the reference improved 133 → 125.
+
+*Basket:* zero eligibility disagreements out of 271. top-12 unchanged. top-15 the same fifteen
+names, with the order **now matching the reference exactly** — the old code ranked WELCORP 2nd
+where the reference and the new code both rank it 6th, which is precisely the RSI penalty cliff
+(desk 79.86 crossing >78 where Baskfy read 73.61) that the M14 leaf had isolated. top-20 improved
+19/20 → 20/20. Thirteen RSI band flips, **all thirteen onto the reference's side**.
+
+**M66 — non-negotiable #1's enforcement moved into `packages/`.** The `confirm`/`plan_id`/30-minute
+gate lived only at `kite-momentum-rebalancer/app/main.py:519-524`, and `PLAN_TTL` was mentioned 15
+times under `packages/` and compared against a clock **zero** times. Retiring the desk would have
+deleted the enforcement, not just the code. Split along law #1: the pure predicate in
+`packages/core` beside the constant it enforces, the store (state + clock) in `services/`, and
+`client_id = plan_id:symbol` now **minted** in `packages/execution` rather than f-strung on the
+desk. `_journal` takes `client_id` keyword-only with no default, so a line added later cannot
+forget one.
+
+**Still open, and named rather than hidden:** the plan store is in-process, exactly like the
+desk's `PLANS` dict and the gateway's idempotency map. Before any execute route ships it must move
+to storage shared by every worker.
+
+### A third assertion that could never fail
+
+The desk's own `scripts/friday_drill.py:265` counts "orders that reached a broker" by reading
+`entry.get("plan_id")` off journal lines — and **neither gateway has ever written that field**
+(zero occurrences in either). That safety check has always reported 0, whatever the truth. It
+joins `test_non_negotiable_3` (a grep for an identifier), `test_non_negotiable_4` (named "every
+buy is stopped", asserts only `stop_from_vol` clamping) and `test_non_negotiable_6b` (an AST walk
+scoped to the desk tree alone, blind to `packages/` and `services/`). The data `friday_drill`
+needs now exists as `client_id`.
+
+### Cause E — a Budget Sunday that was 87% missing
+
+NSE published a full 3,229-row bhavcopy for **2026-02-01**, the Budget special session. We held
+**322 bars** — 301 of them SME rows written the same night by M59's backfill, and only **21
+main-board bars** from Kite's deep-history pass, against 2,310 on 30 Jan. Kite silently skipped
+the session. Re-running the bhavcopy backfill for that one date took it to **2,304**.
+
+Distinct from M62 and worth the distinction: **the calendar was correct here.** 2026-02-01 was
+properly marked a trading day. This was a silent partial ingest, not a misclassified holiday —
+the same signature of quietly wrong 9M/12M windows, a different cause.
+
+### An operational trap found the hard way
+
+`docker compose exec` through SSM **silently no-ops on long commands**: several backfill runs
+returned exit 0, printed nothing, and wrote nothing. Plain `docker exec` works. Do not read a
+long `box.sh` invocation's silence as success.
+
+---
+
 ## M59 — NSE Emerge (SME) is screenable (31 Aug 2026)
 
 **Asked for:** "NSE micro-cap index in the filter … companies less than ₹2,000 crores", clarified
@@ -1320,3 +1384,32 @@ book reports **0 orders today**.
   not changed and no image was rebuilt: it still requires a signed-in principal and a `state`, and
   it still refuses to simulate (leaf 1.1.4). If Baskfy is ever meant to complete its own login, the
   redirect matcher has to come out first, and the desk needs another way to a session.
+
+---
+
+## Leaf 2.2 — non-negotiable #1's enforcement now lives in Baskfy (31 Aug 2026)
+
+The `confirm=true` / `plan_id` / 30-minute-expiry rule existed in exactly one place —
+`kite-momentum-rebalancer/app/main.py:519-524` — so retiring the desk would have deleted the
+enforcement of a non-negotiable. It is now three pieces on the right side of law #1:
+
+- `packages/core/.../curated_plans.py` — `plan_is_expired` / `plan_expires_at`, pure, beside the
+  `PLAN_TTL` they enforce. Asserted at the second: 29:59 live, 30:00 and 30:01 expired.
+- `services/api/.../plan_store.py` — issues a `plan_id`, refuses an unknown, another tenant's, an
+  unconfirmed or an expired one. Clock injected; no `datetime.now()` in the file.
+- `packages/execution/.../client_ids.py` — `client_id = plan_id:symbol`, **minted** in `packages/`
+  for the first time (it was an f-string on the desk), with the validation an f-string could not
+  carry.
+- The gateway journal now records `client_id` on **every** line, closing leaf 1.2.3's ABANDONed
+  G4: a production journal can be reconciled to a plan.
+
+### NOT done — the honest part
+
+- **No execute route, deliberately.** That is leaf 2.3, gated on counsel item C3.
+- **The store is in-process.** Two API workers do not share it, so the same plan presented to both
+  passes this layer twice; the gateway's idempotency map is per-process for the same reason.
+  Before the C3 route ships, the backing map must move to shared storage. (`DECISIONS-MERGE.md`,
+  leaf 2.2.)
+- **`friday_drill.py:265` has always counted zero.** It looks for `plan_id` on journal lines and
+  the gateway never wrote that field. Not fixed here — the desk tree is outside this leaf's
+  contract — but the data it needs now exists as `client_id`.

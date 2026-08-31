@@ -148,3 +148,20 @@ Append-only.
 - 2026-08-31 VERIFIED 1.2.1 (7/7), 1.2.2 (5/5), 1.3.2 (6/6), 1.4.1 (7/7), 1.4.2 (5/5), 1.1.4 (8/8)
 - 2026-08-31 DRIVER FIX: packages/execution uncollectable since ef50c09 (OAuthStart undefined) and absent from testpaths. Defined the dataclass, added the path. 132 tests now run for the first time.
 - 2026-08-31 dispatched 1.2.3 (drill) and 1.3.3 (independent migration verify) — both now unblocked
+- 2026-08-31 VERIFIED 2.1 (8/8) — parity 4,514 -> 3,168 (-29.8%). GTT stops: 132/269 move, all
+  upward, median 0.0239%, max 0.1468%, ZERO clamp crossings (census 24 floor / 97 ceiling
+  unchanged). Basket: 0 eligibility disagreements, top-12 unchanged, top-15 same names with the
+  order now matching the reference exactly (WELCORP 2nd -> 6th, the RSI cliff 1.4.3 found),
+  top-20 improved 19/20 -> 20/20. Committed M65.
+- 2026-08-31 VERIFIED 2.2 (7/7) — split along law #1: pure predicate in core, store in services,
+  client_id minting in execution. _journal now takes client_id keyword-only with no default, all
+  20 call sites checked. routers/kite.py still 0 POST. Committed M66.
+- 2026-08-31 DRIVER: chased 2.1's cause-E handoff. 2026-02-01 Budget Sunday held 322 bars (301 of
+  them SME written earlier tonight, only 21 main-board from Kite) against NSE's full 3,229-row
+  bhavcopy and 2,310 on 30 Jan. Kite silently skipped the special session. Backfilled to 2,304.
+  Distinct from M62: the calendar was CORRECT; this was a partial ingest.
+- 2026-08-31 DRIVER: found docker compose exec through SSM silently no-ops on long commands —
+  several backfill runs reported nothing and wrote nothing. Plain `docker exec` works. Worth
+  knowing before trusting any long box.sh invocation's silence as success.
+- 2026-08-31 13 commits, 7d6b7fb -> df5fb37. Images built for df5fb37; ECR push unconfirmed and
+  DEPLOY BLOCKED on an expired AWS SSO token. Box still runs 83d8d68.

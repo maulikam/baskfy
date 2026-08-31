@@ -1220,7 +1220,19 @@ must include `https://staging.baskfy.com/api/auth/callback/google` and
 | `DESK_PASSWORD` | desk — gates the operator console; loopback is not a boundary on a shared box | desk `.env` | not measured from here (the desk is not reachable over SSM). Root `.env.example:290` documents it |
 | `BASKFY_METRICS_TOKEN` | box api | — | `UNSET` |
 
-### 2. The rotation list — four secrets exposed in agent transcripts
+### 2. The rotation list — ✅ CLOSED 31 Aug 2026: reviewed and accepted, not rotated
+
+> **Maulik's decision, 31 Aug 2026.** Asked directly, with the per-secret risk laid out, he
+> declined to rotate. The api_key is public by design and unregenerable without a second paid
+> Connect app; the api_secret is worthless without a live single-use request_token the desk
+> redeems within seconds; the encryption key needs the 0600 blob on the box; and the transcripts
+> are his own private sessions. Nothing is blocked — Google sign-in works, and
+> `BASKFY_KITE_API_SECRET` is deliberately absent from the Baskfy box (M64 depends on that).
+> Reversal is recorded in `docs/00-merge-status.md`. **Do not reopen this as an oversight.**
+>
+> The original analysis is kept below as the record of what was weighed.
+
+### 2 (original analysis). Four secrets exposed in agent transcripts
 
 Two were recorded on the status page (`docs/00-merge-status.md`, "What is NOT done"):
 *"Two secrets pasted into an agent transcript on 27 Aug still need rotating: the Google client

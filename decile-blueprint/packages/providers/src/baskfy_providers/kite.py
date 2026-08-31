@@ -423,6 +423,32 @@ def _translate(exc: Exception) -> Exception:
     return exc
 
 
+#: Kite spells an NSE Emerge symbol with its series appended — `SHEETAL-SM`, `TANKUP-ST` —
+#: where NSE's own register, the bhavcopy and therefore `instrument.symbol` all use the bare
+#: `SHEETAL`. Left alone, the two never meet: `_merge` keys on symbol, so every Emerge name
+#: ends up as two rows, and the one the pipeline screens is the one with no `kite_token`. That
+#: is exactly what happened — 578 SME instruments, 0 Kite tokens, and no Kite bars for any of
+#: them (M61).
+#:
+#: Only these three. `-RE` (rights entitlement) and `-BE` are *not* stripped: a rights
+#: entitlement is a different instrument from the share, not the same share under another name.
+_SME_SUFFIXES: Final[tuple[str, ...]] = ("-SM", "-ST", "-SZ")
+
+
+def _split_sme_symbol(symbol: str, exchange: str) -> tuple[str, str | None]:
+    """``('SHEETAL-SM', 'NSE') -> ('SHEETAL', 'SM')``; anything else passes through unchanged.
+
+    Guarded on the exchange because the suffix is only Kite's Emerge convention on NSE; a BSE
+    symbol that happens to end in those two letters is not an SME listing.
+    """
+    if exchange.upper() != "NSE":
+        return symbol, None
+    for suffix in _SME_SUFFIXES:
+        if symbol.endswith(suffix) and len(symbol) > len(suffix):
+            return symbol[: -len(suffix)], suffix.lstrip("-")
+    return symbol, None
+
+
 def _to_instrument_record(row: dict[str, object]) -> InstrumentRecord | None:
     """Map one Kite instrument-dump row. Returns ``None`` for rows outside our universe."""
     symbol = _text(row.get("tradingsymbol"))
@@ -440,14 +466,21 @@ def _to_instrument_record(row: dict[str, object]) -> InstrumentRecord | None:
         # product screens NSE equities and ETFs).
         return None
 
+    exchange = _text(row.get("exchange")) or "NSE"
+    # Emerge names arrive suffixed; normalise so this row merges with the NSE register's.
+    bare, sme_series = _split_sme_symbol(symbol, exchange)
+
     return InstrumentRecord(
-        symbol=symbol,
-        name=_text(row.get("name")) or symbol,
+        symbol=bare,
+        name=_text(row.get("name")) or bare,
         instrument_type=instrument_type,
-        series=None,
+        # Kite publishes no series for the main board, so this stays None there and the NSE
+        # register fills it in. For Emerge the suffix *is* the series, and it is the only place
+        # Kite states it — worth keeping rather than rediscovering from the bhavcopy.
+        series=sme_series,
         kite_token=_int(row.get("instrument_token")),
         lot_size=_int(row.get("lot_size")),
-        exchange=_text(row.get("exchange")) or "NSE",
+        exchange=exchange,
     )
 
 

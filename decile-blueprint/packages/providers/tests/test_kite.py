@@ -28,7 +28,7 @@ from baskfy_providers.errors import (
 )
 from baskfy_providers.kite import DEFAULT_MAX_DAYS_PER_REQUEST, KiteProvider, KiteRuntime
 from baskfy_providers.ports import BARS_CAPABILITIES, HOLDINGS_CAPABILITIES, Capability
-from baskfy_providers.records import DAILY_BARS_SCHEMA, BrokerAccountRef
+from baskfy_providers.records import DAILY_BARS_SCHEMA, BrokerAccountRef, InstrumentRecord
 from baskfy_providers.retry import RetryHooks, RetryPolicy
 from baskfy_providers.settings import ProviderSettings
 from baskfy_providers.tokens import IST, AccessTokenStore
@@ -733,3 +733,91 @@ class TestBrokerCash:
 
 def _ref(*, broker_account_id: int = 1, broker_id: str = "zerodha") -> BrokerAccountRef:
     return BrokerAccountRef(broker_account_id=broker_account_id, broker_id=broker_id)
+
+
+class TestEmergeSymbolNormalisation:
+    """M61: Kite suffixes an NSE Emerge symbol with its series; NSE's register does not.
+
+    The bug this pins shipped silently. `instrument.symbol` comes from the NSE register (`AGUL`)
+    and from the bhavcopy (`AGUL`), but Kite calls the same share `AGUL-SM`. `_merge` keys on
+    symbol, so the Kite row and the register row never met: 578 SME instruments carried 0
+    `kite_token`s, and every Kite-sourced path — bars, deep history, holdings sync — was blind to
+    them while looking like it worked.
+    """
+
+    def _record(
+        self,
+        configured_settings: ProviderSettings,
+        stored_token: AccessTokenStore,
+        tradingsymbol: str,
+        exchange: str = "NSE",
+    ) -> InstrumentRecord:
+        client = FakeKiteClient(
+            instruments=[
+                {
+                    "tradingsymbol": tradingsymbol,
+                    "name": tradingsymbol,
+                    "instrument_type": "EQ",
+                    "segment": exchange,
+                    "instrument_token": 5226241,
+                    "lot_size": 1000,
+                    "exchange": exchange,
+                }
+            ]
+        )
+        provider = build_provider(configured_settings, client, stored_token)
+        return provider.list_instruments()[0]
+
+    @pytest.mark.parametrize(
+        ("kite_symbol", "expected_symbol", "expected_series"),
+        [
+            ("SHEETAL-SM", "SHEETAL", "SM"),
+            ("TANKUP-ST", "TANKUP", "ST"),
+            ("SOMENAME-SZ", "SOMENAME", "SZ"),
+            # The register's own symbol already contains a hyphen; only the series comes off.
+            ("RCDL-RE-ST", "RCDL-RE", "ST"),
+        ],
+    )
+    def test_the_series_suffix_is_split_off(
+        self,
+        configured_settings: ProviderSettings,
+        stored_token: AccessTokenStore,
+        kite_symbol: str,
+        expected_symbol: str,
+        expected_series: str,
+    ) -> None:
+        record = self._record(configured_settings, stored_token, kite_symbol)
+        assert record.symbol == expected_symbol
+        assert record.series == expected_series
+        # The whole point: the token must survive onto the row the register will merge with.
+        assert record.kite_token == 5226241
+
+    def test_a_main_board_symbol_is_untouched(
+        self, configured_settings: ProviderSettings, stored_token: AccessTokenStore
+    ) -> None:
+        record = self._record(configured_settings, stored_token, "RELIANCE")
+        assert record.symbol == "RELIANCE"
+        assert record.series is None
+
+    def test_a_rights_entitlement_is_not_treated_as_a_series(
+        self, configured_settings: ProviderSettings, stored_token: AccessTokenStore
+    ) -> None:
+        """`-RE` is a different instrument from the share, not the share under another name."""
+        record = self._record(configured_settings, stored_token, "RCDL-RE")
+        assert record.symbol == "RCDL-RE"
+        assert record.series is None
+
+    def test_the_suffix_is_only_stripped_on_nse(
+        self, configured_settings: ProviderSettings, stored_token: AccessTokenStore
+    ) -> None:
+        """Emerge is an NSE platform. A BSE symbol ending in those letters is just a symbol."""
+        record = self._record(configured_settings, stored_token, "THING-SM", exchange="BSE")
+        assert record.symbol == "THING-SM"
+        assert record.series is None
+
+    def test_kite_supplies_the_lot_size_the_emerge_register_omits(
+        self, configured_settings: ProviderSettings, stored_token: AccessTokenStore
+    ) -> None:
+        """SME trades in lots and `SME_EQUITY_L.csv` has no MARKET_LOT column. Kite does."""
+        record = self._record(configured_settings, stored_token, "SHEETAL-SM")
+        assert record.lot_size == 1000

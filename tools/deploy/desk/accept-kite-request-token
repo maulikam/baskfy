@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+"""Accept ONE Kite request_token on stdin and hand it to the desk's own /callback.
+
+This is the *reverse* leg of the Kite session bridge, and it is the forced command bound to
+Baskfy's handoff key in ~desk/.ssh/authorized_keys. Read `tools/deploy/desk/README.md` for the
+whole picture; the short version is:
+
+    M58 (forward leg)  Baskfy -> desk : "give me the access token"      (emit-kite-token)
+    1.1.5 (reverse)    Baskfy -> desk : "here is a request_token"       (this file)
+
+WHY A REQUEST TOKEN AND NOT AN ACCESS TOKEN
+-------------------------------------------
+Maulik moved the Kite redirect to `https://staging.baskfy.com/api/v1/brokers/callback`, so the
+`request_token` now arrives at Baskfy. Only one of the two systems can redeem it — a Kite request
+token is single-use — and the desk has to be the one, for two reasons that are both facts about
+the *deployed* desk rather than opinions:
+
+  * `app/main.py` caches the Kite client in a module global and `app/kite_client.py` reads the
+    token file only in `Kite.__init__`. A token *written to disk* after uvicorn started is
+    therefore never seen by the process that places Friday's orders. Handing the desk an
+    access token would need a restart, and `momentum-web.service` is `Restart=on-failure`
+    under root — a stop this script could cause is a stop it could not undo.
+  * `/callback` calls `kite().exchange_token(...)`, which calls `set_access_token` on that same
+    cached client. So driving the desk's own login endpoint updates the LIVE process in place,
+    with no restart, and writes the token file in whatever format the deployed desk actually
+    uses. Nothing here has to know that format, which is the other half of the problem
+    (the deployed desk stores plain JSON; repo HEAD stores Fernet).
+
+WHAT THIS CAPABILITY IS, EXACTLY
+--------------------------------
+"Cause the desk to complete a Kite login with this string." That is all. It:
+
+  * ignores SSH_ORIGINAL_COMMAND completely — the client cannot ask for anything else;
+  * takes no arguments, reads at most 512 bytes of stdin, and accepts only [A-Za-z0-9]{8,64};
+  * speaks to exactly one hard-coded URL, on loopback, with one hard-coded path;
+  * writes no file the desk trades on. `/callback` writes the token, using the desk's code;
+  * cannot read the access token back out (that is the other key's forced command, and this
+    one deliberately does not print it);
+  * cannot place an order, cannot reach `portfolio.db`, cannot open a shell;
+  * refuses a `sim_`-prefixed value outright, so a simulated token from a DRY_RUN Baskfy
+    callback can never be relayed to a box that trades for real (leaf 1.1.4's defect class);
+  * rate-limits itself, so the channel cannot be used to hammer Kite through the desk.
+
+A `request_token` is also the weakest credential in the system: single-use, valid for minutes,
+and worthless once redeemed. Compare the forward leg, which emits a live access token that can
+trade for the rest of the day. The reverse leg is the *narrower* of the two.
+
+FAILURE IS SAFE
+---------------
+A bad or spent request_token makes `generate_session` raise inside the desk, `/callback` answers
+500, and the desk's existing session is untouched. This script then exits non-zero and says so.
+It never silently reports success.
+
+Stdlib only, and `/usr/bin/python3`, not the app's virtualenv: this must not be able to import
+the trading application even by accident.
+"""
+
+from __future__ import annotations
+
+import base64
+import datetime as dt
+import hashlib
+import json
+import os
+import re
+import sys
+import time
+import urllib.error
+import urllib.request
+
+HOME = "/home/desk"
+APP_DIR = f"{HOME}/kite-momentum-rebalancer"
+ENV_FILE = f"{APP_DIR}/.env"
+TOKEN_FILE = f"{APP_DIR}/data/.kite_token.json"
+CALLBACK_URL = "http://127.0.0.1:8420/callback"
+PROFILE_URL = "https://api.kite.trade/user/profile"
+AUDIT_LOG = f"{HOME}/logs/kite-handoff.log"
+RATE_FILE = f"{HOME}/.cache/kite-handoff-attempts"
+
+#: Deliberately strict. A Kite request_token is alphanumeric; anything with punctuation in it is
+#: something else that arrived on stdin — an error message, a URL, a shell fragment, or the
+#: `sim_<sha>` stub a dry-run Baskfy callback mints.
+TOKEN_RE = re.compile(r"\A[A-Za-z0-9]{8,64}\Z")
+
+#: At most this many handoffs per hour. A Kite login happens once a trading day; twenty is generous
+#: and still stops the channel being used to drive the desk's exchange endpoint in a loop.
+RATE_LIMIT = 20
+RATE_WINDOW_SECONDS = 3600
+
+TIMEOUT_SECONDS = 60
+
+
+def fail(message: str, *, code: int = 1) -> "int":
+    sys.stderr.write(f"handoff refused: {message}\n")
+    return code
+
+
+def now_iso() -> str:
+    return dt.datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def audit(line: str) -> None:
+    """One line per attempt. Never the request_token, never the access token."""
+    try:
+        os.makedirs(os.path.dirname(AUDIT_LOG), exist_ok=True)
+        with open(AUDIT_LOG, "a", encoding="utf-8") as handle:
+            handle.write(f"{now_iso()} {line}\n")
+    except OSError:
+        # An unwritable audit log must not stop a login the desk needs. It is reported on
+        # stderr instead, which the caller keeps.
+        sys.stderr.write("warning: could not write the handoff audit log\n")
+
+
+def read_env(name: str) -> str:
+    """One value out of the desk's own .env. The value never leaves this machine."""
+    try:
+        with open(ENV_FILE, encoding="utf-8") as handle:
+            for raw in handle:
+                line = raw.strip()
+                if not line.startswith(f"{name}="):
+                    continue
+                value = line.split("=", 1)[1].strip()
+                if value[:1] in ('"', "'") and value[-1:] == value[:1]:
+                    return value[1:-1]
+                # An inline `#` comment is stripped only when whitespace precedes it, which is
+                # how python-dotenv reads the same file. `pass#word` stays intact.
+                cut = re.split(r"\s+#", value, maxsplit=1)[0]
+                return cut.strip()
+    except OSError:
+        return ""
+    return ""
+
+
+def rate_limit_ok() -> bool:
+    now = time.time()
+    kept: list[float] = []
+    try:
+        with open(RATE_FILE, encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    stamp = float(line.strip())
+                except ValueError:
+                    continue
+                if now - stamp <= RATE_WINDOW_SECONDS:
+                    kept.append(stamp)
+    except OSError:
+        kept = []
+    if len(kept) >= RATE_LIMIT:
+        return False
+    kept.append(now)
+    try:
+        os.makedirs(os.path.dirname(RATE_FILE), exist_ok=True)
+        with open(RATE_FILE, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(f"{s:.0f}" for s in kept) + "\n")
+    except OSError:
+        # Fail open on bookkeeping, not on the login. The limit is a courtesy to Kite, not a
+        # security boundary; the security boundary is the forced command itself.
+        pass
+    return True
+
+
+def kite_user_id(access_token: str) -> str:
+    """Which Kite account a token belongs to, or '' if it is not live.
+
+    Read-only: `user/profile` is Kite's cheapest authenticated call and changes nothing.
+    """
+    api_key = read_env("KITE_API_KEY")
+    if not api_key or not access_token:
+        return ""
+    request = urllib.request.Request(
+        PROFILE_URL,
+        headers={
+            "X-Kite-Version": "3",
+            "Authorization": f"token {api_key}:{access_token}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
+            body = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError):
+        return ""
+    data = body.get("data") if isinstance(body, dict) else None
+    value = data.get("user_id") if isinstance(data, dict) else None
+    return value if isinstance(value, str) else ""
+
+
+def stored_token() -> str:
+    """The desk's current access token, read only to fingerprint it. Never printed."""
+    try:
+        with open(TOKEN_FILE, encoding="utf-8") as handle:
+            value = json.load(handle).get("access_token")
+    except (OSError, ValueError, AttributeError):
+        return ""
+    return value if isinstance(value, str) else ""
+
+
+def sha12(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12] if value else "-"
+
+
+def drive_callback(request_token: str) -> tuple[int, str]:
+    """GET the desk's own /callback on loopback. Returns (status, detail)."""
+    password = read_env("DESK_PASSWORD")
+    url = f"{CALLBACK_URL}?request_token={request_token}"
+    request = urllib.request.Request(url, method="GET")
+    # Host must be one of DESK_ALLOWED_HOSTS or core/websec.py answers 421 before routing.
+    request.add_header("Host", "127.0.0.1")
+    if password:
+        raw = base64.b64encode(f"desk:{password}".encode()).decode()
+        request.add_header("Authorization", f"Basic {raw}")
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310
+            return response.status, ""
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8", "replace")[:200]
+        except OSError:
+            pass
+        return exc.code, detail
+    except (urllib.error.URLError, OSError) as exc:
+        return 0, f"{type(exc).__name__}"
+
+
+def main() -> int:
+    # The client's command line is discarded by sshd in favour of this script. Discard it here
+    # too, so that a future change to the authorized_keys line cannot accidentally make it
+    # meaningful.
+    os.environ.pop("SSH_ORIGINAL_COMMAND", None)
+    if len(sys.argv) > 1:
+        return fail("this command takes no arguments")
+
+    raw = sys.stdin.buffer.read(512).decode("utf-8", "replace").strip()
+    if not raw:
+        return fail("nothing on stdin; send the request_token and close the stream")
+    if raw.lower().startswith("sim_"):
+        audit("outcome=refused reason=simulated-token")
+        return fail(
+            "that is a simulated token. Baskfy mints `sim_<sha>` when DRY_RUN is on or its API "
+            "secret is missing; relaying one to a box that trades for real is exactly the bug "
+            "this refuses to be part of"
+        )
+    if not TOKEN_RE.match(raw):
+        audit(f"outcome=refused reason=bad-shape chars={len(raw)}")
+        return fail(f"{len(raw)} characters that do not look like a Kite request_token")
+    if not rate_limit_ok():
+        audit("outcome=refused reason=rate-limited")
+        return fail(f"more than {RATE_LIMIT} handoffs in the last hour; refusing")
+
+    before_token = stored_token()
+    before_user = kite_user_id(before_token)
+
+    status, detail = drive_callback(raw)
+    if status not in (200, 301, 302, 303, 307, 308):
+        audit(f"outcome=failed http={status} detail={detail[:80]!r}")
+        return fail(
+            f"the desk's /callback answered {status}. Its existing session is untouched. "
+            f"{detail[:160]}"
+        )
+
+    after_token = stored_token()
+    after_user = kite_user_id(after_token)
+
+    if not after_user:
+        audit(f"outcome=unverified http={status} sha12={sha12(after_token)}")
+        sys.stderr.write(
+            "the desk accepted the request_token but Kite would not confirm the session that "
+            "came out of it; check the desk's /status\n"
+        )
+        return 2
+
+    changed = "yes" if after_token != before_token else "no"
+    account_note = ""
+    if before_user and after_user != before_user:
+        # Not refusable — the exchange has already happened by the time the account is knowable
+        # — but it must never be silent. A request_token minted by a different Zerodha login
+        # would move the desk onto a different account's session.
+        account_note = f" ACCOUNT-CHANGED from={before_user} to={after_user}"
+        sys.stderr.write(
+            f"ALARM: the desk's Kite account changed from {before_user} to {after_user}\n"
+        )
+
+    audit(
+        f"outcome=accepted http={status} user_id={after_user} token_changed={changed} "
+        f"sha12={sha12(after_token)}{account_note}"
+    )
+    print(
+        f"handoff status=accepted user_id={after_user} token_changed={changed} "
+        f"sha12={sha12(after_token)} at={now_iso()}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

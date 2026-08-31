@@ -127,6 +127,43 @@ Disallow: /
 		# The visible symptom was `GET /api/auth/session 404` in the browser console and a broken
 		# session on every page — a bug that looks like NextAuth misconfiguration and is a one-word
 		# routing error. Widening this back to `/api/*` breaks authentication site-wide.
+		# ------------------------------------------- the reverse Kite bridge (leaf 1.1.5)
+		#
+		# Maulik moved the Kite Connect app's ONE registered redirect to
+		# `https://staging.baskfy.com/api/v1/brokers/callback` (31 Aug 2026). The desk at
+		# 65.0.226.77 still places every live order and must rebalance on Friday, and a Kite
+		# `request_token` is single-use — so exactly one of the two systems can redeem it.
+		#
+		# It has to be the desk, and that is a fact about the deployed desk rather than a
+		# preference: its `app/main.py` caches the Kite client in a module global and
+		# `app/kite_client.py` reads the token file only in `Kite.__init__`, so a token written
+		# to its disk after uvicorn started is never seen by the process that places orders
+		# (`tools/deploy/desk/prove-live-token-pickup.py` demonstrates both halves). Driving the
+		# desk's own `/callback` updates that live client in place, with no restart — and
+		# `momentum-web.service` is `Restart=on-failure` under root, so a restart is not
+		# something this side could safely cause anyway.
+		#
+		# Baskfy loses nothing: `baskfy_worker.kite_session_cli pull` borrows the access token
+		# back from the desk over SSH minutes later, exactly as it does today (M58). One app,
+		# one redirect, one login, two consumers — the same sentence M58 was built around, with
+		# the login landing here first.
+		#
+		# SCOPED TO A LOGIN BASKFY DID NOT START. `POST /brokers/{id}/connect` mints a `state`
+		# and the callback route requires one back, so a Baskfy-initiated flow carries `state`
+		# and falls through to the API untouched. This matcher catches only the other case: a
+		# bare `request_token` arriving from Zerodha with no state — which is what the
+		# operator's morning Kite login produces.
+		#
+		# The server-side twin of this hop, for a login with no browser to redirect, is
+		# `/opt/baskfy/bin/baskfy-desk-handoff` -> the desk's `accept-kite-request-token` forced
+		# command. See `tools/deploy/desk/README.md`.
+		@kite_login_return {
+			path /api/v1/brokers/callback
+			query request_token=*
+			not query state=*
+		}
+		redir @kite_login_return {$BASKFY_DESK_CALLBACK_URL:https://desk.modelbasket.in/callback}?request_token={http.request.uri.query.request_token} 302
+
 		handle /api/v1/* {
 			reverse_proxy api:8000 {
 				# docs/08 §5: "the backtest SSE stream goes to api.baskfy.com directly on the ALB (idle

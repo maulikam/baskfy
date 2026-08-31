@@ -6135,3 +6135,51 @@ Baskfy still gets the access token afterwards through M58's unchanged pull.
   merely reload.
 * `rm ~desk/bin/accept-kite-request-token`. Nothing else on the desk was touched: no application
   file, no `portfolio.db`, no restart (`NRestarts=0`, MainPID 67756 since 27 Aug).
+
+---
+
+## D3-E — Maulik lifts the execute-route rule, scoped multi-tenant (31 Aug 2026)
+
+**This is a human-track decision, recorded because it was actually made — not inferred.**
+`CLAUDE.md` lists "web execute" among the things that stop work, and says of the human-track
+items: *never build against a guess*. This is not a guess. Maulik was asked directly, in a
+structured question that named the alternative and the consequence, and answered
+**"Yes — I lift the rule, build it."** He was then asked the scope question separately, because
+`docs/DECISION-EXECUTE-ROUTE.md` §7 deliberately refuses to let one signature cover both cases,
+and answered **"Multi-tenant — any connected user."**
+
+**What that authorises.** Baskfy may gain an execute route. Non-negotiable #1's *shape* survives
+— `confirm=true`, a `plan_id` issued by `/analyze`, a 30-minute expiry, `DRY_RUN=true` simulating
+end to end — because #1 was never the thing forbidding a second route. As leaf 1.5.2 established
+and the driver verified, #1 constrains the shape; what forbade the route was the human-track
+sentence "The web app never gains an execute route" plus the standing stop list. **The
+prohibition was about location, not mechanism**, and the location is what Maulik has changed.
+
+**What it does NOT authorise, and why the flag stays false.** The multi-tenant scope is the case
+counsel item **C3 gates by its own wording** — *"Yes before multi-tenant paid; no for a
+sole-tenant operator desk."* C3 is still open (`docs/COUNSEL-BRIEF.md`, compiled 25 Aug, no
+record of it being sent). Maulik's decision is engineering authorisation; it is not a legal
+answer and cannot substitute for one. So the route ships **flag-off**: built, tenancy enforced,
+tests proving the enforcement, and unable to be enabled until C3 returns in writing.
+
+Offered and declined: sole-tenant scope, which by C3's own wording engages no counsel question at
+all and could ship enabled immediately. Recorded so the trade is visible — Maulik chose the wider
+capability and the wait, over the narrower one and no wait.
+
+**Preconditions that remain, none of them waived by this decision.**
+
+1. **Non-negotiable #1's enforcement does not exist in `packages/`.** `confirm`/`plan_id`/expiry
+   live only at `kite-momentum-rebalancer/app/main.py:519-524`; `client_id = plan_id:symbol` is
+   constructed at `:581`. Leaf 1.2.3's AST scan of all five source roots found `PLAN_TTL`
+   mentioned 15 times and compared against a clock **zero** times. Retiring the desk deletes the
+   enforcement, not just the code. **Leaf 2.2 is building this and it must land first.**
+2. GTT behind the gateway — done (M16), verified by a drill: 12 buys, 12 stops, symbol sets equal.
+3. The journal does not record `client_id` (`gateway.py:136,152,238`), so a production journal
+   cannot be reconciled to a plan. Leaf 1.2.3 ABANDONed a gate on it; 2.2 closes it.
+4. Numbers parity — M12 now 25/25, M13's gap 0, M14 down to 2–3 quantity-only deltas. The RSI
+   and volatility amendments (authorised the same day) land as leaf 2.1.
+
+**Reversal.** Delete the route and the flag; the enforcement built by 2.2 is worth keeping either
+way, because it is what makes non-negotiable #1 true in a Baskfy that has outlived the desk. The
+decision itself reverses by Maulik saying so, and this entry should then be marked superseded
+rather than deleted.

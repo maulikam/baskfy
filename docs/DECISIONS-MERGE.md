@@ -5971,3 +5971,47 @@ access immediately.
 
 **Reversal.** Unset `BASKFY_LOGIN_ALLOWLIST` and restart. The deployment is open again and no
 data has changed.
+
+---
+
+## M61 — Kite *does* carry Emerge; the symbol suffix hid it ⚠ UNREVIEWED
+
+**Context.** M59 shipped SME on the premise that only the bhavcopy carries Emerge. Asked to move
+off the bhavcopy, this session tested Kite and reported "Kite does not carry NSE Emerge, 0 of 578
+instruments have a token". **That conclusion was wrong**, and Maulik pushed back on it. The test
+looked for bare symbols (`SHEETAL`, `AGUL`) in Kite's dump. Kite spells an Emerge symbol with its
+series appended — `SHEETAL-SM`, `TANKUP-ST`, `RCDL-RE-ST`.
+
+Re-tested exhaustively against all 566 register symbols: **566/566 present in Kite, all on
+`NSE`/`NSE` segment.** Historical bars verified live (SHEETAL-SM token 5226241, 5 candles for
+24–28 Aug; DPEL-SM, EMKAYTOOLS-SM, SUNLITE-SM, TANKUP-ST likewise).
+
+**The bug this uncovered.** `instrument.symbol` is the bare symbol — that is what the NSE
+register and the bhavcopy both use. `_to_instrument_record` took Kite's `tradingsymbol` verbatim,
+so every Emerge name produced a *second* row under the suffixed spelling, and `_merge` (which
+keys on symbol) never joined them. Result: **578 SME instruments, 0 `kite_token`s** — every
+Kite-sourced path (bars, the 2011 deep backfill, holdings sync) silently blind to SME while
+appearing to work. Nothing failed; the rows just were not there.
+
+**Choice taken.** `_split_sme_symbol` normalises `<SYMBOL>-SM|ST|SZ` to the bare symbol on NSE
+only, and carries the stripped suffix into `series` — Kite is the only source that states the
+Emerge series directly. `-RE` (rights entitlement) is deliberately **not** stripped: a rights
+entitlement is a different instrument from the share, not the share under another name. The
+exchange guard exists because a BSE symbol ending in those two letters is not an Emerge listing
+(five such collisions are in the dump today: SEL, MAL, RAJPUTANA, ZEAL, GSTL).
+
+**A second correction it forces.** M59 argued SME must stay screener-only partly because "the
+Emerge register has no MARKET_LOT column and nothing else publishes that lot size". **Kite
+publishes `lot_size`**, and the normalised record now carries it. That specific argument was
+wrong. The screener-only stance still holds on the other ground — non-negotiable #1, and nothing
+in M59/M61 touching `packages/execution` — but it rests on the rule, not on a missing column.
+
+**Consequence for the source question.** Kite covering Emerge removes the objection that dropping
+the bhavcopy would make SME go dark. What remains true, and is a smaller claim than the one made
+before: the bhavcopy carries `turnover` and both circuit bands natively and Kite does not
+(`bars.py`), and it is one file per day against thousands of rate-limited calls. That is a
+cost/fidelity trade, no longer a coverage cliff.
+
+**Reversal.** Delete `_split_sme_symbol` and pass `tradingsymbol` through. Existing rows are
+unaffected until the next `refresh_instruments`; suffixed duplicates already written stay until
+cleaned up separately.

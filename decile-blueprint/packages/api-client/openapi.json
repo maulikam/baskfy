@@ -2509,14 +2509,21 @@
         "type": "object"
       },
       "CallbackOut": {
+        "description": "The result of one finished callback. Only ``connected: true`` is a broker session.\n\nModelled on ``SyncHoldingsOut`` deliberately: a machine-readable provenance field, a\nboolean that says whether the thing is real, and prose that repeats the same statement\nfor a human — because Kite redirects the *browser* here, so this body is read by a person\nas often as by a client.",
         "properties": {
           "broker_id": {
             "title": "Broker Id",
             "type": "string"
           },
           "connected": {
+            "description": "True only when a real Kite session was exchanged and stored. A simulated login is `false`: the flow ran, and there is no broker session behind it.",
             "title": "Connected",
             "type": "boolean"
+          },
+          "note": {
+            "description": "The same statement as `connected` and `simulated`, in prose for a human. Never an order path.",
+            "title": "Note",
+            "type": "string"
           },
           "simulated": {
             "description": "True when the access token was minted by the DRY_RUN / missing-secret stub.",
@@ -2524,6 +2531,7 @@
             "type": "boolean"
           },
           "token_stored": {
+            "description": "True when a token was written. Read it with `simulated` — a stored simulated token lives in a separate file that nothing reads, and is not a session.",
             "title": "Token Stored",
             "type": "boolean"
           }
@@ -2532,7 +2540,8 @@
           "broker_id",
           "connected",
           "token_stored",
-          "simulated"
+          "simulated",
+          "note"
         ],
         "title": "CallbackOut",
         "type": "object"
@@ -19517,7 +19526,7 @@
     },
     "/api/v1/brokers/callback": {
       "get": {
-        "description": "Finish Zerodha login: validate ``state``, exchange ``request_token``, encrypt at rest.\n\nRejects a missing / reused / foreign ``state``. Under ``DRY_RUN`` or without\n``BASKFY_KITE_API_SECRET``, stores a simulated token blob (never calls live Kite).",
+        "description": "Finish Zerodha login: validate ``state``, exchange ``request_token``, encrypt at rest.\n\nRejects a missing / reused / foreign ``state``.\n\n**A login this deployment cannot actually complete is refused, not simulated** (leaf\n1.1.4). Under ``DRY_RUN``, or without ``BASKFY_KITE_API_KEY`` / ``BASKFY_KITE_API_SECRET``,\nthe exchange can only mint a ``sim_`` stub — and this route is on the live path now that\nKite's registered redirect points at it, so a real person finishing a real Kite login\nreaches this code. It used to write that stub over the shared token blob the desk bridge\nfills and answer ``connected: true``: one login destroyed the working session, replaced it\nwith a value Kite rejects, and reported success. Now it answers 503 and stores nothing.\n\n``BASKFY_BROKER_OAUTH_ALLOW_SIMULATED=true`` opts a demo box or an integration suite back\ninto the simulated flow. Even then the stub goes to its own file, never the real session,\nand the response says ``connected: false`` — the flow ran; there is no broker behind it.",
         "operationId": "oauthCallback",
         "parameters": [
           {
@@ -19645,7 +19654,7 @@
             "description": "Data pipeline is degraded"
           }
         },
-        "summary": "OAuth callback — exchange request_token (state-validated)",
+        "summary": "OAuth callback — exchange request_token (state-validated; 503 if only simulable)",
         "tags": [
           "brokers"
         ]

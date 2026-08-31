@@ -3,12 +3,17 @@
     GET  /brokers                         every broker on the grid, plus the D3 gate status
     GET  /brokers/{id}                    one broker
     POST /brokers/{id}/connect            start OAuth — only when the gate is open and wired
-    GET  /brokers/callback                exchange request_token (state-validated)
+    GET  /brokers/callback                exchange request_token (state-validated; 503 if it
+                                          could only be simulated)
     POST /brokers/{id}/sync-holdings      holdings shaped like HoldingRow (DRY_RUN safe)
 
 The catalog is always served to a signed-in account. Live authorize redirects require
 ``BROKER_OAUTH_REVIEW.signed_off`` (D3 posture B). The web app still never places orders —
 callback and sync-holdings store / read credentials only; they never touch the order path.
+
+Kite's registered redirect points at ``/api/v1/brokers/callback``, so that route is reachable
+by a real login and is treated as live: it refuses rather than simulating, and a simulated
+token can never be written where the real session lives (leaf 1.1.4).
 """
 
 from __future__ import annotations
@@ -34,6 +39,8 @@ from baskfy_api.broker_oauth import (
     dry_run_enabled,
     exchange_request_token,
     register_oauth_state,
+    simulated_token_storage_enabled,
+    simulated_token_store_for,
     store_access_token,
     token_store_for,
 )
@@ -130,11 +137,35 @@ class ConnectOut(BaseModel):
 
 
 class CallbackOut(BaseModel):
+    """The result of one finished callback. Only ``connected: true`` is a broker session.
+
+    Modelled on ``SyncHoldingsOut`` deliberately: a machine-readable provenance field, a
+    boolean that says whether the thing is real, and prose that repeats the same statement
+    for a human — because Kite redirects the *browser* here, so this body is read by a person
+    as often as by a client.
+    """
+
     broker_id: str
-    connected: bool
-    token_stored: bool
+    connected: bool = Field(
+        description=(
+            "True only when a real Kite session was exchanged and stored. A simulated login "
+            "is `false`: the flow ran, and there is no broker session behind it."
+        )
+    )
+    token_stored: bool = Field(
+        description=(
+            "True when a token was written. Read it with `simulated` — a stored simulated "
+            "token lives in a separate file that nothing reads, and is not a session."
+        )
+    )
     simulated: bool = Field(
         description="True when the access token was minted by the DRY_RUN / missing-secret stub."
+    )
+    note: str = Field(
+        description=(
+            "The same statement as `connected` and `simulated`, in prose for a human. "
+            "Never an order path."
+        )
     )
 
 
@@ -273,7 +304,7 @@ async def list_brokers(principal: AuthenticatedDep) -> BrokerListOut:
 @router.get(
     "/callback",
     response_model=CallbackOut,
-    summary="OAuth callback — exchange request_token (state-validated)",
+    summary="OAuth callback — exchange request_token (state-validated; 503 if only simulable)",
 )
 async def oauth_callback(
     principal: AuthenticatedDep,
@@ -282,8 +313,19 @@ async def oauth_callback(
 ) -> CallbackOut:
     """Finish Zerodha login: validate ``state``, exchange ``request_token``, encrypt at rest.
 
-    Rejects a missing / reused / foreign ``state``. Under ``DRY_RUN`` or without
-    ``BASKFY_KITE_API_SECRET``, stores a simulated token blob (never calls live Kite).
+    Rejects a missing / reused / foreign ``state``.
+
+    **A login this deployment cannot actually complete is refused, not simulated** (leaf
+    1.1.4). Under ``DRY_RUN``, or without ``BASKFY_KITE_API_KEY`` / ``BASKFY_KITE_API_SECRET``,
+    the exchange can only mint a ``sim_`` stub — and this route is on the live path now that
+    Kite's registered redirect points at it, so a real person finishing a real Kite login
+    reaches this code. It used to write that stub over the shared token blob the desk bridge
+    fills and answer ``connected: true``: one login destroyed the working session, replaced it
+    with a value Kite rejects, and reported success. Now it answers 503 and stores nothing.
+
+    ``BASKFY_BROKER_OAUTH_ALLOW_SIMULATED=true`` opts a demo box or an integration suite back
+    into the simulated flow. Even then the stub goes to its own file, never the real session,
+    and the response says ``connected: false`` — the flow ran; there is no broker behind it.
     """
     user_id = principal.require_user()
     if BROKER_OAUTH_REVIEW.blocks_live_oauth:
@@ -302,19 +344,49 @@ async def oauth_callback(
             "only Zerodha's token exchange is implemented."
         )
 
-    api_key = os.environ.get("BASKFY_KITE_API_KEY", "").strip() or "dry-run-api-key"
-    simulated = dry_run_enabled() or not os.environ.get("BASKFY_KITE_API_SECRET", "").strip()
-    access_token = exchange_request_token(
-        api_key=api_key,
+    exchange = exchange_request_token(
+        api_key=os.environ.get("BASKFY_KITE_API_KEY", "").strip(),
         request_token=request_token,
         user_id=user_id,
     )
-    store_access_token(access_token, store=token_store_for())
+    if exchange.simulated:
+        if not simulated_token_storage_enabled():
+            # 503, matching `billing.py`'s "the payment gateway is not responding": nothing is
+            # wrong with the request, and a 4xx would send the one person who cannot fix this
+            # off to fix their own login. The reasons are named because the operator reading
+            # them is the only one who can act, and the browser lands here directly.
+            raise Problem(
+                ProblemType.PIPELINE_DEGRADED,
+                "This deployment cannot complete a broker login: "
+                + "; ".join(exchange.reasons)
+                + ". Nothing was stored and any existing broker session is untouched. This "
+                "login's one-time state has been spent, so start the connect flow again once "
+                "the deployment is configured; or set BASKFY_BROKER_OAUTH_ALLOW_SIMULATED=true "
+                "to exercise the flow with a simulated session instead.",
+                reasons=list(exchange.reasons),
+            )
+        # Opted in, and still not the real store: `store_access_token` would refuse it.
+        store_access_token(exchange.access_token, store=simulated_token_store_for())
+        return CallbackOut(
+            broker_id=pending.broker_id,
+            connected=False,
+            token_stored=True,
+            simulated=True,
+            note=(
+                "simulated: the OAuth flow ran end to end and stored a fake session in a "
+                "separate file. You are not connected to "
+                f"{pending.broker_id}, and the real broker session was not touched "
+                "(" + "; ".join(exchange.reasons) + ")."
+            ),
+        )
+
+    store_access_token(exchange.access_token, store=token_store_for())
     return CallbackOut(
         broker_id=pending.broker_id,
         connected=True,
         token_stored=True,
-        simulated=simulated,
+        simulated=False,
+        note=f"live: a real {pending.broker_id} session was exchanged and stored encrypted.",
     )
 
 
@@ -412,7 +484,8 @@ async def connect_broker(
             oauth_available=False,
             reason=(
                 f"Connecting {broker.name} needs a Kite **Connect** app, and {missing} "
-                f"{verb} not set on this deployment. A Kite **Publisher** key will not do: Publisher "
+                f"{verb} not set on this deployment. A Kite **Publisher** key will not do: "
+                "Publisher "
                 f"embeds a basket you confirm inside Kite and issues no API secret, so it cannot "
                 f"complete the token exchange this login ends with. Baskfy's basket hand-off uses "
                 f"Publisher and is unaffected."

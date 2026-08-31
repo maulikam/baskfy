@@ -5,8 +5,28 @@ Sole-tenant today: ``connect`` mints a one-time ``state`` bound to the signed-in
 the access token via :class:`baskfy_providers.tokens.AccessTokenStore` (Fernet).
 
 Live Kite ``session/token`` is never called when ``DRY_RUN`` is truthy (the agent
-default) or when ``BASKFY_KITE_API_SECRET`` is unset — those paths persist a
-deterministic simulated token so unit tests stay network-free.
+default), when ``BASKFY_KITE_API_SECRET`` is unset, or when ``BASKFY_KITE_API_KEY``
+is unset. Those are the *simulated* paths and they mint a deterministic ``sim_``
+token so unit tests stay network-free.
+
+**A simulated token is not allowed anywhere near the real session** (leaf 1.1.4).
+``token_store_path()`` falls back to ``BASKFY_KITE_TOKEN_PATH`` — the same encrypted
+blob the M58 desk bridge fills with the live Kite session that the nightly pipeline
+reads. Writing a ``sim_`` stub there destroys a working session and leaves something
+Kite will reject in its place, and until this leaf the callback did exactly that on
+every request. So the two token kinds now have two files and the split is enforced
+at the lowest layer:
+
+* :func:`token_store_path` — the real session. Only a token from a completed live
+  exchange may be written here.
+* :func:`simulated_token_store_path` — a sibling ``*.simulated<suffix>`` file that no
+  reader of the live session ever opens. Only ``sim_`` tokens may be written here.
+
+:func:`store_access_token` refuses either crossing by raising
+:class:`SimulatedTokenRefused`, so caller discipline is not what keeps the live
+session safe. Storing a simulated token at all is additionally opt-in
+(``BASKFY_BROKER_OAUTH_ALLOW_SIMULATED``): a deployment that cannot really complete a
+login should say so rather than answer as though it had.
 """
 
 from __future__ import annotations
@@ -18,21 +38,36 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 from baskfy_providers.tokens import AccessToken, AccessTokenStore
 
 __all__ = [
+    "SIMULATED_TOKEN_PREFIX",
     "OauthPending",
+    "SimulatedTokenRefused",
+    "TokenExchange",
     "clear_oauth_states",
     "consume_oauth_state",
     "dry_run_enabled",
     "exchange_request_token",
     "exchange_request_token_stub",
+    "is_simulated_token",
     "register_oauth_state",
+    "simulated_exchange_reasons",
+    "simulated_token_storage_enabled",
+    "simulated_token_store_for",
+    "simulated_token_store_path",
+    "store_access_token",
     "token_encryption_key",
     "token_store_for",
     "token_store_path",
 ]
+
+#: Every token minted by :func:`exchange_request_token_stub` carries this prefix, so a
+#: simulated value is recognisable from the string alone — including one read back out of a
+#: blob written by an older build.
+SIMULATED_TOKEN_PREFIX: Final = "sim_"
 
 #: Default TTL for pending OAuth ``state`` values (seconds).
 _STATE_TTL_SECONDS = 30 * 60
@@ -77,6 +112,63 @@ def token_store_for(*, path: Path | None = None, key: str | None = None) -> Acce
     return AccessTokenStore(
         path or token_store_path(), key if key is not None else token_encryption_key()
     )
+
+
+def simulated_token_store_path() -> Path:
+    """Where a ``sim_`` token is allowed to live — never :func:`token_store_path`.
+
+    A sibling of the real blob rather than a path of its own, so the two always land on the
+    same volume and inherit the same directory permissions: an operator who moved the session
+    file cannot accidentally leave the simulated one behind in the image.
+
+    Nothing reads this file. That is the point — the pipeline (``index_backfill``, ``ops``),
+    the holdings sync (``broker_holdings``), the Kite provider and the M58 desk bridge all
+    open :func:`token_store_path`, so a simulated login stays exercisable end to end (state,
+    exchange, Fernet encrypt, read back) without any of them ever seeing it.
+    """
+    real = token_store_path()
+    return real.with_name(f"{real.stem}.simulated{real.suffix}")
+
+
+def simulated_token_store_for(
+    *, path: Path | None = None, key: str | None = None
+) -> AccessTokenStore:
+    return AccessTokenStore(
+        path or simulated_token_store_path(), key if key is not None else token_encryption_key()
+    )
+
+
+def simulated_token_storage_enabled() -> bool:
+    """Opt-in: may this deployment persist a simulated session at all?
+
+    Off unless explicitly on, and the inverse of :func:`dry_run_enabled` in that respect —
+    dry-run defaults *safe* by defaulting true, this defaults safe by defaulting false. A
+    DRY_RUN demo box or an integration suite that wants the whole callback exercisable sets
+    ``BASKFY_BROKER_OAUTH_ALLOW_SIMULATED=true``; everything else gets a loud refusal instead
+    of a stored stub and a cheerful 200.
+    """
+    raw = os.environ.get("BASKFY_BROKER_OAUTH_ALLOW_SIMULATED", "").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def is_simulated_token(access_token: str) -> bool:
+    """True for anything :func:`exchange_request_token_stub` could have produced."""
+    return access_token.startswith(SIMULATED_TOKEN_PREFIX)
+
+
+def _same_file(left: Path, right: Path) -> bool:
+    """Path equality that survives ``~``, ``..`` and the ``/tmp`` → ``/private/tmp`` symlink."""
+    return left.expanduser().resolve() == right.expanduser().resolve()
+
+
+class SimulatedTokenRefused(RuntimeError):
+    """A write that would have mixed the simulated and the real session.
+
+    Raised by :func:`store_access_token`, which is the single write path for both files. It is
+    a programming error rather than a user-facing condition — the callback decides whether a
+    simulated login is permitted *before* it stores anything — so it escapes as a 500 rather
+    than being translated into a problem response. The one thing it must never do is pass.
+    """
 
 
 def _state_file() -> Path | None:
@@ -192,7 +284,52 @@ def exchange_request_token_stub(
     """
     material = f"{api_key}|{request_token}|{user_id}|baskfy-oauth-stub".encode()
     digest = hashlib.sha256(material).hexdigest()[:40]
-    return f"sim_{digest}"
+    # The constant, not the literal: `is_simulated_token` is what keeps a stub out of the real
+    # session store, and it recognises tokens by exactly this prefix. Spelling it twice would
+    # let a rename here silently turn every future stub into something the guard waves through.
+    return f"{SIMULATED_TOKEN_PREFIX}{digest}"
+
+
+@dataclass(frozen=True, slots=True)
+class TokenExchange:
+    """The outcome of one exchange: the token, and whether it is real.
+
+    One value carrying both, because the caller used to recompute "was this simulated?" from
+    the environment a second time and report *that* to the user. Two readings of the same
+    environment are two chances to disagree, and the field that says whether a session is real
+    is the last field in this service that should be able to drift from what happened.
+    """
+
+    access_token: str
+    simulated: bool
+    #: Human-readable preconditions that were missing, in the order checked. Empty iff
+    #: ``simulated`` is false. Named so an error message can quote them verbatim.
+    reasons: tuple[str, ...]
+
+
+def simulated_exchange_reasons(*, api_key: str, api_secret: str | None = None) -> tuple[str, ...]:
+    """Why a live ``session/token`` call cannot be made here. Empty tuple = it can.
+
+    All three are collected rather than short-circuiting on the first, because an operator
+    reading the refusal is the only person who can act on it and a box missing two things
+    should hear about two. ``api_key`` is in the list for a reason of its own: the callback
+    used to substitute the literal ``"dry-run-api-key"`` for a missing key, which is harmless
+    in the stub and, on a box with a secret and ``DRY_RUN=false``, would have posted a
+    placeholder credential to Kite as though it were real.
+
+    Names only — never a value. These strings reach an HTTP response body.
+    """
+    secret = (
+        api_secret if api_secret is not None else os.environ.get("BASKFY_KITE_API_SECRET", "")
+    ).strip()
+    reasons: list[str] = []
+    if dry_run_enabled():
+        reasons.append("DRY_RUN is on, so no live broker call may be made")
+    if not api_key.strip():
+        reasons.append("BASKFY_KITE_API_KEY is not set on this deployment")
+    if not secret:
+        reasons.append("BASKFY_KITE_API_SECRET is not set on this deployment")
+    return tuple(reasons)
 
 
 def exchange_request_token(
@@ -201,19 +338,24 @@ def exchange_request_token(
     request_token: str,
     user_id: int,
     api_secret: str | None = None,
-) -> str:
-    """Exchange a Kite ``request_token`` for an access token string.
+) -> TokenExchange:
+    """Exchange a Kite ``request_token``, saying plainly whether the result is real.
 
-    Uses :func:`exchange_request_token_stub` whenever dry-run is on or the API secret is
-    missing. A live POST to ``api.kite.trade`` runs only when both are configured for a
-    real session — never from the default agent / unit-test environment.
+    Uses :func:`exchange_request_token_stub` whenever :func:`simulated_exchange_reasons` finds
+    anything missing. A live POST to ``api.kite.trade`` runs only when all three preconditions
+    hold — never from the default agent / unit-test environment.
     """
     secret = (
         api_secret if api_secret is not None else os.environ.get("BASKFY_KITE_API_SECRET", "")
     ).strip()
-    if dry_run_enabled() or not secret:
-        return exchange_request_token_stub(
-            api_key=api_key, request_token=request_token, user_id=user_id
+    reasons = simulated_exchange_reasons(api_key=api_key, api_secret=secret)
+    if reasons:
+        return TokenExchange(
+            access_token=exchange_request_token_stub(
+                api_key=api_key, request_token=request_token, user_id=user_id
+            ),
+            simulated=True,
+            reasons=reasons,
         )
 
     # Live path — kept for operator sole-tenant login; network-blocked suites never reach here.
@@ -231,10 +373,40 @@ def exchange_request_token(
     data = body.get("data") if isinstance(body, dict) else None
     if not isinstance(data, dict) or "access_token" not in data:
         raise ValueError("kite session/token response missing access_token")
-    return str(data["access_token"])
+    access_token = str(data["access_token"])
+    if not access_token:
+        raise ValueError("kite session/token returned an empty access_token")
+    if is_simulated_token(access_token):
+        # Kite cannot mint one, so this is either a fixture pointed at the live path or a
+        # proxy standing in for Kite. Either way it must not reach the real store, and the
+        # store's own guard would refuse it one line later; failing here names the cause.
+        raise ValueError(
+            f"kite session/token returned a token prefixed {SIMULATED_TOKEN_PREFIX!r}, "
+            "which this service reserves for simulated sessions"
+        )
+    return TokenExchange(access_token=access_token, simulated=False, reasons=())
 
 
 def store_access_token(access_token: str, *, store: AccessTokenStore | None = None) -> AccessToken:
-    """Persist ``access_token`` encrypted at rest."""
-    target = store or token_store_for()
+    """Persist ``access_token`` encrypted at rest, in the file its kind belongs in.
+
+    The guard is here, at the only write path, rather than at the callback that happens to be
+    today's only caller: the failure this leaf fixes was a caller storing unconditionally, and
+    a rule that lives in the caller is a rule the next caller does not inherit. Both crossings
+    are refused, and the real-token-into-the-simulated-file direction matters too — a live
+    session filed under the wrong name is a session the pipeline cannot find.
+    """
+    simulated = is_simulated_token(access_token)
+    target = store or (simulated_token_store_for() if simulated else token_store_for())
+    into_simulated_store = _same_file(target.path, simulated_token_store_path())
+    if simulated and not into_simulated_store:
+        raise SimulatedTokenRefused(
+            "refusing to write a simulated access token to the real session store; "
+            f"simulated tokens belong in {simulated_token_store_path()}"
+        )
+    if not simulated and into_simulated_store:
+        raise SimulatedTokenRefused(
+            "refusing to write a real access token to the simulated session store; "
+            f"the live session belongs in {token_store_path()}"
+        )
     return target.save(access_token)

@@ -676,11 +676,22 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * OAuth callback — exchange request_token (state-validated)
+         * OAuth callback — exchange request_token (state-validated; 503 if only simulable)
          * @description Finish Zerodha login: validate ``state``, exchange ``request_token``, encrypt at rest.
          *
-         *     Rejects a missing / reused / foreign ``state``. Under ``DRY_RUN`` or without
-         *     ``BASKFY_KITE_API_SECRET``, stores a simulated token blob (never calls live Kite).
+         *     Rejects a missing / reused / foreign ``state``.
+         *
+         *     **A login this deployment cannot actually complete is refused, not simulated** (leaf
+         *     1.1.4). Under ``DRY_RUN``, or without ``BASKFY_KITE_API_KEY`` / ``BASKFY_KITE_API_SECRET``,
+         *     the exchange can only mint a ``sim_`` stub — and this route is on the live path now that
+         *     Kite's registered redirect points at it, so a real person finishing a real Kite login
+         *     reaches this code. It used to write that stub over the shared token blob the desk bridge
+         *     fills and answer ``connected: true``: one login destroyed the working session, replaced it
+         *     with a value Kite rejects, and reported success. Now it answers 503 and stores nothing.
+         *
+         *     ``BASKFY_BROKER_OAUTH_ALLOW_SIMULATED=true`` opts a demo box or an integration suite back
+         *     into the simulated flow. Even then the stub goes to its own file, never the real session,
+         *     and the response says ``connected: false`` — the flow ran; there is no broker behind it.
          */
         get: operations["oauthCallback"];
         put?: never;
@@ -4128,18 +4139,37 @@ export interface components {
             /** Label */
             label: string;
         };
-        /** CallbackOut */
+        /**
+         * CallbackOut
+         * @description The result of one finished callback. Only ``connected: true`` is a broker session.
+         *
+         *     Modelled on ``SyncHoldingsOut`` deliberately: a machine-readable provenance field, a
+         *     boolean that says whether the thing is real, and prose that repeats the same statement
+         *     for a human — because Kite redirects the *browser* here, so this body is read by a person
+         *     as often as by a client.
+         */
         CallbackOut: {
             /** Broker Id */
             broker_id: string;
-            /** Connected */
+            /**
+             * Connected
+             * @description True only when a real Kite session was exchanged and stored. A simulated login is `false`: the flow ran, and there is no broker session behind it.
+             */
             connected: boolean;
+            /**
+             * Note
+             * @description The same statement as `connected` and `simulated`, in prose for a human. Never an order path.
+             */
+            note: string;
             /**
              * Simulated
              * @description True when the access token was minted by the DRY_RUN / missing-secret stub.
              */
             simulated: boolean;
-            /** Token Stored */
+            /**
+             * Token Stored
+             * @description True when a token was written. Read it with `simulated` — a stored simulated token lives in a separate file that nothing reads, and is not a session.
+             */
             token_stored: boolean;
         };
         /**

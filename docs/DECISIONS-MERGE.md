@@ -6015,3 +6015,63 @@ cost/fidelity trade, no longer a coverage cliff.
 **Reversal.** Delete `_split_sme_symbol` and pass `tradingsymbol` through. Existing rows are
 unaffected until the next `refresh_instruments`; suffixed duplicates already written stay until
 cleaned up separately.
+
+---
+
+## M62 — a failed fetch must never become an exchange holiday ⚠ UNREVIEWED
+
+**Context.** Maulik noticed the site showing 27 Aug data on 31 Aug. The cause was not staleness in
+the ordinary sense. `trading_day` held:
+
+```
+2026-08-28 | f | bhavcopy | inferred: no instrument traded
+```
+
+28 Aug 2026 was a **Friday NSE traded**. A 202,201-byte bhavcopy for it sits in the archive and
+was fetched successfully during diagnosis. What happened: the scheduled nightly's
+`fetch_daily_bars` returned 0 rows (`BASKFY_KITE_API_KEY` was unset at the time, before Kite was
+configured on 30 Aug 17:37), `compute_factors` wrote nothing, the quality gate correctly failed
+— and then `reconcile_calendar` saw a weekday with no bars inside a dense range and **inferred a
+holiday**.
+
+That inference is load-bearing and must stay: it is the only mechanism that fills in India's
+lunar-calendar holidays, which the seed bundle does not carry. But it conflated two causes of
+"no bars", and the wrong one is unrecoverable: every backfill iterates *trading days*, so once
+28 Aug was marked closed it was excluded from the very jobs that would have fixed it. A transient
+fetch error was laundered into a permanent calendar fact. `calendar.py`'s own module docstring
+already warned that a day we failed to fetch "must not be recorded as an exchange holiday"; the
+existing `MIN_INSTRUMENTS_FOR_HOLIDAY_INFERENCE` guard protects against an empty database, not
+against a single-day failure inside a healthy range.
+
+**Choice taken.** `reconcile_calendar` gains an optional `published: PublicationCheck` —
+"did NSE publish a bhavcopy for this date?". A day it answers yes for is **never** inferred a
+holiday, and is instead returned in `ReconciliationResult.missed_sessions`, which the
+orchestrator logs as a warning. The calendar becomes right immediately; the missing bars stay
+missing and are now *loud* rather than silent.
+
+The check is the exchange's own artefact, which is the only authority that settles it. It is
+consulted only for weekdays that have no bars — a handful a year — so a normal night pays nothing.
+
+**Why optional.** `None` preserves pre-M62 behaviour for callers with no provider (the seed path,
+and the tests that assert the inference itself). `_bhavcopy_published` also returns `None` when
+the provider offers no `bhavcopy`, deliberately: treating "cannot check" as "nothing was
+published" would re-create the exact bug.
+
+**Rejected alternatives.**
+
+- *Stop inferring holidays altogether.* Removes the only source of lunar holidays; 9M/12M factor
+  windows then resolve long (the T9.2 regression).
+- *Require N consecutive empty weekdays.* A single-day holiday is the common case in India, so
+  this trades one silent error for another.
+- *Let the quality gate's failure block the reconcile.* The gate runs after; and a run that
+  failed for an unrelated reason should still be allowed to fix the calendar.
+- *Re-derive the calendar from the NSE holiday circular.* The right long-term answer, but it is
+  a PDF published per year with no stable machine format — a project, not a fix, and this
+  needed to be in place before tonight's run.
+
+**Recovered.** 28 Aug's row corrected, 3,002 bars backfilled from the bhavcopy, pipeline run 13
+succeeded, `data_version` 5, factors now through 2026-08-28 with 449 Emerge members (435 under
+₹2,000 cr).
+
+**Reversal.** Drop the `published` argument at the orchestrator's call site; behaviour returns to
+pre-M62 exactly. No data change is implied either way.

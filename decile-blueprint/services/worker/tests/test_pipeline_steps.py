@@ -129,6 +129,55 @@ class TestCalendarReconciliation:
         assert result.inferred_holidays == 1
         assert not (await classify(session, dt.date(2026, 8, 19))).is_trading_day
 
+    async def test_a_day_nse_published_is_never_called_a_holiday(
+        self, session: AsyncSession
+    ) -> None:
+        """M62, and the reason it exists: this is what cost 2026-08-28.
+
+        The nightly's fetch failed, no bars were written, and inference turned a Friday NSE had
+        traded into an exchange holiday. Every backfill iterates trading days, so the day was
+        then unreachable — the mistake could not self-heal. A `published` check that answers yes
+        must veto the inference outright.
+        """
+        instruments = [await make_instrument(session, f"SYM{i}", token=i + 1) for i in range(25)]
+        for instrument in instruments:
+            await add_bar(session, instrument, PRIOR_DATE, "100")
+            await add_bar(session, instrument, TRADE_DATE, "100")
+
+        missed = dt.date(2026, 8, 19)
+
+        async def published(day: dt.date) -> bool:
+            return day == missed
+
+        result = await reconcile_calendar(
+            session, PRIOR_DATE, missed, published=published
+        )
+        assert result.inferred_holidays == 0
+        assert (await classify(session, missed)).is_trading_day
+        # And it is reported rather than passed over in silence: the calendar is right now, but
+        # the bars are still missing and only a backfill fixes that.
+        assert result.missed_sessions == (missed,)
+
+    async def test_a_day_nse_did_not_publish_is_still_inferred(
+        self, session: AsyncSession
+    ) -> None:
+        """The veto must not disable the mechanism — lunar holidays still need inferring."""
+        instruments = [await make_instrument(session, f"SYM{i}", token=i + 1) for i in range(25)]
+        for instrument in instruments:
+            await add_bar(session, instrument, PRIOR_DATE, "100")
+            await add_bar(session, instrument, TRADE_DATE, "100")
+
+        async def published(day: dt.date) -> bool:
+            del day
+            return False
+
+        result = await reconcile_calendar(
+            session, PRIOR_DATE, dt.date(2026, 8, 19), published=published
+        )
+        assert result.inferred_holidays == 1
+        assert result.missed_sessions == ()
+        assert not (await classify(session, dt.date(2026, 8, 19))).is_trading_day
+
 
 class TestStepRecording:
     """Prompt 3 deliverable 2: every task "writes a pipeline_run_step row with

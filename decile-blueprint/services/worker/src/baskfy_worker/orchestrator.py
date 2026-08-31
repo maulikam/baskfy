@@ -27,7 +27,9 @@ not, and the abandoned run is reconciled by :func:`baskfy_worker.ops.reap_abando
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
+import logging
 from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +39,7 @@ from baskfy_providers.errors import ProviderError
 from baskfy_worker.calendar import (
     CALENDAR_LOOKBACK_DAYS,
     NotATradingDay,
+    PublicationCheck,
     reconcile_calendar,
     require_trading_day,
 )
@@ -70,6 +73,8 @@ from baskfy_worker.tasks import instruments as instruments_task
 from baskfy_worker.tasks.quality import GateReport
 from baskfy_worker.window import DateWindow
 
+log = logging.getLogger(__name__)
+
 #: How far back ``fetch_corporate_actions`` looks each night. A week covers a long weekend plus a
 #: late NSE publication without re-reading the whole calendar every evening.
 CORPORATE_ACTION_LOOKBACK_DAYS: int = 7
@@ -93,6 +98,33 @@ class PipelineOutcome:
     @property
     def published(self) -> bool:
         return self.status is RunStatus.SUCCEEDED and self.data_version is not None
+
+
+def _bhavcopy_published(provider: object) -> PublicationCheck | None:
+    """Wrap the provider's archive lookup as the calendar's "did NSE publish?" question.
+
+    ``None`` when the provider cannot answer, which leaves `reconcile_calendar` on its pre-M62
+    behaviour rather than silently treating "cannot check" as "nothing was published" — the
+    latter would re-create the exact bug this guards.
+    """
+    fetch = getattr(provider, "bhavcopy", None)
+    if not callable(fetch):
+        return None
+
+    async def published(day: dt.date) -> bool:
+        def _probe() -> bool:
+            try:
+                frame = fetch(day)
+            except ProviderError:
+                # No file, or the archive could not be read. Either way this is not evidence
+                # that NSE traded, so inference proceeds as before.
+                return False
+            height = getattr(frame, "height", None)
+            return bool(height) if height is not None else bool(len(frame))
+
+        return await asyncio.to_thread(_probe)
+
+    return published
 
 
 async def run_nightly_pipeline(
@@ -184,7 +216,20 @@ async def _run_chain(  # noqa: PLR0915 - one block per pipeline step, and docs/0
     # Look back the longest factor window, not only tonight: a single-day reconcile left lunar
     # holidays in the trailing year as ``derived``, so 9M/12M resolved long (T9.2).
     calendar_start = min(window.start, trade_date - dt.timedelta(days=CALENDAR_LOOKBACK_DAYS))
-    await reconcile_calendar(session, calendar_start, window.end)
+    # `published` is what stops a failed fetch from being recorded as an exchange holiday —
+    # see `reconcile_calendar` and DECISIONS-MERGE M62. Only consulted for weekdays that have no
+    # bars, which is a handful per year, so the archive lookup costs nothing on a normal night.
+    calendar = await reconcile_calendar(
+        session, calendar_start, window.end, published=_bhavcopy_published(deps.provider)
+    )
+    if calendar.missed_sessions:
+        # Loud on purpose. Each of these is a day NSE traded and we hold no bars for: the
+        # calendar is now right about it, but the data is still missing and only a backfill
+        # fixes that.
+        log.warning(
+            "sessions NSE published but we did not ingest: %s",
+            ", ".join(d.isoformat() for d in calendar.missed_sessions),
+        )
 
     # --- 3. fetch_corporate_actions --------------------------------------
     async with record_step(

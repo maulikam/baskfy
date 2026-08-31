@@ -25,6 +25,7 @@ must not be recorded as an exchange holiday.
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Final
 
@@ -115,15 +116,29 @@ async def previous_trading_days(
     return [row[0] for row in rows]
 
 
+#: "Did NSE publish a bhavcopy for this date?" — the question that separates a holiday from a
+#: failed ingest. A coroutine so the caller can answer it from the archive, the network, or a
+#: cache without this module knowing which.
+PublicationCheck = Callable[[dt.date], Awaitable[bool]]
+
+
 @dataclass(frozen=True, slots=True)
 class ReconciliationResult:
     confirmed: int
     inferred_holidays: int
     still_provisional: int
+    #: Weekdays with no bars that were NOT called holidays, because NSE published a file for
+    #: them. Each one is a session we failed to ingest — surfaced so it is loud, not silent.
+    missed_sessions: tuple[dt.date, ...] = ()
 
 
 async def reconcile_calendar(
-    session: AsyncSession, start: dt.date, end: dt.date, *, infer_holidays: bool = True
+    session: AsyncSession,
+    start: dt.date,
+    end: dt.date,
+    *,
+    infer_holidays: bool = True,
+    published: PublicationCheck | None = None,
 ) -> ReconciliationResult:
     """Assert the calendar against observed bar dates (docs/09 §Schedule).
 
@@ -133,6 +148,18 @@ async def reconcile_calendar(
     When ``infer_holidays`` is set and the range is densely populated, weekdays with no bars at
     all are recorded as inferred holidays. This is what fills in the lunar-calendar holidays the
     seed file is missing, and it is the only mechanism that can: nothing in the bundle lists them.
+
+    **"No bars" has two causes and they must not be conflated (M62).** On 2026-08-28 the nightly's
+    Kite fetch failed, no bars were written, and this function inferred a holiday for a Friday NSE
+    had traded — a 202,201-byte bhavcopy sat in the archive the whole time. Once marked, the day
+    was excluded from every subsequent backfill (they iterate trading days), so it could never
+    self-heal: one lost session, silently, from a fetch error.
+
+    ``published`` closes that. It answers "did NSE publish a bhavcopy for this date?", and a day
+    it says yes to is **never** inferred a holiday — the exchange traded and we simply failed to
+    ingest it, which is an ingestion bug to fix rather than a calendar fact to record. Passing
+    ``None`` keeps the pre-M62 behaviour for callers that have no provider (the seed path, and
+    tests that assert the inference itself).
     """
     counts = dict(
         (
@@ -150,6 +177,7 @@ async def reconcile_calendar(
 
     confirmed = 0
     inferred = 0
+    skipped_published: list[dt.date] = []
     for day in observed:
         await _mark(session, day, is_trading_day=True, source="bhavcopy", holiday_name=None)
         confirmed += 1
@@ -168,6 +196,11 @@ async def reconcile_calendar(
         ).scalars()
         for day in weekdays:
             if day in observed:
+                continue
+            # The exchange's own answer beats our absence of data. Only when NSE published
+            # nothing is "no bars" evidence of a holiday.
+            if published is not None and await published(day):
+                skipped_published.append(day)
                 continue
             await _mark(
                 session,
@@ -191,7 +224,9 @@ async def reconcile_calendar(
         )
     ).scalar_one()
 
-    return ReconciliationResult(confirmed, inferred, int(remaining))
+    return ReconciliationResult(
+        confirmed, inferred, int(remaining), tuple(sorted(skipped_published))
+    )
 
 
 async def _mark(

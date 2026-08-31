@@ -1,0 +1,37 @@
+#!/bin/sh
+# Hand a Kite request_token from the Baskfy box to the desk. Installed at
+# /opt/baskfy/bin/baskfy-desk-handoff by tools/deploy/install-desk-handoff.sh.
+#
+#     printf '%s' "$REQUEST_TOKEN" | /opt/baskfy/bin/baskfy-desk-handoff
+#
+# THE TOKEN ARRIVES ON STDIN AND NOWHERE ELSE. A command line is world-readable in `ps` for as
+# long as the process lives, and `ssm send-command` parameters are retained in CloudTrail. The
+# same rule the forward leg follows (`kite_session_cli.fetch_desk_token`), for the same reason.
+#
+# What is on the other end is a forced command — `~desk/bin/accept-kite-request-token` — which
+# can only drive the desk's own /callback with the string it is given. This script therefore
+# holds "the right to make the desk log in", not a login on the desk. See tools/deploy/desk/README.md.
+#
+# Exit codes are the desk's: 0 accepted, 2 accepted-but-unverified, anything else refused. The
+# receipt it prints carries no secret — a Kite user id, a sha256 prefix, a timestamp.
+set -eu
+
+KEY="${BASKFY_DESK_HANDOFF_KEY:-/opt/baskfy/secrets/ssh/desk-handoff}"
+KNOWN_HOSTS="${BASKFY_DESK_KNOWN_HOSTS:-/opt/baskfy/secrets/ssh/known_hosts}"
+TARGET="${BASKFY_KITE_DESK_SSH_TARGET:-desk@65.0.226.77}"
+
+[ -r "$KEY" ] || { echo "no handoff key at $KEY — run tools/deploy/install-desk-handoff.sh" >&2; exit 3; }
+[ -r "$KNOWN_HOSTS" ] || { echo "no pinned host key at $KNOWN_HOSTS" >&2; exit 3; }
+
+# StrictHostKeyChecking=yes, never accept-new: an unattended handoff has nobody to judge an
+# unfamiliar host key, and the thing on the other end can make a trading account log in.
+exec ssh -T \
+  -i "$KEY" \
+  -o IdentitiesOnly=yes \
+  -o BatchMode=yes \
+  -o PasswordAuthentication=no \
+  -o StrictHostKeyChecking=yes \
+  -o "UserKnownHostsFile=$KNOWN_HOSTS" \
+  -o ConnectTimeout=15 \
+  "$TARGET" \
+  kite-request-token-handoff

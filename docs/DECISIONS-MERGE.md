@@ -6183,3 +6183,58 @@ capability and the wait, over the narrower one and no wait.
 way, because it is what makes non-negotiable #1 true in a Baskfy that has outlived the desk. The
 decision itself reverses by Maulik saying so, and this entry should then be marked superseded
 rather than deleted.
+
+---
+
+## Leaf 2.2 — non-negotiable #1's enforcement, moved into `packages/`/`services/` ⚠ UNREVIEWED
+
+*31 Aug 2026.* Closes preconditions 1 and 3 of the execute-route entry above. **No route was
+added** — that is 2.3, after C3.
+
+**Where each piece landed, and why.** Law #1 splits the mechanism in two. The **predicate**
+(`plan_is_expired`, `plan_expires_at`) sits in `packages/core/src/baskfy_core/curated_plans.py`
+beside the `PLAN_TTL` it enforces, pure — no clock, no state — so the constant and its
+enforcement cannot drift apart and the boundary is assertable at the second without `sleep`. The
+**store** (`services/api/src/baskfy_api/plan_store.py`) holds plans and is handed the clock by
+its caller; state plus a clock is exactly what core may not hold. The **client-id mint**
+(`packages/execution/src/baskfy_execution/client_ids.py`) sits beside the gateway that consumes
+it, because the id is that module's idempotency key and execution still imports no `baskfy_core`.
+
+**Judgement calls taken (all cheap to reverse).**
+
+1. **The expiry boundary is closed at the top: at exactly 30:00 a plan is expired.** The desk's
+   `> 1800` kept it live for that one instant. Chose the stricter reading of "plans expire in 30
+   minutes"; the safe direction, and the difference is a single tick. Reverse by changing `>=` to
+   `>` in `plan_is_expired` and the two boundary tests that name it.
+2. **`issued_at` is derived from the plan's own `expires_at_hint`, not from the store's clock.**
+   Re-stamping at store time would silently extend a plan that sat in a browser tab, so the
+   countdown the investor watched and the deadline that refuses them would differ.
+3. **Another tenant's plan reads as `UnknownPlan` (404), not "forbidden".** Telling a caller the
+   id exists makes the id space enumerable. The gateway refuses the cross-tenant case again.
+4. **A re-presented plan is allowed, not refused.** It returns the same `client_ids()`, so the
+   gateway answers `DUPLICATE` — idempotent, not double-sent. Refusing would look stricter and be
+   worse: a batch stopped halfway by the circuit breaker could never be completed through the
+   gateway.
+5. **An expired plan is not deleted while answering.** Dropping it would make one request answer
+   410 once and 404 for ever after. `purge_expired` bounds the map at issue time instead.
+6. **`client_id_for` refuses a symbol the plan does not name** (`SymbolNotInPlan`). On the desk
+   the mint lived inside the loop over `plan["orders"]`, so the plan constrained the symbols
+   structurally; the moment the mint is a callable function that constraint has to be checked.
+7. **`delete_gtt` gained an optional `client_id`, journalled only.** A cancel is addressed by
+   trigger id and may have no plan; when it has one, the cancellation joins the order's
+   reconciliation thread. It takes no part in idempotency — cancelling twice is not a double-send.
+
+**The journal now carries `client_id` on every line** (`_journal` takes it keyword-only with no
+default, so a line added later cannot forget), and the id is resolved *before* the first refusal
+can be journalled — guard blocks and risk blocks used to be written with no id at all.
+
+**Open, and named rather than hidden.**
+
+* The store is **in-process**, exactly like the desk's `PLANS` dict. Two API workers do not share
+  it, so the same plan presented to both would pass this layer twice. The gateway's `client_id`
+  map is per-process too, so it is one open item, not two. **Before the C3 route ships, the
+  backing map must move to storage shared by every worker.**
+* `kite-momentum-rebalancer/scripts/friday_drill.py:265` counts "orders that reached a broker" by
+  reading `entry.get("plan_id")` off journal lines — **a field the gateway has never written**,
+  so that check has always counted zero. Not fixed here (the desk tree is out of this leaf's
+  contract); with `client_id` on every line it becomes `parse_client_id(entry["client_id"])[0]`.

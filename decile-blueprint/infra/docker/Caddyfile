@@ -157,12 +157,26 @@ Disallow: /
 		# The server-side twin of this hop, for a login with no browser to redirect, is
 		# `/opt/baskfy/bin/baskfy-desk-handoff` -> the desk's `accept-kite-request-token` forced
 		# command. See `tools/deploy/desk/README.md`.
-		@kite_login_return {
-			path /api/v1/brokers/callback
-			query request_token=*
-			not query state=*
-		}
-		redir @kite_login_return {$BASKFY_DESK_CALLBACK_URL:https://desk.modelbasket.in/callback}?request_token={http.request.uri.query.request_token} 302
+		# REMOVED 1 Sep 2026 on Maulik's instruction: "no need to redirect and capture token at
+		# desk.modelbasket.in". Baskfy now owns the Kite login outright — the console redirect points
+		# here, BASKFY_KITE_API_SECRET is set, and `_connect_configured()` reports True, so a login
+		# completes in the API instead of being forwarded.
+		#
+		# WHAT THIS COSTS, recorded because it is a trading-capability change and not a cleanup:
+		# the momentum desk can no longer obtain a Kite session. One Connect app issues one live
+		# access token per user, and there is no longer a hop sending the desk a request_token to
+		# redeem. The desk keeps its data and its pages; it stops being able to place orders or arm
+		# GTT stops, because both need a session it can no longer get. Non-negotiable #4's
+		# same-session stop therefore has no owner on the desk from this commit.
+		#
+		# To reverse: restore the matcher below from git history and recreate the caddy container.
+		# The desk-side twin (`/opt/baskfy/bin/baskfy-desk-handoff` -> `accept-kite-request-token`)
+		# is left in place and unused, so a reversal needs no desk-side change.
+		#
+		# The removed matcher, for the reverser:
+		#   @kite_login_return { path /api/v1/brokers/callback; query request_token=*;
+		#                        not query state=* }
+		#   redir @kite_login_return {$BASKFY_DESK_CALLBACK_URL:...}?request_token={...} 302
 
 		handle /api/v1/* {
 			reverse_proxy api:8000 {

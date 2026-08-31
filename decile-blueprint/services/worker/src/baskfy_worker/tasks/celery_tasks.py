@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+from typing import Final
 
 from celery import shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,6 +49,13 @@ from baskfy_worker.tasks.curated_rebalance_notify import run_curated_rebalance_n
 from baskfy_worker.tasks.curated_sip import run_curated_sip_reminders
 from baskfy_worker.tasks.portfolio_nav_job import run_portfolio_nav
 from baskfy_worker.tasks.purge_accounts import run_purge_accounts
+from baskfy_worker.tasks.resync import run_resync
+
+#: Earliest IST wall-clock at which a session's own data can exist. NSE closes at 15:30 and
+#: publishes the bhavcopy afterwards; the schedule itself fires at 18:45 for that reason. Used to
+#: tell "today, already closed" from "today, still ahead of us" — a distinction `is_trading_day`
+#: cannot make and which redelivered tasks waking after midnight get wrong.
+SESSION_DATA_READY_IST: Final = dt.time(18, 0)
 
 #: docs/09 §"Kite specifics" — a rate-limited or flaky upstream is worth retrying; a malformed
 #: payload or a missing credential is not. Only transient provider failures auto-retry.
@@ -92,6 +100,33 @@ def nightly_pipeline(trade_date: str | None = None) -> JsonObject:
             "status": "skipped",
             "reason": "not a trading day",
         }
+
+    # A trading day is not the same as a *finished* trading day, and the difference bit us on
+    # 2026-09-01. The schedule fires at 18:45, when `now().date()` is the session that just
+    # closed — correct. But this task resolves its date at EXECUTION time, and Celery redelivers
+    # an unacknowledged task when a worker restarts. Three deploys on the evening of 31 Aug
+    # redelivered the nightly; each copy woke past midnight, computed `now().date()` as the NEXT
+    # day, found it a perfectly good trading Tuesday, and ran the full chain against a session
+    # that had not happened. Runs 17 and 18 both failed on zero bars.
+    #
+    # That is the same wrong lesson the holiday guard above exists to prevent — a CRITICAL alert
+    # for a day the data could not possibly exist for. NSE publishes the bhavcopy well after the
+    # 15:30 close, so before the cutoff there is nothing to ingest and nothing to gate.
+    #
+    # An explicit `trade_date` is still honoured: a human asking for today at noon is doing a
+    # rehearsal and knows it.
+    if trade_date is None:
+        now_ist = dt.datetime.now(tz=IST)
+        if now_ist.date() == day and now_ist.time() < SESSION_DATA_READY_IST:
+            return {
+                "trade_date": day.isoformat(),
+                "status": "skipped",
+                "reason": (
+                    f"the {day.isoformat()} session has not published yet "
+                    f"(now {now_ist.time().strftime('%H:%M')} IST, data expected after "
+                    f"{SESSION_DATA_READY_IST.strftime('%H:%M')})"
+                ),
+            }
 
     # Borrow the desk's Kite session before the chain starts (`kite_session_cli`, M58). A Kite
     # access token dies overnight, so the one stored yesterday is already useless; this is the
@@ -211,6 +246,22 @@ def check_queue_backlog_task() -> JsonObject:
 
     dispatched = asyncio.run(check())
     return {"alerts": dispatched}
+
+
+@shared_task(name="baskfy.ops.resync", acks_late=True)
+def resync_task(actor_user_id: int, days: int) -> JsonObject:
+    """Leaf 3.1's resync button: find every pending gap, close what can be closed, report the rest.
+
+    Deliberately **not** auto-retried. Every remedy it runs is already idempotent — the bhavcopy
+    ingest upserts, the calendar correction is an upsert, the Kite pull re-verifies before
+    storing — so a retry would be safe, but it would also silently repeat a run whose report the
+    operator is waiting to read. The honest answer to "it did not work" is the report saying so,
+    not another attempt nobody asked for. Pressing the button again is one tap.
+
+    Never places an order: it reaches ingestion, the trading calendar and the Kite *session*
+    bridge, and imports nothing from ``packages/execution``.
+    """
+    return asyncio.run(run_resync(actor_user_id, days=days)).as_json()
 
 
 @shared_task(

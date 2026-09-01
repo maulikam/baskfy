@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { ResyncPlanOut } from "@baskfy/api-client";
 
 import { serverApi } from "@/lib/api/server";
 
@@ -125,4 +126,47 @@ export async function clearEntitlementOverride(
   }
   revalidatePath("/admin/users");
   return { ok: true, message: `Removed the ${feature} override. The plan decides again.` };
+}
+
+/**
+ * Leaf 3.1's resync button, both halves.
+ *
+ * Two actions rather than one with a flag, because inspect-then-act is the shape of the feature:
+ * the operator is on a phone and reads what is about to happen before it happens, and a flag that
+ * turns a read into a write is one typo away from a repair nobody asked for.
+ */
+
+export interface ResyncInspection extends AdminActionResult {
+  plan: ResyncPlanOut | null;
+}
+
+/** The dry inspection. Changes nothing — safe to poll. */
+export async function inspectResync(): Promise<ResyncInspection> {
+  const api = await serverApi();
+  const { data, error } = await api.GET("/api/v1/admin/resync");
+  if (!data) {
+    return {
+      ok: false,
+      plan: null,
+      message: problemDetail(error, "The data check could not run."),
+    };
+  }
+  return { ok: true, plan: data, message: "" };
+}
+
+/**
+ * Close every gap the inspection found.
+ *
+ * 202, so this returns as soon as the work is queued. What it managed lands in
+ * `plan.last_resync`, which is why the panel polls the inspection afterwards rather than
+ * declaring success here — a repair that fixed three of five gaps must not be reported as done.
+ */
+export async function startResync(): Promise<AdminActionResult> {
+  const api = await serverApi();
+  const { data, error } = await api.POST("/api/v1/admin/resync");
+  if (!data) {
+    return { ok: false, message: problemDetail(error, "The resync could not be started.") };
+  }
+  revalidatePath("/admin");
+  return { ok: true, message: data.detail };
 }

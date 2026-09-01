@@ -15,6 +15,7 @@ from celery.schedules import crontab
 
 from baskfy_api.admin import NIGHTLY_TASK_NAME, REPROCESS_TASK_NAME
 from baskfy_api.queue import CeleryTaskQueue
+from baskfy_api.resync import RESYNC_TASK_NAME
 from baskfy_worker.celery_app import (
     BEAT_SCHEDULE,
     IST_NAME,
@@ -151,6 +152,9 @@ class TestRegisteredTasks:
         assert "baskfy.pipeline.nightly" in names
         assert "baskfy.compute.reprocess_instrument" in names
         assert "baskfy.pipeline.integrity_audit" in names
+        # Leaf 3.1's resync button. A name the API publishes and the worker does not bind is a
+        # 202 the operator reads as "queued" and nothing ever runs.
+        assert RESYNC_TASK_NAME in names
 
     def test_the_backtest_task_is_registered_and_routed_to_its_own_queue(self) -> None:
         """PROMPTS.md Prompt 15 §4: "Celery task on the `backtest` queue".
@@ -204,7 +208,7 @@ class TestTheProducerRoutesWhereTheWorkerListens:
                 mismatched.append(f"{name}: producer -> {here}, worker -> {there}")
         assert not mismatched, "\n".join(mismatched)
 
-    def test_the_three_names_the_api_actually_publishes_reach_a_consumed_queue(self) -> None:
+    def test_every_name_the_api_actually_publishes_reaches_a_consumed_queue(self) -> None:
         """Named explicitly, because the general check would still pass if both sides agreed on a
         queue nobody consumes — which is precisely the state this fixes."""
         producer = CeleryTaskQueue("redis://localhost:6380/0")._app
@@ -212,6 +216,7 @@ class TestTheProducerRoutesWhereTheWorkerListens:
             "baskfy.backtest.run": QUEUE_BACKTEST,
             NIGHTLY_TASK_NAME: QUEUE_DEFAULT,
             REPROCESS_TASK_NAME: QUEUE_COMPUTE,
+            RESYNC_TASK_NAME: QUEUE_DEFAULT,
         }
         actual = {name: _routed_queue(producer, name) for name in expected}
         assert actual == expected

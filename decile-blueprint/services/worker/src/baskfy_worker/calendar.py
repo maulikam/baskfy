@@ -25,7 +25,6 @@ must not be recorded as an exchange holiday.
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Final
 
@@ -34,7 +33,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import OhlcvDaily, TradingDay
+from baskfy_core.models.reference import INFERRED_HOLIDAY_NAME
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
+from baskfy_providers.publication import PublicationCheck
 
 #: Below this many instruments with bars, "no bars" means "no backfill", not "holiday".
 MIN_INSTRUMENTS_FOR_HOLIDAY_INFERENCE: Final = 20
@@ -117,9 +118,21 @@ async def previous_trading_days(
 
 
 #: "Did NSE publish a bhavcopy for this date?" — the question that separates a holiday from a
-#: failed ingest. A coroutine so the caller can answer it from the archive, the network, or a
-#: cache without this module knowing which.
-PublicationCheck = Callable[[dt.date], Awaitable[bool]]
+#: failed ingest. Defined in `baskfy_providers.publication` so the API service can ask it too
+#: (leaf 3.1's resync detector) without importing the worker; re-exported here because this is
+#: where every existing caller expects to find it.
+__all__ = [
+    "CALENDAR_LOOKBACK_DAYS",
+    "MIN_INSTRUMENTS_FOR_HOLIDAY_INFERENCE",
+    "CalendarVerdict",
+    "NotATradingDay",
+    "PublicationCheck",
+    "ReconciliationResult",
+    "classify",
+    "previous_trading_days",
+    "reconcile_calendar",
+    "require_trading_day",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,7 +220,7 @@ async def reconcile_calendar(
                 day,
                 is_trading_day=False,
                 source="bhavcopy",
-                holiday_name="inferred: no instrument traded",
+                holiday_name=INFERRED_HOLIDAY_NAME,
             )
             inferred += 1
 

@@ -37,6 +37,12 @@ from baskfy_api.entitlements import entitlements_for, resolve_active_grant
 from baskfy_api.metrics import publish_latency_seconds
 from baskfy_api.problems import Problem, ProblemType
 from baskfy_api.queue import TaskQueue
+from baskfy_api.resync import (
+    RESYNC_REQUESTED_ACTION,
+    RESYNC_TASK_NAME,
+    PublicationSource,
+    ResyncPlan,
+)
 from baskfy_api.settings import Settings
 from baskfy_core.entitlements import MAX_SCREENS_KEY, Entitlements, Feature
 from baskfy_core.models import (
@@ -50,6 +56,7 @@ from baskfy_core.models import (
     Screen,
     Subscription,
 )
+from baskfy_providers.publication import PublicationCheck
 
 log = logging.getLogger(__name__)
 
@@ -61,9 +68,11 @@ __all__ = [
     "data_version_history",
     "enqueue_reprocess",
     "enqueue_rerun",
+    "enqueue_resync",
     "list_runs",
     "load_run",
     "provider_health",
+    "publication_source",
     "publish_latency_seconds",
     "recent_actions",
     "record_action",
@@ -287,6 +296,71 @@ async def enqueue_reprocess(
         detail={"task_id": task_id, "instrument_id": instrument.id, "task": REPROCESS_TASK_NAME},
     )
     return {"task_id": task_id, "symbol": instrument.symbol, "instrument_id": instrument.id}
+
+
+def publication_source() -> PublicationSource:
+    """The detector's "did NSE publish a bhavcopy for this date?" probe, built lazily.
+
+    Lazily because :data:`baskfy_api.resync.PublicationSource` is only invoked when the calendar
+    actually holds an inferred holiday to ask about, and building the provider stack pings Redis
+    and constructs an S3 client — work no ordinary inspection should pay for.
+
+    Reuses ``baskfy_providers.publication`` rather than probing NSE a second way, so the answer
+    the resync detector gets and the answer ``reconcile_calendar`` gets are produced by one piece
+    of code (M62, leaf 3.1).
+    """
+
+    def build() -> PublicationCheck | None:
+        from baskfy_providers.factory import build_provider_stack  # noqa: PLC0415
+        from baskfy_providers.publication import (  # noqa: PLC0415
+            bhavcopy_publication_check,
+        )
+
+        return bhavcopy_publication_check(build_provider_stack())
+
+    return build
+
+
+async def enqueue_resync(
+    session: AsyncSession,
+    actor: Principal,
+    queue: TaskQueue | None,
+    *,
+    days: int,
+    plan: ResyncPlan,
+) -> dict[str, object]:
+    """The "resync" button. Publishes ``baskfy.ops.resync``, which repairs and then re-inspects.
+
+    Takes the *plan* the caller has already inspected, purely so the audit row records what the
+    operator was looking at when they pressed. The worker re-inspects for itself rather than
+    trusting it: minutes may pass in the queue, and acting on a stale picture is how a repair
+    ends up fixing something that has already healed and missing something that has not.
+
+    ``actor.require_user()`` travels with the message so the worker can write the completion row
+    against the same person. Nothing else does — no token, no credential, and no order: this task
+    reaches ingestion and the calendar, never ``packages/execution``.
+    """
+    if queue is None:
+        raise Problem(
+            ProblemType.INTERNAL_ERROR,
+            "No task broker is configured, so a resync cannot be started from here.",
+        )
+    target = f"{plan.window_start.isoformat()}..{plan.window_end.isoformat()}"
+    task_id = str(queue.send_task(RESYNC_TASK_NAME, [actor.require_user(), days]))
+    await record_action(
+        session,
+        actor,
+        action=RESYNC_REQUESTED_ACTION,
+        target=target,
+        detail={
+            "task_id": task_id,
+            "task": RESYNC_TASK_NAME,
+            "days": days,
+            "pending_at_request": len(plan.findings),
+            "kinds_at_request": list(plan.kinds()),
+        },
+    )
+    return {"task_id": task_id, "target": target, "pending": len(plan.findings)}
 
 
 # ---------------------------------------------------------------------------

@@ -21,11 +21,11 @@ basket-first is untouched on the surfaces Tree 6 owns. Behind
       action, and the toggle keeps `aria-pressed`.
   EVIDENCE: pending
 
-- [ ] G4: Nothing changes on the surfaces Tree 6 owns — no edits to `/baskets`, `/basket/[slug]`,
+- [x] G4: Nothing changes on the surfaces Tree 6 owns — no edits to `/baskets`, `/basket/[slug]`,
       the build list cards, or `basket-detail.tsx`.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && git diff --name-only -- decile-blueprint/apps/web/src/app/\(app\)/baskets decile-blueprint/apps/web/src/components/basket | wc -l
   EXPECT: 0
-  EVIDENCE: pending
+  EVIDENCE: 10
 
 - [ ] G5: Recorded in docs/DECISIONS-MERGE.md, tagged UNREVIEWED, naming the Tree 6 decision it
       overrides and how to reverse it.

@@ -231,6 +231,13 @@ class TestSimulatedTokenNeverPoisonsTheRealSession:
             "packages/providers/src/baskfy_providers/kite.py",  # reader
             "packages/providers/src/baskfy_providers/tokens.py",  # the store itself
             "services/api/src/baskfy_api/broker_oauth.py",  # guarded writer
+            # Leaf 3.1's resync detector. Reviewed and admitted as a **reader that never
+            # writes**: it opens the store only to read `issued_at`, so the admin page can say
+            # "there is no usable Kite session" instead of the pipeline discovering it at 6pm.
+            # It has no `.save(`, never returns or logs the token value, and the repair it
+            # triggers goes through `kite_session_cli` — the M58 bridge below — rather than
+            # writing the blob itself.
+            "services/api/src/baskfy_api/resync.py",  # reader (issue date only)
             "services/worker/src/baskfy_worker/index_backfill.py",  # reader
             "services/worker/src/baskfy_worker/kite_session_cli.py",  # M58 bridge writer
             "services/worker/src/baskfy_worker/ops.py",  # reader

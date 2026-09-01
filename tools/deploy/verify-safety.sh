@@ -27,13 +27,22 @@ for f in .env.staging .env.staging.compose; do
 done
 
 # 2. No literal secret in anything committed under infra/ or tools/deploy.
-if git ls-files 'decile-blueprint/infra/**' 'tools/deploy/**' | xargs grep -lE '\$2[aby]\$[0-9]{2}\$' 2>/dev/null | grep -q .; then
+# The pattern requires the 53-character body, not just the `$2a$14$` prefix. Matching the prefix
+# alone flagged two explanatory comments that write `$2a$14$…` — with an ellipsis — to explain why
+# the `$` has to be escaped for Compose. This check therefore failed on documentation, and had
+# been failing since before M74; a safety check that is always red is one nobody reads.
+if git ls-files 'decile-blueprint/infra/**' 'tools/deploy/**' \
+     | xargs grep -lE '\$2[aby]\$[0-9]{2}\$[./A-Za-z0-9]{53}' 2>/dev/null | grep -q .; then
   fail "a bcrypt hash is committed"
 fi
 
 # 3. The safety rails, in the file that describes the box.
 C="$BLUE/infra/docker/compose.prod.yml"
-grep -q 'DRY_RUN: "true"'                    "$C" || fail "DRY_RUN is not true in compose.prod.yml"
+# c51f46b parameterised this as `${BASKFY_DRY_RUN:-true}` so the box sets it from its env file
+# instead of diverging from git by hand. The rail is that the DEFAULT is true — a literal
+# `DRY_RUN: "true"` has not existed since, so this check had been failing on its own convention.
+grep -qE 'DRY_RUN: "(true|\$\{BASKFY_DRY_RUN:-true\})"' "$C" \
+  || fail "DRY_RUN does not default to true in compose.prod.yml"
 grep -q 'BASKFY_PUBLIC_API_ENABLED: "false"' "$C" || fail "the public API is not shut (D9)"
 grep -q 'BASKFY_FREE_TIER_ENABLED: "false"'  "$C" || fail "a Track B flag is not false"
 grep -q 'DRY_RUN=true' "$BLUE/infra/docker/Dockerfile.python" || fail "DRY_RUN is not baked into the image"

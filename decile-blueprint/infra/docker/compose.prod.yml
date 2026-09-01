@@ -74,9 +74,18 @@ x-python-image: &python-image
     # ONE read-only capability, Kite's `GET /portfolio/holdings` via `broker_holdings.py`.
     # It cannot reach an order: `services/api` contains zero `.place(` / `place_order` /
     # `place_gtt` calls, `routers/kite.py` has zero POST routes, and the only two POSTs under
-    # /brokers are OAuth-start (D3-gated) and sync-holdings (read-only). A live token exchange
-    # stays blocked independently by an absent BASKFY_KITE_API_SECRET — which must stay absent,
-    # because the desk redeems the single-use request_token and places the live orders (M64).
+    # /brokers are OAuth-start (D3-gated) and sync-holdings (read-only).
+    #
+    # THE SECOND LOCK DESCRIBED HERE IS GONE, AND THAT WAS DELIBERATE (M74 corrects the comment).
+    # This used to add "and a live token exchange stays blocked by an absent
+    # BASKFY_KITE_API_SECRET, which must stay absent because the desk redeems the request_token".
+    # M70-M73 moved the Kite login to Baskfy at Maulik's instruction, and the Connect button
+    # cannot redeem a request_token without that secret — so it is now SET on the box and the
+    # desk, not Baskfy, is the side that lost its session. Re-verified 1 Sep 2026: the no-order
+    # property does not rest on that secret. It rests on there being no code path at all —
+    # `services/api` still has zero `.place(` / `place_order` / `place_gtt` calls, `routers/kite.py`
+    # still has zero POST routes, and no execute route exists (D3-E authorises one; it is unbuilt
+    # and its flag is off). Check those four things, not the secret, before trusting this.
     DRY_RUN: "${BASKFY_DRY_RUN:-true}"
     BASKFY_PUBLIC_API_ENABLED: "false"
     BASKFY_FREE_TIER_ENABLED: "false"

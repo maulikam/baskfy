@@ -282,3 +282,58 @@ describe("PROBLEM_TYPES", () => {
     expect(isProblem({ message: "oops" })).toBe(false);
   });
 });
+
+describe("a dead session (M76)", () => {
+  /**
+   * Maulik saw `GET /api/v1/meta/status 401` in the console while the app still rendered a
+   * signed-in shell. A session can die between renders — the access token is minutes long and the
+   * API can revoke one at any time — and every query then 401s behind a UI that still looks
+   * authenticated. The hook exists so the app leaves instead of sitting there wrong.
+   */
+  const respondWith = (status: number, onUnauthorized: () => void) =>
+    createBaskfyClient({
+      baseUrl: "http://api.test",
+      onUnauthorized,
+      fetch: async () =>
+        new Response(JSON.stringify({}), {
+          status,
+          headers: { "content-type": "application/json" },
+        }),
+    });
+
+  it("fires on a 401 from any endpoint", async () => {
+    let fired = 0;
+    const client = respondWith(401, () => {
+      fired += 1;
+    });
+    await client.GET("/api/v1/meta/status");
+    expect(fired).toBe(1);
+  });
+
+  it("fires once even when a page has several queries 401 together", async () => {
+    // A page mounts a dozen queries; they all fail at the same moment. Signing out a dozen times
+    // would race the redirect against itself.
+    let fired = 0;
+    const client = respondWith(401, () => {
+      fired += 1;
+    });
+    await Promise.all([
+      client.GET("/api/v1/meta/status"),
+      client.GET("/api/v1/meta/factors"),
+      client.GET("/api/v1/meta/status"),
+    ]);
+    expect(fired).toBe(1);
+  });
+
+  it("does not fire on any other failure", async () => {
+    // A 500 or a 404 is not a dead session, and throwing someone out over one would be its own bug.
+    for (const status of [200, 404, 500, 503]) {
+      let fired = 0;
+      const client = respondWith(status, () => {
+        fired += 1;
+      });
+      await client.GET("/api/v1/meta/status");
+      expect(fired, `status ${status}`).toBe(0);
+    }
+  });
+});

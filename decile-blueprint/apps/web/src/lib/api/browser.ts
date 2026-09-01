@@ -1,5 +1,7 @@
 "use client";
 
+import { signOut } from "next-auth/react";
+
 import { createBaskfyClient, type BaskfyClient } from "@baskfy/api-client";
 
 import { apiOrigin } from "@/lib/api/config";
@@ -53,10 +55,38 @@ export async function accessToken(now: number = Date.now()): Promise<string | un
 
 let client: BaskfyClient | null = null;
 
+/**
+ * Sign out and leave, on any 401 from any endpoint.
+ *
+ * Maulik asked for this after seeing `GET /api/v1/meta/status 401` in the console while the app
+ * still rendered a signed-in shell. A dead session that leaves the UI looking authenticated is
+ * worse than being thrown out: every panel shows an empty or stale figure and the page gives no
+ * reason, on a product about someone's money.
+ *
+ * `replace`, not `assign`: the authenticated page must not stay in history as the entry Back
+ * returns to. `signOut` clears the Auth.js cookie first, so a Back that reaches any protected
+ * route hits `middleware.ts` with no session and is sent to sign-in — which is the "no way back
+ * unless login succeeds" half of the requirement. The cookie is what enforces it; the history
+ * entry alone never could.
+ */
+async function onUnauthorized(): Promise<void> {
+  resetTokenCache();
+  try {
+    // `redirect: false` so the hard navigation below is the only one — letting Auth.js redirect
+    // too would race two navigations and can land on the sign-in page's own history entry.
+    await signOut({ redirect: false });
+  } finally {
+    window.location.replace("/");
+  }
+}
+
 export function browserApi(): BaskfyClient {
   client ??= createBaskfyClient({
     baseUrl: apiOrigin(),
     getAccessToken: () => accessToken(),
+    onUnauthorized: () => {
+      void onUnauthorized();
+    },
   });
   return client;
 }

@@ -15,6 +15,7 @@ from __future__ import annotations
 import dataclasses
 import inspect
 import json
+import os
 from decimal import Decimal
 from pathlib import Path
 from typing import cast
@@ -718,17 +719,37 @@ class TestConnectDoesNotOverClaimEither:
         `/api/v1/brokers/callback`. Neither shows up until Kite sends the browser back, by which
         point the user has already signed in at Zerodha and authorised the app.
 
-        So this asserts the redirect against the path constant the callback route is registered
-        under, rather than against a string typed out a second time.
+        The login URL no longer carries `redirect_uri` at all: Kite uses the redirect REGISTERED
+        against the app and ignores one supplied at login time, so asserting on it was asserting
+        on a value Kite never read. What still has to be right is the redirect
+        `_connect_configured()` compares against `web_origin`, so that is what this checks.
+
+        It also pins the mechanism that actually broke. `state` must travel inside
+        `redirect_params` — Kite echoes back only what that carries and silently drops unknown
+        top-level keys, so sending `{"state": ...}` at the top level meant every login came home
+        stateless and the callback refused it as one it had not started.
         """
         out = await connect_broker(principal_stub(), "zerodha")
         assert out.redirect_url is not None
-        redirect_uri = parse_qs(urlparse(out.redirect_url).query)["redirect_uri"][0]
+        query = parse_qs(urlparse(out.redirect_url).query)
 
-        assert redirect_uri.endswith(OAUTH_CALLBACK_PATH), redirect_uri
+        assert "redirect_uri" not in query, "Kite ignores it; sending it only looks like it works"
+        assert "state" not in query, "a top-level `state` is dropped by Kite — see redirect_params"
+
+        nested = parse_qs(query["redirect_params"][0])
+        assert nested["state"][0], "the callback requires a state Kite will echo back"
+
+        # The redirect the operator must have registered, and the one `_connect_configured()`
+        # measures against — asserted via the path constant the route is registered under rather
+        # than a string typed out a second time.
+        settings = get_settings()
+        expected = os.environ.get("BASKFY_BROKER_OAUTH_REDIRECT", "").strip() or (
+            f"{settings.web_origin.rstrip('/')}{OAUTH_CALLBACK_PATH}"
+        )
+        assert expected.endswith(OAUTH_CALLBACK_PATH), expected
         # ...and it is absolute against a host we actually serve, not the unresolvable apex.
-        assert redirect_uri.startswith(get_settings().web_origin.rstrip("/")), redirect_uri
-        assert "//brokers/callback" not in redirect_uri
+        assert expected.startswith(settings.web_origin.rstrip("/")), expected
+        assert "//brokers/callback" not in expected
 
     async def test_a_callback_for_a_broker_we_cannot_exchange_for_is_refused(self) -> None:
         """The token store is one shared blob; honouring this would file it under a lie."""

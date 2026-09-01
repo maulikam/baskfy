@@ -507,11 +507,25 @@ async def connect_broker(
     # coherent redirect without a second setting to remember. `BASKFY_BROKER_OAUTH_REDIRECT` still
     # overrides, because the value must match what is registered in the Kite console exactly and
     # only the operator knows what they registered.
-    settings = get_settings()
-    redirect_uri = os.environ.get("BASKFY_BROKER_OAUTH_REDIRECT", "").strip() or (
-        f"{settings.web_origin.rstrip('/')}{OAUTH_CALLBACK_PATH}"
+    # No `redirect_uri` is sent. Kite Connect uses the redirect REGISTERED against the app and
+    # ignores one supplied at login time, so passing it only looked like it was doing something.
+    # Where the value still matters is `_connect_configured()`, which compares the registered
+    # redirect against `web_origin` to decide whether a login started here can finish here —
+    # that check is the reason `BASKFY_BROKER_OAUTH_REDIRECT` exists, and it is unchanged.
+    # `state` travels in `redirect_params`, NOT as a top-level param. Kite ignores query keys it
+    # does not know and echoes back only what `redirect_params` carries, so the previous
+    # `{"state": state}` was dropped on the way out — every Baskfy-initiated login returned with
+    # no state and the callback refused it as one it had not started. Leaf 1.1.1 predicted this
+    # exactly ("`redirect_params` appears zero times in the repo") and it went unacted on until
+    # Maulik hit it. `redirect_uri` is likewise informational: Kite uses the app's REGISTERED
+    # redirect, not one supplied at login time.
+    query = urlencode(
+        {
+            "api_key": api_key,
+            "v": "3",
+            "redirect_params": urlencode({"state": state}),
+        }
     )
-    query = urlencode({"api_key": api_key, "v": "3", "redirect_uri": redirect_uri, "state": state})
     return ConnectOut(
         broker_id=broker_id,
         oauth_available=True,

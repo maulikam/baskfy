@@ -39,10 +39,11 @@ from baskfy_core.models import (
     IndexDef,
     IndexMemberDaily,
     IndexSnapshotDaily,
+    Instrument,
     OhlcvDaily,
 )
 from baskfy_core.models.base import JsonObject
-from baskfy_core.universes import UNIVERSES
+from baskfy_core.universes import SME_SERIES, UNIVERSES
 from baskfy_worker.calendar import previous_trading_days
 from baskfy_worker.settings import WorkerSettings, get_worker_settings
 from baskfy_worker.steps import StepOutcome
@@ -319,6 +320,24 @@ async def check_universe_sizes(session: AsyncSession, ctx: GateContext) -> Check
         .all()
     )
 
+    # `nse-sme-emerge` is derived from `instrument.series`, so whether it HAS a source is a
+    # property of this deployment rather than of the codebase — which is why it cannot simply
+    # join NO_MEMBERSHIP_SOURCE, whose own comment requires an entry to be "sourceless, not
+    # merely empty". A box that has read the Emerge register holds SM/ST/SZ instruments and an
+    # empty universe there is a real failure; a box that has not (the fixture environments, where
+    # `FixtureProvider.sme_listings` returns [] because the local sample is main-board only) has
+    # no Emerge source at all, and failing its nightly for a platform it was never given is the
+    # same wrong lesson NO_MEMBERSHIP_SOURCE exists to avoid. Asked once, not per universe.
+    emerge_instruments = int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(Instrument)
+                .where(Instrument.series.in_(sorted(SME_SERIES)))
+            )
+        ).scalar_one()
+    )
+
     problems: list[str] = []
     unsourced: list[str] = []
     observed: JsonObject = {}
@@ -328,7 +347,9 @@ async def check_universe_sizes(session: AsyncSession, ctx: GateContext) -> Check
         nominal = NOMINAL_SIZES.get(universe.slug)
         if nominal is None:
             if actual == 0:
-                if universe.slug in NO_MEMBERSHIP_SOURCE:
+                if universe.slug == "nse-sme-emerge" and emerge_instruments == 0:
+                    unsourced.append(universe.slug)
+                elif universe.slug in NO_MEMBERSHIP_SOURCE:
                     # Empty because nothing populates it, not because today went wrong. Reported,
                     # never fatal — see NO_MEMBERSHIP_SOURCE.
                     unsourced.append(universe.slug)

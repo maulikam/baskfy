@@ -408,3 +408,56 @@ class TestInstrumentUpsert:
         )
         ids = {row[0] for row in await active_instruments(session)}
         assert ids == {live}
+
+
+class TestTheNightOnlyAsksAboutInstrumentsWorthAsking:
+    """M78. `active_instruments` returned everything still listed, and that cost three hours.
+
+    Measured on staging 1 Sep 2026: 41,443 instruments with a `kite_token`, one Kite historical
+    call each at 3 req/s. 10,130 of them have ever produced a bar; **31,603 have never produced
+    one, ever** — Kite's NSE dump carries every contract on the exchange, not the cash names
+    Baskfy screens. Three of every four calls asked about something that never returns a row.
+
+    That is the cause of three separate defects reported as unrelated: the night outran Celery's
+    Redis `visibility_timeout` and was redelivered, so two copies wrote the same tables; it held
+    the chain's transaction open for hours, blocking every user write that touches `instrument`
+    behind a foreign key; and the data was never published by the time anyone looked.
+    """
+
+    async def test_an_instrument_that_has_traded_is_always_fetched(
+        self, session: AsyncSession
+    ) -> None:
+        """The direction that must never regress: history keeps you in, forever."""
+        traded = await make_instrument(session, "TRADED", token=1, listed_on=dt.date(2011, 1, 3))
+        await add_bar(session, traded, TRADE_DATE, "100")
+        ids = {row[0] for row in await active_instruments(session)}
+        assert traded in ids
+
+    async def test_a_seriesless_instrument_with_no_history_is_skipped(
+        self, session: AsyncSession
+    ) -> None:
+        """The 31,603. Kite's dump carries every contract on the exchange; none of them is a stock
+        Baskfy screens, and asking about them cost three of every four calls."""
+        junk = await make_instrument(session, "JUNK", token=2, series=None)
+        ids = {row[0] for row in await active_instruments(session)}
+        assert junk not in ids
+
+    async def test_a_cash_name_with_no_bars_yet_is_fetched(self, session: AsyncSession) -> None:
+        """Otherwise the filter is a trap: no bar means never asked, means never a bar.
+
+        This is the bootstrap case and the second version of the filter got it wrong — keying the
+        exception on a recent `listed_on` excluded every instrument with an old listing date and no
+        bars, which on a fresh database is all of them.
+        """
+        fresh = await make_instrument(session, "FRESH", token=3, series="EQ")
+        ids = {row[0] for row in await active_instruments(session)}
+        assert fresh in ids
+
+    async def test_a_seriesless_instrument_that_has_traded_is_kept(
+        self, session: AsyncSession
+    ) -> None:
+        """The 6,459. ETFs carry no series and do return bars; history is what keeps them in."""
+        etf = await make_instrument(session, "ETFY", token=4, series=None)
+        await add_bar(session, etf, TRADE_DATE, "100")
+        ids = {row[0] for row in await active_instruments(session)}
+        assert etf in ids

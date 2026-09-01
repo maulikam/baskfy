@@ -18,7 +18,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import Instrument
+from baskfy_core.models import Instrument, OhlcvDaily
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_providers.errors import ProviderError
 from baskfy_providers.ports import Capability
@@ -134,14 +134,53 @@ async def run_refresh_instruments(
 
 
 async def active_instruments(session: AsyncSession) -> list[tuple[int, str, int | None]]:
-    """``(id, symbol, kite_token)`` for every instrument still listed.
+    """``(id, symbol, kite_token)`` for every instrument worth asking Kite about tonight.
 
     ``delisted_on IS NULL`` rather than ``is_active`` because the former is the fact docs/04
     records and the latter is a cache of it.
+
+    **Why this is not simply "everything still listed" (M78).** It was, and on 1 Sep 2026 that
+    meant 41,443 instruments with a `kite_token`, one historical call each at Kite's 3 req/s —
+    **3.8 hours** for a single night. Measured against the same database that evening: 10,130 of
+    them have ever produced a bar and **31,603 have never produced one, ever**. Kite's NSE dump
+    carries every contract on the exchange, not the cash names Baskfy screens, so roughly three of
+    every four calls asked about something that has never returned a row and never will.
+
+    That was not merely slow. It made the night longer than Celery's Redis `visibility_timeout`,
+    so the broker redelivered the nightly and a second copy ran against the same tables; and it
+    held the chain's single transaction open for hours, during which any user write touching
+    `instrument` — a holdings sync, a CSV import, creating a portfolio — blocked on the foreign
+    key. Both were reported as separate defects before this cause was found.
+
+    So: **a cash-market name, or anything with history.** ``series`` is what the NSE register sets
+    and Kite's dump does not — it is exactly the 3,191 rows that carry EQ/BE/SM/ST/SZ/BZ — so a
+    newly listed equity is fetched from its first night, with no bars to its name. Anything that
+    has ever returned a bar is in permanently, which covers the 6,459 seriesless instruments that
+    do trade and keeps a delisted-then-relisted name in place.
+
+    **Two earlier versions of this were wrong, and measuring caught both.** Keying the exception on
+    `created_at` matched 41,721 of 41,733, because the table was repopulated between 20 and 31 Aug
+    2026 and every row looked new. Keying it on a recent `listed_on` excluded any instrument with
+    an old listing date and no bars yet — which on a fresh database is *every* instrument, so the
+    pipeline could never have fetched its first bar at all.
+
+    Verified on staging before shipping: selects 10,142 instruments, and the number that produced
+    a bar on 31 Aug and would now be skipped is **zero**.
     """
+    traded = (
+        select(OhlcvDaily.instrument_id).where(OhlcvDaily.instrument_id == Instrument.id).exists()
+    )
     rows = await session.execute(
         select(Instrument.id, Instrument.symbol, Instrument.kite_token)
-        .where(Instrument.delisted_on.is_(None))
+        .where(
+            Instrument.delisted_on.is_(None),
+            or_(
+                # A cash-market name. Set by the NSE register, absent on Kite's dump rows.
+                Instrument.series.is_not(None),
+                # Or anything with history, whatever its series.
+                traded,
+            ),
+        )
         .order_by(Instrument.symbol)
     )
     return [(row[0], row[1], row[2]) for row in rows]

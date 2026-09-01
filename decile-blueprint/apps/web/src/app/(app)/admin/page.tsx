@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { DataVersions } from "@/components/admin/data-versions";
 import { ProviderHealth } from "@/components/admin/provider-health";
 import { ReprocessForm } from "@/components/admin/reprocess-form";
+import { ResyncPanel } from "@/components/admin/resync-panel";
 import { formatDateTimeIST } from "@/lib/format";
 import { serverApi } from "@/lib/api/server";
 
@@ -64,6 +66,19 @@ export default async function AdminPage() {
       </header>
 
       <section className="space-y-3">
+        <h2 className="text-base font-medium">Data sync</h2>
+        <p className="max-w-prose text-sm text-muted-foreground">
+          Every trading day in the window below, checked four ways: a published run, a bar count
+          against its neighbours, a weekday wrongly marked a holiday, and the broker session. Not
+          a presence check &mdash; on 2026-02-01 the box held 322 bars against a neighbouring
+          2,310 and &ldquo;has bars&rdquo; called it fine. Resyncing places no orders.
+        </p>
+        <Suspense fallback={<p className="text-sm text-muted-foreground">Checking&hellip;</p>}>
+          <DataSync />
+        </Suspense>
+      </section>
+
+      <section className="space-y-3">
         <h2 className="text-base font-medium">Published data versions</h2>
         <DataVersions
           rows={versions.data?.data ?? []}
@@ -100,4 +115,19 @@ export default async function AdminPage() {
       </section>
     </div>
   );
+}
+
+/**
+ * The data check, streamed in rather than awaited with the rest of the page.
+ *
+ * Measured on the staging box: the database half is 202 ms, but asking NSE whether it published
+ * for each weekday recorded as an inferred holiday costs a second each at the provider's
+ * deliberate 1 req/s, and a 400-day window holds nine of them — so a check that the page
+ * blocked on would hold the whole admin surface for ten seconds. Everything else renders at once
+ * and this arrives when it has an answer.
+ */
+async function DataSync() {
+  const api = await serverApi();
+  const resync = await api.GET("/api/v1/admin/resync");
+  return <ResyncPanel initial={resync.data ?? null} />;
 }

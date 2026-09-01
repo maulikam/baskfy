@@ -1345,6 +1345,73 @@ class TaskAcceptedOut(_Out):
 
 
 # ---------------------------------------------------------------------------
+# Resync (leaf 3.1 — "one button that finds every gap and closes what it can")
+# ---------------------------------------------------------------------------
+
+
+class ResyncFindingOut(_Out):
+    """One thing that is pending, why, and what the repair would run for it.
+
+    `kind` is one of `missing_run`, `thin_bars`, `wrong_holiday`, `kite_session` — the four
+    classes `baskfy_api.resync` detects. `trade_date` is null only for `kite_session`, which is
+    about the host rather than about a date.
+    """
+
+    kind: str
+    trade_date: dt.date | None = None
+    summary: str
+    remedy: str
+    #: Bars found on the day and the neighbouring median they were judged against. Both null
+    #: where a bar count is not the evidence.
+    observed_bars: int | None = None
+    expected_bars: int | None = None
+
+
+class ResyncOutcomeOut(_Out):
+    """What the last completed repair actually managed — including what it did not.
+
+    A resync that fixed three of five gaps and reported success would have lied, so `failed`,
+    `deferred` and `still_pending` are first-class fields rather than a log line.
+    """
+
+    completed_at: dt.datetime
+    actor: str | None = None
+    #: Dates (and `kite_session`) the repair closed.
+    repaired: list[str]
+    #: What it tried and could not do, each with the reason it gave.
+    failed: list[str]
+    #: What it did not attempt this pass — the per-run cap, mostly. Press again.
+    deferred: list[str]
+    #: What the re-inspection **after** the repair still found pending.
+    still_pending: list[str]
+    #: Questions the repair could not answer at all — NSE unreachable, no provider on the host.
+    #: "I could not look" is not "I looked and it was fine", and the page renders it as such.
+    unresolved: list[str]
+    #: True only when the repair found work, attempted all of it, and the re-inspection came
+    #: back empty. A partial repair is never `true`.
+    complete: bool
+
+
+class ResyncPlanOut(_Out):
+    """The dry inspection: what is pending right now, and what a resync would do about it.
+
+    Changes nothing. `pending: false` with an empty `unresolved` is a real and common answer;
+    `pending: false` with a non-empty `unresolved` is *not* a clean bill of health, and the page
+    is required to render the difference.
+    """
+
+    window_start: dt.date
+    window_end: dt.date
+    trading_days_checked: int
+    pending: bool
+    findings: list[ResyncFindingOut]
+    #: Questions this inspection could not answer at all.
+    unresolved: list[str]
+    #: The last repair that finished, or null if none ever has.
+    last_resync: ResyncOutcomeOut | None = None
+
+
+# ---------------------------------------------------------------------------
 # Support (Prompt 18 §2 — "/support with a contact form")
 # ---------------------------------------------------------------------------
 

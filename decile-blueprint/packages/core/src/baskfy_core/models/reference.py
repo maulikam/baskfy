@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 from decimal import Decimal
+from typing import Final
 
 from sqlalchemy import (
     BigInteger,
@@ -93,6 +94,20 @@ class SymbolAlias(Base):
     )
     old_symbol: Mapped[str] = mapped_column(String, nullable=False)
     changed_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+
+
+#: The ``holiday_name`` `reconcile_calendar` writes when it decides a weekday with no bars was a
+#: holiday. A *guess*, and the one guess in this table that has been wrong in production: on
+#: 2026-08-28 a failed Kite fetch left a real trading Friday marked shut, and every backfill
+#: afterwards skipped it because they all iterate trading days. M62 stopped the inference from
+#: firing when NSE published a bhavcopy; the marker is a constant here so both the worker that
+#: writes it and the API's resync detector, which hunts for days already in that state, name the
+#: same string instead of two copies that can drift.
+INFERRED_HOLIDAY_NAME: Final = "inferred: no instrument traded"
+
+#: Every inferred verdict starts with this, so a detector can recognise the class rather than one
+#: exact sentence.
+INFERRED_HOLIDAY_PREFIX: Final = "inferred:"
 
 
 class TradingDay(Base):

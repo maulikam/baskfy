@@ -134,7 +134,7 @@ Tree (depth 3): 1 All UI issues fixed and verified → 1.1 Build integrity · 1.
   EVIDENCE: `44 passed` and `20 passed` (BASKFY_TEST_DATABASE_URL against the local stack).
 
 - [x] G1.3.5: The two defects the sweep found are fixed at the source and covered by tests.
-  EVIDENCE:
+  EVIDENCE: Two defects, both fixed at source and both covered by an adversarial test — re-verified 25 Aug 2026 by `tools/tree3b/verify-sweep-claims.sh` (csp.test.ts 10 passed; exactly 1 `default-src` directive in middleware.ts; `dict.fromkeys` present; `test_assumptions_state_each_note_once` 1 passed). Detail:
   **(a) Duplicate CSP.** `contentSecurityPolicy()` prepended `default-src 'self'` while
   `commonDirectives()` already supplied it, so 63 routes logged *"Ignoring duplicate
   Content-Security-Policy directive 'default-src'"*. The effective policy was unchanged (browsers

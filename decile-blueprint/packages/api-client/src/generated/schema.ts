@@ -171,6 +171,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/resync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What data is pending, and why — a dry inspection that changes nothing
+         * @description Leaf 3.1's inspection half: find every gap, change nothing.
+         *
+         *     A **GET**, and deliberately so. The operator is on a phone, and a repair is worth previewing
+         *     before it runs; making the preview a side-effect-free read is also what lets G3's idempotence
+         *     be tested without performing a repair to test it.
+         *
+         *     Four classes are looked for, and the reason none of them is "does the day have any bars" is
+         *     in ``baskfy_api.resync``: on 2026-02-01 the box held 322 bars against a neighbouring 2,310,
+         *     and a presence check called that day fine.
+         */
+        get: operations["inspectResync"];
+        put?: never;
+        /**
+         * Close every gap the inspection found
+         * @description The acting half. 202, for the same reason the re-run button answers 202: a bhavcopy
+         *     re-ingest is minutes of work and a nightly chain is more.
+         *
+         *     Separate from the GET rather than a ``dry_run`` flag on one endpoint, because inspect-then-act
+         *     is the whole shape of this feature: a flag that changes a read into a write is one typo away
+         *     from a repair nobody asked for.
+         *
+         *     **This cannot place an order.** The task it publishes reaches ingestion, the calendar and the
+         *     Kite *session* bridge — never ``packages/execution``, never the order gateway, never a GTT.
+         *     ``services/api/tests/test_admin_resync.py`` asserts it over this file's source.
+         */
+        post: operations["startResync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users": {
         parameters: {
             query?: never;
@@ -7484,6 +7525,85 @@ export interface components {
             unfroze: boolean;
         };
         /**
+         * ResyncFindingOut
+         * @description One thing that is pending, why, and what the repair would run for it.
+         *
+         *     `kind` is one of `missing_run`, `thin_bars`, `wrong_holiday`, `kite_session` — the four
+         *     classes `baskfy_api.resync` detects. `trade_date` is null only for `kite_session`, which is
+         *     about the host rather than about a date.
+         */
+        ResyncFindingOut: {
+            /** Expected Bars */
+            expected_bars?: number | null;
+            /** Kind */
+            kind: string;
+            /** Observed Bars */
+            observed_bars?: number | null;
+            /** Remedy */
+            remedy: string;
+            /** Summary */
+            summary: string;
+            /** Trade Date */
+            trade_date?: string | null;
+        };
+        /**
+         * ResyncOutcomeOut
+         * @description What the last completed repair actually managed — including what it did not.
+         *
+         *     A resync that fixed three of five gaps and reported success would have lied, so `failed`,
+         *     `deferred` and `still_pending` are first-class fields rather than a log line.
+         */
+        ResyncOutcomeOut: {
+            /** Actor */
+            actor?: string | null;
+            /** Complete */
+            complete: boolean;
+            /**
+             * Completed At
+             * Format: date-time
+             */
+            completed_at: string;
+            /** Deferred */
+            deferred: string[];
+            /** Failed */
+            failed: string[];
+            /** Repaired */
+            repaired: string[];
+            /** Still Pending */
+            still_pending: string[];
+            /** Unresolved */
+            unresolved: string[];
+        };
+        /**
+         * ResyncPlanOut
+         * @description The dry inspection: what is pending right now, and what a resync would do about it.
+         *
+         *     Changes nothing. `pending: false` with an empty `unresolved` is a real and common answer;
+         *     `pending: false` with a non-empty `unresolved` is *not* a clean bill of health, and the page
+         *     is required to render the difference.
+         */
+        ResyncPlanOut: {
+            /** Findings */
+            findings: components["schemas"]["ResyncFindingOut"][];
+            last_resync?: components["schemas"]["ResyncOutcomeOut"] | null;
+            /** Pending */
+            pending: boolean;
+            /** Trading Days Checked */
+            trading_days_checked: number;
+            /** Unresolved */
+            unresolved: string[];
+            /**
+             * Window End
+             * Format: date
+             */
+            window_end: string;
+            /**
+             * Window Start
+             * Format: date
+             */
+            window_start: string;
+        };
+        /**
          * ReturnFigureOut
          * @description One of §5.2's headline metrics, rendered with everything criterion 3 requires.
          *
@@ -9771,6 +9891,212 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicApiGateOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    inspectResync: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResyncPlanOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No trading day available for that date */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    startResync: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskAcceptedOut"];
                 };
             };
             /** @description Invalid screen definition */

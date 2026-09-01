@@ -154,6 +154,10 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/admin/pipeline/runs/{run_id}": {"get"},
     "/admin/pipeline/runs/{trade_date}/rerun": {"post"},
     "/admin/instruments/{symbol}/reprocess": {"post"},
+    # Leaf 3.1's resync button. Two methods on one path, deliberately: the GET is a dry
+    # inspection that changes nothing and the POST is the repair, because a flag that turns a
+    # read into a write is one typo away from a repair nobody asked for.
+    "/admin/resync": {"get", "post"},
     "/admin/data-versions": {"get"},
     "/admin/providers": {"get"},
     "/admin/users": {"get"},

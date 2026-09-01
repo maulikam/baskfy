@@ -117,7 +117,7 @@ Tree (depth 3):
   against its own `.next-e2e` build; the dev server on :3000 was still `200` afterwards.
 
 - [x] G1.3.4: The two defects the sweep found are fixed at the source and covered by tests.
-  EVIDENCE:
+  EVIDENCE: Two defects, both fixed at source and both covered by an adversarial test — re-verified 25 Aug 2026 by `tools/tree3b/verify-sweep-claims.sh` (csp.test.ts 10 passed; exactly 1 `default-src` directive in middleware.ts; `dict.fromkeys` present; `test_assumptions_state_each_note_once` 1 passed). Detail:
   **(a) Duplicate CSP.** `contentSecurityPolicy()` prepended `default-src 'self'` while
   `commonDirectives()` already supplied it, so 63 routes logged *"Ignoring duplicate
   Content-Security-Policy directive 'default-src'"*. Effective policy was unchanged (browsers honour

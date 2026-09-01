@@ -6238,3 +6238,70 @@ can be journalled — guard blocks and risk blocks used to be written with no id
   reading `entry.get("plan_id")` off journal lines — **a field the gateway has never written**,
   so that check has always counted zero. Not fixed here (the desk tree is out of this leaf's
   contract); with `client_id` on every line it becomes `parse_client_id(entry["client_id"])[0]`.
+
+---
+
+## Leaf 3.1 — the resync button ⚠ UNREVIEWED
+
+*Maulik, 2026-09-01: "Give a button to resync so it resyncs everything if any data is pending, so
+I don't have to come to this machine."* Repairing a data gap meant an AWS SSO login, `box.sh`, and
+knowing which of four backfills to run. It is now `GET /admin/resync` (a dry inspection that
+changes nothing) and `POST /admin/resync` (202, publishes `baskfy.ops.resync`).
+
+**The detector is the hard part, and a presence check is not it.** Two production incidents set
+the bar. On **2026-02-01**, a Budget special session, the box held 322 bars against 2,310 on the
+neighbouring session; NSE had published a full 3,229-row bhavcopy the whole time and Kite's
+deep-history pass had silently skipped the day. "Has bars?" calls that fine; it was 87% missing
+and corrupted every 9M/12M window crossing it. On **2026-08-28** a failed fetch left a real
+trading Friday inferred a holiday, and once marked shut it was excluded from every backfill (they
+all iterate trading days) so it could never heal. Four classes are therefore detected:
+`missing_run`, `thin_bars`, `wrong_holiday`, `kite_session`.
+
+**Judgement calls taken (all cheap to reverse).**
+
+1. **The detector lives in `services/api/src/baskfy_api/resync.py`.** It reads three tables, asks
+   NSE a question, reads a token file and needs the clock, so law #1 rules out `packages/core`.
+   Of the two services, the API: `baskfy-worker` depends on `baskfy-api` and not the reverse, so
+   the worker imports the same `inspect_pending` the preview ran, and the button's preview and the
+   repair can never disagree about what "pending" means. Reverse by moving the module to the
+   worker and making the GET a 202-and-poll — which is the thing it was written not to be.
+2. **Thin is `< 0.60 × the median of the ten nearest sessions with bars`**, floored at a median of
+   100. A fraction of a *median*, not an absolute number, because the universe grows (2,550 bars a
+   session in mid-July 2026, 3,014 six weeks later) and because 2026-08-31 carries 9,225 rows —
+   three times its neighbours — which a mean would let a genuinely thin day hide behind.
+   **Measured against the real staging series, 271 sessions from 2025-07-28 to 2026-08-31: zero
+   flagged as it stands today; 2026-02-01 restored to its real 322 flags at ratio 0.139 against a
+   neighbouring median of 2,313; 2026-08-28 with the failed fetch's zero bars flags at 0.0 against
+   2,986.** Reverse by moving `THIN_FRACTION`.
+3. **The window ends yesterday until docs/11's 20:15 IST publish deadline has passed.**
+   `trading_day` is seeded to 2026-12-31, so a naive query reports the rest of the year as a gap;
+   and a button that reports *today* as missing every morning is a button nobody presses at 6pm.
+4. **`missing_run` only applies from the earliest `pipeline_run.trade_date` onward.** Staging's
+   runs begin on 2026-08-18 over bars reaching back to 2024: every trading day in between has no
+   run and is correct, having been backfilled rather than run. Reporting a hundred and fifty of
+   those would bury the one that matters. Classes (b) and (c) still cover those days, which is
+   what would have caught 2026-02-01.
+5. **"Could not check" is a separate channel from "still pending".** A host that cannot reach NSE
+   returns `unresolved` notes; they do not clear the outcome's `complete`, but the page is
+   required to render them beside the headline, so "everything found was closed" can never be read
+   as "everything was checked". Conflating the two is the exact shape of the M62 bug.
+6. **`_bhavcopy_published` moved from `baskfy_worker.orchestrator` to
+   `baskfy_providers.publication`** so the API can ask NSE the same question `reconcile_calendar`
+   asks, rather than growing a second probe. `INFERRED_HOLIDAY_NAME` moved to
+   `baskfy_core.models.reference` for the same reason.
+7. **The repair is capped at 30 bhavcopy days and 10 nightly re-runs per press**, and everything
+   past the cap is reported by name as `deferred`. A hundred queued nightlies would wedge the
+   worker for a day.
+8. **A repaired day also gets its nightly re-queued.** Re-ingesting bars does not recompute the
+   factor windows that cross them, and stopping at the bars would leave the day looking fixed and
+   reading wrong.
+
+**Open, and named rather than hidden.**
+
+* A queued nightly is reported as `queued`, never as `repaired`, and is excluded from
+  `still_pending` — otherwise every press would report a failure. Whether those chains actually
+  published is answered by pressing **Check again**, not by this run's report.
+* `POST /admin/resync` inspects before enqueueing purely to record what the operator was looking
+  at. The worker re-inspects and acts on its own picture.
+* Nothing in the path can place an order. `services/api/tests/test_admin_resync.py`
+  ::`TestItCannotPlaceAnOrder` asserts it over the source of all three modules.

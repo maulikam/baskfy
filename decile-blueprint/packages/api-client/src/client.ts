@@ -172,6 +172,14 @@ export type AdminActionOut = Schemas["AdminActionOut"];
 export type AdminActionListOut = Schemas["AdminActionListOut"];
 export type TaskAcceptedOut = Schemas["TaskAcceptedOut"];
 
+/**
+ * The resync button (leaf 3.1). `GET /admin/resync` is a dry inspection that changes nothing;
+ * `POST /admin/resync` closes what it can and reports what it could not.
+ */
+export type ResyncFindingOut = Schemas["ResyncFindingOut"];
+export type ResyncOutcomeOut = Schemas["ResyncOutcomeOut"];
+export type ResyncPlanOut = Schemas["ResyncPlanOut"];
+
 /** The contact form's payload (Prompt 18 §2). Not in docs/07 — `docs/DECISIONS.md` §18.5. */
 export type SupportMessageIn = Schemas["SupportMessageIn"];
 

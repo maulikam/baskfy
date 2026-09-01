@@ -27,7 +27,6 @@ not, and the abandoned run is reconciled by :func:`baskfy_worker.ops.reap_abando
 
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import logging
 from dataclasses import dataclass, field
@@ -36,10 +35,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import PipelineRun
 from baskfy_providers.errors import ProviderError
+from baskfy_providers.publication import bhavcopy_publication_check
 from baskfy_worker.calendar import (
     CALENDAR_LOOKBACK_DAYS,
     NotATradingDay,
-    PublicationCheck,
     reconcile_calendar,
     require_trading_day,
 )
@@ -98,33 +97,6 @@ class PipelineOutcome:
     @property
     def published(self) -> bool:
         return self.status is RunStatus.SUCCEEDED and self.data_version is not None
-
-
-def _bhavcopy_published(provider: object) -> PublicationCheck | None:
-    """Wrap the provider's archive lookup as the calendar's "did NSE publish?" question.
-
-    ``None`` when the provider cannot answer, which leaves `reconcile_calendar` on its pre-M62
-    behaviour rather than silently treating "cannot check" as "nothing was published" — the
-    latter would re-create the exact bug this guards.
-    """
-    fetch = getattr(provider, "bhavcopy", None)
-    if not callable(fetch):
-        return None
-
-    async def published(day: dt.date) -> bool:
-        def _probe() -> bool:
-            try:
-                frame = fetch(day)
-            except ProviderError:
-                # No file, or the archive could not be read. Either way this is not evidence
-                # that NSE traded, so inference proceeds as before.
-                return False
-            height = getattr(frame, "height", None)
-            return bool(height) if height is not None else bool(len(frame))
-
-        return await asyncio.to_thread(_probe)
-
-    return published
 
 
 async def run_nightly_pipeline(
@@ -220,7 +192,10 @@ async def _run_chain(  # noqa: PLR0915 - one block per pipeline step, and docs/0
     # see `reconcile_calendar` and DECISIONS-MERGE M62. Only consulted for weekdays that have no
     # bars, which is a handful per year, so the archive lookup costs nothing on a normal night.
     calendar = await reconcile_calendar(
-        session, calendar_start, window.end, published=_bhavcopy_published(deps.provider)
+        session,
+        calendar_start,
+        window.end,
+        published=bhavcopy_publication_check(deps.provider),
     )
     if calendar.missed_sessions:
         # Loud on purpose. Each of these is a day NSE traded and we hold no bars for: the

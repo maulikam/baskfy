@@ -27,6 +27,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_api import admin
 from baskfy_api.auth import StaffDep, require_staff
 from baskfy_api.db import SessionDep
+from baskfy_api.resync import (
+    DEFAULT_LOOKBACK_DAYS,
+    MAX_LOOKBACK_DAYS,
+    RESYNC_TASK_NAME,
+    ResyncPlan,
+    inspect_pending,
+    last_completed_resync,
+)
 from baskfy_api.routers import public
 from baskfy_api.schemas import (
     AdminActionListOut,
@@ -45,6 +53,9 @@ from baskfy_api.schemas import (
     ProviderHealthListOut,
     ProviderHealthOut,
     PublicApiGateOut,
+    ResyncFindingOut,
+    ResyncOutcomeOut,
+    ResyncPlanOut,
     TaskAcceptedOut,
 )
 from baskfy_api.settings import Settings, get_settings
@@ -160,6 +171,133 @@ async def reprocess_instrument(
         task_id=str(result["task_id"]),
         target=str(result["symbol"]),
         detail="Adjusted bars will be rebuilt from close_raw and the corporate-action history.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Resync — leaf 3.1's one button
+# ---------------------------------------------------------------------------
+
+
+async def _resync_plan(request: Request, session: SessionDep, days: int) -> ResyncPlan:
+    return await inspect_pending(
+        session,
+        settings=_settings(request),
+        publication=admin.publication_source(),
+        days=days,
+    )
+
+
+async def _last_outcome(session: SessionDep) -> ResyncOutcomeOut | None:
+    """The previous repair's own report, read back out of the staff audit trail.
+
+    Rendered beside the current plan so the page can distinguish the two answers an operator most
+    needs to tell apart: "nothing is pending" because the last resync worked, and "nothing is
+    pending" because nothing has ever looked.
+    """
+    row = await last_completed_resync(session)
+    if row is None:
+        return None
+    detail = row.detail or {}
+    actor = await session.get(AppUser, row.actor_user_id)
+
+    def _strings(key: str) -> list[str]:
+        value = detail.get(key)
+        return [str(item) for item in value] if isinstance(value, list) else []
+
+    return ResyncOutcomeOut(
+        completed_at=row.created_at,
+        actor=actor.email if actor else None,
+        repaired=_strings("repaired"),
+        failed=_strings("failed"),
+        deferred=_strings("deferred"),
+        still_pending=_strings("still_pending"),
+        unresolved=_strings("unresolved"),
+        complete=detail.get("complete") is True,
+    )
+
+
+@router.get(
+    "/resync",
+    response_model=ResyncPlanOut,
+    summary="What data is pending, and why — a dry inspection that changes nothing",
+)
+async def inspect_resync(
+    request: Request,
+    session: SessionDep,
+    days: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_DAYS)] = DEFAULT_LOOKBACK_DAYS,
+) -> ResyncPlanOut:
+    """Leaf 3.1's inspection half: find every gap, change nothing.
+
+    A **GET**, and deliberately so. The operator is on a phone, and a repair is worth previewing
+    before it runs; making the preview a side-effect-free read is also what lets G3's idempotence
+    be tested without performing a repair to test it.
+
+    Four classes are looked for, and the reason none of them is "does the day have any bars" is
+    in ``baskfy_api.resync``: on 2026-02-01 the box held 322 bars against a neighbouring 2,310,
+    and a presence check called that day fine.
+    """
+    plan = await _resync_plan(request, session, days)
+    return ResyncPlanOut(
+        window_start=plan.window_start,
+        window_end=plan.window_end,
+        trading_days_checked=plan.trading_days_checked,
+        pending=plan.pending,
+        findings=[
+            ResyncFindingOut(
+                kind=finding.kind.value,
+                trade_date=finding.trade_date,
+                summary=finding.summary,
+                remedy=finding.remedy,
+                observed_bars=finding.observed_bars,
+                expected_bars=finding.expected_bars,
+            )
+            for finding in plan.findings
+        ],
+        unresolved=list(plan.unresolved),
+        last_resync=await _last_outcome(session),
+    )
+
+
+@router.post(
+    "/resync",
+    response_model=TaskAcceptedOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Close every gap the inspection found",
+)
+async def start_resync(
+    request: Request,
+    session: SessionDep,
+    staff: StaffDep,
+    days: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_DAYS)] = DEFAULT_LOOKBACK_DAYS,
+) -> TaskAcceptedOut:
+    """The acting half. 202, for the same reason the re-run button answers 202: a bhavcopy
+    re-ingest is minutes of work and a nightly chain is more.
+
+    Separate from the GET rather than a ``dry_run`` flag on one endpoint, because inspect-then-act
+    is the whole shape of this feature: a flag that changes a read into a write is one typo away
+    from a repair nobody asked for.
+
+    **This cannot place an order.** The task it publishes reaches ingestion, the calendar and the
+    Kite *session* bridge — never ``packages/execution``, never the order gateway, never a GTT.
+    ``services/api/tests/test_admin_resync.py`` asserts it over this file's source.
+    """
+    plan = await _resync_plan(request, session, days)
+    queue = getattr(request.app.state, "task_queue", None)
+    result = await admin.enqueue_resync(session, staff, queue, days=days, plan=plan)
+    pending = int(str(result["pending"]))
+    detail = (
+        "Nothing was pending when this was queued; the task re-checks before acting and will "
+        "report that it had nothing to do."
+        if pending == 0
+        else f"{pending} pending item(s) queued for repair. The result appears here when it "
+        "finishes — including anything it could not fix."
+    )
+    return TaskAcceptedOut(
+        task=RESYNC_TASK_NAME,
+        task_id=str(result["task_id"]),
+        target=str(result["target"]),
+        detail=detail,
     )
 
 

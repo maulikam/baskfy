@@ -92,9 +92,7 @@ def nightly_pipeline(trade_date: str | None = None) -> JsonObject:
     #
     # An explicit `trade_date` is honoured regardless: a human asking for a specific day has a
     # reason, and refusing them here would make a backfill impossible to drive by hand.
-    if trade_date is None and not run_in_session(
-        lambda session: ops.is_trading_day(session, day)
-    ):
+    if trade_date is None and not run_in_session(lambda session: ops.is_trading_day(session, day)):
         return {
             "trade_date": day.isoformat(),
             "status": "skipped",

@@ -85,28 +85,35 @@ def upgrade() -> None:
         if other_key:
             match = " AND ".join(f"y.{c} IS NOT DISTINCT FROM s.{c}" for c in other_key)
             cols = ", ".join(f"s.{c}" for c in other_key)
-            # `DISTINCT ON`, because several duplicates routinely map to one survivor for the same
-            # key — six rows of `SGBDE31III-GB` all hold 27 Aug. A plain UPDATE passes the
-            # NOT EXISTS check for every one of them (the survivor has nothing *yet*) and then they
-            # collide with each other inside the same statement: the first attempt died on
-            # `pk_fundamental_daily`, key (9199, 2026-08-27). Exactly one row is promoted per
-            # (survivor, key); the rest fall to the DELETE below, which is right because they are
-            # the same security's numbers under a different id.
+            group = ", ".join(f"p.{c}" for c in other_key)
+            join = " AND ".join(f"x.{c} IS NOT DISTINCT FROM p.{c}" for c in other_key)
+            # One duplicate promoted per (survivor, key), chosen by lowest id.
+            #
+            # Several duplicates routinely map to one survivor for the same key — the six rows of
+            # `SGBDE31III-GB` all carry 27 Aug — and a plain UPDATE passes the NOT EXISTS check for
+            # every one of them, because the survivor genuinely has nothing there yet. They then
+            # collide with each other inside the same statement, which is how the first attempt
+            # died on `pk_fundamental_daily`, key (9199, 2026-08-27).
+            #
+            # Identified by (instrument_id, key) rather than by `ctid`: these are TimescaleDB
+            # hypertables, and a system column is refused on a compressed chunk with "transparent
+            # decompression only supports tableoid system column". That killed the second attempt.
+            # The unique key is the honest identifier here anyway.
             op.execute(
                 f"""
                 UPDATE {table} x
                 SET {column} = p.keep_id
                 FROM (
-                    SELECT DISTINCT ON (m.keep_id, {cols}) s.ctid AS row_ctid, m.keep_id
+                    SELECT m.keep_id, {cols}, MIN(s.{column}) AS chosen
                     FROM {table} s
                     JOIN instrument_dedup_map m ON s.{column} = m.drop_id
                     WHERE NOT EXISTS (
                         SELECT 1 FROM {table} y
                         WHERE y.{column} = m.keep_id AND {match}
                     )
-                    ORDER BY m.keep_id, {cols}, s.ctid
+                    GROUP BY m.keep_id, {cols}
                 ) p
-                WHERE x.ctid = p.row_ctid
+                WHERE x.{column} = p.chosen AND {join}
                 """
             )
             # Whatever could not move is a row the survivor already has under the same key.

@@ -83,17 +83,30 @@ def upgrade() -> None:
 
     for table, (column, other_key) in REFERENCING.items():
         if other_key:
-            match = " AND ".join(f"y.{c} IS NOT DISTINCT FROM x.{c}" for c in other_key)
+            match = " AND ".join(f"y.{c} IS NOT DISTINCT FROM s.{c}" for c in other_key)
+            cols = ", ".join(f"s.{c}" for c in other_key)
+            # `DISTINCT ON`, because several duplicates routinely map to one survivor for the same
+            # key — six rows of `SGBDE31III-GB` all hold 27 Aug. A plain UPDATE passes the
+            # NOT EXISTS check for every one of them (the survivor has nothing *yet*) and then they
+            # collide with each other inside the same statement: the first attempt died on
+            # `pk_fundamental_daily`, key (9199, 2026-08-27). Exactly one row is promoted per
+            # (survivor, key); the rest fall to the DELETE below, which is right because they are
+            # the same security's numbers under a different id.
             op.execute(
                 f"""
                 UPDATE {table} x
-                SET {column} = m.keep_id
-                FROM instrument_dedup_map m
-                WHERE x.{column} = m.drop_id
-                  AND NOT EXISTS (
-                      SELECT 1 FROM {table} y
-                      WHERE y.{column} = m.keep_id AND {match}
-                  )
+                SET {column} = p.keep_id
+                FROM (
+                    SELECT DISTINCT ON (m.keep_id, {cols}) s.ctid AS row_ctid, m.keep_id
+                    FROM {table} s
+                    JOIN instrument_dedup_map m ON s.{column} = m.drop_id
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM {table} y
+                        WHERE y.{column} = m.keep_id AND {match}
+                    )
+                    ORDER BY m.keep_id, {cols}, s.ctid
+                ) p
+                WHERE x.ctid = p.row_ctid
                 """
             )
             # Whatever could not move is a row the survivor already has under the same key.

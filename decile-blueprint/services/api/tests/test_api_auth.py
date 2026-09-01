@@ -128,6 +128,22 @@ def google(api: httpx.AsyncClient) -> StubGoogle:
     return stub
 
 
+def _with_stub_google(client: httpx.AsyncClient) -> httpx.AsyncClient:
+    """Install the Google double on an app this module built itself.
+
+    The module-level `google` fixture is autouse, but it patches the shared `api` fixture's app.
+    A test that stands up its OWN app via `api_helpers.running_app` — as the allowlist tests must,
+    because they need non-default settings — does not get it, and reaches the real verifier
+    instead. That is the exact trap the fixture's docstring warns about, and it bit both allowlist
+    tests: one failed outright, and the other PASSED FOR THE WRONG REASON, expecting a 401 from
+    the allowlist and getting one from a failed JWKS fetch.
+    """
+    app = getattr(client._transport, "app", None)  # noqa: SLF001 - the fixture does the same
+    assert app is not None, "running_app must be built on an ASGITransport"
+    app.state.google_verifier = StubGoogle()
+    return client
+
+
 async def sign_in(
     api: httpx.AsyncClient,
     *,
@@ -670,10 +686,12 @@ class TestTheLoginAllowlist:
     ) -> None:
         settings = api_helpers.api_settings(seeded_url, login_allowlist="owner@example.com")
         async with api_helpers.running_app(settings, screener_session) as client:
-            response = await sign_in(client, email="stranger@example.com")
+            response = await sign_in(_with_stub_google(client), email="stranger@example.com")
         assert response.status_code == 401
         # The same wording a forged token gets: the endpoint must not become an oracle for who
-        # is on the list.
+        # is on the list. That uniformity is also why this assertion alone is not enough — it
+        # passed for a while against a real verifier failing its JWKS fetch, which is a 401 for
+        # an entirely different reason. The account check below is what pins the cause.
         assert "could not be verified" in response.text
         rows = (
             (
@@ -693,6 +711,6 @@ class TestTheLoginAllowlist:
             seeded_url, login_allowlist=f"{EMAIL},someone-else@example.com"
         )
         async with api_helpers.running_app(settings, screener_session) as client:
-            response = await sign_in(client)
+            response = await sign_in(_with_stub_google(client))
         assert response.status_code == 200, response.text
         assert body_of(response)["email"] == EMAIL

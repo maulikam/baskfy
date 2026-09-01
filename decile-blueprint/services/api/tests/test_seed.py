@@ -28,7 +28,7 @@ from baskfy_core.models import (
     TradingDay,
 )
 from baskfy_core.screen_definition import ScreenDefinition
-from baskfy_core.universes import UNIVERSE_BY_SLUG
+from baskfy_core.universes import UNIVERSE_BY_SLUG, UNIVERSES
 
 ENV_VAR = "BASKFY_TEST_DATABASE_URL"
 
@@ -74,7 +74,8 @@ async def test_reference_seed_lands_the_documented_rows(
     # the seed order changed and the number is worth noticing.
     assert counts == {
         "exchange": 1,
-        "index_def": 14,
+        # M59 seeded a fifteenth universe; tracked from the registry so it cannot drift again.
+        "index_def": len(UNIVERSES),
         "plan": 3,
         "screen": 6,
         "cb_manager": 2,
@@ -92,7 +93,7 @@ async def test_reference_seed_lands_the_documented_rows(
         universes = (await session.execute(select(func.count()).select_from(IndexDef))).scalar_one()
         plans = (await session.execute(select(func.count()).select_from(Plan))).scalar_one()
         screens = (await session.execute(select(func.count()).select_from(Screen))).scalar_one()
-    assert (universes, plans, screens) == (14, 3, 6)
+    assert (universes, plans, screens) == (len(UNIVERSES), 3, 6)
 
 
 @pytest.mark.asyncio
@@ -102,9 +103,13 @@ async def test_reference_seed_is_idempotent(engine: AsyncEngine, migrated: None)
         async with async_sessionmaker(engine)() as session, session.begin():
             await seed_reference(session)
     async with async_sessionmaker(engine)() as session:
+        # Against the registry, not a literal. This said 14 and M59 seeded a fifteenth universe
+        # (`nse-sme-emerge`), so it went red the moment the catalog grew — and stayed red unseen,
+        # because this file is DB-gated and `make test` skips it. A count that tracks its source
+        # cannot drift that way again.
         assert (
             await session.execute(select(func.count()).select_from(IndexDef))
-        ).scalar_one() == 14
+        ).scalar_one() == len(UNIVERSES)
         assert (await session.execute(select(func.count()).select_from(Screen))).scalar_one() == 6
 
 

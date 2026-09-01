@@ -178,6 +178,18 @@ Disallow: /
 		#                        not query state=* }
 		#   redir @kite_login_return {$BASKFY_DESK_CALLBACK_URL:...}?request_token={...} 302
 
+		# Kite lands a BROWSER here, and the API's callback authenticates with
+		# `Authorization: Bearer` only — a browser carries a session cookie and never that header,
+		# so a real Kite return could only ever answer 401 (it did, M70's first hour). This one path
+		# therefore goes to the web app, whose route handler owns the session, reads it, and calls
+		# the API's callback server-to-server with a proper token. The endpoint that redeems a live
+		# broker credential keeps its bearer-only auth model unchanged, which is the point.
+		#
+		# Ordered BEFORE `handle /api/v1/*` because Caddy takes the first matching handle.
+		handle /api/v1/brokers/callback {
+			reverse_proxy web:3000
+		}
+
 		handle /api/v1/* {
 			reverse_proxy api:8000 {
 				# docs/08 §5: "the backtest SSE stream goes to api.baskfy.com directly on the ALB (idle

@@ -46,6 +46,12 @@ class Universe:
     name: str
     ui_order: int
     market_health: bool
+    #: Whether NSE publishes a daily index LEVEL for this universe, so it can appear on the
+    #: indices dashboard (which reads ``index_snapshot_daily``). True for every NIFTY index and
+    #: for the ETF and FNO rows. False for ``nse-sme-emerge``, which is a trading *platform*
+    #: rather than an index: it has constituents and members, but nobody computes a level for it,
+    #: so it will never have a snapshot row and must not be expected on that dashboard.
+    has_index_level: bool = True
     #: Whether the reference product's CSV export carries this universe's ``is_*`` flag columns.
     #: False for anything Baskfy defines that momoindiascreener.in never had — the export is a
     #: fixed 14-universe artefact and the regression corpus is read-only, so a universe of ours
@@ -84,6 +90,7 @@ UNIVERSES: Final[tuple[Universe, ...]] = (
     Universe(14, "etf", "All NSE Listed ETFs", 14, market_health=False),
     Universe(
         15, "nse-sme-emerge", "NSE SME (Emerge)", 15, market_health=False,
+        has_index_level=False,
         in_reference_export=False,
     ),
 )
@@ -92,6 +99,11 @@ UNIVERSE_BY_SLUG: Final[dict[str, Universe]] = {u.slug: u for u in UNIVERSES}
 UNIVERSE_SLUGS: Final[tuple[str, ...]] = tuple(u.slug for u in UNIVERSES)
 UNIVERSE_MASK_BIT: Final[dict[str, int]] = {u.slug: u.mask_bit for u in UNIVERSES}
 MARKET_HEALTH_SLUGS: Final[tuple[str, ...]] = tuple(u.slug for u in UNIVERSES if u.market_health)
+
+#: The universes NSE publishes a daily level for — everything the indices dashboard can show.
+DASHBOARD_UNIVERSES: Final[tuple[Universe, ...]] = tuple(
+    u for u in UNIVERSES if u.has_index_level
+)
 
 #: The universes the reference export's ``is_*`` columns cover, in mask-bit order.
 REFERENCE_EXPORT_UNIVERSES: Final[tuple[Universe, ...]] = tuple(

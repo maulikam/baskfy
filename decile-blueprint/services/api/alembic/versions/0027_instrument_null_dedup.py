@@ -61,6 +61,19 @@ REFERENCING: dict[str, tuple[str, tuple[str, ...]]] = {
 
 
 def upgrade() -> None:
+    # TimescaleDB caps how many compressed tuples one DML transaction may decompress
+    # (`max_tuples_decompressed_per_dml_transaction`, default 100,000). Four of the tables below —
+    # `ohlcv_daily`, `factor_daily`, `fundamental_daily`, `index_member_daily` — are hypertables,
+    # and touching 12,396 duplicate bars means decompressing every chunk that holds one: 3,406,972
+    # tuples on staging, which is what the third attempt died on.
+    #
+    # The row count actually changed is small. Measured before lifting this: of the 12,396 bars
+    # pointing at a duplicate, **zero** need moving, because the survivor already holds a bar for
+    # every one of those dates — they are the same security fetched twice a night. So this is the
+    # cost of reaching the rows, not of rewriting history, and the limit is the wrong guard for a
+    # one-off repair. Session-scoped: it ends with the migration.
+    op.execute("SET timescaledb.max_tuples_decompressed_per_dml_transaction = 0")
+
     # The survivor is the lowest id in each group: it is the row every earlier night already
     # pointed at, so keeping it moves the fewest references.
     op.execute(

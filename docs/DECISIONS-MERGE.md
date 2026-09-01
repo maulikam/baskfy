@@ -6351,3 +6351,53 @@ No production code was touched.
 **Not fixed, and visible from here:** `make lint` is red at HEAD — 52 errors, 12 auto-fixable,
 none in the files above (counted at HEAD and again with these changes: 52 both times). House
 rule 4 says a module ends with lint clean, so this is a standing violation predating M74.
+
+## M75 — four reported defects, and the fifth one found underneath ⚠ UNREVIEWED
+
+Maulik reported four things on 1 Sep 2026. Each had a different cause, and two were missing
+wiring rather than bugs. Diagnosing them surfaced a fifth that explains the night.
+
+**The connect button still said "Connect".** `_broker_out` returned `connected=False` and
+`"not_connected"` as literals, so a finished login was invisible — the catalog never read the
+session back. The connection was real: token written 19:09, worker decrypts it, Kite answers 200
+for YP8452. `_connection_state` now reads it, and a `sim_` token reports `simulated` rather than
+connected. *First attempt gated on `_WIRED_AUTHORIZE` (five brokers with an authorize URL) and
+lit up Upstox off a Kite token; the blob is Kite's alone, so `_OAUTH_COMPLETABLE` is the set that
+matches what is stored. A test caught it.*
+
+**Stale data.** `refresh_quietly` pulled the Kite session from the desk. M70-M73 moved the login
+to Baskfy, so the desk stopped logging in and every night since printed a 403 that reads like an
+infrastructure fault. It now checks Baskfy's own store first, verifying against Kite rather than
+trusting presence — a token dies overnight and yesterday's blob reads back perfectly. The desk is
+the fallback now, not the source. Its docstring also claimed a missing session is cheap "because
+the bars come from the bhavcopy": **NSE answers 403 to the Phase-A box in 0.09s**, so that
+fallback does not exist there and a missing session costs the whole night.
+
+**Empty portfolio.** `sync-holdings` read the account and returned the rows without writing them;
+`portfolio_holding` was reachable only from CSV import, manual replace and reconciliation.
+Maulik chose auto-sync into a broker-owned group. `broker_holdings_sync.py` writes into a
+`HOLDING_GROUP`/`CAPITAL` portfolio keyed to the broker account, so a poll can never overwrite
+what a person entered. Refuses rather than guesses on a non-`live` source, a degraded read, and an
+unresolvable symbol (that one costs a row and is named). Quantity is `quantity + t1 + collateral`
+per non-negotiable #2. `started_on` is set once: re-stamping it would silently restart the
+`SINCE_GROUPED` clock every night.
+
+**The fifth, and the reason tonight failed.** `task_acks_late=True` with no `visibility_timeout`
+configured, so Redis's 3600s default applied. An `acks_late` task acks when it finishes; Redis
+re-delivers an un-acked message after the timeout. **The nightly now runs longer than an hour**,
+because the SME universe roughly tripled the instrument count — a night went from ~2,980 bars to
+9,225, and at Kite's 3 req/s the fetch step alone is ~51 minutes. The same task id was observed on
+two pool processes started 19:18 and 20:19, both writing `ohlcv_daily` for the same night. Set to
+six hours: above any plausible run, below the daily cadence, and a dead worker is still covered
+immediately by `task_reject_on_worker_lost`.
+
+**Mistakes made and corrected in the course of this.** Terminated run 20 calling it "hung" — it
+was fetching normally; the `HTTP Request` log lines I counted are httpx's, and kiteconnect uses
+`requests`, and the chain's inserts are invisible until its single transaction commits. Appended
+the sync outcome to `note`, breaking an assertion that pins that string byte for byte on purpose;
+provenance and persistence are different questions and it now has its own field. Called
+`ensure_default_broker_account` — a write — before checking whether the read was persistable, so
+a DRY_RUN fixture created a `broker_account` row on the way to being refused.
+
+**To reverse:** revert the four source files. The `visibility_timeout` is the one change that
+matters operationally and is a single config line.

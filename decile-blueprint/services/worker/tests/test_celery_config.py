@@ -229,3 +229,29 @@ def _routed_queue(app: Celery, task_name: str) -> str:
     queue = options.get("queue")
     name = getattr(queue, "name", queue)
     return str(name or app.conf.task_default_queue)
+
+
+class TestTheBrokerDoesNotRedeliverALongNight:
+    """M75. `acks_late` plus Redis's one-hour default is a duplicate-run generator.
+
+    An `acks_late` task acks when it finishes. Redis makes an un-acked message visible again after
+    `visibility_timeout`, so any task that runs longer than that is handed to a second worker while
+    the first is still going. On 1 Sep 2026 the same nightly task id was seen on two pool processes
+    started an hour apart, both writing `ohlcv_daily` for the same night.
+
+    The nightly crossed that line when the SME universe roughly tripled the instrument count — a
+    night went from ~2,980 bars to 9,225, and at Kite's 3 req/s the fetch step alone is ~51 minutes.
+    """
+
+    def test_the_visibility_timeout_is_set_and_clears_a_long_run(self) -> None:
+        options = build_celery().conf.broker_transport_options
+        timeout = options.get("visibility_timeout")
+        assert timeout is not None, (
+            "no visibility_timeout: Redis falls back to 3600s, and a nightly that now takes over "
+            "an hour will be redelivered while it is still running"
+        )
+        # The observed fetch step is ~51 minutes and the whole chain is longer. Two hours is the
+        # floor at which redelivery stops being a certainty; the configured value is well past it.
+        assert timeout >= 2 * 60 * 60
+        # And not so long that a worker killed mid-night waits until tomorrow to be retried.
+        assert timeout <= 12 * 60 * 60

@@ -238,6 +238,22 @@ class TestSimulatedTokenNeverPoisonsTheRealSession:
             # triggers goes through `kite_session_cli` — the M58 bridge below — rather than
             # writing the blob itself.
             "services/api/src/baskfy_api/resync.py",  # reader (issue date only)
+            # M75's connection readback. Reviewed and admitted as a **reader**, and it was
+            # already the second audited writer — `test_the_write_helper_has_exactly_two_call_sites`
+            # above has listed it since the callback was built, because the callback is what
+            # stores a real token through the guarded helper.
+            #
+            # What is new is `_connection_state`, which opens the store to answer one question for
+            # the brokers page: is there a session behind this row. Before it, `_broker_out` said
+            # `connected=False` unconditionally, so a finished login was invisible and Maulik saw
+            # "Connect Zerodha" after connecting successfully.
+            #
+            # It reads and never writes: no `.save(`, and the token VALUE never leaves the
+            # function — only a bool and a status string do. A `sim_` token is reported as
+            # `simulated` rather than connected, which is this class's own rule applied one layer
+            # further out. (The scan is a substring match, so the mention of the store in a
+            # comment would have listed this file anyway; the `.load()` call is the real reason.)
+            "services/api/src/baskfy_api/routers/brokers.py",  # reader (presence only)
             "services/worker/src/baskfy_worker/index_backfill.py",  # reader
             "services/worker/src/baskfy_worker/kite_session_cli.py",  # M58 bridge writer
             "services/worker/src/baskfy_worker/ops.py",  # reader

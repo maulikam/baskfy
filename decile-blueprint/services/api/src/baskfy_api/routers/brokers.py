@@ -18,6 +18,7 @@ token can never be written where the real session lives (leaf 1.1.4).
 
 from __future__ import annotations
 
+import datetime as dt
 import os
 import secrets
 from decimal import Decimal
@@ -28,22 +29,31 @@ from fastapi import APIRouter, Path, Query
 from pydantic import BaseModel, Field
 
 from baskfy_api.auth import AuthenticatedDep
+from baskfy_api.broker_accounts import ensure_default_broker_account
 from baskfy_api.broker_holdings import (
     HoldingsResult,
     HoldingsSource,
     holding_row_to_dict,
     holdings_for_broker,
 )
+from baskfy_api.broker_holdings_sync import (
+    is_persistable,
+    not_persisted,
+    sync_holdings_into_portfolio,
+)
 from baskfy_api.broker_oauth import (
     consume_oauth_state,
     dry_run_enabled,
     exchange_request_token,
+    is_simulated_token,
     register_oauth_state,
     simulated_token_storage_enabled,
     simulated_token_store_for,
     store_access_token,
     token_store_for,
 )
+from baskfy_api.db import SessionDep
+from baskfy_api.metrics import IST
 from baskfy_api.problems import Problem, ProblemType
 from baskfy_api.settings import get_settings
 from baskfy_core.broker_connections import (
@@ -52,6 +62,7 @@ from baskfy_core.broker_connections import (
     broker_catalog,
     get_broker,
 )
+from baskfy_providers.errors import CredentialsMissing
 
 #: Where Kite sends the browser back. Declared once, next to the route that serves it and the
 #: value handed to Kite, because a redirect_uri that disagrees with the registered one fails at
@@ -194,6 +205,32 @@ class SyncHoldingsOut(BaseModel):
     broker_id: str
     holdings: list[BrokerHoldingOut]
     dry_run: bool
+    persisted: bool = Field(
+        default=False,
+        description=(
+            "Whether these rows were written into the broker's holding group, which is what "
+            "makes them appear on the Portfolio page. False for anything but a live read: a "
+            "fixture behind a real rupee total is indistinguishable from your own positions."
+        ),
+    )
+    written: int = Field(default=0, description="Holdings written to the portfolio.")
+    portfolio_id: int | None = Field(
+        default=None, description="The broker's holding group, once one exists."
+    )
+    sync_note: str = Field(
+        default="",
+        description=(
+            "What the persistence step did, in prose. Separate from `note`, which describes "
+            "where the rows came from — two different questions."
+        ),
+    )
+    unresolved: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Symbols the broker reported that this build could not resolve to an instrument, "
+            "named rather than dropped silently. Each costs one row, not the sync."
+        ),
+    )
     source: HoldingsSource = Field(
         description=(
             "Provenance of `holdings`, as a machine-readable value a client can switch on. "
@@ -263,7 +300,49 @@ def _gate_out() -> BrokerGateOut:
     )
 
 
+def _connection_state(broker_id: str) -> tuple[bool, str]:
+    """Is there a broker session behind this row, right now?
+
+    `_broker_out` used to answer `False`/`"not_connected"` unconditionally, so a completed login
+    was invisible: you connected, Kite came back, the token was written, and the page still said
+    "Connect". Nothing in the catalog ever read the session back.
+
+    What counts as connected is a token this deployment can actually use:
+
+    * only for a broker whose OAuth is wired here — the other nine have no session to have;
+    * the blob has to load, so an unreadable or absent file reads as disconnected rather than
+      raising into a page that has nothing to do with tokens;
+    * and a `sim_` token is NOT a connection. `exchange_request_token_stub` mints those in
+      DRY_RUN, and `TestSimulatedTokenNeverPoisonsTheRealSession` exists because a simulated
+      value that reads as real is the failure mode this whole module guards against. It reports
+      `simulated` so the UI can say which it is instead of implying a broker is on the line.
+
+    Deliberately no network call: this runs on every render of the brokers page, and "is the
+    token still good with Kite" costs a round trip and can fail for reasons that have nothing to
+    do with whether the user connected. Presence is what the page is asking about; the sync
+    endpoint is where an expired token surfaces.
+    """
+    # `_OAUTH_COMPLETABLE`, not `_WIRED_AUTHORIZE`. Five brokers have an authorize URL, but the
+    # blob this reads is Kite's — one store, keyed by BASKFY_KITE_*. Gating on the wider set made
+    # a Zerodha token report Upstox as connected, which the test below caught.
+    if broker_id not in _OAUTH_COMPLETABLE:
+        return False, "not_connected"
+    try:
+        token = token_store_for().load()
+    except CredentialsMissing:
+        # `AccessTokenStore.load` funnels all three failures into this one type — no file, no
+        # encryption key, key rotated so the blob will not decrypt. Every one of them means the
+        # same thing to this page: there is no session. Caught by its own type rather than by a
+        # bare `except`, which house rule 3 forbids, and narrow enough that a genuine bug in the
+        # store still reaches the caller instead of being reported as "not connected".
+        return False, "not_connected"
+    if is_simulated_token(token.value):
+        return False, "simulated"
+    return True, "connected"
+
+
 def _broker_out(broker: BrokerDef) -> BrokerOut:
+    connected, status = _connection_state(broker.id)
     return BrokerOut(
         id=broker.id,
         name=broker.name,
@@ -279,8 +358,8 @@ def _broker_out(broker: BrokerDef) -> BrokerOut:
             trading=broker.capabilities.trading,
         ),
         sort_order=broker.sort_order,
-        connected=False,
-        connection_status="not_connected",
+        connected=connected,
+        connection_status=status,
         adapter_wired=broker.id in _WIRED_AUTHORIZE,
     )
 
@@ -572,6 +651,7 @@ def _holdings_note(result: HoldingsResult, *, broker_name: str, dry_run: bool) -
 )
 async def sync_holdings(
     principal: AuthenticatedDep,
+    session: SessionDep,
     broker_id: Annotated[str, Path(min_length=2, max_length=32)],
 ) -> SyncHoldingsOut:
     """Return holdings for the sole-tenant caller, labelled with where they came from.
@@ -583,7 +663,7 @@ async def sync_holdings(
     non-negotiable #2 (qty + t1 + collateral). Under DRY_RUN or without a live session this
     is empty or a fixture — never crashes, never places an order.
     """
-    principal.require_user()
+    user_id = principal.require_user()
     broker = get_broker(broker_id)
     if broker is None:
         raise Problem(ProblemType.NOT_FOUND, f"No broker with id {broker_id!r}.")
@@ -591,11 +671,43 @@ async def sync_holdings(
     result = holdings_for_broker(broker_id)
     holdings = [BrokerHoldingOut.model_validate(holding_row_to_dict(row)) for row in result.rows]
     dry = dry_run_enabled()
+
+    # M75: this used to end here, returning the rows and writing nothing, so a connected broker
+    # left the Portfolio page reading "Holdings not synced yet" permanently. The write goes to a
+    # holding group the broker owns, so a person's own portfolios are never touched by a poll.
+    # Asked before any database work. A fixture, an unwired broker or an empty read is refused,
+    # and refusing must not cost a `broker_account` row written on the way to saying no.
+    if is_persistable(result):
+        broker_account_id = await ensure_default_broker_account(
+            session, user_id, broker_id=broker_id
+        )
+        sync = await sync_holdings_into_portfolio(
+            session,
+            result,
+            user_id=user_id,
+            broker_account_id=broker_account_id,
+            broker_name=broker.name,
+            as_of=dt.datetime.now(tz=IST).date(),
+        )
+        await session.commit()
+    else:
+        sync = not_persisted(result)
+
     return SyncHoldingsOut(
         broker_id=broker_id,
         holdings=holdings,
         dry_run=dry,
+        persisted=sync.persisted,
+        written=sync.written,
+        portfolio_id=sync.portfolio_id,
+        unresolved=list(sync.unresolved),
         source=result.source,
         degraded=result.degraded,
+        # `note` is left exactly as it was. It describes the PROVENANCE of the rows, and
+        # `test_the_router_still_names_the_fixture_env_var_for_a_real_fixture` asserts it byte for
+        # byte on purpose. Appending the sync outcome here broke that, and it was the wrong place
+        # anyway: whether the rows were written down is a different question from where they came
+        # from, and it has its own fields above.
         note=_holdings_note(result, broker_name=broker.name, dry_run=dry),
+        sync_note=sync.reason,
     )

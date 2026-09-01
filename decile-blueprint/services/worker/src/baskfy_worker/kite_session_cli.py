@@ -58,6 +58,7 @@ from collections.abc import Sequence
 
 import httpx
 
+from baskfy_providers.errors import CredentialsMissing
 from baskfy_providers.settings import get_provider_settings
 from baskfy_providers.tokens import AccessTokenStore
 
@@ -236,13 +237,45 @@ def pull(verify: bool = True) -> int:
     return deposit(token)
 
 
-def refresh_quietly() -> bool:
-    """Best-effort pull for callers that must not fail because of it.
+def local_session_is_live() -> bool:
+    """Does Baskfy already hold a Kite session that works right now?
 
-    The nightly pipeline uses this. A missing Kite session costs history and holdings; it does not
-    cost the day's bars, which come from the bhavcopy. So this reports and returns rather than
-    raising, and the caller carries on.
+    Presence is not the question — a Kite access token dies overnight, so yesterday's blob reads
+    back perfectly and is dead. This asks Kite, which is the only thing that can answer.
     """
+    try:
+        store = _store()
+        if not store.exists():
+            return False
+        verify_session(store.load().value)
+    except (SystemExit, CredentialsMissing):
+        return False
+    return True
+
+
+def refresh_quietly() -> bool:
+    """Make sure a Kite session exists before the nightly runs. Baskfy's own comes first.
+
+    **Why this checks locally before asking the desk (M75).** This used to call :func:`pull`
+    unconditionally, which fetches from the momentum desk. That was right while the desk owned the
+    Kite redirect. M70-M73 moved the login to Baskfy at Maulik's instruction, so the desk no longer
+    logs in — and every night since, this has reported "Kite refused the token (403). Either the
+    desk has not logged in today, or this host's IP is not whitelisted", which reads like an
+    infrastructure fault and is actually a design change nobody told this function about.
+
+    Meanwhile Baskfy's own Connect button had already written a working session to the very store
+    the pipeline reads. So the first question is whether we already have one; the desk is now the
+    fallback, not the source.
+
+    **This is no longer as best-effort as its old docstring claimed.** That text said a missing
+    session "does not cost the day's bars, which come from the bhavcopy". On the Phase-A box NSE
+    answers 403 to every request — the bhavcopy fallback does not exist there — so Kite is the
+    only path to a bar and a missing session costs the entire night. It still returns rather than
+    raises, because the failure belongs to the step that needs the session, with the instrument it
+    was fetching; but a `False` here means the night is in trouble, not merely thinner.
+    """
+    if local_session_is_live():
+        return True
     try:
         pull()
     except SystemExit as exc:

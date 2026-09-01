@@ -25,6 +25,7 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 from baskfy_execution.broker_ports import HoldingRow, normalize_holding
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api import broker_holdings
 from baskfy_api.broker_holdings import (
@@ -125,6 +126,19 @@ def principal_stub() -> MagicMock:
     return principal
 
 
+def no_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stop `sync_holdings` writing, for the tests that are about the response's provenance.
+
+    M75 gave the endpoint a second job: a live read is now written into the broker's holding
+    group. These tests predate that and assert what the response SAYS about where its rows came
+    from — `source`, `degraded`, `note`, the quantity contract — none of which depends on the
+    write. Handing them a database would make seven provenance assertions wait on Postgres to
+    check a string. Persistence has its own tests in `test_broker_holdings_sync.py`, and the
+    live-write path is exercised end to end there.
+    """
+    monkeypatch.setattr(brokers_router, "is_persistable", lambda _result: False)
+
+
 class TestLiveIsNeverLabelledFixture:
     """The money-safety fix. Every test here fails against the pre-C1 code."""
 
@@ -156,10 +170,11 @@ class TestLiveIsNeverLabelledFixture:
         self, monkeypatch: pytest.MonkeyPatch, live_session: None
     ) -> None:
         """The whole defect, at the surface a user sees: the note must not say 'fixture'."""
+        no_persistence(monkeypatch)
         monkeypatch.setattr(
             broker_holdings, "fetch_kite_holdings", lambda **_kwargs: [a_row("RELIANCE")]
         )
-        out = await sync_holdings(principal_stub(), WIRED)
+        out = await sync_holdings(principal_stub(), AsyncSession(), WIRED)
         assert out.source == "live"
         assert out.degraded is False
         assert "fixture" not in out.note.lower()
@@ -197,14 +212,14 @@ class TestUnwiredBroker:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setenv("BASKFY_BROKER_HOLDINGS_FIXTURE", str(write_fixture(tmp_path)))
-        out = await sync_holdings(principal_stub(), UNWIRED)
+        out = await sync_holdings(principal_stub(), AsyncSession(), UNWIRED)
         assert out.source == "unwired"
         assert out.holdings == []
         assert "unwired" in out.note.lower()
 
     async def test_an_unknown_broker_is_still_a_404_not_a_provenance_value(self) -> None:
         with pytest.raises(Problem) as caught:
-            await sync_holdings(principal_stub(), "not-a-broker")
+            await sync_holdings(principal_stub(), AsyncSession(), "not-a-broker")
         assert caught.value.status == 404
 
 
@@ -248,7 +263,7 @@ class TestConfiguredFixture:
     ) -> None:
         """The old note string survives — on the one path where it was ever true."""
         monkeypatch.setenv("BASKFY_BROKER_HOLDINGS_FIXTURE", str(write_fixture(tmp_path)))
-        out = await sync_holdings(principal_stub(), WIRED)
+        out = await sync_holdings(principal_stub(), AsyncSession(), WIRED)
         assert out.source == "fixture"
         assert out.degraded is False
         # Byte-identical to the pre-C1 note, deliberately: under DRY_RUN the old wording was
@@ -257,7 +272,7 @@ class TestConfiguredFixture:
 
     async def test_dry_run_without_a_fixture_is_empty_and_never_crashes(self) -> None:
         """DRY_RUN must simulate end to end — safety rail, not just a nicety."""
-        out = await sync_holdings(principal_stub(), WIRED)
+        out = await sync_holdings(principal_stub(), AsyncSession(), WIRED)
         assert out.source == "empty"
         assert out.holdings == []
         assert out.dry_run is True
@@ -374,7 +389,7 @@ class TestDegradedFallbackIsDistinguishable:
 
         monkeypatch.setenv("BASKFY_BROKER_HOLDINGS_FIXTURE", str(write_fixture(tmp_path)))
         monkeypatch.setattr(broker_holdings, "fetch_kite_holdings", _boom)
-        out = await sync_holdings(principal_stub(), WIRED)
+        out = await sync_holdings(principal_stub(), AsyncSession(), WIRED)
         assert out.source == "fixture"
         assert out.degraded is True
         assert "degraded" in out.note.lower()
@@ -538,10 +553,11 @@ class TestQuantityContractSurvives:
         self, monkeypatch: pytest.MonkeyPatch, live_session: None
     ) -> None:
         """Desk non-negotiable #2, asserted on the path that used to be mislabelled."""
+        no_persistence(monkeypatch)
         monkeypatch.setattr(
             broker_holdings, "fetch_kite_holdings", lambda **_kwargs: [a_row(quantity=10)]
         )
-        out = await sync_holdings(principal_stub(), WIRED)
+        out = await sync_holdings(principal_stub(), AsyncSession(), WIRED)
         row = out.holdings[0]
         assert out.source == "live"
         assert row.quantity == Decimal("10")

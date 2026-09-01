@@ -521,3 +521,65 @@ class TestAPulledSessionIsProvenBeforeItIsTrusted:
 
         assert kite_session_cli.pull(verify=False) == 0
         assert called == []
+
+
+class TestBaskfysOwnSessionComesFirst:
+    """M75. `refresh_quietly` asked the desk unconditionally, long after it stopped logging in.
+
+    M70-M73 moved the Kite login to Baskfy. From that night on this printed "Kite refused the token
+    (403). Either the desk has not logged in today, or this host's IP is not whitelisted" — an
+    infrastructure-sounding message for a design change — while a working session sat in the very
+    store the pipeline reads, put there by Baskfy's own Connect button.
+    """
+
+    def test_a_live_local_session_means_the_desk_is_never_asked(
+        self, configured: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        AccessTokenStore(configured, get_provider_settings().kite_token_encryption_key).save(
+            "live-local-token"
+        )
+        monkeypatch.setattr(kite_session_cli, "verify_session", lambda _token: "YP8452")
+
+        def _no(*_a: object, **_k: object) -> str:
+            raise AssertionError("the desk was contacted while Baskfy already had a session")
+
+        monkeypatch.setattr(kite_session_cli, "fetch_desk_token", _no)
+        assert kite_session_cli.refresh_quietly() is True
+
+    def test_a_dead_local_token_still_falls_back_to_the_desk(
+        self, configured: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Presence is not liveness. A Kite token dies overnight and reads back perfectly."""
+        AccessTokenStore(configured, get_provider_settings().kite_token_encryption_key).save(
+            "yesterdays-dead-token"
+        )
+        asked: list[str] = []
+
+        def _verify(token: str) -> str:
+            if token == "yesterdays-dead-token":
+                raise SystemExit("Kite refused the token (403)")
+            return "YP8452"
+
+        monkeypatch.setattr(kite_session_cli, "verify_session", _verify)
+
+        def _desk() -> str:
+            asked.append("desk")
+            return "fresh-from-desk"
+
+        monkeypatch.setattr(kite_session_cli, "fetch_desk_token", _desk)
+        assert kite_session_cli.refresh_quietly() is True
+        assert asked == ["desk"], "a dead local token must not stop the desk fallback"
+
+    def test_no_local_token_and_no_desk_reports_false_without_raising(
+        self, configured: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The nightly must not die here.
+
+        The step that needs the session reports it, with the instrument it was fetching.
+        """
+
+        def _no_desk() -> str:
+            raise SystemExit("the desk has not logged in today")
+
+        monkeypatch.setattr(kite_session_cli, "fetch_desk_token", _no_desk)
+        assert kite_session_cli.refresh_quietly() is False

@@ -219,6 +219,24 @@ def build_celery(settings: WorkerSettings | None = None) -> Celery:
         task_default_queue=QUEUE_DEFAULT,
         task_routes=TASK_ROUTES,
         task_acks_late=True,
+        # THE NIGHTLY NOW RUNS LONGER THAN AN HOUR, AND THAT BROKE `acks_late` (M75).
+        #
+        # With Redis as the broker, an un-acked message becomes visible again after
+        # `visibility_timeout` and is handed to another worker. The default is 3600s. `acks_late`
+        # means the nightly acks only when it FINISHES, so the moment the chain takes longer than
+        # an hour the broker redelivers it and a second copy starts while the first is still
+        # fetching — two writers on the same `ohlcv_daily` rows for the same night.
+        #
+        # That is not hypothetical: on 1 Sep 2026 the same task id was observed running on two
+        # pool processes, started 19:18 and 20:19, almost exactly an hour apart. The cause is that
+        # the NSE SME universe roughly tripled the instrument count (a night went from ~2,980 bars
+        # to 9,225), and at Kite's 3 req/s the fetch step alone is now ~51 minutes.
+        #
+        # Six hours: comfortably above any plausible run, comfortably below the daily cadence, so
+        # a genuinely dead worker's message still comes back the same night. A worker that dies is
+        # still covered by `task_reject_on_worker_lost` below, which redelivers immediately rather
+        # than waiting this out.
+        broker_transport_options={"visibility_timeout": 6 * 60 * 60},
         # A pipeline step that dies with its worker must be re-delivered, not lost: the
         # orchestrator's idea of "this step ran" comes from pipeline_run_step, not from the broker.
         task_reject_on_worker_lost=True,

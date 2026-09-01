@@ -69,6 +69,25 @@ export default tseslint.config(
         "error",
         { tags: ["main"], roles: ["tabpanel"], allowExpressionValues: true },
       ],
+
+      /*
+       * `depth` raised from the default 2. A radio whose label carries both a title and a line of
+       * help puts its text inside `<span><span>…`, which is three levels down and reads as "no
+       * accessible text" at the default. The labels are correct — they wrap their control and are
+       * bound to it by `htmlFor`/`id` as well — so the depth is what is wrong, not the markup.
+       * Raised rather than disabled: a label with genuinely no text still fails.
+       */
+      "jsx-a11y/label-has-associated-control": ["error", { depth: 3 }],
+
+      /*
+       * `_`-prefixed means "deliberately unused" — the convention already in the source. Next
+       * hands every route handler a request object whether the handler reads it or not, and
+       * deleting the parameter to satisfy the rule breaks the handler's own test.
+       */
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
     },
   },
   {

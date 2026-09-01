@@ -79,7 +79,10 @@ export function healthRowsFrom(
   screenRows: readonly Record<string, unknown>[],
 ): HealthRow[] {
   const bySymbol = new Map(
-    screenRows.map((row) => [String(row.symbol ?? "").toUpperCase(), row]),
+    screenRows.map((row) => [
+      (typeof row.symbol === "string" ? row.symbol : "").toUpperCase(),
+      row,
+    ]),
   );
   return holdings.map((holding) => {
     const row = bySymbol.get(holding.symbol.toUpperCase()) ?? {};

@@ -169,8 +169,9 @@ export function SizingControls({
       <fieldset className="flex flex-col gap-2">
         <legend className="text-sm font-medium">Cash</legend>
         <div className="flex flex-col gap-2" role="radiogroup" aria-label="Cash allocation">
-          <label className="flex cursor-pointer items-start gap-2 text-sm">
+          <label htmlFor="cash-sleeve-keep" className="flex cursor-pointer items-start gap-2 text-sm">
             <input
+              id="cash-sleeve-keep"
               type="radio"
               name="cash-sleeve"
               data-testid="cash-sleeve-keep"
@@ -224,8 +225,9 @@ export function SizingControls({
               ) : null}
             </label>
           ) : null}
-          <label className="flex cursor-pointer items-start gap-2 text-sm">
+          <label htmlFor="cash-sleeve-none" className="flex cursor-pointer items-start gap-2 text-sm">
             <input
+              id="cash-sleeve-none"
               type="radio"
               name="cash-sleeve"
               data-testid="cash-sleeve-none"

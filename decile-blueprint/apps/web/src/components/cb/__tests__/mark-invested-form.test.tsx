@@ -4,13 +4,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MarkInvestedForm } from "@/components/cb/mark-invested-form";
 import { parseHoldingLines } from "@/lib/investments/mark";
+import type * as MarkModule from "@/lib/investments/mark";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
 vi.mock("@/lib/investments/mark", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/investments/mark")>(
+  const actual = await vi.importActual<typeof MarkModule>(
     "@/lib/investments/mark",
   );
   return {

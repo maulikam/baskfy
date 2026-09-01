@@ -76,7 +76,7 @@ describe("the chip bar does not nest one popover inside another", () => {
 });
 
 describe("the inline factor list is usable", () => {
-  it("shows the factors, grouped by family", async () => {
+  it("shows the factors, grouped by family", () => {
     render(<FactorList factors={DEMO_FACTORS} value={null} onChange={vi.fn()} />);
     // The headings docs/08 asks for, so the list is navigable rather than 64 flat rows.
     expect(screen.getByText("Absolute return")).toBeInTheDocument();

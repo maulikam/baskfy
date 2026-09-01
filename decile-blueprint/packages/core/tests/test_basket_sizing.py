@@ -155,9 +155,7 @@ class TestTheColumnsAddUp:
 
     def test_opting_out_of_cash_deploys_the_whole_budget(self) -> None:
         """SB7: 0% is an explicit choice. The leftover is only the whole-rupee remainder."""
-        invested = size_basket(
-            candidates(3), amount=LAKH, holdings=3, cash_pct=ZERO_CASH_PCT
-        )
+        invested = size_basket(candidates(3), amount=LAKH, holdings=3, cash_pct=ZERO_CASH_PCT)
         buffered = size_basket(candidates(3), amount=LAKH, holdings=3, cash_pct=Decimal(5))
         assert invested.cash_pct == ZERO_CASH_PCT
         assert invested.deployed > buffered.deployed

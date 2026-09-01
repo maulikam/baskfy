@@ -91,8 +91,17 @@ def test_non_negotiable_1_dry_run_simulates_an_order_end_to_end(
 ) -> None:
     gw = make_gateway(tmp_path, dry_run=True)
     out = asyncio.run(
-        gw.place(symbol="RELIANCE", qty=1, side="BUY", product="CNC", order_type="LIMIT",
-                 price=100.0, exchange="NSE", tenant=TENANT, plan_tenant=TENANT)
+        gw.place(
+            symbol="RELIANCE",
+            qty=1,
+            side="BUY",
+            product="CNC",
+            order_type="LIMIT",
+            price=100.0,
+            exchange="NSE",
+            tenant=TENANT,
+            plan_tenant=TENANT,
+        )
     )
     assert out["status"] == "DRY_RUN"
     assert str(out["order_id"]).startswith("DRY-")
@@ -105,8 +114,14 @@ def test_non_negotiable_1b_dry_run_simulates_a_gtt_end_to_end(
     DRY_RUN has to cover it or "simulate end to end" is only true of half the system."""
     gw = make_gateway(tmp_path, dry_run=True)
     out = asyncio.run(
-        gw.place_gtt_stop(symbol="RELIANCE", qty=10, trigger=89.0, last_price=100.0,
-                          tenant=TENANT, plan_tenant=TENANT)
+        gw.place_gtt_stop(
+            symbol="RELIANCE",
+            qty=10,
+            trigger=89.0,
+            last_price=100.0,
+            tenant=TENANT,
+            plan_tenant=TENANT,
+        )
     )
     assert out["status"] == DRY_RUN_GTT
     assert out["trigger"] == 89.0
@@ -116,9 +131,7 @@ def test_non_negotiable_1c_dry_run_simulates_a_cancellation_too(
     tmp_path: pathlib.Path,
 ) -> None:
     gw = make_gateway(tmp_path, dry_run=True)
-    out = asyncio.run(
-        gw.delete_gtt(gtt_id=1, symbol="RELIANCE", tenant=TENANT, plan_tenant=TENANT)
-    )
+    out = asyncio.run(gw.delete_gtt(gtt_id=1, symbol="RELIANCE", tenant=TENANT, plan_tenant=TENANT))
     assert out["status"] == "DRY_RUN_GTT_DELETE"
 
 
@@ -152,8 +165,14 @@ def test_non_negotiable_4b_a_stop_can_be_armed_through_the_gateway(
     assert hasattr(OrderGateway, "delete_gtt")
     gw = make_gateway(tmp_path, dry_run=True)
     out = asyncio.run(
-        gw.place_gtt_stop(symbol="RELIANCE", qty=10, trigger=89.0, last_price=100.0,
-                          tenant=TENANT, plan_tenant=TENANT)
+        gw.place_gtt_stop(
+            symbol="RELIANCE",
+            qty=10,
+            trigger=89.0,
+            last_price=100.0,
+            tenant=TENANT,
+            plan_tenant=TENANT,
+        )
     )
     assert out["status"] in ("GTT_PLACED", DRY_RUN_GTT)
 
@@ -174,8 +193,17 @@ def test_non_negotiable_5_product_gates_block_inside_the_gateway(
 ) -> None:
     gw = make_gateway(tmp_path, dry_run=False, **gates)
     out = asyncio.run(
-        gw.place(symbol="RELIANCE", qty=1, side="BUY", product=product, order_type="LIMIT",
-                 price=100.0, exchange=exchange, tenant=TENANT, plan_tenant=TENANT)
+        gw.place(
+            symbol="RELIANCE",
+            qty=1,
+            side="BUY",
+            product=product,
+            order_type="LIMIT",
+            price=100.0,
+            exchange=exchange,
+            tenant=TENANT,
+            plan_tenant=TENANT,
+        )
     )
     assert out["status"] == "BLOCKED"
     assert why in str(out["error"])
@@ -186,16 +214,30 @@ def test_non_negotiable_5b_a_gtt_is_gated_on_the_same_switch(
 ) -> None:
     gw = make_gateway(tmp_path, dry_run=False, options_enabled=False)
     out = asyncio.run(
-        gw.place_gtt_stop(symbol="NIFTY25SEPFUT", qty=50, trigger=89.0, last_price=100.0,
-                          exchange="NFO", tenant=TENANT, plan_tenant=TENANT)
+        gw.place_gtt_stop(
+            symbol="NIFTY25SEPFUT",
+            qty=50,
+            trigger=89.0,
+            last_price=100.0,
+            exchange="NFO",
+            tenant=TENANT,
+            plan_tenant=TENANT,
+        )
     )
     assert out["status"] == "BLOCKED"
     assert "F&O disabled" in str(out["error"])
     # An OPTION on the same exchange is refused one layer earlier, by the overnight guard —
     # the same precedence `place()` uses, so enabling options cannot open a GTT door.
     out = asyncio.run(
-        gw.place_gtt_stop(symbol="NIFTY25SEP24000CE", qty=50, trigger=89.0, last_price=100.0,
-                          exchange="NFO", tenant=TENANT, plan_tenant=TENANT)
+        gw.place_gtt_stop(
+            symbol="NIFTY25SEP24000CE",
+            qty=50,
+            trigger=89.0,
+            last_price=100.0,
+            exchange="NFO",
+            tenant=TENANT,
+            plan_tenant=TENANT,
+        )
     )
     assert out["status"] == "BLOCKED"
     assert "past the close" in str(out["error"])
@@ -216,8 +258,12 @@ def test_non_negotiable_6_the_four_layers_are_in_order() -> None:
     """guards -> risk -> idempotency -> rate limits. Reordering them is how an untouchable
     instrument reaches a network call."""
     src = (SRC / "gateway.py").read_text(encoding="utf-8")
-    marks = ["layer 1: untouchables", "layer 2: risk",
-             "layer 3: idempotency", "layer 4: rate limits"]
+    marks = [
+        "layer 1: untouchables",
+        "layer 2: risk",
+        "layer 3: idempotency",
+        "layer 4: rate limits",
+    ]
     positions = [src.index(m) for m in marks]
     assert positions == sorted(positions)
 
@@ -226,8 +272,12 @@ def test_non_negotiable_6b_the_gtt_path_has_the_same_four_layers() -> None:
     """CLAUDE.md's caveat on rule 6 — "the gateway has no GTT method yet" — is what leaf 1.2.1
     closed. The GTT path carries the layers under their own names so this can be checked."""
     src = (SRC / "gateway.py").read_text(encoding="utf-8")
-    marks = ["GTT layer 1: untouchables", "GTT layer 2: risk",
-             "GTT layer 3: idempotency", "GTT layer 4: rate limits"]
+    marks = [
+        "GTT layer 1: untouchables",
+        "GTT layer 2: risk",
+        "GTT layer 3: idempotency",
+        "GTT layer 4: rate limits",
+    ]
     positions = [src.index(m) for m in marks]
     assert positions == sorted(positions)
 
@@ -246,8 +296,11 @@ def test_non_negotiable_6c_nothing_in_this_package_reaches_a_gtt_outside_the_gat
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-                    and node.func.attr in verbs):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in verbs
+            ):
                 offenders.append(f"{path.name}:{node.lineno} {node.func.attr}")
     assert offenders == [], f"{offenders} reach the broker outside the gateway"
 
@@ -261,9 +314,18 @@ def test_non_negotiable_6d_a_replayed_client_id_cannot_double_send(
 
     def once() -> dict[str, object]:
         return asyncio.run(
-            gw.place(symbol="RELIANCE", qty=1, side="BUY", product="CNC", order_type="LIMIT",
-                     price=100.0, exchange="NSE", client_id="PLAN1:RELIANCE",
-                     tenant=TENANT, plan_tenant=TENANT)
+            gw.place(
+                symbol="RELIANCE",
+                qty=1,
+                side="BUY",
+                product="CNC",
+                order_type="LIMIT",
+                price=100.0,
+                exchange="NSE",
+                client_id="PLAN1:RELIANCE",
+                tenant=TENANT,
+                plan_tenant=TENANT,
+            )
         )
 
     assert once()["status"] == "DRY_RUN"
@@ -282,8 +344,17 @@ def test_non_negotiable_7_an_untouchable_is_refused_before_any_network_call(
     gw = make_gateway(tmp_path, dry_run=False)
     with pytest.raises(UntouchableInstrumentError):
         asyncio.run(
-            gw.place(symbol=symbol, qty=1, side="SELL", product="CNC", order_type="LIMIT",
-                     price=7000.0, exchange="NSE", tenant=TENANT, plan_tenant=TENANT)
+            gw.place(
+                symbol=symbol,
+                qty=1,
+                side="SELL",
+                product="CNC",
+                order_type="LIMIT",
+                price=7000.0,
+                exchange="NSE",
+                tenant=TENANT,
+                plan_tenant=TENANT,
+            )
         )
 
 
@@ -296,10 +367,14 @@ def test_non_negotiable_7b_an_untouchable_is_refused_a_gtt_in_both_directions(
     gw = make_gateway(tmp_path, dry_run=False)
     with pytest.raises(UntouchableInstrumentError):
         asyncio.run(
-            gw.place_gtt_stop(symbol=symbol, qty=1, trigger=6300.0, last_price=7000.0,
-                              tenant=TENANT, plan_tenant=TENANT)
+            gw.place_gtt_stop(
+                symbol=symbol,
+                qty=1,
+                trigger=6300.0,
+                last_price=7000.0,
+                tenant=TENANT,
+                plan_tenant=TENANT,
+            )
         )
     with pytest.raises(UntouchableInstrumentError):
-        asyncio.run(
-            gw.delete_gtt(gtt_id=1, symbol=symbol, tenant=TENANT, plan_tenant=TENANT)
-        )
+        asyncio.run(gw.delete_gtt(gtt_id=1, symbol=symbol, tenant=TENANT, plan_tenant=TENANT))

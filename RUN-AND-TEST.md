@@ -122,6 +122,33 @@ unmatched / failed` — and names the failures so a second pass can target them.
 means those five add up to the scope; anything else means a symbol went missing and the run
 should not be believed.
 
+**Never run a bare `next build` while `make web` is running.** Next writes a production build
+into `.next`, which is the directory the dev server owns, and the result is a *mixed* tree: the
+page still returns 200 but its `main-app.js` and `polyfills.js` 404 as `text/plain`, React never
+hydrates, and every button and tab on the page looks disabled. It reads exactly like a product
+bug and is not one.
+
+The repo already has the convention that avoids it — `next.config.ts` reads
+`BASKFY_WEB_DIST_DIR`, and `tsconfig.json` expects `.next-build`, `.next-e2e`, `.next-gate`:
+
+```bash
+cd decile-blueprint/apps/web
+BASKFY_WEB_DIST_DIR=.next-build pnpm exec next build     # never touches the dev server
+```
+
+If you hit it anyway: `pkill -f "next dev"; pkill -f next-server; rm -rf .next`, then `make web`.
+Kill both — `pkill -f "next dev"` alone leaves the `next-server` child alive and serving from the
+clobbered directory. Verify with:
+
+```bash
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' \
+  http://localhost:3000/_next/static/chunks/main-app.js     # want 200 application/javascript
+```
+
+A stale `.next*/types/validator.ts` causes the same class of confusion in `pnpm run lint`: it
+still imports pages that were deleted, and `tsc` reports errors that look like source errors.
+Same fix — remove the stale build dir.
+
 **If it stalls.** Observed once during the first real fill: the log starts repeating
 `provider retry`, the archived-file count stops rising, and the process sits at 0% CPU — while
 `curl` against the same NSE endpoint answers 200 in 0.3s. A stuck HTTP connection, not NSE. Kill

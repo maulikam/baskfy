@@ -54,7 +54,11 @@ class TestChunking:
 
     def test_d5_history_is_three_kite_requests(self) -> None:
         """D5: backfill from 2011-01-01. Kite's 2000-day cap makes that three windows."""
-        assert deep.DEFAULT_START == dt.date(2011, 1, 1)
+        # D5's backfill floor. Named rather than inlined: ruff reads an ALL-CAPS attribute as
+        # the constant and wants it on the right (SIM300), which only reads well if the other
+        # side says what it is.
+        d5_floor = dt.date(2011, 1, 1)
+        assert d5_floor == deep.DEFAULT_START
         windows = deep.chunk_windows(deep.DEFAULT_START, dt.date(2026, 8, 21))
         assert len(windows) == 3
         assert windows[0][0] == dt.date(2011, 1, 1)

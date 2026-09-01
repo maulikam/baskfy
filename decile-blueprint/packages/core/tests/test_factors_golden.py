@@ -25,12 +25,11 @@ make the other pass.
 
 from __future__ import annotations
 
-from typing import Final
-
 import datetime as dt
 import math
 import time
 from decimal import Decimal
+from typing import Final
 
 import numpy as np
 import polars as pl
@@ -699,7 +698,8 @@ class TestRegistry:
         how a guard becomes a chore and then a rubber stamp.
         """
         assert DOCUMENTED_FACTOR_COUNT == 62
-        assert NAMED_FACTOR_COUNT == 64 + len(FACTORS_ADDED_SINCE_DOCS)
+        expected_named = 64 + len(FACTORS_ADDED_SINCE_DOCS)
+        assert expected_named == NAMED_FACTOR_COUNT
         assert family_counts()["non_momentum"] == 8
 
     def test_the_column_picker_count_disagrees_the_same_way(self) -> None:

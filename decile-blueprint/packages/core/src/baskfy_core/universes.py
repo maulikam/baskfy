@@ -89,7 +89,11 @@ UNIVERSES: Final[tuple[Universe, ...]] = (
     Universe(13, "nifty-fno", "NIFTY FNO", 12, market_health=False),
     Universe(14, "etf", "All NSE Listed ETFs", 14, market_health=False),
     Universe(
-        15, "nse-sme-emerge", "NSE SME (Emerge)", 15, market_health=False,
+        15,
+        "nse-sme-emerge",
+        "NSE SME (Emerge)",
+        15,
+        market_health=False,
         has_index_level=False,
         in_reference_export=False,
     ),
@@ -101,9 +105,7 @@ UNIVERSE_MASK_BIT: Final[dict[str, int]] = {u.slug: u.mask_bit for u in UNIVERSE
 MARKET_HEALTH_SLUGS: Final[tuple[str, ...]] = tuple(u.slug for u in UNIVERSES if u.market_health)
 
 #: The universes NSE publishes a daily level for — everything the indices dashboard can show.
-DASHBOARD_UNIVERSES: Final[tuple[Universe, ...]] = tuple(
-    u for u in UNIVERSES if u.has_index_level
-)
+DASHBOARD_UNIVERSES: Final[tuple[Universe, ...]] = tuple(u for u in UNIVERSES if u.has_index_level)
 
 #: The universes the reference export's ``is_*`` columns cover, in mask-bit order.
 REFERENCE_EXPORT_UNIVERSES: Final[tuple[Universe, ...]] = tuple(

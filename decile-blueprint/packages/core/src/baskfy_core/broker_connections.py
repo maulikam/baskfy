@@ -37,9 +37,7 @@ __all__ = [
 #: ``not_applicable``  there is nothing to connect; the basket opens in the session you have.
 #: ``not_available``   this cannot be done at all on this integration, and will not be.
 #: ``handoff``         you do it, in your own terminal, after reviewing what we prepared.
-Capability = Literal[
-    "ready", "planned", "partner", "not_applicable", "not_available", "handoff"
-]
+Capability = Literal["ready", "planned", "partner", "not_applicable", "not_available", "handoff"]
 
 
 @dataclass(frozen=True, slots=True)

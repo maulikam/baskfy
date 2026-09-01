@@ -8,3 +8,33 @@ baskfy-safety/
 
 # tools/coverage-combined.sh's scratch directory: two suites' raw coverage data, combined.
 .coverage-combined/
+
+# Deployment environment files (docs/08 Phase A). The sub-trees ignore their own `.env*`; these
+# live at the root because `infra/docker/compose.prod.yml` reads them from here, and the root
+# ignore file did not cover them — `.env.staging` showed up as untracked, one `git add -A` away
+# from a database password in history. `.env.example` and `.env.staging.example` are the
+# committed contracts and are exempt.
+.env
+.env.*
+!.env.example
+!.env.staging.example
+.secrets/
+*.pem
+*.key
+
+# Operational output from the AWS deploy. `ops/aws-backups/` holds policy snapshots (not secret,
+# and worth keeping); the password file is a secret and must never be tracked. Written broadly on
+# purpose — this is the same shape of gap that put a Fernet key in origin/developer (§20 of
+# NEEDS-MAULIK), where the ciphertext was ignored and the key beside it was not.
+ops/*password*
+ops/*secret*
+ops/*.pem
+ops/*.key
+
+# Go-rewrite parity dumpers compile under tools/parity
+__pycache__/
+
+# `/graphify`'s output: a generated knowledge graph plus a 1,000-file JSON cache (~75 MB). It is
+# rebuilt from the repo on demand, so tracking it would put a large derived artifact — and a fresh
+# merge conflict on every run — into a repo whose history is the thing being preserved (D2).
+graphify-out/

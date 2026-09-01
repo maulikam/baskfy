@@ -72,9 +72,14 @@ class TestItCannotReachTheOrderPath:
         # `baskfy_api.desk_schema` — it was written out separately in four routers, and four
         # copies of "which schema is the desk's" is three chances to disagree. What matters to
         # this test is unchanged: every query in this module is qualified by it.
+        from baskfy_api.desk_schema import DESK_SCHEMA  # noqa: PLC0415 - local to this test
+
         assert "from baskfy_api.desk_schema import" in source
         assert "DESK_SCHEMA" in source
-        assert desk.DESK_SCHEMA == "desk"
+        # Read from the module that declares it, not through the router's binding: the two lines
+        # above already prove the router imports this very object, and reaching through it was an
+        # implicit re-export mypy strict rejects.
+        assert DESK_SCHEMA == "desk"
         # No query may name a schema this router is not supposed to read.
         assert 'from "' not in source.replace('from "{DESK_SCHEMA}"', ""), (
             "a query names a schema literally instead of going through DESK_SCHEMA"
@@ -119,9 +124,9 @@ class TestADeploymentWithNoDeskHistory:
         500. Hiding those behind "nothing here yet" turns an outage into an empty page that
         nobody investigates, which is strictly worse than the 500 it replaced.
         """
-        from sqlalchemy.exc import ProgrammingError
+        from sqlalchemy.exc import ProgrammingError  # noqa: PLC0415 - local to this test
 
-        from baskfy_api.desk_schema import is_missing_desk_data
+        from baskfy_api.desk_schema import is_missing_desk_data  # noqa: PLC0415
 
         class UndefinedTableError(Exception):
             pass
@@ -139,19 +144,17 @@ class TestADeploymentWithNoDeskHistory:
 
     def test_every_desk_route_is_gated_on_the_schema_existing(self) -> None:
         """On the router, not repeated per endpoint — so the seventh route cannot forget it."""
-        from baskfy_api.routers.desk import router
+        from baskfy_api.routers.desk import router  # noqa: PLC0415 - local to this test
 
-        names = [
-            getattr(d.dependency, "__name__", "") for d in (router.dependencies or [])
-        ]
+        names = [getattr(d.dependency, "__name__", "") for d in (router.dependencies or [])]
         assert "require_desk_schema" in names, names
 
     def test_one_definition_of_which_schema_the_desk_is(self) -> None:
         """It was written out as a string literal in four routers. Three chances to disagree."""
-        import inspect as _inspect
+        import inspect as _inspect  # noqa: PLC0415 - only this test reads source
 
-        from baskfy_api.desk_schema import DESK_SCHEMA
-        from baskfy_api.routers import baskets as baskets_router
+        from baskfy_api.desk_schema import DESK_SCHEMA  # noqa: PLC0415
+        from baskfy_api.routers import baskets as baskets_router  # noqa: PLC0415
 
         assert DESK_SCHEMA == "desk"
         for module in (desk, baskets_router):

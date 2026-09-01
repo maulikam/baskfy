@@ -145,8 +145,6 @@ function hasData(value: unknown): boolean {
   return value !== null && value !== undefined && value !== "";
 }
 
-const hasOwn = Object.prototype.hasOwnProperty;
-
 /**
  * The subset of `candidateColumns` for which no row in `rows` carries data.
  *
@@ -167,7 +165,7 @@ function columnsWithoutData(
   for (const row of rows) {
     for (const key of candidates) {
       // Deleting the entry the iterator is currently on is well-defined for a Set.
-      if (hasOwn.call(row, key) && hasData(row[key])) candidates.delete(key);
+      if (Object.hasOwn(row, key) && hasData(row[key])) candidates.delete(key);
     }
     if (candidates.size === 0) break;
   }

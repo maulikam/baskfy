@@ -46,7 +46,7 @@ class TestEveryMessageIsBranded:
     def test_the_mark_is_decorative_to_a_screen_reader(self, name: str, build: Build) -> None:
         # The word sits beside it in real text. A non-empty alt would say "Baskfy" twice.
         for tag in re.findall(r"<img[^>]*>", build().html):
-            assert 'alt=""' in tag, f"{name}: the mark should be alt=\"\", got {tag}"
+            assert 'alt=""' in tag, f'{name}: the mark should be alt="", got {tag}'
 
 
 class TestTheMarkIsFetchable:

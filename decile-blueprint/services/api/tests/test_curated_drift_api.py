@@ -52,7 +52,9 @@ async def test_scan_raises_drift_pending(monkeypatch: pytest.MonkeyPatch) -> Non
     ) -> tuple[list[BrokerHolding], dict[int, str]]:
         return broker, {1: "CUPID"}
 
-    async def _ledger_rows(_session: object, _id: int) -> tuple:
+    async def _ledger_rows(
+        _session: object, _id: int
+    ) -> tuple[list[LedgerHolding], dict[int, Decimal], dict[int, str]]:
         return ledger, {1: Decimal("80")}, {1: "CUPID"}
 
     monkeypatch.setattr(curated_drift, "_resolve_broker", _resolve)
@@ -99,7 +101,9 @@ async def test_fix_rebases_qty(monkeypatch: pytest.MonkeyPatch) -> None:
     ) -> tuple[list[BrokerHolding], dict[int, str]]:
         return broker, {1: "CUPID"}
 
-    async def _ledger_rows(_session: object, _id: int) -> tuple:
+    async def _ledger_rows(
+        _session: object, _id: int
+    ) -> tuple[list[LedgerHolding], dict[int, Decimal], dict[int, str]]:
         return ledger, {1: Decimal("80")}, {1: "CUPID"}
 
     monkeypatch.setattr(curated_drift, "_resolve_broker", _resolve)

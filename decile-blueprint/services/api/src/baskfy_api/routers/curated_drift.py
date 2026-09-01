@@ -84,13 +84,17 @@ async def _instruments_by_symbol(
 async def _desk_holdings(session: AsyncSession) -> list[BrokerHoldingIn]:
     try:
         row = (
-            await session.execute(
-                text(
-                    f'select holdings_json from "{DESK_SCHEMA}".snapshots '
-                    "order by date desc limit 1"
+            (
+                await session.execute(
+                    text(
+                        f'select holdings_json from "{DESK_SCHEMA}".snapshots '
+                        "order by date desc limit 1"
+                    )
                 )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
     except (ProgrammingError, SQLAlchemyError):
         return []
     if row is None:
@@ -151,9 +155,7 @@ async def _ledger(
     instruments = list(
         (
             await session.scalars(
-                select(Instrument).where(
-                    Instrument.id.in_([int(h.instrument_id) for h in rows])
-                )
+                select(Instrument).where(Instrument.id.in_([int(h.instrument_id) for h in rows]))
             )
         ).all()
     )
@@ -264,9 +266,7 @@ async def fix_investment_drift(
     existing_rows = list(
         (
             await session.scalars(
-                select(CbInvestmentHolding).where(
-                    CbInvestmentHolding.investment_id == inv.id
-                )
+                select(CbInvestmentHolding).where(CbInvestmentHolding.investment_id == inv.id)
             )
         ).all()
     )

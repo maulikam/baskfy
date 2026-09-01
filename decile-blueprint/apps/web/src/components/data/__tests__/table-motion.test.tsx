@@ -163,6 +163,7 @@ describe("sort FLIP", () => {
 
     await act(async () => {
       vi.advanceTimersByTime(SORT_FLIP_MS);
+      await Promise.resolve();
     });
 
     const after = document.querySelector("[data-row-index]");

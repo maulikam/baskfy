@@ -52,6 +52,35 @@ API_DIR = Path(__file__).resolve().parents[1]
 
 CB_TABLES = frozenset(name for name in Base.metadata.tables if name.startswith("cb_"))
 
+#: The tables docs/smallcase/03-data-model.md declares, written out rather than counted.
+#: The count this replaced (``== 18``) was doing real work — it caught
+#: ``cb_manager_revenue_share``, added in ef50c09 and never written into the spec — but a bare
+#: number cannot say WHICH table drifted, and the cheapest way to make it pass is to bump it.
+#: Naming them means a new table fails here until somebody adds it in both places (house rule 4).
+SPEC_CB_TABLES: Final = frozenset(
+    {
+        "cb_basket",
+        "cb_basket_version",
+        "cb_collection",
+        "cb_constituent",
+        "cb_dividend",
+        "cb_fee_ledger",
+        "cb_investment",
+        "cb_investment_holding",
+        "cb_manager",
+        "cb_manager_revenue_share",
+        "cb_metrics",
+        "cb_order_batch",
+        "cb_pending_action",
+        "cb_plan",
+        "cb_sip_plan",
+        "cb_subscription",
+        "cb_update_post",
+        "cb_user_rebalance_state",
+        "cb_watchlist_item",
+    }
+)
+
 pytestmark = [
     pytest.mark.db,
     pytest.mark.skipif(
@@ -90,7 +119,11 @@ async def test_migration_creates_all_cb_tables(engine: AsyncEngine, migrated: No
         )
         present = {r[0] for r in rows}
     assert present >= CB_TABLES
-    assert len(CB_TABLES) == 18
+    assert CB_TABLES == SPEC_CB_TABLES, (
+        "the models and docs/smallcase/03-data-model.md disagree — "
+        f"undocumented: {sorted(CB_TABLES - SPEC_CB_TABLES)}, "
+        f"documented but missing from the models: {sorted(SPEC_CB_TABLES - CB_TABLES)}"
+    )
 
 
 @pytest.mark.asyncio

@@ -42,7 +42,8 @@ def main(argv: list[str] | None = None) -> int:
     day = dt.date.fromisoformat(args.date) if args.date else dt.datetime.now(tz=IST).date()
     result = asyncio.run(_run(day))
     print(json.dumps(result, indent=2, default=str))
-    return 0 if int(result.get("baskets", 0)) >= 0 else 1
+    baskets = result.get("baskets", 0)
+    return 0 if isinstance(baskets, int) and baskets >= 0 else 1
 
 
 if __name__ == "__main__":

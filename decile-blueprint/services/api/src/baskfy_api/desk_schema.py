@@ -72,7 +72,7 @@ async def require_desk_schema(session: SessionDep) -> None:
     if present is None:
         # Imported here rather than at module scope: `problems` is the HTTP vocabulary and this
         # module is otherwise usable by anything that talks to the desk schema.
-        from baskfy_api.problems import Problem, ProblemType
+        from baskfy_api.problems import Problem, ProblemType  # noqa: PLC0415
 
         raise Problem(
             ProblemType.NOT_FOUND,

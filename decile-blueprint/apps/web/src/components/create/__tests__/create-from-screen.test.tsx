@@ -169,7 +169,7 @@ describe("CreateFromScreen — the profile suggests, the investor decides", () =
     fireEvent.change(count, { target: { value: "8" } });
     expect(screen.getByText(/Yours, not the suggested 20/)).toBeInTheDocument();
 
-    await fillAmount(100_000);
+    fillAmount(100_000);
     await user.click(screen.getByTestId("save-from-screen"));
     expect(createBasketFromScreen).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -191,7 +191,7 @@ describe("CreateFromScreen — the profile suggests, the investor decides", () =
       <CreateFromScreen screens={TEMPLATES} initialScreenId="exmpl0000001" />,
     );
 
-    await fillAmount(100_000);
+    fillAmount(100_000);
     await user.click(screen.getByTestId("save-from-screen"));
     expect(createBasketFromScreen).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -203,7 +203,9 @@ describe("CreateFromScreen — the profile suggests, the investor decides", () =
       }),
     );
     expect(createBasketFromScreen).toHaveBeenCalledWith(
-      expect.not.objectContaining({ custom_weights: expect.anything() }),
+      // vitest types its matchers as `any`; narrowing to `unknown` keeps the assertion and
+      // stops the `any` from spreading into the object literal.
+      expect.not.objectContaining({ custom_weights: expect.anything() as unknown }),
     );
   });
 });
@@ -218,7 +220,7 @@ describe("CreateFromScreen — cash sleeve (SB7)", () => {
     expect(screen.getByTestId("cash-sleeve-keep")).toBeChecked();
     expect(screen.getByText(/Suggested 5%/)).toBeInTheDocument();
 
-    await fillAmount(100_000);
+    fillAmount(100_000);
     await user.click(screen.getByTestId("cash-sleeve-none"));
     expect(screen.getByTestId("cash-sleeve-none")).toBeChecked();
     expect(screen.getByText(/rounding remainder stays uninvested/i)).toBeInTheDocument();
@@ -235,7 +237,7 @@ describe("CreateFromScreen — cash sleeve (SB7)", () => {
       <CreateFromScreen screens={TEMPLATES} initialScreenId="exmpl0000001" />,
     );
 
-    await fillAmount(100_000);
+    fillAmount(100_000);
     await user.click(screen.getByTestId("cash-sleeve-none"));
     await user.click(screen.getByTestId("save-from-screen"));
 
@@ -275,7 +277,7 @@ describe("CreateFromScreen — how the money is split", () => {
     );
 
     await user.click(screen.getByTestId("method-rank"));
-    await fillAmount(250_000);
+    fillAmount(250_000);
     await user.click(screen.getByTestId("save-from-screen"));
     expect(createBasketFromScreen).toHaveBeenCalledWith(
       expect.objectContaining({ method: "RANK", amount: 250_000 }),
@@ -304,14 +306,14 @@ describe("CreateFromScreen — how the money is split", () => {
     expect(screen.queryByLabelText("NOT-ON-SCREEN weight")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("SYM1 weight"), { target: { value: "40" } });
-    await fillAmount(100_000);
+    fillAmount(100_000);
     await user.click(screen.getByTestId("save-from-screen"));
     expect(createBasketFromScreen).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "CUSTOM",
         custom_weights: expect.arrayContaining([
           expect.objectContaining({ symbol: "SYM1", weight: 40 }),
-        ]),
+        ]) as unknown,
       }),
     );
     const posted = vi.mocked(createBasketFromScreen).mock.calls[0]?.[0];

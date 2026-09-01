@@ -16,8 +16,10 @@ weekend did the same, which is how an alert becomes noise.
 from __future__ import annotations
 
 import datetime as dt
+from typing import NoReturn
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_worker import ops
 from baskfy_worker.steps import StepOutcome
@@ -48,7 +50,7 @@ class TestTheBarStepFallsBackToTheBhavcopy:
         """
         called: dict[str, object] = {}
 
-        async def fake_backfill(provider, window, **kwargs):  # noqa: ANN001, ANN003
+        async def fake_backfill(provider: object, window: DateWindow, **kwargs: object) -> _Report:
             called["window"] = window
             return _Report(bars_written=2516, days_written=1)
 
@@ -57,7 +59,11 @@ class TestTheBarStepFallsBackToTheBhavcopy:
         )
         outcome = StepOutcome()
         written = await run_fetch_daily_bars(
-            session=None, provider=_BhavcopyOnly(), outcome=outcome, instruments=[], window=WINDOW
+            session=AsyncSession(),
+            provider=_BhavcopyOnly(),
+            outcome=outcome,
+            instruments=[],
+            window=WINDOW,
         )
         assert written == 2516
         assert called["window"] == WINDOW
@@ -71,7 +77,7 @@ class TestTheBarStepFallsBackToTheBhavcopy:
         leave them unable to tell a Kite night from a bhavcopy one.
         """
 
-        async def fake_backfill(provider, window, **kwargs):  # noqa: ANN001, ANN003
+        async def fake_backfill(provider: object, window: DateWindow, **kwargs: object) -> _Report:
             return _Report(bars_written=2516, days_written=1)
 
         monkeypatch.setattr(
@@ -79,7 +85,11 @@ class TestTheBarStepFallsBackToTheBhavcopy:
         )
         outcome = StepOutcome()
         await run_fetch_daily_bars(
-            session=None, provider=_BhavcopyOnly(), outcome=outcome, instruments=[], window=WINDOW
+            session=AsyncSession(),
+            provider=_BhavcopyOnly(),
+            outcome=outcome,
+            instruments=[],
+            window=WINDOW,
         )
         # `StepOutcome.detail` is the JSONB an operator reads back off `pipeline_run_step`.
         assert outcome.detail["fallback"] == "bhavcopy"
@@ -90,7 +100,11 @@ class TestTheBarStepFallsBackToTheBhavcopy:
         """The honest dead end. It must not raise — the quality gate owns 'is this publishable'."""
         outcome = StepOutcome()
         written = await run_fetch_daily_bars(
-            session=None, provider=_NoBhavcopy(), outcome=outcome, instruments=[], window=WINDOW
+            session=AsyncSession(),
+            provider=_NoBhavcopy(),
+            outcome=outcome,
+            instruments=[],
+            window=WINDOW,
         )
         assert written == 0
 
@@ -113,8 +127,8 @@ class TestTheScheduleRespectsTheCalendar:
         2026-08-28 was a Friday and shut. A `weekday() < 5` check would have run the pipeline on
         it, which is exactly what happened.
         """
-        import ast
-        import inspect
+        import ast  # noqa: PLC0415 - only this test reads source
+        import inspect  # noqa: PLC0415 - only this test reads source
 
         # The *code*, with the docstring stripped — this test's own first draft failed because
         # the docstring says "no weekday rule knows them", which is prose about the bug rather
@@ -135,8 +149,8 @@ class TestTheScheduleRespectsTheCalendar:
         running a phantom one produces a failed run and a CRITICAL alert for a day the exchange
         was closed. So an absent calendar row must read as "do not run".
         """
-        import ast
-        import inspect
+        import ast  # noqa: PLC0415 - only this test reads source
+        import inspect  # noqa: PLC0415 - only this test reads source
 
         tree = ast.parse(inspect.getsource(ops.is_trading_day).strip())
         fn = tree.body[0]
@@ -162,19 +176,19 @@ class TestItDoesNotAskTenThousandTimes:
     async def test_it_stops_after_the_first_credentials_failure(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from baskfy_providers.errors import CredentialsMissing
+        from baskfy_providers.errors import CredentialsMissing  # noqa: PLC0415 - local to this test
 
         attempts: list[str] = []
 
         class _Unconfigured:
-            def daily_bars(self, token, start, end):  # noqa: ANN001, ANN202
+            def daily_bars(self, token: int, start: dt.date, end: dt.date) -> NoReturn:
                 attempts.append(str(token))
                 raise CredentialsMissing("BASKFY_KITE_API_KEY is empty")
 
-            def bhavcopy(self, on):  # noqa: ANN001, ANN202
+            def bhavcopy(self, on: dt.date) -> NoReturn:
                 raise AssertionError("not reached in this test")
 
-        async def fake_backfill(provider, window, **kwargs):  # noqa: ANN001, ANN003
+        async def fake_backfill(provider: object, window: DateWindow, **kwargs: object) -> _Report:
             return _Report(bars_written=2516, days_written=1)
 
         monkeypatch.setattr(
@@ -184,7 +198,7 @@ class TestItDoesNotAskTenThousandTimes:
         outcome = StepOutcome()
 
         await run_fetch_daily_bars(
-            session=None,
+            session=AsyncSession(),
             provider=_Unconfigured(),
             outcome=outcome,
             instruments=instruments,
@@ -196,19 +210,19 @@ class TestItDoesNotAskTenThousandTimes:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """The other side. One bad symbol must not abandon the other 499."""
-        from baskfy_providers.errors import ProviderError
+        from baskfy_providers.errors import ProviderError  # noqa: PLC0415 - local to this test
 
         attempts: list[str] = []
 
         class _OneBadSymbol:
-            def daily_bars(self, token, start, end):  # noqa: ANN001, ANN202
+            def daily_bars(self, token: int, start: dt.date, end: dt.date) -> NoReturn:
                 attempts.append(str(token))
                 raise ProviderError("rate limited")
 
-            def bhavcopy(self, on):  # noqa: ANN001, ANN202
+            def bhavcopy(self, on: dt.date) -> NoReturn:
                 raise AssertionError("not reached")
 
-        async def fake_backfill(provider, window, **kwargs):  # noqa: ANN001, ANN003
+        async def fake_backfill(provider: object, window: DateWindow, **kwargs: object) -> _Report:
             return _Report(bars_written=0, days_written=0)
 
         monkeypatch.setattr(
@@ -216,7 +230,7 @@ class TestItDoesNotAskTenThousandTimes:
         )
         instruments = [(i, f"SYM{i}", i) for i in range(20)]
         await run_fetch_daily_bars(
-            session=None,
+            session=AsyncSession(),
             provider=_OneBadSymbol(),
             outcome=StepOutcome(),
             instruments=instruments,

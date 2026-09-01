@@ -70,7 +70,9 @@ async def _instruments_by_symbol(
     return {str(row.symbol).upper(): row for row in rows}
 
 
-def snapshot_dict(
+# Keyword-only by design, so PLR0913's actual hazard — an unreadable positional call site —
+# cannot occur. Six named inputs to one calculation; a parameter object would only rename them.
+def snapshot_dict(  # noqa: PLR0913
     *,
     buy_amounts: Sequence[Decimal],
     holdings: Sequence[HoldingPosition],
@@ -99,7 +101,9 @@ def snapshot_dict(
     }
 
 
-async def mark_invested(
+# Same as `snapshot_dict`: everything after `session` is keyword-only. `confirmed` is a
+# deliberate explicit gate, not a parameter to be folded away.
+async def mark_invested(  # noqa: PLR0913
     session: AsyncSession,
     *,
     principal_user_id: int | None,
@@ -244,9 +248,7 @@ async def load_investment_for_user(
     return row
 
 
-async def list_open_pending(
-    session: AsyncSession, user_id: int
-) -> list[CbPendingAction]:
+async def list_open_pending(session: AsyncSession, user_id: int) -> list[CbPendingAction]:
     rows = (
         await session.scalars(
             select(CbPendingAction)

@@ -577,7 +577,7 @@ class TestMove:
         assert body_of(promoted)["depth"] == 1
 
         body = await listing(api, headers)
-        assert sorted(node["id"] for node in arr(body["data"])) == sorted([root, child])
+        assert {node["id"] for node in arr(body["data"])} == {root, child}
 
     async def test_move_under_its_own_descendant_is_refused(
         self, api: httpx.AsyncClient, screener_session: AsyncSession

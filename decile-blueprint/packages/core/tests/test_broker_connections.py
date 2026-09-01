@@ -89,7 +89,9 @@ class TestTheCatalog:
         `handoff` is the strongest thing any row may say about trading. A `ready` here would be
         the catalog advertising an execute path the web app does not have and must never gain.
         """
+        # Named rather than inlined so the ceiling this test enforces is legible on one line.
+        strongest_permitted = {"handoff", "planned", "partner", "not_available"}
         for broker in BROKERS:
-            assert broker.capabilities.trading in {"handoff", "planned", "partner", "not_available"}, (
+            assert broker.capabilities.trading in strongest_permitted, (
                 f"{broker.id} advertises trading as {broker.capabilities.trading!r}"
             )

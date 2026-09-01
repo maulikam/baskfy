@@ -98,7 +98,10 @@ class TestWhatTheUserIsAllowedToTrade:
         Asserted here rather than trusted, because "we removed the filter from the hand-off" and
         "we removed the filter" are one careless commit apart.
         """
-        from baskfy_execution.guards import UntouchableInstrumentError, assert_tradeable
+        from baskfy_execution.guards import (  # noqa: PLC0415
+            UntouchableInstrumentError,
+            assert_tradeable,
+        )
 
         with pytest.raises(UntouchableInstrumentError):
             assert_tradeable("SGBDE31III")

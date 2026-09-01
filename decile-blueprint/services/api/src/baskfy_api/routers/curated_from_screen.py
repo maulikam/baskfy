@@ -201,9 +201,7 @@ async def _sized(
     ]
     try:
         resolved_cash = (
-            body.cash_pct
-            if body.cash_pct is not None
-            else cash_pct_for_tier(body.exposure_tier)
+            body.cash_pct if body.cash_pct is not None else cash_pct_for_tier(body.exposure_tier)
         )
         sized = size_basket(
             candidates,

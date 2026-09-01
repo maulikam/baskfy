@@ -5,10 +5,10 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-
-from baskfy_core.broker_connections import BROKERS
 from baskfy_execution.adapters import ADAPTERS, get_adapter, total_quantity
 from baskfy_execution.broker_ports import normalize_holding
+
+from baskfy_core.broker_connections import BROKERS
 
 
 class TestAdapters:

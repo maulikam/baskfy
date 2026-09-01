@@ -78,7 +78,7 @@ export function MarkInvestedForm({
   return (
     <form
       data-testid="mark-invested-form"
-      onSubmit={onSubmit}
+      onSubmit={(event) => void onSubmit(event)}
       className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
     >
       <div className="space-y-1">

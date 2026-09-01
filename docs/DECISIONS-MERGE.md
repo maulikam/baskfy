@@ -6305,3 +6305,49 @@ all iterate trading days) so it could never heal. Four classes are therefore det
   at. The worker re-inspects and acts on its own picture.
 * Nothing in the path can place an order. `services/api/tests/test_admin_resync.py`
   ::`TestItCannotPlaceAnOrder` asserts it over the source of all three modules.
+
+## M74 — two long-red tests, and what each was actually guarding ⚠ UNREVIEWED
+
+Both had been failing long enough to be described as "pre-existing". Neither was noise, and
+neither fix was the obvious one.
+
+**`test_api_run.py::TestCsvExport::test_the_values_match_the_json_response_exactly`.** It
+asserted `first_csv["ma_200"] == str(first_json["ma_200"])`. The JSON run response serves
+`DEFAULT_RESULT_COLUMNS` — three columns — while the CSV serves docs/13's 93, so `ma_200` is in
+one payload and has never been in the other. The assertion could only ever raise `KeyError`.
+
+*Rejected:* adding `ma_200` to `DEFAULT_RESULT_COLUMNS`. That changes a public response payload
+to suit a test, which is backwards — the test was wrong about the contract, not the contract.
+
+*Taken:* derive the pairs from `FACTOR_COLUMN_MAP ∩ first_json`, and assert **every** shared
+column rather than two picked by eye. This is what the test's own docstring ("one rounding,
+three surfaces") always claimed to do. It grows by itself as `DEFAULT_RESULT_COLUMNS` does.
+
+Broadening it immediately found a second thing: `vol_12m` read `0.5793179400` from the CSV and
+`0.57931794` from the JSON. **The API was right.** The wire carries `"vol_12m":0.5793179400` —
+the full `RATIO_10DP` scale, agreeing with the CSV to the digit. `json.loads` was parsing it into
+an IEEE double and `str()` was rendering the shortest repr. The lossy lens was in the *test*, so
+it now reads the body with `parse_float=Decimal`. Had the original assertion used a 10dp column
+instead of `ma_200`, it would have "found" an API bug that does not exist.
+
+**`test_curated_schema.py::test_migration_creates_all_cb_tables`.** `assert len(CB_TABLES) == 18`
+against 19 declared tables. This one was **correct and doing real work**: `cb_manager_revenue_share`
+landed in `ef50c09` and never reached `docs/smallcase/03-data-model.md`. Every declared table has
+a migration, so the substantive assertion (`present >= CB_TABLES`) passed; only the documentation
+had drifted, which is exactly what house rule 4 exists to catch.
+
+*Rejected:* bumping 18 → 19. It is the cheapest way to make the test pass and it discards the
+finding — the table stays undocumented and the next drift is bumped away just as easily.
+
+*Taken:* document the table in `docs/smallcase/03-data-model.md` (including *why* `rate_bps` has
+no server default — D7 is human-track, and a default is how an invented rate stops showing up in
+diffs), and replace the count with an explicit named `SPEC_CB_TABLES` frozenset. A bare number
+cannot say which table drifted; the set can, and its failure message does. Verified by removing a
+name and watching it report `undocumented: ['cb_watchlist_item']`.
+
+**To reverse:** both are test-and-doc changes; revert the two test files and the doc section.
+No production code was touched.
+
+**Not fixed, and visible from here:** `make lint` is red at HEAD — 52 errors, 12 auto-fixable,
+none in the files above (counted at HEAD and again with these changes: 52 both times). House
+rule 4 says a module ends with lint clean, so this is a standing violation predating M74.

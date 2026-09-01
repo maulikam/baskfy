@@ -190,7 +190,10 @@ GoogleDep = Annotated[TokenVerifier, Depends(_google)]
 
 
 @router.post("/auth/google", response_model=SessionOut, summary="Sign in with Google")
-async def sign_in_with_google(
+# The six parameters are FastAPI's injection surface — request, body, response and three
+# `Depends`. Bundling them to satisfy an arity limit would hide the dependency list that IS
+# the handler's contract, and PLR0917 does not apply at all: FastAPI never calls positionally.
+async def sign_in_with_google(  # noqa: PLR0913, PLR0917
     request: Request,
     body: GoogleSignInIn,
     response: Response,
@@ -249,7 +252,6 @@ async def sign_in_with_google(
         extra={"user_public_id": user.public_id, "account_created": created},
     )
     return _session_response(response, issued, settings)
-
 
 
 async def _clear_pending_deletion(session: AsyncSession, user: AppUser) -> None:

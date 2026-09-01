@@ -34,9 +34,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import get_args
-
-from typing import ClassVar
+from typing import ClassVar, get_args
 
 import pytest
 

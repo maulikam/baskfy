@@ -686,7 +686,7 @@ class TestConnectDoesNotOverClaimEither:
         `connect_configured` therefore asks three questions, not two. Without the third, wiring
         Kite for data would have reinstated exactly the dead button that field exists to prevent.
         """
-        from baskfy_api.routers.brokers import _connect_configured
+        from baskfy_api.routers.brokers import _connect_configured  # noqa: PLC0415
 
         monkeypatch.setenv("BASKFY_KITE_API_KEY", "desk-app-key")
         monkeypatch.setenv("BASKFY_KITE_API_SECRET", "desk-app-secret")
@@ -701,8 +701,8 @@ class TestConnectDoesNotOverClaimEither:
         A Baskfy-owned Connect app would set a redirect on our own origin, and the button must
         return without a code change.
         """
-        from baskfy_api.routers.brokers import _connect_configured
-        from baskfy_api.settings import get_settings
+        from baskfy_api.routers.brokers import _connect_configured  # noqa: PLC0415
+        from baskfy_api.settings import get_settings  # noqa: PLC0415 - local to this test
 
         monkeypatch.setenv("BASKFY_KITE_API_KEY", "our-app-key")
         monkeypatch.setenv("BASKFY_KITE_API_SECRET", "our-app-secret")

@@ -383,6 +383,7 @@ dependencies = [
     { name = "baskfy-providers" },
     { name = "celery", extra = ["redis"] },
     { name = "flower" },
+    { name = "httpx" },
     { name = "opentelemetry-instrumentation-celery" },
     { name = "psycopg", extra = ["binary"] },
 ]
@@ -394,6 +395,7 @@ requires-dist = [
     { name = "baskfy-providers", editable = "packages/providers" },
     { name = "celery", extras = ["redis"], specifier = ">=5.4" },
     { name = "flower", specifier = ">=2.0" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "opentelemetry-instrumentation-celery", specifier = ">=0.49b0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
 ]

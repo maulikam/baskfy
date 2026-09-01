@@ -419,9 +419,9 @@ def compute_curated_metrics_task(trade_date: str | None = None) -> JsonObject:
     day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
 
     async def _run() -> JsonObject:
-        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: PLC0415
 
-        from baskfy_api.settings import get_settings
+        from baskfy_api.settings import get_settings  # noqa: PLC0415
 
         engine = create_async_engine(get_settings().database_url, pool_pre_ping=True)
         maker = async_sessionmaker(engine, expire_on_commit=False)

@@ -28,8 +28,11 @@ for round in $(seq 1 "$ROUNDS"); do
     break
   fi
   echo "  round $round: $have/$scope stored, running up to ${PER_ROUND}s"
-  ( cd decile-blueprint && timeout "$PER_ROUND" \
-      uv run python -m baskfy_worker.fundamentals_cli fill --date "$DATE" --resume \
+  # The venv interpreter directly, NOT `uv run`: `timeout` signals the process it starts, and
+  # `uv` does not pass a SIGTERM on to the python it spawned — so a round could outlive its
+  # budget and the supervisor would never get to restart the very stall it exists for. Observed.
+  ( cd decile-blueprint && timeout -k 15 "$PER_ROUND" \
+      ./.venv/bin/python -m baskfy_worker.fundamentals_cli fill --date "$DATE" --resume \
       >> "/tmp/tree3-fill-$DATE.log" 2>&1 )
   code=$?
   after=$("${PSQL[@]}" "select count(*) from fundamental_daily where date = '$DATE'")

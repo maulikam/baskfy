@@ -13,6 +13,13 @@ from baskfy_api.problems import Problem, ProblemType
 from baskfy_api.routers import curated_investments
 from baskfy_api.routers.curated_investments import HoldingBody, MarkBody, mark_as_invested
 from baskfy_core.curated_accounting import platform_fee
+from baskfy_core.models import (
+    BrokerAccount,
+    CbFeeLedger,
+    CbInvestment,
+    CbInvestmentHolding,
+    CbOrderBatch,
+)
 
 
 def test_openapi_exposes_mark_and_reads() -> None:
@@ -43,7 +50,7 @@ def test_router_has_no_broker_path() -> None:
 
 
 def test_mark_source_never_writes_executed() -> None:
-    from baskfy_api import curated_investments as service
+    from baskfy_api import curated_investments as service  # noqa: PLC0415 - local to this test
 
     source = inspect.getsource(service.mark_invested)
     assert 'status="PLANNED"' in source
@@ -66,9 +73,13 @@ async def test_mark_requires_confirmed(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_mark_persists_planned_batch_and_fee(monkeypatch: pytest.MonkeyPatch) -> None:
-    from baskfy_api import curated_investments as service
-    from baskfy_api.curated_investments import HoldingIn, mark_invested
+# 57 statements, nearly all of it mock scaffolding for one write path. Splitting it would put
+# the arrangement in a fixture and leave the assertions unable to say what they depend on.
+async def test_mark_persists_planned_batch_and_fee(  # noqa: PLR0915
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from baskfy_api import curated_investments as service  # noqa: PLC0415 - local to this test
+    from baskfy_api.curated_investments import HoldingIn, mark_invested  # noqa: PLC0415
 
     session = AsyncMock()
     session.commit = AsyncMock()
@@ -83,14 +94,17 @@ async def test_mark_persists_planned_batch_and_fee(monkeypatch: pytest.MonkeyPat
         for obj in added:
             if getattr(obj, "id", None) is not None:
                 continue
-            name = type(obj).__name__
-            if name == "CbInvestment":
+            if isinstance(obj, CbInvestment):
                 obj.id = 7
-            elif name == "CbOrderBatch":
+            elif isinstance(obj, CbOrderBatch):
                 obj.id = 3
-            elif name == "CbFeeLedger":
+            elif isinstance(obj, CbFeeLedger):
                 obj.id = 11
-            else:
+            # Five models reach `session.add` on this path: four from `mark_invested` itself and
+            # `BrokerAccount` from `ensure_broker_account`, which it calls. The bare `else` this
+            # replaced hid that fifth one — it took the default silently, so nothing said the
+            # write path touches an account table.
+            elif isinstance(obj, CbInvestmentHolding | BrokerAccount):
                 obj.id = 1
 
     session.flush = AsyncMock(side_effect=_assign_ids)
@@ -138,14 +152,14 @@ async def test_mark_persists_planned_batch_and_fee(monkeypatch: pytest.MonkeyPat
     assert "CbInvestmentHolding" in kinds
     assert "CbOrderBatch" in kinds
     assert "CbFeeLedger" in kinds
-    batch = next(obj for obj in added if type(obj).__name__ == "CbOrderBatch")
+    batch = next(obj for obj in added if isinstance(obj, CbOrderBatch))
     assert batch.status == "PLANNED"
     assert batch.kind == "BUY"
     assert batch.user_id == 42
     assert batch.broker_account_id is not None
-    investment = next(obj for obj in added if type(obj).__name__ == "CbInvestment")
+    investment = next(obj for obj in added if isinstance(obj, CbInvestment))
     assert investment.broker_account_id == batch.broker_account_id
-    fee = next(obj for obj in added if type(obj).__name__ == "CbFeeLedger")
+    fee = next(obj for obj in added if isinstance(obj, CbFeeLedger))
     expected = platform_fee("BUY", Decimal("7000"))
     assert fee.total == expected.total
     assert fee.collected is False
@@ -154,8 +168,8 @@ async def test_mark_persists_planned_batch_and_fee(monkeypatch: pytest.MonkeyPat
 
 @pytest.mark.asyncio
 async def test_mark_rejects_second_active(monkeypatch: pytest.MonkeyPatch) -> None:
-    from baskfy_api import curated_investments as service
-    from baskfy_api.curated_investments import HoldingIn, mark_invested
+    from baskfy_api import curated_investments as service  # noqa: PLC0415 - local to this test
+    from baskfy_api.curated_investments import HoldingIn, mark_invested  # noqa: PLC0415
 
     session = AsyncMock()
     basket = MagicMock(id=5, slug="momentum-scan")

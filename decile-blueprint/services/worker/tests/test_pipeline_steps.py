@@ -7,7 +7,8 @@ from decimal import Decimal
 
 import pytest
 from helpers import PRIOR_DATE, TRADE_DATE, add_bar, make_instrument, requires_db
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from baskfy_core.models import (
@@ -17,6 +18,7 @@ from baskfy_core.models import (
     MarketHealthDaily,
     PipelineRunStep,
 )
+from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_core.universes import MARKET_HEALTH_SLUGS, UNIVERSE_BY_SLUG
 from baskfy_worker.calendar import (
     NotATradingDay,
@@ -461,3 +463,54 @@ class TestTheNightOnlyAsksAboutInstrumentsWorthAsking:
         await add_bar(session, etf, TRADE_DATE, "100")
         ids = {row[0] for row in await active_instruments(session)}
         assert etf in ids
+
+
+class TestASeriesLessInstrumentCannotBeInsertedTwice:
+    """M80. The constraint said UNIQUE (exchange_id, symbol, series) and did not mean it.
+
+    Postgres treats NULLs as distinct in a unique constraint, and 38,542 instruments arrive from
+    Kite's dump with no series — so for every one of them the constraint enforced nothing, the
+    upsert's `ON CONFLICT` never fired, and each nightly run inserted another copy. Measured on
+    staging 2 Sep 2026: 7,937 symbols had more than one live row and **every one had a NULL
+    series**; `SGBDE31III-GB` had six. The published day was inflated to match — 8,537 bars for
+    3,998 real securities — so a screener was ranking a universe where 1,387 names appeared up to
+    five times, and the data-quality gate read the inflation as health.
+
+    `NULLS NOT DISTINCT` (Postgres 15+, the box runs 16) makes the constraint mean what it says.
+    """
+
+    async def test_the_second_insert_of_a_seriesless_symbol_is_refused(
+        self, session: AsyncSession
+    ) -> None:
+        await make_instrument(session, "NULLSER", token=8001, series=None)
+        with pytest.raises(IntegrityError):
+            await make_instrument(session, "NULLSER", token=8001, series=None)
+            await session.flush()
+
+    async def test_the_upsert_updates_in_place_rather_than_failing(
+        self, session: AsyncSession
+    ) -> None:
+        """The other half: the nightly must still run, not start erroring every night instead.
+
+        `refresh_instruments` conflicts on (exchange_id, symbol, series). With NULLs distinct that
+        target never matched a seriesless row and every run inserted; with `NULLS NOT DISTINCT` it
+        matches and updates, which is what the upsert was written to do all along.
+        """
+        await make_instrument(session, "UPSER", token=8002, series=None)
+        await session.flush()
+        rows = (
+            await session.execute(
+                text(
+                    "insert into instrument (exchange_id, symbol, name, instrument_type, series,"
+                    " kite_token, is_active) values (:e,'UPSER','Renamed','EQ',null,8002,true)"
+                    " on conflict (exchange_id, symbol, series) do update set name = excluded.name"
+                    " returning id"
+                ),
+                {"e": NSE_EXCHANGE_ID},
+            )
+        ).all()
+        assert len(rows) == 1
+        total = (
+            await session.execute(text("select count(*) from instrument where symbol = 'UPSER'"))
+        ).scalar_one()
+        assert total == 1, "the upsert inserted a second row instead of updating the first"

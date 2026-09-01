@@ -46,6 +46,7 @@ from baskfy_core.screener import ScreenQueryError, build_screen_query
 from baskfy_core.seed_data import EXAMPLE_SCREENS
 from baskfy_core.universes import (
     CONTAINMENT_IDENTITIES,
+    REFERENCE_EXPORT_UNIVERSES,
     UNION_IDENTITIES,
     UNIVERSE_BY_SLUG,
     UNIVERSES,
@@ -525,7 +526,13 @@ class TestTopRiskFlags:
                 continue
             assert min(flagged) > max(unflagged), universe.slug
             checked += 1
-        assert checked == len(UNIVERSES) - 1, "only `etf` has no members in the export"
+        # Against REFERENCE_EXPORT_UNIVERSES, not UNIVERSES. This walks the reference export —
+        # momoindiascreener.in's own file, the read-only regression corpus — which carries
+        # fourteen universes and always will. M59 added a fifteenth to Baskfy's catalog, so
+        # `len(UNIVERSES) - 1` started asking the export for a universe it has no column for.
+        assert checked == len(REFERENCE_EXPORT_UNIVERSES) - 1, (
+            "only `etf` has no members in the export"
+        )
 
     async def test_the_flag_share_matches_the_calibrated_percentile(
         self, screener_session: AsyncSession

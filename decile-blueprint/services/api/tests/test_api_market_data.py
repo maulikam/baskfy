@@ -29,7 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_core.breadth import ATH_PROXIMITY_PCT
 from baskfy_core.models import Instrument
 from baskfy_core.reference_export import to_rows
-from baskfy_core.universes import MARKET_HEALTH_SLUGS, UNIVERSE_BY_SLUG
+from baskfy_core.universes import (
+    DASHBOARD_UNIVERSES,
+    MARKET_HEALTH_SLUGS,
+    UNIVERSE_BY_SLUG,
+)
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 
@@ -293,10 +297,19 @@ class TestIndexDashboard:
         changes = [number(row["change_pct"]) for row in rows if row["change_pct"] is not None]
         assert changes == sorted(changes, reverse=True)
 
-    async def test_the_fourteen_universes_are_flagged_as_such(self, api: httpx.AsyncClient) -> None:
+    async def test_every_universe_with_a_published_level_is_flagged_as_such(
+        self, api: httpx.AsyncClient
+    ) -> None:
+        """This compared against every universe, which held while all of them were indices.
+
+        M59 added `nse-sme-emerge`, a trading PLATFORM rather than an index: it has members and
+        constituents, but NSE computes no daily level for it, so it has no `index_snapshot_daily`
+        row and cannot appear on a dashboard built from that table. Its absence is correct, and
+        `Universe.has_index_level` is where the catalog now says so.
+        """
         rows = as_rows(body_of(await api.get(url("/indices/dashboard")))["data"])
         universes = {str(row["slug"]) for row in rows if row["is_universe"]}
-        assert universes == set(UNIVERSE_BY_SLUG)
+        assert universes == {u.slug for u in DASHBOARD_UNIVERSES}
 
     async def test_an_index_with_no_fundamentals_serves_null_not_zero(
         self, api: httpx.AsyncClient

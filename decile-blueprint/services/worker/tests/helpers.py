@@ -56,7 +56,9 @@ async def make_instrument(
     symbol: str,
     *,
     token: int | None = None,
-    series: str = "EQ",
+    # `str | None`, because a seriesless instrument is a real thing: Kite's dump carries
+    # 38,542 of them and M78 turns on telling them apart from cash names.
+    series: str | None = "EQ",
     listed_on: dt.date | _Unset | None = UNSET,
 ) -> int:
     """A live NSE instrument.

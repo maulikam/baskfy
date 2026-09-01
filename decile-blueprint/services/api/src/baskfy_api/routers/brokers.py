@@ -333,6 +333,18 @@ def _connection_state(broker_id: str) -> tuple[bool, str]:
         return False, "not_connected"
     if is_simulated_token(token.value):
         return False, "simulated"
+    # Present is not alive (M79). Kite invalidates an access token at the start of the next
+    # trading day, so the blob written yesterday reads back perfectly and is dead — and on the
+    # morning of 2 Sep 2026 this reported "connected" while `holdings_for_broker` was already
+    # answering `AccessTokenExpired` and serving a fixture. That is the same defect this function
+    # was written to fix, one day later: the page claiming a session the server does not have.
+    #
+    # Still no network call. `is_expired` compares the issue date against the IST calendar day,
+    # which is the boundary Kite actually uses, so the check stays local and costs nothing per
+    # render. A live token that Kite has revoked early is beyond a local check; that surfaces at
+    # the sync, which refuses anything that is not a `live` read.
+    if token.is_expired():
+        return False, "expired"
     return True, "connected"
 
 

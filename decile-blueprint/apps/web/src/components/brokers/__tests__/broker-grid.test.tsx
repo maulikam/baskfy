@@ -187,3 +187,31 @@ describe("a connected broker (M76)", () => {
     expect(screen.queryByRole("button", { name: "Sync holdings" })).not.toBeInTheDocument();
   });
 });
+
+describe("an expired Kite session (M79)", () => {
+  /**
+   * Kite invalidates an access token at the start of the next trading day. On the morning of
+   * 2 Sep 2026 the API still reported `connected` from a token written the night before, while
+   * holdings were already answering `AccessTokenExpired` and serving a fixture — the page claiming
+   * a session the server did not have, which is the defect this whole area exists to fix.
+   */
+  const expired = { ...ZERODHA, connected: false, connection_status: "expired" };
+
+  it("explains why, rather than silently offering Connect again", () => {
+    render(<BrokerGrid brokers={[expired]} gate={gate({ connect_configured: true })} />);
+    expect(screen.getByTestId("broker-expired")).toHaveTextContent("session expired");
+    expect(screen.getByRole("button", { name: "Reconnect Zerodha" })).toBeInTheDocument();
+  });
+
+  it("does not offer Sync, which would only refuse", () => {
+    // A sync on a dead session reads a fixture, and a fixture is never persisted.
+    render(<BrokerGrid brokers={[expired]} gate={gate({ connect_configured: true })} />);
+    expect(screen.queryByRole("button", { name: "Sync holdings" })).not.toBeInTheDocument();
+  });
+
+  it("a never-connected broker says nothing about expiry", () => {
+    render(<BrokerGrid brokers={[ZERODHA]} gate={gate({ connect_configured: true })} />);
+    expect(screen.queryByTestId("broker-expired")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect Zerodha" })).toBeInTheDocument();
+  });
+});

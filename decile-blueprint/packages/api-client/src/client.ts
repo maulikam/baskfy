@@ -221,6 +221,18 @@ export interface BaskfyClientOptions {
   /** Injectable transport. Matches `openapi-fetch`'s own signature, which takes a `Request`. */
   fetch?: (request: Request) => Promise<Response>;
   /**
+   * Called when the API answers 401 to any request.
+   *
+   * A session can die between renders — the access token is minutes long, and the API can revoke
+   * one at any time. When that happens every subsequent query 401s while the UI still shows a
+   * signed-in shell: menus, a portfolio, an account. The screen says "signed in" and the server
+   * disagrees, which is the worst state to leave a user in on a page about their money.
+   *
+   * One hook rather than a check at each call site, because "every request" is the requirement
+   * and a per-call check is one someone will forget to add to the next endpoint.
+   */
+  onUnauthorized?: () => void;
+  /**
    * W3C trace context for the web → API hop (PROMPTS.md Prompt 17 §1: "OpenTelemetry traces
    * across web → API → worker → database").
    *
@@ -259,6 +271,22 @@ export function createBaskfyClient(options: BaskfyClientOptions) {
           request.headers.set("Authorization", `Bearer ${token}`);
         }
         return request;
+      },
+    });
+  }
+
+  if (options.onUnauthorized) {
+    const onUnauthorized = options.onUnauthorized;
+    let fired = false;
+    client.use({
+      onResponse({ response }) {
+        // Fired once. A page can have a dozen queries in flight, and every one of them will 401
+        // together; signing out a dozen times would race the redirect against itself.
+        if (response.status === 401 && !fired) {
+          fired = true;
+          onUnauthorized();
+        }
+        return response;
       },
     });
   }

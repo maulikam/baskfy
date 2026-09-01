@@ -96,39 +96,40 @@ def upgrade() -> None:
 
     for table, (column, other_key) in REFERENCING.items():
         if other_key:
-            match = " AND ".join(f"y.{c} IS NOT DISTINCT FROM s.{c}" for c in other_key)
-            cols = ", ".join(f"s.{c}" for c in other_key)
-            group = ", ".join(f"p.{c}" for c in other_key)
+            cols = ", ".join(other_key)
+            s_cols = ", ".join(f"s.{c}" for c in other_key)
+            on = " AND ".join(f"y.{c} IS NOT DISTINCT FROM s.{c}" for c in other_key)
             join = " AND ".join(f"x.{c} IS NOT DISTINCT FROM p.{c}" for c in other_key)
-            # One duplicate promoted per (survivor, key), chosen by lowest id.
+            # The move set is computed as a plain SELECT into a temp table, then joined.
             #
-            # Several duplicates routinely map to one survivor for the same key — the six rows of
-            # `SGBDE31III-GB` all carry 27 Aug — and a plain UPDATE passes the NOT EXISTS check for
-            # every one of them, because the survivor genuinely has nothing there yet. They then
-            # collide with each other inside the same statement, which is how the first attempt
-            # died on `pk_fundamental_daily`, key (9199, 2026-08-27).
+            # Written as `UPDATE ... FROM (SELECT ... WHERE NOT EXISTS ...)` this ran for 54
+            # minutes on staging without finishing — and it moves ZERO rows there, because the
+            # survivor already holds every date the duplicates do. A correlated NOT EXISTS inside
+            # an UPDATE over a compressed hypertable plans terribly; the identical logic as a
+            # standalone SELECT returns in seconds. So: scan once, cheaply, then act on the result.
             #
-            # Identified by (instrument_id, key) rather than by `ctid`: these are TimescaleDB
-            # hypertables, and a system column is refused on a compressed chunk with "transparent
-            # decompression only supports tableoid system column". That killed the second attempt.
-            # The unique key is the honest identifier here anyway.
+            # A LEFT JOIN ... IS NULL rather than NOT EXISTS for the same reason, and the UPDATE
+            # is skipped outright when the set comes back empty, which is the common case.
+            op.execute(
+                f"""
+                CREATE TEMP TABLE dedup_moves AS
+                SELECT m.keep_id, {s_cols}, MIN(s.{column}) AS chosen
+                FROM {table} s
+                JOIN instrument_dedup_map m ON s.{column} = m.drop_id
+                LEFT JOIN {table} y ON y.{column} = m.keep_id AND {on}
+                WHERE y.{column} IS NULL
+                GROUP BY m.keep_id, {s_cols}
+                """
+            )
             op.execute(
                 f"""
                 UPDATE {table} x
                 SET {column} = p.keep_id
-                FROM (
-                    SELECT m.keep_id, {cols}, MIN(s.{column}) AS chosen
-                    FROM {table} s
-                    JOIN instrument_dedup_map m ON s.{column} = m.drop_id
-                    WHERE NOT EXISTS (
-                        SELECT 1 FROM {table} y
-                        WHERE y.{column} = m.keep_id AND {match}
-                    )
-                    GROUP BY m.keep_id, {cols}
-                ) p
+                FROM dedup_moves p
                 WHERE x.{column} = p.chosen AND {join}
                 """
             )
+            op.execute("DROP TABLE dedup_moves")
             # Whatever could not move is a row the survivor already has under the same key.
             op.execute(
                 f"DELETE FROM {table} x USING instrument_dedup_map m WHERE x.{column} = m.drop_id"

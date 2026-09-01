@@ -13,6 +13,12 @@ import { describeProvenance, type SyncHoldingsOut } from "@/lib/portfolios/prove
 function result(partial: Partial<SyncHoldingsOut> = {}): SyncHoldingsOut {
   return {
     broker_id: "zerodha",
+    // M76 added the persistence fields; a fixture that omits them no longer matches the response.
+    persisted: false,
+    written: 0,
+    portfolio_id: null,
+    unresolved: [],
+    sync_note: "",
     degraded: false,
     dry_run: true,
     holdings: [

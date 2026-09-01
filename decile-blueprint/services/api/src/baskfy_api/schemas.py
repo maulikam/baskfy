@@ -107,6 +107,12 @@ class StatusOut(_Out):
     #: docs/11 §Reliability: "if the pipeline fails, serve the last good `data_version` with a
     #: banner". This is the flag the banner reads.
     degraded: bool
+    #: M76. A run that is STILL GOING is neither published nor failed, and the freshness pill had
+    #: no way to say so — it read `degraded` alone, so a night mid-flight was reported to Maulik as
+    #: "the last pipeline run did not publish". That is a different sentence from "we are fetching
+    #: it now", and the difference was the whole question he asked. The nightly takes about an hour
+    #: since the SME universe tripled the instrument count, so this state is visible for a while.
+    pipeline_running: bool = False
     data_start_date: dt.date
 
 

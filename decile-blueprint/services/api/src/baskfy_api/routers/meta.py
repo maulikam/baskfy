@@ -43,6 +43,8 @@ MAX_TRADING_DAY_SPAN = dt.timedelta(days=5 * 366)
 #: docs/03: a run whose gate failed never publishes, so these two states mean "the last attempt
 #: did not produce data" (docs/07: "503 `pipeline-degraded` — last run failed its QA gate").
 FAILED_RUN_STATUSES: Final[frozenset[str]] = frozenset({"failed", "aborted"})
+#: The third state. Neither published nor failed — in flight, and the UI must say so.
+RUNNING_RUN_STATUS: Final[str] = "running"
 
 
 @router.get("/factors", response_model=list[FactorOut], summary="The factor registry")
@@ -153,5 +155,6 @@ async def get_status(session: SessionDep) -> StatusOut:
             )
         ),
         degraded=last_run is not None and last_run.status in FAILED_RUN_STATUSES,
+        pipeline_running=last_run is not None and last_run.status == RUNNING_RUN_STATUS,
         data_start_date=DATA_START_DATE,
     )

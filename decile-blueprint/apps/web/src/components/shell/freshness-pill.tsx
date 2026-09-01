@@ -66,7 +66,13 @@ export function FreshnessPill({ className }: { className?: string }) {
     );
   }
 
-  const degraded = data.degraded;
+  // Three states, not two (M76). A run that is still going is neither published nor failed, and
+  // reading `degraded` alone told Maulik "the last pipeline run did not publish" while the night
+  // was mid-flight. `running` wins over `degraded`: the failure it would otherwise report is the
+  // PREVIOUS run, and blaming a finished failure while its replacement is working is the more
+  // misleading of the two. The nightly takes about an hour, so this shows for a long time.
+  const running = data.pipeline_running === true;
+  const degraded = data.degraded && !running;
 
   return (
     <Tooltip>
@@ -87,12 +93,20 @@ export function FreshnessPill({ className }: { className?: string }) {
             <Database aria-hidden="true" className="size-3.5" />
           )}
           Data: {formatTradeDate(data.as_of)}
+          {running ? (
+            <span data-testid="pipeline-running" className="text-muted-foreground">
+              {" "}
+              · updating…
+            </span>
+          ) : null}
         </span>
       </TooltipTrigger>
       <TooltipContent>
-        {degraded
-          ? `The last pipeline run did not publish. You are seeing the ${formatTradeDate(data.as_of)} trading session.`
-          : `Published for the ${formatTradeDate(data.as_of)} trading session.`}
+        {running
+          ? `A pipeline run is in progress. Until it publishes you are seeing the ${formatTradeDate(data.as_of)} trading session.`
+          : degraded
+            ? `The last pipeline run did not publish. You are seeing the ${formatTradeDate(data.as_of)} trading session.`
+            : `Published for the ${formatTradeDate(data.as_of)} trading session.`}
       </TooltipContent>
     </Tooltip>
   );

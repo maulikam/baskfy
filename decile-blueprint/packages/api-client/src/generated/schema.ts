@@ -8306,6 +8306,11 @@ export interface components {
             /** Degraded */
             degraded: boolean;
             last_pipeline_run: components["schemas"]["PipelineRunOut"] | null;
+            /**
+             * Pipeline Running
+             * @default false
+             */
+            pipeline_running: boolean;
         };
         /**
          * SubtreeHoldingOut
@@ -8459,11 +8464,36 @@ export interface components {
              */
             note: string;
             /**
+             * Persisted
+             * @description Whether these rows were written into the broker's holding group, which is what makes them appear on the Portfolio page. False for anything but a live read: a fixture behind a real rupee total is indistinguishable from your own positions.
+             */
+            persisted: boolean;
+            /**
+             * Portfolio Id
+             * @description The broker's holding group, once one exists.
+             */
+            portfolio_id: number | null;
+            /**
              * Source
              * @description Provenance of `holdings`, as a machine-readable value a client can switch on. `live` = the broker actually reported these rows; `fixture` = fabricated sample rows; `empty` = no rows at all (never carries any); `unwired` = this broker has no holdings adapter. Only `live` is the caller's real money.
              * @enum {string}
              */
             source: "live" | "fixture" | "empty" | "unwired";
+            /**
+             * Sync Note
+             * @description What the persistence step did, in prose. Separate from `note`, which describes where the rows came from — two different questions.
+             */
+            sync_note: string;
+            /**
+             * Unresolved
+             * @description Symbols the broker reported that this build could not resolve to an instrument, named rather than dropped silently. Each costs one row, not the sync.
+             */
+            unresolved: string[];
+            /**
+             * Written
+             * @description Holdings written to the portfolio.
+             */
+            written: number;
         };
         /**
          * SyncStatusOut

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 
-import { connectBrokerAction } from "@/app/actions/brokers";
+import { connectBrokerAction, syncHoldingsAction } from "@/app/actions/brokers";
 import { Button } from "@/components/ui/button";
 import type { Broker, BrokerGate } from "@/lib/brokers/fetch";
 import { cn } from "@/lib/utils";
@@ -61,7 +61,9 @@ function tileLabel(broker: Broker): string {
 export function BrokerGrid({ brokers, gate }: BrokerGridProps) {
   const [selectedId, setSelectedId] = useState<string | null>(brokers[0]?.id ?? null);
   const [message, setMessage] = useState<string | null>(null);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [syncing, startSync] = useTransition();
 
   const selected = brokers.find((b) => b.id === selectedId) ?? null;
 
@@ -74,6 +76,21 @@ export function BrokerGrid({ brokers, gate }: BrokerGridProps) {
         return;
       }
       setMessage(result.reason || "Connect is not available for this broker yet.");
+    });
+  }
+
+  function onSync(brokerId: string) {
+    setSyncNote(null);
+    startSync(async () => {
+      const result = await syncHoldingsAction(brokerId);
+      setSyncNote(
+        result.persisted
+          ? `${result.written} holding${result.written === 1 ? "" : "s"} synced.` +
+              (result.unresolved.length
+                ? ` ${result.unresolved.length} symbol(s) not recognised: ${result.unresolved.join(", ")}.`
+                : "")
+          : result.sync_note || result.note,
+      );
     });
   }
 
@@ -195,7 +212,58 @@ export function BrokerGrid({ brokers, gate }: BrokerGridProps) {
               reader that the product is broken rather than that this route is not the one they
               want. `NEEDS-MAULIK.md` §28.
             */}
-            {gate.connect_configured ? (
+            {/*
+              CONNECTED IS A STATE, NOT JUST A TILE LABEL (M76).
+
+              The tile has read `broker.connected` since M75 and correctly said "Connected". This
+              panel did not: it rendered `Connect {short_name}` unconditionally, so the button
+              Maulik actually clicks was unchanged by that fix and he reported the same defect
+              twice. Reading the field in one of the two places it is displayed is not reading it.
+
+              When connected, Connect stops being the primary action — re-running it would issue a
+              fresh Kite token and invalidate the working session — and **Sync holdings** takes its
+              place, because that is the step that was missing: the endpoint has persisted since
+              M75 and nothing in the UI could call it.
+            */}
+            {gate.connect_configured && selected.connected ? (
+              <>
+                <p
+                  data-testid="broker-connected"
+                  className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs font-medium text-foreground"
+                >
+                  Connected to {selected.short_name}.
+                </p>
+                <Button
+                  type="button"
+                  disabled={syncing}
+                  onClick={() => onSync(selected.id)}
+                  className="w-full"
+                >
+                  {syncing ? "Syncing…" : "Sync holdings"}
+                </Button>
+                {syncNote ? (
+                  <p
+                    data-testid="sync-note"
+                    className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
+                  >
+                    {syncNote}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => onConnect(selected.id)}
+                  className="w-full text-xs text-muted-foreground underline underline-offset-2"
+                >
+                  {pending ? "Starting…" : `Reconnect ${selected.short_name}`}
+                </button>
+                {message ? (
+                  <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                    {message}
+                  </p>
+                ) : null}
+              </>
+            ) : gate.connect_configured ? (
               <>
                 <Button
                   type="button"

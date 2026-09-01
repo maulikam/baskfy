@@ -13415,6 +13415,11 @@
                 "type": "null"
               }
             ]
+          },
+          "pipeline_running": {
+            "default": false,
+            "title": "Pipeline Running",
+            "type": "boolean"
           }
         },
         "required": [
@@ -13671,7 +13676,6 @@
             "type": "string"
           },
           "persisted": {
-            "default": false,
             "description": "Whether these rows were written into the broker's holding group, which is what makes them appear on the Portfolio page. False for anything but a live read: a fixture behind a real rupee total is indistinguishable from your own positions.",
             "title": "Persisted",
             "type": "boolean"
@@ -13700,7 +13704,6 @@
             "type": "string"
           },
           "sync_note": {
-            "default": "",
             "description": "What the persistence step did, in prose. Separate from `note`, which describes where the rows came from — two different questions.",
             "title": "Sync Note",
             "type": "string"
@@ -13714,7 +13717,6 @@
             "type": "array"
           },
           "written": {
-            "default": 0,
             "description": "Holdings written to the portfolio.",
             "title": "Written",
             "type": "integer"
@@ -13724,6 +13726,11 @@
           "broker_id",
           "holdings",
           "dry_run",
+          "persisted",
+          "written",
+          "portfolio_id",
+          "sync_note",
+          "unresolved",
           "source",
           "note"
         ],

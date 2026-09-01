@@ -104,3 +104,50 @@ export async function startBrokerConnect(brokerId: string): Promise<ConnectResul
   }
   return (await response.json()) as ConnectResult;
 }
+
+/** What `POST /brokers/{id}/sync-holdings` reports back, narrowed to what the page shows. */
+export type SyncHoldingsResult = {
+  broker_id: string;
+  persisted: boolean;
+  written: number;
+  unresolved: string[];
+  source: string;
+  degraded: boolean;
+  note: string;
+  sync_note: string;
+};
+
+/**
+ * Read the broker's holdings and write them into its holding group.
+ *
+ * The endpoint has persisted since M75 and no screen could reach it, so `portfolio_holding` stayed
+ * at zero and every Portfolio surface said "Holdings not synced yet" for a connected account.
+ */
+export async function syncBrokerHoldings(brokerId: string): Promise<SyncHoldingsResult> {
+  const session = await auth();
+  const refused = (reason: string): SyncHoldingsResult => ({
+    broker_id: brokerId,
+    persisted: false,
+    written: 0,
+    unresolved: [],
+    source: "empty",
+    degraded: false,
+    note: reason,
+    sync_note: reason,
+  });
+  if (!session?.accessToken) return refused("Sign in to sync holdings.");
+
+  const response = await fetch(
+    `${serverApiOrigin()}/api/v1/brokers/${brokerId}/sync-holdings`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    },
+  );
+  if (!response.ok) return refused(`Could not sync holdings (${response.status}).`);
+  return (await response.json()) as SyncHoldingsResult;
+}

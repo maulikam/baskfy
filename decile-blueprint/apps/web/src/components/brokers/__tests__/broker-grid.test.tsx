@@ -151,3 +151,39 @@ describe("the panel describes Publisher, not a Connect OAuth", () => {
     expect(screen.getByText(/Authorize Baskfy to read holdings/i)).toBeInTheDocument();
   });
 });
+
+describe("a connected broker (M76)", () => {
+  /**
+   * Maulik reported "still says Connect Zerodha" twice. M75 made the API report `connected` and
+   * the TILE read it — his own screenshot shows the tile saying "Connected". The panel did not:
+   * it rendered `Connect {short_name}` unconditionally, so the button he actually clicks was
+   * untouched by the fix. Reading a field in one of the two places it is shown is not reading it.
+   */
+  const connected = { ...ZERODHA, connected: true, connection_status: "connected" };
+
+  it("says it is connected instead of offering Connect as the main action", () => {
+    render(<BrokerGrid brokers={[connected]} gate={gate({ connect_configured: true })} />);
+    expect(screen.getByTestId("broker-connected")).toHaveTextContent("Connected to Zerodha");
+    expect(screen.queryByRole("button", { name: "Connect Zerodha" })).not.toBeInTheDocument();
+  });
+
+  it("offers Sync holdings, which is what was missing", () => {
+    // The endpoint has persisted since M75 and no screen could call it, so portfolio_holding
+    // stayed at 0 and every Portfolio surface said "Holdings not synced yet".
+    render(<BrokerGrid brokers={[connected]} gate={gate({ connect_configured: true })} />);
+    expect(screen.getByRole("button", { name: "Sync holdings" })).toBeInTheDocument();
+  });
+
+  it("still allows a deliberate reconnect, demoted so it is not the obvious click", () => {
+    // Re-running connect issues a fresh Kite token and invalidates the working session, so it
+    // must stay reachable but must not be the primary button.
+    render(<BrokerGrid brokers={[connected]} gate={gate({ connect_configured: true })} />);
+    expect(screen.getByRole("button", { name: "Reconnect Zerodha" })).toBeInTheDocument();
+  });
+
+  it("a disconnected broker is unchanged — Connect is still the action", () => {
+    render(<BrokerGrid brokers={[ZERODHA]} gate={gate({ connect_configured: true })} />);
+    expect(screen.getByRole("button", { name: "Connect Zerodha" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sync holdings" })).not.toBeInTheDocument();
+  });
+});

@@ -206,26 +206,21 @@ class SyncHoldingsOut(BaseModel):
     holdings: list[BrokerHoldingOut]
     dry_run: bool
     persisted: bool = Field(
-        default=False,
         description=(
             "Whether these rows were written into the broker's holding group, which is what "
             "makes them appear on the Portfolio page. False for anything but a live read: a "
             "fixture behind a real rupee total is indistinguishable from your own positions."
         ),
     )
-    written: int = Field(default=0, description="Holdings written to the portfolio.")
-    portfolio_id: int | None = Field(
-        default=None, description="The broker's holding group, once one exists."
-    )
+    written: int = Field(description="Holdings written to the portfolio.")
+    portfolio_id: int | None = Field(description="The broker's holding group, once one exists.")
     sync_note: str = Field(
-        default="",
         description=(
             "What the persistence step did, in prose. Separate from `note`, which describes "
             "where the rows came from — two different questions."
         ),
     )
     unresolved: list[str] = Field(
-        default_factory=list,
         description=(
             "Symbols the broker reported that this build could not resolve to an instrument, "
             "named rather than dropped silently. Each costs one row, not the sync."

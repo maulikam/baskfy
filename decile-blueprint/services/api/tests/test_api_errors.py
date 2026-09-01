@@ -200,6 +200,33 @@ class TestPipelineDegraded:
         response = await api.post(url(f"/screens/{EXAMPLE_ID}/run"), json={})
         assert_problem(response, 503, "pipeline-degraded")
 
+    async def test_a_running_run_reports_in_progress_not_a_failure(
+        self, api: httpx.AsyncClient, screener_session: AsyncSession
+    ) -> None:
+        """M76. Maulik asked for exactly this: "if data pull is in progress it should say so".
+
+        `/meta/status` had two states — published or `degraded` — and the freshness pill read the
+        second as "The last pipeline run did not publish". On 1 Sep 2026 that sentence was on
+        screen while a run WAS in progress: the nightly now takes about an hour, because the SME
+        universe tripled the instrument count, so the in-flight window is long and visible.
+
+        The failure being reported in that window belongs to the PREVIOUS run. Blaming a finished
+        failure while its replacement is working is the more misleading of the two, so `running`
+        wins.
+        """
+        await screener_session.execute(update(PipelineRun).values(status="running"))
+        body = (await api.get(url("/meta/status"))).json()
+        assert body["pipeline_running"] is True
+
+    async def test_a_failed_run_still_reports_degraded(
+        self, api: httpx.AsyncClient, screener_session: AsyncSession
+    ) -> None:
+        """The other direction, so the new state cannot swallow the old one."""
+        await screener_session.execute(update(PipelineRun).values(status="failed"))
+        body = (await api.get(url("/meta/status"))).json()
+        assert body["degraded"] is True
+        assert body["pipeline_running"] is False
+
     async def test_status_still_answers_when_nothing_is_published(
         self, api: httpx.AsyncClient, screener_session: AsyncSession
     ) -> None:

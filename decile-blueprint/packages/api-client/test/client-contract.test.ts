@@ -96,11 +96,23 @@ type _RunBodyIsOptional = Expect<Equal<undefined extends RunBody ? true : false,
 type _RowHasRank = Expect<Equal<ScreenRunRowOut["rank"], number>>;
 type _RowHasSymbol = Expect<Equal<ScreenRunRowOut["symbol"], string>>;
 
-/** The status payload the freshness banner reads. */
+/**
+ * The status payload the freshness banner reads.
+ *
+ * `pipeline_running` joined at M76. The banner had two states — published or `degraded` — and read
+ * the second as "The last pipeline run did not publish", which it showed while a run was actually
+ * in progress. A run in flight is neither, and the nightly now takes about an hour, so that window
+ * is long enough to matter.
+ */
 type _StatusShape = Expect<
   Equal<
     KeysOf<StatusOut>,
-    "as_of" | "data_version" | "last_pipeline_run" | "degraded" | "data_start_date"
+    | "as_of"
+    | "data_version"
+    | "last_pipeline_run"
+    | "degraded"
+    | "pipeline_running"
+    | "data_start_date"
   >
 >;
 

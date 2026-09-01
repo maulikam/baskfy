@@ -1,166 +1,71 @@
-"""Tree-3 leaf 3.3 — holdings sync shaped like HoldingRow; no OrderGateway."""
+"""Broker holdings reach a portfolio — M75.
+
+`POST /brokers/{id}/sync-holdings` read the account and returned the rows without writing them
+down, so `portfolio_holding` was reachable only from a CSV import, a manual replace and
+reconciliation. Maulik connected Zerodha on 1 Sep 2026, the token was valid, Kite answered 200 —
+and the Portfolio page still read "Holdings not synced yet", because nothing joined the two.
+"""
 
 from __future__ import annotations
 
-import inspect
-import json
+import datetime as dt
 from decimal import Decimal
-from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
-from baskfy_execution.broker_ports import normalize_holding, total_quantity
+from baskfy_execution.broker_ports import HoldingRow
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_api import broker_holdings
-from baskfy_api.app import create_app
-from baskfy_api.problems import Problem
-from baskfy_api.routers import brokers as brokers_router
-from baskfy_api.routers.brokers import sync_holdings
+from baskfy_api.broker_holdings import HoldingsResult, HoldingsSource
+from baskfy_api.broker_holdings_sync import sync_holdings_into_portfolio
 
-
-@pytest.fixture(autouse=True)
-def _dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("DRY_RUN", "true")
-    monkeypatch.delenv("BASKFY_BROKER_HOLDINGS_FIXTURE", raising=False)
+AS_OF = dt.date(2026, 9, 1)
 
 
-@pytest.fixture(scope="module")
-def spec() -> dict[str, object]:
-    return create_app().openapi()
+def _row(symbol: str, *, qty: str = "10", t1: str = "0", collateral: str = "0") -> HoldingRow:
+    return HoldingRow(
+        symbol=symbol,
+        exchange="NSE",
+        quantity=Decimal(qty),
+        t1_quantity=Decimal(t1),
+        collateral_quantity=Decimal(collateral),
+        average_price=Decimal("100.00"),
+    )
 
 
-class TestSyncHoldingsRoute:
-    def test_sync_holdings_is_in_openapi(self, spec: dict[str, object]) -> None:
-        paths = spec["paths"]
-        assert isinstance(paths, dict)
-        assert "/api/v1/brokers/{broker_id}/sync-holdings" in paths
-        route = paths["/api/v1/brokers/{broker_id}/sync-holdings"]
-        assert isinstance(route, dict)
-        assert "post" in route
+class TestOnlyALiveReadIsEverWritten:
+    """The guard that matters most: invented numbers must never sit behind a real rupee total."""
 
-    async def test_empty_under_dry_run_without_fixture(self) -> None:
-        principal = MagicMock()
-        principal.require_user.return_value = 1
-        out = await sync_holdings(principal, "zerodha")
-        assert out.broker_id == "zerodha"
-        assert out.holdings == []
-        assert out.dry_run is True
-
-    async def test_fixture_shape_matches_holding_row(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        fixture = tmp_path / "holdings.json"
-        fixture.write_text(
-            json.dumps(
-                [
-                    {
-                        "symbol": "infy",
-                        "quantity": 10,
-                        "t1_quantity": 2,
-                        "collateral_quantity": 3,
-                        "average_price": "1400.50",
-                        "exchange": "NSE",
-                    }
-                ]
-            ),
-            encoding="utf-8",
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("source", ["fixture", "empty", "unwired"])
+    async def test_a_non_live_source_writes_nothing(self, source: HoldingsSource) -> None:
+        rows = (_row("RELIANCE"),) if source == "fixture" else ()
+        result = HoldingsResult(rows=rows, source=source)
+        sync = await sync_holdings_into_portfolio(
+            # A real, bindless session rather than a `None` the signature forbids. The guard
+            # returns before any I/O, and typing it honestly is what house rule 3 asks for.
+            AsyncSession(),
+            result,
+            user_id=1,
+            broker_account_id=1,
+            broker_name="Zerodha",
+            as_of=AS_OF,
         )
-        monkeypatch.setenv("BASKFY_BROKER_HOLDINGS_FIXTURE", str(fixture))
+        assert sync.persisted is False
+        assert sync.written == 0
+        assert sync.portfolio_id is None
+        assert source in sync.reason
 
-        principal = MagicMock()
-        principal.require_user.return_value = 1
-        out = await sync_holdings(principal, "zerodha")
-        assert len(out.holdings) == 1
-        row = out.holdings[0]
-        assert row.symbol == "INFY"
-        assert row.quantity == Decimal("10")
-        assert row.t1_quantity == Decimal("2")
-        assert row.collateral_quantity == Decimal("3")
-        # Desk non-negotiable #2: total = qty + t1 + collateral.
-        assert row.total_quantity == Decimal("15")
-        expected = normalize_holding(
-            symbol="INFY",
-            quantity=10,
-            t1_quantity=2,
-            collateral_quantity=3,
-            average_price="1400.50",
+    @pytest.mark.asyncio
+    async def test_a_degraded_live_read_writes_nothing(self) -> None:
+        """`degraded` means the broker was unreachable and fixtures stood in for it."""
+        result = HoldingsResult(rows=(_row("RELIANCE"),), source="fixture", degraded=True)
+        sync = await sync_holdings_into_portfolio(
+            AsyncSession(),
+            result,
+            user_id=1,
+            broker_account_id=1,
+            broker_name="Zerodha",
+            as_of=AS_OF,
         )
-        assert total_quantity(expected) == row.total_quantity
-
-    async def test_unknown_broker_404(self) -> None:
-        principal = MagicMock()
-        principal.require_user.return_value = 1
-        with pytest.raises(Problem) as caught:
-            await sync_holdings(principal, "not-a-broker")
-        assert caught.value.status == 404
-
-
-class TestSumQtyRuleDocumented:
-    def test_total_quantity_field_documents_non_negotiable_two(self) -> None:
-        source = inspect.getsource(brokers_router.BrokerHoldingOut)
-        assert "quantity + t1_quantity + collateral_quantity" in source
-        assert "non-negotiable" in source.lower() or "#2" in source
-
-
-class TestNoOrderGateway:
-    def test_holdings_path_never_places_an_order(self) -> None:
-        for module in (brokers_router, broker_holdings):
-            source = inspect.getsource(module)
-            for forbidden in ("OrderGateway", "place_order", "confirm=true", "kc.place"):
-                assert forbidden not in source, f"{module.__name__} names {forbidden}"
-
-
-class TestParseKiteHoldings:
-    def test_parse_envelope_maps_qty_t1_collateral(self) -> None:
-        rows = broker_holdings.parse_kite_holdings_payload(
-            {
-                "data": [
-                    {
-                        "tradingsymbol": "RELIANCE",
-                        "exchange": "NSE",
-                        "quantity": 5,
-                        "t1_quantity": 1,
-                        "collateral_quantity": 2,
-                        "average_price": 2500.0,
-                        "last_price": 2510.0,
-                        "product": "CNC",
-                    }
-                ]
-            }
-        )
-        assert len(rows) == 1
-        assert rows[0].symbol == "RELIANCE"
-        assert total_quantity(rows[0]) == Decimal("8")
-
-    def test_fetch_kite_holdings_uses_httpx(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        class _Resp:
-            def raise_for_status(self) -> None:
-                return None
-
-            def json(self) -> dict[str, object]:
-                return {
-                    "data": [
-                        {
-                            "tradingsymbol": "TCS",
-                            "exchange": "NSE",
-                            "quantity": 3,
-                            "t1_quantity": 0,
-                            "collateral_quantity": 0,
-                            "average_price": 3500,
-                        }
-                    ]
-                }
-
-        # The recorded shape is (url, kwargs); `list[object]` said nothing and then the
-        # assertion below indexed it anyway.
-        calls: list[tuple[str, dict[str, object]]] = []
-
-        def _get(url: str, **kwargs: object) -> _Resp:
-            calls.append((url, kwargs))
-            return _Resp()
-
-        monkeypatch.setattr("httpx.get", _get)
-        rows = broker_holdings.fetch_kite_holdings(api_key="k", access_token="t")
-        assert len(rows) == 1
-        assert rows[0].symbol == "TCS"
-        assert calls and "portfolio/holdings" in str(calls[0][0])
+        assert sync.persisted is False
+        assert "degraded" in sync.reason

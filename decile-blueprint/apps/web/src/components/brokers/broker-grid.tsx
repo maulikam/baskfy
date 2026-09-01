@@ -265,13 +265,33 @@ export function BrokerGrid({ brokers, gate }: BrokerGridProps) {
               </>
             ) : gate.connect_configured ? (
               <>
+                {/*
+                  Say WHY, when we know why (M79). Kite invalidates an access token at the start of
+                  the next trading day, so a login that worked last night is gone by morning and
+                  the button silently becomes "Connect" again. Told plainly, that is a daily
+                  routine; left unexplained it reads as the connect having never worked — which is
+                  exactly the report that started this.
+                */}
+                {selected.connection_status === "expired" ? (
+                  <p
+                    data-testid="broker-expired"
+                    className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
+                  >
+                    Your {selected.short_name} session expired. Kite ends a session at the start of
+                    each trading day, so this needs connecting again to sync holdings.
+                  </p>
+                ) : null}
                 <Button
                   type="button"
                   disabled={pending}
                   onClick={() => onConnect(selected.id)}
                   className="w-full"
                 >
-                  {pending ? "Starting…" : `Connect ${selected.short_name}`}
+                  {pending
+                    ? "Starting…"
+                    : selected.connection_status === "expired"
+                      ? `Reconnect ${selected.short_name}`
+                      : `Connect ${selected.short_name}`}
                 </Button>
                 {message ? (
                   <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">

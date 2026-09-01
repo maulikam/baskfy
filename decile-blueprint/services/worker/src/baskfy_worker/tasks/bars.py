@@ -177,7 +177,7 @@ async def _fetch_from_bhavcopy(
     **A fallback, not a replacement.** Kite stays first because it reaches back before 2024, where
     the bhavcopy's UDiFF archive begins. A deployment with Kite configured never gets here.
     """
-    from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
+    from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy  # noqa: PLC0415
 
     if not callable(getattr(provider, "bhavcopy", None)):
         outcome.note(reason=reason, fallback="unavailable: no provider offers bhavcopy")

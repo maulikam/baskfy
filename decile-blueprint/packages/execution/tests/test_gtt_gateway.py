@@ -72,8 +72,13 @@ class SpyKC:
     ORDER_TYPE_LIMIT = "LIMIT"
     PRODUCT_CNC = "CNC"
 
-    def __init__(self, *, fail: str = "", trigger_id: int | None = 777,
-                 instruments_payload: list[dict[str, object]] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        fail: str = "",
+        trigger_id: int | None = 777,
+        instruments_payload: list[dict[str, object]] | None = None,
+    ) -> None:
         self.calls: list[tuple[str, dict[str, object]]] = []
         self._fail = fail
         self._trigger_id = trigger_id
@@ -321,14 +326,14 @@ def test_a_live_stop_is_a_cnc_sell_limit_just_under_a_tick_snapped_trigger(
 
     assert out["status"] == GTT_PLACED
     assert out["gtt_id"] == 777
-    (name, params), = [c for c in kc.calls if c[0] == "place_gtt"]
+    ((name, params),) = [c for c in kc.calls if c[0] == "place_gtt"]
     assert name == "place_gtt"
     assert params["trigger_type"] == SpyKC.GTT_TYPE_SINGLE
     assert params["tradingsymbol"] == "RELIANCE"
     assert params["exchange"] == "NSE"
     assert params["trigger_values"] == [89.0]
     assert params["last_price"] == 100.0
-    leg, = params["orders"]
+    (leg,) = params["orders"]
     assert leg["transaction_type"] == SpyKC.TRANSACTION_TYPE_SELL
     assert leg["order_type"] == SpyKC.ORDER_TYPE_LIMIT
     assert leg["product"] == SpyKC.PRODUCT_CNC, "a stop must never be MIS or NRML"
@@ -345,8 +350,8 @@ def test_a_coarse_tick_scrip_is_snapped_to_whole_rupees(tmp_path: Path) -> None:
     out = arm(gw, symbol="OFSS", qty=3, trigger=2515.1, last_price=2750.0)
     assert out["status"] == GTT_PLACED
     assert out["trigger"] == 2515.0
-    assert out["limit"] == 2502.0        # 2515 * 0.995 = 2502.425 -> 2502
-    (_, params), = [c for c in kc.calls if c[0] == "place_gtt"]
+    assert out["limit"] == 2502.0  # 2515 * 0.995 = 2502.425 -> 2502
+    ((_, params),) = [c for c in kc.calls if c[0] == "place_gtt"]
     assert params["trigger_values"] == [2515.0]
 
 
@@ -411,7 +416,7 @@ def test_a_trigger_that_snaps_up_through_the_last_price_is_refused_after_snappin
 # =====================================================================================
 def test_a_stop_inside_the_band_raises_no_finding(tmp_path: Path) -> None:
     gw, _ = make_gateway(tmp_path)
-    arm(gw, trigger=89.0, last_price=100.0)      # 11% below — mid-band
+    arm(gw, trigger=89.0, last_price=100.0)  # 11% below — mid-band
     assert "gtt_band_warning" not in events(tmp_path)
 
 
@@ -436,8 +441,8 @@ def test_the_band_boundaries_are_inside_the_band(tmp_path: Path) -> None:
     """`protection.py` compares with a 1e-9 slack, so a stop exactly on the boundary is not a
     finding. Preserved so the gateway and the review page cannot disagree about one stop."""
     gw, _ = make_gateway(tmp_path)
-    arm(gw, trigger=92.0, last_price=100.0, client_id="min")   # exactly 8%
-    arm(gw, trigger=88.0, last_price=100.0, client_id="max")   # exactly 12%
+    arm(gw, trigger=92.0, last_price=100.0, client_id="min")  # exactly 8%
+    arm(gw, trigger=88.0, last_price=100.0, client_id="max")  # exactly 12%
     assert "gtt_band_warning" not in events(tmp_path)
 
 
@@ -512,9 +517,18 @@ def test_an_order_and_its_stop_do_not_share_an_idempotency_namespace(tmp_path: P
     the one failure this whole path exists to prevent."""
     gw, kc = make_gateway(tmp_path)
     placed = asyncio.run(
-        gw.place(symbol="RELIANCE", qty=10, side="BUY", product="CNC", order_type="LIMIT",
-                 price=100.0, exchange="NSE", client_id="PLAN1:RELIANCE",
-                 tenant=CALLER, plan_tenant=CALLER)
+        gw.place(
+            symbol="RELIANCE",
+            qty=10,
+            side="BUY",
+            product="CNC",
+            order_type="LIMIT",
+            price=100.0,
+            exchange="NSE",
+            client_id="PLAN1:RELIANCE",
+            tenant=CALLER,
+            plan_tenant=CALLER,
+        )
     )
     assert placed["status"] == "PLACED"
     stop = arm(gw, client_id="PLAN1:RELIANCE")
@@ -576,7 +590,7 @@ def test_a_cancel_reaches_the_broker_with_an_integer_trigger_id(tmp_path: Path) 
     out = cancel(gw, gtt_id=4242)
     assert out["status"] == GTT_DELETED
     assert out["gtt_id"] == 4242
-    (_, params), = [c for c in kc.calls if c[0] == "delete_gtt"]
+    ((_, params),) = [c for c in kc.calls if c[0] == "delete_gtt"]
     assert params == {"trigger_id": 4242}
     assert isinstance(params["trigger_id"], int)
 
@@ -629,7 +643,7 @@ def test_the_placed_record_carries_what_slippage_and_coverage_are_measured_from(
 ) -> None:
     gw, _ = make_gateway(tmp_path)
     arm(gw, symbol="RELIANCE", qty=10, trigger=89.0, last_price=100.0)
-    placed, = [r for r in journal(tmp_path) if r.get("event") == "gtt_placed"]
+    (placed,) = [r for r in journal(tmp_path) if r.get("event") == "gtt_placed"]
     assert placed["symbol"] == "RELIANCE"
     assert placed["gtt_id"] == 777
     assert placed["qty"] == 10
@@ -665,7 +679,7 @@ def test_an_unnameable_but_created_trigger_is_reported_as_placed(tmp_path: Path)
     out = arm(gw, client_id="P:X")
     assert out["status"] == GTT_PLACED
     assert out["gtt_id"] is None
-    placed, = [r for r in journal(tmp_path) if r.get("event") == "gtt_placed"]
+    (placed,) = [r for r in journal(tmp_path) if r.get("event") == "gtt_placed"]
     assert "cannot be addressed" in str(placed["warning"])
     # And it is still deduplicated, so nothing re-arms it by accident.
     assert arm(gw, client_id="P:X")["status"] == "DUPLICATE"

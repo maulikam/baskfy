@@ -55,7 +55,7 @@ class TestTheTokenReachesTheProvidersStore:
         """
         assert kite_session_cli.main(["deposit", "--token", "live-token-xyz"]) == 0
 
-        key = kite_session_cli.get_provider_settings().kite_token_encryption_key
+        key = get_provider_settings().kite_token_encryption_key
         store = AccessTokenStore(configured, key)
         assert store.load().value == "live-token-xyz"
 
@@ -110,7 +110,7 @@ class TestStatusAnswersTheQuestionThatMatters:
         "Present" and "usable" are different questions, and conflating them is how a pipeline
         discovers the problem at 6pm instead of at 9am.
         """
-        key = kite_session_cli.get_provider_settings().kite_token_encryption_key
+        key = get_provider_settings().kite_token_encryption_key
         store = AccessTokenStore(configured, key)
         store.save("stale", issued_at=dt.datetime.now(tz=dt.UTC) - dt.timedelta(days=3))
         assert kite_session_cli.main(["status"]) == 1
@@ -154,7 +154,7 @@ def pullable(configured: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
             request=httpx.Request("GET", url),
         )
 
-    monkeypatch.setattr(kite_session_cli.httpx, "get", live_session)
+    monkeypatch.setattr(httpx, "get", live_session)
     return configured
 
 
@@ -167,7 +167,7 @@ def _record_run(
         assert kwargs.get("shell") in (None, False)
         return result
 
-    monkeypatch.setattr(kite_session_cli.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
 
 class TestPullFetchesTheSessionWithoutAHuman:
@@ -301,7 +301,7 @@ class TestItRefusesAnythingThatIsNotAToken:
         def fake_run(command: list[str], **kwargs: object) -> _FakeCompleted:
             raise subprocess.TimeoutExpired(cmd="ssh", timeout=20.0)
 
-        monkeypatch.setattr(kite_session_cli.subprocess, "run", fake_run)
+        monkeypatch.setattr(subprocess, "run", fake_run)
         with pytest.raises(SystemExit) as caught:
             kite_session_cli.fetch_desk_token()
         assert "20" in str(caught.value)
@@ -314,7 +314,7 @@ class TestItRefusesAnythingThatIsNotAToken:
         def fake_run(command: list[str], **kwargs: object) -> _FakeCompleted:
             raise FileNotFoundError(2, "No such file or directory: 'ssh'")
 
-        monkeypatch.setattr(kite_session_cli.subprocess, "run", fake_run)
+        monkeypatch.setattr(subprocess, "run", fake_run)
         with pytest.raises(SystemExit) as caught:
             kite_session_cli.fetch_desk_token()
         assert "openssh-client" in str(caught.value)
@@ -368,7 +368,7 @@ class TestTheNightRefreshesItsOwnSession:
             calls.append("deps")
             raise _Stop
 
-        monkeypatch.setattr(celery_tasks.kite_session_cli, "refresh_quietly", fake_refresh)
+        monkeypatch.setattr(kite_session_cli, "refresh_quietly", fake_refresh)
         monkeypatch.setattr(celery_tasks, "build_pipeline_dependencies", fake_deps)
 
         with pytest.raises(_Stop):
@@ -390,7 +390,7 @@ class TestTheNightRefreshesItsOwnSession:
             reached.append("deps")
             raise _Stop
 
-        monkeypatch.setattr(celery_tasks.kite_session_cli, "refresh_quietly", lambda: False)
+        monkeypatch.setattr(kite_session_cli, "refresh_quietly", lambda: False)
         monkeypatch.setattr(celery_tasks, "build_pipeline_dependencies", fake_deps)
 
         with pytest.raises(_Stop):
@@ -417,7 +417,7 @@ class TestAPulledSessionIsProvenBeforeItIsTrusted:
                 seen.append({str(k): str(v) for k, v in headers.items()})
             return httpx.Response(status, json=payload, request=httpx.Request("GET", url))
 
-        monkeypatch.setattr(kite_session_cli.httpx, "get", fake_get)
+        monkeypatch.setattr(httpx, "get", fake_get)
         return seen
 
     def test_a_live_token_is_stored_and_its_owner_named(
@@ -477,9 +477,7 @@ class TestAPulledSessionIsProvenBeforeItIsTrusted:
         monkeypatch.setenv("BASKFY_KITE_API_KEY", "apikey0123456789")
         _reset_settings_cache()
         _record_run(monkeypatch, _FakeCompleted(0, stdout=DESK_TOKEN), [])
-        seen = self._respond(
-            monkeypatch, 200, {"status": "success", "data": {"user_id": "YP8452"}}
-        )
+        seen = self._respond(monkeypatch, 200, {"status": "success", "data": {"user_id": "YP8452"}})
         kite_session_cli.pull()
 
         assert seen, "Kite was never called"
@@ -518,7 +516,7 @@ class TestAPulledSessionIsProvenBeforeItIsTrusted:
             called.append(url)
             raise AssertionError("Kite must not be called when verification is off")
 
-        monkeypatch.setattr(kite_session_cli.httpx, "get", fake_get)
+        monkeypatch.setattr(httpx, "get", fake_get)
         _record_run(monkeypatch, _FakeCompleted(0, stdout=DESK_TOKEN), [])
 
         assert kite_session_cli.pull(verify=False) == 0

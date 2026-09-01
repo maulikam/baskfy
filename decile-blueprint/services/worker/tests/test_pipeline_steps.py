@@ -149,18 +149,14 @@ class TestCalendarReconciliation:
         async def published(day: dt.date) -> bool:
             return day == missed
 
-        result = await reconcile_calendar(
-            session, PRIOR_DATE, missed, published=published
-        )
+        result = await reconcile_calendar(session, PRIOR_DATE, missed, published=published)
         assert result.inferred_holidays == 0
         assert (await classify(session, missed)).is_trading_day
         # And it is reported rather than passed over in silence: the calendar is right now, but
         # the bars are still missing and only a backfill fixes that.
         assert result.missed_sessions == (missed,)
 
-    async def test_a_day_nse_did_not_publish_is_still_inferred(
-        self, session: AsyncSession
-    ) -> None:
+    async def test_a_day_nse_did_not_publish_is_still_inferred(self, session: AsyncSession) -> None:
         """The veto must not disable the mechanism — lunar holidays still need inferring."""
         instruments = [await make_instrument(session, f"SYM{i}", token=i + 1) for i in range(25)]
         for instrument in instruments:

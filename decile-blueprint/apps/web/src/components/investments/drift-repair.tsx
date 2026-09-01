@@ -68,7 +68,7 @@ export function DriftRepair({ investmentId }: { investmentId: string }) {
   return (
     <form
       data-testid="drift-repair"
-      onSubmit={onScan}
+      onSubmit={(event) => void onScan(event)}
       className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
     >
       <div className="space-y-1">
@@ -109,7 +109,7 @@ export function DriftRepair({ investmentId }: { investmentId: string }) {
           {busy ? "Working…" : "Scan"}
         </Button>
         {needsFix ? (
-          <Button type="button" size="sm" disabled={busy} onClick={onFix}>
+          <Button type="button" size="sm" disabled={busy} onClick={() => void onFix()}>
             Fix now
           </Button>
         ) : null}

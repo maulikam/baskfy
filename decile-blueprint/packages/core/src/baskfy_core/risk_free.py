@@ -32,9 +32,7 @@ def load_tbill_series() -> tuple[tuple[dt.date, Decimal], ...]:
     text = resources.files("baskfy_core.data").joinpath(_SERIES_FILE).read_text(encoding="utf-8")
     points: list[tuple[dt.date, Decimal]] = []
     for row in csv.DictReader(text.splitlines()):
-        points.append(
-            (dt.date.fromisoformat(row["date"]), Decimal(row["annual_pct"]) / _HUNDRED)
-        )
+        points.append((dt.date.fromisoformat(row["date"]), Decimal(row["annual_pct"]) / _HUNDRED))
     points.sort(key=lambda item: item[0])
     return tuple(points)
 

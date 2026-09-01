@@ -22,7 +22,7 @@ from baskfy_worker.tasks.quality import NO_MEMBERSHIP_SOURCE
 class TestTheExemptionIsNarrowAndStaysNarrow:
     def test_it_names_only_universes_that_exist(self) -> None:
         slugs = {u.slug for u in UNIVERSES}
-        assert NO_MEMBERSHIP_SOURCE <= slugs, sorted(NO_MEMBERSHIP_SOURCE - slugs)
+        assert slugs >= NO_MEMBERSHIP_SOURCE, sorted(NO_MEMBERSHIP_SOURCE - slugs)
 
     def test_it_is_a_short_list_and_not_a_habit(self) -> None:
         """Two of fourteen. If this ever approaches the size of the catalogue, the gate has been
@@ -51,9 +51,9 @@ class TestTheReasonsAreWrittenDownWhereTheyAreUsed:
     def test_each_exempt_universe_is_explained_in_the_source(self) -> None:
         """A bare set of slugs decays into folklore. The next person to read this needs to know
         what would have to change for the entry to be removed."""
-        import inspect
+        import inspect  # noqa: PLC0415 - only this test reads source
 
-        from baskfy_worker.tasks import quality
+        from baskfy_worker.tasks import quality  # noqa: PLC0415 - only this test reads source
 
         source = inspect.getsource(quality)
         head = source[: source.index("async def check_universe_sizes")]
@@ -62,9 +62,9 @@ class TestTheReasonsAreWrittenDownWhereTheyAreUsed:
 
     def test_the_gate_still_reports_them_on_a_passing_run(self) -> None:
         """A known gap that stops being mentioned is a known gap that stops being known."""
-        import inspect
+        import inspect  # noqa: PLC0415 - only this test reads source
 
-        from baskfy_worker.tasks.quality import check_universe_sizes
+        from baskfy_worker.tasks.quality import check_universe_sizes  # noqa: PLC0415
 
         source = inspect.getsource(check_universe_sizes)
         assert "no membership source wired for" in source

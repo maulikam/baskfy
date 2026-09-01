@@ -56,7 +56,9 @@ def signing_key() -> rsa.RSAPrivateKey:
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
 
-def build_token(
+# One keyword-only knob per thing that can be wrong — which is what "one thing wrong at a
+# time" requires. Fewer parameters would mean fewer independently-testable failure modes.
+def build_token(  # noqa: PLR0913
     key: rsa.RSAPrivateKey,
     *,
     audience: str = CLIENT_ID,
@@ -67,7 +69,7 @@ def build_token(
     name: str | None = "Asha Rao",
     expires_in: int = 3600,
     algorithm: str = "RS256",
-    key_for_signing: object = None,
+    key_for_signing: rsa.RSAPrivateKey | None = None,
 ) -> str:
     """A token shaped exactly like Google's, with one thing wrong at a time."""
     now = dt.datetime.now(tz=dt.UTC)
@@ -89,9 +91,7 @@ def build_token(
     return jwt.encode(claims, secret, algorithm=algorithm, headers={"kid": KEY_ID})
 
 
-def _hs256_by_hand(
-    *, secret: str, header: dict[str, object], claims: dict[str, object]
-) -> str:
+def _hs256_by_hand(*, secret: str, header: dict[str, object], claims: dict[str, object]) -> str:
     """A JWT built segment by segment, so an HS256 token can carry a PEM public key as its secret.
 
     Deliberately not `jwt.encode`: PyJWT blocks exactly this, which is correct of PyJWT and
@@ -108,9 +108,7 @@ def _hs256_by_hand(
 
 
 @pytest.fixture
-def verifier(
-    signing_key: rsa.RSAPrivateKey, monkeypatch: pytest.MonkeyPatch
-) -> GoogleVerifier:
+def verifier(signing_key: rsa.RSAPrivateKey, monkeypatch: pytest.MonkeyPatch) -> GoogleVerifier:
     """A real verifier whose JWKS lookup returns our test key instead of fetching Google's.
 
     Only the *fetch* is replaced. Signature verification, the audience check, the expiry and every
@@ -143,9 +141,7 @@ class TestATokenWeShouldBelieve:
         self, verifier: GoogleVerifier, signing_key: rsa.RSAPrivateKey
     ) -> None:
         """Google issues both. Accepting only one rejects live users."""
-        identity = await verifier.verify(
-            build_token(signing_key, issuer="accounts.google.com")
-        )
+        identity = await verifier.verify(build_token(signing_key, issuer="accounts.google.com"))
         assert identity.subject == SUBJECT
 
     async def test_email_verified_as_the_string_true_is_accepted(

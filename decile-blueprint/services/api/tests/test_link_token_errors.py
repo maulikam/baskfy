@@ -24,14 +24,23 @@ to email verification, and the wrong sentence would be just as wrong on an unsub
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Protocol
 
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from baskfy_api.schemas import UnsubscribeIn
 
+
+class _CarriesAToken(Protocol):
+    """The one field these models are gathered here to share."""
+
+    token: str
+
+
 #: Builds one request model from a token. Typed rather than suppressed: house rule 3.
-Build = Callable[[str], BaseModel]
+#: `BaseModel` was too wide — it hid `.token`, the only attribute every test here reads.
+Build = Callable[[str], _CarriesAToken]
 
 #: Every request model whose token arrives out of a link in an email.
 LINK_TOKEN_MODELS: list[tuple[str, Build]] = [

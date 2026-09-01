@@ -3,6 +3,12 @@
 # that grants full account read plus order placement until it expires.
 .env
 data/.kite_token.json
+# ...and the key that decrypts it. This line was missing until 26 Aug 2026: the ciphertext was
+# ignored and the Fernet key beside it was committed in 44c029c (22 Aug) and pushed to
+# origin/developer. Ignoring the ciphertext while committing its key protects nothing. The glob
+# covers the whole family so a future `.kite_token.json.key.bak` cannot repeat it.
+data/.kite_token.json.*
+data/*.key
 
 # --- environment -------------------------------------------------------------------
 .venv/

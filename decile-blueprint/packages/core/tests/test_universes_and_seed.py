@@ -12,9 +12,9 @@ from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.seed_data import EXAMPLE_SCREENS, PLANS, index_def_rows
 from baskfy_core.universes import (
     CONTAINMENT_IDENTITIES,
-    REFERENCE_EXPORT_UNIVERSES,
     FIRST_NON_UNIVERSE_INDEX_ID,
     MARKET_HEALTH_SLUGS,
+    REFERENCE_EXPORT_UNIVERSES,
     UNION_IDENTITIES,
     UNIVERSE_BY_SLUG,
     UNIVERSES,

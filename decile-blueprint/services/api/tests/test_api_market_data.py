@@ -32,7 +32,6 @@ from baskfy_core.reference_export import to_rows
 from baskfy_core.universes import (
     DASHBOARD_UNIVERSES,
     MARKET_HEALTH_SLUGS,
-    UNIVERSE_BY_SLUG,
 )
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]

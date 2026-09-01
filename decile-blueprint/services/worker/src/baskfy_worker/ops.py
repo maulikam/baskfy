@@ -92,9 +92,7 @@ async def is_trading_day(session: AsyncSession, day: dt.date) -> bool:
     (`trading_day` currently reaches 2026-12-31), so an absent row means the far future or a gap,
     and in both cases not running is the safe answer.
     """
-    found = await session.scalar(
-        select(TradingDay.is_trading_day).where(TradingDay.date == day)
-    )
+    found = await session.scalar(select(TradingDay.is_trading_day).where(TradingDay.date == day))
     return bool(found)
 
 

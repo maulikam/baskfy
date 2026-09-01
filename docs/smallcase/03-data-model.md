@@ -28,6 +28,19 @@ cb_manager(id, slug, name, kind[ENGINE|HUMAN|EXTERNAL], sebi_reg_no NULL,
            bio, strategies[], disclosures_md, created_at)
   -- seed rows: 'baskfy-engine' (kind=ENGINE), 'maulik' (kind=HUMAN)
 
+cb_manager_revenue_share(id, manager_id → cb_manager ON DELETE CASCADE,
+                         rate_bps  -- 0..10000; NO server default, see below,
+                         effective_from, effective_to NULL, note NULL, created_at)
+  -- Landed in ef50c09 and went undocumented until M74; the schema test's table count
+  -- is what caught it. Shape settled now so paid launch is not blocked later, the same
+  -- order P4.1 followed while C3 was outstanding.
+  -- `rate_bps` is NOT NULL with no default ON PURPOSE: D7 pricing amounts are
+  -- human-track, and a default is how an invented rate stops appearing in diffs.
+  -- Rates are SUPERSEDED, never edited — a renegotiation is a new row with a new
+  -- effective_from, and the old row gets an effective_to. An UPDATE would rewrite what
+  -- a manager was owed in a quarter they may already have been paid for.
+  -- Basis points, not a percentage: house rule 9 keeps money off floats.
+
 cb_basket(id, slug, name, manager_id → cb_manager,
           type[STOCK|MF|US]  -- only STOCK buildable this run,
           access[FREE|FEE]   -- FEE inert while subscriptions flag is off,

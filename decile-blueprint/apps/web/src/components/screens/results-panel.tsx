@@ -155,16 +155,11 @@ export function ResultsPanel({
     [result?.rows],
   );
 
+  const sortingFactorLabel = result?.sorting_factor.label ?? "";
   const columns = useMemo(
     () =>
-      buildColumns(
-        result?.columns ?? [],
-        columnMeta,
-        result?.sorting_factor.label ?? "",
-        sortingFactorUnit,
-        rows,
-      ),
-    [result?.columns, result?.sorting_factor.label, columnMeta, sortingFactorUnit, rows],
+      buildColumns(result?.columns ?? [], columnMeta, sortingFactorLabel, sortingFactorUnit, rows),
+    [result?.columns, sortingFactorLabel, columnMeta, sortingFactorUnit, rows],
   );
 
   const suppressed = useMemo(

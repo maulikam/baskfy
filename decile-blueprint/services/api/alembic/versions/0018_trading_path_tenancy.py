@@ -42,9 +42,7 @@ def upgrade() -> None:
 
     op.add_column("cb_investment", sa.Column("broker_account_id", sa.BigInteger(), nullable=True))
     op.add_column("cb_order_batch", sa.Column("user_id", sa.BigInteger(), nullable=True))
-    op.add_column(
-        "cb_order_batch", sa.Column("broker_account_id", sa.BigInteger(), nullable=True)
-    )
+    op.add_column("cb_order_batch", sa.Column("broker_account_id", sa.BigInteger(), nullable=True))
 
     op.execute(
         """

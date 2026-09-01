@@ -138,7 +138,7 @@ class TestTheSeriesFilter:
         )
         ids = {("AGUL", "SM"): 11, ("AATMAJ", "ST"): 12}
         rows, unmatched = _rows_for_day(frame, ids, EQUITY_SERIES)
-        assert sorted(r["instrument_id"] for r in rows) == [11, 12]
+        assert {r["instrument_id"] for r in rows} == {11, 12}
         assert unmatched == set()
 
 

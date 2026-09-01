@@ -36,8 +36,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_core.models import PipelineRun
 from baskfy_providers.errors import ProviderError
 from baskfy_providers.publication import bhavcopy_publication_check
+
+# `CALENDAR_LOOKBACK_DAYS` is re-exported on purpose. The `as` form is what marks a name as
+# deliberately public to mypy strict, and `test_pipeline_chain` imports it from here to prove the
+# pipeline's lookback IS the calendar's and not a second copy that can drift. PLC0414 exists to
+# catch an accidental `import x as x`; in re-export position it is a false positive, and ruff and
+# mypy simply disagree here.
 from baskfy_worker.calendar import (
-    CALENDAR_LOOKBACK_DAYS,
+    CALENDAR_LOOKBACK_DAYS as CALENDAR_LOOKBACK_DAYS,  # noqa: PLC0414
+)
+from baskfy_worker.calendar import (
     NotATradingDay,
     reconcile_calendar,
     require_trading_day,

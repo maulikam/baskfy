@@ -138,7 +138,8 @@ def _with_stub_google(client: httpx.AsyncClient) -> httpx.AsyncClient:
     tests: one failed outright, and the other PASSED FOR THE WRONG REASON, expecting a 401 from
     the allowlist and getting one from a failed JWKS fetch.
     """
-    app = getattr(client._transport, "app", None)  # noqa: SLF001 - the fixture does the same
+    # Private attribute on purpose: the fixture reaches for the same one.
+    app = getattr(client._transport, "app", None)
     assert app is not None, "running_app must be built on an ASGITransport"
     app.state.google_verifier = StubGoogle()
     return client
@@ -213,9 +214,7 @@ class TestGoogleSignIn:
             .all()
         )
         assert len(users) == 1
-        identities = (
-            (await screener_session.execute(select(AuthIdentity))).scalars().all()
-        )
+        identities = (await screener_session.execute(select(AuthIdentity))).scalars().all()
         assert len(identities) == 1, "a second sign-in must not accumulate an identity row"
 
     async def test_the_subject_identifies_the_account_not_the_address(
@@ -498,6 +497,7 @@ class TestMe:
         body = body_of(await api.patch(url("/me"), json={"name": "Renamed"}, headers=headers))
         assert body["name"] == "Renamed"
 
+
 class TestDpdp:
     """docs/11 §Compliance: "DPDP Act: consent record, data export and deletion endpoints"."""
 
@@ -625,9 +625,7 @@ class TestSessionEpoch:
         before = signed_in["session_epoch"]
         headers = {"Authorization": f"Bearer {signed_in['access_token']}"}
 
-        deleted = await api.request(
-            "DELETE", url("/me"), json={"email": EMAIL}, headers=headers
-        )
+        deleted = await api.request("DELETE", url("/me"), json={"email": EMAIL}, headers=headers)
         assert deleted.status_code == 200, deleted.text
 
         # Signing in again cancels the deletion (Prompt 12 §5) and reports the new generation.

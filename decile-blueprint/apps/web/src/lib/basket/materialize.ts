@@ -96,7 +96,7 @@ function priceOf(row: MaterializeRowIn): number | null {
 /** Map a screen-run row (additionalProperties) onto what sizing reads. */
 export function rowsFromScreen(rows: readonly Record<string, unknown>[]): MaterializeRowIn[] {
   return rows.map((row) => ({
-    symbol: String(row.symbol ?? ""),
+    symbol: typeof row.symbol === "string" ? row.symbol : "",
     name: typeof row.name === "string" ? row.name : undefined,
     rank: typeof row.rank === "number" ? row.rank : Number(row.rank) || 0,
     sorting_factor: numericField(row, "sorting_factor"),

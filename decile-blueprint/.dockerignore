@@ -1,0 +1,43 @@
+# The build context is this directory. Everything below is either rebuilt inside the image,
+# irrelevant to it, or must never enter it.
+
+# Rebuilt in the image. Copying the host's would drag in darwin-arm64 platform binaries and
+# pnpm's symlink farm, both of which break inside linux/arm64.
+**/node_modules
+**/.next
+**/.next-build
+**/.turbo
+**/dist
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+
+# MUST NEVER ENTER AN IMAGE. Root CLAUDE.md: ".env files and data/ stay untracked"; an image
+# layer is world-readable to anyone who can pull it, and layers survive deletion.
+.env
+.env.*
+!.env.example
+.secrets
+**/*.pem
+**/*.key
+
+# Unrebuildable evidence and the regression corpus — neither belongs in a deployment artefact.
+data
+../kite-momentum-rebalancer/data
+
+# Test and tooling output.
+coverage
+coverage.json
+playwright-report
+test-results
+benchmarks/*.json
+
+# Version control and editor noise.
+.git
+.gitignore
+.github
+**/.DS_Store
+**/*.log

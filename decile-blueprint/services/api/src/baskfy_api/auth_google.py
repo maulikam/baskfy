@@ -101,9 +101,7 @@ class GoogleVerifier:
         self._leeway = settings.jwt_leeway_seconds
         # Constructed eagerly, but it performs no I/O until the first `get_signing_key_from_jwt`,
         # so importing this module never reaches the network.
-        self._jwks = PyJWKClient(
-            GOOGLE_JWKS_URI, cache_keys=True, lifespan=JWKS_CACHE_SECONDS
-        )
+        self._jwks = PyJWKClient(GOOGLE_JWKS_URI, cache_keys=True, lifespan=JWKS_CACHE_SECONDS)
 
     @property
     def configured(self) -> bool:
@@ -140,7 +138,9 @@ class GoogleVerifier:
         except jwt.PyJWTError as exc:
             # The class, never the message: PyJWT's text can quote claim values back.
             raise GoogleVerificationError(f"token rejected: {type(exc).__name__}") from exc
-        except Exception as exc:  # noqa: BLE001 — a JWKS fetch failure is a network error
+        # Broad by intent: a JWKS fetch failure is a network error, and every variant of it
+        # means the same thing to the caller. Re-raised, never swallowed (house rule 3).
+        except Exception as exc:
             raise GoogleVerificationError(f"JWKS unavailable: {type(exc).__name__}") from exc
 
         issuer = claims.get("iss")

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 from decimal import Decimal
 
 import httpx
@@ -26,7 +27,7 @@ from api_helpers import (
 from screener_helpers import AS_OF, DATA_VERSION, export_symbols_in_file_order, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.reference_export import EXPORT_COLUMNS
+from baskfy_core.reference_export import EXPORT_COLUMNS, FACTOR_COLUMN_MAP
 from baskfy_core.screener import DEFAULT_RESULT_COLUMNS, IDENTITY_COLUMNS
 from baskfy_core.seed_data import EXAMPLE_SCREENS
 
@@ -346,7 +347,12 @@ class TestCsvExport:
         to come out identically through both.
         """
         headers = await subscriber(screener_session, "csv3@example.com")
-        body = (await api.post(url(f"/screens/{EXAMPLE_ID}/run"), json={}, headers=headers)).json()
+        # `parse_float=Decimal`, not `.json()`. The wire carries `"vol_12m":0.5793179400` — the
+        # full RATIO_10DP scale, agreeing with the CSV to the digit. Plain `json.loads` turns that
+        # into an IEEE double and `str()` renders it `0.57931794`, so the default lens invents a
+        # mismatch that neither surface has. Reading the literal is what house rule 8 is about.
+        raw = (await api.post(url(f"/screens/{EXAMPLE_ID}/run"), json={}, headers=headers)).text
+        body = json.loads(raw, parse_float=Decimal)
         text = (await api.get(url(f"/screens/{EXAMPLE_ID}/csv"), headers=headers)).content.decode(
             "utf-8-sig"
         )
@@ -356,8 +362,20 @@ class TestCsvExport:
         first_csv = rows[0]
         # The export's row order is the screen's order, so row one of each is the same instrument.
         assert first_csv["symbol"] == first_json["symbol"]
-        assert first_csv["absolute_return_one_year"] == str(first_json["ret_12m"])
-        assert first_csv["ma_200"] == str(first_json["ma_200"])
+
+        # Derived, not named by hand. This used to assert two columns chosen by eye, one of them
+        # `ma_200` — which the CSV carries (it is one of docs/13's 93) and the JSON run response
+        # never has, because that payload serves DEFAULT_RESULT_COLUMNS. The test was red for as
+        # long as that had been true, asserting a key it could only KeyError on.
+        #
+        # Pairing through FACTOR_COLUMN_MAP covers every column both payloads actually share, and
+        # grows on its own when DEFAULT_RESULT_COLUMNS does.
+        shared = [(exp, model) for exp, model in FACTOR_COLUMN_MAP.items() if model in first_json]
+        assert shared, "no factor column is served by both payloads — the pairing has broken"
+        for export_name, model_name in shared:
+            assert first_csv[export_name] == str(first_json[model_name]), (
+                f"{export_name} / {model_name} disagree between the CSV and the JSON"
+            )
 
     async def test_the_response_is_chunked_not_content_length(
         self, api: httpx.AsyncClient, screener_session: AsyncSession

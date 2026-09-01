@@ -60,9 +60,7 @@ async def get_investment_costs(
     )
     batches = list(
         (
-            await session.scalars(
-                select(CbOrderBatch).where(CbOrderBatch.investment_id == inv.id)
-            )
+            await session.scalars(select(CbOrderBatch).where(CbOrderBatch.investment_id == inv.id))
         ).all()
     )
     buy_amounts = [

@@ -163,6 +163,7 @@ describe("DataTable screen contract", () => {
 
     await act(async () => {
       vi.advanceTimersByTime(200);
+      await Promise.resolve();
     });
 
     const after = document.querySelector("[data-row-index]");

@@ -1413,3 +1413,37 @@ enforcement of a non-negotiable. It is now three pieces on the right side of law
 - **`friday_drill.py:265` has always counted zero.** It looks for `plan_id` on journal lines and
   the gateway never wrote that field. Not fixed here — the desk tree is outside this leaf's
   contract — but the data it needs now exists as `client_id`.
+
+## M74 — the lint gate goes green, and two long-red tests say what they meant (1 Sep 2026)
+
+`make lint` had been failing at HEAD and `make test-db` carried two failures old enough to be
+called "pre-existing". Both are now clean, and nothing was suppressed to get there.
+
+**The two tests.** `test_the_values_match_the_json_response_exactly` asserted on `ma_200`, a column
+the CSV carries and the JSON run response has never served — it could only ever `KeyError`. It now
+derives its pairs from `FACTOR_COLUMN_MAP ∩ response` and checks every shared column, which is what
+its docstring always claimed. That immediately surfaced a second thing, and **the API was right**:
+the wire carries `vol_12m` at its full 10dp, agreeing with the CSV to the digit, and `json.loads`
+was flattening it to a float in the test. `test_migration_creates_all_cb_tables`' `== 18` was
+**correct and doing real work** — `cb_manager_revenue_share` landed in `ef50c09` and never reached
+`docs/smallcase/03-data-model.md`. Documented, and the count replaced by a named set that says
+which table drifted.
+
+**The lint gate.** ruff 52 → 0, mypy strict 44 → 0, eslint 23 errors → 0, plus 22 files of
+formatting drift. House rule 3 bans `# type: ignore`, so every mypy error is a real fix: implicit
+re-exports replaced by the direct names already imported at the top of those files; model selection
+by `isinstance` instead of `type(obj).__name__ == "..."` (a string the checker cannot narrow and
+that breaks silently on a rename); five `session=None` calls that lied to an `AsyncSession`
+parameter; stub methods typed `NoReturn`, which is exact because they always raise.
+
+### NOT done — the honest part
+
+- **`ruff>=0.8` is unpinned while `select` names the whole `PL` family.** A new ruff release adds
+  rules to that family, so this gate can go red with no code change — which is how it accumulated
+  52. Pinning is a policy call and was left for Maulik.
+- **`test_load.py::test_p95_stays_under_four_hundred_milliseconds` flakes locally under a full-suite
+  run** and passes in isolation, before and after these changes. It is a p95 latency budget on a
+  laptop, and it failed by cancellation rather than by a wrong number. Nothing in this module is
+  within reach of the screener path.
+- One eslint warning survives: TanStack Table's `useReactTable` cannot be memoized by React
+  Compiler. That lives in the library, not here.

@@ -14,9 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from baskfy_api.seed import (
     _run,
+    seed_reference,
     seed_reference_fixture,
     seed_trading_days,
-seed_reference,
 )
 from baskfy_core.models import (
     FactorDaily,
@@ -288,9 +288,7 @@ async def test_seed_all_leaves_the_catalogue_surfaces_with_something_to_render(
 
     async with async_sessionmaker(engine)() as session:
         plans = (await session.execute(select(func.count()).select_from(Plan))).scalar_one()
-        shelves = (
-            await session.execute(text("select count(*) from cb_collection"))
-        ).scalar_one()
+        shelves = (await session.execute(text("select count(*) from cb_collection"))).scalar_one()
 
     # The three docs/01 §1 plans. `/pricing` renders one card each; zero is the reported bug.
     assert plans == 3, f"/pricing would render {plans} cards"

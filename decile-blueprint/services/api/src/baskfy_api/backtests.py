@@ -600,9 +600,7 @@ def _sharpe_assumption(config: BacktestConfig) -> str:
             f"forward-filled from monthly observations {first.isoformat()}-{last.isoformat()}. "
             "That series is a published proxy for the 91-day T-bill, not the RBI auction cutoff."
         )
-    return (
-        "Sharpe is excess over zero: no overlapping T-bill observation was attached to this run."
-    )
+    return "Sharpe is excess over zero: no overlapping T-bill observation was attached to this run."
 
 
 @dataclass(frozen=True, slots=True)

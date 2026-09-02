@@ -16,6 +16,11 @@ the ADR floor (§1), the session cap and the trader's position cap in the plan (
 widest stop (§6), the index rule, the ladder's top rung and the drawdown containment (§8.2–8.5),
 and the swing GTT's cushion (§9.4). Where a number changed, the old one is named in the section.
 
+**Amended at SW10.5** from Maulik's review (`STANDING-ANSWERS.md` A7, A8, A9, A10, A14): the
+first-live risk multiplier (§5.4), the marketable limit and the fill poll (§7.5), the live
+gap's provisional score (§7.3), the `PENDING_RANGE` line (§9.1), the live buy's fill sequence
+(§9.4), the watch funnel and the MANUAL expiry (§9.5), and the ladder's book (§10).
+
 ## §1 Universe and indicators (`indicators.py`, `LiquidityConfig`)
 
 Computed per bar, per instrument, over the instrument (`with_swing_indicators`):
@@ -138,6 +143,21 @@ count, so a fourth trigger of a morning is a skip and a fourth confirm is a refu
 ("never more than 30% of your account over night in any stock"). `risk_per_trade_pct` [0.5],
 ceiling 1.0 (PACK.9).
 
+5.4 **The first live sessions** (SW10.5, STANDING-ANSWERS A9; `02` §3.5 — "start small"). For
+the first `first_live_sessions` [5] LIVE sessions the plan is sized at **half risk at plan
+time**: `plan.first_live_multiplier(sessions_left, execution_enabled)` is
+`risk_multiplier_first_live` [0.5] while `sw_config.first_live_sessions_left > 0` **and**
+execution is enabled, else 1, and `build_entries(..., risk_multiplier)` scales
+`risk_per_trade_pct` by it *before* `size_position` (`plan.sizing_at`) — so the line shown is
+the line sent and every cap and refusal sees the real size. A paper plan (`DRY_RUN`, or the
+flag off) is full size: the paper record rehearses the rules at the size the rules describe.
+Never a quantity halved at send time (SW7.2's rule, void). `SELL_AT_OPEN` / `RAISE_GTT_STOP`
+lines are never touched. The countdown is the evening job's: `first_live_sessions_left` comes
+down by one when a LIVE `sw_session` closes, once (`sw_session.first_live_counted`), never by a
+request, and a restart changes nothing — the fifth live session decrements to 0 and the sixth
+plans at full risk. The plan header says "first live sessions: N left · risk 0.250%";
+`sw_position.half_risk` tags the entries the journal shows.
+
 ## §6 Stops and management (`stops.py`, `StopConfig`)
 
 6.1 **Initial stop** = low of the day (`stop_mode = LOW_OF_DAY`, the default); with
@@ -178,11 +198,22 @@ incomplete → `RANGE_INCOMPLETE`; `last_price ≥ upper_circuit` → `LOCKED_UP
 `stop = min(range_low, low_of_day)`.
 7.3 `live_gap` (EP at the open): `gap = (last / prev_close − 1) × 100 ≥ live_min_gap_pct` [10]
 and `volume_pace = volume_so_far / (avg_daily_volume × minutes_elapsed / 375) ≥
-live_min_volume_pace` [3.0].
+live_min_volume_pace` [3.0]. Its **provisional score** (SW10.5, A14 — the watch row is ranked
+by it until the detectors score the close): `live_gap_score = 35 × clamp(gap / 20) + 35 ×
+clamp(volume_pace / 6)`, the two terms of §3's score the pre-open knows, out of 70. The watch
+row also carries the ADR the bars measured (`sw_watch.adr_pct`), because a live gap has no
+detection row and a stop must be measured against one ADR (§6.1).
 7.4 The monitor polls the watchlist's quotes every 5 s from the `TickBus` (fallback: Kite
 `quote` for ≤ 500 instruments per call, ≤ 1 call per 5 s, inside the 3 req/s limiter); minute
 candles for the range come from `historical_data(interval="minute")` at window close. Every
 `TRIGGERED` verdict is one `sw_signal` row and one desk notification; **nothing is ordered**.
+7.5 **The marketable limit and the fill poll** (SW10.5, STANDING-ANSWERS A8). A confirmed buy is
+sent as a LIMIT — never MARKET — at `plan.marketable_limit = min(trigger × (1 +
+entry_limit_buffer_pct [0.5] / 100), range_high + entry_limit_max_adr [0.25] × ADR)` snapped
+down to the tick (ADR in rupees, `adr_pct / 100 × trigger`; a line with no range reads the
+trigger as the range high). The request then polls the order for at most `fill_poll_seconds`
+[10] at one read every `fill_poll_interval_seconds` [0.5] — Kite's orders endpoint at ≤ 2
+req/s — and stops early on COMPLETE or a dead status. §9.4 says what each answer writes.
 
 ## §8 Market gate and progressive exposure (`market.py`, `MarketConfig`)
 
@@ -262,13 +293,23 @@ sits 3% under its trigger and fills on the way down like a market stop would. Th
 keeps the gateway's own `GTT_LIMIT_FRACTION` (0.995); the keyword is additive and defaults to
 it. Every swing GTT — a buy's, a partial's re-arm, a raised stop's, a re-arm — carries it.
 
-9.5 **The watchlist** (`WatchConfig`, SW5). A detected flag is auto-watched at
-`auto_watch_min_score` [60] or above with status `SETTING_UP`; **every** `GAP_DAY` EP is watched
-whatever it scored, because an EP is enterable for three sessions and there is no second chance to
-notice it. A flag row expires after `flag_valid_bars` [10] sessions without a trigger, an EP after
-`ep.valid_bars` [3]; a `MANUAL` row never expires and keeps the levels the person typed. Expiry is
-a state change (`WATCHING` → `EXPIRED`), never a delete — the record of what was watched is the
-record of what was passed over.
+9.5 **The watchlist** (`WatchConfig`, SW5; the funnel since SW10.5, STANDING-ANSWERS A14 —
+his own: universe → weekly focus list of 5–20 → daily focus under 5, `07`). Each evening the
+**top `auto_watch_top_n` [20] `SETTING_UP` flags by score** at `auto_watch_min_score` [60] or
+above are auto-watched, and **every** `GAP_DAY` EP whatever it scored, because an EP is
+enterable for three sessions and there is no second chance to notice it; the row carries its
+score and ADR (`sw_watch.score`, `adr_pct`). The monitor watches **all** `WATCHING` rows. The
+**daily focus** — `sw_watch.focus`, recomputed by the evening and by the premarket once the
+live gaps are on the list — is the top `focus_top_n` [5] flags by score plus every EP: what the
+notifier (SW11) pushes and the desk page puts on top; the other rows are watched, signalled
+and logged to `sw_signal`, never pushed, and feed the journal's "missed setups". A flag row
+expires after `flag_valid_bars` [10] sessions without a trigger, an EP after `ep.valid_bars`
+[3]; a `MANUAL` row keeps the levels the person typed and expires after `manual_valid_bars`
+[10] sessions **unless re-confirmed** on the watchlist page (`PATCH /swing/watch/{id}` with
+`reconfirm: true` restarts its clock from `reconfirmed_on`; until SW10.5 a MANUAL row never
+expired) — a two-week-old typed pivot is stale, and MANUAL levels are not refreshed premarket.
+Expiry is a state change (`WATCHING` → `EXPIRED`), never a delete — the record of what was
+watched is the record of what was passed over.
 
 ## §10 The journal (`journal.py`)
 
@@ -276,8 +317,12 @@ record of what was passed over.
 − entry) × quantity`; `exit_avg` share-weighted over fills. `summarize`: trades, win rate %,
 mean win R, mean loss R, expectancy (mean R), profit factor (gross win R / gross loss R, null
 when no losses), net R, largest win/loss, current loss streak. Empty → zeros, not an error.
-Simulated fills are summarised **separately** from real ones on the page; the ladder reads
-real trades when execution is enabled and simulated ones before (PACK.6).
+Simulated fills are summarised **separately** from real ones on the page. **The ladder reads
+real closes only, from day one** (SW10.5, STANDING-ANSWERS A10): there is no paper book for
+it — PACK.6's paper clause is void, the rung starts at 0 — and a simulated close never moves
+the rung whatever the flag says. One idempotent, date-bound settlement at 21:05 after `manage`
+and the fill reconciliation; the 09:09 job settles the previous session **only as a catch-up**
+when no settlement record exists for it, never a second time.
 
 ## §11 The backtest (SW9) — an EOD approximation, labelled as one
 

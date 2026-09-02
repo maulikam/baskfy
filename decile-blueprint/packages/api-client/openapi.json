@@ -15512,6 +15512,18 @@
             "title": "Added On",
             "type": "string"
           },
+          "adr_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adr Pct"
+          },
           "catalyst": {
             "anyOf": [
               {
@@ -15547,6 +15559,11 @@
             ],
             "title": "Expires On"
           },
+          "focus": {
+            "default": false,
+            "title": "Focus",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -15581,6 +15598,30 @@
               }
             ],
             "title": "Note"
+          },
+          "reconfirmed_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconfirmed On"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
           },
           "setup": {
             "title": "Setup",
@@ -15645,7 +15686,7 @@
       },
       "SwingWatchPatch": {
         "additionalProperties": false,
-        "description": "The two free-text fields, and nothing else.\n\n`docs/swing/02` Track A allows the watchlist's writes because they \"change no money\" — which\nis true of a note and a catalyst, and would stop being true the moment this model grew a\n`trigger`. A level a person can edit after the fact is a level that can be edited to match\na price, which is how a plan comes to justify a trade rather than the other way round.",
+        "description": "The two free-text fields and the re-confirmation, and nothing else.\n\n`docs/swing/02` Track A allows the watchlist's writes because they \"change no money\" — which\nis true of a note, a catalyst and a re-confirmation (A14: a MANUAL row expires after ten\nsessions unless a person says they still want it; `reconfirm: true` restarts that clock and\nchanges no level), and would stop being true the moment this model grew a `trigger`. A\nlevel a person can edit after the fact is a level that can be edited to match a price,\nwhich is how a plan comes to justify a trade rather than the other way round.",
         "properties": {
           "catalyst": {
             "anyOf": [
@@ -15670,6 +15711,11 @@
               }
             ],
             "title": "Note"
+          },
+          "reconfirm": {
+            "default": false,
+            "title": "Reconfirm",
+            "type": "boolean"
           }
         },
         "title": "SwingWatchPatch",
@@ -37892,7 +37938,7 @@
         ]
       },
       "post": {
-        "description": "Add a name by hand. It moves no money (`02` Track A) and it reaches no broker.\n\nA `MANUAL` row never expires: the person is watching for a reason the detectors cannot see,\nand retiring it after ten sessions would be the system overruling a judgement.",
+        "description": "Add a name by hand. It moves no money (`02` Track A) and it reaches no broker.\n\nA `MANUAL` row expires after ten sessions unless re-confirmed (A14, SW10.5): the person is\nwatching for a reason the detectors cannot see, but a typed level nobody has looked at in\ntwo weeks is stale, and `PATCH … {\"reconfirm\": true}` is how they say they still want it.",
         "operationId": "postWatch",
         "requestBody": {
           "content": {
@@ -38135,7 +38181,7 @@
         ]
       },
       "patch": {
-        "description": "The note and the catalyst — `01` §3's \"news check\", which a person does and Baskfy cannot.\n\nLevels are deliberately not editable here. A trigger a person can revise after the fact is a\ntrigger that can be revised to match a price they already paid.",
+        "description": "The note and the catalyst — `01` §3's \"news check\", which a person does and Baskfy cannot\n— and, with `reconfirm: true`, a MANUAL row's clock restarted (A14).\n\nLevels are deliberately not editable here. A trigger a person can revise after the fact is a\ntrigger that can be revised to match a price they already paid. Re-confirming a detector's\nrow is refused: its expiry is the detector's, and it is refreshed every evening.",
         "operationId": "patchWatch",
         "parameters": [
           {

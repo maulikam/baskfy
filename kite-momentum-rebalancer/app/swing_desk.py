@@ -60,11 +60,13 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from baskfy_core.swing.config import DEFAULT_SWING_CONFIG
 from baskfy_core.swing.opening_range import TriggerState
+from baskfy_core.swing.plan import first_live_multiplier
+from baskfy_core.swing.plan import EXECUTABLE_KINDS as _EXECUTABLE_KINDS
 from baskfy_core.swing.plan import LineKind
 
 from . import config as C
@@ -78,6 +80,10 @@ router = APIRouter()
 #: The plan-line kinds that act on a position the book already holds, in the order the plan
 #: panel lists them (`05` §3: "exit lines first (SELL at open, RAISE GTT)").
 EXIT_KINDS: tuple[str, ...] = (LineKind.SELL_AT_OPEN.value, LineKind.RAISE_GTT_STOP.value)
+#: A7 (SW10.5): the kinds a Confirm may post. `PENDING_RANGE` is not one, and the route refuses
+#: it with a 400 before `execute_line` is even called — the same set the execute module keeps.
+EXECUTABLE_KINDS: frozenset[str] = frozenset(k.value for k in _EXECUTABLE_KINDS)
+PENDING_KIND: str = LineKind.PENDING_RANGE.value
 #: The only line state a Confirm button may be attached to.
 PROPOSED = "PROPOSED"
 #: How many manage actions the book panel shows (`05` §3: "the last five").
@@ -119,7 +125,7 @@ _POSITION_COLUMNS: frozenset[str] = frozenset(
         "broker_account_id", "instrument_id", "setup", "entry_date", "entry_avg",
         "quantity_entered", "initial_stop", "stop", "gtt_id", "gtt_trigger", "gtt_armed_at",
         "trail", "partial_done", "partial_date", "quantity_open", "state", "closed_on",
-        "exit_avg", "close_reason", "r_multiple", "pnl_inr", "simulated",
+        "exit_avg", "close_reason", "r_multiple", "pnl_inr", "simulated", "half_risk",
     }
 )
 _FILL_COLUMNS: frozenset[str] = frozenset(
@@ -358,7 +364,7 @@ class PgSwingStore:
         "SELECT p.id, p.instrument_id, i.symbol, p.setup, p.entry_date, p.entry_avg, "
         "p.quantity_entered, p.quantity_open, p.initial_stop, p.stop, p.gtt_id, p.gtt_trigger, "
         "p.gtt_armed_at, p.trail, p.partial_done, p.partial_date, p.state, p.closed_on, "
-        "p.exit_avg, p.close_reason, p.r_multiple, p.pnl_inr, p.simulated "
+        "p.exit_avg, p.close_reason, p.r_multiple, p.pnl_inr, p.simulated, p.half_risk "
     )
 
     def _position_from(self) -> str:
@@ -392,6 +398,7 @@ class PgSwingStore:
             "r_multiple": _dec(row["r_multiple"], "r_multiple"),
             "pnl_inr": _dec(row["pnl_inr"], "pnl_inr"),
             "simulated": bool(row["simulated"]),
+            "half_risk": bool(row["half_risk"]),
         }
 
     def open_position_for(self, instrument_id: int) -> dict | None:
@@ -623,6 +630,56 @@ class PgSwingStore:
              str(note), self.user_id, int(line_id)),
         )
 
+    # -- SW10.5 (A7, A8): the marketable limit, the late fill, the cutoff ------------------
+
+    def range_high_for(self, line_id: int) -> Decimal | None:
+        """The opening-range high of the signal that became this line, for the marketable
+        limit (A8); None for a line no signal produced (an EOD entry reads the trigger)."""
+        row = self.conn.execute(
+            f"SELECT range_high FROM {self.t('sw_signal')} "
+            "WHERE user_id = ? AND plan_line_id = ? ORDER BY id DESC LIMIT 1",
+            (self.user_id, int(line_id)),
+        ).fetchone()
+        return _dec(row["range_high"], "range_high") if row is not None else None
+
+    def line_by_order(self, order_id: str) -> dict | None:
+        """The SENT BUY line whose `journal_ref` is this broker order id (A8's postback)."""
+        row = self.conn.execute(
+            self._LINE_SELECT + self._line_from()
+            + "WHERE l.user_id = ? AND l.kind = 'BUY_ON_TRIGGER' AND l.state = 'SENT' "
+            "AND l.journal_ref = ? ORDER BY l.id DESC LIMIT 1",
+            (self.user_id, str(order_id)),
+        ).fetchone()
+        return self._line_row(row) if row is not None else None
+
+    def sent_buy_lines(self, day: dt.date) -> list[dict]:
+        rows = self.conn.execute(
+            self._LINE_SELECT + self._line_from()
+            + "WHERE l.user_id = ? AND p.as_of = ? AND l.kind = 'BUY_ON_TRIGGER' "
+            "AND l.state = 'SENT' ORDER BY l.id",
+            (self.user_id, _bind(day)),
+        ).fetchall()
+        return [self._line_row(r) for r in rows]
+
+    def note_line(self, line_id: int, note: str) -> None:
+        self.conn.execute(
+            f"UPDATE {self.t('sw_plan_line')} SET note = COALESCE(note || '; ', '') || ?, "
+            "updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?",
+            (str(note), self.user_id, int(line_id)),
+        )
+
+    def expire_pending(self, day: dt.date) -> int:
+        """A7: every PENDING_RANGE line of `day` still PROPOSED → EXPIRED (the 10:45 sweep)."""
+        rows = self.conn.execute(
+            f"UPDATE {self.t('sw_plan_line')} SET state = 'EXPIRED', "
+            "note = COALESCE(note || '; ', '') || 'slot freed at 10:45', "
+            "updated_at = CURRENT_TIMESTAMP "
+            "WHERE user_id = ? AND kind = 'PENDING_RANGE' AND state = 'PROPOSED' AND plan_id IN "
+            f"(SELECT id FROM {self.t('sw_plan')} WHERE user_id = ? AND as_of = ?) RETURNING id",
+            (self.user_id, self.user_id, _bind(day)),
+        ).fetchall()
+        return len(rows)
+
     # -- the page's reads (this module's, not the contract's) ------------------------------
 
     def signals_for(self, day: dt.date) -> list[dict]:
@@ -630,7 +687,8 @@ class PgSwingStore:
         rows = self.conn.execute(
             f"SELECT s.id, s.instrument_id, i.symbol, s.setup, s.session_date, s.raised_at, "
             f"s.state, s.or_window_minutes, s.range_high, s.range_low, s.low_of_day, "
-            f"s.last_price, s.entry, s.stop, s.plan_line_id "
+            f"s.last_price, s.entry, s.stop, s.plan_line_id, "
+            f"(SELECT w.focus FROM {self.t('sw_watch')} w WHERE w.id = s.watch_id) AS focus "
             f"FROM {self.t('sw_signal')} s JOIN {self.t('instrument')} i ON i.id = s.instrument_id "
             "WHERE s.user_id = ? AND s.session_date = ? ORDER BY s.raised_at DESC, s.id DESC",
             (self.user_id, _bind(day)),
@@ -656,6 +714,8 @@ class PgSwingStore:
                     "entry": _dec(r["entry"], "entry"),
                     "stop": _dec(r["stop"], "stop"),
                     "plan_line_id": int(r["plan_line_id"]) if r["plan_line_id"] is not None else None,
+                    # A14: in today's focus (top 5 flags by score + every EP) — shown on top.
+                    "focus": bool(r["focus"]) if r["focus"] is not None else False,
                 }
             )
         return out
@@ -772,6 +832,8 @@ def _label(line: dict) -> str:
         return f"SWING SELL {line['symbol']} x{line['quantity']} at open"
     if kind == LineKind.RAISE_GTT_STOP.value:
         return f"SWING RAISE GTT {line['symbol']} to {_price(line['stop'])}"
+    if kind == PENDING_KIND:
+        return f"SWING PENDING {line['symbol']} — range at {_price(line['trigger'])}, no stop yet"
     return f"SWING {kind} {line['symbol']}"
 
 
@@ -798,7 +860,12 @@ def _line_view(
     expired = plan["expires_at"] is None or now > plan["expires_at"]
     position = held.get(line["instrument_id"])
     why_not = ""
-    if line["state"] != PROPOSED:
+    if line["kind"] not in EXECUTABLE_KINDS:
+        # A7: information only. Never a button, whatever the state or the plan's clock.
+        why_not = ("pending the opening range — not confirmable; the SIGNAL plan at window "
+                   "close is the line" if line["state"] == PROPOSED
+                   else f"{line['state'].lower()} (pending range)")
+    elif line["state"] != PROPOSED:
         why_not = line["state"].lower()
     elif expired:
         why_not = "plan expired"
@@ -861,6 +928,8 @@ def _plan_view(
         key=lambda ln: (EXIT_KINDS.index(ln["kind"]), ln["symbol"]),
     )
     buys = [ln for ln in lines if ln["kind"] == LineKind.BUY_ON_TRIGGER.value]
+    # A7: the live gaps holding a slot — shown with the buys, never with a button.
+    pending = [ln for ln in lines if ln["kind"] == PENDING_KIND]
     expired = plan["expires_at"] is None or now > plan["expires_at"]
     return {
         **plan,
@@ -868,6 +937,7 @@ def _plan_view(
         "countdown": _countdown(plan["expires_at"], now),
         "exits": exits,
         "buys": buys,
+        "pending": pending,
         "skips": store.skips_for(plan["id"]),
         "line_count": len(lines),
     }
@@ -964,7 +1034,7 @@ def _fingerprint(signals: list[dict], plans: list[dict | None], positions: list[
         if p is None:
             continue
         parts.append(f"p{p['id']}:{p['expired']}")
-        for ln in p["exits"] + p["buys"]:
+        for ln in p["exits"] + p["buys"] + p.get("pending", []):
             parts.append(f"l{ln['id']}:{ln['state']}")
     for pos in positions:
         parts.append(f"o{pos['id']}:{pos['state']}:{pos['gtt_id']}:{pos['quantity_open']}")
@@ -1026,6 +1096,8 @@ def build_view(
                 "confirmable": bool(line_view and line_view["confirmable"]),
             }
         )
+    # A14: the focus names first (a stable sort keeps newest-first inside each group).
+    triggers.sort(key=lambda t: 0 if t.get("focus") else 1)
 
     # --- the plan ------------------------------------------------------------------------
     morning = store.latest_plan("MORNING")
@@ -1056,6 +1128,19 @@ def build_view(
         "confirms": 0, "fills": 0, "manage_actions": 0, "notes": None,
     }
     simulated = dry_run or not execution_enabled
+    # A9: the plan header's line — half risk while the countdown runs and a confirm is real.
+    left = int(config["first_live_sessions_left"])
+    multiplier = first_live_multiplier(
+        sessions_left=left, execution_enabled=not simulated, config=DEFAULT_SWING_CONFIG.sizing
+    )
+    risk_in_force = (Decimal(str(config["risk_per_trade_pct"])) * multiplier).quantize(
+        Decimal("0.001")
+    )
+    first_live_header = (
+        f"first live sessions: {left} left · risk {risk_in_force}%" if left > 0 else ""
+    )
+    # A8: live LIMIT buys accepted and not yet complete — the reconcile / cutoff buttons' cue.
+    sent_lines = store.sent_buy_lines(today)
     poll_ms, window_opens_in_ms = _refresh(now)
     plans_for_print = [morning_view, preview_view]
     return {
@@ -1087,8 +1172,15 @@ def build_view(
             "max_open_positions": config["max_open_positions"],
             "exposure_level": config["exposure_level"],
             "first_live_sessions_left": config["first_live_sessions_left"],
+            "risk_multiplier": str(multiplier),
+            "risk_pct_in_force": risk_in_force,
+            "first_live_header": first_live_header,
+            "half_risk": multiplier < 1,
             "configured": config.get("present", True),
         },
+        "sent_lines": [{"id": ln["id"], "symbol": ln["symbol"], "quantity": ln["quantity"],
+                        "journal_ref": ln["journal_ref"], "position_id": ln["position_id"]}
+                       for ln in sent_lines],
         "triggers": triggers,
         "plans": {"morning": morning_view, "preview": preview_view},
         "book": {
@@ -1247,6 +1339,12 @@ async def swing_execute_line(
 
     with open_store() as store:
         line = store.line(line_id)
+        if line is not None and line["kind"] not in EXECUTABLE_KINDS:
+            # A7: a PENDING_RANGE line is information — the route refuses it before the
+            # execute module is even asked (which would refuse it again).
+            raise HTTPException(400, f"A {line['kind']} line cannot be executed — it is "
+                                     f"information only; the SIGNAL plan at range close is "
+                                     f"the line.")
         # Only an exit needs the market: a buy's entry is its trigger. Looked up before the
         # call so a refusal (400/404/410/409) costs no broker read.
         price = (
@@ -1256,11 +1354,95 @@ async def swing_execute_line(
         try:
             outcome = await swing_execute.execute_line(
                 store, swing_gateway(), plan_id=plan_id, line_id=line_id, confirm=confirm,
-                now=_now(), last_price=price,
+                now=_now(), last_price=price, orders=order_source(),
             )
         except UntouchableInstrumentError as exc:
             return _refused_json(exc, line_id=line_id)
     return _outcome_json(outcome, line_id=line_id)
+
+
+class KiteOrders:
+    """A8's `OrderSource` over the desk's Kite session — a READ of the order history, the
+    last row of which is the order's current state. No session → an OPEN, unfilled report,
+    so the confirm answers `SENT` and the reconcile finds it later."""
+
+    def __init__(self, kite: Any) -> None:  # noqa: ANN401 - the desk's Kite wrapper
+        self.kite = kite
+
+    def order_status(self, order_id: str) -> Any:  # noqa: ANN401 - an OrderReport
+        from . import swing_execute  # noqa: PLC0415
+
+        try:
+            history = self.kite.kc.order_history(order_id)
+        except Exception as exc:  # noqa: BLE001 - no session, no answer; the line stays SENT
+            log.warning("no order history for %s: %s", order_id, exc)
+            return swing_execute.OrderReport("OPEN", 0, Decimal(0))
+        last = history[-1] if history else {}
+        return swing_execute.OrderReport(
+            str(last.get("status") or "OPEN"),
+            int(last.get("filled_quantity") or 0),
+            Decimal(str(last.get("average_price") or 0)),
+        )
+
+
+def order_source() -> Any:  # noqa: ANN401 - an OrderSource, or None without a session
+    """The broker's order book for the fill poll — None when the desk has no Kite session (a
+    sqlite desk, a test), in which case a live confirm answers `SENT` without polling."""
+    try:
+        from . import main as _main  # noqa: PLC0415
+
+        return KiteOrders(_main.kite())
+    except Exception as exc:  # noqa: BLE001 - reported, not fatal: the poll is a convenience
+        log.warning("no order source: %s", exc)
+        return None
+
+
+@router.post("/swing/reconcile")
+async def swing_reconcile(confirm: str = Form(...)):
+    """A8: ask the broker about every SENT buy of today and apply what has filled through the
+    postback handler — the pull the page offers while a live LIMIT is resting. A non-money
+    write: it grows a position the broker already filled and re-sizes its stop; it never
+    places a buy."""
+    from . import swing_execute  # noqa: PLC0415
+
+    if confirm != "true":
+        raise HTTPException(400, "Reconciling fills requires explicit confirmation.")
+    source = order_source()
+    applied: list[dict] = []
+    with open_store() as store:
+        for line in store.sent_buy_lines(_now().astimezone(IST).date()):
+            if source is None or not line["journal_ref"]:
+                continue
+            seen = source.order_status(line["journal_ref"])
+            outcome = await swing_execute.on_order_update(
+                store, swing_gateway(),
+                {"order_id": line["journal_ref"], "status": seen.status,
+                 "filled_quantity": seen.filled_quantity, "average_price": seen.average_price},
+                now=_now(),
+            )
+            if outcome is not None:
+                applied.append(_outcome_json(outcome, line_id=line["id"]))
+    return _jsonable({"reconciled": applied, "count": len(applied)})
+
+
+@router.post("/swing/cutoff")
+async def swing_cutoff(confirm: str = Form(...)):
+    """The 10:45 sweep (A8, A7): cancel every open remainder through the gateway, free every
+    pending-range slot nothing claimed. Posted by the page's button or the operator's cron;
+    SW11 wires the Beat entry and the alert."""
+    from . import swing_execute  # noqa: PLC0415
+
+    if confirm != "true":
+        raise HTTPException(400, "The 10:45 sweep requires explicit confirmation.")
+    with open_store() as store:
+        report = await swing_execute.cutoff_open_orders(
+            store, swing_gateway(), orders=order_source(), now=_now()
+        )
+    return _jsonable({
+        "reconciled": report.reconciled, "cancelled": report.cancelled,
+        "cancel_failed": report.cancel_failed, "slots_freed": report.slots_freed,
+        "outcomes": [_outcome_json(o) for o in report.outcomes],
+    })
 
 
 @router.post("/swing/rearm")

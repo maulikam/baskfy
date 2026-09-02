@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from typing import Callable
 from .guards import (OvernightOptionError, assert_not_overnight_option,
                      assert_tradeable)
-from .gtt import (DEFAULT_STOP_BAND, DRY_RUN_GTT, DRY_RUN_GTT_DELETE, GTT_DELETE_ERROR,
-                  GTT_DELETED, GTT_ERROR, GTT_LIMIT_FRACTION, GTT_PLACED, StopBand,
-                  TickSizes, band_finding, drop_pct, gtt_params, kill_switch_reason,
-                  refuse_stop, to_tick)
+from .gtt import (DEFAULT_STOP_BAND, DRY_RUN_GTT, DRY_RUN_GTT_DELETE, DRY_RUN_GTT_MODIFY,
+                  GTT_DELETE_ERROR, GTT_DELETED, GTT_ERROR, GTT_LIMIT_FRACTION, GTT_MODIFIED,
+                  GTT_MODIFY_ERROR, GTT_PLACED, ORDER_CANCEL_DRY_RUN, ORDER_CANCEL_ERROR,
+                  ORDER_CANCELLED, ORDER_CANCELLED_STATUSES, StopBand, TickSizes, band_finding,
+                  drop_pct, gtt_params, kill_switch_reason, refuse_stop, to_tick)
 from .ratelimit import KiteLimits
 from .risk import RiskManager
 from .tenancy import TenantIds, refuse_cross_tenant
@@ -460,3 +461,165 @@ class OrderGateway:
                           client_id=client_id)
             return {"symbol": symbol, "gtt_id": gtt_id, "status": GTT_DELETE_ERROR,
                     "error": str(exc)}
+
+    # --- SW10.5 (STANDING-ANSWERS A8): a live LIMIT buy that fills late -------------------
+    #
+    # A marketable LIMIT can fill in part, and the stop armed for the first fill covers the
+    # first fill only. When the rest arrives the trigger has to grow with it — MODIFIED, never
+    # a second trigger beside the first (two triggers on one position sell twice what is held
+    # when they fire: `protection.EXCESS`). And what has not filled by 10:45 is CANCELLED, so
+    # a LIMIT does not rest into the afternoon and fill a position nobody is watching. Both
+    # are order-shaped actions and both live here, behind the same four layers, because law 2
+    # says the gateway is the only path to touch an order or a stop.
+
+    async def modify_gtt_quantity(self, *, gtt_id: int, symbol: str, qty: int, trigger: float,
+                                  last_price: float, exchange: str = "NSE",
+                                  series: str | None = None, client_id: str | None = None,
+                                  tenant: TenantIds, plan_tenant: TenantIds,
+                                  limit_fraction: float | None = None) -> dict:
+        """Re-size one resting GTT to ``qty`` at the same ``trigger``. The ONLY way to modify
+        a GTT.
+
+        The layers are `place_gtt_stop`'s — tenant, untouchables, "is this a stop", the kill
+        switch consulted and recorded but not obeyed (a stop is protection; growing it while
+        the kill switch is live is still protection), the rate limit — and then Kite's
+        `modify_gtt` with the same single-leg shape `gtt_params` builds, at the snapped
+        trigger and the same limit cushion. There is no idempotency map: modifying twice to the
+        same quantity is not a double-send, and a caller reconciling a fill must be able to
+        retry. The dry-run branch answers `DRY_RUN_GTT_MODIFY` and journals the ask.
+
+        The quantity is the caller's to get right — the gateway holds no book — but it refuses
+        a non-positive one: a trigger for zero shares is not a stop, it is a cancel by another
+        name, and `delete_gtt` is the way to say that.
+        """
+        if limit_fraction is not None and not 0.0 < limit_fraction <= 1.0:
+            raise ValueError(
+                f"limit_fraction must be in (0, 1], got {limit_fraction!r}: a GTT sell limit "
+                f"rests at or under its trigger, never above it"
+            )
+        fraction = GTT_LIMIT_FRACTION if limit_fraction is None else limit_fraction
+        mismatch = refuse_cross_tenant(tenant, plan_tenant)
+        if mismatch:
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": mismatch}
+        gates = self._gates()
+        cid = client_id or uuid.uuid4().hex[:10]
+        assert_tradeable(symbol, series)                       # GTT layer 1: untouchables
+        if not isinstance(gtt_id, int) or isinstance(gtt_id, bool) or gtt_id <= 0:
+            why = f"{symbol}: {gtt_id!r} is not a GTT trigger id"
+            self._journal({"event": "gtt_modify_block", "symbol": symbol, "gtt_id": gtt_id,
+                           "why": why}, client_id=cid)
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": why}
+        if int(qty) <= 0:
+            why = (f"{symbol}: a GTT for {qty} shares is not a stop; cancel it with "
+                   f"delete_gtt instead")
+            self._journal({"event": "gtt_modify_block", "symbol": symbol, "gtt_id": gtt_id,
+                           "qty": int(qty), "why": why}, client_id=cid)
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": why}
+        refusal = refuse_stop(symbol=symbol, qty=qty, trigger=trigger, last_price=last_price)
+        if refusal:                                           # GTT layer 1b: is it a stop?
+            self._journal({"event": "gtt_modify_block", "symbol": symbol, "gtt_id": gtt_id,
+                           "qty": int(qty), "trigger": trigger, "last_price": last_price,
+                           "why": refusal}, client_id=cid)
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": refusal}
+        killed = kill_switch_reason(self.risk)                 # GTT layer 2: risk, recorded
+        if killed:
+            self._journal({"event": "gtt_risk_note", "symbol": symbol, "gtt_id": gtt_id,
+                           "qty": int(qty), "trigger": trigger, "why": killed,
+                           "note": "kill switch is live; a protective stop is still re-sized"},
+                          client_id=cid)
+        await self.limits.api_slot()                           # GTT layer 4: rate limits
+        if gates.dry_run:
+            self._journal({"event": "gtt_dry_run_modify", "symbol": symbol, "gtt_id": gtt_id,
+                           "qty": int(qty), "trigger": trigger, "last_price": last_price,
+                           "exchange": exchange, "limit_fraction": fraction}, client_id=cid)
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": DRY_RUN_GTT_MODIFY,
+                    "trigger": trigger, "qty": int(qty)}
+        try:
+            tick = await self._tick_size(symbol, exchange)
+            trig = to_tick(trigger, tick)
+            limit = to_tick(trig * fraction, tick)
+        except Exception as exc:
+            self._journal({"event": "gtt_modify_error", "symbol": symbol, "gtt_id": gtt_id,
+                           "stage": "tick_size", "error": str(exc),
+                           "exception": type(exc).__name__}, client_id=cid)
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": GTT_MODIFY_ERROR,
+                    "error": str(exc)}
+        snapped_refusal = refuse_stop(symbol=symbol, qty=qty, trigger=trig,
+                                      last_price=last_price)
+        if snapped_refusal:
+            self._journal({"event": "gtt_modify_block", "symbol": symbol, "gtt_id": gtt_id,
+                           "qty": int(qty), "trigger": trig, "requested_trigger": trigger,
+                           "tick": tick, "last_price": last_price,
+                           "stage": "after_tick_snap", "why": snapped_refusal}, client_id=cid)
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED",
+                    "error": snapped_refusal}
+        params = gtt_params(self.kc, symbol=symbol, exchange=exchange, qty=int(qty),
+                            trigger=trig, limit=limit, last_price=last_price)
+        try:
+            await asyncio.to_thread(self.kc.modify_gtt, trigger_id=int(gtt_id), **params)
+        except Exception as exc:
+            self._journal({"event": "gtt_modify_error", "symbol": symbol, "gtt_id": gtt_id,
+                           "stage": "modify_gtt", "error": str(exc),
+                           "exception": type(exc).__name__, "trigger": trig,
+                           "qty": int(qty)}, client_id=cid)
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": GTT_MODIFY_ERROR,
+                    "error": str(exc), "exception": type(exc).__name__,
+                    # As for a placed GTT: no taxonomy to read the outcome from, so check the
+                    # GTT book before re-arming rather than assuming the old quantity rests.
+                    "reached_exchange": None}
+        self._journal({"event": "gtt_modified", "symbol": symbol, "gtt_id": gtt_id,
+                       "qty": int(qty), "trigger": trig, "limit": limit,
+                       "limit_fraction": fraction, "last_price": last_price,
+                       "exchange": exchange}, client_id=cid)
+        return {"symbol": symbol, "gtt_id": gtt_id, "status": GTT_MODIFIED, "trigger": trig,
+                "limit": limit, "qty": int(qty)}
+
+    async def cancel_order(self, *, order_id: str, symbol: str, variety: str = "regular",
+                           series: str | None = None, client_id: str | None = None,
+                           tenant: TenantIds, plan_tenant: TenantIds) -> dict:
+        """Cancel one open order at the broker. The ONLY way to cancel an order.
+
+        SW10.5 (A8): the 10:45 sweep pulls whatever of a marketable LIMIT buy has not filled.
+        Guarded like a cancel of a stop — tenant, a named instrument, the untouchable guard —
+        and journalled; the kill switch does NOT refuse it (cancelling a buy reduces exposure,
+        which is the direction a kill switch wants). Cancelling twice is not a double-send, so
+        there is no idempotency map. The dry-run branch answers `ORDER_CANCEL_DRY_RUN`.
+        """
+        mismatch = refuse_cross_tenant(tenant, plan_tenant)
+        if mismatch:
+            return {"symbol": symbol, "order_id": order_id, "status": "BLOCKED",
+                    "error": mismatch}
+        gates = self._gates()
+        if not (symbol or "").strip():
+            why = ("an order cannot be cancelled without naming its instrument: the untouchable "
+                   "guard has nothing to check")
+            self._journal({"event": "order_cancel_block", "order_id": order_id, "why": why},
+                          client_id=client_id)
+            return {"symbol": symbol, "order_id": order_id, "status": "BLOCKED", "error": why}
+        assert_tradeable(symbol, series)                       # layer 1: untouchables
+        if not str(order_id or "").strip():
+            why = f"{symbol}: {order_id!r} is not an order id"
+            self._journal({"event": "order_cancel_block", "symbol": symbol,
+                           "order_id": order_id, "why": why}, client_id=client_id)
+            return {"symbol": symbol, "order_id": order_id, "status": "BLOCKED", "error": why}
+        await self.limits.api_slot()                           # layer 4: rate limits
+        if gates.dry_run:
+            self._journal({"event": "order_cancel_dry_run", "symbol": symbol,
+                           "order_id": order_id, "variety": variety}, client_id=client_id)
+            return {"symbol": symbol, "order_id": order_id, "status": ORDER_CANCEL_DRY_RUN}
+        try:
+            await asyncio.to_thread(self.kc.cancel_order, variety=variety,
+                                    order_id=str(order_id))
+            self._journal({"event": "order_cancelled", "symbol": symbol, "order_id": order_id,
+                           "variety": variety}, client_id=client_id)
+            return {"symbol": symbol, "order_id": order_id, "status": ORDER_CANCELLED}
+        except Exception as exc:
+            self._journal({"event": "order_cancel_error", "symbol": symbol,
+                           "order_id": order_id, "error": str(exc),
+                           "exception": type(exc).__name__}, client_id=client_id)
+            return {"symbol": symbol, "order_id": order_id, "status": ORDER_CANCEL_ERROR,
+                    "error": str(exc)}
+
+
+__all__ = ["FAILED_STATUSES", "JOURNAL", "ORDER_CANCELLED_STATUSES", "OrderGateway",
+           "ProductGates"]

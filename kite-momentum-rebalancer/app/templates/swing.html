@@ -159,6 +159,20 @@
       <thead><tr><th>Waiting buy</th><th>Symbol</th><th>Setup</th><th>Qty</th><th>Trigger</th><th>Stop</th>
         <th>Risk</th><th>Value</th><th>State</th><th>Action</th></tr></thead>
       <tbody>
+      {% for ln in plan.pending %}
+        <tr class="sw-line sw-line-pending_range" data-line-id="{{ ln.id }}">
+          <td><b>{{ ln.label }}</b></td>
+          <td>{{ ln.symbol }}</td>
+          <td>{{ ln.setup or '—' }}</td>
+          <td class="muted">—</td>
+          <td>{{ px(ln.trigger) }}</td>
+          <td class="muted">range</td>
+          <td class="muted">—</td>
+          <td class="muted" style="text-align:left;white-space:normal">{{ ln.note or '' }}</td>
+          <td>{{ ln.state }}</td>
+          <td><span class="muted sw-why-not">{{ ln.why_not }}</span></td>
+        </tr>
+      {% endfor %}
       {% for ln in plan.buys %}
         <tr class="sw-line sw-line-buy_on_trigger" data-line-id="{{ ln.id }}">
           <td><b>{{ ln.label }}</b></td>
@@ -173,7 +187,7 @@
           <td>{{ confirm_form(ln) }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="10" class="muted">No buys waiting.</td></tr>
+        {% if not plan.pending %}<tr><td colspan="10" class="muted">No buys waiting.</td></tr>{% endif %}
       {% endfor %}
       </tbody>
     </table>
@@ -192,6 +206,23 @@
 
 <section id="plan">
   <h2>Plan &mdash; exits first, then the buys waiting for a signal, then the skips</h2>
+  {% if v.sleeve.first_live_header %}
+  <div class="banner warn" id="swFirstLive"><span class="tag">start small</span>
+    <span>{{ v.sleeve.first_live_header }} &mdash; every new entry is sized at half the configured
+      risk until the countdown ends (the evening counts a LIVE session down; SELL and RAISE lines
+      are never halved).</span></div>
+  {% endif %}
+  {% if v.sent_lines %}
+  <div class="banner" id="swSent"><span class="tag">resting</span>
+    <span>{{ v.sent_lines | length }} live buy{{ 's' if v.sent_lines | length != 1 else '' }} accepted
+      and not yet complete ({% for s in v.sent_lines %}{{ s.symbol }} x{{ s.quantity }} {{ s.journal_ref }}{{ ', ' if not loop.last else '' }}{% endfor %}).
+      <form method="post" action="/swing/reconcile" class="sw-sweep" style="display:inline" data-sweep="reconcile">
+        <input type="hidden" name="confirm" value="true"><button type="submit">Reconcile fills</button></form>
+      <form method="post" action="/swing/cutoff" class="sw-sweep" style="display:inline" data-sweep="cutoff">
+        <input type="hidden" name="confirm" value="true"><button type="submit" class="btn-danger">10:45 sweep — cancel remainders</button></form>
+      <span class="sw-sweep-outcome muted" aria-live="polite"></span>
+    </span></div>
+  {% endif %}
   {% if v.plans.morning %}
     {{ plan_panel(v.plans.morning, 'Morning plan') }}
   {% else %}
@@ -329,6 +360,20 @@
     f.addEventListener('submit', e => { e.preventDefault(); submitOne(f, f.dataset.lineId); }));
   document.querySelectorAll('form.sw-rearm').forEach(f =>
     f.addEventListener('submit', e => { e.preventDefault(); submitOne(f, 'position-' + f.dataset.positionId); }));
+  // A8: the reconcile and the 10:45 sweep — each posts one confirm=true form, never a line.
+  document.querySelectorAll('form.sw-sweep').forEach(f =>
+    f.addEventListener('submit', async e => {
+      e.preventDefault();
+      const out = f.parentElement.querySelector('.sw-sweep-outcome');
+      const btn = f.querySelector('button'); btn.disabled = true;
+      try {
+        const r = await fetch(f.action, {method: 'POST', body: new FormData(f)});
+        const j = r.ok ? await r.json() : {error: await r.text()};
+        out.textContent = r.ok ? (f.dataset.sweep + ': ' + JSON.stringify(j)) : ('refused — ' + j.error);
+        if (r.ok) setTimeout(() => location.reload(), 1500);
+      } catch (err) { out.textContent = 'request failed: ' + err; }
+      btn.disabled = false;
+    }));
 
   // 5 s inside 09:15–10:45, on demand outside it. Reload only when something changed, so an
   // inline result is not wiped by an idle poll.

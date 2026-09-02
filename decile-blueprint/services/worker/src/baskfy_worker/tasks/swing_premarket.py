@@ -24,9 +24,24 @@ WHY AN EP AT THE OPEN HAS NO STOP YET
 -------------------------------------
 The stop for a live gap is the opening range's low or the low of the day (`04` §7.2), and at
 09:09 there is no range. The watch row therefore carries the indicative price as ``trigger``
-and no ``stop_ref``; the morning plan skips it (a plan line needs a stop to size against), and
-the ``SIGNAL`` plan the monitor builds when the range breaks carries the verdict's own entry and
-stop. `docs/swing/DECISIONS-SW.md` SW6.2.
+and no ``stop_ref`` (`docs/swing/DECISIONS-SW.md` SW6.2) — and, since SW10.5 (STANDING-ANSWERS
+A7), the morning plan shows it as a ``PENDING_RANGE`` line: no quantity, no stop, an
+information-only preview at a 1-ADR stop, reserving one of the session's new-entry slots so a
+lower-scored flag cannot crowd it out. The ``SIGNAL`` plan the monitor builds when the range
+breaks carries the verdict's own entry and ``stop = min(range low, LOD)``; wider than one ADR
+it is ``STOP_TOO_WIDE`` and the slot is released; a slot nothing claimed is freed at 10:45 by
+the desk's sweep. The row carries the provisional EP score the pre-open knows and the ADR the
+bars measured (`sw_watch.score`, `sw_watch.adr_pct`), and the focus flags are refreshed once
+the gaps are on the list (A14).
+
+THE 09:09 CATCH-UP (A10)
+------------------------
+The ladder settles once, at 21:05, after ``manage`` and the fill reconciliation. If that
+evening never ran — the worker was down, the detectors' row arrived late — the morning has a
+market row for the last close with no settlement record on it, and the plan would be built
+on the rung the detection job previewed. So the 09:09 stage runs ``settle_ladder`` for the
+previous session **only when no settlement record exists** for it; a session the evening
+settled is never settled twice.
 
 The flag: ``BASKFY_SWING_EP_PREMARKET_ENABLED`` gates the *quote pull* only. The level refresh
 and the morning plan run on data the nightly already wrote and cost no Kite call.
@@ -45,13 +60,14 @@ import polars as pl
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.swing_watch import refresh_focus
 from baskfy_core.models import OhlcvDaily
 from baskfy_core.models.swing import SwConfig, SwMarketDaily, SwSetupDaily, SwWatch
 from baskfy_core.swing.config import DEFAULT_SWING_CONFIG, Setup, SwingConfig
 from baskfy_core.swing.indicators import liquid_expr, with_swing_indicators
 from baskfy_core.swing.market import ExposureTier, MarketGate
-from baskfy_core.swing.opening_range import LiveGapVerdict, live_gap
-from baskfy_core.swing.plan import assemble, build_entries
+from baskfy_core.swing.opening_range import LiveGapVerdict, live_gap, live_gap_score
+from baskfy_core.swing.plan import LineKind, assemble, build_entries, first_live_multiplier
 from baskfy_providers.records import QuoteRecord
 from baskfy_worker.steps import StepOutcome, StepStatus
 from baskfy_worker.tasks.swing import (
@@ -64,6 +80,8 @@ from baskfy_worker.tasks.swing import (
 from baskfy_worker.tasks.swing_eod import (
     held_instrument_ids,
     manage_open_positions,
+    risk_pct_in_force,
+    settle_ladder,
     sleeve_account,
     store_plan,
     watch_items,
@@ -108,9 +126,20 @@ class PremarketReport:
     gaps_already_watched: int = 0
     plan_id: str | None = None
     entry_lines: int = 0
+    #: A7: live gaps on the plan as `PENDING_RANGE` lines, each holding a session slot.
+    pending_lines: int = 0
     exit_lines: int = 0
     skips: int = 0
     skipped_reason: str | None = None
+    #: A14: rows in today's focus after the gap scan.
+    focus: int = 0
+    #: A10: whether the 09:09 stage settled the previous session as a catch-up (the evening
+    #: never did), and the rung it landed on.
+    ladder_caught_up: bool = False
+    #: A9: the countdown and the multiplier the morning plan was sized with.
+    first_live_sessions_left: int = 0
+    risk_multiplier: str = "1"
+    risk_pct_in_force: str = "0.500"
 
     def as_detail(self) -> dict[str, object]:
         return {
@@ -127,9 +156,15 @@ class PremarketReport:
             "plan": {
                 "plan_id": self.plan_id,
                 "entries": self.entry_lines,
+                "pending": self.pending_lines,
                 "exits": self.exit_lines,
                 "skips": self.skips,
+                "risk_multiplier": self.risk_multiplier,
+                "risk_pct_in_force": self.risk_pct_in_force,
             },
+            "focus": self.focus,
+            "ladder_caught_up": self.ladder_caught_up,
+            "first_live_sessions_left": self.first_live_sessions_left,
             "skipped_reason": self.skipped_reason,
         }
 
@@ -230,6 +265,11 @@ class LiquidName:
     symbol: str
     avg_daily_volume: Decimal
     prev_close: Decimal
+    #: The ADR and the average turnover the bars measured at the last close — written onto the
+    #: watch row (A7 / SW9.5.2: a stop is measured against one ADR, and a live gap has no
+    #: detection row to read it from).
+    adr_pct: Decimal = Decimal(0)
+    turnover_avg: Decimal | None = None
 
 
 async def liquid_universe(
@@ -257,6 +297,8 @@ async def liquid_universe(
             pl.col("close").last(),
             pl.col("adj_factor").last(),
             pl.col("date").last(),
+            pl.col("adr_pct").last(),
+            pl.col("turnover_avg").last(),
         )
         .filter(pl.col("liquid") & (pl.col("date") == as_of))
         .sort("symbol")
@@ -272,6 +314,10 @@ async def liquid_universe(
                 symbol=str(row["symbol"]),
                 avg_daily_volume=Decimal(str(row["vol_avg_rvol"])),
                 prev_close=Decimal(str(round(row["close"] / factor, 2))),
+                adr_pct=Decimal(str(round(row["adr_pct"], 2))) if row["adr_pct"] else Decimal(0),
+                turnover_avg=(
+                    Decimal(str(round(row["turnover_avg"]))) if row["turnover_avg"] else None
+                ),
             )
         )
     return names
@@ -370,6 +416,10 @@ async def watch_live_gaps(  # noqa: PLR0913 - one keyword per input the scan dep
                 note=f"live gap {verdict.gap_pct}% on {verdict.volume_pace}x pace at {at:%H:%M}",
                 catalyst=None,
                 state="WATCHING",
+                # A14 / A7: ranked by the provisional EP score the pre-open knows, and sized
+                # against the ADR the bars measured, because no detection row exists yet.
+                score=live_gap_score(verdict, config.ep),
+                adr_pct=name.adr_pct,
             )
         )
         watched.add(name.instrument_id)
@@ -413,6 +463,7 @@ async def build_morning_plan(  # noqa: PLR0913 - one keyword per input the plan 
     last_session: dt.date,
     config: SwingConfig,
     now: dt.datetime,
+    execution_enabled: bool = False,
 ) -> str | None:
     """Rebuild the plan from the same watchlist as the evening's preview, ``source=MORNING``.
 
@@ -420,6 +471,10 @@ async def build_morning_plan(  # noqa: PLR0913 - one keyword per input the plan 
     at 09:10 from the same watchlist"); a morning job that invented a gate from pre-open quotes
     would be planning against a tape nobody measured. ``None`` when there is no market row for
     the last session — the detectors have not run, and the report says so.
+
+    A live gap on the list is a ``PENDING_RANGE`` line (A7); the sizes carry the first-live
+    risk multiplier when the countdown runs and execution is enabled (A9) — the same reading
+    the evening's preview was built with.
     """
     market = (
         await session.execute(
@@ -439,6 +494,7 @@ async def build_morning_plan(  # noqa: PLR0913 - one keyword per input the plan 
         max_open_positions=market.max_open_positions,
         max_exposure_pct=float(market.max_exposure_pct),
         new_entries_allowed=market.new_entries_allowed,
+        drawdown_locked=bool(market.drawdown_locked),
     )
     # The exits are the evening's, re-derived from the same bar: `manage` is idempotent (a stop
     # never falls, `04` §6.5), so running it again in the morning changes nothing it already did.
@@ -448,17 +504,76 @@ async def build_morning_plan(  # noqa: PLR0913 - one keyword per input the plan 
     items, instrument_ids = await watch_items(session, user_id=user_id, on=last_session)
     config_row = await load_config_row(session, user_id)
     account = await sleeve_account(session, user_id=user_id, config_row=config_row)
+    left = int(config_row.first_live_sessions_left) if config_row is not None else 0
+    multiplier = first_live_multiplier(
+        sessions_left=left, execution_enabled=execution_enabled, config=config.sizing
+    )
+    report.first_live_sessions_left = left
+    report.risk_multiplier = str(multiplier)
+    report.risk_pct_in_force = risk_pct_in_force(config, multiplier)
     entries, skipped = build_entries(
-        as_of=on, watch=items, account=account, gate=gate, tier=tier, config=config
+        as_of=on,
+        watch=items,
+        account=account,
+        gate=gate,
+        tier=tier,
+        config=config,
+        risk_multiplier=multiplier,
     )
     plan = assemble(as_of=on, gate=gate, tier=tier, entries=entries, exits=exits, skipped=skipped)
     instrument_ids.update(await held_instrument_ids(session, user_id=user_id))
-    report.entry_lines = len(entries)
+    report.entry_lines = sum(1 for line in entries if line.kind is LineKind.BUY_ON_TRIGGER)
+    report.pending_lines = sum(1 for line in entries if line.kind is LineKind.PENDING_RANGE)
     report.exit_lines = len(exits)
     report.skips = len(skipped)
     return await store_plan(
         session, plan, user_id=user_id, source="MORNING", instrument_ids=instrument_ids, now=now
     )
+
+
+async def catch_up_ladder(  # noqa: PLR0913 - one keyword per input the settlement depends on
+    session: AsyncSession,
+    *,
+    user_id: int,
+    last_session: dt.date,
+    config: SwingConfig,
+    execution_enabled: bool,
+    now: dt.datetime,
+) -> bool:
+    """A10: settle the previous session **only** if the evening never did. Returns whether it ran.
+
+    The evening's `settle_ladder` leaves ``detail.ladder.settled_by`` on the market row; a row
+    that carries it is settled and is never settled twice (the record, not the column, is the
+    fact — SW8.1). A row without it is a session the evening missed, and the morning settles it
+    with the same function, the same closes and the same date bound, so the plan is built on
+    a settled rung rather than the detection job's preview.
+    """
+    market = (
+        await session.execute(
+            select(SwMarketDaily).where(
+                SwMarketDaily.user_id == user_id, SwMarketDaily.date == last_session
+            )
+        )
+    ).scalar_one_or_none()
+    if market is None:
+        return False
+    detail = market.detail if isinstance(market.detail, dict) else {}
+    settled = detail.get("ladder")
+    if isinstance(settled, dict) and settled.get("settled_by"):
+        return False
+    log.warning(
+        "no settlement record for %s; the evening did not run — settling it now as a catch-up",
+        last_session.isoformat(),
+    )
+    await settle_ladder(
+        session,
+        user_id=user_id,
+        market=market,
+        config=config,
+        execution_enabled=execution_enabled,
+        now=now,
+    )
+    return True
 
 
 async def load_config_row(session: AsyncSession, user_id: int) -> SwConfig | None:
@@ -482,8 +597,12 @@ async def run_swing_premarket(  # noqa: PLR0913 - one keyword per input the morn
     quotes: QuoteSource | None = None,
     now: dt.datetime | None = None,
     config: SwingConfig | None = None,
+    execution_enabled: bool = False,
 ) -> PremarketReport:
     """The morning's job. ``LEVELS`` refreshes; ``GAPS`` scans (flag permitting) and plans.
+
+    ``execution_enabled`` (A9) decides whether the countdown's half risk applies to the plan —
+    a paper plan is full size — and is the worker's own reading of the flag.
 
     ``now`` is the wall clock in IST as a naive datetime, injectable so the tests can put the
     scan at 09:09 without waiting for it. The quote source is injected for the same reason, and
@@ -528,7 +647,18 @@ async def run_swing_premarket(  # noqa: PLR0913 - one keyword per input the morn
         )
     elif ep_premarket_enabled:
         log.warning("BASKFY_SWING_EP_PREMARKET_ENABLED is on but no quote source was wired")
+    # A14: the daily focus, recomputed now that the live gaps (every EP is in focus) are on it.
+    report.focus = await refresh_focus(session, user_id=user_id, config=resolved)
 
+    built_at = stamp.astimezone(dt.UTC) if stamp.tzinfo else stamp.replace(tzinfo=IST_OFFSET)
+    report.ladder_caught_up = await catch_up_ladder(
+        session,
+        user_id=user_id,
+        last_session=last_session,
+        config=resolved,
+        execution_enabled=execution_enabled,
+        now=built_at,
+    )
     report.plan_id = await build_morning_plan(
         session,
         report,
@@ -536,7 +666,8 @@ async def run_swing_premarket(  # noqa: PLR0913 - one keyword per input the morn
         on=session_date,
         last_session=last_session,
         config=resolved,
-        now=stamp.astimezone(dt.UTC) if stamp.tzinfo else stamp.replace(tzinfo=IST_OFFSET),
+        now=built_at,
+        execution_enabled=execution_enabled,
     )
     if report.plan_id is None:
         outcome.status = StepStatus.SKIPPED
@@ -560,6 +691,7 @@ __all__ = [
     "PremarketReport",
     "QuoteSource",
     "build_morning_plan",
+    "catch_up_ladder",
     "evaluate_gaps",
     "liquid_universe",
     "minutes_since_preopen",

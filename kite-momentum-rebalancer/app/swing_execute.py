@@ -34,15 +34,40 @@ THE RULES IT ENFORCES, AND WHERE THEY COME FROM
   ``EXPOSURE_FULL`` / ``TIER_FULL`` / ``SESSION_CAP`` / ``SIZE_REFUSED`` and never sent. The
   lock spans the gateway call, so two browser tabs cannot confirm past the ceiling together.
 
-Every order — the buy, the market sell, the stop and its cancellation — goes through the
-:class:`OrderGateway` this module is handed. Nothing here names a broker method.
+* STANDING-ANSWERS A7 (SW10.5) — a ``PENDING_RANGE`` line (a live gap on the MORNING plan with
+  no quantity and no stop) is not executable: it is refused with a 400 before anything is read,
+  the route refuses it too, and :data:`EXECUTABLE_KINDS` is the source-level set.
+* A8 — the live buy is a **marketable LIMIT** at ``min(trigger x 1.005, range_high + 0.25 x
+  ADR)`` (:func:`baskfy_core.swing.plan.marketable_limit`), never MARKET. The request then
+  polls the order for up to ``fill_poll_seconds`` [10] at ``fill_poll_interval_seconds`` [0.5]
+  through an injectable :class:`OrderSource` and clock: COMPLETE → the position, its fill and
+  its GTT in the same request; partial or open → ``SENT`` with the quantity filled so far and
+  a GTT for that quantity if it is above zero. Later fills arrive through
+  :func:`on_order_update` (the postback handler), which grows the position and **modifies**
+  the GTT's quantity — never a second GTT — and is idempotent on a repeated update. At 10:45
+  :func:`cutoff_open_orders` cancels whatever is still open and frees the pending-range slots
+  nothing claimed. The dry-run branch follows the same path: the gateway's simulated order is
+  a complete fill at the trigger, ``simulated=true``.
+* A9 — the first live sessions run at **half risk at plan time**: ``risk_multiplier`` 0.5 is
+  applied to ``risk_per_trade_pct`` before ``size_position`` (:func:`sizing_config`), only while
+  ``sw_config.first_live_sessions_left`` is above zero AND the order would be real. Nothing
+  here halves a quantity at send time, nothing here counts the sessions down — the evening
+  job does, once per LIVE session — and a SELL or a RAISE is never touched. ``sw_position.
+  half_risk`` tags the entry for the journal.
+
+Every order — the buy, the market sell, the stop, its cancellation, its re-sizing and the
+cancel of an open remainder — goes through the :class:`OrderGateway` this module is handed.
+Nothing here names a broker method.
 """
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import logging
 import os
+import time
+from collections.abc import Awaitable, Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from decimal import Decimal
@@ -56,11 +81,22 @@ from baskfy_core.swing.config import (
     SwingConfig,
 )
 from baskfy_core.swing.journal import ClosedTrade, exit_average
-from baskfy_core.swing.plan import SkipReason, WatchItem
+from baskfy_core.swing.plan import (
+    EXECUTABLE_KINDS as _CORE_EXECUTABLE_KINDS,
+)
+from baskfy_core.swing.plan import (
+    SkipReason,
+    WatchItem,
+    first_live_multiplier,
+    marketable_limit,
+)
 from baskfy_core.swing.sizing import r_multiple
+from baskfy_execution.gateway import ORDER_CANCELLED_STATUSES
 from baskfy_execution.gtt import (
     DRY_RUN_GTT_DELETE,
+    DRY_RUN_GTT_MODIFY,
     GTT_DELETED_STATUSES,
+    GTT_MODIFIED_STATUSES,
     GTT_PLACED,
     GTT_PLACED_STATUSES,
     StopBand,
@@ -88,6 +124,20 @@ SWING_JOURNAL_NAME = "swing_orders_journal.jsonl"
 BUY_ON_TRIGGER = "BUY_ON_TRIGGER"
 SELL_AT_OPEN = "SELL_AT_OPEN"
 RAISE_GTT_STOP = "RAISE_GTT_STOP"
+#: A7: a live gap on the MORNING plan — no quantity, no stop, a reserved slot. Never executed.
+PENDING_RANGE = "PENDING_RANGE"
+#: The kinds a confirm may turn into an order — the source-level set, written out here and
+#: asserted equal to the core's ``EXECUTABLE_KINDS`` so neither can grow without the other.
+EXECUTABLE_KINDS: frozenset[str] = frozenset({BUY_ON_TRIGGER, SELL_AT_OPEN, RAISE_GTT_STOP})
+assert EXECUTABLE_KINDS == {k.value for k in _CORE_EXECUTABLE_KINDS}  # noqa: S101 - import-time contract
+assert PENDING_RANGE not in EXECUTABLE_KINDS  # noqa: S101
+
+#: Kite's order statuses, as the postback and the order book report them (A8).
+ORDER_COMPLETE = "COMPLETE"
+ORDER_OPEN_STATUSES: frozenset[str] = frozenset({"OPEN", "TRIGGER PENDING", "PUT ORDER REQ RECEIVED",
+                                                 "VALIDATION PENDING", "OPEN PENDING",
+                                                 "MODIFY PENDING", "MODIFY VALIDATION PENDING"})
+ORDER_DEAD_STATUSES: frozenset[str] = frozenset({"REJECTED", "CANCELLED", "CANCEL PENDING"})
 
 #: ``sw_position.close_reason`` accepts an ``ActionReason`` value or ``MANUAL`` (``03`` §7); a
 #: SELL line's ``note`` carries the rule that produced it (``plan.exit_lines``), so a line whose
@@ -121,13 +171,9 @@ _ORDER_STATUS = {
 }
 
 _TWO_DP = Decimal("0.01")
+_FOUR_DP = Decimal("0.0001")
 _ZERO = Decimal(0)
-
-#: SW7.2 — the sessions on which this process has already counted down
-#: ``first_live_sessions_left``. In-process, like the desk's ``PLANS`` dict: the counter is
-#: decremented once per session, on the first live buy, and a second live buy on the same
-#: morning must not decrement it again.
-_FIRST_LIVE_COUNTED: set[dt.date] = set()
+_ONE = Decimal(1)
 
 
 # --- the contract surface (C1) ------------------------------------------------------------
@@ -196,7 +242,10 @@ class SwingStore(Protocol):
         first_live_sessions_left, exposure_level"""
         ...
 
-    def set_first_live_sessions_left(self, value: int) -> None: ...
+    def set_first_live_sessions_left(self, value: int) -> None:
+        """C1's write. Since SW10.5 (A9) NOTHING in this module calls it: the countdown is the
+        evening job's, once per LIVE session that closes, never a request's."""
+        ...
 
     # -- SW10.4 (STANDING-ANSWERS A5): the confirm-time gate --
 
@@ -226,6 +275,57 @@ class SwingStore(Protocol):
         """Write a re-sized BUY back to its row, so the record shows the size that was sent."""
         ...
 
+    # -- SW10.5 (STANDING-ANSWERS A7, A8): the marketable limit, the late fill, the cutoff --
+
+    def range_high_for(self, line_id: int) -> Decimal | None:
+        """The opening-range high of the signal that became this line (``sw_signal.range_high``
+        where ``plan_line_id = line_id``), or None for a line no signal produced."""
+        ...
+
+    def line_by_order(self, order_id: str) -> dict | None:
+        """The ``SENT`` BUY line whose ``journal_ref`` is this broker order id, or None."""
+        ...
+
+    def sent_buy_lines(self, day: dt.date) -> list[dict]:
+        """Today's ``BUY_ON_TRIGGER`` lines in ``SENT`` — live orders not yet complete."""
+        ...
+
+    def note_line(self, line_id: int, note: str) -> None:
+        """Append to the line's note — what a later fill or the cutoff did to it."""
+        ...
+
+    def expire_pending(self, day: dt.date) -> int:
+        """Every ``PENDING_RANGE`` line of ``day`` still ``PROPOSED`` → ``EXPIRED``: the slots
+        nothing claimed, freed at 10:45. Returns how many."""
+        ...
+
+
+class OrderStatus(Protocol):
+    """One order as the broker reports it (A8) — the order book's row or the postback's."""
+
+    @property
+    def status(self) -> str: ...
+    @property
+    def filled_quantity(self) -> int: ...
+    @property
+    def average_price(self) -> Decimal: ...
+
+
+@dataclass(frozen=True)
+class OrderReport:
+    """An :class:`OrderStatus` as a value — what the desk's order source and a test hand back."""
+
+    status: str
+    filled_quantity: int
+    average_price: Decimal
+
+
+class OrderSource(Protocol):
+    """Where the confirm asks how its order is doing (A8). The desk backs it with the broker's
+    order history through the Kite wrapper — a READ; a test answers from a script."""
+
+    def order_status(self, order_id: str) -> OrderStatus: ...
+
 
 @dataclass(frozen=True)
 class ExecOutcome:
@@ -248,6 +348,9 @@ class ExecOutcome:
     gtt: dict | None  # the gateway's place_gtt_stop() result, if any
     position_id: int | None
     simulated: bool
+    #: A8: how many shares had filled when the request answered (a partial is `SENT` with a
+    #: number here and a GTT for exactly that number).
+    filled_quantity: int = 0
 
 
 def swing_gates() -> ProductGates:
@@ -328,16 +431,19 @@ def _blocked_reason(result: dict, *, what: str) -> str:
     return f"{what} refused by the gateway ({status}): {error}"
 
 
-def first_live_quantity(quantity: int, *, sessions_left: int, simulated: bool) -> int:
-    """SW7.2 / ``02`` §3.5: the first live sessions run at half size.
+def risk_multiplier_for(config: dict, *, simulated: bool) -> Decimal:
+    """A9: 0.5 while ``first_live_sessions_left`` is above zero AND the order would be real.
 
-    Halved only for a REAL order: a simulated line at half size would make the paper record
-    smaller than the rules it is meant to rehearse. Rounded down, never below one share — a
-    one-share line halved to nothing would be a refusal dressed as a size.
+    The reading STANDING-ANSWERS A9 asks to be recorded: a paper confirm (``DRY_RUN`` or the
+    flag off) is full size — the paper record rehearses the rules at the size the rules
+    describe — and only real money starts small. Nothing here changes the count: that is the
+    evening job's, once per LIVE session that closes.
     """
-    if simulated or sessions_left <= 0 or quantity <= 1:
-        return quantity
-    return max(1, quantity // 2)
+    sessions_left = int(config.get("first_live_sessions_left") or 0)
+    return first_live_multiplier(
+        sessions_left=sessions_left, execution_enabled=not simulated,
+        config=DEFAULT_SWING_CONFIG.sizing,
+    )
 
 
 def is_simulated_gtt(gtt_id) -> bool:
@@ -346,16 +452,19 @@ def is_simulated_gtt(gtt_id) -> bool:
 
 # --- SW10.4: the confirm-time gate (STANDING-ANSWERS A5) ------------------------------------
 
-def sizing_config(config: dict) -> SwingConfig:
+def sizing_config(config: dict, *, risk_multiplier: Decimal = _ONE) -> SwingConfig:
     """The gate's config: the pack's defaults with the person's three sizing knobs (`03` §1)
     from `SwingStore.config()` — the same three the worker (SW9.5.3) and the monitor hand
-    `build_entries`, so the confirm sizes with the numbers the plan was sized with."""
+    `build_entries`, so the confirm sizes with the numbers the plan was sized with — and, since
+    SW10.5 (A9), ``risk_per_trade_pct`` scaled by ``risk_multiplier`` *before* sizing, the one
+    place the first-live half risk is applied at the desk."""
     sizing = DEFAULT_SWING_CONFIG.sizing
+    risk = Decimal(str(config.get("risk_per_trade_pct", sizing.risk_per_trade_pct)))
     return replace(
         DEFAULT_SWING_CONFIG,
         sizing=replace(
             SizingConfig(),
-            risk_per_trade_pct=float(config.get("risk_per_trade_pct", sizing.risk_per_trade_pct)),
+            risk_per_trade_pct=float(risk * risk_multiplier),
             max_position_pct=float(config.get("max_position_pct", sizing.max_position_pct)),
             max_open_positions=int(config.get("max_open_positions", sizing.max_open_positions)),
         ),
@@ -381,8 +490,13 @@ def _pct(value: Decimal, equity: Decimal) -> str:
     return f"{(value / equity * 100).quantize(_TWO_DP)}%"
 
 
-def resize_buy(line: dict, context: SignalContext, config: SwingConfig, *, day: dt.date) -> Resized:
+def resize_buy(line: dict, context: SignalContext, config: SwingConfig, *, day: dt.date,
+               live: bool = False) -> Resized:
     """Re-size one BUY line against the book as it is now (`app.swing_monitor.entries_now`).
+
+    ``live`` (A9) says whether a real order would go out: `entries_now` applies the first-live
+    half risk from the context's countdown exactly when it is true — the ONE place the
+    multiplier is applied at the desk, so `config` arrives unscaled.
 
     The line's trigger and stop are what the person saw and confirmed; the *quantity* is what
     the rules allow now — the same function that sized the SIGNAL preview, so the page and the
@@ -410,7 +524,7 @@ def resize_buy(line: dict, context: SignalContext, config: SwingConfig, *, day: 
     trigger, stop = _price(line["trigger"]), _price(line["stop"])
     item = WatchItem(symbol=symbol, setup=setup, trigger=trigger, stop_ref=stop, adr_pct=adr,
                      avg_turnover_inr=turnover, score=score, locked_upper_circuit=False)
-    lines, skipped = entries_now(item, context, config, day=day)
+    lines, skipped = entries_now(item, context, config, day=day, live=live)
     if not lines:
         skip = skipped[0]
         return Resized(0, _ZERO, _ZERO, skip.reason.value, skip.detail)
@@ -459,6 +573,12 @@ def _validate(
     line = store.line(line_id)
     if line is None or str(line.get("plan_id")) != str(plan_id):
         raise HTTPException(404, "Unknown line_id for this plan — reload the swing page.")
+    if line.get("kind") not in EXECUTABLE_KINDS:
+        # A7: a PENDING_RANGE line has no quantity and no stop — it is information, a slot held
+        # for the opening range, and nothing on it can be sent. Refused before the plan's
+        # expiry or the line's state is even looked at, and the row is left exactly as it was.
+        raise HTTPException(400, f"A {line.get('kind')} line cannot be executed — it is "
+                                 f"information only; the SIGNAL plan at range close is the line.")
     if _aware(now) > _aware(plan["expires_at"]):
         # The line is marked so the page shows why it can no longer be confirmed; the plan
         # row itself is what expired, and the next plan build replaces it.
@@ -481,6 +601,9 @@ async def execute_line(  # noqa: PLR0913 - the request's parts, named
     confirm: str,
     now: dt.datetime,
     last_price: Decimal | None = None,
+    orders: OrderSource | None = None,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> ExecOutcome:
     """Execute one confirmed plan line through the gateway and write what happened.
 
@@ -492,6 +615,11 @@ async def execute_line(  # noqa: PLR0913 - the request's parts, named
     ``last_price`` is the instrument's last traded price when the page has one. A BUY needs
     none (its entry is the trigger); a SELL's simulated fill and a RAISE's stop check both do,
     and are ``BLOCKED`` — never guessed — without it.
+
+    ``orders``, ``clock`` and ``sleep`` (A8) are the live buy's fill poll: the order source is
+    asked at most every ``fill_poll_interval_seconds`` for up to ``fill_poll_seconds`` after a
+    real order is accepted. Injectable so a test runs the ten seconds in no time; the dry-run
+    path never polls — the gateway's simulated order is a complete fill.
     """
     line = _validate(store, plan_id=plan_id, line_id=line_id, confirm=confirm, now=now)
     kind = line["kind"]
@@ -517,7 +645,8 @@ async def execute_line(  # noqa: PLR0913 - the request's parts, named
             store.bump_session(day, mode=mode, confirms=1)
             if kind == BUY_ON_TRIGGER:
                 outcome = await _buy(store, gw, line=line, plan_id=plan_id, now=now,
-                                     simulated=simulated, context=context)
+                                     simulated=simulated, context=context, orders=orders,
+                                     clock=clock, sleep=sleep)
             elif kind == SELL_AT_OPEN:
                 outcome = await _sell(store, gw, line=line, plan_id=plan_id, now=now,
                                       simulated=simulated, last_price=last_price)
@@ -530,6 +659,8 @@ async def execute_line(  # noqa: PLR0913 - the request's parts, named
             _record_line(store, line_id, outcome)
             if outcome.status in ("SIMULATED", "FILLED") and kind in (BUY_ON_TRIGGER, SELL_AT_OPEN):
                 store.bump_session(day, mode=mode, fills=1)
+            elif outcome.status == "SENT" and outcome.filled_quantity > 0:
+                store.bump_session(day, mode=mode, fills=1)  # a partial is a fill (A8)
             elif outcome.status in ("SIMULATED", "FILLED"):
                 store.bump_session(day, mode=mode, manage_actions=1)
     except HTTPException:
@@ -594,7 +725,10 @@ async def rearm_gtt(
 
 
 async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa: PLR0913
-               simulated: bool, context: SignalContext | None = None) -> ExecOutcome:
+               simulated: bool, context: SignalContext | None = None,
+               orders: OrderSource | None = None,
+               clock: Callable[[], float] = time.monotonic,
+               sleep: Callable[[float], Awaitable[None]] = asyncio.sleep) -> ExecOutcome:
     symbol = line["symbol"]
     quantity = int(line.get("quantity") or 0)
     trigger = line.get("trigger")
@@ -620,7 +754,16 @@ async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa
     config = store.config()
     if context is None:
         context = store.session_context(_session_day(now))
-    sized = resize_buy(line, context, sizing_config(config), day=_session_day(now))
+    # A9: half risk at plan time, and only for real money. `entries_now` scales the risk
+    # budget from the context's countdown when `live`; the quantity that comes out IS the
+    # quantity sent. (Scaling `sizing_config` here as well would halve twice — the defect the
+    # `..._is_applied_once` test pins.)
+    multiplier = first_live_multiplier(
+        sessions_left=context.first_live_sessions_left, execution_enabled=not simulated,
+        config=DEFAULT_SWING_CONFIG.sizing,
+    )
+    sized = resize_buy(line, context, sizing_config(config), day=_session_day(now),
+                       live=not simulated)
     if sized.refusal:
         # A5: the book as it is now does not have room for this line. Nothing is sent; the
         # reason leads with the skip code so the row and the page say exactly why.
@@ -633,41 +776,95 @@ async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa
         store.resize_line(line["id"], quantity=sized.quantity, risk_inr=sized.risk_inr,
                           position_value=sized.position_value, note=sized.detail)
         log.info("swing BUY %s %s", symbol, sized.detail)
-    quantity = sized.quantity
-    sessions_left = int(config.get("first_live_sessions_left") or 0)
-    qty = first_live_quantity(quantity, sessions_left=sessions_left, simulated=simulated)
+    qty = sized.quantity
+    # A8: a marketable LIMIT — never MARKET — capped at half a percent past the trigger and a
+    # quarter of a normal day's range above the opening range it broke out of.
+    adr = context.detected.get(symbol, (_ZERO, None, _ZERO))[0]
+    limit = marketable_limit(trigger=trigger, range_high=store.range_high_for(int(line["id"])),
+                             adr_pct=adr, config=DEFAULT_SWING_CONFIG.opening_range)
     order = await gw.place(
         symbol=symbol, qty=qty, side="BUY", product="CNC", order_type="LIMIT",
-        price=float(trigger), exchange="NSE", client_id=f"{plan_id}:{symbol}:BUY",
-        gross_exposure=float(trigger * qty),
+        price=float(limit), exchange="NSE", client_id=f"{plan_id}:{symbol}:BUY",
+        gross_exposure=float(limit * qty),
         tenant=_sole_tenant(), plan_tenant=_sole_tenant(),
     )
     status = _ORDER_STATUS.get(order.get("status", ""), "REJECTED")
     if status not in ("SIMULATED", "SENT"):
         return ExecOutcome(status, _blocked_reason(order, what="the buy"), order, None, None,
                            simulated)
-    if not simulated and sessions_left > 0 and _session_day(now) not in _FIRST_LIVE_COUNTED:
-        # SW7.2: the countdown is per session, not per order, and it starts the moment a real
-        # order of this session went out — only then has the session been traded at half size.
-        _FIRST_LIVE_COUNTED.add(_session_day(now))
-        store.set_first_live_sessions_left(sessions_left - 1)
-    if status == "SENT":
-        # SW7.1: a live LIMIT order is not a fill. The gateway returns as soon as the broker
-        # accepts it; the fill arrives later, and a stop armed for shares not yet held is a
-        # trigger that sells what is not there. The line stays SENT with the order id; the
-        # position and its GTT are written when the fill is known.
-        return ExecOutcome("SENT", f"{symbol}: order {order.get('order_id')} accepted, "
-                           f"not yet filled — no position, no stop, until it fills",
-                           order, None, None, simulated)
-    # Simulated: the whole line fills at the trigger, now.
+    half_risk = multiplier < _ONE
+    if status == "SIMULATED":
+        # The dry-run branch is the fill: the whole line, at the trigger, now — the same
+        # bookkeeping as a live COMPLETE, with simulated=true on every row.
+        return await _apply_buy_fill(
+            store, gw, line=line, plan_id=plan_id, now=now, order=order, filled=qty,
+            average=trigger, complete=True, simulated=True, half_risk=half_risk,
+        )
+    # A8: a live LIMIT is accepted, not filled. Ask the order book for up to ten seconds, at
+    # most twice a second, and write whatever has filled by then; the postback handler and
+    # the 10:45 sweep take it from there.
+    report = await _poll_fill(orders, str(order.get("order_id")), clock=clock, sleep=sleep)
+    if report is None:
+        return ExecOutcome("SENT", f"{symbol}: order {order.get('order_id')} accepted, no "
+                           f"order source to poll — no position, no stop, until a fill is "
+                           f"reported", order, None, None, simulated)
+    if report.status in ORDER_DEAD_STATUSES and report.filled_quantity <= 0:
+        return ExecOutcome("REJECTED", f"{symbol}: order {order.get('order_id')} is "
+                           f"{report.status} with nothing filled", order, None, None, simulated)
+    return await _apply_buy_fill(
+        store, gw, line=line, plan_id=plan_id, now=now, order=order,
+        filled=int(report.filled_quantity), average=_price(report.average_price),
+        complete=report.status == ORDER_COMPLETE, simulated=False, half_risk=half_risk,
+    )
+
+
+async def _poll_fill(orders: OrderSource | None, order_id: str, *,
+                     clock: Callable[[], float],
+                     sleep: Callable[[float], Awaitable[None]]) -> OrderReport | None:
+    """A8's poll: ≤ ``fill_poll_seconds`` at ≤ 1 / ``fill_poll_interval_seconds`` a second.
+    Stops early on COMPLETE or a dead status; answers the last report it saw."""
+    if orders is None:
+        return None
+    window = DEFAULT_SWING_CONFIG.opening_range
+    started = clock()
+    last: OrderReport | None = None
+    while True:
+        seen = orders.order_status(order_id)
+        last = OrderReport(status=str(seen.status), filled_quantity=int(seen.filled_quantity),
+                           average_price=_price(seen.average_price or 0))
+        if last.status == ORDER_COMPLETE or last.status in ORDER_DEAD_STATUSES:
+            return last
+        if clock() - started + window.fill_poll_interval_seconds > window.fill_poll_seconds:
+            return last
+        await sleep(window.fill_poll_interval_seconds)
+
+
+async def _apply_buy_fill(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa: PLR0913
+                          order: dict, filled: int, average: Decimal, complete: bool,
+                          simulated: bool, half_risk: bool) -> ExecOutcome:
+    """What a buy's fill — whole, partial, or none yet — writes (A8), one path for all three.
+
+    ``filled`` shares at ``average``: a position for exactly that many, one fill row, and a
+    GTT for exactly that many in the same call. Nothing filled yet → ``SENT`` with no position
+    and no stop (a stop for shares not held sells what is not there). ``complete`` decides
+    the line's state: ``FILLED``, or ``SENT`` with the position on it so the postback handler
+    can grow it.
+    """
+    symbol = line["symbol"]
+    order_id = order.get("order_id")
+    if filled <= 0:
+        return ExecOutcome("SENT", f"{symbol}: order {order_id} accepted, not yet filled — "
+                           f"no position, no stop, until it fills", order, None, None,
+                           simulated, filled_quantity=0)
+    stop = _price(line["stop"])
     position_id = store.create_position({
         "instrument_id": int(line["instrument_id"]),
         "symbol": symbol,
         "setup": line.get("setup"),
         "entry_date": _session_day(now),
-        "entry_avg": trigger,
-        "quantity_entered": qty,
-        "quantity_open": qty,
+        "entry_avg": average.quantize(_FOUR_DP),
+        "quantity_entered": filled,
+        "quantity_open": filled,
         "initial_stop": stop,
         "stop": stop,
         "gtt_id": None,
@@ -682,23 +879,271 @@ async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa
         "close_reason": None,
         "r_multiple": None,
         "pnl_inr": None,
-        "simulated": True,
+        "simulated": simulated,
+        "half_risk": half_risk,
     })
     store.add_fill({
-        "position_id": position_id, "side": "BUY", "quantity": qty, "price": trigger,
-        "filled_at": _aware(now), "journal_ref": order.get("order_id"), "simulated": True,
+        "position_id": position_id, "side": "BUY", "quantity": filled, "price": average,
+        "filled_at": _aware(now), "journal_ref": order_id, "simulated": simulated,
     })
-    gtt = await _arm(gw, symbol=symbol, qty=qty, stop=stop, last_price=trigger,
+    gtt = await _arm(gw, symbol=symbol, qty=filled, stop=stop, last_price=average,
                      client_id=f"{plan_id}:{symbol}:GTT")
+    status = "SIMULATED" if simulated else ("FILLED" if complete else "SENT")
+    planned = int(line.get("quantity") or 0)
+    partial = "" if complete else (f"; {filled} of {planned} filled so far, order {order_id} "
+                                   f"still open for the rest")
     if gtt.get("status") in GTT_PLACED_STATUSES:
         store.update_position(position_id, _gtt_fields(gtt, stop=stop, now=now))
-        return ExecOutcome("SIMULATED", "", order, gtt, position_id, True)
-    # The shares are (simulated as) held and the stop is not resting: the honest record is a
-    # NAKED position, which the page leads with and ``rearm_gtt`` exists for.
-    return ExecOutcome("SIMULATED",
-                       f"{symbol}: bought, but the stop was not armed — "
+        return ExecOutcome(status, partial.lstrip("; "), order, gtt, position_id, simulated,
+                           filled_quantity=filled)
+    # The shares are held and the stop is not resting: the honest record is a NAKED position,
+    # which the page leads with and ``rearm_gtt`` exists for.
+    return ExecOutcome(status,
+                       f"{symbol}: bought {filled}, but the stop was not armed — "
                        f"{_blocked_reason(gtt, what='the GTT')}; position {position_id} is "
-                       f"NAKED, re-arm it", order, gtt, position_id, True)
+                       f"NAKED, re-arm it{partial}", order, gtt, position_id, simulated,
+                       filled_quantity=filled)
+
+
+# --- A8: the late fill, the cutoff, the 15:15 sweep -----------------------------------------
+
+
+async def on_order_update(store: SwingStore, gw, update: dict, *, now: dt.datetime) -> ExecOutcome | None:
+    """The desk's postback handler (A8): a broker order update for a swing buy.
+
+    ``update`` is Kite's postback / order-book shape — ``order_id``, ``status``,
+    ``filled_quantity``, ``average_price``. Anything that is not a ``SENT`` swing BUY line's
+    order is ignored (the weekly book's updates arrive on the same channel and are not this
+    module's). Under the session lock:
+
+    * no position yet and shares filled → the position, its fill and its GTT for exactly the
+      filled quantity (the same bookkeeping as the confirm's own partial);
+    * a position and *more* shares filled than it holds → one fill row for the difference at
+      the price that makes the averages agree, the position grown, and the resting GTT's
+      quantity **modified** to the new open quantity — never a second GTT; a naked position
+      is armed for the whole;
+    * a position and no more shares than it holds → nothing to write: **idempotent** on a
+      repeated update, an out-of-order one, or a duplicate postback;
+    * ``COMPLETE`` closes the line as ``FILLED``; a cancel or rejection with shares held
+      closes it ``FILLED`` too (the position stands for what filled) and with none held
+      ``EXPIRED``.
+
+    Protection is never withheld because the stop distance grew past one ADR: the rule bounds
+    entries, not protection (MD11).
+    """
+    order_id = str(update.get("order_id") or "")
+    line = store.line_by_order(order_id) if order_id else None
+    if line is None:
+        return None
+    day = _session_day(now)
+    simulated = swing_gates().dry_run
+    mode = "DRY_RUN" if simulated else "LIVE"
+    with store.lock_session_for_update(day):
+        current = store.line(int(line["id"]))
+        if current is None or current.get("state") != "SENT":
+            return None
+        return await _apply_update(store, gw, line=current, update=update, now=now, mode=mode)
+
+
+async def _apply_update(store, gw, *, line: dict, update: dict, now: dt.datetime,  # noqa: PLR0913
+                        mode: str) -> ExecOutcome:
+    symbol = line["symbol"]
+    plan_id = str(line["plan_id"])
+    order_id = str(update.get("order_id"))
+    status = str(update.get("status") or "")
+    filled = int(update.get("filled_quantity") or 0)
+    average = _price(update.get("average_price") or 0)
+    simulated = swing_gates().dry_run
+    half_risk = risk_multiplier_for(store.config(), simulated=simulated) < _ONE
+    position = store.position(int(line["position_id"])) if line.get("position_id") else None
+    outcome: ExecOutcome
+    if position is None:
+        if filled <= 0:
+            outcome = ExecOutcome("SENT", f"{symbol}: {order_id} {status}, nothing filled",
+                                  {"order_id": order_id, "status": status}, None, None, simulated)
+        else:
+            outcome = await _apply_buy_fill(
+                store, gw, line=line, plan_id=plan_id, now=now,
+                order={"order_id": order_id, "status": status}, filled=filled, average=average,
+                complete=status == ORDER_COMPLETE, simulated=simulated, half_risk=half_risk,
+            )
+            store.bump_session(_session_day(now), mode=mode, fills=1)
+    else:
+        outcome = await _grow_position(store, gw, position=position, line=line, order_id=order_id,
+                                       status=status, filled=filled, average=average, now=now,
+                                       simulated=simulated)
+    _close_line_after_update(store, line, outcome, status=status, order_id=order_id)
+    return outcome
+
+
+async def _grow_position(store, gw, *, position: dict, line: dict, order_id: str,  # noqa: PLR0913
+                         status: str, filled: int, average: Decimal, now: dt.datetime,
+                         simulated: bool) -> ExecOutcome:
+    """More of the same order filled: grow the position and re-size — never re-arm — its GTT."""
+    symbol = position["symbol"]
+    position_id = int(position["id"])
+    entered = int(position["quantity_entered"])
+    open_qty = int(position["quantity_open"])
+    delta = filled - entered
+    if delta <= 0:
+        # Already applied (a repeated postback, the poll's own fill, an older report). Nothing
+        # to write; the position and its stop are what they were.
+        return ExecOutcome("SENT" if status != ORDER_COMPLETE else "FILLED", "", None, None,
+                           position_id, simulated, filled_quantity=entered)
+    old_avg = _price(position["entry_avg"])
+    # The price of the new shares alone: the averages must agree before and after.
+    delta_price = ((average * filled - old_avg * entered) / delta).quantize(_FOUR_DP)
+    if delta_price <= _ZERO:
+        delta_price = average
+    new_open = open_qty + delta
+    store.add_fill({
+        "position_id": position_id, "side": "BUY", "quantity": delta, "price": delta_price,
+        "filled_at": _aware(now), "journal_ref": order_id, "simulated": simulated,
+    })
+    store.update_position(position_id, {
+        "quantity_entered": filled, "quantity_open": new_open,
+        "entry_avg": average.quantize(_FOUR_DP),
+    })
+    stop = _price(position["stop"])
+    gtt_id = position.get("gtt_id")
+    if gtt_id is None:
+        # Naked (the first arm was refused): arm now, for everything open.
+        gtt = await _arm(gw, symbol=symbol, qty=new_open, stop=stop, last_price=average,
+                         client_id=f"{line['plan_id']}:{symbol}:GTT")
+        ok = gtt.get("status") in GTT_PLACED_STATUSES
+        if ok:
+            store.update_position(position_id, _gtt_fields(gtt, stop=stop, now=now))
+    else:
+        gtt = await _modify(gw, gtt_id=gtt_id, symbol=symbol, qty=new_open, stop=stop,
+                            last_price=average, client_id=f"{line['plan_id']}:{symbol}:GTT")
+        ok = gtt.get("status") in GTT_MODIFIED_STATUSES
+        if ok:
+            store.update_position(position_id, {"gtt_armed_at": _aware(now)})
+    final = "FILLED" if status == ORDER_COMPLETE else "SENT"
+    if ok:
+        return ExecOutcome(final, f"{symbol}: +{delta} filled at {delta_price}, GTT now covers "
+                           f"{new_open}", {"order_id": order_id, "status": status}, gtt,
+                           position_id, simulated, filled_quantity=filled)
+    return ExecOutcome(final, f"{symbol}: +{delta} filled, but the GTT could not be re-sized "
+                       f"to {new_open} — {_blocked_reason(gtt, what='the GTT')}; it still "
+                       f"covers {open_qty}, re-arm", {"order_id": order_id, "status": status},
+                       gtt, position_id, simulated, filled_quantity=filled)
+
+
+def _close_line_after_update(store: SwingStore, line: dict, outcome: ExecOutcome, *,
+                             status: str, order_id: str) -> None:
+    """The line's state after an update: FILLED on COMPLETE (or a dead order with shares
+    held), EXPIRED on a dead order with nothing held, SENT otherwise — and the position id
+    once there is one."""
+    line_id = int(line["id"])
+    position_id = outcome.position_id
+    if status == ORDER_COMPLETE:
+        store.set_line(line_id, state="FILLED", journal_ref=order_id, position_id=position_id)
+    elif status in ORDER_DEAD_STATUSES:
+        if position_id is not None:
+            store.set_line(line_id, state="FILLED", journal_ref=order_id, position_id=position_id)
+            store.note_line(line_id, f"{status}: {outcome.filled_quantity} filled, the rest "
+                                     f"never did")
+        else:
+            store.set_line(line_id, state="EXPIRED", journal_ref=order_id)
+            store.note_line(line_id, f"{status} with nothing filled")
+    elif position_id is not None:
+        store.set_line(line_id, state="SENT", journal_ref=order_id, position_id=position_id)
+
+
+@dataclass(frozen=True)
+class CutoffReport:
+    """What the 10:45 sweep did (A8, A7)."""
+
+    reconciled: int
+    cancelled: int
+    cancel_failed: int
+    slots_freed: int
+    outcomes: tuple[ExecOutcome, ...]
+
+
+async def cutoff_open_orders(store: SwingStore, gw, *, orders: OrderSource | None,
+                             now: dt.datetime) -> CutoffReport:
+    """The monitor-close hook (A8, A7): cancel every open remainder, free every unclaimed slot.
+
+    For each of today's ``SENT`` BUY lines: the order book is asked once more and the answer
+    applied through the same path as a postback (so a fill that arrived between the last
+    update and now is written first); if the order is still open, its remainder is cancelled
+    through the gateway — the GTT covering what filled is **untouched** — and the line closes
+    as ``FILLED`` (shares held) or ``EXPIRED`` (none). Then every ``PENDING_RANGE`` line still
+    ``PROPOSED`` is ``EXPIRED``: the slot it held is free. Each cancel is journalled; a cancel
+    the gateway refuses leaves the line ``SENT`` and is counted, so the alert SW11 adds
+    (``SWING_ORDER_OPEN_AFTER_CUTOFF``) has something to read.
+    """
+    day = _session_day(now)
+    outcomes: list[ExecOutcome] = []
+    reconciled = cancelled = failed = 0
+    for line in store.sent_buy_lines(day):
+        order_id = str(line.get("journal_ref") or "")
+        if not order_id:
+            continue
+        if orders is not None:
+            seen = orders.order_status(order_id)
+            update = {"order_id": order_id, "status": str(seen.status),
+                      "filled_quantity": int(seen.filled_quantity),
+                      "average_price": _price(seen.average_price or 0)}
+            applied = await on_order_update(store, gw, update, now=now)
+            if applied is not None:
+                outcomes.append(applied)
+                reconciled += 1
+            if update["status"] == ORDER_COMPLETE or update["status"] in ORDER_DEAD_STATUSES:
+                continue
+        current = store.line(int(line["id"]))
+        if current is None or current.get("state") != "SENT":
+            continue
+        cancel = await gw.cancel_order(
+            order_id=order_id, symbol=current["symbol"],
+            client_id=f"{current['plan_id']}:{current['symbol']}:CANCEL",
+            tenant=_sole_tenant(), plan_tenant=_sole_tenant(),
+        )
+        if cancel.get("status") not in ORDER_CANCELLED_STATUSES:
+            failed += 1
+            store.note_line(int(current["id"]), f"10:45 cancel refused: "
+                                                f"{_blocked_reason(cancel, what='the cancel')}")
+            continue
+        cancelled += 1
+        with store.lock_session_for_update(day):
+            position_id = current.get("position_id")
+            held = int(store.position(int(position_id))["quantity_open"]) if position_id else 0
+            planned = int(current.get("quantity") or 0)
+            if position_id is not None:
+                store.set_line(int(current["id"]), state="FILLED", position_id=int(position_id))
+                store.note_line(int(current["id"]), f"10:45 cutoff: {held} filled, the "
+                                                    f"remaining {max(planned - held, 0)} "
+                                                    f"cancelled ({order_id}); GTT untouched")
+            else:
+                store.set_line(int(current["id"]), state="EXPIRED")
+                store.note_line(int(current["id"]), f"10:45 cutoff: nothing filled, order "
+                                                    f"{order_id} cancelled")
+    freed = store.expire_pending(day)
+    log.info("swing 10:45 sweep: %d reconciled, %d cancelled, %d refused, %d slots freed",
+             reconciled, cancelled, failed, freed)
+    return CutoffReport(reconciled, cancelled, failed, freed, tuple(outcomes))
+
+
+async def eod_gtt_sweep(store: SwingStore, gw, *, now: dt.datetime,
+                        prices: dict[str, Decimal] | None = None) -> list[ExecOutcome]:
+    """The 15:15 hook, as a named stub (A8; the alert and the Beat entry are SW11's): every
+    open position with shares and no resting GTT is re-armed through ``rearm_gtt`` — given a
+    last price above its stop — and the outcomes say which are still naked."""
+    outcomes: list[ExecOutcome] = []
+    for pos in _naked_positions(store):
+        price = (prices or {}).get(str(pos["symbol"]))
+        outcomes.append(await rearm_gtt(store, gw, position_id=int(pos["id"]), confirm="true",
+                                        now=now, last_price=price))
+    return outcomes
+
+
+def _naked_positions(store: SwingStore) -> list[dict]:
+    reader = getattr(store, "open_positions", None)
+    if reader is None:
+        return []
+    return [p for p in reader() if p.get("gtt_id") is None and int(p.get("quantity_open") or 0) > 0]
 
 
 async def _sell(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa: PLR0913
@@ -914,6 +1359,25 @@ async def _cancel(gw, *, gtt_id, symbol: str, client_id: str) -> dict | None:
         gtt_id=broker_id, symbol=symbol, exchange="NSE", client_id=client_id,
         tenant=_sole_tenant(), plan_tenant=_sole_tenant(),
     )
+
+
+async def _modify(gw, *, gtt_id, symbol: str, qty: int, stop: Decimal,  # noqa: PLR0913
+                  last_price: Decimal, client_id: str) -> dict:
+    """Re-size a resting trigger to ``qty`` (A8) — the gateway's ``modify_gtt_quantity``, the
+    ONLY way to touch a GTT; a simulated trigger (nothing at the exchange) is recorded as
+    re-sized locally, as ``_cancel`` records a simulated delete."""
+    broker_id = _broker_gtt_id(gtt_id)
+    if broker_id is None:
+        return {"symbol": symbol, "gtt_id": gtt_id, "status": DRY_RUN_GTT_MODIFY,
+                "qty": int(qty), "trigger": float(stop), "simulated": True}
+    result = await gw.modify_gtt_quantity(
+        gtt_id=broker_id, symbol=symbol, qty=int(qty), trigger=float(stop),
+        last_price=float(last_price), exchange="NSE", client_id=client_id,
+        tenant=_sole_tenant(), plan_tenant=_sole_tenant(),
+        limit_fraction=C.SWING_GTT_LIMIT_FRACTION,
+    )
+    result.setdefault("client_id", client_id)
+    return result
 
 
 def _gtt_fields(gtt: dict, *, stop: Decimal, now: dt.datetime) -> dict:

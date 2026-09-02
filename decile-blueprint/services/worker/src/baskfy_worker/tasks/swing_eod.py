@@ -10,18 +10,27 @@ things in an order that matters:
    its two moving averages. The actions become tomorrow's exit lines: a `SELL_AT_OPEN` for a
    partial or a full exit, a `RAISE_GTT_STOP` for a stop that has earned its move.
 3. **Settle the ladder** (SW8, and the drawdown since SW9.5). `exposure_tier` over the rung in
-   force, the last closed trades, the day's gate and the sleeve's drawdown from its peak EOD NAV
+   force, the last **real** closed trades (STANDING-ANSWERS A10, SW10.5: real closes from day
+   one — there is no paper book for the ladder, PACK.6's paper clause is void, the rung starts
+   at 0), the day's gate and the sleeve's drawdown from its peak EOD NAV
    (`04` §8.5; `sleeve_drawdown` in `tasks/swing.py` says how the NAV is computed, SW9.5.1); the
    rung it answers is written back to `sw_config.exposure_level` — audited,
    `changed_by="swing-eod"` — with the peak, the drawdown and the lock-out beside it, and into
    the day's `sw_market_daily`, so the plan, the settings page, the morning rebuild and every hub
    tab read one number. `rung_in_force` says why the rung it starts from is read from the
    previous settlement rather than from `sw_config`.
-4. **Plan tomorrow.** `build_entries` over the watchlist with the settled tier, into an
-   `sw_plan(source=EOD_PREVIEW)` with its lines **and its skips**. `04` §9's own words: "A
-   watchlist of twelve names and a plan of two lines is only useful if the other ten explain
-   themselves."
-5. **Send the email**, and count the session.
+4. **Count the session, and the first-live countdown** (A9, SW10.5). One `sw_session` row per
+   session the system ran; when the session was LIVE and `sw_config.first_live_sessions_left`
+   is above zero, it comes down by one — once, `sw_session.first_live_counted` says so — so
+   tomorrow's plan is sized with the count the session left behind: the fifth live session
+   decrements to 0 and the sixth plans at full risk. Never by a request; a desk restart
+   changes nothing.
+5. **Plan tomorrow.** `build_entries` over the watchlist with the settled tier and the risk
+   multiplier the countdown implies (0.5 while it runs and execution is enabled; a paper plan is
+   full size), into an `sw_plan(source=EOD_PREVIEW)` with its lines **and its skips**. `04` §9's
+   own words: "A watchlist of twelve names and a plan of two lines is only useful if the other
+   ten explain themselves."
+6. **Send the email.**
 
 **Exits are computed before entries, and the plan puts them first.** `04` §9.3: "the money they
 free is the money the entries spend". A plan that sized tomorrow's buys against today's cash
@@ -79,6 +88,7 @@ from baskfy_core.swing.plan import (
     assemble,
     build_entries,
     exit_lines,
+    first_live_multiplier,
 )
 from baskfy_core.swing.stops import (
     ActionKind,
@@ -123,10 +133,16 @@ class EodReport:
     positions_managed: int = 0
     exit_lines: int = 0
     entry_lines: int = 0
+    #: A7: live-gap lines on the plan with no stop yet (only the morning plan carries them).
+    pending_lines: int = 0
     skips: int = 0
     naked_positions: list[str] = field(default_factory=list)
     plan_id: str | None = None
     sessions_logged: int = 0
+    #: A9: the countdown after tonight, and the multiplier tomorrow's plan was sized with.
+    first_live_sessions_left: int = 0
+    risk_multiplier: str = "1"
+    risk_pct_in_force: str = "0.500"
 
     def as_detail(self) -> dict[str, object]:
         return {
@@ -149,12 +165,37 @@ class EodReport:
                 "plan_id": self.plan_id,
                 "exits": self.exit_lines,
                 "entries": self.entry_lines,
+                "pending": self.pending_lines,
                 "skips": self.skips,
+                "risk_multiplier": self.risk_multiplier,
+                "risk_pct_in_force": self.risk_pct_in_force,
+            },
+            "first_live": {
+                "sessions_left": self.first_live_sessions_left,
+                "header": self.first_live_header(),
             },
             "positions_managed": self.positions_managed,
             "naked_positions": list(self.naked_positions),
             "sessions_logged": self.sessions_logged,
         }
+
+    def first_live_header(self) -> str:
+        """The plan header's line (A9): "first live sessions: N left · risk 0.25%"."""
+        return first_live_header(self.first_live_sessions_left, self.risk_pct_in_force)
+
+
+def first_live_header(sessions_left: int, risk_pct_in_force: str) -> str:
+    """The sentence the plan is headed with while the countdown runs; empty once it is done."""
+    if sessions_left <= 0:
+        return ""
+    return f"first live sessions: {sessions_left} left · risk {risk_pct_in_force}%"
+
+
+def risk_pct_in_force(config: SwingConfig, multiplier: Decimal) -> str:
+    """``risk_per_trade_pct x multiplier`` at the setting's three places — what the header says."""
+    return str(
+        (Decimal(str(config.sizing.risk_per_trade_pct)) * multiplier).quantize(Decimal("0.001"))
+    )
 
 
 async def _bars_for(
@@ -335,7 +376,9 @@ async def watch_items(
     """The watchlist as the plan builder wants it, plus symbol → instrument id for the writer.
 
     A row with no trigger is dropped: `build_entries` sizes from the trigger and the stop, and a
-    `MANUAL` row someone added without levels is a name to look at rather than a plan line.
+    `MANUAL` row someone added without levels is a name to look at rather than a plan line. A
+    row with a trigger and **no stop** — a live gap the 09:09 scan wrote (SW6.2) — is kept
+    since SW10.5 (A7): `build_entries` shows it as a `PENDING_RANGE` line that reserves a slot.
 
     The ADR, the turnover, the score and the band come from the name's **latest** detection row
     on or before ``on`` — today's when the detectors saw it today, else the last time they did —
@@ -343,7 +386,9 @@ async def watch_items(
     stop (`04` §6), so a watched flag whose base is still forming keeps its measured ADR across
     the sessions it is watched; a name the detectors have never seen (a `MANUAL` row with no
     detection behind it) has no ADR, and a stop nobody can measure against the range is refused
-    `STOP_TOO_WIDE` rather than waved through (SW9.5.2).
+    `STOP_TOO_WIDE` rather than waved through (SW9.5.2) — unless the watch row itself carries
+    the ADR (`sw_watch.adr_pct`, SW10.5: the gap scan measures it from the bars) and the score
+    it was watched at (`sw_watch.score`), which are read when no detection row exists.
     """
     rows = await list_watch(session, user_id=user_id)
     latest: dict[int, SwSetupDaily] = {}
@@ -360,20 +405,22 @@ async def watch_items(
     items: list[WatchItem] = []
     ids: dict[str, int] = {}
     for row in rows:
-        if row.trigger is None or row.stop_ref is None:
+        if row.trigger is None:
             continue
         detected = latest.get(row.instrument_id)
+        adr = detected.adr_pct if detected and detected.adr_pct else row.adr_pct
+        score = detected.score if detected else row.score
         items.append(
             WatchItem(
                 symbol=row.symbol,
                 setup=Setup(row.setup),
                 trigger=row.trigger,
                 stop_ref=row.stop_ref,
-                adr_pct=detected.adr_pct if detected and detected.adr_pct else Decimal(0),
+                adr_pct=Decimal(adr) if adr else Decimal(0),
                 avg_turnover_inr=(
                     Decimal(detected.turnover_avg) if detected and detected.turnover_avg else None
                 ),
-                score=detected.score if detected else Decimal(0),
+                score=Decimal(score) if score is not None else Decimal(0),
                 locked_upper_circuit=bool(detected.locked_upper_circuit) if detected else False,
             )
         )
@@ -486,6 +533,10 @@ async def _record_session(
         seen: list[str] = [str(entry) for entry in recorded] if isinstance(recorded, list) else []
         existing.plan_ids = {"plans": [*seen, *(p for p in plans if p not in seen)]}
     await session.flush()
+    return await sessions_logged(session, user_id=user_id)
+
+
+async def sessions_logged(session: AsyncSession, *, user_id: int) -> int:
     return int(
         (
             await session.execute(
@@ -498,6 +549,49 @@ async def _record_session(
 #: Who the audit row says moved the rung. Read off the settings module's own table so the name
 #: the settings page shows and the name this job writes cannot drift apart.
 LADDER_CHANGED_BY: Final = SYSTEM_OWNED_FIELDS["exposure_level"]
+#: Who counts the first live sessions down (A9): the same evening, never a request.
+FIRST_LIVE_CHANGED_BY: Final = SYSTEM_OWNED_FIELDS["first_live_sessions_left"]
+
+
+async def count_first_live_session(
+    session: AsyncSession, *, user_id: int, on: dt.date, execution_enabled: bool, now: dt.datetime
+) -> int:
+    """`02` §3.5 / STANDING-ANSWERS A9: the countdown, moved once per LIVE session that closes.
+
+    Returns ``sw_config.first_live_sessions_left`` after tonight. A DRY_RUN session counts for
+    nothing — the paper sessions are not the first live ones. A LIVE session brings the count
+    down by one, and the session row records that it did (``first_live_counted``), so the
+    evening re-run for the same date reads the mark and leaves the count alone; a desk restart
+    mid-countdown changes nothing because nothing in the desk writes it. The change is audited
+    like the rung (`03` §1b), ``changed_by = "swing-eod"``, with the session date in the note.
+    """
+    row = (
+        await session.execute(select(SwConfig).where(SwConfig.user_id == user_id))
+    ).scalar_one_or_none()
+    if row is None:
+        return 0
+    left = int(row.first_live_sessions_left)
+    if not execution_enabled or left <= 0:
+        return left
+    day = (
+        await session.execute(
+            select(SwSession).where(SwSession.user_id == user_id, SwSession.session_date == on)
+        )
+    ).scalar_one_or_none()
+    if day is None or day.first_live_counted:
+        return left
+    await record_system_change(
+        session,
+        user_id=user_id,
+        field="first_live_sessions_left",
+        value=left - 1,
+        changed_by=FIRST_LIVE_CHANGED_BY,
+        now=now,
+        note=f"{on.isoformat()} closed LIVE: first live sessions {left} -> {left - 1}",
+    )
+    day.first_live_counted = True
+    await session.flush()
+    return left - 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -509,7 +603,8 @@ class LadderSettlement:
     #: The R-multiples the ladder read, oldest first — `sw_market_daily.detail` keeps them so the
     #: rung is explainable (`03` §3), and the journal page shows them (`06` SW8's AC).
     closed_r: tuple[Decimal, ...]
-    #: Which book they came from (PACK.6): ``"simulated"`` until execution is enabled.
+    #: Which book they came from: always ``"real"`` since SW10.5 (A10; PACK.6's paper clause is
+    #: void). Kept on the record so an old row that says ``"simulated"`` reads as what it was.
     reads: str
     #: `04` §8.5: the sleeve's NAV against its peak tonight, and the lock-out it carried in.
     drawdown: SleeveDrawdown
@@ -519,17 +614,17 @@ async def closed_r_multiples(
     session: AsyncSession,
     *,
     user_id: int,
-    simulated: bool,
     on: dt.date,
     count: int,
+    simulated: bool = False,
 ) -> tuple[Decimal, ...]:
     """The last ``count`` closed trades' R, oldest first, closed **on or before** ``on``.
 
     Bounded by date, unlike the detection job's reader, because the evening can be re-run for a
     past session (a weekend re-detect, a `make swing DATE=` repair) and a ladder that read closes
     from after that date would be sizing yesterday with tomorrow's results — house rule 5.
-    ``simulated`` selects the book (PACK.6); a `CLOSED` row without an `r_multiple` is a close-out
-    that never finished writing and is not a trade.
+    The ladder reads the real book (``simulated=False``, A10 — SW10.5); a `CLOSED` row without
+    an `r_multiple` is a close-out that never finished writing and is not a trade.
     """
     rows = await session.execute(
         select(SwPosition.r_multiple)
@@ -606,33 +701,6 @@ async def rung_in_force(session: AsyncSession, *, user_id: int, market: SwMarket
     return int(configured or 0)
 
 
-async def _book_switched(
-    session: AsyncSession, *, user_id: int, market: SwMarketDaily, reads: str
-) -> bool:
-    """Whether tonight's ladder reads a different book from the last settled evening's.
-
-    The previous settlement records which book it read (``detail.closed_trades_read``, PACK.6).
-    A change — the execution flag flipped since — means the sleeve's peak belongs to the other
-    book and is reset (`sleeve_drawdown`). Tonight's own earlier settlement is read first, so a
-    re-run answers the same as the first run did; with no record at all nothing has switched.
-    """
-    own = market.detail.get("closed_trades_read") if isinstance(market.detail, dict) else None
-    if isinstance(own, str) and _settled_rung(market, "from") is not None:
-        return False
-    previous = (
-        await session.execute(
-            select(SwMarketDaily)
-            .where(SwMarketDaily.user_id == user_id, SwMarketDaily.date < market.date)
-            .order_by(SwMarketDaily.date.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    if previous is None or not isinstance(previous.detail, dict):
-        return False
-    before = previous.detail.get("closed_trades_read")
-    return isinstance(before, str) and before != reads
-
-
 async def settle_ladder(  # noqa: PLR0913 - one keyword per input the rung depends on
     session: AsyncSession,
     *,
@@ -646,8 +714,9 @@ async def settle_ladder(  # noqa: PLR0913 - one keyword per input the rung depen
 
     The gate is the day's, as the detectors measured it — this job never invents one. The rung
     it starts from is :func:`rung_in_force`, and is recorded on the row (``detail.ladder.from``)
-    so a re-run starts from the same place; the closes are the last `lookback_trades` of the
-    book the ladder reads (PACK.6), on or before today. The answer goes:
+    so a re-run starts from the same place; the closes are the last `lookback_trades` **real**
+    closes (A10, SW10.5), on or before today. ``execution_enabled`` no longer picks a book; it
+    is kept on the signature for the callers and the record. The answer goes:
 
     * to `sw_config.exposure_level` through `record_system_change`, so an `sw_config_audit` row
       says `swing-eod` moved it and from what — the same audit a person's settings change
@@ -663,7 +732,7 @@ async def settle_ladder(  # noqa: PLR0913 - one keyword per input the rung depen
     leaves no audit row: the audit is a history of changes, not a log of runs.
 
     **The drawdown** (`04` §8.5, SW9.5) is settled in the same call, because it is an input to
-    the same rung. `sleeve_drawdown` reads tonight's NAV of the book the ladder reads against
+    the same rung. `sleeve_drawdown` reads tonight's NAV of the real book against
     the peak `sw_config.sleeve_peak_inr` carries (null on the first evening: the first session
     is never locked) and the lock-out state the sleeve came in with; `exposure_tier` applies
     the hysteresis. The peak, the drawdown and the lock-out go back to `sw_config` — the two
@@ -675,23 +744,14 @@ async def settle_ladder(  # noqa: PLR0913 - one keyword per input the rung depen
     gate = MarketGate(market.gate)
     rung_in = await rung_in_force(session, user_id=user_id, market=market)
     closes = await closed_r_multiples(
-        session,
-        user_id=user_id,
-        simulated=not execution_enabled,
-        on=market.date,
-        count=config.market.lookback_trades,
+        session, user_id=user_id, on=market.date, count=config.market.lookback_trades
     )
     config_row = (
         await session.execute(select(SwConfig).where(SwConfig.user_id == user_id))
     ).scalar_one_or_none()
-    reads = "real" if execution_enabled else "simulated"
+    reads = "real"
     drawdown = await sleeve_drawdown(
-        session,
-        user_id=user_id,
-        on=market.date,
-        config_row=config_row,
-        simulated=not execution_enabled,
-        reset_peak=await _book_switched(session, user_id=user_id, market=market, reads=reads),
+        session, user_id=user_id, on=market.date, config_row=config_row
     )
     tier = exposure_tier(
         current_level=rung_in,
@@ -711,7 +771,7 @@ async def settle_ladder(  # noqa: PLR0913 - one keyword per input the rung depen
             now=now,
             note=(
                 f"{market.date.isoformat()} {gate.value}: rung {rung_in} -> {tier.level} on "
-                f"{len(closes)} {'real' if execution_enabled else 'simulated'} closes "
+                f"{len(closes)} real closes "
                 f"[{', '.join(str(r) for r in closes)}]"
                 + (
                     f"; sleeve {drawdown.pct}% below its peak, locked out"
@@ -851,6 +911,21 @@ async def run_swing_eod(  # noqa: PLR0913 - one keyword per input the evening de
     report.drawdown_pct = str(settled.drawdown.pct)
     report.drawdown_locked = tier.drawdown_locked
 
+    # A9: the session is counted — and, if it was LIVE, the first-live countdown moved — BEFORE
+    # tomorrow is planned, so the plan is sized with the count the session leaves behind.
+    await _record_session(
+        session, user_id=user_id, on=trade_date, plan_id=None, execution=execution_enabled
+    )
+    left = await count_first_live_session(
+        session, user_id=user_id, on=trade_date, execution_enabled=execution_enabled, now=stamp
+    )
+    multiplier = first_live_multiplier(
+        sessions_left=left, execution_enabled=execution_enabled, config=config.sizing
+    )
+    report.first_live_sessions_left = left
+    report.risk_multiplier = str(multiplier)
+    report.risk_pct_in_force = risk_pct_in_force(config, multiplier)
+
     items, instrument_ids = await watch_items(session, user_id=user_id, on=trade_date)
     report.watching = len(items)
     account = await sleeve_account(session, user_id=user_id, config_row=config_row)
@@ -861,8 +936,10 @@ async def run_swing_eod(  # noqa: PLR0913 - one keyword per input the evening de
         gate=gate,
         tier=tier,
         config=config,
+        risk_multiplier=multiplier,
     )
-    report.entry_lines = len(entries)
+    report.entry_lines = sum(1 for line in entries if line.kind is LineKind.BUY_ON_TRIGGER)
+    report.pending_lines = sum(1 for line in entries if line.kind is LineKind.PENDING_RANGE)
     report.skips = len(skipped)
 
     plan = assemble(
@@ -948,10 +1025,16 @@ async def send_eod_email(  # noqa: PLR0913 - one keyword per part of the message
         max_open_positions=0,
         naked=tuple(report.naked_positions),
         exits=tuple(
-            _candidate(line) for line in plan_lines if line.kind is not LineKind.BUY_ON_TRIGGER
+            _candidate(line)
+            for line in plan_lines
+            if line.kind in (LineKind.SELL_AT_OPEN, LineKind.RAISE_GTT_STOP)
         ),
+        # A PENDING_RANGE line (A7) is an entry the range has not priced yet; it is listed
+        # with the entries, its note saying so, never with the exits.
         entries=tuple(
-            _candidate(line) for line in plan_lines if line.kind is LineKind.BUY_ON_TRIGGER
+            _candidate(line)
+            for line in plan_lines
+            if line.kind in (LineKind.BUY_ON_TRIGGER, LineKind.PENDING_RANGE)
         ),
         skips=tuple(
             (skip.symbol, f"{skip.reason.value} {skip.detail}".strip()) for skip in skipped
@@ -1002,6 +1085,7 @@ async def held_instrument_ids(session: AsyncSession, *, user_id: int) -> dict[st
 
 
 __all__ = [
+    "FIRST_LIVE_CHANGED_BY",
     "LADDER_CHANGED_BY",
     "MA_LOOKBACK_SESSIONS",
     "PAPER_SESSIONS_REQUIRED",
@@ -1010,10 +1094,14 @@ __all__ = [
     "LineKind",
     "Skipped",
     "closed_r_multiples",
+    "count_first_live_session",
+    "first_live_header",
     "held_instrument_ids",
     "manage_open_positions",
+    "risk_pct_in_force",
     "run_swing_eod",
     "rung_in_force",
+    "sessions_logged",
     "settle_ladder",
     "sleeve_account",
     "store_plan",

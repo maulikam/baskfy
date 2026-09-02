@@ -3214,8 +3214,9 @@ export interface paths {
          * Watch a name
          * @description Add a name by hand. It moves no money (`02` Track A) and it reaches no broker.
          *
-         *     A `MANUAL` row never expires: the person is watching for a reason the detectors cannot see,
-         *     and retiring it after ten sessions would be the system overruling a judgement.
+         *     A `MANUAL` row expires after ten sessions unless re-confirmed (A14, SW10.5): the person is
+         *     watching for a reason the detectors cannot see, but a typed level nobody has looked at in
+         *     two weeks is stale, and `PATCH … {"reconfirm": true}` is how they say they still want it.
          */
         post: operations["postWatch"];
         delete?: never;
@@ -3246,10 +3247,12 @@ export interface paths {
         head?: never;
         /**
          * Annotate a watched name
-         * @description The note and the catalyst — `01` §3's "news check", which a person does and Baskfy cannot.
+         * @description The note and the catalyst — `01` §3's "news check", which a person does and Baskfy cannot
+         *     — and, with `reconfirm: true`, a MANUAL row's clock restarted (A14).
          *
          *     Levels are deliberately not editable here. A trigger a person can revise after the fact is a
-         *     trigger that can be revised to match a price they already paid.
+         *     trigger that can be revised to match a price they already paid. Re-confirming a detector's
+         *     row is refused: its expiry is the detector's, and it is refreshed every evening.
          */
         patch: operations["patchWatch"];
         trace?: never;
@@ -9260,12 +9263,19 @@ export interface components {
              * Format: date
              */
             added_on: string;
+            /** Adr Pct */
+            adr_pct?: string | null;
             /** Catalyst */
             catalyst: string | null;
             /** Distance To Trigger Pct */
             distance_to_trigger_pct: string | null;
             /** Expires On */
             expires_on: string | null;
+            /**
+             * Focus
+             * @default false
+             */
+            focus: boolean;
             /** Id */
             id: number;
             /** Instrument Id */
@@ -9276,6 +9286,10 @@ export interface components {
             name: string;
             /** Note */
             note: string | null;
+            /** Reconfirmed On */
+            reconfirmed_on?: string | null;
+            /** Score */
+            score?: string | null;
             /** Setup */
             setup: string;
             /** Source */
@@ -9291,18 +9305,25 @@ export interface components {
         };
         /**
          * SwingWatchPatch
-         * @description The two free-text fields, and nothing else.
+         * @description The two free-text fields and the re-confirmation, and nothing else.
          *
          *     `docs/swing/02` Track A allows the watchlist's writes because they "change no money" — which
-         *     is true of a note and a catalyst, and would stop being true the moment this model grew a
-         *     `trigger`. A level a person can edit after the fact is a level that can be edited to match
-         *     a price, which is how a plan comes to justify a trade rather than the other way round.
+         *     is true of a note, a catalyst and a re-confirmation (A14: a MANUAL row expires after ten
+         *     sessions unless a person says they still want it; `reconfirm: true` restarts that clock and
+         *     changes no level), and would stop being true the moment this model grew a `trigger`. A
+         *     level a person can edit after the fact is a level that can be edited to match a price,
+         *     which is how a plan comes to justify a trade rather than the other way round.
          */
         SwingWatchPatch: {
             /** Catalyst */
             catalyst?: string | null;
             /** Note */
             note?: string | null;
+            /**
+             * Reconfirm
+             * @default false
+             */
+            reconfirm: boolean;
         };
         /** SyncHoldingsOut */
         SyncHoldingsOut: {

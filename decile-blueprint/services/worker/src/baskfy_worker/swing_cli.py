@@ -128,6 +128,7 @@ async def _run_premarket(day: dt.date, stage: str) -> JsonObject:
                 ep_premarket_enabled=settings.swing_ep_premarket_enabled,
                 quotes=quotes,
                 now=dt.datetime.now(tz=IST).replace(tzinfo=None),
+                execution_enabled=settings.swing_execution_enabled,
             )
             return {
                 "user_id": deps.swing_user_id,

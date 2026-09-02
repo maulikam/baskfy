@@ -380,7 +380,8 @@ class TestTheMarketRow:
         assert row.max_exposure_pct == Decimal("25.00")
         assert row.detail is not None
         assert row.detail["closed_r_multiples"] == []
-        assert row.detail["closed_trades_read"] == "simulated"
+        # A10 (SW10.5): the ladder reads real closes only, from day one.
+        assert row.detail["closed_trades_read"] == "real"
 
     async def test_a_second_run_overwrites_the_market_row(self, session: AsyncSession) -> None:
         user_id = await _sole_user(session)

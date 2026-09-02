@@ -24,11 +24,12 @@ from helpers import make_instrument, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.email.templates import SwingCandidate, SwingDigest, swing_eod
-from baskfy_api.swing_watch import WATCHING, auto_watch, list_watch
+from baskfy_api.swing_watch import WATCHING, add_manual, auto_watch, list_watch, reconfirm
 from baskfy_core.models import (
     AppUser,
     OhlcvDaily,
     SwConfig,
+    SwConfigAudit,
     SwMarketDaily,
     SwPlan,
     SwPlanLine,
@@ -36,12 +37,17 @@ from baskfy_core.models import (
     SwPosition,
     SwSession,
     SwSetupDaily,
+    SwWatch,
     TradingDay,
 )
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_core.swing.plan import LineKind
 from baskfy_worker.steps import StepOutcome, StepStatus
-from baskfy_worker.tasks.swing_eod import manage_open_positions, run_swing_eod
+from baskfy_worker.tasks.swing_eod import (
+    count_first_live_session,
+    manage_open_positions,
+    run_swing_eod,
+)
 
 pytestmark = requires_db
 
@@ -514,6 +520,279 @@ class TestTheSessionCounter:
         plans = row.plan_ids["plans"]
         assert isinstance(plans, list)
         assert len(plans) == 2
+
+
+@pytest.mark.db
+class TestTheWatchFunnel:
+    """STANDING-ANSWERS A14 (SW10.5): the top 20 flags by score + every EP are watched; the daily
+    focus is the top 5 by score + every EP; MANUAL rows expire after 10 sessions unless
+    re-confirmed."""
+
+    async def test_only_the_top_20_flags_by_score_are_auto_watched_plus_every_ep(
+        self, session: AsyncSession
+    ) -> None:
+        user_id = await _user(session)
+        for index in range(25):
+            flag = await make_instrument(session, f"FLAG{index:02d}")
+            # Scores 99, 98, … 75 — all above the 60 floor; only the top twenty make the list.
+            await _setup(session, user_id=user_id, instrument_id=flag, score=str(99 - index))
+        ep = await make_instrument(session, "EPCO")
+        await _setup(
+            session, user_id=user_id, instrument_id=ep, setup="EP", status="GAP_DAY", score="12.00"
+        )
+
+        result = await auto_watch(session, user_id=user_id, on=AS_OF)
+
+        rows = await list_watch(session, user_id=user_id)
+        flags = sorted(row.symbol for row in rows if row.setup == "FLAG")
+        assert flags == [f"FLAG{index:02d}" for index in range(20)], "the top 20 by score"
+        assert {row.symbol for row in rows if row.setup == "EP"} == {"EPCO"}
+        assert result.added == 21 and result.considered == 26
+        by_symbol = {row.symbol: row for row in rows}
+        assert by_symbol["FLAG00"].score == Decimal("99.00")
+        assert by_symbol["FLAG00"].adr_pct == Decimal("5.60")
+
+    async def test_the_daily_focus_is_the_top_5_flags_by_score_plus_every_ep(
+        self, session: AsyncSession
+    ) -> None:
+        user_id = await _user(session)
+        for index in range(8):
+            flag = await make_instrument(session, f"FLAG{index}")
+            await _setup(session, user_id=user_id, instrument_id=flag, score=str(90 - index))
+        ep = await make_instrument(session, "EPCO")
+        await _setup(
+            session, user_id=user_id, instrument_id=ep, setup="EP", status="GAP_DAY", score="12.00"
+        )
+
+        result = await auto_watch(session, user_id=user_id, on=AS_OF)
+
+        rows = await list_watch(session, user_id=user_id)
+        focus = sorted(row.symbol for row in rows if row.focus)
+        assert focus == ["EPCO", "FLAG0", "FLAG1", "FLAG2", "FLAG3", "FLAG4"]
+        assert result.focus == 6
+        below = sorted(row.symbol for row in rows if not row.focus)
+        assert below == ["FLAG5", "FLAG6", "FLAG7"], "still watched, never pushed"
+
+    async def test_the_focus_is_recomputed_not_accumulated(self, session: AsyncSession) -> None:
+        """A better flag tonight pushes yesterday's fifth out of focus; the flag moves, the
+        row stays."""
+        user_id = await _user(session)
+        yesterday = (await _sessions_before(session, AS_OF, 2))[0]
+        for index in range(5):
+            flag = await make_instrument(session, f"OLD{index}")
+            await _setup(
+                session, user_id=user_id, instrument_id=flag, score=str(80 - index), on=yesterday
+            )
+        await auto_watch(session, user_id=user_id, on=yesterday)
+        assert sum(1 for r in await list_watch(session, user_id=user_id) if r.focus) == 5
+        new = await make_instrument(session, "NEWBEST")
+        await _setup(session, user_id=user_id, instrument_id=new, score="95.00")
+
+        await auto_watch(session, user_id=user_id, on=AS_OF)
+
+        rows = {row.symbol: row for row in await list_watch(session, user_id=user_id)}
+        assert rows["NEWBEST"].focus is True
+        assert rows["OLD4"].focus is False and rows["OLD4"].state == WATCHING
+        assert sum(1 for r in rows.values() if r.focus) == 5
+
+    async def test_a_manual_row_expires_after_ten_sessions_unless_reconfirmed(
+        self, session: AsyncSession
+    ) -> None:
+        """A14: a typed pivot is stale after two weeks. One MANUAL row is left alone, one is
+        re-confirmed on day nine; eleven sessions on, the first has expired and the second is
+        still watched with its clock running from the re-confirmation."""
+        user_id = await _user(session)
+        days = await _sessions_before(session, AS_OF, 12)
+        stale = await make_instrument(session, "STALECO")
+        kept = await make_instrument(session, "KEPTCO")
+        first = await add_manual(
+            session,
+            user_id=user_id,
+            instrument_id=stale,
+            setup="FLAG",
+            on=days[0],
+            trigger=Decimal("100"),
+            stop_ref=Decimal("96"),
+        )
+        second = await add_manual(
+            session,
+            user_id=user_id,
+            instrument_id=kept,
+            setup="FLAG",
+            on=days[0],
+            trigger=Decimal("100"),
+            stop_ref=Decimal("96"),
+        )
+        assert first.expires_on == days[10], "ten sessions from the day it was typed"
+        await reconfirm(session, user_id=user_id, watch_id=second.id, on=days[8])
+        assert second.reconfirmed_on == days[8]
+        await _market(session, user_id=user_id)
+
+        await run_swing_eod(session, StepOutcome(), AS_OF, user_id=user_id)
+
+        rows = {row.symbol: row for row in await list_watch(session, user_id=user_id, state=None)}
+        assert rows["STALECO"].state == "EXPIRED"
+        assert rows["KEPTCO"].state == WATCHING
+        assert rows["KEPTCO"].expires_on is not None and rows["KEPTCO"].expires_on > AS_OF
+
+    async def test_a_manual_row_written_before_the_rule_is_given_its_clock_once(
+        self, session: AsyncSession
+    ) -> None:
+        """A row from before 0031 has no `expires_on`; the first evening after the rule gives it
+        one from `added_on`, and a fortnight-old one expires that same evening."""
+        user_id = await _user(session)
+        days = await _sessions_before(session, AS_OF, 12)
+        old = await make_instrument(session, "OLDMANUAL")
+        row = SwWatch(
+            user_id=user_id,
+            instrument_id=old,
+            setup="FLAG",
+            source="MANUAL",
+            added_on=days[0],
+            expires_on=None,
+            trigger=Decimal("100"),
+            stop_ref=Decimal("96"),
+            state=WATCHING,
+        )
+        session.add(row)
+        await session.flush()
+
+        result = await auto_watch(session, user_id=user_id, on=AS_OF)
+
+        assert result.expired == 1
+        assert row.expires_on == days[10] and row.state == "EXPIRED"
+
+
+@pytest.mark.db
+class TestTheFirstLiveCountdown:
+    """STANDING-ANSWERS A9 (SW10.5): half risk at plan time while the countdown runs, the
+    countdown moved once per LIVE session by the evening, never by a request."""
+
+    async def _watched_flag(self, session: AsyncSession, user_id: int) -> None:
+        flag = await make_instrument(session, "GOODFLAG")
+        await _setup(session, user_id=user_id, instrument_id=flag)
+        await _market(session, user_id=user_id)
+
+    async def test_a_live_session_closing_decrements_first_live_sessions_left_once(
+        self, session: AsyncSession
+    ) -> None:
+        user_id = await _user(session)
+        await self._watched_flag(session, user_id)
+
+        first = await run_swing_eod(
+            session, StepOutcome(), AS_OF, user_id=user_id, execution_enabled=True
+        )
+        second = await run_swing_eod(
+            session, StepOutcome(), AS_OF, user_id=user_id, execution_enabled=True
+        )
+
+        assert (first.first_live_sessions_left, second.first_live_sessions_left) == (4, 4), (
+            "the evening re-run reads `first_live_counted` and leaves the count alone"
+        )
+        config = (await session.execute(sa.select(SwConfig))).scalar_one()
+        assert config.first_live_sessions_left == 4
+        row = (await session.execute(sa.select(SwSession))).scalar_one()
+        assert row.first_live_counted is True
+        audit = (
+            (
+                await session.execute(
+                    sa.select(SwConfigAudit).where(SwConfigAudit.key == "first_live_sessions_left")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert [(a.old_value, a.new_value, a.changed_by) for a in audit] == [
+            ("5", "4", "swing-eod")
+        ]
+
+    async def test_a_dry_run_session_never_moves_the_countdown(self, session: AsyncSession) -> None:
+        user_id = await _user(session)
+        await self._watched_flag(session, user_id)
+
+        report = await run_swing_eod(
+            session, StepOutcome(), AS_OF, user_id=user_id, execution_enabled=False
+        )
+
+        assert report.first_live_sessions_left == 5
+        row = (await session.execute(sa.select(SwSession))).scalar_one()
+        assert row.first_live_counted is False
+
+    async def test_the_plan_is_sized_at_half_risk_while_live_and_full_size_on_paper(
+        self, session: AsyncSession
+    ) -> None:
+        """0.5% of ₹10 lakh over a ₹6 stop is 833 shares; at half risk 416. A paper plan with
+        the same countdown is 833 — the paper record rehearses the rules at full size."""
+        user_id = await _user(session)
+        await self._watched_flag(session, user_id)
+
+        paper = await run_swing_eod(
+            session, StepOutcome(), AS_OF, user_id=user_id, execution_enabled=False
+        )
+        live = await run_swing_eod(
+            session, StepOutcome(), AS_OF, user_id=user_id, execution_enabled=True
+        )
+
+        lines = (
+            (await session.execute(sa.select(SwPlanLine).order_by(SwPlanLine.id))).scalars().all()
+        )
+        assert [line.quantity for line in lines] == [833, 416]
+        assert (paper.risk_multiplier, paper.risk_pct_in_force) == ("1", "0.500")
+        assert (live.risk_multiplier, live.risk_pct_in_force) == ("0.5", "0.250")
+        assert live.first_live_header() == "first live sessions: 4 left · risk 0.250%"
+        assert paper.first_live_header() == "first live sessions: 5 left · risk 0.500%"
+
+    async def test_the_fifth_session_decrements_to_zero_and_the_sixth_plans_at_full_risk(
+        self, session: AsyncSession
+    ) -> None:
+        user_id = await _user(session)
+        days = await _sessions_before(session, AS_OF, 6)
+        flag = await make_instrument(session, "GOODFLAG")
+        for on in days:
+            await _market(session, user_id=user_id, on=on)
+        await _setup(session, user_id=user_id, instrument_id=flag, on=days[0])
+        quantities: list[int] = []
+        lefts: list[int] = []
+        for on in days:
+            report = await run_swing_eod(
+                session, StepOutcome(), on, user_id=user_id, execution_enabled=True
+            )
+            lefts.append(report.first_live_sessions_left)
+            lines = (
+                (
+                    await session.execute(
+                        sa.select(SwPlanLine)
+                        .join(SwPlan, SwPlan.id == SwPlanLine.plan_id)
+                        .where(SwPlan.as_of == on)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            quantities.append(lines[0].quantity if lines else -1)
+
+        assert lefts == [4, 3, 2, 1, 0, 0]
+        # Each evening plans the NEXT session: evenings 1-4 (sessions 2-5 ahead) at half risk,
+        # evening 5 has counted the fifth live session down to 0 and plans the sixth at full.
+        assert quantities == [416, 416, 416, 416, 833, 833]
+        assert report.first_live_header() == ""
+
+    async def test_a_restart_mid_countdown_changes_nothing(self, session: AsyncSession) -> None:
+        """The count lives in `sw_config` and the mark in `sw_session`; nothing in a process
+        remembers it, so calling the counter again — as a restarted worker would — moves it
+        no further."""
+        user_id = await _user(session)
+        await _market(session, user_id=user_id)
+        await run_swing_eod(session, StepOutcome(), AS_OF, user_id=user_id, execution_enabled=True)
+        now = dt.datetime(2026, 8, 18, 21, 5, tzinfo=dt.UTC)
+
+        again = await count_first_live_session(
+            session, user_id=user_id, on=AS_OF, execution_enabled=True, now=now
+        )
+
+        assert again == 4
+        config = (await session.execute(sa.select(SwConfig))).scalar_one()
+        assert config.first_live_sessions_left == 4
 
 
 class TestTheEmail:

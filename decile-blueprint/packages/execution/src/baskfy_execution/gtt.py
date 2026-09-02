@@ -58,13 +58,21 @@ __all__ = [
     "DEFAULT_STOP_BAND",
     "DRY_RUN_GTT",
     "DRY_RUN_GTT_DELETE",
+    "DRY_RUN_GTT_MODIFY",
     "GTT_DELETED",
     "GTT_DELETED_STATUSES",
     "GTT_DELETE_ERROR",
     "GTT_ERROR",
     "GTT_LIMIT_FRACTION",
+    "GTT_MODIFIED",
+    "GTT_MODIFIED_STATUSES",
+    "GTT_MODIFY_ERROR",
     "GTT_PLACED",
     "GTT_PLACED_STATUSES",
+    "ORDER_CANCELLED",
+    "ORDER_CANCELLED_STATUSES",
+    "ORDER_CANCEL_DRY_RUN",
+    "ORDER_CANCEL_ERROR",
     "GttConstants",
     "StopBand",
     "TickSizes",
@@ -102,11 +110,26 @@ GTT_ERROR: Final[str] = "GTT_ERROR"
 GTT_DELETED: Final[str] = "GTT_DELETED"
 DRY_RUN_GTT_DELETE: Final[str] = "DRY_RUN_GTT_DELETE"
 GTT_DELETE_ERROR: Final[str] = "GTT_DELETE_ERROR"
+#: `modify_gtt_quantity` (SW10.5, STANDING-ANSWERS A8): a resting trigger re-sized to the
+#: quantity that has actually filled — never a second trigger.
+GTT_MODIFIED: Final[str] = "GTT_MODIFIED"
+DRY_RUN_GTT_MODIFY: Final[str] = "DRY_RUN_GTT_MODIFY"
+GTT_MODIFY_ERROR: Final[str] = "GTT_MODIFY_ERROR"
+#: `cancel_order` (SW10.5, A8): an open order's remainder pulled at 10:45. Named constants like
+#: the GTT statuses — these are not statuses `place()` returns, so the weekly execution report
+#: and the /execute circuit breaker (which read `place()`'s literals) are not their readers.
+ORDER_CANCELLED: Final[str] = "ORDER_CANCELLED"
+ORDER_CANCEL_DRY_RUN: Final[str] = "ORDER_CANCEL_DRY_RUN"
+ORDER_CANCEL_ERROR: Final[str] = "ORDER_CANCEL_ERROR"
 
 #: What counts as "the stop is now resting at the exchange" (or was faithfully simulated).
 GTT_PLACED_STATUSES: Final[frozenset[str]] = frozenset({GTT_PLACED, DRY_RUN_GTT})
 #: What counts as "the trigger is gone".
 GTT_DELETED_STATUSES: Final[frozenset[str]] = frozenset({GTT_DELETED, DRY_RUN_GTT_DELETE})
+#: "The GTT now covers the new quantity" — live or simulated.
+GTT_MODIFIED_STATUSES: Final[frozenset[str]] = frozenset({GTT_MODIFIED, DRY_RUN_GTT_MODIFY})
+#: "The order no longer rests" — live or simulated.
+ORDER_CANCELLED_STATUSES: Final[frozenset[str]] = frozenset({ORDER_CANCELLED, ORDER_CANCEL_DRY_RUN})
 
 #: `kite_client.py:260` -- the GTT's own limit sits just under the trigger so it fills on the
 #: way down. A GTT fires a LIMIT order; at the trigger price exactly, a falling book walks

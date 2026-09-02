@@ -40,12 +40,15 @@ Section tabs: **Setups | Watchlist | Market | Positions | Journal**.
 the last close, **stop distance as a share of the ADR** (a name whose stop is wider than one ADR
 is shown as one the plan will skip — `04` §6.1, SW9.5), added on, expires on, source
 (detector/manual), note and catalyst (inline editable), state history. **The funnel numbers**
-(`07`, SW9.5): the list auto-watches the top **20** flags by score plus **every** EP (his weekly
-focus list of 5–20); the monitor's daily focus is the top **5** by score (his daily focus list of
-under 5); the page shows the count against each. Today the evening applies
-`WatchConfig.auto_watch_min_score` [60] as the floor (`04` §9.5) and the monitor watches every
-`WATCHING` row; the top-20 cap and the top-5 focus are SW11's to land in `swing_watch` and the
-monitor — this section is their spec. **Add manual** form: symbol search (existing `/search`), setup, trigger,
+(`07`, SW9.5; code since SW10.5 — STANDING-ANSWERS A14): the evening auto-watches the top
+**20** `SETTING_UP` flags by score plus **every** EP (his weekly focus list of 5–20) and the
+monitor watches all of them; the **daily focus** is the top **5** by score plus every EP —
+`sw_watch.focus`, a stored flag the read model carries (`SwingWatchOut.focus`, with `score`
+and `adr_pct`), which the notifier (SW11) pushes and the desk page puts on top; the page shows
+the count against each and marks focus rows. A **MANUAL** row expires after 10 sessions unless
+**re-confirmed** — a `Still watching` control on the row posts `PATCH /swing/watch/{id}` with
+`{"reconfirm": true}` (a non-money write; `reconfirmed_on` and the new `expires_on` are shown).
+**Add manual** form: symbol search (existing `/search`), setup, trigger,
 stop reference. Yesterday's `sw_signal` rows for these names are shown as "fired 09:23, 5-min
 range 412.30–418.90" under the row.
 
@@ -89,7 +92,8 @@ that the only server actions under `/swing` are `watchAdd`, `watchDismiss`, `wat
 
 One page, three panels, refreshed every 5 s during 09:15–10:45 and on demand otherwise.
 
-**Triggers (top).** `sw_signal` rows for today, newest first: time, symbol, setup, "5-min ORH
+**Triggers (top).** `sw_signal` rows for today, **focus names first** (A14 — `sw_watch.focus`),
+newest first within each group: time, symbol, setup, "5-min ORH
 418.90 broken at 419.35", entry, stop, the sized line (qty, ₹ risk, % of sleeve, cap), the
 `plan_id` and its countdown, and a **Confirm** button per line. Confirm POSTs
 `/swing/execute {plan_id, line_id, confirm=true}`. The response renders inline: `SIMULATED` (DRY_RUN
@@ -100,7 +104,18 @@ button. Lines a second person could confuse for the weekly book are prefixed **S
 lines first (SELL at open, RAISE GTT), then the buy-on-trigger lines that are *waiting* for a
 signal (at most three a session — `SESSION_CAP` skips say so), then the skips with reasons; a
 `DRAWDOWN_LOCKOUT` day is headed with the sleeve's drawdown. **Confirm** on a `SELL_AT_OPEN` or `RAISE_GTT_STOP` line
-goes through the same endpoint. There is no "confirm all".
+goes through the same endpoint. There is no "confirm all". Since SW10.5: a live gap found at
+09:09 is a **`PENDING_RANGE` row** among the waiting buys (STANDING-ANSWERS A7) — "SWING PENDING
+EPSILONGAP — range at 92.00, no stop yet", its preview note ("≈ N shares if the stop lands 1 ADR
+below"), **no button ever**, and the route refuses it with a 400 regardless; the SIGNAL plan at
+window close is the line. While `sw_config.first_live_sessions_left > 0` the panel is headed
+**"first live sessions: N left · risk 0.250%"** (A9; the risk in force is halved only when a
+confirm would be real — a SIMULATED desk shows the full 0.500%). While a live buy is accepted
+and not yet complete the panel shows the resting lines with two more one-form controls
+(A8): **Reconcile fills** (`POST /swing/reconcile`, `confirm=true`), which reads the broker's
+order book for today's `SENT` buys and applies each through the postback handler, and
+**10:45 sweep** (`POST /swing/cutoff`), which cancels open remainders through the gateway and
+frees unclaimed pending-range slots. Both are websec-covered form posts; neither places a buy.
 
 **Book (bottom).** Open positions with GTT ids; a **Re-arm GTT** button for a naked position
 (the only other order-shaped action, and it is a GTT, not a buy); the last five `manage`

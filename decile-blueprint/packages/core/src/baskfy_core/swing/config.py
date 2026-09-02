@@ -131,6 +131,14 @@ class SizingConfig:
     max_position_vs_turnover: float = 0.01
     #: Below this the brokerage dominates the edge (the desk's ``MIN_TRADE_VALUE``).
     min_trade_value_inr: float = 10_000.0
+    #: "Start small" (docs/swing/02 §3.5, STANDING-ANSWERS A9): the first live sessions plan at
+    #: half the configured risk — ``risk_per_trade_pct x risk_multiplier_first_live`` before
+    #: ``size_position`` — for ``first_live_sessions`` sessions, counted down by the evening job
+    #: once a LIVE session closes (``sw_config.first_live_sessions_left``). Applied at plan
+    #: time, never to a quantity at send time, so the line shown is the line sent; SELL and
+    #: RAISE lines are never touched. A paper plan is full size.
+    risk_multiplier_first_live: float = 0.5
+    first_live_sessions: int = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,6 +178,16 @@ class OpeningRangeConfig:
     #: Session bounds, IST, as ``(hour, minute)``. The monitor is idle outside them.
     session_open: tuple[int, int] = (9, 15)
     monitor_close: tuple[int, int] = (10, 45)
+    #: The live buy (STANDING-ANSWERS A8) is a *marketable* LIMIT, never MARKET: its price is
+    #: ``min(trigger x (1 + entry_limit_buffer_pct / 100), range_high + entry_limit_max_adr x
+    #: ADR)`` — half a percent of chase, and never more than a quarter of a normal day's range
+    #: above the opening range it broke out of.
+    entry_limit_buffer_pct: float = 0.5
+    entry_limit_max_adr: float = 0.25
+    #: How long a confirm waits for the broker's fill before answering (seconds), and how often
+    #: it asks — the orders endpoint at most twice a second (Kite's own ceiling is ten).
+    fill_poll_seconds: float = 10.0
+    fill_poll_interval_seconds: float = 0.5
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +209,15 @@ class WatchConfig:
     #: stopped being a base — but it has stopped being *this week's*, and the detector will find
     #: it again tomorrow if it still qualifies.
     flag_valid_bars: int = 10
+    #: His funnel (docs/swing/07, STANDING-ANSWERS A14): the weekly focus list is the top
+    #: ``auto_watch_top_n`` SETTING_UP flags by score (plus every EP); the daily focus — what
+    #: is pushed and sits at the top of the desk page — is the top ``focus_top_n`` of those by
+    #: score (plus every EP). The rest are watched, signalled and logged, never pushed.
+    auto_watch_top_n: int = 20
+    focus_top_n: int = 5
+    #: A MANUAL row expires after this many sessions unless re-confirmed on the watchlist page:
+    #: a two-week-old typed pivot is stale, and MANUAL levels are not refreshed premarket.
+    manual_valid_bars: int = 10
 
 
 @dataclass(frozen=True, slots=True)

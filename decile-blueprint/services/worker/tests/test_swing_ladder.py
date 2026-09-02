@@ -3,20 +3,25 @@
 `docs/swing/06` SW8, in its own words: "five simulated closes with net positive R in a GREEN tape
 move the rung 0 → 1 on the next EOD run and the page says so with the five R values; three
 simulated losses move it back; RED puts it at 0 with entries disallowed and the next plan shows
-`GATE_RED` skips." One test each, through `run_swing_eod`, and then the ones those imply:
+`GATE_RED` skips." Since SW10.5 (STANDING-ANSWERS A10) the closes the ladder reads are **real**
+ones, from day one: there is no paper book for it, PACK.6's paper clause is void, and a
+simulated close never moves the rung whatever the flag says — the fixtures below plant real
+closes and the paper-book cases assert the opposite of what they used to. One test each,
+through `run_swing_eod`, and then the ones those imply:
 
 * the rung lands in `sw_config.exposure_level` **and** leaves an `sw_config_audit` row that says
   `swing-eod` moved it (`03` §1b) — the plan is built with that same rung;
 * the evening is idempotent: run twice, the ladder climbs once (house rule 7);
-* the ladder reads the paper book while execution is off (PACK.6), never a close dated after the
-  session it is settling (house rule 5), and never a `CLOSED` row whose R was never written.
+* the ladder reads the real book with the flag off and on (A10), never a simulated close, never
+  a close dated after the session it is settling (house rule 5), and never a `CLOSED` row whose
+  R was never written.
 
 SW9.5 adds `04` §8.5, the drawdown containment, to the same evening: the sleeve's EOD NAV against
 its peak (`sleeve_drawdown`, SW9.5.1) is settled beside the rung — a sleeve 15% under its peak
 settles rung 0 with `drawdown_locked` and the plan's skips say `DRAWDOWN_LOCKOUT`; back within
 10% it unlocks and starts at rung 0; between the two it stays as it was (hysteresis); the first
-evening sets the peak and is never locked; the peak only rises; a re-run moves nothing; and the
-night the ladder switches books (PACK.6) the paper peak is not held against the real book.
+evening sets the peak and is never locked; the peak only rises; a re-run moves nothing; and a
+paper position never counts toward the NAV the peak is measured on (A10).
 """
 
 from __future__ import annotations
@@ -52,7 +57,7 @@ AS_OF = dt.date(2026, 8, 18)
 YESTERDAY = dt.date(2026, 8, 17)
 TIERS = DEFAULT_SWING_CONFIG.market.tiers
 
-#: Five closes, net +4.50R — the module plan's "five simulated closes with net positive R".
+#: Five closes, net +4.50R — the module plan's "five closes with net positive R" (real ones, A10).
 FIVE_GOOD = ("2.00", "-1.00", "1.50", "-0.50", "2.50")
 #: Two wins and then three losses in a row — `04` §8.4's `step_down_loss_streak`.
 THREE_LOSSES = ("2.00", "1.50", "-1.00", "-0.80", "-1.00")
@@ -101,7 +106,7 @@ async def _market(  # noqa: PLR0913 - one keyword per column a test may set
     detail: dict[str, object] = {
         "sectors": [],
         "closed_r_multiples": [],
-        "closed_trades_read": "simulated",
+        "closed_trades_read": "real",
     }
     if settled is not None:
         detail["ladder"] = {"from": settled[0], "to": settled[1], "settled_by": "swing-eod"}
@@ -130,11 +135,12 @@ async def _closed(  # noqa: PLR0913 - one keyword per column a test may set
     symbol: str,
     r: str | None,
     closed_on: dt.date = YESTERDAY,
-    simulated: bool = True,
+    simulated: bool = False,
     pnl: str | None = None,
 ) -> int:
-    """A closed simulated trade: entry 100, one R = 4, so `exit_avg` follows from ``r``.
-    ``pnl`` overrides the rupees (the drawdown reads `pnl_inr`, the ladder reads R)."""
+    """A closed real trade (A10: the book the ladder reads): entry 100, one R = 4, so `exit_avg`
+    follows from ``r``. ``pnl`` overrides the rupees (the drawdown reads `pnl_inr`, the ladder
+    reads R). ``simulated=True`` plants a paper close, which the ladder must ignore."""
     instrument_id = await make_instrument(session, symbol)
     r_multiple = None if r is None else Decimal(r)
     exit_avg = None if r_multiple is None else Decimal(100) + r_multiple * 4
@@ -169,7 +175,7 @@ async def _closed(  # noqa: PLR0913 - one keyword per column a test may set
 
 
 async def _closes(
-    session: AsyncSession, *, user_id: int, rs: tuple[str, ...], simulated: bool = True
+    session: AsyncSession, *, user_id: int, rs: tuple[str, ...], simulated: bool = False
 ) -> None:
     """``rs`` oldest first, closed on successive days so the order is the order they happened."""
     first = YESTERDAY - dt.timedelta(days=len(rs) - 1)
@@ -264,7 +270,7 @@ class TestTheAcceptanceCriteria:
         assert market.new_entries_allowed is True
         assert isinstance(market.detail, dict)
         assert market.detail["closed_r_multiples"] == list(FIVE_GOOD)
-        assert market.detail["closed_trades_read"] == "simulated"
+        assert market.detail["closed_trades_read"] == "real"
         assert report.closed_r == list(FIVE_GOOD)
 
     async def test_three_losses_in_a_row_move_it_back(self, session: AsyncSession) -> None:
@@ -466,11 +472,11 @@ class TestTheWriteBack:
 
 
 class TestWhatTheLadderReads:
-    async def test_it_reads_the_paper_book_while_execution_is_off(
+    async def test_it_reads_real_closes_from_day_one_with_the_flag_off(
         self, session: AsyncSession
     ) -> None:
-        """PACK.6. Five good *real* closes do not move the paper rung, and the row says which
-        book it read."""
+        """A10 (SW10.5): five good *real* closes move the rung with execution disabled — the
+        ladder never waited for the flag — and the row says it read the real book."""
         user_id = await _user(session)
         await _market(session, user_id=user_id, gate="GREEN")
         await _closes(session, user_id=user_id, rs=FIVE_GOOD, simulated=False)
@@ -479,11 +485,31 @@ class TestWhatTheLadderReads:
             session, StepOutcome(), AS_OF, user_id=user_id, execution_enabled=False
         )
 
+        assert report.exposure_level == 1
+        assert report.closed_r == list(FIVE_GOOD)
+        market = await _market_row(session, user_id)
+        assert isinstance(market.detail, dict)
+        assert market.detail["closed_trades_read"] == "real"
+
+    @pytest.mark.parametrize("execution_enabled", [False, True])
+    async def test_simulated_closes_never_move_the_rung_whatever_the_flag_says(
+        self, session: AsyncSession, execution_enabled: bool
+    ) -> None:
+        """A10: there is no paper book for the ladder. Five paper wins are read by nobody —
+        with the flag off *and* on — and the rung starts at 0 and stays there."""
+        user_id = await _user(session)
+        await _market(session, user_id=user_id, gate="GREEN")
+        await _closes(session, user_id=user_id, rs=FIVE_GOOD, simulated=True)
+
+        report = await run_swing_eod(
+            session, StepOutcome(), AS_OF, user_id=user_id, execution_enabled=execution_enabled
+        )
+
         assert report.exposure_level == 0
         assert report.closed_r == []
         market = await _market_row(session, user_id)
         assert isinstance(market.detail, dict)
-        assert market.detail["closed_trades_read"] == "simulated"
+        assert market.detail["closed_trades_read"] == "real"
 
     async def test_it_reads_the_real_book_once_execution_is_on(self, session: AsyncSession) -> None:
         user_id = await _user(session)
@@ -766,7 +792,7 @@ class TestTheDrawdownContainment:
                 partial_done=sold is not None,
                 quantity_open=open_,
                 state="OPEN" if sold is None else "PARTIAL",
-                simulated=True,
+                simulated=False,
             )
             session.add(position)
             await session.flush()
@@ -779,7 +805,7 @@ class TestTheDrawdownContainment:
                         quantity=sold[0],
                         price=Decimal(sold[1]),
                         filled_at=dt.datetime(2026, 8, 18, 9, 20, tzinfo=dt.UTC),
-                        simulated=True,
+                        simulated=False,
                     )
                 )
         await session.flush()
@@ -823,18 +849,19 @@ class TestTheDrawdownContainment:
         assert config.sleeve_peak_inr == Decimal("1000000.00")
         assert await _lock_audit(session, user_id) == [("False", "True")]
 
-    async def test_the_night_the_ladder_switches_books_the_paper_peak_is_not_held_against_it(
+    async def test_a_paper_position_never_counts_toward_the_nav_the_peak_is_measured_on(
         self, session: AsyncSession
     ) -> None:
-        """PACK.6: paper closes until the flag is on, real ones after. The paper book peaked at
-        ₹12 lakh; the real book starts at the ₹10 lakh sleeve. With the flag on tonight and
-        yesterday's settlement recorded as read from the simulated book, the peak starts over
-        at tonight's real NAV — 0.00% under, unlocked — instead of reading a 16.67% drawdown
-        the real book never had. The paper closes are not the real book's either."""
-        user_id = await _user(session, peak="1200000", locked=True)
+        """A10 (SW10.5): the ladder and the drawdown read the real book from the first evening,
+        so there is no book switch and no paper peak to reset. A paper close of +₹2 lakh and a
+        stored peak of ₹10 lakh leave the sleeve exactly at its peak: NAV ₹10 lakh, 0.00%
+        under, unlocked, and the paper close is not one the ladder read."""
+        user_id = await _user(session, peak="1000000")
         await _market(session, user_id=user_id, gate="GREEN", on=YESTERDAY, settled=(0, 0))
         await _market(session, user_id=user_id, gate="GREEN")
-        await _closed(session, user_id=user_id, symbol="PAPER", r="5.00", pnl="200000")
+        await _closed(
+            session, user_id=user_id, symbol="PAPER", r="5.00", pnl="200000", simulated=True
+        )
 
         report = await run_swing_eod(
             session, StepOutcome(), AS_OF, user_id=user_id, execution_enabled=True
@@ -844,4 +871,8 @@ class TestTheDrawdownContainment:
         assert config.sleeve_peak_inr == Decimal("1000000.00")
         assert (report.drawdown_pct, report.drawdown_locked) == ("0.00", False)
         assert report.closed_r == []
-        assert await _lock_audit(session, user_id) == [("True", "False")]
+        market = await _market_row(session, user_id)
+        assert isinstance(market.detail, dict)
+        drawdown = market.detail["drawdown"]
+        assert isinstance(drawdown, dict)
+        assert drawdown["nav"] == "1000000.00"

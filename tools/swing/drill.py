@@ -25,27 +25,44 @@ WHAT IT RUNS, IN ORDER — EVERY STEP IS THE PRODUCTION CODE PATH
    detectors' rows, the `EOD_PREVIEW` plan is built, the first session is counted.
 2. 08:50 (`run_swing_premarket --stage LEVELS`): watched levels re-expressed under today's
    `adj_factor`.
-3. 09:09 (`run_swing_premarket`, flag off): no quote is pulled, the `MORNING` plan is built.
-4. 09:15–10:45: the fixture morning `tools/swing/fixtures/morning-synthetic.csv` is replayed
-   through `app.strategies.swing_breakout.SwingBreakout` with `app.swing_monitor.PgSignalStore`
+3. 09:09 (`run_swing_premarket`, the EP flag ON for the drill with a scripted quote source —
+   no Kite): the liquid universe is quoted; `EPSILONGAP` is gapping 15 % on 5x pace and is
+   watched as an EP with a trigger and **no stop** (SW6.2); the `MORNING` plan shows it as a
+   `PENDING_RANGE` line (STANDING-ANSWERS A7) — no quantity, no stop, a preview at a 1-ADR
+   stop, one of the session's three slots reserved — beside the waiting buys.
+4. 09:15–10:45: the fixture morning `tools/swing/fixtures/morning-live-gap.csv` (the four
+   names of `morning-synthetic.csv` plus the live gap) is replayed through
+   `app.strategies.swing_breakout.SwingBreakout` with `app.swing_monitor.PgSignalStore`
    writing `sw_signal` rows and one-line `SIGNAL` plans into the same database — the desk's
    Postgres adapter over a psycopg connection, schema `public`, exactly as the monitor process
-   would. The four signals are compared with the fixture's expectation; `monitor_ran` is marked.
-5. Two confirms: the two `TRIGGERED` lines go through `app.swing_execute.execute_line` with a
-   `PgSwingStore` and the REAL swing gateway built by `build_swing_gateway` over a broker
-   client whose every method raises. Both come back `SIMULATED` with a position, a fill and a
-   `DRY-…` stop; the swing journal is read back and must contain only dry-run events. Both
-   SIGNAL lines were sized at their triggers (09:31, 09:45) before either was confirmed, so
-   together they ask for 34 % of a sleeve whose rung allows 25 %: the second confirm is
-   **re-sized at confirm** by the gate of SW10.4 (STANDING-ANSWERS A5) — under the session's
-   row lock the book is re-derived and the line shrunk to the ceiling's headroom — and the
-   drill asserts the book after both confirms is inside the rung's ceiling (exit 1 if not).
-6. The close prints: the day's bars and the detectors' rows for the session.
-7. 21:05 (`run_swing_eod`): the book is managed (one position is up more than one R, so the
-   rules raise its stop to breakeven), the ladder settles, tomorrow's preview is built, the
-   session is counted.
-8. Next morning (`run_swing_premarket`, 2026-08-20): the `MORNING` plan carries the raised stop
-   as a `RAISE_GTT_STOP` line and skips the two held names as `ALREADY_HELD`.
+   would. Five signals: one locked circuit (`GAMMALOCK`), one flag break (`ALPHAFLAG`), one
+   below-pivot (`DELTAWAIT`), the live gap's break (`EPSILONGAP`, whose range stop is wider
+   than one ADR — `STOP_TOO_WIDE`, the reserved slot released, A7) and one EP (`BETAEP`).
+   `monitor_ran` is marked.
+5. Two confirms, and one late partial fill (A8). `ALPHAFLAG`'s SIGNAL line is taken through
+   the live shape: the line is marked `SENT` with an order id the way a real marketable LIMIT
+   accepted-but-unfilled leaves it (the gateway's dry-run branch cannot produce that state —
+   it fills whole — so the drill writes it and says so), and at 10:20 a partial fill of 1,000
+   of 1,666 arrives through `app.swing_execute.on_order_update`, the postback handler: a
+   position for 1,000, a fill row, and a GTT for exactly 1,000 through the REAL gateway's
+   dry-run branch. Then `BETAEP` is confirmed through `execute_line` with a `PgSwingStore`
+   and the same gateway over a broker client whose every method raises: re-sized at confirm
+   (SW10.4, A5) against a book that holds 1,000 `ALPHAFLAG` at cost **plus the 666 still
+   resting at the trigger**, to the ceiling's headroom. The swing journal must contain only
+   dry-run events; the book after both is inside the rung's 25 % ceiling (exit 1 if not).
+6. 10:45 (`cutoff_open_orders`): the order book is asked once more, `ALPHAFLAG`'s open
+   remainder of 666 is cancelled through the gateway (dry-run), the line closes `FILLED` for
+   the 1,000, the GTT for 1,000 is untouched, and the pending-range slots nothing claimed are
+   freed (none left: `EPSILONGAP`'s was released at its trigger). The 15:15 sweep hook
+   (`eod_gtt_sweep`) runs and finds no naked position.
+7. The close prints: the day's bars and the detectors' rows for the session.
+8. 21:05 (`run_swing_eod`): the book is managed (one position is up more than one R, so the
+   rules raise its stop to breakeven), the ladder settles on real closes (A10: none yet), the
+   watch funnel and the focus flags are refreshed (A14), tomorrow's preview is built, the
+   session is counted (DRY_RUN, so the first-live countdown does not move — A9).
+9. Next morning (`run_swing_premarket`, 2026-08-20): the `MORNING` plan carries the raised stop
+   as a `RAISE_GTT_STOP` line, skips the two held names as `ALREADY_HELD`, and shows the
+   still-watched live gap as `PENDING_RANGE` again.
 
 Then the `sw_session` counters are printed — the rows `02` §3.2 counts twenty of — and
 `DRILL OK`. Exit 1 with the reason on any step that does not do what the rules say.
@@ -110,6 +127,12 @@ NAMES: tuple[tuple[str, int, str, str, str, str, bool], ...] = (
     ("GAMMALOCK", 1003, "FLAG", "SETTING_UP", "50.00", "48.50", True),
     ("DELTAWAIT", 1004, "FLAG", "SETTING_UP", "300.00", "291.00", False),
 )
+#: The live gap (SW10.5, A7): no detection row — the detectors never saw it — but a liquid
+#: name in the bar table (a 5% range on ₹8 cr a day), so the 09:09 scan quotes it. Its
+#: 18 Aug close is 80; the scripted pre-open quote says 92 on 120,000 shares — a 15% gap at
+#: 5x the pace of an average day at 09:09.
+LIVE_GAP = ("EPSILONGAP", 1005, "80.00")
+LIVE_GAP_QUOTE = ("92.00", 120_000)
 #: The 19 Aug bars, as (open, high, low, close). ALPHAFLAG closes more than one R above its
 #: 100.80 entry (stop 97.80, so 1R = 3.00) without printing through the stop: `04` §6.4.5
 #: moves its stop to breakeven. BETAEP closes green on its gap day: rule 2 stays quiet.
@@ -118,11 +141,21 @@ CLOSE_BARS: dict[str, tuple[str, str, str, str]] = {
     "BETAEP": ("210.00", "214.00", "204.60", "212.00"),
     "GAMMALOCK": ("52.50", "52.50", "52.50", "52.50"),
     "DELTAWAIT": ("298.00", "299.50", "296.00", "299.00"),
+    "EPSILONGAP": ("92.00", "95.00", "88.00", "93.00"),
 }
+#: Sessions of bars per name: the gap scan's `vol_avg_rvol` window is 50 bars excluding
+#: today, so a liquid name needs more than 51 to be quoted at all.
+BARS = 60
+
+#: The late partial fill (A8): ALPHAFLAG's 1,666-share line is accepted at 09:50 and 1,000
+#: of it fills by 10:20; the remaining 666 are still open at 10:45 and cancelled.
+PARTIAL_FILL = (1000, "100.85")
+DRILL_ORDER_ID = "DRILL-ORD-1"
 
 #: Journal events the gateway writes on a path that did NOT reach a broker. The drill demands
-#: exactly the first two, in the order a buy produces them.
-DRY_EVENTS = ("dry_run", "gtt_dry_run")
+#: exactly these, in order: BETAEP's buy and stop; the late partial fill's stop for 1,000;
+#: the 10:45 cancel of ALPHAFLAG's remainder.
+DRY_EVENTS = ("dry_run", "gtt_dry_run", "gtt_dry_run", "order_cancel_dry_run")
 
 
 class DrillFailed(RuntimeError):
@@ -162,6 +195,50 @@ class ExplodingKC:
     def instruments(self, *_: object) -> list:
         self._explode("the instrument dump")
         return []
+
+    def modify_gtt(self, *_: object, **__: object) -> None:
+        self._explode("a GTT modify")
+
+    def cancel_order(self, *_: object, **__: object) -> None:
+        self._explode("an order cancel")
+
+    def order_history(self, *_: object, **__: object) -> list:
+        self._explode("the order book")
+        return []
+
+
+class DrillQuotes:
+    """The 09:09 quote source — a script, not Kite. Answers the live gap's pre-open print for
+    every symbol it is asked about that is the live gap, and nothing for the rest."""
+
+    def __init__(self) -> None:
+        self.requests: list[list[str]] = []
+
+    def quotes(self, symbols):  # noqa: ANN001, ANN201 - the provider's own shape
+        from baskfy_providers.records import QuoteRecord
+
+        self.requests.append(list(symbols))
+        symbol, _, prev_close = LIVE_GAP
+        last, volume = LIVE_GAP_QUOTE
+        if symbol not in symbols:
+            return []
+        return [QuoteRecord(symbol=symbol, last_price=Decimal(last), volume=volume,
+                            prev_close=Decimal(prev_close), upper_circuit=Decimal("96.00"))]
+
+
+class DrillOrders:
+    """The order book for A8's poll and the 10:45 sweep — a script, not Kite: the drill's one
+    live-shaped order is OPEN with the partial filled, until it is cancelled."""
+
+    def __init__(self, filled: int, average: str) -> None:
+        self.filled, self.average = filled, Decimal(average)
+        self.asked: list[str] = []
+
+    def order_status(self, order_id: str):  # noqa: ANN201 - an OrderReport
+        from app.swing_execute import OrderReport
+
+        self.asked.append(order_id)
+        return OrderReport("OPEN", self.filled, self.average)
 
 
 class RecordingTransport:
@@ -318,8 +395,8 @@ async def reset_and_seed(url: str, sole: int, report: Report) -> int:
     finally:
         await engine.dispose()
     report.step("0. database", f"reset + seeded: user {sole}, broker account {int(broker)}, "
-                f"sleeve ₹{SLEEVE_INR:,.0f}, {len(NAMES)} names × 40 bars, detectors' rows "
-                f"and the market row for {D0}")
+                f"sleeve ₹{SLEEVE_INR:,.0f}, {len(NAMES)} names + the live gap × {BARS} bars, "
+                f"detectors' rows and the market row for {D0}")
     return int(broker)
 
 
@@ -380,7 +457,7 @@ async def seed_drill_rows(session, sole: int) -> None:
     from baskfy_core.seed_data import NSE_EXCHANGE_ID
 
     session.add(SwConfig(user_id=sole, sleeve_capital_inr=SLEEVE_INR, updated_by="swing-drill"))
-    dates = await _sessions_before(session, D0, 40)
+    dates = await _sessions_before(session, D0, BARS)
     if not dates or dates[-1] != D0:
         raise DrillFailed(f"{D0} is not a trading day in the seeded calendar")
     for spec in NAMES:
@@ -393,10 +470,24 @@ async def seed_drill_rows(session, sole: int) -> None:
         session.add(instrument)
         await session.flush()
         close = Decimal(spec[4]) * Decimal("0.98")
+        # A 1% range: below the 4% ADR floor, so the 09:09 scan never quotes a flag it has a
+        # detection row for — the live gap is the only name it finds.
         flat = (str(close), str(close * Decimal("1.01")), str(close * Decimal("0.99")), str(close))
         for on in dates:
             session.add(_bar(instrument.id, on, flat))
         session.add(_setup_row(sole, instrument.id, D0, spec))
+    symbol, token, close_text = LIVE_GAP
+    gap = Instrument(
+        exchange_id=NSE_EXCHANGE_ID, symbol=symbol, name=f"{symbol} LIMITED", series="EQ",
+        instrument_type="EQ", kite_token=token, listed_on=dt.date(2011, 1, 1), is_active=True,
+    )
+    session.add(gap)
+    await session.flush()
+    close = Decimal(close_text)
+    # A 5% range on a million shares at ₹80 — liquid by `04` §1 — and no detection row.
+    wide = (str(close), str(close * Decimal("1.025")), str(close * Decimal("0.975")), str(close))
+    for on in dates:
+        session.add(_bar(gap.id, on, wide))
     session.add(_market_row(sole, D0))
     await session.flush()
 
@@ -408,7 +499,7 @@ async def instrument_ids(session) -> dict[str, int]:
 
     rows = await session.execute(
         sa.select(Instrument.symbol, Instrument.id).where(
-            Instrument.symbol.in_([spec[0] for spec in NAMES])
+            Instrument.symbol.in_([*(spec[0] for spec in NAMES), LIVE_GAP[0]])
         )
     )
     return {str(symbol): int(instrument_id) for symbol, instrument_id in rows}
@@ -445,6 +536,9 @@ async def describe_plan(session, plan_id: str | None) -> list[str]:
                        f"risk ₹{line.risk_inr} [{line.state}]")
         elif line.kind == "SELL_AT_OPEN":
             out.append(f"SWING SELL {symbol} x{line.quantity} at open — {line.note} [{line.state}]")
+        elif line.kind == "PENDING_RANGE":
+            out.append(f"SWING PENDING {symbol} — range at {line.trigger}, no stop yet; "
+                       f"{line.note} [{line.state}]")
         else:
             out.append(f"SWING RAISE GTT {symbol} to {line.stop} — {line.note} [{line.state}]")
     for skip in skips:
@@ -475,11 +569,15 @@ async def run_eod(url: str, sole: int, on: dt.date, report: Report, label: str) 
             if outcome.status is not StepStatus.SUCCEEDED or result.plan_id is None:
                 raise DrillFailed(f"EOD {on} did not run: {outcome.detail}")
             report.step(label, f"EOD {on}: gate {result.gate} rung {result.rung_before}→"
-                               f"{result.exposure_level}, watch +{result.watch_added} "
+                               f"{result.exposure_level} (real closes: "
+                               f"{result.closed_r or 'none'}), watch +{result.watch_added} "
                                f"−{result.watch_expired}, managed {result.positions_managed}, "
                                f"exits {result.exit_lines}, entries {result.entry_lines}, "
-                               f"skips {result.skips}, naked {result.naked_positions or 'none'}, "
-                               f"sessions logged {result.sessions_logged}")
+                               f"pending {result.pending_lines}, skips {result.skips}, naked "
+                               f"{result.naked_positions or 'none'}, sessions logged "
+                               f"{result.sessions_logged}, first live sessions left "
+                               f"{result.first_live_sessions_left} (risk x"
+                               f"{result.risk_multiplier}: {result.risk_pct_in_force}%)")
             for text in await describe_plan(session, result.plan_id):
                 report.detail(text)
             report.detail(f"email: {transport.subjects[0] if transport.subjects else 'NOT SENT'}")
@@ -488,12 +586,16 @@ async def run_eod(url: str, sole: int, on: dt.date, report: Report, label: str) 
 
 
 async def run_premarket(url: str, sole: int, on: dt.date, stage: str, report: Report,
-                        label: str) -> str | None:
+                        label: str, *, scan: bool = False) -> str | None:
+    """The morning's job. With ``scan`` the EP flag is on for the run and the quote source is
+    the drill's script (no Kite): the live gap is found and watched, and the plan shows it as
+    a PENDING_RANGE line (A7)."""
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
     from baskfy_worker.steps import StepOutcome, StepStatus
     from baskfy_worker.tasks.swing_premarket import STAGE_LEVELS, run_swing_premarket
 
+    quotes = DrillQuotes() if scan else None
     engine = create_async_engine(url)
     try:
         maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -501,8 +603,8 @@ async def run_premarket(url: str, sole: int, on: dt.date, stage: str, report: Re
             outcome = StepOutcome()
             clock = dt.time(8, 50) if stage == STAGE_LEVELS else dt.time(9, 9)
             result = await run_swing_premarket(
-                session, outcome, on, user_id=sole, stage=stage, ep_premarket_enabled=False,
-                quotes=None, now=dt.datetime.combine(on, clock),
+                session, outcome, on, user_id=sole, stage=stage, ep_premarket_enabled=scan,
+                quotes=quotes, now=dt.datetime.combine(on, clock), execution_enabled=False,
             )
             if outcome.status is not StepStatus.SUCCEEDED:
                 raise DrillFailed(f"premarket {stage} {on} did not run: {outcome.detail}")
@@ -510,11 +612,23 @@ async def run_premarket(url: str, sole: int, on: dt.date, stage: str, report: Re
                 report.step(label, f"LEVELS {on}: refreshed {result.levels_refreshed}, "
                                    f"unchanged {result.levels_unchanged}")
                 return None
-            report.step(label, f"MORNING plan {on}: quotes pulled {result.quotes_pulled} "
-                               f"(flag off), entries {result.entry_lines}, exits "
-                               f"{result.exit_lines}, skips {result.skips}")
+            report.step(label, f"MORNING plan {on}: universe {result.universe}, quotes pulled "
+                               f"{result.quotes_pulled} ({'scripted' if scan else 'flag off'}), "
+                               f"gaps {result.gap_candidates or 'none'} (+{result.gaps_added}), "
+                               f"entries {result.entry_lines}, pending {result.pending_lines}, "
+                               f"exits {result.exit_lines}, skips {result.skips}, focus "
+                               f"{result.focus}, ladder caught up: {result.ladder_caught_up}")
             for text in await describe_plan(session, result.plan_id):
                 report.detail(text)
+            if scan:
+                if quotes is None or quotes.requests != [[LIVE_GAP[0]]]:
+                    raise DrillFailed(f"the scan quoted {quotes.requests if quotes else None}, "
+                                      f"not exactly the liquid universe [{LIVE_GAP[0]}]")
+                if result.gaps_added != 1 or result.pending_lines != 1:
+                    raise DrillFailed(f"the live gap was not watched and shown pending: "
+                                      f"{result.as_detail()}")
+                if result.ladder_caught_up:
+                    raise DrillFailed("the 09:09 job settled a session the evening had settled")
             return result.plan_id
     finally:
         await engine.dispose()
@@ -533,12 +647,13 @@ async def the_close_prints(url: str, sole: int, report: Report) -> None:
             for spec in NAMES:
                 session.add(_bar(ids[spec[0]], D1, CLOSE_BARS[spec[0]]))
                 session.add(_setup_row(sole, ids[spec[0]], D1, spec))
+            session.add(_bar(ids[LIVE_GAP[0]], D1, CLOSE_BARS[LIVE_GAP[0]]))
             session.add(_market_row(sole, D1))
             await session.flush()
     finally:
         await engine.dispose()
     closes = ", ".join(f"{symbol} {bar[3]}" for symbol, bar in CLOSE_BARS.items())
-    report.step("6. the close", f"bars, detectors' rows and the market row for {D1}: {closes}")
+    report.step("7. the close", f"bars, detectors' rows and the market row for {D1}: {closes}")
 
 
 # --- step 4: the replayed morning, through the desk's store -------------------------------
@@ -559,12 +674,12 @@ def replay_morning(dsn: str, sole: int, report: Report) -> Morning:
     from app.analytics.pg import Connection
     from app.strategies.swing_breakout import SwingBreakout
 
-    watchlist_path = FIXTURES / "morning-synthetic.watchlist.json"
+    watchlist_path = FIXTURES / "morning-live-gap.watchlist.json"
     day, window, fixture_names = replay.read_watchlist(watchlist_path)
     if day != D1:
         raise DrillFailed(f"the fixture morning is dated {day}, the drill expects {D1}")
     circuits = {n.symbol: n.upper_circuit for n in fixture_names if n.upper_circuit is not None}
-    candles = replay.read_candles(FIXTURES / "morning-synthetic.csv")
+    candles = replay.read_candles(FIXTURES / "morning-live-gap.csv")
     ticks = replay.ticks_from_candles(candles)
 
     conn = Connection(dsn)
@@ -594,8 +709,8 @@ def replay_morning(dsn: str, sole: int, report: Report) -> Morning:
 
     raised = [replay.Raised.of(s) for s in strategy.signals]
     expected = [replay.Raised.from_json(e)
-                for e in json.loads((FIXTURES / "morning-synthetic.expected.json").read_text())]
-    report.step("4. 09:15-10:45", f"replayed morning-synthetic.csv through PgSignalStore: "
+                for e in json.loads((FIXTURES / "morning-live-gap.expected.json").read_text())]
+    report.step("4. 09:15-10:45", f"replayed morning-live-gap.csv through PgSignalStore: "
                                   f"{len(raised)} signals, {len(store.lines_written)} SIGNAL "
                                   f"lines, gate {context.gate.value} rung {context.tier.level}")
     for r in raised:
@@ -605,6 +720,32 @@ def replay_morning(dsn: str, sole: int, report: Report) -> Morning:
         raise DrillFailed(f"the replay did not raise the fixture's signals: {raised} != {expected}")
     if len(store.lines_written) != 2:
         raise DrillFailed(f"expected two TRIGGERED lines, the store wrote {store.lines_written}")
+    # A7: the live gap's break set a stop wider than one ADR — a skip, and its slot released.
+    conn = Connection(dsn)
+    try:
+        skip = conn.execute(
+            "SELECT k.reason, k.detail FROM public.sw_plan_skip k JOIN public.sw_plan p "
+            "ON p.id = k.plan_id WHERE k.user_id = ? AND k.symbol = ? AND p.source = 'SIGNAL' "
+            "AND p.as_of = ?",
+            (sole, LIVE_GAP[0], D1),
+        ).fetchone()
+        pending = conn.execute(
+            "SELECT l.state, l.note FROM public.sw_plan_line l JOIN public.sw_plan p "
+            "ON p.id = l.plan_id WHERE l.user_id = ? AND l.kind = 'PENDING_RANGE' "
+            "AND p.as_of = ? AND p.source = 'MORNING'",
+            (sole, D1),
+        ).fetchall()
+    finally:
+        conn.close()
+    if skip is None or (skip["reason"], skip["detail"]) != ("SIZE_REFUSED", "STOP_TOO_WIDE"):
+        raise DrillFailed(f"the live gap's SIGNAL plan did not skip it STOP_TOO_WIDE: "
+                          f"{dict(skip) if skip else None}")
+    if len(pending) != 1 or pending[0]["state"] != "SKIPPED":
+        raise DrillFailed(f"the reserved slot was not released exactly once at the trigger: "
+                          f"{[dict(p) for p in pending]}")
+    report.detail(f"{LIVE_GAP[0]}: SIGNAL plan skipped it SIZE_REFUSED STOP_TOO_WIDE (stop 88.00 "
+                  f"under 94.60 is 6.98%, wider than its ADR); the PENDING_RANGE slot is "
+                  f"released — {pending[0]['note'].split('; ')[-1]}")
     return Morning(line_ids=list(store.lines_written), raised=len(raised),
                    ceiling_pct=context.tier.max_exposure_pct, equity=context.account.equity)
 
@@ -621,7 +762,8 @@ class Confirmed:
 
 def confirm_two_lines(dsn: str, sole: int, broker_account: int, morning: Morning,
                       journal_dir: Path, report: Report) -> Confirmed:
-    line_ids = morning.line_ids
+    """Step 5 and 6: the late partial fill, the re-sized confirm, the 10:45 sweep."""
+    alpha_line, beta_line = morning.line_ids
     import app.core.gateway as gateway_shim
     from app import swing_execute
     from app.analytics.pg import Connection
@@ -636,87 +778,161 @@ def confirm_two_lines(dsn: str, sole: int, broker_account: int, morning: Morning
     gateway_shim.JOURNAL = str(journal_dir / "orders_journal.jsonl")
     kc = ExplodingKC()
     gw = swing_execute.build_swing_gateway(kc, RiskManager())
-    now = dt.datetime.combine(D1, dt.time(9, 50), tzinfo=IST)
+    partial_qty, partial_price = PARTIAL_FILL
+    orders = DrillOrders(partial_qty, partial_price)
 
     conn = Connection(dsn)
     outcomes: list[object] = []
-    resized = 0
     try:
         store = PgSwingStore(conn, user_id=sole, schema="public", broker_account_id=broker_account)
-        for line_id in line_ids:
-            line = store.line(line_id)
-            if line is None or line["state"] != "PROPOSED":
-                raise DrillFailed(f"line {line_id} is not a PROPOSED line: {line}")
-            planned = int(line["quantity"])
-            outcome = asyncio.run(swing_execute.execute_line(
-                store, gw, plan_id=str(line["plan_id"]), line_id=line_id, confirm="true", now=now,
-            ))
-            outcomes.append(outcome)
-            line = store.line(line_id) or line   # the gate may have rewritten the row
-            position = store.position(outcome.position_id) if outcome.position_id else None
-            sent = int(line["quantity"])
-            report.detail(f"SWING BUY {line['symbol']} x{planned} @ {line['trigger']} "
-                          f"stop {line['stop']} → {outcome.status} "
-                          f"{outcome.reason or ''}".rstrip()
-                          + (f"; position {position['id']} x{position['quantity_open']} "
-                             f"gtt {position['gtt_id']} simulated={position['simulated']}"
-                             if position else ""))
-            if sent != planned:
-                resized += 1
-                report.detail(f"  re-sized at confirm {planned} → {sent} (A5): {line['note']}")
-            if outcome.status != "SIMULATED" or not outcome.simulated or position is None:
-                raise DrillFailed(f"line {line_id} did not simulate end to end: {outcome}")
-            if not str(position["gtt_id"]).startswith("DRY-") or position["simulated"] is not True:
-                raise DrillFailed(f"position {position['id']} is not a paper position: {position}")
-            if int(position["quantity_open"]) != sent or sent > planned:
-                raise DrillFailed(f"position {position['id']} holds {position['quantity_open']}, "
-                                  f"the line says {sent} (planned {planned})")
-            fills = store.fills_for(int(position["id"]))
-            if len(fills) != 1 or fills[0]["simulated"] is not True or fills[0]["quantity"] != sent:
-                raise DrillFailed(f"position {position['id']} has no simulated fill for {sent}: "
-                                  f"{fills}")
-            if line["state"] != "FILLED" or line["position_id"] != position["id"]:
-                raise DrillFailed(f"line {line_id} is {line['state']} with position "
-                                  f"{line['position_id']} after a simulated fill")
-        session = store.session(D1)
-        book = sum(
-            (Decimal(str(p["entry_avg"])) * int(p["quantity_open"])
-             for p in store.open_positions()),
-            Decimal(0),
+        alpha = store.line(alpha_line)
+        if alpha is None or alpha["state"] != "PROPOSED" or alpha["symbol"] != "ALPHAFLAG":
+            raise DrillFailed(f"line {alpha_line} is not ALPHAFLAG's PROPOSED line: {alpha}")
+        planned_alpha = int(alpha["quantity"])
+
+        # --- 5a. ALPHAFLAG goes out as a live marketable LIMIT would (A8) --------------------
+        # A live marketable LIMIT is accepted, not filled; `execute_line` leaves such a line
+        # SENT with the broker's order id (SW7.1). The gateway's dry-run branch cannot produce
+        # that state — it fills whole — so the drill writes the SENT line the way the live
+        # path would have at 09:50. The fill arrives later the way a live fill does (5c).
+        with store.lock_session_for_update(D1):
+            store.set_line(alpha_line, state="SENT", journal_ref=DRILL_ORDER_ID)
+            store.bump_session(D1, mode="DRY_RUN", confirms=1)
+        limit = swing_execute.marketable_limit(
+            trigger=alpha["trigger"], range_high=store.range_high_for(alpha_line),
+            adr_pct=Decimal("5.00"), config=swing_execute.DEFAULT_SWING_CONFIG.opening_range,
         )
+        report.detail(f"09:50 SWING BUY ALPHAFLAG x{planned_alpha} @ {alpha['trigger']} stop "
+                      f"{alpha['stop']} → SENT as a live marketable LIMIT would be (limit "
+                      f"{limit} = min(100.80 x 1.005, range high 100.50 + 0.25 x 5% ADR)), "
+                      f"order {DRILL_ORDER_ID}, nothing filled yet; the drill wrote this state "
+                      f"— the dry-run branch cannot")
+
+        # --- 5b. BETAEP's confirm, re-sized against ALPHAFLAG's resting order --------------
+        beta = store.line(beta_line)
+        if beta is None or beta["state"] != "PROPOSED":
+            raise DrillFailed(f"line {beta_line} is not a PROPOSED line: {beta}")
+        planned_beta = int(beta["quantity"])
+        now = dt.datetime.combine(D1, dt.time(9, 55), tzinfo=IST)
+        outcome = asyncio.run(swing_execute.execute_line(
+            store, gw, plan_id=str(beta["plan_id"]), line_id=beta_line, confirm="true", now=now,
+            orders=orders,
+        ))
+        outcomes.append(outcome)
+        beta = store.line(beta_line) or beta
+        beta_pos = store.position(outcome.position_id) if outcome.position_id else None
+        sent = int(beta["quantity"])
+        report.detail(f"09:55 SWING BUY {beta['symbol']} x{planned_beta} @ {beta['trigger']} "
+                      f"stop {beta['stop']} → {outcome.status} {outcome.reason or ''}".rstrip()
+                      + (f"; position {beta_pos['id']} x{beta_pos['quantity_open']} "
+                         f"gtt {beta_pos['gtt_id']} simulated={beta_pos['simulated']}"
+                         if beta_pos else ""))
+        resized = 0
+        if sent != planned_beta:
+            resized += 1
+            report.detail(f"  re-sized at confirm {planned_beta} → {sent} (A5): {beta['note']}")
+        if outcome.status != "SIMULATED" or not outcome.simulated or beta_pos is None:
+            raise DrillFailed(f"line {beta_line} did not simulate end to end: {outcome}")
+        if not str(beta_pos["gtt_id"]).startswith("DRY-") or beta_pos["simulated"] is not True:
+            raise DrillFailed(f"position {beta_pos['id']} is not a paper position: {beta_pos}")
+        if int(beta_pos["quantity_open"]) != sent or sent > planned_beta:
+            raise DrillFailed(f"position {beta_pos['id']} holds {beta_pos['quantity_open']}, "
+                              f"the line says {sent} (planned {planned_beta})")
+        if beta["state"] != "FILLED" or beta["position_id"] != beta_pos["id"]:
+            raise DrillFailed(f"line {beta_line} is {beta['state']} after a simulated fill")
+        if orders.asked:
+            raise DrillFailed("a dry-run confirm polled the order book; the dry-run path "
+                              "completes immediately")
+        if resized != 1:
+            raise DrillFailed(f"{resized} lines were re-sized at confirm; the fixture expects one")
+
+        # --- 5c. the late partial fill (A8): the postback handler ----------------------------
+        at_1020 = dt.datetime.combine(D1, dt.time(10, 20), tzinfo=IST)
+        late = asyncio.run(swing_execute.on_order_update(
+            store, gw, {"order_id": DRILL_ORDER_ID, "status": "OPEN",
+                        "filled_quantity": partial_qty, "average_price": partial_price},
+            now=at_1020,
+        ))
+        if late is None or late.position_id is None or late.filled_quantity != partial_qty:
+            raise DrillFailed(f"the late partial fill was not applied: {late}")
+        outcomes.append(late)
+        position = store.position(late.position_id)
+        alpha = store.line(alpha_line) or alpha
+        report.detail(f"10:20 postback: {partial_qty} of {planned_alpha} ALPHAFLAG filled at "
+                      f"{partial_price} → position {position['id']} x{position['quantity_open']} "
+                      f"gtt {position['gtt_id']} (for exactly {position['quantity_open']}, the "
+                      f"real gateway's dry-run branch), line {alpha['state']} — the remaining "
+                      f"{planned_alpha - partial_qty} still resting")
+        if position is None or int(position["quantity_open"]) != partial_qty:
+            raise DrillFailed(f"the position does not hold the filled quantity: {position}")
+        if not str(position["gtt_id"]).startswith("DRY-"):
+            raise DrillFailed(f"the partial's stop is not a dry-run GTT: {position}")
+        if alpha["state"] != "SENT" or alpha["position_id"] != position["id"]:
+            raise DrillFailed(f"ALPHAFLAG's line is {alpha['state']} with position "
+                              f"{alpha['position_id']} after a partial fill")
+        # Idempotent: the same postback again writes nothing.
+        again = asyncio.run(swing_execute.on_order_update(
+            store, gw, {"order_id": DRILL_ORDER_ID, "status": "OPEN",
+                        "filled_quantity": partial_qty, "average_price": partial_price},
+            now=at_1020,
+        ))
+        if again is None or len(store.fills_for(int(position["id"]))) != 1:
+            raise DrillFailed("a repeated postback wrote a second fill")
         context = store.session_context(D1)
+        book_now = context.account.open_exposure_inr
+        alpha_cost = Decimal(partial_price) * partial_qty
+        remainder = Decimal(str(alpha["trigger"])) * (planned_alpha - partial_qty)
+        report.detail(f"EXPOSURE after confirms ₹{book_now:,.2f} = "
+                      f"{book_now / morning.equity * 100:.1f}% of the sleeve — ALPHAFLAG "
+                      f"₹{alpha_cost:,.2f} filled + ₹{remainder:,.2f} still resting at the "
+                      f"trigger + BETAEP ₹{beta_pos['entry_avg'] * beta_pos['quantity_open']:,.2f} "
+                      f"(rung ceiling {morning.ceiling_pct:.0f}% = "
+                      f"₹{morning.equity * Decimal(str(morning.ceiling_pct)) / 100:,.2f}); "
+                      f"{context.entries_today} entries today, "
+                      f"{len(context.account.open_symbols)} of "
+                      f"{context.tier.max_open_positions} positions at rung {context.tier.level}")
+        ceiling = morning.equity * Decimal(str(morning.ceiling_pct)) / 100
+        if book_now > ceiling:
+            raise DrillFailed(f"the book after the confirms is ₹{book_now:,.2f}, over the rung's "
+                              f"{morning.ceiling_pct:.0f}% ceiling (₹{ceiling:,.2f}) — the "
+                              f"confirm-time gate did not hold")
+        if context.entries_today != 2:
+            raise DrillFailed(f"the session counts {context.entries_today} entries, not 2")
+
+        # --- 6. 10:45: cancel the open remainder, free the unclaimed slots --------------------
+        at_1045 = dt.datetime.combine(D1, dt.time(10, 45), tzinfo=IST)
+        sweep = asyncio.run(swing_execute.cutoff_open_orders(store, gw, orders=orders, now=at_1045))
+        alpha = store.line(alpha_line) or alpha
+        position = store.position(int(position["id"])) or position
+        report.step("6. 10:45 sweep", f"reconciled {sweep.reconciled}, cancelled "
+                                      f"{sweep.cancelled}, refused {sweep.cancel_failed}, "
+                                      f"slots freed {sweep.slots_freed}")
+        report.detail(f"ALPHAFLAG order {DRILL_ORDER_ID}: remainder "
+                      f"{planned_alpha - partial_qty} cancelled through the gateway (dry-run), "
+                      f"line {alpha['state']}, position x{position['quantity_open']} gtt "
+                      f"{position['gtt_id']} — {'; '.join(alpha['note'].split('; ')[-2:])}")
+        if sweep.cancelled != 1 or sweep.cancel_failed != 0 or sweep.slots_freed != 0:
+            raise DrillFailed(f"the sweep did not cancel exactly the one remainder: {sweep}")
+        if alpha["state"] != "FILLED" or int(position["quantity_open"]) != partial_qty:
+            raise DrillFailed(f"after the cutoff ALPHAFLAG is {alpha['state']} with "
+                              f"{position['quantity_open']} open")
+        if len(store.fills_for(int(position["id"]))) != 1:
+            raise DrillFailed("the cutoff wrote a fill")
+        naked = asyncio.run(swing_execute.eod_gtt_sweep(store, gw, now=at_1045.replace(hour=15,
+                                                                                     minute=15)))
+        report.detail(f"15:15 sweep hook: {len(naked)} naked position(s) re-armed")
+        if naked:
+            raise DrillFailed(f"a position was naked at 15:15: {naked}")
+        session = store.session(D1)
     finally:
         conn.close()
-    book_pct = book / morning.equity * 100 if morning.equity else Decimal(0)
-    ceiling = morning.equity * Decimal(str(morning.ceiling_pct)) / 100
-    report.detail(f"EXPOSURE after confirms ₹{book:,.2f} = {book_pct:.1f}% of the sleeve "
-                  f"(rung ceiling {morning.ceiling_pct:.0f}% = ₹{ceiling:,.2f}); "
-                  f"{context.entries_today} entries today, {len(context.account.open_symbols)} "
-                  f"of {context.tier.max_open_positions} positions at rung {context.tier.level}")
-    if book_pct > Decimal(str(morning.ceiling_pct)) or book > ceiling:
-        # SW10.2's finding, now a failure: the confirm-time gate (SW10.4, STANDING-ANSWERS A5)
-        # re-sizes the second confirm to the ceiling's headroom; a book over the ceiling means
-        # the gate did not hold.
-        raise DrillFailed(f"the book after the confirms is ₹{book:,.2f} = {book_pct:.1f}% of "
-                          f"the sleeve, over the rung's {morning.ceiling_pct:.0f}% ceiling "
-                          f"(₹{ceiling:,.2f}) — the confirm-time gate did not hold")
-    if context.entries_today != len(line_ids):
-        raise DrillFailed(f"the session counts {context.entries_today} entries, not "
-                          f"{len(line_ids)}")
-    if len(context.account.open_symbols) > context.tier.max_open_positions:
-        raise DrillFailed(f"{len(context.account.open_symbols)} positions at a rung that "
-                          f"allows {context.tier.max_open_positions}")
-    if resized != 1:
-        # The fixture is built so that the two triggers ask for 34 % of a 25 % rung: exactly
-        # one of the two confirms must have been shrunk. Zero means the gate did not fire (or
-        # the fixture changed); two means the first was shrunk against an empty book.
-        raise DrillFailed(f"{resized} lines were re-sized at confirm; the fixture expects one")
 
     journal = Path(gw._journal_path)
     events = [json.loads(row)["event"] for row in journal.read_text().splitlines()] \
         if journal.exists() else []
-    if events != list(DRY_EVENTS) * len(line_ids):
-        raise DrillFailed(f"the swing journal is not two dry-run buys with their stops: {events}")
+    if events != list(DRY_EVENTS):
+        raise DrillFailed(f"the swing journal is not the partial's stop, BETAEP's buy and stop "
+                          f"and the 10:45 cancel, all dry: {events}")
     if kc.touched:
         raise DrillFailed(f"the broker client was touched {kc.touched} times")
     if session is None or session["confirms"] != 2 or session["fills"] != 2:
@@ -798,22 +1014,24 @@ def run(args: argparse.Namespace) -> int:
 
     asyncio.run(run_eod(url, sole, D0, report, "1. evening before"))
     asyncio.run(run_premarket(url, sole, D1, "LEVELS", report, "2. 08:50 LEVELS"))
-    morning_plan = asyncio.run(run_premarket(url, sole, D1, "GAPS", report, "3. 09:09 MORNING"))
+    morning_plan = asyncio.run(run_premarket(url, sole, D1, "GAPS", report, "3. 09:09 MORNING",
+                                             scan=True))
     if morning_plan is None:
         raise DrillFailed("no MORNING plan was built")
     morning = replay_morning(dsn, sole, report)
 
-    report.step("5. confirm", "two TRIGGERED lines through execute_line + the real gateway "
-                              "(dry-run) over an exploding broker client, each under the "
-                              "session lock and re-sized to the rung (A5)")
+    report.step("5. confirm", "ALPHAFLAG as a live marketable LIMIT with a late partial fill "
+                              "through on_order_update (A8), then BETAEP through execute_line "
+                              "+ the real gateway (dry-run) over an exploding broker client, "
+                              "under the session lock and re-sized to the rung (A5)")
     with tempfile.TemporaryDirectory(prefix="swing-drill-") as journal_dir:
         confirmed = confirm_two_lines(dsn, sole, broker_account, morning, Path(journal_dir),
                                       report)
 
     asyncio.run(the_close_prints(url, sole, report))
-    asyncio.run(run_eod(url, sole, D1, report, "7. 21:05 EOD"))
-    asyncio.run(run_premarket(url, sole, D2, "LEVELS", report, "8. 08:50 LEVELS"))
-    next_plan = asyncio.run(run_premarket(url, sole, D2, "GAPS", report, "8. 09:09 MORNING"))
+    asyncio.run(run_eod(url, sole, D1, report, "8. 21:05 EOD"))
+    asyncio.run(run_premarket(url, sole, D2, "LEVELS", report, "9. 08:50 LEVELS"))
+    next_plan = asyncio.run(run_premarket(url, sole, D2, "GAPS", report, "9. 09:09 MORNING"))
     if next_plan is None:
         raise DrillFailed("no MORNING plan was built for the next session")
 
@@ -824,6 +1042,8 @@ def run(args: argparse.Namespace) -> int:
         print(f"  {line}")
     print(f"  orders that reached a broker: {confirmed.touched}   "
           f"(journal: {', '.join(confirmed.events)})")
+    print(f"  late partial fill: {PARTIAL_FILL[0]} of 1666 ALPHAFLAG at {PARTIAL_FILL[1]} by "
+          f"postback, the rest cancelled at 10:45; one GTT, for exactly {PARTIAL_FILL[0]}")
     print("DRILL OK")
     return 0
 

@@ -48,7 +48,7 @@ from baskfy_api.swing_settings import (
     record_system_change,
 )
 from baskfy_core.models import AppUser, Base, SwConfig
-from baskfy_core.models.swing import SW_SKIP_REASONS
+from baskfy_core.models.swing import SW_LINE_KINDS, SW_SKIP_REASONS
 from baskfy_core.swing.config import DEFAULT_SWING_CONFIG
 from baskfy_worker.settings import WorkerSettings
 
@@ -88,9 +88,12 @@ class TestEveryTableIsTenantKeyed:
         assert all(fk.ondelete == "CASCADE" for fk in column.foreign_keys)
 
     def test_there_are_swing_migrations_at_all(self) -> None:
-        assert {"0028_swing.py", "0029_swing_backtest.py", "0030_swing_primary_sources.py"} <= set(
-            MIGRATIONS
-        )
+        assert {
+            "0028_swing.py",
+            "0029_swing_backtest.py",
+            "0030_swing_primary_sources.py",
+            "0031_swing_review_corrections.py",
+        } <= set(MIGRATIONS)
 
     @pytest.mark.parametrize("table_name", SWING_TABLES)
     def test_the_migration_drops_what_it_creates(self, table_name: str) -> None:
@@ -237,6 +240,24 @@ class TestTheCeilings:
         exec(block, namespace)
         assert namespace["NEW_SKIP_REASONS"] == SW_SKIP_REASONS
         assert {"SESSION_CAP", "DRAWDOWN_LOCKOUT"} <= set(SW_SKIP_REASONS)
+
+    def test_the_line_kind_constraint_in_the_latest_migration_is_the_engines_list(self) -> None:
+        """`0031_swing_review_corrections.py` rebuilds `ck_sw_plan_line_kind_known` with the
+        fourth kind SW10.5 added (`PENDING_RANGE`, STANDING-ANSWERS A7). Same rule as the skip
+        reasons: the migration writes the list out, and this is the check that it is the
+        engine's, so a fifth kind cannot be added to `LineKind` without a migration."""
+        source = MIGRATIONS["0031_swing_review_corrections.py"]
+        namespace: dict[str, object] = {}
+        block = source[source.index("NEW_LINE_KINDS = (") : source.index("def _kind_check")]
+        exec(block, namespace)
+        assert namespace["NEW_LINE_KINDS"] == SW_LINE_KINDS
+        assert "PENDING_RANGE" in SW_LINE_KINDS
+
+    def test_the_first_live_countdown_is_the_evenings_never_a_requests(self) -> None:
+        """`03` §1 (SW10.5, A9): `first_live_sessions_left` is decremented once when a LIVE
+        session closes, by `swing-eod`; the desk's `/swing/execute` no longer owns it."""
+        assert SYSTEM_OWNED_FIELDS["first_live_sessions_left"] == "swing-eod"
+        assert "first_live_sessions_left" not in EDITABLE_FIELDS
 
     def test_the_drawdown_state_is_system_owned_and_written_by_the_evening(self) -> None:
         """`03` §1 (SW9.5): `sleeve_peak_inr`, `drawdown_pct` and `drawdown_locked` are the

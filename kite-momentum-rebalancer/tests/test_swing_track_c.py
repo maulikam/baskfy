@@ -124,7 +124,6 @@ def _unthrottled(gw):
 @pytest.fixture()
 def spy(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    X._FIRST_LIVE_COUNTED.clear()
     real = X.build_swing_gateway(desk_tests.ExplodingKC(), RiskManager())
     return SpyGateway(_unthrottled(real))
 
@@ -453,7 +452,6 @@ def fast_gw(monkeypatch, tmp_path):
     monkeypatch.setattr(C, "SWING_EXECUTION_ENABLED", False)
     monkeypatch.setattr(C, "DRY_RUN", True)
     monkeypatch.chdir(tmp_path)
-    X._FIRST_LIVE_COUNTED.clear()
     return _unthrottled(X.build_swing_gateway(desk_tests.ExplodingKC(), RiskManager()))
 
 
@@ -633,7 +631,6 @@ class TestNoSequenceOfConfirmsExceedsTheCeilingTheCountOrTheCap:
         monkeypatch.setattr(C, "SWING_EXECUTION_ENABLED", False)
         monkeypatch.setattr(C, "DRY_RUN", True)
         monkeypatch.chdir(tmp_path)
-        X._FIRST_LIVE_COUNTED.clear()
         rng = random.Random(SEED)
         codes = {"EXPOSURE_FULL", "TIER_FULL", "SESSION_CAP", "SIZE_REFUSED", "ALREADY_HELD",
                  "GATE_RED", "DRAWDOWN_LOCKOUT", "NOT_TRADEABLE_SETUP"}

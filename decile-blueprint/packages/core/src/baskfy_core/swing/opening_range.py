@@ -19,12 +19,16 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Final
 
-from baskfy_core.swing.config import OpeningRangeConfig
+from baskfy_core.swing.config import EpConfig, OpeningRangeConfig
 
 _PCT = Decimal(100)
 _ZERO = Decimal(0)
+_ONE = Decimal(1)
 #: Minutes in a full NSE cash session, 09:15-15:30.
 SESSION_MINUTES: Final = 375
+#: A reading at this multiple of its threshold earns full marks in a score component — the
+#: detectors' own rule (``setups._FULL_MARKS``), restated for the pre-open.
+_FULL_MARKS: Final = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,3 +171,24 @@ def live_gap(  # noqa: PLR0913 - one keyword per input the verdict depends on
         str(config.live_min_volume_pace)
     )
     return LiveGapVerdict(ok, gap.quantize(Decimal("0.01")), ratio.quantize(Decimal("0.01")))
+
+
+def live_gap_score(verdict: LiveGapVerdict, config: EpConfig) -> Decimal:
+    """The provisional EP score of a live gap at the pre-open (`04` §7.3, SW10.5 / A14).
+
+    `04` §3's score is ``35 x clamp(gap / 20) + 35 x clamp(rvol / 6) + 15 x close_position +
+    15 x clamp(1 - prior_move / 30)``. At 09:09 the gap and the pace are known and the close is
+    not, so the two known terms are scored on the detectors' own scale — full marks at twice the
+    threshold — and the two that need a close contribute nothing: the score is out of 70, and it
+    is the number the watch row is ranked by until the detectors write a real one at the close.
+    Two decimals, like a detection row's.
+    """
+    gap = min(
+        max(verdict.gap_pct / (Decimal(_FULL_MARKS) * Decimal(str(config.min_gap_pct))), _ZERO),
+        _ONE,
+    )
+    pace = min(
+        max(verdict.volume_pace / (Decimal(_FULL_MARKS) * Decimal(str(config.min_rvol))), _ZERO),
+        _ONE,
+    )
+    return (Decimal(35) * gap + Decimal(35) * pace).quantize(Decimal("0.01"))

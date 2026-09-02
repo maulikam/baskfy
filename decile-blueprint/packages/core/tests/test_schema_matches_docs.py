@@ -293,6 +293,29 @@ def test_swing_drawdown_columns_are_modelled_and_recorded_in_docs(table: str, co
     }
 
 
+@pytest.mark.parametrize(
+    ("table", "column"),
+    [
+        ("sw_watch", "score"),
+        ("sw_watch", "adr_pct"),
+        ("sw_watch", "focus"),
+        ("sw_watch", "reconfirmed_on"),
+        ("sw_position", "half_risk"),
+        ("sw_session", "first_live_counted"),
+    ],
+)
+def test_swing_review_columns_are_modelled_and_recorded_in_docs(table: str, column: str) -> None:
+    """SW10.5 (docs/swing/STANDING-ANSWERS A7, A9, A14): migration
+    `0031_swing_review_corrections.py` adds the watch funnel's score / ADR / focus / re-confirm
+    columns (§4), the journal's half-risk tag (§7) and the first-live bookkeeping (§8). The
+    model has each one and `docs/swing/03` names it, so column and meaning cannot drift."""
+    swing_model = (MONOREPO_ROOT / "docs" / "swing" / "03-data-model.md").read_text(
+        encoding="utf-8"
+    )
+    assert column in Base.metadata.tables[table].c, f"{table}.{column} is not modelled"
+    assert f"`{column}`" in swing_model, f"{table}.{column} is not described in docs/swing/03"
+
+
 def test_billing_tables_are_recorded_in_decisions() -> None:
     """The Prompt 13, 14 and 17 additions are written down too, in docs/DECISIONS.md.
 

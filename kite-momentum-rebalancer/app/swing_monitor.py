@@ -69,6 +69,7 @@ from baskfy_core.swing.plan import (
     WatchItem,
     assemble,
     build_entries,
+    first_live_multiplier,
 )
 
 from . import config as C
@@ -213,10 +214,17 @@ class SignalContext:
     gate: MarketGate
     tier: ExposureTier
     account: SwingAccount
-    #: symbol → (adr_pct, avg_turnover_inr, score) from the latest detection row.
+    #: symbol → (adr_pct, avg_turnover_inr, score) from the latest detection row — or, for a
+    #: name with none (a live gap), from the watch row's own `adr_pct` / `score` (SW10.5).
     detected: dict[str, tuple[Decimal, Decimal | None, Decimal]]
     entries_today: int = 0
     pending: tuple[PendingLine, ...] = ()
+    #: A7: symbols whose `PENDING_RANGE` line on today's MORNING plan is still `PROPOSED` —
+    #: each holds one of the session's new-entry slots until its range breaks or 10:45.
+    reserved: tuple[str, ...] = ()
+    #: A9: `sw_config.first_live_sessions_left`, so the SIGNAL plan and the confirm size at
+    #: the same half risk while the countdown runs.
+    first_live_sessions_left: int = 0
 
 
 def load_context(conn: Any, *, user_id: int, day: dt.date, schema: str = SCHEMA) -> SignalContext:
@@ -251,9 +259,12 @@ def load_context(conn: Any, *, user_id: int, day: dt.date, schema: str = SCHEMA)
             drawdown_locked=bool(market["drawdown_locked"]),
         )
     capital_row = conn.execute(
-        f"SELECT sleeve_capital_inr FROM {_t(schema, 'sw_config')} WHERE user_id = ?", (user_id,)
+        f"SELECT sleeve_capital_inr, first_live_sessions_left FROM {_t(schema, 'sw_config')} "
+        "WHERE user_id = ?",
+        (user_id,),
     ).fetchone()
     capital = Decimal(str(capital_row["sleeve_capital_inr"])) if capital_row else Decimal(0)
+    first_live_left = int(capital_row["first_live_sessions_left"]) if capital_row else 0
     held = conn.execute(
         f"SELECT i.symbol, p.entry_avg, p.quantity_open FROM {_t(schema, 'sw_position')} p "
         f"JOIN {_t(schema, 'instrument')} i ON i.id = p.instrument_id "
@@ -265,7 +276,9 @@ def load_context(conn: Any, *, user_id: int, day: dt.date, schema: str = SCHEMA)
     )
     open_symbols = {str(r["symbol"]) for r in held}
     taken = conn.execute(
-        f"SELECT l.id, i.symbol, l.quantity, l.trigger, l.state, l.position_id "
+        f"SELECT l.id, i.symbol, l.quantity, l.trigger, l.state, l.position_id, "
+        f"(SELECT q.quantity_entered FROM {_t(schema, 'sw_position')} q "
+        "WHERE q.id = l.position_id) AS entered "
         f"FROM {_t(schema, 'sw_plan_line')} l "
         f"JOIN {_t(schema, 'sw_plan')} p ON p.id = l.plan_id "
         f"JOIN {_t(schema, 'instrument')} i ON i.id = l.instrument_id "
@@ -275,20 +288,40 @@ def load_context(conn: Any, *, user_id: int, day: dt.date, schema: str = SCHEMA)
     ).fetchall()
     pending: list[PendingLine] = []
     for r in taken:
-        if r["position_id"] is not None or str(r["symbol"]) in open_symbols:
-            continue  # already on the book as a position: counted at cost above
+        symbol = str(r["symbol"])
+        if r["position_id"] is not None or symbol in open_symbols:
+            # On the book as a position, counted at cost above. A8: a partially filled live
+            # LIMIT still resting for the rest is exposure the book may yet take — the
+            # unfilled remainder counts at the trigger until 10:45 cancels it.
+            if str(r["state"]) == "SENT" and r["entered"] is not None:
+                remainder = int(r["quantity"]) - int(r["entered"])
+                if remainder > 0:
+                    exposure += Decimal(str(r["trigger"] or 0)) * Decimal(remainder)
+            continue
         value = Decimal(str(r["trigger"] or 0)) * Decimal(int(r["quantity"]))
         pending.append(
             PendingLine(
                 line_id=int(r["id"]),
-                symbol=str(r["symbol"]),
+                symbol=symbol,
                 quantity=int(r["quantity"]),
                 value_inr=value,
                 state=str(r["state"]),
             )
         )
         exposure += value
-        open_symbols.add(str(r["symbol"]))
+        open_symbols.add(symbol)
+    # A7: the slots the morning plan reserved for live gaps whose range has not broken yet.
+    reserved = tuple(
+        str(r["symbol"])
+        for r in conn.execute(
+            f"SELECT i.symbol FROM {_t(schema, 'sw_plan_line')} l "
+            f"JOIN {_t(schema, 'sw_plan')} p ON p.id = l.plan_id "
+            f"JOIN {_t(schema, 'instrument')} i ON i.id = l.instrument_id "
+            "WHERE l.user_id = ? AND p.as_of = ? AND l.kind = 'PENDING_RANGE' "
+            "AND l.state = 'PROPOSED' ORDER BY l.id",
+            (user_id, day.isoformat()),
+        ).fetchall()
+    )
     account = SwingAccount(
         equity=capital,
         cash_available=max(capital - exposure, Decimal(0)),
@@ -317,6 +350,23 @@ def load_context(conn: Any, *, user_id: int, day: dt.date, schema: str = SCHEMA)
             Decimal(int(r["turnover_avg"])) if r["turnover_avg"] is not None else None,
             Decimal(str(r["score"])) if r["score"] is not None else Decimal(0),
         )
+    # SW10.5: a watched name with no detection row — a live gap the 09:09 scan wrote — carries
+    # its ADR and its provisional score on the watch row (`sw_watch.adr_pct` / `score`), and
+    # a stop that cannot be measured against one ADR is a stop the plan refuses (SW9.5.2).
+    for r in conn.execute(
+        f"SELECT i.symbol, w.adr_pct, w.score FROM {_t(schema, 'sw_watch')} w "
+        f"JOIN {_t(schema, 'instrument')} i ON i.id = w.instrument_id "
+        "WHERE w.user_id = ? AND w.state = 'WATCHING' ORDER BY w.id",
+        (user_id,),
+    ).fetchall():
+        symbol = str(r["symbol"])
+        if symbol in detected or r["adr_pct"] is None:
+            continue
+        detected[symbol] = (
+            Decimal(str(r["adr_pct"])),
+            None,
+            Decimal(str(r["score"])) if r["score"] is not None else Decimal(0),
+        )
     return SignalContext(
         gate=gate,
         tier=tier,
@@ -324,14 +374,33 @@ def load_context(conn: Any, *, user_id: int, day: dt.date, schema: str = SCHEMA)
         detected=detected,
         entries_today=len(taken),
         pending=tuple(pending),
+        reserved=reserved,
+        first_live_sessions_left=first_live_left,
     )
 
 
+def live_execution() -> bool:
+    """Whether a confirm would place a real order: the swing flag on AND the desk not in
+    DRY_RUN — the same truth table as `swing_execute.swing_gates`, read from the config module
+    at call time. A9's half risk applies exactly when this is true."""
+    return bool(C.SWING_EXECUTION_ENABLED) and not bool(C.DRY_RUN)
+
+
 def entries_now(
-    item: WatchItem, context: SignalContext, config: SwingConfig, *, day: dt.date
+    item: WatchItem,
+    context: SignalContext,
+    config: SwingConfig,
+    *,
+    day: dt.date,
+    live: bool | None = None,
 ) -> tuple[list[PlanLine], list[Skipped]]:
     """One triggered name against the book as it is now — the SIGNAL plan's size and the
     confirm's, from one function (SW10.4 / SW10.5).
+
+    Since SW10.5: the session's reserved slots (A7 — every `PENDING_RANGE` line still open,
+    less this name's own) count with today's entries against the per-session cap, and the
+    first-live half risk (A9) scales the risk budget while `first_live_sessions_left` runs
+    and a real order would go out (`live`; read from the flags when not given).
 
     `build_entries` (`04` §9.1) answers the gate, the drawdown lock, `ALREADY_HELD`, the
     per-session cap (today's entries count, `entries_already_today`), the position count, the
@@ -343,9 +412,15 @@ def entries_now(
     the one that does not fit (`04` §9.1); this is the rule for one name at the moment of its
     trigger, and the page shows exactly what the confirm will send.
     """
+    already = context.entries_today + sum(1 for s in context.reserved if s != item.symbol)
+    multiplier = first_live_multiplier(
+        sessions_left=context.first_live_sessions_left,
+        execution_enabled=live_execution() if live is None else live,
+        config=config.sizing,
+    )
     lines, skipped = build_entries(
         as_of=day, watch=[item], account=context.account, gate=context.gate, tier=context.tier,
-        config=config, entries_already_today=context.entries_today,
+        config=config, entries_already_today=already, risk_multiplier=multiplier,
     )
     if lines or not skipped or skipped[0].reason is not SkipReason.EXPOSURE_FULL:
         return lines, skipped
@@ -356,7 +431,7 @@ def entries_now(
         as_of=day, watch=[item],
         account=replace(account, cash_available=min(account.cash_available, headroom)),
         gate=context.gate, tier=context.tier, config=config,
-        entries_already_today=context.entries_today,
+        entries_already_today=already, risk_multiplier=multiplier,
     )
     if lines:
         return lines, []
@@ -439,6 +514,27 @@ class PgSignalStore:
             )
             self.lines_written.append(line_id)
 
+    def release_reservation(self, instrument_id: int, raised_at: dt.datetime) -> int:
+        """A7: mark this name's `PENDING_RANGE` line on today's plan `SKIPPED` — the range has
+        broken and the SIGNAL plan is the line now, or the skip. Idempotent: only a `PROPOSED`
+        line moves. Returns how many moved (0 or 1)."""
+        moved = self.conn.execute(
+            f"UPDATE {SCHEMA}.sw_plan_line SET state = 'SKIPPED', "
+            "note = COALESCE(note, '') || ?, updated_at = CURRENT_TIMESTAMP "
+            "WHERE user_id = ? AND kind = 'PENDING_RANGE' AND state = 'PROPOSED' "
+            "AND instrument_id = ? AND plan_id IN "
+            f"(SELECT id FROM {SCHEMA}.sw_plan WHERE user_id = ? AND as_of = ?) RETURNING id",
+            (
+                f"; slot released at {raised_at.time():%H:%M} — the range broke, see the "
+                f"SIGNAL plan",
+                self.user_id,
+                instrument_id,
+                self.user_id,
+                self.day,
+            ),
+        ).fetchall()
+        return len(moved)
+
     def _plan_for(self, signal: Signal, raised_at: dt.datetime) -> int | None:
         """One `sw_plan(SIGNAL)`: a line if the rules allow it, a skip if they do not.
 
@@ -448,6 +544,11 @@ class PgSignalStore:
         the confirm-time gate (`app.swing_execute`) will re-derive under its lock.
         """
         verdict = signal.verdict
+        # A7: this name's range has broken — its reserved slot is spent, lined or skipped.
+        # Released BEFORE the context is read, and exactly once: the UPDATE moves only a
+        # PROPOSED line, so a second trigger (there is none — a name triggers once) or a
+        # re-read finds nothing left to release.
+        self.release_reservation(signal.watch.instrument_id, raised_at)
         context = self.read_context()
         adr, turnover, score = context.detected.get(
             signal.watch.symbol, (Decimal(0), None, Decimal(0))

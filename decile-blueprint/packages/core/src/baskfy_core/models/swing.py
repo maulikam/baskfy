@@ -162,9 +162,10 @@ class SwConfig(Base):
     a person decides what the swing book is allowed to risk. ``docs/swing/02`` §3.4 makes writing
     that number one of the five conditions on the real-money flag.
 
-    ``exposure_level`` and ``first_live_sessions_left`` are written by the EOD job and the
-    execute route respectively, **never by a form** — they are the system's memory of how the
-    book has been doing, and a user who could set the rung could set it to 3 after three losses.
+    ``exposure_level`` and ``first_live_sessions_left`` are both written by the EOD job (the
+    countdown once when a LIVE session closes — STANDING-ANSWERS A9, SW10.5 — never by a
+    request), **never by a form** — they are the system's memory of how the book has been
+    doing, and a user who could set the rung could set it to 3 after three losses.
     """
 
     __tablename__ = "sw_config"
@@ -211,8 +212,11 @@ class SwConfig(Base):
     price_min: Mapped[Decimal] = mapped_column(PRICE, nullable=False, server_default="20.00")
     #: The ladder rung in force, 0-3. Written by ``swing-eod``; displayed, never edited.
     exposure_level: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
-    #: ``docs/swing/02`` §3.5 — "start small". Counts down from 5 once execution is enabled;
-    #: while it is above zero the risk per trade is halved before sizing.
+    #: ``docs/swing/02`` §3.5 — "start small". Counts down from 5 (``SizingConfig.
+    #: first_live_sessions``), decremented by the evening job once per LIVE session that closes;
+    #: while it is above zero and execution is enabled, the risk per trade is multiplied by
+    #: ``risk_multiplier_first_live`` before sizing (A9). A restart changes nothing: the count
+    #: lives here, and ``sw_session.first_live_counted`` says which sessions were counted.
     first_live_sessions_left: Mapped[int] = mapped_column(
         SmallInteger, nullable=False, server_default="5"
     )
@@ -261,7 +265,7 @@ class SwConfigAudit(Base):
     new_value: Mapped[str] = mapped_column(Text, nullable=False)
     changed_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     #: Who: a user id as text, or a job name for the fields a job owns (``swing-eod`` writes
-    #: ``exposure_level``; ``/swing/execute`` writes ``first_live_sessions_left``).
+    #: ``exposure_level`` and, since SW10.5, ``first_live_sessions_left``).
     changed_by: Mapped[str] = mapped_column(String, nullable=False)
     note: Mapped[str | None] = mapped_column(Text)
 
@@ -422,6 +426,18 @@ class SwWatch(Base):
     note: Mapped[str | None] = mapped_column(Text)
     catalyst: Mapped[str | None] = mapped_column(Text)
     state: Mapped[str] = mapped_column(String, nullable=False, server_default="WATCHING")
+    #: SW10.5 (STANDING-ANSWERS A14, A7). ``score`` is what the row is ranked by — the
+    #: detection row's at watch time, or a live gap's provisional EP score from the gap and
+    #: the pace (``04`` §7.3); ``adr_pct`` is the name's ADR when the row was written, read
+    #: when no detection row exists (a live gap, a MANUAL name) so its stop can be measured
+    #: against one ADR; ``focus`` is the daily focus flag (top ``focus_top_n`` by score plus
+    #: every EP), set by the evening and the premarket, read by the desk page and the notifier;
+    #: ``reconfirmed_on`` is the last time a person re-confirmed a MANUAL row, which resets
+    #: its ``expires_on``.
+    score: Mapped[Decimal | None] = mapped_column(SCORE)
+    adr_pct: Mapped[Decimal | None] = mapped_column(MEASURE)
+    focus: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    reconfirmed_on: Mapped[dt.date | None] = mapped_column(Date)
     created_at: Mapped[CreatedAt]
     updated_at: Mapped[UpdatedAt]
 
@@ -635,9 +651,13 @@ class SwPosition(Base):
     close_reason: Mapped[str | None] = mapped_column(String)
     r_multiple: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
     pnl_inr: Mapped[Decimal | None] = mapped_column(INR)
-    #: **True for every DRY_RUN / flag-off fill.** The journal page labels them and, until
-    #: ``BASKFY_SWING_EXECUTION_ENABLED`` is true, the ladder reads them (PACK.6).
+    #: **True for every DRY_RUN / flag-off fill.** The journal page labels them. The ladder
+    #: reads the real book from day one (STANDING-ANSWERS A10, SW10.5): a simulated close never
+    #: moves the rung.
     simulated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    #: SW10.5 (A9): the entry was sized at the first-live half risk (``risk_multiplier`` 0.5).
+    #: The journal's tag; a column only until SW11 surfaces it on the page.
+    half_risk: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     created_at: Mapped[CreatedAt]
     updated_at: Mapped[UpdatedAt]
 
@@ -693,6 +713,11 @@ class SwSession(Base):
     fills: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     manage_actions: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     notes: Mapped[str | None] = mapped_column(Text)
+    #: SW10.5 (A9): the evening counted this LIVE session against
+    #: ``sw_config.first_live_sessions_left`` — once; a re-run of the evening reads it back.
+    first_live_counted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     created_at: Mapped[CreatedAt]
     updated_at: Mapped[UpdatedAt]
 

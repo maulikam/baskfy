@@ -67,18 +67,61 @@ DDL = [
         sleeve_capital_inr NUMERIC NOT NULL DEFAULT 0,
         risk_per_trade_pct NUMERIC NOT NULL DEFAULT 0.500,
         max_position_pct NUMERIC NOT NULL DEFAULT 20.00,
-        max_open_positions INTEGER NOT NULL DEFAULT 8,
+        max_open_positions INTEGER NOT NULL DEFAULT 10,
         or_window_minutes INTEGER NOT NULL DEFAULT 5,
         stop_mode TEXT NOT NULL DEFAULT 'LOW_OF_DAY',
-        adr_min_pct NUMERIC NOT NULL DEFAULT 3.50,
+        adr_min_pct NUMERIC NOT NULL DEFAULT 4.00,
         turnover_min_inr NUMERIC NOT NULL DEFAULT 50000000,
         price_min NUMERIC NOT NULL DEFAULT 20.00,
         exposure_level INTEGER NOT NULL DEFAULT 0,
         first_live_sessions_left INTEGER NOT NULL DEFAULT 5,
+        sleeve_peak_inr NUMERIC,
+        drawdown_pct NUMERIC NOT NULL DEFAULT 0,
+        drawdown_locked BOOLEAN NOT NULL DEFAULT false,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_by TEXT,
         CHECK (first_live_sessions_left >= 0),
         CHECK (exposure_level >= 0 AND exposure_level <= 3))""",
+    # 0028 + 0030: the two tables the confirm-time context reads (SW10.4) — the last close's
+    # gate and rung, and each name's ADR/turnover/score. Columns the store never reads are
+    # kept so a statement written against the real table cannot pass here by accident.
+    """CREATE TABLE sw_market_daily(
+        user_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        constituent_count INTEGER NOT NULL DEFAULT 0,
+        pct_up_strong_1m NUMERIC, pct_new_52w_high NUMERIC, pct_above_ma_slow NUMERIC,
+        index_slug TEXT, index_close NUMERIC, index_ma_fast NUMERIC, index_ma_slow NUMERIC,
+        gate TEXT NOT NULL,
+        exposure_level INTEGER NOT NULL DEFAULT 0,
+        max_open_positions INTEGER NOT NULL,
+        max_exposure_pct NUMERIC NOT NULL,
+        new_entries_allowed BOOLEAN NOT NULL,
+        parabolic_count INTEGER NOT NULL DEFAULT 0,
+        detail TEXT,
+        drawdown_pct NUMERIC NOT NULL DEFAULT 0,
+        drawdown_locked BOOLEAN NOT NULL DEFAULT false,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, date),
+        CHECK (gate IN ('GREEN', 'AMBER', 'RED')),
+        CHECK (exposure_level >= 0 AND exposure_level <= 3))""",
+    """CREATE TABLE sw_setup_daily(
+        user_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        instrument_id INTEGER NOT NULL REFERENCES instrument(id),
+        setup TEXT NOT NULL,
+        status TEXT NOT NULL,
+        score NUMERIC NOT NULL,
+        close NUMERIC, trigger NUMERIC, stop_ref NUMERIC, pivot_high NUMERIC, adj_factor NUMERIC,
+        adr_pct NUMERIC, prior_move_pct NUMERIC, base_depth_pct NUMERIC, tightness_adr NUMERIC,
+        dryup_ratio NUMERIC, dist_ma_fast_pct NUMERIC, dist_ma_slow_pct NUMERIC, rvol NUMERIC,
+        gap_pct NUMERIC, turnover_avg INTEGER, base_bars INTEGER, up_streak INTEGER,
+        locked_upper_circuit BOOLEAN NOT NULL DEFAULT false,
+        sector_slug TEXT,
+        listed_within_2y BOOLEAN NOT NULL DEFAULT false,
+        pipeline_run_id INTEGER,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, date, instrument_id, setup),
+        CHECK (setup IN ('FLAG', 'EP', 'PARABOLIC_SHORT')))""",
     """CREATE TABLE sw_plan(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         plan_id TEXT NOT NULL UNIQUE,
@@ -243,11 +286,42 @@ class Scenario:
     def store(self) -> PgSwingStore:
         return PgSwingStore(_connect(self.path), user_id=USER, schema="", broker_account_id=1)
 
-    def config(self, capital: str = "1000000", risk: str = "0.500", first_live: int = 5) -> None:
+    def config(self, capital: str = "1000000", risk: str = "0.500", first_live: int = 5, *,
+               market: bool = True, detected: bool = True) -> None:
+        """The sleeve — and, unless told otherwise, the two rows the confirm-time gate (SW10.4)
+        reads: last night's market row and a detection row per name, because a plan line that
+        exists was built from both, and a book with neither is RED with no ADR to check."""
         self.conn.execute(
             "INSERT INTO sw_config(user_id, sleeve_capital_inr, risk_per_trade_pct, "
             "first_live_sessions_left) VALUES (?, ?, ?, ?)",
             (USER, capital, risk, first_live),
+        )
+        if market:
+            self.market()
+        if detected:
+            for instrument_id, setup in ((1, "FLAG"), (2, "EP"), (3, "FLAG"), (4, "FLAG"),
+                                         (5, "FLAG")):
+                self.detected(instrument_id, setup=setup)
+
+    def market(self, *, on: dt.date = TODAY - dt.timedelta(days=1), gate: str = "GREEN",
+               rung: int = 2, max_open_positions: int = 6, max_exposure_pct: str = "75.00",
+               new_entries_allowed: bool = True, drawdown_locked: bool = False) -> None:
+        """Last night's `sw_market_daily`: the scenario's plans say rung 2, so (6, 75 %)."""
+        self.conn.execute(
+            "INSERT INTO sw_market_daily(user_id, date, constituent_count, gate, exposure_level, "
+            "max_open_positions, max_exposure_pct, new_entries_allowed, drawdown_locked) "
+            "VALUES (?, ?, 40, ?, ?, ?, ?, ?, ?)",
+            (USER, on.isoformat(), gate, rung, max_open_positions, max_exposure_pct,
+             new_entries_allowed, drawdown_locked),
+        )
+
+    def detected(self, instrument_id: int, *, setup: str = "FLAG", adr: str = "5.00",
+                 turnover: int = 100_000_000, score: str = "72.00",
+                 on: dt.date = TODAY - dt.timedelta(days=1)) -> None:
+        self.conn.execute(
+            "INSERT INTO sw_setup_daily(user_id, date, instrument_id, setup, status, score, "
+            "adr_pct, turnover_avg) VALUES (?, ?, ?, ?, 'SETTING_UP', ?, ?, ?)",
+            (USER, on.isoformat(), instrument_id, setup, score, adr, turnover),
         )
 
     def plan(self, *, source: str, built_at: dt.datetime, as_of: dt.date = TODAY,
@@ -1319,3 +1393,237 @@ class TestNav:
     def test_nav_marks_swing_current_on_its_own_page(self, client, scenario):
         scenario.config()
         assert 'href="/swing" aria-current="page"' in client.get("/swing").text
+
+
+# =======================================================================================
+# SW10.4 (STANDING-ANSWERS A5) — the store's half of the confirm-time gate: the session
+# lock, the context, the re-size write, and the route re-sizing through the real module
+# =======================================================================================
+class TestTheSessionLock:
+    def test_lock_session_for_update_inserts_the_row_and_commits_what_was_written(self, store, scenario):
+        assert store.session(TODAY) is None
+        with store.lock_session_for_update(TODAY):
+            assert store.session(TODAY) is not None, "the row is there before the body runs"
+            store.bump_session(TODAY, mode="DRY_RUN", confirms=1)
+        row = scenario.conn.execute("SELECT confirms, mode, notes FROM sw_session").fetchone()
+        assert (row["confirms"], row["mode"], row["notes"]) == (1, "DRY_RUN", "swing-desk")
+        assert store.conn.in_transaction is False
+
+    def test_lock_keeps_an_existing_row_and_its_counters(self, store, scenario):
+        scenario.session(monitor_ran=True, signals=4, confirms=2)
+        with store.lock_session_for_update(TODAY):
+            pass
+        row = store.session(TODAY)
+        assert (row["monitor_ran"], row["signals"], row["confirms"]) == (True, 4, 2)
+
+    def test_lock_rolls_back_everything_written_inside_it_on_an_exception(self, store, scenario):
+        scenario.config()
+        pk, plan_id = scenario.plan(source="SIGNAL", built_at=NOW)
+        line_id = scenario.line(pk, plan_id, kind="BUY_ON_TRIGGER", instrument_id=1,
+                                symbol="ALPHAFLAG")
+        with pytest.raises(RuntimeError, match="broker"), store.lock_session_for_update(TODAY):
+            store.set_line(line_id, state="CONFIRMED")
+            store.bump_session(TODAY, mode="DRY_RUN", confirms=1)
+            store.create_position({"instrument_id": 1, "setup": "FLAG", "entry_date": TODAY,
+                                   "entry_avg": Decimal("100.80"), "quantity_entered": 10,
+                                   "initial_stop": Decimal("97.80"), "stop": Decimal("97.80"),
+                                   "trail": "MA10"})
+            raise RuntimeError("the broker call blew up")
+        assert store.line(line_id)["state"] == "PROPOSED"
+        assert store.session(TODAY) is None and store.open_positions() == []
+        assert store.conn.in_transaction is False
+        # and the connection is usable afterwards — a rollback is not a broken store
+        with store.lock_session_for_update(TODAY):
+            store.bump_session(TODAY, mode="DRY_RUN", confirms=1)
+        assert store.session(TODAY)["confirms"] == 1
+
+    def test_the_lock_is_real_a_second_connection_cannot_write_while_it_is_held(self, store, scenario):
+        """`BEGIN IMMEDIATE` on the sqlite twin takes the database's write lock the moment the
+        lock is entered — a second store's confirm blocks (here: fails within its timeout) until
+        the first commits. On Postgres the same shape is `SELECT … FOR UPDATE` on the row."""
+        other_conn = sqlite3.connect(scenario.path, isolation_level=None, timeout=0.2)
+        other_conn.row_factory = sqlite3.Row
+        other = PgSwingStore(other_conn, user_id=USER, schema="")
+        with store.lock_session_for_update(TODAY):
+            with pytest.raises(sqlite3.OperationalError, match="locked"), \
+                    other.lock_session_for_update(TODAY):
+                pass
+        # released on exit: the second store now gets its turn and sees the first's row
+        with other.lock_session_for_update(TODAY):
+            other.bump_session(TODAY, mode="DRY_RUN", confirms=1)
+        assert store.session(TODAY)["confirms"] == 1
+
+    def test_the_lock_statement_is_for_update_on_postgres_and_begin_immediate_on_sqlite(self):
+        source = inspect.getsource(PgSwingStore.lock_session_for_update)
+        assert "FOR UPDATE" in source and "BEGIN IMMEDIATE" in source
+        assert "ROLLBACK" in source and "COMMIT" in source
+
+
+class TestTheSessionContext:
+    def test_session_context_reads_the_market_row_the_book_and_todays_lines(self, store, scenario):
+        """Over the sqlite twin, the same SQL the monitor runs on Postgres: last night's
+        market row (rung 2 → 6 names, 75 %), the two open positions at cost, a SENT line at
+        its trigger, a FILLED line counted once through its position, the ADR per name."""
+        ids = scenario.morning()
+        pk, plan_id = ids["signal_plan"]
+        scenario.line(pk, plan_id, kind="BUY_ON_TRIGGER", instrument_id=5, symbol="EPSILON",
+                      quantity=100, trigger="300.50", stop="295.00", state="SENT")
+        filled = scenario.line(pk, plan_id, kind="BUY_ON_TRIGGER", instrument_id=4,
+                               symbol="DELTAHELD", quantity=300, state="FILLED")
+        scenario.conn.execute("UPDATE sw_plan_line SET position_id = ? WHERE id = ?",
+                              (ids["held"], filled))
+        ctx = store.session_context(TODAY)
+        assert ctx.gate.value == "GREEN" and ctx.tier.level == 2
+        assert (ctx.tier.max_open_positions, ctx.tier.max_exposure_pct) == (6, 75.0)
+        assert ctx.tier.new_entries_allowed is True and ctx.tier.drawdown_locked is False
+        assert ctx.account.equity == Decimal("1000000.00")
+        held = Decimal("100.80") * 300 + Decimal("210.50") * 300   # DELTAHELD + BETAEP (naked)
+        sent = Decimal("300.50") * 100
+        assert ctx.account.open_exposure_inr == held + sent
+        assert ctx.account.cash_available == Decimal("1000000.00") - held - sent
+        assert ctx.account.open_symbols == frozenset({"DELTAHELD", "BETAEP", "EPSILON"})
+        assert ctx.entries_today == 2, "the SENT and the FILLED line; the PROPOSED ones are not entries"
+        assert [p.symbol for p in ctx.pending] == ["EPSILON"]
+        assert ctx.detected["ALPHAFLAG"] == (Decimal("5.00"), Decimal(100_000_000), Decimal("72.00"))
+        assert set(ctx.detected) == {"ALPHAFLAG", "BETAEP", "GAMMALOCK", "DELTAHELD", "EPSILON"}
+
+    def test_session_context_without_a_market_row_is_red_and_without_detections_is_blind(self, store, scenario):
+        scenario.config(market=False, detected=False)
+        ctx = store.session_context(TODAY)
+        assert ctx.gate.value == "RED" and ctx.tier.new_entries_allowed is False
+        assert ctx.tier.level == 0 and ctx.detected == {}
+        assert ctx.account.equity == Decimal("1000000.00") and ctx.entries_today == 0
+
+    def test_session_context_takes_the_latest_row_before_the_day_never_the_days_own(self, store, scenario):
+        scenario.config(market=False)
+        scenario.market(on=TODAY - dt.timedelta(days=7), rung=3, max_open_positions=10,
+                        max_exposure_pct="100.00")
+        scenario.market(on=TODAY - dt.timedelta(days=1), rung=0, max_open_positions=2,
+                        max_exposure_pct="25.00")
+        scenario.market(on=TODAY, rung=3, max_open_positions=10, max_exposure_pct="100.00")
+        ctx = store.session_context(TODAY)
+        assert ctx.tier.level == 0, "last night's close, not a row dated today"
+
+    def test_session_context_carries_the_drawdown_lock(self, store, scenario):
+        scenario.config(market=False)
+        scenario.market(drawdown_locked=True, new_entries_allowed=False)
+        assert store.session_context(TODAY).tier.drawdown_locked is True
+
+    def test_another_users_book_is_not_in_the_context(self, store, scenario):
+        scenario.morning()
+        other = PgSwingStore(_connect(scenario.path), user_id=USER + 1, schema="")
+        ctx = other.session_context(TODAY)
+        assert ctx.account.open_symbols == frozenset() and ctx.entries_today == 0
+        assert ctx.gate.value == "RED" and ctx.detected == {}
+
+
+class TestResizeLine:
+    def test_resize_line_rewrites_the_three_numbers_and_the_note_at_the_schemas_scale(self, store, scenario):
+        scenario.config()
+        pk, plan_id = scenario.plan(source="SIGNAL", built_at=NOW)
+        line_id = scenario.line(pk, plan_id, kind="BUY_ON_TRIGGER", instrument_id=1,
+                                symbol="ALPHAFLAG", quantity=1666)
+        store.resize_line(line_id, quantity=390, risk_inr=Decimal("2340"),
+                          position_value=Decimal("81900.005"), note="re-sized at confirm 1666 → 390")
+        line = store.line(line_id)
+        assert line["quantity"] == 390
+        assert line["risk_inr"] == Decimal("2340.00")
+        assert line["position_value"] == Decimal("81900.01"), "rounded at write time (house rule 8)"
+        assert line["note"] == "re-sized at confirm 1666 → 390"
+        assert line["state"] == "PROPOSED" and line["trigger"] == Decimal("100.80")
+
+    def test_resize_line_is_scoped_to_the_user(self, store, scenario):
+        scenario.config()
+        pk, plan_id = scenario.plan(source="SIGNAL", built_at=NOW)
+        line_id = scenario.line(pk, plan_id, kind="BUY_ON_TRIGGER", instrument_id=1,
+                                symbol="ALPHAFLAG", quantity=1666)
+        other = PgSwingStore(_connect(scenario.path), user_id=USER + 1, schema="")
+        other.resize_line(line_id, quantity=1, risk_inr=Decimal(1), position_value=Decimal(1),
+                          note="x")
+        assert store.line(line_id)["quantity"] == 1666
+
+
+class TestTheRouteReSizesThroughTheRealModule:
+    """The drill's arithmetic through `POST /swing/execute`, the sqlite twin and the real
+    dry-run gateway: rung 0 on a ₹10 lakh sleeve is ₹2,50,000; the scenario's two positions
+    hold ₹93,390 at cost; the 1,666-share ALPHAFLAG trigger (₹1,67,932.80) would take the
+    book to 26.13 %, so it is re-sized to the ₹1,56,610 of headroom — 1,553 shares."""
+
+    def test_the_route_re_sizes_a_signal_line_to_the_ceiling(self, real_client, scenario):
+        ids = scenario.morning()
+        scenario.conn.execute("UPDATE sw_market_daily SET exposure_level = 0, "
+                              "max_open_positions = 2, max_exposure_pct = 25.00")
+        # rung 0 allows two names and two are held: lift the count so the money is what binds
+        scenario.conn.execute("UPDATE sw_market_daily SET max_open_positions = 3")
+        r = real_client.post("/swing/execute", data={"plan_id": ids["signal_plan"][1],
+                                                     "line_id": ids["trigger_line"],
+                                                     "confirm": "true"})
+        assert r.status_code == 200, r.text
+        j = r.json()
+        assert j["status"] == "SIMULATED" and j["gtt"]["qty"] == 1553, j
+        s = scenario.store()
+        line = s.line(ids["trigger_line"])
+        assert line["quantity"] == 1553 and line["state"] == "FILLED"
+        assert line["position_value"] == Decimal("156542.40")
+        assert line["risk_inr"] == Decimal("4659.00"), "(100.80 − 97.80) × 1553"
+        assert "re-sized at confirm 1666 → 1553" in line["note"]
+        pos = s.position(j["position_id"])
+        assert pos["quantity_entered"] == pos["quantity_open"] == 1553
+        book = sum(p["entry_avg"] * p["quantity_open"] for p in s.open_positions())
+        assert book == Decimal("249932.40") and book <= Decimal(250_000)
+        assert "x1,553" in real_client.get("/swing").text or "x1553" in real_client.get("/swing").text
+
+    def test_the_route_answers_EXPOSURE_FULL_as_BLOCKED_and_the_line_is_REJECTED(self, real_client, scenario):
+        ids = scenario.morning()
+        scenario.conn.execute("UPDATE sw_market_daily SET exposure_level = 0, "
+                              "max_open_positions = 3, max_exposure_pct = 10.00")   # ₹1 lakh, ₹93,390 held
+        r = real_client.post("/swing/execute", data={"plan_id": ids["signal_plan"][1],
+                                                     "line_id": ids["trigger_line"],
+                                                     "confirm": "true"})
+        assert r.status_code == 200, r.text
+        j = r.json()
+        assert j["status"] == "BLOCKED" and j["reason"].startswith("EXPOSURE_FULL: ALPHAFLAG"), j
+        assert j["order"] is None and j["gtt"] is None and j["position_id"] is None
+        s = scenario.store()
+        assert s.line(ids["trigger_line"])["state"] == "REJECTED"
+        assert len(s.open_positions()) == 2
+        assert s.session(TODAY)["confirms"] == 2 and s.session(TODAY)["fills"] == 1
+        html = real_client.get("/swing").text
+        row = re.search(r'data-signal-id="%d".*?</tr>' % ids["trigger"], html, re.S).group(0)
+        assert "rejected" in row and _forms(row, "/swing/execute") == []
+
+    def test_the_route_answers_TIER_FULL_at_a_full_rung(self, real_client, scenario):
+        ids = scenario.morning()
+        scenario.conn.execute("UPDATE sw_market_daily SET exposure_level = 0, "
+                              "max_open_positions = 2, max_exposure_pct = 25.00")
+        r = real_client.post("/swing/execute", data={"plan_id": ids["signal_plan"][1],
+                                                     "line_id": ids["trigger_line"],
+                                                     "confirm": "true"})
+        j = r.json()
+        assert j["status"] == "BLOCKED" and j["reason"].startswith("TIER_FULL: ALPHAFLAG"), j
+        assert "rung 0 allows 2 positions" in j["reason"]
+
+    def test_the_route_answers_SESSION_CAP_after_three_entries(self, real_client, scenario):
+        ids = scenario.morning()
+        pk, plan_id = ids["signal_plan"]
+        for instrument_id, symbol in ((3, "GAMMALOCK"), (5, "EPSILON")):
+            scenario.line(pk, plan_id, kind="BUY_ON_TRIGGER", instrument_id=instrument_id,
+                          symbol=symbol, quantity=10, state="FILLED")
+        scenario.line(pk, plan_id, kind="BUY_ON_TRIGGER", instrument_id=4, symbol="DELTAHELD",
+                      quantity=10, state="SENT")
+        r = real_client.post("/swing/execute", data={"plan_id": plan_id,
+                                                     "line_id": ids["trigger_line"],
+                                                     "confirm": "true"})
+        j = r.json()
+        assert j["status"] == "BLOCKED" and j["reason"].startswith("SESSION_CAP: ALPHAFLAG"), j
+        assert scenario.store().line(ids["trigger_line"])["state"] == "REJECTED"
+
+    def test_a_confirm_that_fits_is_sent_as_planned_and_the_row_is_untouched(self, real_client, scenario):
+        ids = scenario.morning()   # rung 2: 6 names, 75 % — the 1,666 fit whole
+        r = real_client.post("/swing/execute", data={"plan_id": ids["signal_plan"][1],
+                                                     "line_id": ids["trigger_line"],
+                                                     "confirm": "true"})
+        j = r.json()
+        assert j["status"] == "SIMULATED" and j["gtt"]["qty"] == 1666
+        line = scenario.store().line(ids["trigger_line"])
+        assert line["quantity"] == 1666 and line["note"] is None

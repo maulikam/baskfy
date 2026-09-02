@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import contextlib
+import copy
 import datetime as dt
 import inspect
 import json
@@ -23,6 +25,8 @@ from decimal import Decimal
 
 import pytest
 from baskfy_core.swing.journal import ClosedTrade
+from baskfy_core.swing.market import ExposureTier, MarketGate
+from baskfy_core.swing.plan import SwingAccount
 from baskfy_core.swing.sizing import r_multiple
 from baskfy_execution.gtt import DRY_RUN_GTT, DRY_RUN_GTT_DELETE
 from fastapi import HTTPException
@@ -60,10 +64,22 @@ class ExplodingKC:
         raise AssertionError("the instrument dump was fetched — a live GTT path ran")
 
 
-class MemoryStore:
-    """`SwingStore` over dicts. Every write is kept so a test can read what the book became."""
+#: The ladder's rungs, `04` §8.4 — (max open positions, max exposure %), lowest first.
+TIERS = ((2, 25.0), (4, 50.0), (6, 75.0), (10, 100.0))
 
-    def __init__(self, *, first_live_sessions_left: int = 0) -> None:
+
+class MemoryStore:
+    """`SwingStore` over dicts. Every write is kept so a test can read what the book became.
+
+    The confirm-time gate (SW10.4) reads its context from the same dicts: the book is the
+    positions with shares open plus today's CONFIRMED/SENT lines not yet positions; the gate,
+    the rung and each name's ADR are the store's `market` and `detected` — a test sets them the
+    way a scenario writes `sw_market_daily` and `sw_setup_daily`. The lock is a snapshot: the
+    dicts are copied on entry and restored on an exception, the in-memory twin of a rollback.
+    """
+
+    def __init__(self, *, first_live_sessions_left: int = 0, rung: int = 3,
+                 gate: str = "GREEN", capital: Decimal = D("1000000")) -> None:
         self.plans: dict[str, dict] = {}
         self.lines: dict[int, dict] = {}
         self.positions: dict[int, dict] = {}
@@ -71,12 +87,23 @@ class MemoryStore:
         self.sessions: dict[dt.date, dict] = {}
         self.line_history: list[tuple[int, str]] = []
         self._config = {
-            "sleeve_capital_inr": D("1000000"),
+            "sleeve_capital_inr": capital,
             "risk_per_trade_pct": D("0.500"),
+            "max_position_pct": D("20.00"),
+            "max_open_positions": 10,
             "first_live_sessions_left": first_live_sessions_left,
-            "exposure_level": 0,
+            "exposure_level": rung,
         }
         self.first_live_writes: list[int] = []
+        self.market = {"gate": gate, "rung": rung, "new_entries_allowed": gate != "RED",
+                       "drawdown_locked": False}
+        #: symbol → (adr_pct, avg_turnover_inr, score), as the latest detection row would say.
+        self.detected: dict[str, tuple[Decimal, Decimal | None, Decimal]] = {
+            "ALPHA": (D("5.00"), D(100_000_000), D("72.00")),
+        }
+        self.locks: list[dt.date] = []
+        self.resizes: list[dict] = []
+        self.context_reads = 0
 
     # -- setup helpers (not part of the protocol) --
     def add_plan(self, *, built_at: dt.datetime = NOW - dt.timedelta(minutes=5)) -> str:
@@ -100,6 +127,9 @@ class MemoryStore:
         }
         base.update(fields)
         self.lines[line_id] = base
+        # A line exists because a detection row did (the evening sized it off that row's
+        # ADR); the store knows the name unless a test says otherwise (`del store.detected[…]`).
+        self.detected.setdefault(base["symbol"], (D("5.00"), D(100_000_000), D("72.00")))
         return line_id
 
     def add_position(self, **fields) -> int:
@@ -172,6 +202,53 @@ class MemoryStore:
         self._config["first_live_sessions_left"] = value
         self.first_live_writes.append(value)
 
+    # -- the confirm-time gate (SW10.4) --
+    @contextlib.contextmanager
+    def lock_session_for_update(self, day):
+        self.locks.append(day)
+        snapshot = copy.deepcopy((self.plans, self.lines, self.positions, self.fills,
+                                  self.sessions, self._config))
+        try:
+            yield
+        except BaseException:
+            (self.plans, self.lines, self.positions, self.fills, self.sessions,
+             self._config) = snapshot
+            raise
+
+    def session_context(self, day):
+        self.context_reads += 1
+        held = [p for p in self.positions.values()
+                if p["state"] != "CLOSED" and int(p["quantity_open"]) > 0]
+        exposure = sum((D(str(p["entry_avg"])) * int(p["quantity_open"]) for p in held), D(0))
+        symbols = {p["symbol"] for p in held}
+        taken = [ln for ln in self.lines.values()
+                 if ln["kind"] == "BUY_ON_TRIGGER" and ln["state"] in ("CONFIRMED", "SENT", "FILLED")
+                 and self.plans[ln["plan_id"]]["as_of"] == day]
+        for ln in taken:
+            if ln.get("position_id") is None and ln["symbol"] not in symbols:
+                exposure += D(str(ln["trigger"])) * int(ln["quantity"])
+                symbols.add(ln["symbol"])
+        capital = self._config["sleeve_capital_inr"]
+        count, pct = TIERS[self.market["rung"]]
+        return X.SignalContext(
+            gate=MarketGate(self.market["gate"]),
+            tier=ExposureTier(level=self.market["rung"], max_open_positions=count,
+                              max_exposure_pct=pct,
+                              new_entries_allowed=self.market["new_entries_allowed"],
+                              drawdown_locked=self.market["drawdown_locked"]),
+            account=SwingAccount(equity=capital, cash_available=max(capital - exposure, D(0)),
+                                 open_symbols=frozenset(symbols), open_exposure_inr=exposure),
+            detected=dict(self.detected),
+            entries_today=len(taken),
+        )
+
+    def resize_line(self, line_id, *, quantity, risk_inr, position_value, note):
+        row = self.lines[line_id]
+        row.update({"quantity": quantity, "risk_inr": risk_inr, "position_value": position_value,
+                    "note": note})
+        self.resizes.append({"line_id": line_id, "quantity": quantity, "risk_inr": risk_inr,
+                             "position_value": position_value, "note": note})
+
 
 @pytest.fixture(autouse=True)
 def _flag_off(monkeypatch, tmp_path):
@@ -192,9 +269,21 @@ def run(coro):
 
 
 def journal_events(gw) -> list[str]:
-    """The event names the gateway journalled, in order."""
-    text = pathlib.Path(gw._journal_path).read_text()
-    return [json.loads(row)["event"] for row in text.splitlines()]
+    """The event names the gateway journalled, in order — none when nothing reached it."""
+    path = pathlib.Path(gw._journal_path)
+    if not path.exists():
+        return []
+    return [json.loads(row)["event"] for row in path.read_text().splitlines()]
+
+
+def sent_quantities(gw) -> list[int]:
+    """The quantity of every dry-run ORDER the gateway journalled, in order — the size that
+    went to the gateway, which the dry-run result itself does not carry."""
+    path = pathlib.Path(gw._journal_path)
+    if not path.exists():
+        return []
+    rows = [json.loads(row) for row in path.read_text().splitlines()]
+    return [int(r["qty"]) for r in rows if r["event"] == "dry_run"]
 
 
 def execute(store, gw, plan_id, line_id, *, confirm="true", now=NOW, last_price=None):
@@ -431,18 +520,22 @@ def test_buy_untouchable_instrument_raises_and_marks_line_REJECTED(gw) -> None:
 
 
 def test_buy_DUPLICATE_from_gateway_is_BLOCKED_with_no_second_position(gw) -> None:
-    """A store that lost the line state (two lines, one client id) still cannot double-send:
-    the gateway's map answers DUPLICATE and the outcome is BLOCKED with the first order id."""
+    """A store that lost the book (two lines, one client id, and the first's position gone)
+    still cannot double-send: the gateway's map answers DUPLICATE and the outcome is BLOCKED
+    with the first order id. Re-pinned for SW10.4: with the position still on the book the
+    confirm-time gate answers ALREADY_HELD before the gateway is asked, so the book is wiped
+    between the two confirms to reach the gateway's own last line of defence."""
     store = MemoryStore()
     plan_id = store.add_plan()
     first = store.add_line(plan_id, instrument_id=11)
     second = store.add_line(plan_id, instrument_id=12)   # same symbol, different instrument
     out1 = execute(store, gw, plan_id, first)
     assert out1.status == "SIMULATED"
+    store.positions.clear()   # the store lost the book; the line's FILLED state survives
     out2 = execute(store, gw, plan_id, second)
     assert out2.status == "BLOCKED" and "DUPLICATE" in out2.reason
     assert out2.order["order_id"] == out1.order["order_id"]
-    assert len(store.positions) == 1 and len(store.fills) == 1
+    assert store.positions == {} and len(store.fills) == 1, "no second position, no second fill"
 
 
 def test_buy_risk_blocked_is_BLOCKED_with_the_gateway_error() -> None:
@@ -1066,11 +1159,14 @@ def test_live_gates_with_an_exploding_kc_are_REJECTED_never_a_position(monkeypat
 
 
 def test_gtt_outside_the_swing_band_is_journalled_not_refused(gw) -> None:
-    """PACK.3 / `StopBand`: a stop 12 % below the entry is outside 0.5–10 %, and that is a
-    finding for a person, never a refusal that leaves the position naked."""
+    """PACK.3 / `StopBand`: a stop outside 0.5–10 % is a finding for a person, never a
+    refusal that leaves the position naked. Re-pinned for SW9.5/SW10.4: a stop 12 % below the
+    entry is `STOP_TOO_WIDE` at the confirm-time gate (`04` §6.1, one ADR or tighter) and never
+    reaches a GTT, so the band's *near* edge is what is left to test — a stop 0.3 % under the
+    entry is inside one ADR, outside the band's 0.5 % floor, and journalled, not refused."""
     store = MemoryStore()
     plan_id = store.add_plan()
-    line_id = store.add_line(plan_id, trigger=D("100.00"), stop=D("88.00"))
+    line_id = store.add_line(plan_id, trigger=D("100.00"), stop=D("99.70"))
     out = execute(store, gw, plan_id, line_id)
     assert out.status == "SIMULATED" and out.gtt["status"] == DRY_RUN_GTT
     assert store.positions[out.position_id]["gtt_id"] is not None
@@ -1208,3 +1304,353 @@ def test_the_weekly_books_gtt_path_does_not_name_the_swing_cushion() -> None:
         if path.exists():
             assert "SWING_GTT_LIMIT_FRACTION" not in path.read_text(), name
             assert "limit_fraction" not in path.read_text(), name
+
+
+# --- SW10.4 (STANDING-ANSWERS A5): the confirm-time gate ------------------------------------
+#
+# A plan line's size is a preview; the confirm is the gate. Under the day's session lock the
+# book is re-derived and the BUY re-sized through `build_entries` (via `entries_now`) against
+# the rung's ceiling, the position count and the per-session cap. Every case below is `04`
+# §5.3 / §8.4 / §9.1 restated at the moment of the click, over the real dry-run gateway.
+
+
+def _rung0_book(store: MemoryStore) -> None:
+    """ALPHA held: 1,666 × 100.80 = ₹1,67,932.80, 16.79 % of the ₹10 lakh sleeve (the drill's
+    first confirm, `docs/swing/STATUS.md` SW10)."""
+    store.add_position(symbol="ALPHA", instrument_id=11, entry_avg=D("100.80"),
+                       quantity_entered=1666, quantity_open=1666, initial_stop=D("97.80"),
+                       stop=D("97.80"))
+
+
+def _beta_line(store: MemoryStore, plan_id: str, quantity: int = 833) -> int:
+    """The drill's second trigger: BETA 833 × 210 = ₹1,74,930 — fits a 25 % rung alone, not
+    beside ALPHA (together 34.29 %)."""
+    store.detected["BETA"] = (D("6.00"), D(200_000_000), D("70.00"))
+    return store.add_line(plan_id, symbol="BETA", instrument_id=12, setup="EP",
+                          quantity=quantity, trigger=D("210.00"), stop=D("204.00"),
+                          risk_inr=D("4998.00"), position_value=D("174930.00"))
+
+
+def test_confirm_re_sizes_a_line_to_the_rungs_ceiling_and_rewrites_the_row(gw) -> None:
+    """A5, the drill's arithmetic: rung 0 is 25 % of ₹10 lakh = ₹2,50,000; ALPHA holds
+    ₹1,67,932.80; BETA's 833 shares would make 34.29 %. The confirm sends the 390 shares that
+    fit the ₹82,067.20 of headroom (390 × 210 = ₹81,900), the row is rewritten with the
+    risk (₹6 × 390) and the value re-derived, the position, the fill and the GTT all carry 390,
+    and the book ends at 24.98 %."""
+    store = MemoryStore(rung=0)
+    _rung0_book(store)
+    plan_id = store.add_plan()
+    line_id = _beta_line(store, plan_id)
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "SIMULATED", out
+    assert sent_quantities(gw) == [390] and out.gtt["qty"] == 390
+    line = store.lines[line_id]
+    assert line["quantity"] == 390 and line["state"] == "FILLED"
+    assert line["risk_inr"] == D("2340.00") and line["position_value"] == D("81900.00")
+    assert "re-sized at confirm 833 → 390" in line["note"] and "CASH" in line["note"]
+    assert store.resizes == [{"line_id": line_id, "quantity": 390, "risk_inr": D("2340.00"),
+                              "position_value": D("81900.00"), "note": line["note"]}]
+    pos = store.positions[out.position_id]
+    assert pos["quantity_entered"] == pos["quantity_open"] == 390
+    assert store.fills[-1]["quantity"] == 390
+    book = sum(D(str(p["entry_avg"])) * p["quantity_open"] for p in store.positions.values())
+    assert book == D("249832.80") and book <= D(250_000), "24.98 % of the sleeve, not 34 %"
+    events = journal_events(gw)
+    assert events[-2:] == ["dry_run", "gtt_dry_run"]
+
+
+def test_confirm_EXPOSURE_FULL_when_no_sliver_fits_is_BLOCKED_and_sends_nothing(gw) -> None:
+    """₹2,48,000 on the book at rung 0 leaves ₹2,000 — under the ₹10,000 minimum trade value —
+    so the re-size cannot line even a sliver: `EXPOSURE_FULL`, the line `REJECTED` with the
+    reason, no order, no GTT, no position, nothing in the journal."""
+    store = MemoryStore(rung=0)
+    store.add_position(symbol="ALPHA", instrument_id=11, entry_avg=D("124.00"),
+                       quantity_entered=2000, quantity_open=2000, initial_stop=D("120.00"),
+                       stop=D("120.00"))
+    plan_id = store.add_plan()
+    line_id = _beta_line(store, plan_id)
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "BLOCKED" and out.reason.startswith("EXPOSURE_FULL: BETA"), out
+    assert "leaves ₹2,000.00" in out.reason and "BELOW_MIN_TRADE_VALUE" in out.reason
+    assert out.order is None and out.gtt is None and out.position_id is None
+    assert store.lines[line_id]["state"] == "REJECTED"
+    assert store.lines[line_id]["quantity"] == 833, "a refused line keeps its planned size"
+    assert len(store.positions) == 1 and store.fills == [] and store.resizes == []
+    assert journal_events(gw) == []
+    assert store.sessions[NOW.date()] == {"mode": "DRY_RUN", "confirms": 1, "fills": 0,
+                                          "manage_actions": 0}
+
+
+def test_confirm_TIER_FULL_when_the_rung_allows_no_more_positions(gw) -> None:
+    """Rung 0 allows two names. Two held (small, well under the ceiling) and a third line is
+    `TIER_FULL` — the count, not the money, refuses it — and the detail names the number."""
+    store = MemoryStore(rung=0)
+    store.add_position(symbol="ALPHA", instrument_id=11, entry_avg=D("100.00"),
+                       quantity_entered=100, quantity_open=100)
+    store.add_position(symbol="BETA", instrument_id=12, entry_avg=D("200.00"),
+                       quantity_entered=100, quantity_open=100, initial_stop=D("190.00"),
+                       stop=D("190.00"))
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, symbol="GAMMA", instrument_id=13, quantity=50)
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "BLOCKED" and out.reason.startswith("TIER_FULL: GAMMA"), out
+    assert "rung 0 allows 2 positions" in out.reason
+    assert len(store.positions) == 2 and journal_events(gw) == []
+    assert store.lines[line_id]["state"] == "REJECTED"
+
+
+def test_confirm_TIER_FULL_takes_the_persons_cap_when_it_is_below_the_rung(gw) -> None:
+    """`04` §9.1: the count is `min(rung, sw_config.max_open_positions)`. Rung 3 allows ten;
+    a person whose cap is 1 gets `TIER_FULL` on the second name."""
+    store = MemoryStore(rung=3)
+    store._config["max_open_positions"] = 1
+    store.add_position(symbol="ALPHA", instrument_id=11, quantity_entered=100, quantity_open=100)
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, symbol="BETA", instrument_id=12, quantity=50)
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "BLOCKED" and "TIER_FULL" in out.reason
+    assert "rung 3 allows 1 positions" in out.reason
+
+
+def test_confirm_SESSION_CAP_after_three_entries_today(gw) -> None:
+    """`04` §5.3: three new entries a session, counted over today's CONFIRMED / SENT / FILLED
+    lines whatever plan they came from. The fourth confirm is `SESSION_CAP` before its size
+    is looked at — rung 3 would allow ten names and the money is there."""
+    store = MemoryStore(rung=3)
+    plan_id = store.add_plan()
+    ids = [store.add_line(plan_id, symbol=s, instrument_id=i, quantity=10)
+           for s, i in (("ALPHA", 11), ("BETA", 12), ("GAMMA", 13), ("DELTA", 14))]
+    outs = [execute(store, gw, plan_id, line_id) for line_id in ids]
+    assert [o.status for o in outs] == ["SIMULATED"] * 3 + ["BLOCKED"], outs
+    assert outs[3].reason.startswith("SESSION_CAP: DELTA — 3 new entries per session")
+    assert len(store.positions) == 3 and store.lines[ids[3]]["state"] == "REJECTED"
+    assert journal_events(gw).count("dry_run") == 3
+
+
+def test_SESSION_CAP_counts_a_SENT_live_line_and_not_a_REJECTED_one(gw) -> None:
+    """A live order accepted and not filled (`SENT`, SW7.1) is an entry the session took; a
+    refused confirm (`REJECTED`) never was one. Two SENT + one FILLED = three; a REJECTED
+    fourth does not move the count, and the fifth is still the cap."""
+    store = MemoryStore(rung=3)
+    plan_id = store.add_plan()
+    for s, i, state in (("A1", 21, "SENT"), ("A2", 22, "SENT"), ("A3", 23, "REJECTED")):
+        store.add_line(plan_id, symbol=s, instrument_id=i, quantity=10, state=state)
+    third = store.add_line(plan_id, symbol="A4", instrument_id=24, quantity=10)
+    assert execute(store, gw, plan_id, third).status == "SIMULATED"
+    fifth = store.add_line(plan_id, symbol="A5", instrument_id=25, quantity=10)
+    out = execute(store, gw, plan_id, fifth)
+    assert out.status == "BLOCKED" and "SESSION_CAP" in out.reason
+    ctx = store.session_context(NOW.date())
+    assert ctx.entries_today == 3
+    assert ctx.account.open_symbols == frozenset({"A1", "A2", "A4"}), "SENT lines are held"
+
+
+def test_a_SENT_line_counts_as_exposure_at_its_trigger(gw) -> None:
+    """The shares of a live order not yet filled may arrive any moment: they are on the book
+    at the trigger for the ceiling, so the next confirm cannot spend the same rupees twice."""
+    store = MemoryStore(rung=0)
+    plan_id = store.add_plan()
+    store.add_line(plan_id, symbol="ALPHA", instrument_id=11, quantity=1666,
+                   trigger=D("100.80"), stop=D("97.80"), state="SENT")
+    line_id = _beta_line(store, plan_id)
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "SIMULATED" and sent_quantities(gw) == [390], out
+    assert store.lines[line_id]["quantity"] == 390
+
+
+def test_confirm_never_sends_more_than_the_line_said(gw) -> None:
+    """The page said 100; the rules would allow 1,666. 100 goes, the row is not touched."""
+    store = MemoryStore(rung=3)
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=100)
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "SIMULATED" and sent_quantities(gw) == [100]
+    assert store.resizes == [] and store.lines[line_id]["quantity"] == 100
+    assert store.lines[line_id]["note"] == "", "an unchanged line keeps its note"
+
+
+def test_the_line_being_confirmed_is_not_counted_against_itself(gw) -> None:
+    """The context is read before the line is marked CONFIRMED: a lone line at rung 0 is
+    neither `ALREADY_HELD` by its own symbol nor an entry against its own cap."""
+    store = MemoryStore(rung=0)
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=1666, trigger=D("100.80"), stop=D("97.80"))
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "SIMULATED" and sent_quantities(gw) == [1666], out
+    assert store.context_reads == 1
+    assert store.line_history[-2:] == [(line_id, "CONFIRMED"), (line_id, "FILLED")]
+
+
+def test_confirm_re_sizes_with_the_persons_risk_knob(gw) -> None:
+    """MD6: a SIGNAL line sized by the pack's 0.5 % is re-sized at confirm with the person's
+    `sw_config.risk_per_trade_pct`. At 0.25 % over a ₹3 stop the budget is ₹2,500 → 833."""
+    store = MemoryStore(rung=3)
+    store._config["risk_per_trade_pct"] = D("0.250")
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=1666, trigger=D("100.80"), stop=D("97.80"))
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "SIMULATED" and sent_quantities(gw) == [833]
+    assert "re-sized at confirm 1666 → 833 (size by RISK)" in store.lines[line_id]["note"]
+
+
+@pytest.mark.parametrize(
+    ("market", "code"),
+    [({"gate": "RED", "new_entries_allowed": False}, "GATE_RED"),
+     ({"drawdown_locked": True}, "DRAWDOWN_LOCKOUT")],
+)
+def test_confirm_refuses_under_a_red_gate_or_a_drawdown_lock(gw, market, code) -> None:
+    """`04` §8.3 / §8.5 apply at the click as they apply to the plan: the market row is read
+    again, and a line built before the evening turned the gate red does not go."""
+    store = MemoryStore(rung=1)
+    store.market.update(market)
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id)
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "BLOCKED" and out.reason.startswith(f"{code}: ALPHA")
+    assert journal_events(gw) == [] and store.positions == {}
+
+
+def test_confirm_refuses_a_name_with_no_ADR_on_record(gw) -> None:
+    """SW9.5.2 at the desk: the widest stop is one ADR, and a name with no detection row has
+    no ADR to check a stop against. `SIZE_REFUSED`, and the reason says so."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id)
+    del store.detected["ALPHA"]
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "BLOCKED" and out.reason.startswith("SIZE_REFUSED: ALPHA")
+    assert "ADR is unknown" in out.reason and journal_events(gw) == []
+
+
+def test_confirm_refuses_a_stop_wider_than_one_ADR(gw) -> None:
+    """`04` §6.1: a 6 % stop on a 5 % ADR name is `STOP_TOO_WIDE` — at confirm too."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, trigger=D("100.00"), stop=D("94.00"))
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "BLOCKED" and out.reason == "SIZE_REFUSED: ALPHA — STOP_TOO_WIDE"
+
+
+def test_confirm_refuses_a_setup_this_book_does_not_trade(gw) -> None:
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, setup="PARABOLIC_SHORT")
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "BLOCKED" and out.reason.startswith("NOT_TRADEABLE_SETUP")
+    line_id = store.add_line(plan_id, setup=None)
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "BLOCKED" and out.reason.startswith("NOT_TRADEABLE_SETUP")
+
+
+def test_a_partial_then_full_sequence_of_confirms_holds_the_ceiling_and_the_count(gw) -> None:
+    """The drill's morning, then one more: at rung 0 ALPHA goes whole (16.79 %), BETA is
+    re-sized to the ceiling (24.98 %), and GAMMA — the third name at a rung that allows two —
+    is `TIER_FULL`. Every confirm took the session lock; the book never passed 25 %."""
+    store = MemoryStore(rung=0)
+    plan_id = store.add_plan()
+    alpha = store.add_line(plan_id, quantity=1666, trigger=D("100.80"), stop=D("97.80"))
+    beta = _beta_line(store, plan_id)
+    store.detected["GAMMA"] = (D("5.00"), D(100_000_000), D("65.00"))
+    gamma = store.add_line(plan_id, symbol="GAMMA", instrument_id=13, quantity=10)
+    outs = [execute(store, gw, plan_id, line_id) for line_id in (alpha, beta, gamma)]
+    assert [o.status for o in outs] == ["SIMULATED", "SIMULATED", "BLOCKED"], outs
+    assert sent_quantities(gw) == [1666, 390]
+    assert outs[2].reason.startswith("TIER_FULL: GAMMA")
+    book = sum(D(str(p["entry_avg"])) * p["quantity_open"] for p in store.positions.values())
+    assert book == D("249832.80") and book <= D(250_000)
+    assert store.locks == [NOW.date()] * 3
+    assert store.sessions[NOW.date()]["confirms"] == 3
+    assert store.sessions[NOW.date()]["fills"] == 2
+
+
+def test_the_lock_is_taken_for_every_kind_and_spans_the_gateway_call(gw) -> None:
+    """A SELL and a RAISE take the session lock too — the book they change is the book the
+    next BUY is sized against — and the lock is held while the gateway answers: the gateway
+    call happens between lock entry and lock exit, never outside."""
+    order = []
+
+    class Recording(MemoryStore):
+        @contextlib.contextmanager
+        def lock_session_for_update(self, day):
+            order.append("lock")
+            with super().lock_session_for_update(day):
+                yield
+            order.append("unlock")
+
+    class Watched:
+        def __init__(self, real):
+            self.real = real
+
+        def __getattr__(self, name):
+            attr = getattr(self.real, name)
+            if name in ("place", "place_gtt_stop", "delete_gtt"):
+                async def call(**kw):
+                    order.append(name)
+                    return await attr(**kw)
+                return call
+            return attr
+
+    store = Recording()
+    pid = store.add_position(quantity_entered=300, quantity_open=300, gtt_id="4242")
+    plan_id = store.add_plan()
+    sell = store.add_line(plan_id, kind="SELL_AT_OPEN", quantity=100, trigger=None, stop=None)
+    raise_ = store.add_line(plan_id, kind="RAISE_GTT_STOP", quantity=0, trigger=None,
+                            stop=D("98.00"))
+    execute(store, Watched(gw), plan_id, sell, last_price=D("104.00"))
+    execute(store, Watched(gw), plan_id, raise_, last_price=D("104.00"))
+    assert order == ["lock", "place", "delete_gtt", "place_gtt_stop", "unlock",
+                     "lock", "place_gtt_stop", "unlock"], order
+    assert store.positions[pid]["quantity_open"] == 200 and store.positions[pid]["stop"] == D("98.00")
+
+
+def test_a_gateway_exception_rolls_the_lock_back_and_records_the_refusal_once(gw) -> None:
+    """Under the lock an untouchable instrument raises out of the gateway: the transaction
+    rolls back (the CONFIRMED mark and the counter with it), then the line is marked
+    REJECTED and the click counted, once — the same end state SW7 promised, reached through
+    the rollback rather than around it."""
+    from baskfy_execution.guards import UntouchableInstrumentError
+
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, symbol="SGBAUG28")
+    with pytest.raises(UntouchableInstrumentError):
+        execute(store, gw, plan_id, line_id)
+    assert store.lines[line_id]["state"] == "REJECTED"
+    assert store.sessions[NOW.date()]["confirms"] == 1
+    assert store.positions == {} and store.fills == []
+
+
+def test_a_line_confirmed_by_another_request_under_the_lock_is_409(gw) -> None:
+    """Two requests pass `_validate` on the same PROPOSED line; the second, once it holds the
+    lock, reads the line again and finds it FILLED — 409, nothing sent, nothing written."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id)
+
+    class Racing(MemoryStore):
+        pass
+
+    real_lock = store.lock_session_for_update
+
+    @contextlib.contextmanager
+    def lock_then_lose(day):
+        with real_lock(day):
+            store.lines[line_id]["state"] = "FILLED"   # the other tab won the lock first
+            yield
+
+    store.lock_session_for_update = lock_then_lose
+    with pytest.raises(HTTPException) as exc:
+        execute(store, gw, plan_id, line_id)
+    assert exc.value.status_code == 409 and "FILLED" in exc.value.detail
+    assert journal_events(gw) == [] and store.positions == {}
+    assert store.sessions == {}, "no confirm was counted for a line that was already gone"
+
+
+def test_sizing_config_carries_the_three_knobs_and_nothing_else() -> None:
+    config = X.sizing_config({"risk_per_trade_pct": D("0.250"), "max_position_pct": D("15.00"),
+                              "max_open_positions": 4, "sleeve_capital_inr": D("1")})
+    assert (config.sizing.risk_per_trade_pct, config.sizing.max_position_pct,
+            config.sizing.max_open_positions) == (0.25, 15.0, 4)
+    assert config.sizing.max_new_entries_per_session == 3, "the session cap is not a setting"
+    assert config.stops == X.DEFAULT_SWING_CONFIG.stops and config.market == X.DEFAULT_SWING_CONFIG.market
+    assert X.sizing_config({}).sizing == X.DEFAULT_SWING_CONFIG.sizing

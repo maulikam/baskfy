@@ -160,6 +160,99 @@ cd kite-momentum-rebalancer
     --expect ../tools/swing/fixtures/morning-synthetic.expected.json
 ```
 
+### The swing book's DRY_RUN morning drill (SW10) — the whole paper session, zero orders
+
+The swing book's own version of §3's Friday drill, and the first condition of the real-money
+gate (`docs/swing/02` §3.1). It runs one full paper session end to end through the production
+code paths — the evening job, the two premarket stages, the opening-range monitor's store, the
+desk's `execute_line` over the real gateway, the evening job again, the next morning's plan —
+and counts the orders that reached a broker. That number must be zero.
+
+```bash
+cd decile-blueprint
+export BASKFY_DATABASE_URL="$(grep '^BASKFY_TEST_DATABASE_URL=' .env | cut -d= -f2- | sed 's#/baskfy_test$#/baskfy_sw_t3#')"
+export BASKFY_SOLE_USER_ID=1 DRY_RUN=true
+uv run python ../tools/swing/drill.py
+```
+
+**It resets the database it is pointed at** — `alembic upgrade head`, then the pipeline and
+`sw_` tables truncated and re-seeded — so it refuses any `BASKFY_DATABASE_URL` whose name does
+not say `test`, `drill` or `_t<n>` unless you pass `--database-is-disposable`. It also refuses
+to start with `DRY_RUN=false` or `BASKFY_SWING_EXECUTION_ENABLED=true` in the environment, the
+Friday drill's rule: a refusal, not a warning. Nothing in it needs a Kite login; nothing in it
+reads the clock.
+
+What it prints, step by step (a real run, 2 Sep 2026, on `baskfy_sw_t3`, after SW10.4's
+confirm-time gate):
+
+```
+Swing DRY_RUN drill — 2026-08-18 evening → 2026-08-19 morning → 2026-08-20 plan   DRY_RUN=true   BASKFY_SWING_EXECUTION_ENABLED=false   BASKFY_SWING_MONITOR_ENABLED=false
+  0. migrate         alembic upgrade head → 0030_swing_primary_sources (head)
+  0. database        reset + seeded: user 1, broker account 7, sleeve ₹1,000,000, 4 names × 40 bars, ...
+  1. evening before  EOD 2026-08-18: gate GREEN rung 0→0, watch +4 −0, managed 0, exits 0, entries 1, skips 3, ... sessions logged 1
+  2. 08:50 LEVELS    LEVELS 2026-08-19: refreshed 0, unchanged 4
+  3. 09:09 MORNING   MORNING plan 2026-08-19: quotes pulled 0 (flag off), entries 1, exits 0, skips 3
+  4. 09:15-10:45     replayed morning-synthetic.csv through PgSignalStore: 4 signals, 2 SIGNAL lines, gate GREEN rung 0
+                       09:20  LOCKED_UPPER_CIRCUIT   GAMMALOCK  ...
+                       09:31  TRIGGERED              ALPHAFLAG  entry=  100.80 stop=   97.80
+                       09:35  BELOW_PIVOT            DELTAWAIT  ...
+                       09:45  TRIGGERED              BETAEP     entry=  210.50 stop=  204.50
+  5. confirm         two TRIGGERED lines through execute_line + the real gateway (dry-run) over an exploding broker client, each under the session lock and re-sized to the rung (A5)
+                       SWING BUY ALPHAFLAG x1666 @ 100.80 stop 97.80 → SIMULATED; position 1 x1666 gtt DRY-…:ALPHAFLAG:GTT simulated=True
+                       SWING BUY BETAEP x833 @ 210.50 stop 204.50 → SIMULATED; position 2 x389 gtt DRY-…:BETAEP:GTT simulated=True
+                         re-sized at confirm 833 → 389 (A5): re-sized at confirm 833 → 389 (size by CASH): book ₹167,932.80 + ₹81,884.50 = 24.98% of the sleeve, ceiling 25% at rung 0, 1 entry today
+                       EXPOSURE after confirms ₹249,817.30 = 25.0% of the sleeve (rung ceiling 25% = ₹250,000.00); 2 entries today, 2 of 2 positions at rung 0
+                       swing journal (swing_orders_journal.jsonl): dry_run, gtt_dry_run, dry_run, gtt_dry_run
+                       broker client touched: 0
+  6. the close       bars, detectors' rows and the market row for 2026-08-19: ALPHAFLAG 104.50, BETAEP 212.00, ...
+  7. 21:05 EOD       EOD 2026-08-19: gate GREEN rung 0→0, ... managed 2, exits 1, entries 0, skips 4, naked none, sessions logged 2
+                       SWING RAISE GTT ALPHAFLAG to 100.80 — BREAKEVEN_AT_R [PROPOSED]
+  8. 09:09 MORNING   MORNING plan 2026-08-20: quotes pulled 0 (flag off), entries 0, exits 1, skips 4
+  every sw_ row     51 rows across the sw_ tables, all user 1's
+  sw_session 2026-08-18: mode=DRY_RUN monitor_ran=False signals=0 confirms=0 fills=0 manage_actions=0 plans=1
+  sw_session 2026-08-19: mode=DRY_RUN monitor_ran=True signals=4 confirms=2 fills=2 manage_actions=0 plans=1
+  orders that reached a broker: 0   (journal: dry_run, gtt_dry_run, dry_run, gtt_dry_run)
+DRILL OK
+```
+
+**What "0 orders" is proven by**, in order of strength:
+
+1. **The broker client explodes.** The gateway is built by the desk's own `build_swing_gateway`
+   over an `ExplodingKC` whose `place_order`, `place_gtt`, `delete_gtt` and `instruments` raise
+   and count every touch. The gateway's dry-run branch returns before any of them; a touch would
+   surface as a `REJECTED` outcome, fail the drill, and print the count.
+2. **The swing journal is read back.** `swing_orders_journal.jsonl` (written to a temporary
+   directory, never the desk's real journal) must contain exactly `dry_run, gtt_dry_run` twice —
+   one LIMIT buy and one GTT stop per confirmed line — and nothing else.
+3. **The rows say so.** Both `sw_position` rows carry `simulated=true` and a `DRY-…` trigger id,
+   both `sw_fill` rows are `simulated=true`, and `sw_session` for the morning counts exactly
+   two confirms and two fills.
+4. **The flags are pinned, not assumed.** The drill sets `DRY_RUN=true`,
+   `BASKFY_SWING_EXECUTION_ENABLED=false` and `BASKFY_SWING_MONITOR_ENABLED=false` in its own
+   environment before importing the desk, and asserts `swing_gates().dry_run` before the first
+   confirm. The monitor flag stays false: the strategy is driven directly, the way
+   `tools/swing/replay.py` drives it, with the Postgres store in place of the harness's list.
+
+**What the `EXPOSURE` line is proven by** (SW10.4, STANDING-ANSWERS A5). Both SIGNAL lines
+were sized at their own triggers, before either was confirmed: 1,666 ALPHAFLAG (₹1,67,932.80)
+and 833 BETAEP (₹1,75,346.50), together 34.3 % of a sleeve whose rung 0 allows 25 %. Each
+confirm runs under `PgSwingStore.lock_session_for_update` — a transaction holding the day's
+`sw_session` row `FOR UPDATE` from before the book is re-derived until after the gateway has
+answered — and re-sizes the line through the same `entries_now` the monitor sizes a SIGNAL line
+with. The first fits whole; the second is shrunk to the ₹82,067.20 of headroom (389 × 210.50 =
+₹81,884.50), its row rewritten with the quantity, the risk and the value that went out, and its
+position, fill and GTT all carry 389. The drill then **exits 1** if the book after the confirms
+is over the rung's ceiling, if the session does not count exactly the two entries, if the
+position count is over the rung's, or if the number of re-sized lines is not exactly one (the
+fixture is built so that one, and only one, confirm has to shrink). Before SW10.4 the same
+line read `WARNING book after confirms ₹343,279.30 = 34.3%` and did not fail
+(`docs/swing/DECISIONS-SW.md` SW10.2, now closed by SW10.4).
+
+Exit code 1, with `DRILL FAILED: <reason>` on stderr, for anything else that does not do what
+the rules say: a replay that raises other signals than the fixture's, a confirm that is not
+`SIMULATED`, a journal with any other event, a touched broker client, a session row that does
+not count two and two, an `sw_` row that is not the sole user's.
+
 ### Filling market cap and P/E for a date the pipeline already published
 
 Step 6 fetches NSE fundamentals as part of a night. For a **past** date — a table that was never

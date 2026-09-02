@@ -152,12 +152,18 @@ def build_entries(  # noqa: PLR0913 - one keyword per input the plan depends on
     gate: MarketGate,
     tier: ExposureTier,
     config: SwingConfig,
+    entries_already_today: int = 0,
 ) -> tuple[list[PlanLine], list[Skipped]]:
     """BUY lines for the watchlist, best score first, until the tier or the session is full.
 
     The position count is the smaller of the ladder's rung and the trader's own cap; new
     entries per session are capped at ``max_new_entries_per_session`` ("1, 2, 3 stocks per
     day"); each name's widest stop is one ADR (:func:`widest_stop_pct`).
+
+    ``entries_already_today`` (``04`` §5.3, SW10): entries the session has *already* taken
+    before this plan — the desk's confirm-time gate re-sizes one line at a time against the
+    lines confirmed earlier in the morning, and those count against the same cap. The evening
+    and the morning plan pass nothing: a plan is the session's first and only set of lines.
     """
     lines: list[PlanLine] = []
     skipped: list[Skipped] = []
@@ -182,7 +188,7 @@ def build_entries(  # noqa: PLR0913 - one keyword per input the plan depends on
         if item.locked_upper_circuit:
             skipped.append(Skipped(item.symbol, SkipReason.LOCKED_UPPER_CIRCUIT, "no fill at band"))
             continue
-        if len(lines) >= config.sizing.max_new_entries_per_session:
+        if entries_already_today + len(lines) >= config.sizing.max_new_entries_per_session:
             skipped.append(
                 Skipped(
                     item.symbol,

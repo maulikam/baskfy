@@ -96,7 +96,12 @@ describe("the primary consumer IA", () => {
       "Create",
       "Swing",
     ]);
-    expect(SECTION_TABS.swing.map((t) => t.label)).toEqual(["Setups", "Market"]);
+    expect(SECTION_TABS.swing.map((t) => t.label)).toEqual([
+      "Setups",
+      "Watchlist",
+      "Market",
+      "Positions",
+    ]);
     expect(SECTION_TABS.build.map((t) => t.href)).toContain("/create");
     /*
       §2: `Me → Investments | Portfolios | Watchlist` becomes

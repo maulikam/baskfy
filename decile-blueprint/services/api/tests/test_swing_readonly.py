@@ -24,19 +24,34 @@ numbers into `sw_config`. Three claims make that defensible, and each is asserte
 from __future__ import annotations
 
 import inspect
+import typing
 
 import pytest
 
 from baskfy_api import swing as swing_service
+from baskfy_api import swing_watch
 from baskfy_api.app import create_app
 from baskfy_api.routers import swing as swing_router
 from baskfy_api.swing_settings import SYSTEM_OWNED_FIELDS, SwingConfigPatch
 
 MUTATING = ("post", "put", "patch", "delete")
 
-#: The one non-GET route the surface has, and the only one it may ever have without a decision
-#: recorded in `docs/swing/DECISIONS-SW.md`.
-DELIBERATE_MUTATING_ROUTES: dict[str, set[str]] = {"/api/v1/swing/config": {"patch"}}
+#: Every non-GET route on the surface, and why each one is allowed.
+#:
+#: `docs/swing/02` Track A permits exactly the writes that "change no money" — "watchlist edits,
+#: notes and the catalyst field". Each entry here is one of those, and a route that is not in this
+#: table fails `test_every_route_is_a_get_except_the_documented_writes` the moment it is added.
+#:
+#: `PATCH /swing/config` writes seven settings and cannot name the exposure rung (SW4.1).
+#: `POST /swing/watch` adds a name to a list. `PATCH /swing/watch/{id}` edits a note and a
+#: catalyst — and nothing else, because a level a person can revise after the fact is a level
+#: that can be revised to match a price they already paid. `DELETE /swing/watch/{id}` is a state
+#: change to DISMISSED, not a delete.
+DELIBERATE_MUTATING_ROUTES: dict[str, set[str]] = {
+    "/api/v1/swing/config": {"patch"},
+    "/api/v1/swing/watch": {"post"},
+    "/api/v1/swing/watch/{watch_id}": {"patch", "delete"},
+}
 
 #: What `app.openapi()` returns, to the depth these tests read it.
 OpenApiSpec = dict[str, dict[str, dict[str, object]]]
@@ -54,10 +69,10 @@ def _swing_paths(spec: OpenApiSpec) -> list[str]:
 class TestTheSurfaceIsRegisteredAndReadOnly:
     def test_the_swing_routes_exist(self, spec: OpenApiSpec) -> None:
         paths = _swing_paths(spec)
-        assert paths, "SW4's routes are not registered at all"
-        assert len(paths) == 5, f"expected five swing paths, found {paths}"
+        assert paths, "the swing routes are not registered at all"
+        assert len(paths) == 8, f"expected eight swing paths, found {paths}"
 
-    def test_every_route_is_a_get_except_the_settings_patch(self, spec: OpenApiSpec) -> None:
+    def test_every_route_is_a_get_except_the_documented_writes(self, spec: OpenApiSpec) -> None:
         for path in _swing_paths(spec):
             allowed = {"get"} | DELIBERATE_MUTATING_ROUTES.get(path, set())
             assert set(spec["paths"][path]) <= allowed, (
@@ -72,18 +87,35 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
             assert path in spec["paths"], f"{path} is exempted but no longer served"
             assert verbs <= set(spec["paths"][path])
 
-    def test_the_router_declares_one_mutating_decorator(self) -> None:
+    def test_the_router_declares_only_the_documented_mutating_decorators(self) -> None:
         """Over the source, so a route added and not yet registered is still caught."""
         source = inspect.getsource(swing_router)
-        assert source.count("@router.patch(") == 1
-        for verb in ("post", "put", "delete"):
-            assert f"@router.{verb}(" not in source, f"routers/swing.py declares a {verb.upper()}"
+        assert source.count("@router.patch(") == 2, "settings and the watchlist annotation"
+        assert source.count("@router.post(") == 1, "watching a name"
+        assert source.count("@router.delete(") == 1, "dismissing one"
+        assert "@router.put(" not in source, "routers/swing.py declares a PUT"
 
-    def test_the_service_writes_nothing(self) -> None:
-        """`baskfy_api.swing` is the read layer, and it has no write in it at all."""
+    def test_the_read_service_writes_nothing(self) -> None:
+        """`baskfy_api.swing` is the read layer, and it has no write in it at all.
+
+        The watchlist's writes live in `baskfy_api.swing_watch`, which is a different module for
+        exactly this reason: one file that both reads and writes cannot be asserted about.
+        """
         source = inspect.getsource(swing_service)
         for forbidden in ("insert(", "update(", "delete(", "session.add", "session.commit"):
             assert forbidden not in source, f"baskfy_api/swing.py contains {forbidden}"
+
+    def test_the_watchlist_writer_touches_only_the_watchlist(self) -> None:
+        """`swing_watch` may write, and only to `sw_watch`.
+
+        A module allowed to write is a module worth checking the *target* of: a watchlist service
+        that could add an `SwPlanLine` or an `SwPosition` would move money under a name that says
+        it does not.
+        """
+        source = inspect.getsource(swing_watch)
+        for forbidden in ("SwPlan", "SwPosition", "SwFill", "SwSignal", "SwConfig"):
+            assert forbidden not in source, f"swing_watch names {forbidden}"
+        assert "SwWatch(" in source, "swing_watch does not construct an sw_watch row at all"
 
 
 class TestItCannotReachAnOrder:
@@ -109,24 +141,33 @@ class TestItCannotReachAnOrder:
         ]
         assert offenders == [], f"the swing surface exposes {offenders}"
 
-    def test_the_swing_router_is_not_reachable_without_a_bearer_token(
-        self, spec: OpenApiSpec
-    ) -> None:
+    def test_every_route_requires_an_authenticated_principal(self) -> None:
         """A swing book is one person's positions, levels and results.
 
-        Unlike `/market-health` there is no public view of it, so every operation declares a
-        security requirement. `scoped_sole_user_id` then refuses a principal that is not the sole
-        tenant rather than serving them somebody else's book (M43.4).
+        Unlike `/market-health` there is no public view of it and no anonymous one. Asserted over
+        the *signatures*: every handler takes `AuthenticatedDep`, so a route added without it —
+        which would answer 200 to a stranger — fails here rather than in production.
+        `scoped_sole_user_id` then refuses a principal who is not the sole tenant, rather than
+        serving them somebody else's book (M43.4).
         """
-        for path in _swing_paths(spec):
-            for method, operation in spec["paths"][path].items():
-                assert isinstance(operation, dict)
-                parameters = operation.get("parameters", [])
-                assert isinstance(parameters, list)
-                # FastAPI puts the dependency's security scheme on the operation; the shape we
-                # can assert without coupling to it is that the route is not documented as
-                # anonymous, which `create_app` marks by omitting `security` entirely nowhere.
-                assert method in {"get", "patch"}, f"{path} exposes {method}"
+        handlers = [
+            value
+            for name, value in vars(swing_router).items()
+            if callable(value)
+            and not name.startswith("_")
+            and getattr(value, "__module__", "") == swing_router.__name__
+            and name.startswith(("get_", "post_", "patch_", "delete_"))
+        ]
+        assert len(handlers) >= 8, f"only found {len(handlers)} route handlers"
+        for handler in handlers:
+            hints = typing.get_type_hints(handler, include_extras=True)
+            assert "principal" in hints, f"{handler.__name__} takes no principal"
+
+    def test_every_route_scopes_to_the_sole_tenant(self) -> None:
+        """One call to `scoped_sole_user_id` per handler. A route that read `principal.user_id`
+        directly would serve whoever asked."""
+        source = inspect.getsource(swing_router)
+        assert source.count("await scoped_sole_user_id(") >= 8
 
 
 class TestTheLadderCannotBeClimbedByAsking:

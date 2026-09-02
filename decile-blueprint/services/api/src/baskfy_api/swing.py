@@ -17,13 +17,17 @@ import datetime as dt
 from dataclasses import dataclass
 from decimal import Decimal
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import (
     Instrument,
     OhlcvDaily,
     SwMarketDaily,
+    SwPlan,
+    SwPlanLine,
+    SwPlanSkip,
+    SwPosition,
     SwSetupDaily,
 )
 from baskfy_core.swing.config import Setup
@@ -129,6 +133,79 @@ class SectorRow:
     members: int
     candidates: int
     hot: bool
+
+
+@dataclass(frozen=True, slots=True)
+class PlanLineRow:
+    """One line of a stored plan, joined to the symbol it names."""
+
+    id: int
+    kind: str
+    symbol: str
+    name: str
+    setup: str | None
+    quantity: int
+    trigger: Decimal | None
+    stop: Decimal | None
+    risk_inr: Decimal
+    position_value: Decimal
+    trail: str | None
+    note: str | None
+    state: str
+
+
+@dataclass(frozen=True, slots=True)
+class PlanView:
+    """A plan and everything a person needs to read it — including what it refused.
+
+    `04` §9: "A watchlist of twelve names and a plan of two lines is only useful if the other ten
+    explain themselves." The skips are not an appendix; they are half the document.
+    """
+
+    plan_id: str
+    as_of: dt.date
+    source: str
+    built_at: dt.datetime
+    expires_at: dt.datetime
+    gate: str
+    exposure_level: int
+    total_risk_inr: Decimal
+    total_new_exposure_inr: Decimal
+    lines: tuple[PlanLineRow, ...]
+    skips: tuple[tuple[str, str, str | None], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PositionRow:
+    """One open or closed position, as `05` §2's Positions tab reads it."""
+
+    id: int
+    instrument_id: int
+    symbol: str
+    name: str
+    setup: str
+    entry_date: dt.date
+    entry_avg: Decimal
+    quantity_entered: int
+    quantity_open: int
+    initial_stop: Decimal
+    stop: Decimal
+    gtt_id: str | None
+    trail: str
+    partial_done: bool
+    state: str
+    closed_on: dt.date | None
+    exit_avg: Decimal | None
+    close_reason: str | None
+    r_multiple: Decimal | None
+    pnl_inr: Decimal | None
+    simulated: bool
+    last_close: Decimal | None
+
+    @property
+    def naked(self) -> bool:
+        """Open, with no resting stop. The one state `04` §6 forbids outright."""
+        return self.quantity_open > 0 and self.gtt_id is None
 
 
 @dataclass(frozen=True, slots=True)
@@ -340,6 +417,140 @@ async def sectors(
 #: `04` §2.6 gives its `+5` to "a sector in the top-3 breadth strip", so three is what the page
 #: marks. `05` §2 shows five; the extra two are context, not a bonus.
 HOT_SECTORS_ON_THE_STRIP: int = 3
+
+
+async def latest_plan(
+    session: AsyncSession, *, user_id: int, source: str | None = None
+) -> PlanView | None:
+    """The most recent plan, with its lines and its skips.
+
+    Newest by `built_at`, not by `as_of`: a morning plan and an evening preview can share a date,
+    and the one a person wants is the one that was built last.
+    """
+    query = select(SwPlan).where(SwPlan.user_id == user_id)
+    if source is not None:
+        query = query.where(SwPlan.source == source)
+    plan = (
+        await session.execute(query.order_by(SwPlan.built_at.desc(), SwPlan.id.desc()).limit(1))
+    ).scalar_one_or_none()
+    if plan is None:
+        return None
+
+    lines = (
+        await session.execute(
+            select(SwPlanLine, Instrument.symbol, Instrument.name)
+            .join(Instrument, Instrument.id == SwPlanLine.instrument_id)
+            .where(SwPlanLine.plan_id == plan.id)
+            .order_by(SwPlanLine.id)
+        )
+    ).all()
+    skips = (
+        await session.execute(
+            select(SwPlanSkip.symbol, SwPlanSkip.reason, SwPlanSkip.detail)
+            .where(SwPlanSkip.plan_id == plan.id)
+            .order_by(SwPlanSkip.symbol)
+        )
+    ).all()
+    return PlanView(
+        plan_id=str(plan.plan_id),
+        as_of=plan.as_of,
+        source=plan.source,
+        built_at=plan.built_at,
+        expires_at=plan.expires_at,
+        gate=plan.gate,
+        exposure_level=plan.exposure_level,
+        total_risk_inr=plan.total_risk_inr,
+        total_new_exposure_inr=plan.total_new_exposure_inr,
+        lines=tuple(
+            PlanLineRow(
+                id=row.id,
+                kind=row.kind,
+                symbol=symbol,
+                name=name,
+                setup=row.setup,
+                quantity=row.quantity,
+                trigger=row.trigger,
+                stop=row.stop,
+                risk_inr=row.risk_inr,
+                position_value=row.position_value,
+                trail=row.trail,
+                note=row.note,
+                state=row.state,
+            )
+            for row, symbol, name in lines
+        ),
+        skips=tuple((str(symbol), str(reason), detail) for symbol, reason, detail in skips),
+    )
+
+
+async def positions(
+    session: AsyncSession, *, user_id: int, include_closed: bool = True
+) -> tuple[PositionRow, ...]:
+    """The book: open first, then closed, newest first within each."""
+    query = (
+        select(SwPosition, Instrument.symbol, Instrument.name)
+        .join(Instrument, Instrument.id == SwPosition.instrument_id)
+        .where(SwPosition.user_id == user_id)
+        .order_by(SwPosition.state, SwPosition.entry_date.desc(), SwPosition.id.desc())
+    )
+    if not include_closed:
+        query = query.where(SwPosition.state != "CLOSED")
+    rows = (await session.execute(query)).all()
+    if not rows:
+        return ()
+    closes = await _latest_closes(session, [row[0].instrument_id for row in rows])
+    return tuple(
+        PositionRow(
+            id=row.id,
+            instrument_id=row.instrument_id,
+            symbol=symbol,
+            name=name,
+            setup=row.setup,
+            entry_date=row.entry_date,
+            entry_avg=row.entry_avg,
+            quantity_entered=row.quantity_entered,
+            quantity_open=row.quantity_open,
+            initial_stop=row.initial_stop,
+            stop=row.stop,
+            gtt_id=row.gtt_id,
+            trail=row.trail,
+            partial_done=row.partial_done,
+            state=row.state,
+            closed_on=row.closed_on,
+            exit_avg=row.exit_avg,
+            close_reason=row.close_reason,
+            r_multiple=row.r_multiple,
+            pnl_inr=row.pnl_inr,
+            simulated=row.simulated,
+            last_close=closes.get(row.instrument_id),
+        )
+        for row, symbol, name in rows
+    )
+
+
+async def _latest_closes(session: AsyncSession, instrument_ids: list[int]) -> dict[int, Decimal]:
+    """The most recent adjusted close per instrument, in one grouped query."""
+    if not instrument_ids:
+        return {}
+    newest = (
+        select(
+            OhlcvDaily.instrument_id.label("instrument_id"),
+            func.max(OhlcvDaily.date).label("date"),
+        )
+        .where(OhlcvDaily.instrument_id.in_(instrument_ids))
+        .group_by(OhlcvDaily.instrument_id)
+        .subquery()
+    )
+    rows = await session.execute(
+        select(OhlcvDaily.instrument_id, OhlcvDaily.close).join(
+            newest,
+            and_(
+                OhlcvDaily.instrument_id == newest.c.instrument_id,
+                OhlcvDaily.date == newest.c.date,
+            ),
+        )
+    )
+    return {int(instrument_id): close for instrument_id, close in rows.all()}
 
 
 async def bars(

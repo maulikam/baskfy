@@ -217,6 +217,13 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=21, minute=0, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_COMPUTE},
     },
+    # docs/swing/01 §8: "End of day: 15-30 minutes on positions and scans." 21:05, five minutes
+    # after the detectors, because the plan is built from the day's candidates and the day's gate.
+    "swing-eod-plan": {
+        "task": "baskfy.swing.eod",
+        "schedule": crontab(hour=21, minute=5, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
     # docs/swing/01 §8: "Weekend: a full scan, a watchlist of a few dozen forming flags, the
     # levels that would trigger next week." Saturday morning, before anyone looks.
     "swing-weekend": {

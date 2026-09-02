@@ -3074,6 +3074,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/swing/positions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The book, and tomorrow's plan
+         * @description `05` §2's Positions tab, with the EOD plan preview beside it.
+         *
+         *     One call, because the two are read together: what is open, and what the rules want done with
+         *     it at tomorrow's open.
+         */
+        get: operations["getPositions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/swing/sectors": {
         parameters: {
             query?: never;
@@ -3143,6 +3166,66 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/swing/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The watchlist
+         * @description `05` §2's Watchlist tab. ``state=all`` includes what expired and what was dismissed.
+         *
+         *     Expired rows are readable on purpose: the record of what was watched is the record of what
+         *     was passed over, and a list that forgot them could not answer "what did I miss".
+         */
+        get: operations["getWatch"];
+        put?: never;
+        /**
+         * Watch a name
+         * @description Add a name by hand. It moves no money (`02` Track A) and it reaches no broker.
+         *
+         *     A `MANUAL` row never expires: the person is watching for a reason the detectors cannot see,
+         *     and retiring it after ten sessions would be the system overruling a judgement.
+         */
+        post: operations["postWatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/swing/watch/{watch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Stop watching a name
+         * @description A state change to `DISMISSED`, not a delete.
+         *
+         *     "I looked and said no" and "it ran out of time" are different facts, and a watchlist that
+         *     could not tell them apart could not answer the only question worth asking about it.
+         */
+        delete: operations["deleteWatch"];
+        options?: never;
+        head?: never;
+        /**
+         * Annotate a watched name
+         * @description The note and the catalyst — `01` §3's "news check", which a person does and Baskfy cannot.
+         *
+         *     Levels are deliberately not editable here. A trigger a person can revise after the fact is a
+         *     trigger that can be revised to match a price they already paid.
+         */
+        patch: operations["patchWatch"];
         trace?: never;
     };
     "/api/v1/watchlist": {
@@ -3996,34 +4079,6 @@ export interface components {
             total_return?: number | null;
             /** Weighting */
             weighting: string;
-        };
-        /** BarOut */
-        BarOut: {
-            /** Close */
-            close: string;
-            /**
-             * Date
-             * Format: date
-             */
-            date: string;
-            /** Ma Fast */
-            ma_fast: string | null;
-            /** Ma Slow */
-            ma_slow: string | null;
-        };
-        /** BarsOut */
-        BarsOut: {
-            /**
-             * Adjusted
-             * @default true
-             */
-            adjusted: boolean;
-            /** Data */
-            data: components["schemas"]["BarOut"][];
-            /** Instrument Id */
-            instrument_id: number;
-            /** Symbol */
-            symbol: string;
         };
         /** BasketCardOut */
         BasketCardOut: {
@@ -6214,42 +6269,6 @@ export interface components {
             /** Status */
             status: string;
         };
-        /** MarketDayOut */
-        MarketDayOut: {
-            /** Constituent Count */
-            constituent_count: number;
-            /**
-             * Date
-             * Format: date
-             */
-            date: string;
-            /** Exposure Level */
-            exposure_level: number;
-            /** Gate */
-            gate: string;
-            /** Index Close */
-            index_close: string | null;
-            /** Index Ma Fast */
-            index_ma_fast: string | null;
-            /** Index Ma Slow */
-            index_ma_slow: string | null;
-            /** Index Slug */
-            index_slug: string | null;
-            /** Max Exposure Pct */
-            max_exposure_pct: string;
-            /** Max Open Positions */
-            max_open_positions: number;
-            /** New Entries Allowed */
-            new_entries_allowed: boolean;
-            /** Parabolic Count */
-            parabolic_count: number;
-            /** Pct Above Ma Slow */
-            pct_above_ma_slow: string | null;
-            /** Pct New 52W High */
-            pct_new_52w_high: string | null;
-            /** Pct Up Strong 1M */
-            pct_up_strong_1m: string | null;
-        };
         /**
          * MarketHealthHistoryOut
          * @description docs/07: `GET /market-health/history?universe=&from=&to=`.
@@ -6313,11 +6332,6 @@ export interface components {
             pct_ret_1y_positive?: string | number | null;
             /** Pct Within 10Pct Ath */
             pct_within_10pct_ath?: string | number | null;
-        };
-        /** MarketOut */
-        MarketOut: {
-            /** Data */
-            data: components["schemas"]["MarketDayOut"][];
         };
         /**
          * MarketQualityOut
@@ -8217,26 +8231,6 @@ export interface components {
             /** Name */
             name?: string | null;
         };
-        /** SectorOut */
-        SectorOut: {
-            /** Candidates */
-            candidates: number;
-            /** Hot */
-            hot: boolean;
-            /** Members */
-            members: number;
-            /** Pct Above Ma Slow */
-            pct_above_ma_slow: number;
-            /** Slug */
-            slug: string;
-        };
-        /** SectorsOut */
-        SectorsOut: {
-            /** As Of */
-            as_of: string | null;
-            /** Data */
-            data: components["schemas"]["SectorOut"][];
-        };
         /**
          * SelectionSpec
          * @description docs/10: ``{"top_n": 20, "hold_buffer": 10}``; "0 = strict top-N".
@@ -8287,81 +8281,6 @@ export interface components {
              * @default Bearer
              */
             token_type: string;
-        };
-        /**
-         * SetupOut
-         * @description One candidate row. Every price is an **exchange** price (SW3 divides by ``adj_factor``).
-         */
-        SetupOut: {
-            /** Adr Pct */
-            adr_pct: string | null;
-            /** Base Bars */
-            base_bars: number | null;
-            /** Base Depth Pct */
-            base_depth_pct: string | null;
-            /** Close */
-            close: string | null;
-            /** Dryup Ratio */
-            dryup_ratio: string | null;
-            /** Gap Pct */
-            gap_pct: string | null;
-            /** Instrument Id */
-            instrument_id: number;
-            /** Listed Within 2Y */
-            listed_within_2y: boolean;
-            /** Locked Upper Circuit */
-            locked_upper_circuit: boolean;
-            /** Name */
-            name: string;
-            /** Pivot High */
-            pivot_high: string | null;
-            /** Prior Move Pct */
-            prior_move_pct: string | null;
-            /** Rvol */
-            rvol: string | null;
-            /** Score */
-            score: string;
-            /** Sector Slug */
-            sector_slug: string | null;
-            /** Setup */
-            setup: string;
-            /** Status */
-            status: string;
-            /** Stop Distance Pct */
-            stop_distance_pct: string | null;
-            /** Stop Ref */
-            stop_ref: string | null;
-            /** Symbol */
-            symbol: string;
-            /** Tightness Adr */
-            tightness_adr: string | null;
-            /** Trigger */
-            trigger: string | null;
-            /** Turnover Avg */
-            turnover_avg: number | null;
-            /** Up Streak */
-            up_streak: number | null;
-        };
-        /** SetupsOut */
-        SetupsOut: {
-            /** As Of */
-            as_of: string | null;
-            /** Data */
-            data: components["schemas"]["SetupOut"][];
-            /** Exposure Level */
-            exposure_level: number | null;
-            /** Funnel */
-            funnel: {
-                [key: string]: unknown;
-            } | null;
-            /** Gate */
-            gate: string | null;
-            /** Max Exposure Pct */
-            max_exposure_pct: string | null;
-            /** Max Open Positions */
-            max_open_positions: number | null;
-            /** New Entries Allowed */
-            new_entries_allowed: boolean | null;
         };
         /** SipBody */
         SipBody: {
@@ -8747,6 +8666,34 @@ export interface components {
              */
             topic: "A number looks wrong" | "Billing or invoices" | "My account" | "A feature request" | "Something else";
         };
+        /** SwingBarOut */
+        SwingBarOut: {
+            /** Close */
+            close: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Ma Fast */
+            ma_fast: string | null;
+            /** Ma Slow */
+            ma_slow: string | null;
+        };
+        /** SwingBarsOut */
+        SwingBarsOut: {
+            /**
+             * Adjusted
+             * @default true
+             */
+            adjusted: boolean;
+            /** Data */
+            data: components["schemas"]["SwingBarOut"][];
+            /** Instrument Id */
+            instrument_id: number;
+            /** Symbol */
+            symbol: string;
+        };
         /**
          * SwingConfigPatch
          * @description A partial update. Every field optional; unset means "leave it alone".
@@ -8819,6 +8766,349 @@ export interface components {
             updated_at: string;
             /** Updated By */
             updated_by: string | null;
+        };
+        /** SwingMarketDayOut */
+        SwingMarketDayOut: {
+            /** Constituent Count */
+            constituent_count: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Exposure Level */
+            exposure_level: number;
+            /** Gate */
+            gate: string;
+            /** Index Close */
+            index_close: string | null;
+            /** Index Ma Fast */
+            index_ma_fast: string | null;
+            /** Index Ma Slow */
+            index_ma_slow: string | null;
+            /** Index Slug */
+            index_slug: string | null;
+            /** Max Exposure Pct */
+            max_exposure_pct: string;
+            /** Max Open Positions */
+            max_open_positions: number;
+            /** New Entries Allowed */
+            new_entries_allowed: boolean;
+            /** Parabolic Count */
+            parabolic_count: number;
+            /** Pct Above Ma Slow */
+            pct_above_ma_slow: string | null;
+            /** Pct New 52W High */
+            pct_new_52w_high: string | null;
+            /** Pct Up Strong 1M */
+            pct_up_strong_1m: string | null;
+        };
+        /** SwingMarketOut */
+        SwingMarketOut: {
+            /** Data */
+            data: components["schemas"]["SwingMarketDayOut"][];
+        };
+        /** SwingPlanLineOut */
+        SwingPlanLineOut: {
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Note */
+            note: string | null;
+            /** Position Value */
+            position_value: string;
+            /** Quantity */
+            quantity: number;
+            /** Risk Inr */
+            risk_inr: string;
+            /** Setup */
+            setup: string | null;
+            /** State */
+            state: string;
+            /** Stop */
+            stop: string | null;
+            /** Symbol */
+            symbol: string;
+            /** Trail */
+            trail: string | null;
+            /** Trigger */
+            trigger: string | null;
+        };
+        /** SwingPlanOut */
+        SwingPlanOut: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /**
+             * Built At
+             * Format: date-time
+             */
+            built_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Exposure Level */
+            exposure_level: number;
+            /** Gate */
+            gate: string;
+            /** Lines */
+            lines: components["schemas"]["SwingPlanLineOut"][];
+            /** Plan Id */
+            plan_id: string;
+            /** Skips */
+            skips: components["schemas"]["SwingPlanSkipOut"][];
+            /** Source */
+            source: string;
+            /** Total New Exposure Inr */
+            total_new_exposure_inr: string;
+            /** Total Risk Inr */
+            total_risk_inr: string;
+        };
+        /** SwingPlanSkipOut */
+        SwingPlanSkipOut: {
+            /** Detail */
+            detail: string | null;
+            /** Reason */
+            reason: string;
+            /** Symbol */
+            symbol: string;
+        };
+        /** SwingPositionOut */
+        SwingPositionOut: {
+            /** Close Reason */
+            close_reason: string | null;
+            /** Closed On */
+            closed_on: string | null;
+            /** Entry Avg */
+            entry_avg: string;
+            /**
+             * Entry Date
+             * Format: date
+             */
+            entry_date: string;
+            /** Exit Avg */
+            exit_avg: string | null;
+            /** Gtt Id */
+            gtt_id: string | null;
+            /** Id */
+            id: number;
+            /** Initial Stop */
+            initial_stop: string;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Last Close */
+            last_close: string | null;
+            /** Naked */
+            naked: boolean;
+            /** Name */
+            name: string;
+            /** Partial Done */
+            partial_done: boolean;
+            /** Pnl Inr */
+            pnl_inr: string | null;
+            /** Quantity Entered */
+            quantity_entered: number;
+            /** Quantity Open */
+            quantity_open: number;
+            /** R Multiple */
+            r_multiple: string | null;
+            /** Setup */
+            setup: string;
+            /** Simulated */
+            simulated: boolean;
+            /** State */
+            state: string;
+            /** Stop */
+            stop: string;
+            /** Symbol */
+            symbol: string;
+            /** Trail */
+            trail: string;
+        };
+        /** SwingPositionsOut */
+        SwingPositionsOut: {
+            /** Data */
+            data: components["schemas"]["SwingPositionOut"][];
+            plan: components["schemas"]["SwingPlanOut"] | null;
+        };
+        /** SwingSectorOut */
+        SwingSectorOut: {
+            /** Candidates */
+            candidates: number;
+            /** Hot */
+            hot: boolean;
+            /** Members */
+            members: number;
+            /** Pct Above Ma Slow */
+            pct_above_ma_slow: number;
+            /** Slug */
+            slug: string;
+        };
+        /** SwingSectorsOut */
+        SwingSectorsOut: {
+            /** As Of */
+            as_of: string | null;
+            /** Data */
+            data: components["schemas"]["SwingSectorOut"][];
+        };
+        /**
+         * SwingSetupOut
+         * @description One candidate row. Every price is an **exchange** price (SW3 divides by ``adj_factor``).
+         */
+        SwingSetupOut: {
+            /** Adr Pct */
+            adr_pct: string | null;
+            /** Base Bars */
+            base_bars: number | null;
+            /** Base Depth Pct */
+            base_depth_pct: string | null;
+            /** Close */
+            close: string | null;
+            /** Dryup Ratio */
+            dryup_ratio: string | null;
+            /** Gap Pct */
+            gap_pct: string | null;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Listed Within 2Y */
+            listed_within_2y: boolean;
+            /** Locked Upper Circuit */
+            locked_upper_circuit: boolean;
+            /** Name */
+            name: string;
+            /** Pivot High */
+            pivot_high: string | null;
+            /** Prior Move Pct */
+            prior_move_pct: string | null;
+            /** Rvol */
+            rvol: string | null;
+            /** Score */
+            score: string;
+            /** Sector Slug */
+            sector_slug: string | null;
+            /** Setup */
+            setup: string;
+            /** Status */
+            status: string;
+            /** Stop Distance Pct */
+            stop_distance_pct: string | null;
+            /** Stop Ref */
+            stop_ref: string | null;
+            /** Symbol */
+            symbol: string;
+            /** Tightness Adr */
+            tightness_adr: string | null;
+            /** Trigger */
+            trigger: string | null;
+            /** Turnover Avg */
+            turnover_avg: number | null;
+            /** Up Streak */
+            up_streak: number | null;
+        };
+        /** SwingSetupsOut */
+        SwingSetupsOut: {
+            /** As Of */
+            as_of: string | null;
+            /** Data */
+            data: components["schemas"]["SwingSetupOut"][];
+            /** Exposure Level */
+            exposure_level: number | null;
+            /** Funnel */
+            funnel: {
+                [key: string]: unknown;
+            } | null;
+            /** Gate */
+            gate: string | null;
+            /** Max Exposure Pct */
+            max_exposure_pct: string | null;
+            /** Max Open Positions */
+            max_open_positions: number | null;
+            /** New Entries Allowed */
+            new_entries_allowed: boolean | null;
+        };
+        /**
+         * SwingWatchIn
+         * @description Adding a name by hand. Levels optional — a name with no trigger is one to look at.
+         */
+        SwingWatchIn: {
+            /** Catalyst */
+            catalyst?: string | null;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Note */
+            note?: string | null;
+            /**
+             * Setup
+             * @enum {string}
+             */
+            setup: "FLAG" | "EP";
+            /** Stop Ref */
+            stop_ref?: number | string | null;
+            /** Trigger */
+            trigger?: number | string | null;
+        };
+        /** SwingWatchListOut */
+        SwingWatchListOut: {
+            /** Data */
+            data: components["schemas"]["SwingWatchOut"][];
+        };
+        /** SwingWatchOut */
+        SwingWatchOut: {
+            /**
+             * Added On
+             * Format: date
+             */
+            added_on: string;
+            /** Catalyst */
+            catalyst: string | null;
+            /** Distance To Trigger Pct */
+            distance_to_trigger_pct: string | null;
+            /** Expires On */
+            expires_on: string | null;
+            /** Id */
+            id: number;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Last Close */
+            last_close: string | null;
+            /** Name */
+            name: string;
+            /** Note */
+            note: string | null;
+            /** Setup */
+            setup: string;
+            /** Source */
+            source: string;
+            /** State */
+            state: string;
+            /** Stop Ref */
+            stop_ref: string | null;
+            /** Symbol */
+            symbol: string;
+            /** Trigger */
+            trigger: string | null;
+        };
+        /**
+         * SwingWatchPatch
+         * @description The two free-text fields, and nothing else.
+         *
+         *     `docs/swing/02` Track A allows the watchlist's writes because they "change no money" — which
+         *     is true of a note and a catalyst, and would stop being true the moment this model grew a
+         *     `trigger`. A level a person can edit after the fact is a level that can be edited to match
+         *     a price, which is how a plan comes to justify a trade rather than the other way round.
+         */
+        SwingWatchPatch: {
+            /** Catalyst */
+            catalyst?: string | null;
+            /** Note */
+            note?: string | null;
         };
         /** SyncHoldingsOut */
         SyncHoldingsOut: {
@@ -25453,7 +25743,108 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MarketOut"];
+                    "application/json": components["schemas"]["SwingMarketOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getPositions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwingPositionsOut"];
                 };
             };
             /** @description Invalid screen definition */
@@ -25556,7 +25947,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SectorsOut"];
+                    "application/json": components["schemas"]["SwingSectorsOut"];
                 };
             };
             /** @description Invalid screen definition */
@@ -25661,7 +26052,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SetupsOut"];
+                    "application/json": components["schemas"]["SwingSetupsOut"];
                 };
             };
             /** @description Invalid screen definition */
@@ -25767,7 +26158,425 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BarsOut"];
+                    "application/json": components["schemas"]["SwingBarsOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getWatch: {
+        parameters: {
+            query?: {
+                state?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwingWatchListOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    postWatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwingWatchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwingWatchOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    deleteWatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                watch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwingWatchOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patchWatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                watch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwingWatchPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwingWatchOut"];
                 };
             };
             /** @description Invalid screen definition */

@@ -189,7 +189,9 @@ export const SECTION_TABS = {
   */
   swing: [
     { href: "/swing" as Route, label: "Setups" },
+    { href: "/swing/watchlist" as Route, label: "Watchlist" },
     { href: "/swing/market" as Route, label: "Market" },
+    { href: "/swing/positions" as Route, label: "Positions" },
   ],
   /*
     PORTFOLIO_REDESIGN.md §2, in order. Overview first because it is the default landing tab —

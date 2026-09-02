@@ -1,7 +1,8 @@
 # 04 — Business rules: the numerical contract
 
 Every number here is a field of `baskfy_core.swing.config` (`SwingConfig` groups them as
-`liquidity`, `flag`, `ep`, `parabolic`, `sizing`, `stops`, `opening_range`, `market`; the pack's default in brackets),
+`liquidity`, `flag`, `ep`, `parabolic`, `sizing`, `stops`, `watch`, `opening_range`, `market`; the
+pack's default in brackets),
 and every rule is a function in `baskfy_core.swing`. The tests in
 `packages/core/tests/test_swing_*.py` assert **this document**; when a module finds the
 document and the code disagreeing, the document wins and the code is fixed, unless the
@@ -187,6 +188,14 @@ re-post cannot double-send. A `BUY_ON_TRIGGER` line is sent as a **LIMIT buy at 
 market once a `TRIGGERED` signal exists for it)**, and its GTT stop is armed in the same call
 with a `StopBand(min_pct=0.005, max_pct=0.10)` (PACK.3) — the desk's 8–12% band is the weekly
 book's, not this one's.
+
+9.5 **The watchlist** (`WatchConfig`, SW5). A detected flag is auto-watched at
+`auto_watch_min_score` [60] or above with status `SETTING_UP`; **every** `GAP_DAY` EP is watched
+whatever it scored, because an EP is enterable for three sessions and there is no second chance to
+notice it. A flag row expires after `flag_valid_bars` [10] sessions without a trigger, an EP after
+`ep.valid_bars` [3]; a `MANUAL` row never expires and keeps the levels the person typed. Expiry is
+a state change (`WATCHING` → `EXPIRED`), never a delete — the record of what was watched is the
+record of what was passed over.
 
 ## §10 The journal (`journal.py`)
 

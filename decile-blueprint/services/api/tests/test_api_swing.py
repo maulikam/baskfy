@@ -30,7 +30,14 @@ from screener_helpers import requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.settings import Settings
-from baskfy_core.models import Instrument, OhlcvDaily, SwConfig, SwMarketDaily, SwSetupDaily
+from baskfy_core.models import (
+    Instrument,
+    OhlcvDaily,
+    SwConfig,
+    SwMarketDaily,
+    SwPosition,
+    SwSetupDaily,
+)
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 
 pytestmark = [requires_db, pytest.mark.db]
@@ -449,6 +456,158 @@ class TestTheConfigRoutes:
             )
 
         assert response.status_code == 400
+
+
+class TestTheWatchlistRoutes:
+    async def test_a_name_can_be_watched_annotated_and_dismissed(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The three writes `docs/swing/02` Track A allows, end to end. None moves money."""
+        _, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+
+        async with running_app(settings, screener_session) as client:
+            added = await client.post(
+                url("/swing/watch"),
+                json={
+                    "instrument_id": instrument_id,
+                    "setup": "FLAG",
+                    "trigger": "149.60",
+                    "stop_ref": "141.86",
+                },
+                headers=bearer(public_id),
+            )
+            assert added.status_code == 200
+            watch_id = added.json()["id"]
+
+            annotated = await client.patch(
+                url(f"/swing/watch/{watch_id}"),
+                json={"catalyst": "Q2 result, order book up"},
+                headers=bearer(public_id),
+            )
+            listed = await client.get(url("/swing/watch"), headers=bearer(public_id))
+            dismissed = await client.delete(
+                url(f"/swing/watch/{watch_id}"), headers=bearer(public_id)
+            )
+            after = await client.get(url("/swing/watch"), headers=bearer(public_id))
+
+        assert annotated.json()["catalyst"] == "Q2 result, order book up"
+        assert annotated.json()["source"] == "MANUAL"
+        # A hand-added row has no expiry: the person is watching for a reason the detectors
+        # cannot see, and retiring it would be the system overruling them.
+        assert annotated.json()["expires_on"] is None
+        assert [row["symbol"] for row in listed.json()["data"]] == ["FLAGCO"]
+        assert dismissed.json()["state"] == "DISMISSED"
+        assert after.json()["data"] == []
+
+    async def test_a_level_cannot_be_edited_after_the_fact(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A trigger a person can revise is a trigger that can be revised to match a price they
+        already paid. The PATCH model carries a note and a catalyst and nothing else."""
+        _, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+
+        async with running_app(settings, screener_session) as client:
+            added = await client.post(
+                url("/swing/watch"),
+                json={"instrument_id": instrument_id, "setup": "FLAG", "trigger": "149.60"},
+                headers=bearer(public_id),
+            )
+            response = await client.patch(
+                url(f"/swing/watch/{added.json()['id']}"),
+                json={"trigger": "100.00"},
+                headers=bearer(public_id),
+            )
+
+        assert response.status_code == 400
+
+    async def test_a_parabolic_short_cannot_be_watched(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """PACK.1. The request model admits FLAG and EP; there is no third option to send."""
+        _, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "PARACO")
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.post(
+                url("/swing/watch"),
+                json={"instrument_id": instrument_id, "setup": "PARABOLIC_SHORT"},
+                headers=bearer(public_id),
+            )
+
+        assert response.status_code == 400
+
+    async def test_an_unknown_instrument_cannot_be_watched(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _, public_id = await _sole_tenant(screener_session, monkeypatch)
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.post(
+                url("/swing/watch"),
+                json={"instrument_id": 9_999_999, "setup": "FLAG"},
+                headers=bearer(public_id),
+            )
+
+        assert response.status_code == 404
+
+    async def test_another_account_cannot_read_the_list(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        await _sole_tenant(screener_session, monkeypatch)
+        _, intruder = await make_user(screener_session, "intruder2@example.com")
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/watch"), headers=bearer(intruder))
+
+        assert response.status_code == 404
+
+
+class TestThePositionsRoute:
+    async def test_an_empty_book_is_an_empty_list_and_no_plan(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Before the first EOD run. Not a 404: the surface exists, the book is empty."""
+        _, public_id = await _sole_tenant(screener_session, monkeypatch)
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/positions"), headers=bearer(public_id))
+
+        assert response.status_code == 200
+        assert response.json() == {"data": [], "plan": None}
+
+    async def test_a_position_with_no_resting_stop_is_flagged(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`naked` is derived on the way out, so a page cannot forget to compute it."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "NAKEDCO")
+        screener_session.add(
+            SwPosition(
+                user_id=user_id,
+                instrument_id=instrument_id,
+                setup="FLAG",
+                entry_date=AS_OF,
+                entry_avg=Decimal("100.0000"),
+                quantity_entered=100,
+                initial_stop=Decimal("96.00"),
+                stop=Decimal("96.00"),
+                gtt_id=None,
+                trail="MA20",
+                quantity_open=100,
+                state="OPEN",
+                simulated=True,
+            )
+        )
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/positions"), headers=bearer(public_id))
+
+        row = response.json()["data"][0]
+        assert row["naked"] is True
+        assert row["simulated"] is True
 
 
 def test_the_helpers_are_the_ones_this_module_thinks() -> None:

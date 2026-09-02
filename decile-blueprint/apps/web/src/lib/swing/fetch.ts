@@ -158,6 +158,93 @@ export async function fetchSectors(
   );
 }
 
+export interface SwingWatchRow {
+  id: number;
+  instrument_id: number;
+  symbol: string;
+  name: string;
+  setup: string;
+  source: string;
+  added_on: string;
+  expires_on: string | null;
+  trigger: number | null;
+  stop_ref: number | null;
+  distance_to_trigger_pct: number | null;
+  last_close: number | null;
+  note: string | null;
+  catalyst: string | null;
+  state: string;
+}
+
+export interface SwingPlanLine {
+  id: number;
+  kind: string;
+  symbol: string;
+  name: string;
+  setup: string | null;
+  quantity: number;
+  trigger: number | null;
+  stop: number | null;
+  risk_inr: number;
+  position_value: number;
+  trail: string | null;
+  note: string | null;
+  state: string;
+}
+
+export interface SwingPlan {
+  plan_id: string;
+  as_of: string;
+  source: string;
+  built_at: string;
+  expires_at: string;
+  gate: string;
+  exposure_level: number;
+  total_risk_inr: number;
+  total_new_exposure_inr: number;
+  lines: SwingPlanLine[];
+  skips: { symbol: string; reason: string; detail: string | null }[];
+}
+
+export interface SwingPosition {
+  id: number;
+  instrument_id: number;
+  symbol: string;
+  name: string;
+  setup: string;
+  entry_date: string;
+  entry_avg: number;
+  quantity_entered: number;
+  quantity_open: number;
+  initial_stop: number;
+  stop: number;
+  gtt_id: string | null;
+  naked: boolean;
+  trail: string;
+  partial_done: boolean;
+  state: string;
+  closed_on: string | null;
+  exit_avg: number | null;
+  close_reason: string | null;
+  r_multiple: number | null;
+  pnl_inr: number | null;
+  simulated: boolean;
+  last_close: number | null;
+}
+
+export async function fetchWatchlist(
+  state?: string,
+): Promise<{ data: SwingWatchRow[] } | null> {
+  return readOrNull<{ data: SwingWatchRow[] }>("/swing/watch", state ? { state } : {});
+}
+
+export async function fetchPositions(): Promise<{
+  data: SwingPosition[];
+  plan: SwingPlan | null;
+} | null> {
+  return readOrNull<{ data: SwingPosition[]; plan: SwingPlan | null }>("/swing/positions");
+}
+
 export async function fetchMarket(params: {
   from?: string;
   to?: string;

@@ -386,3 +386,62 @@ never run is not evidence, and it reads on the status page as coverage.
 
 **Reversal / what closes it.** SW11 owns the budget table, and both items are on its list; the
 browser check wants either a backfilled dev database or a fixture seeder of its own.
+
+
+## SW5.1 — `WatchConfig` is a new group in `baskfy_core.swing.config`, and `04` gains §9.5 · ⚠ UNREVIEWED
+
+**Context.** SW5's criterion names two numbers the pack had not written down: "detector rows with
+`SETTING_UP` and **score ≥ 60**" and, from `03` §4, "flags expire after **10 sessions** without a
+trigger". The kickoff is explicit that "every threshold is a field of `baskfy_core.swing.config`,
+never a literal in a detector, task, router or page", and `04`'s own preamble says every number in
+it is such a field.
+
+**The choice.** A `WatchConfig` group with `auto_watch_min_score` [60] and `flag_valid_bars` [10],
+and a new `04` §9.5 that states the whole rule — including that a `MANUAL` row never expires and
+that expiry is a state change rather than a delete. SW1's docs-parity test then holds both to the
+document, which is how it was caught: a literal `60` in the task would have passed every test in
+the run.
+
+`ep.valid_bars` [3] already existed and is reused rather than duplicated.
+
+**Rejected.** (a) Constants in `swing_watch.py` — they are thresholds of the method, and the run's
+own rule is that those live in one place. (b) `sw_config` fields — PACK.5 keeps pattern thresholds
+in code so that changing one leaves a diff and a decision, and "which flags are worth watching" is
+a pattern threshold.
+
+**Reversal.** Delete the group and inline the two numbers; `04` §9.5 then has to go with them, and
+the docs-parity test makes that impossible to forget.
+
+## SW5.2 — Every swing response model is prefixed `Swing` · (not really a judgement call, but it cost a build)
+
+`PlanOut` in `routers/swing.py` collided with `PlanOut` in `baskfy_api.schemas` — the billing
+plan. OpenAPI names a schema by its Python class name, so the generator renamed **both** to
+`baskfy_api__routers__swing__PlanOut` and `baskfy_api__schemas__PlanOut`, and every existing
+`PlanOut` reference in `packages/api-client/src/client.ts` stopped resolving. The web build caught
+it; nothing else would have.
+
+Every response model in the router now carries the prefix. Recorded because the failure mode is
+invisible in Python — both classes are valid, both routes work, and the break lands in a different
+package.
+
+## SW5.3 — The web read-only test bans the GTT *verbs*, not the word · ⚠ UNREVIEWED
+
+**Context.** SW4's web-side read-only test forbade the substring `gtt` anywhere under
+`lib/swing` or the pages. SW5's positions page has to show whether a position has a resting stop —
+`sw_position.gtt_id` — because an unprotected position is the one state `04` §6 forbids and the
+page leads with it.
+
+**The choice.** Narrow the ban to what *does* something: `place_gtt`, `delete_gtt`, `/gtt`,
+`/execute`, `place_order`, `OrderGateway`, `kiteconnect`. And add a second test asserting the id
+is only ever **read** — no assignment, no request body containing it — so the narrowing cannot
+quietly become a licence to manage triggers from the web app.
+
+This is a narrowing of an over-broad pattern, not the "widen the pattern to silence a hit" failure
+`CLAUDE.md` warns about: displaying that a stop exists is the opposite of arming one, and the
+alternative was a page that could not warn about the thing it most needs to warn about.
+
+**Rejected.** Renaming the field on the wire (`stop_armed_id`) to dodge the substring — the schema
+word would then differ from the database word for the benefit of a regex.
+
+**Reversal.** Restore the single-word ban and drop `gtt_id` from `SwingPositionOut`; the page then
+cannot tell a protected position from an unprotected one.

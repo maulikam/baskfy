@@ -37,13 +37,15 @@ from __future__ import annotations
 
 import datetime as dt
 from decimal import Decimal
-from typing import Annotated, Final
+from typing import Annotated, Final, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api import swing as swing_service
+from baskfy_api import swing_watch
 from baskfy_api.auth import AuthenticatedDep, settings_for
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
@@ -103,9 +105,15 @@ def _one_of(value: str | None, allowed: frozenset[str], field: str) -> str | Non
 
 
 # --- response models ---------------------------------------------------------
+#
+# Every model here is prefixed `Swing`, and that is not decoration. OpenAPI names a schema by its
+# Python class name, so a second `PlanOut` in this service collides with `baskfy_api.schemas`'
+# billing plan: the generator then emits `baskfy_api__routers__swing__PlanOut` and
+# `baskfy_api__schemas__PlanOut`, and every existing reference to `PlanOut` in the TypeScript
+# client stops resolving. It did, on the first build.
 
 
-class SetupOut(BaseModel):
+class SwingSetupOut(BaseModel):
     """One candidate row. Every price is an **exchange** price (SW3 divides by ``adj_factor``)."""
 
     instrument_id: int
@@ -140,7 +148,7 @@ class SetupOut(BaseModel):
     listed_within_2y: bool
 
 
-class SetupsOut(BaseModel):
+class SwingSetupsOut(BaseModel):
     as_of: dt.date | None
     #: The gate and the tier for the same day, so a page never has to make a second call to find
     #: out whether the candidates it is showing may be acted on at all.
@@ -152,26 +160,26 @@ class SetupsOut(BaseModel):
     #: universe → with a bar today → liquid → candidates per setup. `05` §2's empty state is
     #: written from this, and without it an empty list cannot be told from a job that never ran.
     funnel: dict[str, object] | None
-    data: list[SetupOut]
+    data: list[SwingSetupOut]
 
 
-class BarOut(BaseModel):
+class SwingBarOut(BaseModel):
     date: dt.date
     close: Decimal
     ma_fast: Decimal | None
     ma_slow: Decimal | None
 
 
-class BarsOut(BaseModel):
+class SwingBarsOut(BaseModel):
     instrument_id: int
     symbol: str
     #: **Adjusted** closes: the chart shows the shape, and a raw series with a split in it shows
     #: a cliff that never happened. The tradeable levels beside it are exchange prices.
     adjusted: bool = True
-    data: list[BarOut]
+    data: list[SwingBarOut]
 
 
-class MarketDayOut(BaseModel):
+class SwingMarketDayOut(BaseModel):
     date: dt.date
     constituent_count: int
     pct_up_strong_1m: Decimal | None
@@ -189,11 +197,11 @@ class MarketDayOut(BaseModel):
     parabolic_count: int
 
 
-class MarketOut(BaseModel):
-    data: list[MarketDayOut]
+class SwingMarketOut(BaseModel):
+    data: list[SwingMarketDayOut]
 
 
-class SectorOut(BaseModel):
+class SwingSectorOut(BaseModel):
     slug: str
     pct_above_ma_slow: float
     members: int
@@ -202,15 +210,137 @@ class SectorOut(BaseModel):
     hot: bool
 
 
-class SectorsOut(BaseModel):
+class SwingSectorsOut(BaseModel):
     as_of: dt.date | None
-    data: list[SectorOut]
+    data: list[SwingSectorOut]
+
+
+class SwingWatchOut(BaseModel):
+    id: int
+    instrument_id: int
+    symbol: str
+    name: str
+    setup: str
+    source: str
+    added_on: dt.date
+    expires_on: dt.date | None
+    trigger: Decimal | None
+    stop_ref: Decimal | None
+    #: How far the last close sits below the trigger, as a percentage of it. The one number a
+    #: person scanning a watchlist actually reads: "how close is this to going".
+    distance_to_trigger_pct: Decimal | None
+    last_close: Decimal | None
+    note: str | None
+    catalyst: str | None
+    state: str
+
+
+class SwingWatchListOut(BaseModel):
+    data: list[SwingWatchOut]
+
+
+class SwingWatchIn(BaseModel):
+    """Adding a name by hand. Levels optional — a name with no trigger is one to look at."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    instrument_id: int
+    setup: Literal["FLAG", "EP"]
+    trigger: Decimal | None = Field(default=None, gt=0)
+    stop_ref: Decimal | None = Field(default=None, gt=0)
+    note: str | None = Field(default=None, max_length=2000)
+    catalyst: str | None = Field(default=None, max_length=2000)
+
+
+class SwingWatchPatch(BaseModel):
+    """The two free-text fields, and nothing else.
+
+    `docs/swing/02` Track A allows the watchlist's writes because they "change no money" — which
+    is true of a note and a catalyst, and would stop being true the moment this model grew a
+    `trigger`. A level a person can edit after the fact is a level that can be edited to match
+    a price, which is how a plan comes to justify a trade rather than the other way round.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    note: str | None = Field(default=None, max_length=2000)
+    catalyst: str | None = Field(default=None, max_length=2000)
+
+
+class SwingPlanLineOut(BaseModel):
+    id: int
+    kind: str
+    symbol: str
+    name: str
+    setup: str | None
+    quantity: int
+    trigger: Decimal | None
+    stop: Decimal | None
+    risk_inr: Decimal
+    position_value: Decimal
+    trail: str | None
+    note: str | None
+    state: str
+
+
+class SwingPlanSkipOut(BaseModel):
+    symbol: str
+    reason: str
+    detail: str | None
+
+
+class SwingPlanOut(BaseModel):
+    plan_id: str
+    as_of: dt.date
+    source: str
+    built_at: dt.datetime
+    expires_at: dt.datetime
+    gate: str
+    exposure_level: int
+    total_risk_inr: Decimal
+    total_new_exposure_inr: Decimal
+    lines: list[SwingPlanLineOut]
+    #: Never omitted, even when empty. A plan without its refusals is half a document (`04` §9).
+    skips: list[SwingPlanSkipOut]
+
+
+class SwingPositionOut(BaseModel):
+    id: int
+    instrument_id: int
+    symbol: str
+    name: str
+    setup: str
+    entry_date: dt.date
+    entry_avg: Decimal
+    quantity_entered: int
+    quantity_open: int
+    initial_stop: Decimal
+    stop: Decimal
+    gtt_id: str | None
+    #: Open with no resting stop. Rendered in red, and the EOD email leads with it.
+    naked: bool
+    trail: str
+    partial_done: bool
+    state: str
+    closed_on: dt.date | None
+    exit_avg: Decimal | None
+    close_reason: str | None
+    r_multiple: Decimal | None
+    pnl_inr: Decimal | None
+    simulated: bool
+    last_close: Decimal | None
+
+
+class SwingPositionsOut(BaseModel):
+    data: list[SwingPositionOut]
+    #: The plan preview `05` §2 shows beside the book. `None` before the first EOD run.
+    plan: SwingPlanOut | None
 
 
 # --- routes ------------------------------------------------------------------
 
 
-@router.get("/setups", response_model=SetupsOut, summary="The day's swing candidates")
+@router.get("/setups", response_model=SwingSetupsOut, summary="The day's swing candidates")
 async def get_setups(
     session: SessionDep,
     principal: AuthenticatedDep,
@@ -233,7 +363,7 @@ async def get_setups(
         status=_one_of(status, swing_service.STATUSES, "status"),
     )
     return _json(
-        SetupsOut(
+        SwingSetupsOut(
             as_of=page.as_of,
             gate=page.gate,
             exposure_level=page.exposure_level,
@@ -242,7 +372,7 @@ async def get_setups(
             new_entries_allowed=page.new_entries_allowed,
             funnel=page.funnel,
             data=[
-                SetupOut(
+                SwingSetupOut(
                     instrument_id=row.instrument_id,
                     symbol=row.symbol,
                     name=row.name,
@@ -275,7 +405,7 @@ async def get_setups(
 
 
 @router.get(
-    "/setups/{instrument_id}/bars", response_model=BarsOut, summary="The mini chart's series"
+    "/setups/{instrument_id}/bars", response_model=SwingBarsOut, summary="The mini chart's series"
 )
 async def get_bars(
     session: SessionDep,
@@ -301,11 +431,11 @@ async def get_bars(
         raise not_found("instrument", str(instrument_id))
     points = await swing_service.bars(session, instrument_id=instrument_id, end=date, count=count)
     return _json(
-        BarsOut(
+        SwingBarsOut(
             instrument_id=instrument_id,
             symbol=str(symbol),
             data=[
-                BarOut(
+                SwingBarOut(
                     date=point.date,
                     close=point.close,
                     ma_fast=point.ma_fast,
@@ -317,7 +447,7 @@ async def get_bars(
     )
 
 
-@router.get("/market", response_model=MarketOut, summary="Breadth, the gate and the rung")
+@router.get("/market", response_model=SwingMarketOut, summary="Breadth, the gate and the rung")
 async def get_market(
     session: SessionDep,
     principal: AuthenticatedDep,
@@ -343,9 +473,9 @@ async def get_market(
         session, user_id=user_id, start=date_from, end=date_to
     )
     return _json(
-        MarketOut(
+        SwingMarketOut(
             data=[
-                MarketDayOut(
+                SwingMarketDayOut(
                     date=row.date,
                     constituent_count=row.constituent_count,
                     pct_up_strong_1m=row.pct_up_strong_1m,
@@ -368,7 +498,7 @@ async def get_market(
     )
 
 
-@router.get("/sectors", response_model=SectorsOut, summary="The sector strip")
+@router.get("/sectors", response_model=SwingSectorsOut, summary="The sector strip")
 async def get_sectors(
     session: SessionDep,
     principal: AuthenticatedDep,
@@ -383,10 +513,10 @@ async def get_sectors(
     user_id = await scoped_sole_user_id(session, principal.user_id)
     as_of, rows = await swing_service.sectors(session, user_id=user_id, on=date)
     return _json(
-        SectorsOut(
+        SwingSectorsOut(
             as_of=as_of,
             data=[
-                SectorOut(
+                SwingSectorOut(
                     slug=row.slug,
                     pct_above_ma_slow=row.pct_above_ma_slow,
                     members=row.members,
@@ -396,6 +526,214 @@ async def get_sectors(
                 for row in rows
             ],
         )
+    )
+
+
+def _distance(trigger: Decimal | None, close: Decimal | None) -> Decimal | None:
+    """How far ``close`` sits below ``trigger``, as a percentage of the trigger.
+
+    Negative when the price is already above it — which is a real state on a watchlist read after
+    the open, and rounding it to zero would hide the one row a person needs to look at first.
+    """
+    if trigger is None or close is None or trigger <= 0:
+        return None
+    return ((trigger - close) / trigger * 100).quantize(Decimal("0.01"))
+
+
+def _watch_out(row: swing_watch.WatchRow) -> SwingWatchOut:
+    return SwingWatchOut(
+        id=row.id,
+        instrument_id=row.instrument_id,
+        symbol=row.symbol,
+        name=row.name,
+        setup=row.setup,
+        source=row.source,
+        added_on=row.added_on,
+        expires_on=row.expires_on,
+        trigger=row.trigger,
+        stop_ref=row.stop_ref,
+        distance_to_trigger_pct=_distance(row.trigger, row.last_close),
+        last_close=row.last_close,
+        note=row.note,
+        catalyst=row.catalyst,
+        state=row.state,
+    )
+
+
+@router.get("/watch", response_model=SwingWatchListOut, summary="The watchlist")
+async def get_watch(
+    session: SessionDep,
+    principal: AuthenticatedDep,
+    state: Annotated[str | None, Query()] = swing_watch.WATCHING,
+) -> Response:
+    """`05` §2's Watchlist tab. ``state=all`` includes what expired and what was dismissed.
+
+    Expired rows are readable on purpose: the record of what was watched is the record of what
+    was passed over, and a list that forgot them could not answer "what did I miss".
+    """
+    user_id = await scoped_sole_user_id(session, principal.user_id)
+    wanted = None if state in (None, "all") else state
+    rows = await swing_watch.list_watch(session, user_id=user_id, state=wanted)
+    return _json(SwingWatchListOut(data=[_watch_out(row) for row in rows]))
+
+
+@router.post("/watch", response_model=SwingWatchOut, summary="Watch a name")
+async def post_watch(
+    session: SessionDep, principal: AuthenticatedDep, payload: SwingWatchIn
+) -> Response:
+    """Add a name by hand. It moves no money (`02` Track A) and it reaches no broker.
+
+    A `MANUAL` row never expires: the person is watching for a reason the detectors cannot see,
+    and retiring it after ten sessions would be the system overruling a judgement.
+    """
+    user_id = await scoped_sole_user_id(session, principal.user_id)
+    instrument = (
+        await session.execute(select(Instrument.id).where(Instrument.id == payload.instrument_id))
+    ).scalar_one_or_none()
+    if instrument is None:
+        raise not_found("instrument", str(payload.instrument_id))
+    row = await swing_watch.add_manual(
+        session,
+        user_id=user_id,
+        instrument_id=payload.instrument_id,
+        setup=payload.setup,
+        on=dt.datetime.now(tz=dt.UTC).date(),
+        trigger=payload.trigger,
+        stop_ref=payload.stop_ref,
+        note=payload.note,
+        catalyst=payload.catalyst,
+    )
+    return _json(await _one_watch(session, user_id=user_id, watch_id=row.id))
+
+
+@router.patch("/watch/{watch_id}", response_model=SwingWatchOut, summary="Annotate a watched name")
+async def patch_watch(
+    session: SessionDep, principal: AuthenticatedDep, watch_id: int, payload: SwingWatchPatch
+) -> Response:
+    """The note and the catalyst — `01` §3's "news check", which a person does and Baskfy cannot.
+
+    Levels are deliberately not editable here. A trigger a person can revise after the fact is a
+    trigger that can be revised to match a price they already paid.
+    """
+    user_id = await scoped_sole_user_id(session, principal.user_id)
+    try:
+        await swing_watch.annotate(
+            session,
+            user_id=user_id,
+            watch_id=watch_id,
+            note=payload.note,
+            catalyst=payload.catalyst,
+        )
+    except swing_watch.WatchNotFound as exc:
+        raise not_found("watchlist row", str(watch_id)) from exc
+    return _json(await _one_watch(session, user_id=user_id, watch_id=watch_id))
+
+
+@router.delete("/watch/{watch_id}", response_model=SwingWatchOut, summary="Stop watching a name")
+async def delete_watch(session: SessionDep, principal: AuthenticatedDep, watch_id: int) -> Response:
+    """A state change to `DISMISSED`, not a delete.
+
+    "I looked and said no" and "it ran out of time" are different facts, and a watchlist that
+    could not tell them apart could not answer the only question worth asking about it.
+    """
+    user_id = await scoped_sole_user_id(session, principal.user_id)
+    try:
+        await swing_watch.dismiss(session, user_id=user_id, watch_id=watch_id)
+    except swing_watch.WatchNotFound as exc:
+        raise not_found("watchlist row", str(watch_id)) from exc
+    return _json(await _one_watch(session, user_id=user_id, watch_id=watch_id, state=None))
+
+
+async def _one_watch(
+    session: AsyncSession, *, user_id: int, watch_id: int, state: str | None = None
+) -> SwingWatchOut:
+    rows = await swing_watch.list_watch(session, user_id=user_id, state=state)
+    for row in rows:
+        if row.id == watch_id:
+            return _watch_out(row)
+    raise not_found("watchlist row", str(watch_id))
+
+
+@router.get("/positions", response_model=SwingPositionsOut, summary="The book, and tomorrow's plan")
+async def get_positions(session: SessionDep, principal: AuthenticatedDep) -> Response:
+    """`05` §2's Positions tab, with the EOD plan preview beside it.
+
+    One call, because the two are read together: what is open, and what the rules want done with
+    it at tomorrow's open.
+    """
+    user_id = await scoped_sole_user_id(session, principal.user_id)
+    rows = await swing_service.positions(session, user_id=user_id)
+    plan = await swing_service.latest_plan(session, user_id=user_id)
+    return _json(
+        SwingPositionsOut(
+            data=[
+                SwingPositionOut(
+                    id=row.id,
+                    instrument_id=row.instrument_id,
+                    symbol=row.symbol,
+                    name=row.name,
+                    setup=row.setup,
+                    entry_date=row.entry_date,
+                    entry_avg=row.entry_avg,
+                    quantity_entered=row.quantity_entered,
+                    quantity_open=row.quantity_open,
+                    initial_stop=row.initial_stop,
+                    stop=row.stop,
+                    gtt_id=row.gtt_id,
+                    naked=row.naked,
+                    trail=row.trail,
+                    partial_done=row.partial_done,
+                    state=row.state,
+                    closed_on=row.closed_on,
+                    exit_avg=row.exit_avg,
+                    close_reason=row.close_reason,
+                    r_multiple=row.r_multiple,
+                    pnl_inr=row.pnl_inr,
+                    simulated=row.simulated,
+                    last_close=row.last_close,
+                )
+                for row in rows
+            ],
+            plan=_plan_out(plan),
+        )
+    )
+
+
+def _plan_out(plan: swing_service.PlanView | None) -> SwingPlanOut | None:
+    if plan is None:
+        return None
+    return SwingPlanOut(
+        plan_id=plan.plan_id,
+        as_of=plan.as_of,
+        source=plan.source,
+        built_at=plan.built_at,
+        expires_at=plan.expires_at,
+        gate=plan.gate,
+        exposure_level=plan.exposure_level,
+        total_risk_inr=plan.total_risk_inr,
+        total_new_exposure_inr=plan.total_new_exposure_inr,
+        lines=[
+            SwingPlanLineOut(
+                id=line.id,
+                kind=line.kind,
+                symbol=line.symbol,
+                name=line.name,
+                setup=line.setup,
+                quantity=line.quantity,
+                trigger=line.trigger,
+                stop=line.stop,
+                risk_inr=line.risk_inr,
+                position_value=line.position_value,
+                trail=line.trail,
+                note=line.note,
+                state=line.state,
+            )
+            for line in plan.lines
+        ],
+        skips=[
+            SwingPlanSkipOut(symbol=symbol, reason=reason, detail=detail)
+            for symbol, reason, detail in plan.skips
+        ],
     )
 
 

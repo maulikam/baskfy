@@ -14,7 +14,7 @@ done. A fresh session resumes from the first module not marked ✅.
 | SW2 — Schema and settings | ✅ | Twelve `sw_` tables migrated and round-tripped, `sw_config` seeded at zero capital, the three flags and three ceilings wired into API, worker and desk, and a ceiling can never become a form field |
 | SW3 — Daily detection job | ✅ | `baskfy.swing.detect` writes `sw_setup_daily` + `sw_market_daily`, wired in as the chain's twelfth step (unable to fail the night), with `make swing DATE=…` and two Beat entries |
 | SW4 — API + Setups/Market pages | ✅ | Five `/swing` routes (four reads, one bounded settings write), the Setups and Market pages, and two read-only tests — one per side of the wire |
-| SW5 — Watchlist, plan preview, EOD, alert | ⬜ | |
+| SW5 — Watchlist, plan preview, EOD, alert | ✅ | The evening job manages the book, plans tomorrow with its skips, fills and prunes the watchlist, emails the summary and counts the session; two more pages and four more routes |
 | SW6 — Premarket EP scan + opening-range monitor | ⬜ | |
 | SW7 — Desk page + `/swing/execute` (DRY_RUN) | ⬜ | |
 | SW8 — Journal + ladder closes the loop | ⬜ | |
@@ -384,6 +384,87 @@ and a setting above its ceiling answers 422 naming the ceiling.
   machine to measure against.
 - The three remaining tabs (`Watchlist`, `Positions`, `Journal`) are SW5's and SW8's; the tab row
   carries the two that exist rather than showing three dead links.
+
+---
+
+## SW5 — Watchlist, plan preview, the EOD job and the alert ✅
+
+### The evening, in order
+
+`baskfy.swing.eod` (Beat 21:05 IST Mon–Fri, five minutes after the detectors) does four things,
+and the order is the rule:
+
+1. **Auto-watch and expire.** Every flag scoring `watch.auto_watch_min_score` [60] or better with
+   status `SETTING_UP`, and **every** `GAP_DAY` EP whatever it scored — an EP is enterable for
+   three sessions and there is no second chance to notice one. A `PARABOLIC_SHORT` is never
+   watched (PACK.1: a watchlist is a list of things to buy). Rows past their expiry become
+   `EXPIRED`, never deleted.
+2. **Manage what is open.** `stops.manage` over every open `sw_position` with today's bar and its
+   two averages. A position with **no bar today** is skipped rather than managed — a suspended
+   name has not given the rules a close, and managing it against a stale bar would sell it on
+   yesterday's information.
+3. **Plan tomorrow.** `build_entries` over the watchlist with the day's tier, into an
+   `sw_plan(source=EOD_PREVIEW)` with its lines and its skips. Exits first: `04` §9.3's "the money
+   they free is the money the entries spend".
+4. **Email, and count the session.** One `sw_session` row per session the system ran — the number
+   `02` §3.2 gates the real-money flag on.
+
+`04` gained **§9.5** and `baskfy_core.swing.config` gained **`WatchConfig`**, because the kickoff
+requires every threshold to be a config field rather than a literal: `auto_watch_min_score` [60]
+and `flag_valid_bars` [10] are the two new numbers, and the docs-parity test would have caught
+either as a literal.
+
+### The email (`05` §4)
+
+`swing_eod` in `baskfy_api.email.templates`. The subject carries the two numbers that decide
+whether it needs opening tonight — how many positions are unprotected and how many lines the plan
+has. **The unprotected section is rendered even when it is empty** ("Every open position has a
+resting stop"), because a section that appeared only when something was wrong would train the
+reader to skim past the top of the message. A mail failure never fails the evening: the plan is
+on the page whether or not the message arrived.
+
+### Four more routes, two more pages
+
+| Route | |
+|---|---|
+| `GET /swing/watch?state` | the list; `state=all` includes what expired and what was dismissed |
+| `POST /swing/watch` | add a name by hand — no expiry, and re-adding one updates its levels rather than making a second row that would spend the cash twice |
+| `PATCH /swing/watch/{id}` | the note and the catalyst, **and nothing else** |
+| `DELETE /swing/watch/{id}` | a state change to `DISMISSED` |
+| `GET /swing/positions` | the book **and** the plan preview, in one call, because they are read together |
+
+`/swing/watchlist` sorts by **distance to trigger**, not by score: a list sorted by how good a
+setup looks tells you what to admire; one sorted by how close it is tells you what to watch.
+`/swing/positions` leads with any unprotected position, in the same place whether or not there
+is one.
+
+### Tests
+
+| Suite | |
+|---|---|
+| `services/worker/tests/test_swing_eod.py` | **22 passed.** The module plan's own fixture — one position, day 3, green — produces *exactly* a `SELL_AT_OPEN` of 100 of 300 and a `RAISE_GTT_STOP` to the entry, and nothing else; day 2 produces nothing; one full R on day 2 moves the stop and *that* is a different rule; a suspended name is not managed; a naked position is reported every evening; the watchlist fills, prunes and does not double-add; a RED gate skips every name with `GATE_RED`; a sleeve with no capital skips with `SIZE_REFUSED / NO_EQUITY`; the session counter counts sessions, not events; and the email renders with its empty naked section and its counter |
+| `services/api/tests/test_api_swing.py` | the three watchlist writes end to end, a level that cannot be edited after the fact, a `PARABOLIC_SHORT` that cannot be watched, and another account refused |
+| `services/api/tests/test_swing_readonly.py` | extended: four mutating routes, each whitelisted by path with its reason; `swing_watch` may write and names no `SwPlan`/`SwPosition`/`SwFill`; every handler takes an authenticated principal and calls `scoped_sole_user_id` |
+
+### Two things worth knowing
+
+- **`PlanOut` collided.** OpenAPI names a schema by its Python class name, and a second `PlanOut`
+  in this service silently renamed *both* — breaking every existing `PlanOut` reference in the
+  TypeScript client. Every response model in `routers/swing.py` is now prefixed `Swing`.
+- **The web read-only test's `gtt` ban was too wide.** A position carries a `gtt_id` and whether
+  one exists is the single most important safety fact the hub shows. The ban now names the verbs
+  (`place_gtt`, `delete_gtt`, `/gtt`) and a second test asserts the id is only ever read.
+
+### What SW5 did NOT do
+
+- **`sw_position` is written by nothing yet.** SW7 owns the fills; until then the book is empty on
+  every real database and the position tests build their rows directly.
+- The watchlist page is read-only: adding, annotating and dismissing exist as API routes and are
+  tested, but there is no form on the page yet.
+- `05` §2's "yesterday's `sw_signal` rows shown under the row" needs the monitor (SW6).
+- No Mailpit assertion. The email is asserted as a rendered `Message` — subject, both bodies, every
+  section — rather than by delivering it to a local inbox, which would test SMTP rather than the
+  template.
 
 ---
 

@@ -163,6 +163,27 @@ class OpeningRangeConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class WatchConfig:
+    """The watchlist's own rules (docs/swing/04 §9.5, SW5).
+
+    Two numbers, and both exist because a watchlist that is not pruned is not a watchlist. His
+    weekend routine produces "a watchlist of a few dozen forming flags"; a list that only ever
+    grows becomes a list nobody reads, and the names on it stop being the ones that were setting
+    up *this week*.
+    """
+
+    #: A detected flag is watched automatically from this score up. Below it the setup is real but
+    #: unremarkable, and every name that is merely real would fill the list. `04` §2.6's score is
+    #: out of 100 and its median textbook flag scores in the low 60s.
+    auto_watch_min_score: float = 60.0
+    #: A flag stays on the list this many sessions without triggering. Two trading weeks: his
+    #: bases run two weeks to three months, so a name that has not moved in ten sessions has not
+    #: stopped being a base — but it has stopped being *this week's*, and the detector will find
+    #: it again tomorrow if it still qualifies.
+    flag_valid_bars: int = 10
+
+
+@dataclass(frozen=True, slots=True)
 class MarketConfig:
     """Breadth, the gate, and progressive exposure (docs/swing/04 §8)."""
 
@@ -190,6 +211,7 @@ class SwingConfig:
     parabolic: ParabolicConfig = field(default_factory=ParabolicConfig)
     sizing: SizingConfig = field(default_factory=SizingConfig)
     stops: StopConfig = field(default_factory=StopConfig)
+    watch: WatchConfig = field(default_factory=WatchConfig)
     opening_range: OpeningRangeConfig = field(default_factory=OpeningRangeConfig)
     market: MarketConfig = field(default_factory=MarketConfig)
 

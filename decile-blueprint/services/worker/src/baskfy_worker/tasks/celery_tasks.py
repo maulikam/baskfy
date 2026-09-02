@@ -55,6 +55,7 @@ from baskfy_worker.tasks.swing import (
     recent_trading_days,
     run_detect_swing,
 )
+from baskfy_worker.tasks.swing_eod import run_swing_eod
 
 #: Earliest IST wall-clock at which a session's own data can exist. NSE closes at 15:30 and
 #: publishes the bhavcopy afterwards; the schedule itself fires at 18:45 for that reason. Used to
@@ -559,5 +560,32 @@ def swing_weekend_task(as_of: str | None = None) -> JsonObject:
             )
             results.append({"date": one.isoformat(), "candidates": written})
         return {"as_of": day.isoformat(), "sessions": results}
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.swing.eod", acks_late=True)
+def swing_eod_task(trade_date: str | None = None) -> JsonObject:
+    """SW5: manage the book, plan tomorrow, email the summary, count the session.
+
+    Separate from `baskfy.swing.detect` and always **after** it: the plan is built from the
+    day's candidates and the day's gate, and an evening job that ran before the detectors would
+    plan against yesterday's tape.
+    """
+    day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
+    deps = build_pipeline_dependencies()
+    if deps.swing_user_id is None:
+        return {"date": day.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        outcome = StepOutcome()
+        report = await run_swing_eod(
+            session,
+            outcome,
+            day,
+            user_id=int(deps.swing_user_id or 0),
+            execution_enabled=deps.swing_execution_enabled,
+        )
+        return {"date": day.isoformat(), **report.as_detail()}
 
     return run_in_session(_run)

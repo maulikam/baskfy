@@ -47,7 +47,14 @@ const SOURCES = [
  * allowed `/swing/setups`, and `/swing/execute` is exactly the route Track C §4 exists to keep
  * out of this application. Adding an entry here is a deliberate act with a diff on it.
  */
-const ALLOWED_PATHS = ["/swing/setups", "/swing/sectors", "/swing/market", "/swing/config"];
+const ALLOWED_PATHS = [
+  "/swing/setups",
+  "/swing/sectors",
+  "/swing/market",
+  "/swing/config",
+  "/swing/watch",
+  "/swing/positions",
+];
 
 describe("the swing hub is read-only and cannot reach an order", () => {
   it("covers the pages that exist", () => {
@@ -56,21 +63,39 @@ describe("the swing hub is read-only and cannot reach an order", () => {
   });
 
   it("names no order, execution or broker endpoint", () => {
+    /*
+      The banned words are the ones that *do* something. `gtt` on its own is deliberately not
+      among them: a position carries a `gtt_id`, and whether one exists is the single most
+      important safety fact this hub shows — the unprotected-position warning is written from it.
+      Reading that field is the opposite of arming a trigger, so the list names the verbs
+      (`place_gtt`, `delete_gtt`, `/gtt`) rather than the noun.
+    */
     for (const path of SOURCES) {
       const source = readFileSync(path, "utf8").toLowerCase();
       for (const word of [
         "/swing/execute",
         "/execute",
+        "/gtt",
         "place_order",
         "placeorder",
         "place_gtt",
-        "gtt",
+        "delete_gtt",
         "kiteconnect",
         "ordergateway",
         "confirm=true",
       ]) {
         expect(source, `${path} mentions ${word}`).not.toContain(word);
       }
+    }
+  });
+
+  it("only ever reads a gtt id, never writes one", () => {
+    // The narrowing above is only safe while `gtt_id` is read. An assignment to it here would
+    // mean the web app had started managing triggers, which is Track C §4's whole subject.
+    for (const path of SOURCES) {
+      const source = readFileSync(path, "utf8");
+      expect(source, `${path} assigns a gtt id`).not.toMatch(/gtt_id\s*[:=]\s*[^;\n]*\(/);
+      expect(source, `${path} builds a gtt request`).not.toMatch(/body:.*gtt/i);
     }
   });
 

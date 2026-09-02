@@ -39,6 +39,7 @@ from baskfy_core.swing.config import (
     SizingConfig,
     StopConfig,
     SwingConfig,
+    WatchConfig,
 )
 
 __all__ = [
@@ -53,4 +54,5 @@ __all__ = [
     "SizingConfig",
     "StopConfig",
     "SwingConfig",
+    "WatchConfig",
 ]

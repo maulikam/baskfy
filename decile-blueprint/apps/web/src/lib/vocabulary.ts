@@ -74,6 +74,14 @@ export const PAGES = {
     title: "Swing",
     blurb: "Which leaders have finished resting, where they would break out, and where the stop goes.",
   },
+  "/swing/watchlist": {
+    title: "Watchlist · Swing",
+    blurb: "The names you are waiting on, and the level each one has to clear.",
+  },
+  "/swing/positions": {
+    title: "Positions · Swing",
+    blurb: "What is open, where its stop is, and what the rules want done at tomorrow's open.",
+  },
   "/swing/market": {
     title: "Market · Swing",
     blurb: "Whether the tape is worth trading, and how much the allocation may carry.",

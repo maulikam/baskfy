@@ -277,6 +277,20 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/cb/paywall/checkout": {"post"},
     "/cb/public-signup": {"post"},
     "/cb/fees/collect": {"post"},
+    # SW4/SW5 (docs/swing/05 §2, docs/swing/02 Track A): the swing book, as a surface. Every
+    # route is a GET except the four Track A permits because they "change no money" — the
+    # settings form (which cannot name the exposure rung, SW4.1), watching a name, annotating it
+    # and dismissing it. `test_swing_readonly.py` asserts that structurally, and asserts the
+    # surface names no broker. Nothing here is `/swing/execute`: that lives in the desk console
+    # (SW7), behind `BASKFY_SWING_EXECUTION_ENABLED`, and never on the web app.
+    "/swing/setups": {"get"},
+    "/swing/setups/{instrument_id}/bars": {"get"},
+    "/swing/market": {"get"},
+    "/swing/sectors": {"get"},
+    "/swing/config": {"get", "patch"},
+    "/swing/watch": {"get", "post"},
+    "/swing/watch/{watch_id}": {"patch", "delete"},
+    "/swing/positions": {"get"},
     # NOT LISTED, and deliberately: nothing under `/api/public/v1`. The public tier's router is
     # not mounted while the data-redistribution review docs/11 §Compliance requires is
     # outstanding, so it is absent from this document by construction —

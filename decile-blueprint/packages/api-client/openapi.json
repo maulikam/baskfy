@@ -1706,83 +1706,6 @@
         "title": "BacktestSummaryOut",
         "type": "object"
       },
-      "BarOut": {
-        "properties": {
-          "close": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Close",
-            "type": "string"
-          },
-          "date": {
-            "format": "date",
-            "title": "Date",
-            "type": "string"
-          },
-          "ma_fast": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ma Fast"
-          },
-          "ma_slow": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ma Slow"
-          }
-        },
-        "required": [
-          "date",
-          "close",
-          "ma_fast",
-          "ma_slow"
-        ],
-        "title": "BarOut",
-        "type": "object"
-      },
-      "BarsOut": {
-        "properties": {
-          "adjusted": {
-            "default": true,
-            "title": "Adjusted",
-            "type": "boolean"
-          },
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/BarOut"
-            },
-            "title": "Data",
-            "type": "array"
-          },
-          "instrument_id": {
-            "title": "Instrument Id",
-            "type": "integer"
-          },
-          "symbol": {
-            "title": "Symbol",
-            "type": "string"
-          }
-        },
-        "required": [
-          "instrument_id",
-          "symbol",
-          "data"
-        ],
-        "title": "BarsOut",
-        "type": "object"
-      },
       "BasketCardOut": {
         "properties": {
           "access": {
@@ -7654,146 +7577,6 @@
         "title": "MarkOut",
         "type": "object"
       },
-      "MarketDayOut": {
-        "properties": {
-          "constituent_count": {
-            "title": "Constituent Count",
-            "type": "integer"
-          },
-          "date": {
-            "format": "date",
-            "title": "Date",
-            "type": "string"
-          },
-          "exposure_level": {
-            "title": "Exposure Level",
-            "type": "integer"
-          },
-          "gate": {
-            "title": "Gate",
-            "type": "string"
-          },
-          "index_close": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Index Close"
-          },
-          "index_ma_fast": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Index Ma Fast"
-          },
-          "index_ma_slow": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Index Ma Slow"
-          },
-          "index_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Index Slug"
-          },
-          "max_exposure_pct": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Max Exposure Pct",
-            "type": "string"
-          },
-          "max_open_positions": {
-            "title": "Max Open Positions",
-            "type": "integer"
-          },
-          "new_entries_allowed": {
-            "title": "New Entries Allowed",
-            "type": "boolean"
-          },
-          "parabolic_count": {
-            "title": "Parabolic Count",
-            "type": "integer"
-          },
-          "pct_above_ma_slow": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pct Above Ma Slow"
-          },
-          "pct_new_52w_high": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pct New 52W High"
-          },
-          "pct_up_strong_1m": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pct Up Strong 1M"
-          }
-        },
-        "required": [
-          "date",
-          "constituent_count",
-          "pct_up_strong_1m",
-          "pct_new_52w_high",
-          "pct_above_ma_slow",
-          "index_slug",
-          "index_close",
-          "index_ma_fast",
-          "index_ma_slow",
-          "gate",
-          "exposure_level",
-          "max_open_positions",
-          "max_exposure_pct",
-          "new_entries_allowed",
-          "parabolic_count"
-        ],
-        "title": "MarketDayOut",
-        "type": "object"
-      },
       "MarketHealthHistoryOut": {
         "additionalProperties": false,
         "description": "docs/07: `GET /market-health/history?universe=&from=&to=`.\n\n\"The four series for charting\", plus the overlay docs/08 §\"Market Health\" asks for.",
@@ -8019,22 +7802,6 @@
           "date"
         ],
         "title": "MarketHealthPointOut",
-        "type": "object"
-      },
-      "MarketOut": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/MarketDayOut"
-            },
-            "title": "Data",
-            "type": "array"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "title": "MarketOut",
         "type": "object"
       },
       "MarketQualityOut": {
@@ -12908,68 +12675,6 @@
         "title": "ScreenUpdate",
         "type": "object"
       },
-      "SectorOut": {
-        "properties": {
-          "candidates": {
-            "title": "Candidates",
-            "type": "integer"
-          },
-          "hot": {
-            "title": "Hot",
-            "type": "boolean"
-          },
-          "members": {
-            "title": "Members",
-            "type": "integer"
-          },
-          "pct_above_ma_slow": {
-            "title": "Pct Above Ma Slow",
-            "type": "number"
-          },
-          "slug": {
-            "title": "Slug",
-            "type": "string"
-          }
-        },
-        "required": [
-          "slug",
-          "pct_above_ma_slow",
-          "members",
-          "candidates",
-          "hot"
-        ],
-        "title": "SectorOut",
-        "type": "object"
-      },
-      "SectorsOut": {
-        "properties": {
-          "as_of": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "As Of"
-          },
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/SectorOut"
-            },
-            "title": "Data",
-            "type": "array"
-          }
-        },
-        "required": [
-          "as_of",
-          "data"
-        ],
-        "title": "SectorsOut",
-        "type": "object"
-      },
       "SelectionSpec": {
         "additionalProperties": false,
         "description": "docs/10: ``{\"top_n\": 20, \"hold_buffer\": 10}``; \"0 = strict top-N\".",
@@ -13046,363 +12751,6 @@
           "email"
         ],
         "title": "SessionOut",
-        "type": "object"
-      },
-      "SetupOut": {
-        "description": "One candidate row. Every price is an **exchange** price (SW3 divides by ``adj_factor``).",
-        "properties": {
-          "adr_pct": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Adr Pct"
-          },
-          "base_bars": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Base Bars"
-          },
-          "base_depth_pct": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Base Depth Pct"
-          },
-          "close": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Close"
-          },
-          "dryup_ratio": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dryup Ratio"
-          },
-          "gap_pct": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Gap Pct"
-          },
-          "instrument_id": {
-            "title": "Instrument Id",
-            "type": "integer"
-          },
-          "listed_within_2y": {
-            "title": "Listed Within 2Y",
-            "type": "boolean"
-          },
-          "locked_upper_circuit": {
-            "title": "Locked Upper Circuit",
-            "type": "boolean"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "pivot_high": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pivot High"
-          },
-          "prior_move_pct": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prior Move Pct"
-          },
-          "rvol": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rvol"
-          },
-          "score": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Score",
-            "type": "string"
-          },
-          "sector_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sector Slug"
-          },
-          "setup": {
-            "title": "Setup",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "stop_distance_pct": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stop Distance Pct"
-          },
-          "stop_ref": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stop Ref"
-          },
-          "symbol": {
-            "title": "Symbol",
-            "type": "string"
-          },
-          "tightness_adr": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tightness Adr"
-          },
-          "trigger": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Trigger"
-          },
-          "turnover_avg": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Turnover Avg"
-          },
-          "up_streak": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Up Streak"
-          }
-        },
-        "required": [
-          "instrument_id",
-          "symbol",
-          "name",
-          "setup",
-          "status",
-          "score",
-          "close",
-          "trigger",
-          "stop_ref",
-          "pivot_high",
-          "stop_distance_pct",
-          "adr_pct",
-          "prior_move_pct",
-          "base_depth_pct",
-          "tightness_adr",
-          "dryup_ratio",
-          "rvol",
-          "gap_pct",
-          "turnover_avg",
-          "base_bars",
-          "up_streak",
-          "locked_upper_circuit",
-          "sector_slug",
-          "listed_within_2y"
-        ],
-        "title": "SetupOut",
-        "type": "object"
-      },
-      "SetupsOut": {
-        "properties": {
-          "as_of": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "As Of"
-          },
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/SetupOut"
-            },
-            "title": "Data",
-            "type": "array"
-          },
-          "exposure_level": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Exposure Level"
-          },
-          "funnel": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Funnel"
-          },
-          "gate": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Gate"
-          },
-          "max_exposure_pct": {
-            "anyOf": [
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Exposure Pct"
-          },
-          "max_open_positions": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Open Positions"
-          },
-          "new_entries_allowed": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "New Entries Allowed"
-          }
-        },
-        "required": [
-          "as_of",
-          "gate",
-          "exposure_level",
-          "max_open_positions",
-          "max_exposure_pct",
-          "new_entries_allowed",
-          "funnel",
-          "data"
-        ],
-        "title": "SetupsOut",
         "type": "object"
       },
       "SipBody": {
@@ -14314,6 +13662,83 @@
         "title": "SupportMessageIn",
         "type": "object"
       },
+      "SwingBarOut": {
+        "properties": {
+          "close": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Close",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "ma_fast": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ma Fast"
+          },
+          "ma_slow": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ma Slow"
+          }
+        },
+        "required": [
+          "date",
+          "close",
+          "ma_fast",
+          "ma_slow"
+        ],
+        "title": "SwingBarOut",
+        "type": "object"
+      },
+      "SwingBarsOut": {
+        "properties": {
+          "adjusted": {
+            "default": true,
+            "title": "Adjusted",
+            "type": "boolean"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SwingBarOut"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "symbol",
+          "data"
+        ],
+        "title": "SwingBarsOut",
+        "type": "object"
+      },
       "SwingConfigPatch": {
         "additionalProperties": false,
         "description": "A partial update. Every field optional; unset means \"leave it alone\".\n\n``extra=\"forbid\"`` is the load-bearing line. Without it, ``PATCH {\"exposure_level\": 3}``\nwould be accepted, ignored and answered ``200`` — the caller believing they had climbed the\nladder by asking. With it, they are told the field does not exist here.\n\nThe bounds on each field are the *engine's* limits, not the server's ceilings: a negative\nrisk or a 0-minute opening range is nonsense at any ceiling, and nonsense is a 400. The\nceilings are checked afterwards, in :func:`apply_patch`, and answer 422 — a different\nquestion with a different answer.",
@@ -14556,6 +13981,1271 @@
           "execution_enabled"
         ],
         "title": "SwingConfigView",
+        "type": "object"
+      },
+      "SwingMarketDayOut": {
+        "properties": {
+          "constituent_count": {
+            "title": "Constituent Count",
+            "type": "integer"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "exposure_level": {
+            "title": "Exposure Level",
+            "type": "integer"
+          },
+          "gate": {
+            "title": "Gate",
+            "type": "string"
+          },
+          "index_close": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Close"
+          },
+          "index_ma_fast": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Ma Fast"
+          },
+          "index_ma_slow": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Ma Slow"
+          },
+          "index_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Slug"
+          },
+          "max_exposure_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Max Exposure Pct",
+            "type": "string"
+          },
+          "max_open_positions": {
+            "title": "Max Open Positions",
+            "type": "integer"
+          },
+          "new_entries_allowed": {
+            "title": "New Entries Allowed",
+            "type": "boolean"
+          },
+          "parabolic_count": {
+            "title": "Parabolic Count",
+            "type": "integer"
+          },
+          "pct_above_ma_slow": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Above Ma Slow"
+          },
+          "pct_new_52w_high": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct New 52W High"
+          },
+          "pct_up_strong_1m": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Up Strong 1M"
+          }
+        },
+        "required": [
+          "date",
+          "constituent_count",
+          "pct_up_strong_1m",
+          "pct_new_52w_high",
+          "pct_above_ma_slow",
+          "index_slug",
+          "index_close",
+          "index_ma_fast",
+          "index_ma_slow",
+          "gate",
+          "exposure_level",
+          "max_open_positions",
+          "max_exposure_pct",
+          "new_entries_allowed",
+          "parabolic_count"
+        ],
+        "title": "SwingMarketDayOut",
+        "type": "object"
+      },
+      "SwingMarketOut": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SwingMarketDayOut"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "SwingMarketOut",
+        "type": "object"
+      },
+      "SwingPlanLineOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "position_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Position Value",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "risk_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Risk Inr",
+            "type": "string"
+          },
+          "setup": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Setup"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "stop": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "trail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trail"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "symbol",
+          "name",
+          "setup",
+          "quantity",
+          "trigger",
+          "stop",
+          "risk_inr",
+          "position_value",
+          "trail",
+          "note",
+          "state"
+        ],
+        "title": "SwingPlanLineOut",
+        "type": "object"
+      },
+      "SwingPlanOut": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "built_at": {
+            "format": "date-time",
+            "title": "Built At",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "exposure_level": {
+            "title": "Exposure Level",
+            "type": "integer"
+          },
+          "gate": {
+            "title": "Gate",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SwingPlanLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "plan_id": {
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "skips": {
+            "items": {
+              "$ref": "#/components/schemas/SwingPlanSkipOut"
+            },
+            "title": "Skips",
+            "type": "array"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "total_new_exposure_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total New Exposure Inr",
+            "type": "string"
+          },
+          "total_risk_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Risk Inr",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_id",
+          "as_of",
+          "source",
+          "built_at",
+          "expires_at",
+          "gate",
+          "exposure_level",
+          "total_risk_inr",
+          "total_new_exposure_inr",
+          "lines",
+          "skips"
+        ],
+        "title": "SwingPlanOut",
+        "type": "object"
+      },
+      "SwingPlanSkipOut": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "reason",
+          "detail"
+        ],
+        "title": "SwingPlanSkipOut",
+        "type": "object"
+      },
+      "SwingPositionOut": {
+        "properties": {
+          "close_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Reason"
+          },
+          "closed_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed On"
+          },
+          "entry_avg": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Entry Avg",
+            "type": "string"
+          },
+          "entry_date": {
+            "format": "date",
+            "title": "Entry Date",
+            "type": "string"
+          },
+          "exit_avg": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Avg"
+          },
+          "gtt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gtt Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "initial_stop": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Initial Stop",
+            "type": "string"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "last_close": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Close"
+          },
+          "naked": {
+            "title": "Naked",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "partial_done": {
+            "title": "Partial Done",
+            "type": "boolean"
+          },
+          "pnl_inr": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl Inr"
+          },
+          "quantity_entered": {
+            "title": "Quantity Entered",
+            "type": "integer"
+          },
+          "quantity_open": {
+            "title": "Quantity Open",
+            "type": "integer"
+          },
+          "r_multiple": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "R Multiple"
+          },
+          "setup": {
+            "title": "Setup",
+            "type": "string"
+          },
+          "simulated": {
+            "title": "Simulated",
+            "type": "boolean"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "stop": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Stop",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "trail": {
+            "title": "Trail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "instrument_id",
+          "symbol",
+          "name",
+          "setup",
+          "entry_date",
+          "entry_avg",
+          "quantity_entered",
+          "quantity_open",
+          "initial_stop",
+          "stop",
+          "gtt_id",
+          "naked",
+          "trail",
+          "partial_done",
+          "state",
+          "closed_on",
+          "exit_avg",
+          "close_reason",
+          "r_multiple",
+          "pnl_inr",
+          "simulated",
+          "last_close"
+        ],
+        "title": "SwingPositionOut",
+        "type": "object"
+      },
+      "SwingPositionsOut": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SwingPositionOut"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SwingPlanOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "plan"
+        ],
+        "title": "SwingPositionsOut",
+        "type": "object"
+      },
+      "SwingSectorOut": {
+        "properties": {
+          "candidates": {
+            "title": "Candidates",
+            "type": "integer"
+          },
+          "hot": {
+            "title": "Hot",
+            "type": "boolean"
+          },
+          "members": {
+            "title": "Members",
+            "type": "integer"
+          },
+          "pct_above_ma_slow": {
+            "title": "Pct Above Ma Slow",
+            "type": "number"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "pct_above_ma_slow",
+          "members",
+          "candidates",
+          "hot"
+        ],
+        "title": "SwingSectorOut",
+        "type": "object"
+      },
+      "SwingSectorsOut": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SwingSectorOut"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "data"
+        ],
+        "title": "SwingSectorsOut",
+        "type": "object"
+      },
+      "SwingSetupOut": {
+        "description": "One candidate row. Every price is an **exchange** price (SW3 divides by ``adj_factor``).",
+        "properties": {
+          "adr_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adr Pct"
+          },
+          "base_bars": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Bars"
+          },
+          "base_depth_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Depth Pct"
+          },
+          "close": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close"
+          },
+          "dryup_ratio": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dryup Ratio"
+          },
+          "gap_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gap Pct"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "listed_within_2y": {
+            "title": "Listed Within 2Y",
+            "type": "boolean"
+          },
+          "locked_upper_circuit": {
+            "title": "Locked Upper Circuit",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pivot_high": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pivot High"
+          },
+          "prior_move_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Move Pct"
+          },
+          "rvol": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rvol"
+          },
+          "score": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Score",
+            "type": "string"
+          },
+          "sector_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sector Slug"
+          },
+          "setup": {
+            "title": "Setup",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "stop_distance_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Distance Pct"
+          },
+          "stop_ref": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Ref"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "tightness_adr": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tightness Adr"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger"
+          },
+          "turnover_avg": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnover Avg"
+          },
+          "up_streak": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Up Streak"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "symbol",
+          "name",
+          "setup",
+          "status",
+          "score",
+          "close",
+          "trigger",
+          "stop_ref",
+          "pivot_high",
+          "stop_distance_pct",
+          "adr_pct",
+          "prior_move_pct",
+          "base_depth_pct",
+          "tightness_adr",
+          "dryup_ratio",
+          "rvol",
+          "gap_pct",
+          "turnover_avg",
+          "base_bars",
+          "up_streak",
+          "locked_upper_circuit",
+          "sector_slug",
+          "listed_within_2y"
+        ],
+        "title": "SwingSetupOut",
+        "type": "object"
+      },
+      "SwingSetupsOut": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SwingSetupOut"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "exposure_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exposure Level"
+          },
+          "funnel": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Funnel"
+          },
+          "gate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gate"
+          },
+          "max_exposure_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Exposure Pct"
+          },
+          "max_open_positions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Open Positions"
+          },
+          "new_entries_allowed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Entries Allowed"
+          }
+        },
+        "required": [
+          "as_of",
+          "gate",
+          "exposure_level",
+          "max_open_positions",
+          "max_exposure_pct",
+          "new_entries_allowed",
+          "funnel",
+          "data"
+        ],
+        "title": "SwingSetupsOut",
+        "type": "object"
+      },
+      "SwingWatchIn": {
+        "additionalProperties": false,
+        "description": "Adding a name by hand. Levels optional — a name with no trigger is one to look at.",
+        "properties": {
+          "catalyst": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalyst"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "setup": {
+            "enum": [
+              "FLAG",
+              "EP"
+            ],
+            "title": "Setup",
+            "type": "string"
+          },
+          "stop_ref": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Ref"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "setup"
+        ],
+        "title": "SwingWatchIn",
+        "type": "object"
+      },
+      "SwingWatchListOut": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SwingWatchOut"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "SwingWatchListOut",
+        "type": "object"
+      },
+      "SwingWatchOut": {
+        "properties": {
+          "added_on": {
+            "format": "date",
+            "title": "Added On",
+            "type": "string"
+          },
+          "catalyst": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalyst"
+          },
+          "distance_to_trigger_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance To Trigger Pct"
+          },
+          "expires_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires On"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "last_close": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Close"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "setup": {
+            "title": "Setup",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "stop_ref": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Ref"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger"
+          }
+        },
+        "required": [
+          "id",
+          "instrument_id",
+          "symbol",
+          "name",
+          "setup",
+          "source",
+          "added_on",
+          "expires_on",
+          "trigger",
+          "stop_ref",
+          "distance_to_trigger_pct",
+          "last_close",
+          "note",
+          "catalyst",
+          "state"
+        ],
+        "title": "SwingWatchOut",
+        "type": "object"
+      },
+      "SwingWatchPatch": {
+        "additionalProperties": false,
+        "description": "The two free-text fields, and nothing else.\n\n`docs/swing/02` Track A allows the watchlist's writes because they \"change no money\" — which\nis true of a note and a catalyst, and would stop being true the moment this model grew a\n`trigger`. A level a person can edit after the fact is a level that can be edited to match\na price, which is how a plan comes to justify a trade rather than the other way round.",
+        "properties": {
+          "catalyst": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalyst"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "SwingWatchPatch",
         "type": "object"
       },
       "SyncHoldingsOut": {
@@ -35871,7 +36561,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MarketOut"
+                  "$ref": "#/components/schemas/SwingMarketOut"
                 }
               }
             },
@@ -35974,6 +36664,118 @@
         ]
       }
     },
+    "/api/v1/swing/positions": {
+      "get": {
+        "description": "`05` §2's Positions tab, with the EOD plan preview beside it.\n\nOne call, because the two are read together: what is open, and what the rules want done with\nit at tomorrow's open.",
+        "operationId": "getPositions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwingPositionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The book, and tomorrow's plan",
+        "tags": [
+          "swing"
+        ]
+      }
+    },
     "/api/v1/swing/sectors": {
       "get": {
         "description": "Sector breadth for the day, with how many of the day's candidates sit in each.\n\nThe breadth figures were computed by the detection job over its own liquid universe, not read\nfrom `market_health_daily` — which covers only the twelve size universes and has no sector\nrow at all (DECISIONS-SW SW3.1).",
@@ -36002,7 +36804,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SectorsOut"
+                  "$ref": "#/components/schemas/SwingSectorsOut"
                 }
               }
             },
@@ -36165,7 +36967,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SetupsOut"
+                  "$ref": "#/components/schemas/SwingSetupsOut"
                 }
               }
             },
@@ -36317,7 +37119,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BarsOut"
+                  "$ref": "#/components/schemas/SwingBarsOut"
                 }
               }
             },
@@ -36415,6 +37217,511 @@
           }
         },
         "summary": "The mini chart's series",
+        "tags": [
+          "swing"
+        ]
+      }
+    },
+    "/api/v1/swing/watch": {
+      "get": {
+        "description": "`05` §2's Watchlist tab. ``state=all`` includes what expired and what was dismissed.\n\nExpired rows are readable on purpose: the record of what was watched is the record of what\nwas passed over, and a list that forgot them could not answer \"what did I miss\".",
+        "operationId": "getWatch",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "WATCHING",
+              "title": "State"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwingWatchListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The watchlist",
+        "tags": [
+          "swing"
+        ]
+      },
+      "post": {
+        "description": "Add a name by hand. It moves no money (`02` Track A) and it reaches no broker.\n\nA `MANUAL` row never expires: the person is watching for a reason the detectors cannot see,\nand retiring it after ten sessions would be the system overruling a judgement.",
+        "operationId": "postWatch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwingWatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwingWatchOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Watch a name",
+        "tags": [
+          "swing"
+        ]
+      }
+    },
+    "/api/v1/swing/watch/{watch_id}": {
+      "delete": {
+        "description": "A state change to `DISMISSED`, not a delete.\n\n\"I looked and said no\" and \"it ran out of time\" are different facts, and a watchlist that\ncould not tell them apart could not answer the only question worth asking about it.",
+        "operationId": "deleteWatch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "watch_id",
+            "required": true,
+            "schema": {
+              "title": "Watch Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwingWatchOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Stop watching a name",
+        "tags": [
+          "swing"
+        ]
+      },
+      "patch": {
+        "description": "The note and the catalyst — `01` §3's \"news check\", which a person does and Baskfy cannot.\n\nLevels are deliberately not editable here. A trigger a person can revise after the fact is a\ntrigger that can be revised to match a price they already paid.",
+        "operationId": "patchWatch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "watch_id",
+            "required": true,
+            "schema": {
+              "title": "Watch Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwingWatchPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwingWatchOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Annotate a watched name",
         "tags": [
           "swing"
         ]

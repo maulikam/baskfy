@@ -545,6 +545,124 @@ def screen_alert(to: str, sections: Sequence[AlertSection], *, manage_url: str) 
     )
 
 
+@dataclass(frozen=True, slots=True)
+class SwingCandidate:
+    """One name on the swing email — a candidate to watch, or a line to act on."""
+
+    symbol: str
+    setup: str
+    trigger: str
+    stop: str
+    note: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class SwingDigest:
+    """One evening of the swing book (`docs/swing/05` §4).
+
+    Five things, and the order is the order a person needs them in: **what is unprotected**,
+    what tomorrow's plan does, what it refused, what is worth watching, and how far the paper
+    period has got.
+
+    `naked` is first and is rendered even when it is empty, which is unusual for an email
+    section and deliberate. A position without a resting stop is the one state the method
+    forbids outright (`04` §6, `03` §7), and a section that appeared only when something was
+    wrong would train the reader to skim past the top of the message.
+    """
+
+    as_of: dt.date
+    gate: str
+    exposure_level: int
+    max_open_positions: int
+    #: Symbols with an open quantity and no `gtt_id`. Empty is the normal case and is said aloud.
+    naked: tuple[str, ...]
+    exits: tuple[SwingCandidate, ...]
+    entries: tuple[SwingCandidate, ...]
+    skips: tuple[tuple[str, str], ...]
+    flags: tuple[SwingCandidate, ...]
+    eps: tuple[SwingCandidate, ...]
+    sessions_logged: int
+    sessions_required: int
+
+
+def _swing_lines(title: str, rows: Sequence[SwingCandidate]) -> list[str]:
+    if not rows:
+        return [f"{title}: none."]
+    out = [f"{title}:"]
+    out += [
+        f"  {row.symbol:<14} {row.setup:<6} trigger {row.trigger:>10}  stop {row.stop:>10}"
+        + (f"  {row.note}" if row.note else "")
+        for row in rows
+    ]
+    return out
+
+
+def swing_eod(to: str, digest: SwingDigest, *, swing_url: str) -> Message:
+    """The evening email of `docs/swing/05` §4.
+
+    The subject carries the two numbers that decide whether the message needs opening tonight:
+    how many positions are unprotected, and how many lines tomorrow's plan has. An email whose
+    subject is always "Your swing update" is an email that gets read on Saturday.
+    """
+    naked_line = (
+        "Every open position has a resting stop."
+        if not digest.naked
+        else f"UNPROTECTED: {', '.join(digest.naked)} — no resting stop. Arm one before the open."
+    )
+    heading = f"Swing · {digest.as_of.isoformat()} · {digest.gate}"
+    urgent = f"{len(digest.naked)} unprotected · " if digest.naked else ""
+    subject = (
+        f"{urgent}{len(digest.exits)} exits, {len(digest.entries)} entries "
+        f"({digest.as_of.isoformat()})"
+    )
+
+    text_lines: list[str] = [
+        naked_line,
+        "",
+        f"Tape: {digest.gate}. Rung {digest.exposure_level + 1} of 4, up to "
+        f"{digest.max_open_positions} positions.",
+        "",
+    ]
+    text_lines += _swing_lines("Tomorrow's exits", digest.exits)
+    text_lines += [""]
+    text_lines += _swing_lines("Tomorrow's entries", digest.entries)
+    text_lines += [""]
+    if digest.skips:
+        text_lines += ["Refused, and why:"]
+        text_lines += [f"  {symbol:<14} {reason}" for symbol, reason in digest.skips]
+    else:
+        text_lines += ["Refused, and why: nothing was refused."]
+    text_lines += [""]
+    text_lines += _swing_lines("Flags forming", digest.flags)
+    text_lines += [""]
+    text_lines += _swing_lines("Episodic pivots", digest.eps)
+    text_lines += [
+        "",
+        f"{digest.sessions_logged} of {digest.sessions_required} paper sessions logged.",
+        "",
+        f"Open the swing hub: {swing_url}",
+    ]
+
+    body_html = [
+        f'<p style="margin:0 0 16px;font-size:15px'
+        f'{";color:#b45309;font-weight:600" if digest.naked else ""}">'
+        f"{html.escape(naked_line)}</p>",
+        f'<p style="margin:0 0 16px;font-size:14px">Tape: <strong>{html.escape(digest.gate)}'
+        f"</strong>. Rung {digest.exposure_level + 1} of 4, up to "
+        f"{digest.max_open_positions} positions.</p>",
+        f'<pre style="margin:0 0 16px;font-size:13px;white-space:pre-wrap">'
+        f"{html.escape(chr(10).join(text_lines[4:]))}</pre>",
+        f'<p style="margin:0 0 16px;font-size:13px">'
+        f'<a href="{html.escape(swing_url, quote=True)}">Open the swing hub</a></p>',
+    ]
+    return Message(
+        to=to,
+        subject=subject,
+        text=_plain(heading, text_lines, ALERT_FOOTER_TEXT),
+        html=_document(heading, body_html, ALERT_FOOTER_TEXT),
+    )
+
+
 def rebalance_available(
     to: str,
     *,

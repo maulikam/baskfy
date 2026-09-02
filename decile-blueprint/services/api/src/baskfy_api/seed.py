@@ -10,6 +10,7 @@ Usage:
     python -m baskfy_api.seed fixture            # the reference CSV export (docs/13)
     python -m baskfy_api.seed bars               # 3 years of bars from FixtureProvider
     python -m baskfy_api.seed market             # index snapshots + market-health breadth
+    python -m baskfy_api.seed swing              # sw_config for the sole tenant (SW2)
     python -m baskfy_api.seed e2e                # everything the browser acceptance suite needs
 
 ``bars`` is the local-development dataset docs/03 §Environments describes: "100-instrument
@@ -57,6 +58,7 @@ from baskfy_core.models import (
     Plan,
     Screen,
     Subscription,
+    SwConfig,
     TradingDay,
 )
 from baskfy_core.reference_export import ReferenceRows, to_rows
@@ -654,6 +656,50 @@ async def seed_published_run(
     return 1
 
 
+async def seed_swing_config(session: AsyncSession) -> int:
+    """One ``sw_config`` row for the sole tenant, with ``sleeve_capital_inr = 0`` (SW2).
+
+    **Zero capital is the point, not an oversight.** ``docs/swing/02-scope-and-gating.md`` §3.4
+    makes writing the sleeve's capital one of the five conditions on the real-money flag, and
+    ``baskfy_core.swing.sizing`` refuses every entry with ``NO_EQUITY`` while equity is zero. So a
+    freshly seeded database has a swing book that detects, watches, journals and plans **nothing
+    to buy** until a person decides what it may risk. Any other default would mean the number a
+    trade was sized against was one this seeder chose.
+
+    Idempotent, like every other step here: re-running converges, and re-running never resets a
+    capital or a risk setting a person has already chosen. ``ON CONFLICT DO NOTHING`` rather than
+    ``DO UPDATE`` is what makes that true — this is the row's *creation*, not its management.
+
+    Seeded rather than written by migration ``0028_swing`` because the user id comes from
+    ``BASKFY_SOLE_USER_ID``, and an environment variable does not belong in schema history.
+    """
+    user_id = await _sole_user_id(session)
+    if user_id is None:
+        return 0
+    statement = insert(SwConfig).values(user_id=user_id, updated_by="seed")
+    await session.execute(statement.on_conflict_do_nothing(index_elements=[SwConfig.user_id]))
+    return 1
+
+
+async def _sole_user_id(session: AsyncSession) -> int | None:
+    """The tenant ``sw_config`` belongs to, or ``None`` when no account exists yet.
+
+    ``None`` rather than an exception: ``make seed`` runs against a database that may have no
+    ``app_user`` at all (the ``reference`` set does not create one), and a seeder that fails
+    there would make the swing schema look broken when it is merely unpopulated. The row is
+    created by the next ``seed`` once an account exists.
+    """
+    configured = os.environ.get("BASKFY_SOLE_USER_ID")
+    if configured is not None:
+        exists = (
+            await session.execute(select(AppUser.id).where(AppUser.id == int(configured)))
+        ).scalar_one_or_none()
+        return exists
+    return (
+        await session.execute(select(AppUser.id).order_by(AppUser.id).limit(1))
+    ).scalar_one_or_none()
+
+
 async def seed_reference(session: AsyncSession) -> dict[str, int]:
     return {
         "exchange": await seed_exchange(session),
@@ -699,6 +745,9 @@ async def _run(command: str, database_url: str | None) -> dict[str, int]:
         if command in ("all", "bars"):
             await seed_exchange(session)
             counts["ohlcv_daily"] = await seed_fixture_bars(session)
+        if command in ("all", "swing"):
+            # After the account sets above, so the sole tenant exists to key the row on.
+            counts["sw_config"] = await seed_swing_config(session)
         if command in ("all", "market"):
             await seed_reference(session)
             counts["index_snapshot_daily"] = await seed_index_snapshots(session)
@@ -726,6 +775,8 @@ async def _run(command: str, database_url: str | None) -> dict[str, int]:
             counts["market_health_daily"] = await seed_market_health(session, to_rows().as_of)
             counts["pipeline_run"] = await seed_published_run(session, to_rows().as_of)
             counts["app_user"] = await seed_e2e_account(session)
+            # Last: it needs the account the line above creates.
+            counts["sw_config"] = await seed_swing_config(session)
         return counts
 
 
@@ -733,7 +784,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="baskfy-seed", description=__doc__)
     parser.add_argument(
         "command",
-        choices=("all", "reference", "trading-days", "fixture", "bars", "market", "e2e"),
+        choices=("all", "reference", "trading-days", "fixture", "bars", "market", "swing", "e2e"),
         help="which seed set to apply",
     )
     parser.add_argument("--database-url", default=None, help="override BASKFY_DATABASE_URL")

@@ -291,6 +291,36 @@ class Settings(BaseSettings):
     #: Consecutive failed deliveries before an endpoint is switched off and its owner told.
     webhook_failure_threshold: int = Field(default=20, gt=0)
 
+    # --- The swing book (docs/swing) -----------------------------------------
+    #
+    # Three flags and three ceilings, and the split between them is the whole point.
+    #
+    # The **flags** are Track B in ``docs/swing/02-scope-and-gating.md``: the code behind each is
+    # written, tested and unreachable. ``swing_execution_enabled`` is the one that decides
+    # whether a confirmed line may reach a broker at all; ``docs/swing/02`` §3 lists the five
+    # things that must be true before it flips, and none of them is an engineering task. With it
+    # false the desk's ``/swing/execute`` still runs the whole path and journals
+    # ``simulated=true`` **regardless of DRY_RUN**, which is what makes the twenty paper sessions
+    # a real rehearsal rather than a different code path.
+    #
+    # The **ceilings** are the M4.1 boundary (docs/03 §3f, the rule that produced
+    # ``RISK_MAX_DAILY_LOSS_PCT``). The value a person actually trades with lives in ``sw_config``
+    # and is user-editable; the maximum that value may take is server configuration and is never
+    # a form field. A ceiling a user can raise is not a ceiling.
+    swing_execution_enabled: bool = False
+    swing_monitor_enabled: bool = False
+    swing_ep_premarket_enabled: bool = False
+    #: ``sw_config.risk_per_trade_pct`` may not exceed this. His own range is 0.25-1%; 1.0 is the
+    #: top of it, and the pack's default setting is half that.
+    swing_risk_per_trade_pct_max: Decimal = Field(default=Decimal("1.0"), gt=0, le=5)
+    #: ``sw_config.max_position_pct`` may not exceed this. "Positions capped at 20-25%."
+    swing_max_position_pct_max: Decimal = Field(default=Decimal("25.0"), gt=0, le=100)
+    #: ``sw_config.max_open_positions`` may not exceed this. The ladder's top rung is 8.
+    swing_max_open_positions_max: int = Field(default=10, gt=0, le=50)
+    #: The benchmark the market gate reads (``docs/swing/04`` §8.2). Falls back to ``nifty-50``
+    #: when the named index has no snapshot; a missing benchmark is not a bear market.
+    swing_index_slug: str = "nifty-500"
+
     # --- Rate limits (docs/07 §Conventions) ----------------------------------
     rate_limit_anonymous_per_minute: int = Field(default=10, gt=0)
     rate_limit_authenticated_per_minute: int = Field(default=60, gt=0)

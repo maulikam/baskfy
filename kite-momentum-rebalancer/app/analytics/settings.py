@@ -45,7 +45,21 @@ LOCKED_KEYS = frozenset({"DRY_RUN", "INTRADAY_ENABLED", "OPTIONS_ENABLED",
                          # user can raise is not a ceiling. See the note in SPECS below.
                          "RISK_MAX_DAILY_LOSS_PCT", "RISK_POSITION_HEADROOM",
                          "RISK_GROSS_MULTIPLE", "RISK_MAX_ORDERS_PER_DAY",
-                         "RISK_MAX_POSITION_VALUE", "RISK_MAX_GROSS_EXPOSURE"})
+                         "RISK_MAX_POSITION_VALUE", "RISK_MAX_GROSS_EXPOSURE",
+                         # The swing book (SW2). Same two categories as above, arriving
+                         # together. BASKFY_SWING_EXECUTION_ENABLED is a safety switch — it
+                         # decides whether a confirmed swing line may reach a broker at all,
+                         # and docs/swing/02 §3 puts five conditions in front of it, none of
+                         # them a click. The other two flags gate live market processes. The
+                         # *_MAX keys are the M4.1 ceilings for sw_config: the value traded
+                         # with is user-editable in the web app, the maximum it may take is
+                         # server configuration.
+                         "BASKFY_SWING_EXECUTION_ENABLED",
+                         "BASKFY_SWING_MONITOR_ENABLED",
+                         "BASKFY_SWING_EP_PREMARKET_ENABLED",
+                         "BASKFY_SWING_RISK_PER_TRADE_PCT_MAX",
+                         "BASKFY_SWING_MAX_POSITION_PCT_MAX",
+                         "BASKFY_SWING_MAX_OPEN_POSITIONS_MAX"})
 
 
 class SettingsError(ValueError):

@@ -104,6 +104,32 @@ FULLY_INVESTED = os.getenv("FULLY_INVESTED", "false").lower() == "true"  # overr
 INTRADAY_ENABLED = os.getenv("INTRADAY_ENABLED", "false").lower() == "true"
 OPTIONS_ENABLED = os.getenv("OPTIONS_ENABLED", "false").lower() == "true"
 
+# ---- The swing book's gates (docs/swing/02-scope-and-gating.md, Track B) ---------------
+# Read here, once, at import — never from a form, and never from the settings table. The
+# reasoning is the one already written above LOCKED_KEYS in analytics/settings.py: a switch
+# that decides whether real orders can be placed does not belong one click away from the
+# button that places them.
+#
+# BASKFY_SWING_EXECUTION_ENABLED is the swing book's DRY_RUN, and it is DELIBERATELY
+# INDEPENDENT of DRY_RUN itself. With it false, /swing/execute runs the entire path —
+# guards, risk, rate limits, journal — through the gateway's dry-run adapter and records
+# simulated=true whatever DRY_RUN says. That is what makes the twenty paper sessions the
+# real-money gate counts (docs/swing/02 §3.2) a rehearsal of this code rather than of a
+# different branch. Flipping it needs the five conditions in §3, by Maulik's hand.
+SWING_EXECUTION_ENABLED = os.getenv("BASKFY_SWING_EXECUTION_ENABLED", "false").lower() == "true"
+# The 09:15-10:45 opening-range monitor. Off until SW6's replay is green and one morning has
+# been watched by a person.
+SWING_MONITOR_ENABLED = os.getenv("BASKFY_SWING_MONITOR_ENABLED", "false").lower() == "true"
+# The 08:50/09:09 pre-open gap scan. Independent of the monitor: either can run alone.
+_EP_PREMARKET = os.getenv("BASKFY_SWING_EP_PREMARKET_ENABLED", "false")
+SWING_EP_PREMARKET_ENABLED = _EP_PREMARKET.lower() == "true"
+# The swing GTT band (PACK.3). The desk's own STOP_MIN/STOP_MAX (8-12%) encode vol-scaled
+# stops for the WEEKLY book; a swing stop sits at the low of the day and is supposed to be
+# tight, typically 2-6%. Passed to the gateway per call rather than changing the default,
+# because widening the default would silently change the weekly book's findings.
+SWING_STOP_BAND_MIN = float(os.getenv("BASKFY_SWING_STOP_BAND_MIN", "0.005"))
+SWING_STOP_BAND_MAX = float(os.getenv("BASKFY_SWING_STOP_BAND_MAX", "0.10"))
+
 # ---- Options research engines (PAPER-ONLY; the product gates above remain OFF) --------
 # Return figures are evaluation benchmarks, never an instruction to trade until hit.
 OPTION_UNDERLYING = os.getenv("OPTION_UNDERLYING", "NIFTY")

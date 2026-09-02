@@ -1,0 +1,151 @@
+# syntax=docker/dockerfile:1.9
+#
+# The merged desk (weekly momentum book + swing book) as a Baskfy service — DECISIONS-SW MD20.
+#
+# BUILD CONTEXT IS THE REPO ROOT, because the desk imports `baskfy_core`, `baskfy_execution` and
+# `baskfy_providers` from the workspace and its own code lives in the sibling tree:
+#
+#     docker build -f decile-blueprint/infra/docker/Dockerfile.desk -t baskfy-desk .
+#
+# The root `.dockerignore` is an allow-list: only the three packages, `app/`, `config/`, `scripts/`
+# and `requirements.txt` enter the context. `.env`, `data/` (portfolio.db, the upload corpus) and
+# the token files never do.
+#
+# Same uid/gid (1001 `baskfy`) as Dockerfile.python, so the `baskfy-state` volume that holds the
+# encrypted Kite token — written by the api/worker, mounted read-only here — is readable by this
+# process and by nothing else.
+
+ARG PYTHON_VERSION=3.12
+
+# ---------------------------------------------------------------------------- build
+FROM python:${PYTHON_VERSION}-slim-bookworm AS build
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1 PIP_ROOT_USER_ACTION=ignore
+WORKDIR /build
+
+RUN python -m venv /venv
+ENV PATH="/venv/bin:$PATH"
+
+# The desk's own lock, minus the test-only lines (pytest, pytest-cov, httpx2 is the TestClient
+# transport). The lock pins the runtime; the image does not carry a test runner.
+COPY kite-momentum-rebalancer/requirements.txt desk-requirements.txt
+RUN grep -vE '^(pytest|pytest-cov|httpx2)==' desk-requirements.txt > runtime.txt \
+ && pip install -r runtime.txt
+
+# The three Baskfy packages, non-editable, with their dependencies pinned to what the desk's
+# verified venv runs (`.venv`, 2 Sep 2026) so the image cannot resolve a newer SQLAlchemy or
+# pydantic than the suite was green against. psycopg is the desk's Postgres backend
+# (`app/analytics/pg.py`, DESK_DB_BACKEND=postgres) and is not in its requirements.txt because
+# the retired box ran SQLite.
+COPY decile-blueprint/packages/core       packages/core
+COPY decile-blueprint/packages/execution  packages/execution
+COPY decile-blueprint/packages/providers  packages/providers
+RUN cat > constraints.txt <<'EOF'
+sqlalchemy==2.0.52
+pydantic==2.13.4
+pydantic-settings==2.15.0
+polars==1.43.2
+cryptography==50.0.0
+redis==8.1.0
+boto3==1.43.78
+httpx==0.28.1
+greenlet==3.5.5
+EOF
+RUN pip install -c constraints.txt \
+      ./packages/core ./packages/execution ./packages/providers \
+      'psycopg[binary]==3.3.4'
+
+# ---------------------------------------------------------------------------- runtime
+FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
+
+ENV PATH="/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    # tzdata below makes this real; without it the schedule would be UTC and every IST time in
+    # the desk (09:14 monitor, 18:30 collection) would be five and a half hours late.
+    TZ=Asia/Kolkata \
+    # Root CLAUDE.md safety rail, baked in as in Dockerfile.python: forgetting it in an env file
+    # cannot arm anything. Every swing flag is off by construction (app/config.py defaults) and
+    # is stated again in compose.prod.yml so the file that describes the box tells the truth.
+    DRY_RUN=true \
+    # The desk's paths are relative to its tree (`app/templates`, `data/uploads`), so the working
+    # directory is the tree and `data/` is a volume.
+    DESK_DB_BACKEND=postgres
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tzdata curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 1001 baskfy \
+ && useradd --system --uid 1001 --gid baskfy --home /desk baskfy \
+ && install -d -o baskfy -g baskfy /desk /desk/data /desk/data/uploads \
+ # The token volume's mount point, owned like the file inside it (see Dockerfile.python).
+ && install -d -o baskfy -g baskfy /var/lib/baskfy/state
+
+COPY --from=build --chown=baskfy:baskfy /venv /venv
+COPY --chown=baskfy:baskfy kite-momentum-rebalancer/app      /desk/app
+COPY --chown=baskfy:baskfy kite-momentum-rebalancer/config   /desk/config
+COPY --chown=baskfy:baskfy kite-momentum-rebalancer/scripts  /desk/scripts
+
+# Entry point: maps the box's BASKFY_-prefixed credentials onto the desk's unprefixed names,
+# preferring the BASKFY_ ones — `.env.example` carries both halves and the box's measured,
+# working values are the prefixed ones (NEEDS-MAULIK §29); the token file in the shared volume
+# was encrypted with BASKFY_KITE_TOKEN_ENCRYPTION_KEY and decrypts with nothing else. Then makes
+# sure the desk's schema exists and execs. KITE_API_SECRET is deliberately NOT mapped: Baskfy
+# redeems the morning's request_token (M74) and a Kite request token is single-use — one
+# redeemer, one token store.
+RUN cat > /usr/local/bin/desk-entrypoint <<'EOF'
+#!/bin/sh
+set -eu
+export KITE_API_KEY="${BASKFY_KITE_API_KEY:-${KITE_API_KEY:-}}"
+export KITE_TOKEN_ENCRYPTION_KEY="${BASKFY_KITE_TOKEN_ENCRYPTION_KEY:-${KITE_TOKEN_ENCRYPTION_KEY:-}}"
+if [ "${DESK_DB_BACKEND:-sqlite}" = "postgres" ] && [ -n "${DESK_DATABASE_URL:-}" ]; then
+  python - <<'PY' || echo "desk-entrypoint: could not ensure schema ${DESK_DB_SCHEMA:-desk}; continuing" >&2
+import os, psycopg
+schema = os.environ.get("DESK_DB_SCHEMA", "desk")
+with psycopg.connect(os.environ["DESK_DATABASE_URL"], autocommit=True, connect_timeout=10) as c:
+    c.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
+PY
+fi
+exec "$@"
+EOF
+# The swing-monitor service's loop. Sleeps until 09:14 IST on a weekday, runs the monitor
+# (`app.swing_monitor` exits 0 at once while BASKFY_SWING_MONITOR_ENABLED is false — it never
+# builds the strategy), then sleeps until the next weekday. Flag off means it logs and idles.
+RUN cat > /usr/local/bin/swing-monitor-loop <<'EOF'
+#!/venv/bin/python
+"""09:14 IST on weekdays: python -m app.swing_monitor. Flag off: log, idle, repeat."""
+import datetime as dt, os, subprocess, sys, time, zoneinfo
+
+IST = zoneinfo.ZoneInfo("Asia/Kolkata")
+AT = dt.time(9, 14)
+
+
+def next_run(now: dt.datetime) -> dt.datetime:
+    run = dt.datetime.combine(now.date(), AT, tzinfo=IST)
+    if run <= now:
+        run += dt.timedelta(days=1)
+    while run.weekday() > 4:
+        run += dt.timedelta(days=1)
+    return run
+
+
+while True:
+    now = dt.datetime.now(IST)
+    run = next_run(now)
+    flag = os.environ.get("BASKFY_SWING_MONITOR_ENABLED", "false").lower() == "true"
+    print(f"swing-monitor: flag {'ON' if flag else 'off'}; next run {run:%a %Y-%m-%d %H:%M} IST",
+          flush=True)
+    time.sleep(max(1.0, (run - dt.datetime.now(IST)).total_seconds()))
+    rc = subprocess.call([sys.executable, "-m", "app.swing_monitor"])
+    print(f"swing-monitor: app.swing_monitor exited {rc}", flush=True)
+    time.sleep(90)  # past 09:14 before the next next_run(), never twice in one minute
+EOF
+RUN chmod 0755 /usr/local/bin/desk-entrypoint /usr/local/bin/swing-monitor-loop
+
+WORKDIR /desk
+USER baskfy
+EXPOSE 8420
+VOLUME ["/desk/data"]
+
+ENTRYPOINT ["desk-entrypoint"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8420", "--proxy-headers", "--forwarded-allow-ips=*"]

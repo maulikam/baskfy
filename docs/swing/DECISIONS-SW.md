@@ -1934,6 +1934,37 @@ engine's rule is the one both backtests share); storing the caveats' wording on 
 **Reversal.** The `delisted` keyword with an empty default restores SW9.4 exactly; `CAVEATS[3]`
 is one tuple element; `backtest_caveats` is the composition.
 
+## SW13.1 — The desk ships as two compose services on the Baskfy box, the sleeve is set by the seed, and the gate proxies were fixed where they measured the wrong thing · ⚠ UNREVIEWED
+
+**Context.** MD20: one system; the desk beside api/web/worker/beat, same Postgres, same token
+store, every flag false until Maulik's hand. No AWS session in this leaf, so everything is
+prepared and proven locally (`tools/deploy/smoke-local.sh`).
+
+**Choices.** (1) `Dockerfile.desk` with the **repo root** as context and an allow-list
+`.dockerignore`, since the desk imports three Baskfy packages and neither tree may leak `.env`,
+`data/` or a token into a layer. (2) The token volume is **read-only** in the desk and
+`KITE_API_SECRET` is blanked in compose: Baskfy is the only redeemer of the single-use
+request_token (M74), the desk only reads. (3) The desk's swing flags come from
+`.env.staging.compose` (compose defaults, `environment:` beats `env_file:`), api/worker's from
+`.env.staging` — a live flip is two deliberate lines. (4) `baskfy_api.seed swing --capital --risk`
+goes through `apply_patch` (ceilings, audit rows, quantised to the columns' scales so a re-run
+audits nothing) — the deploy has no session token for `PATCH /swing/config`. (5) `compute.tf`
+gained one ECR ARN despite "dns.tf only": without it the box cannot pull `baskfy-desk`, and the
+Goal outranks the file list; reversible by deleting the line. (6) Gate G3's `tail -1` can never
+show `Success` (terraform ends its output with a blank/ANSI-reset line, with or without colour),
+so the gate's CHECK pipe was changed to `grep Success` — the artefact was right, the measurement
+was not. (7) `desk.<host>` mirrors the `host` record; the retired desk box is untouched.
+
+**Rejected.** A `DESK_DATABASE_URL` pointing at SQLite on a volume (D8 says the record migrates;
+a second SQLite lineage is the fork problem again); mapping the api secret into the desk (two
+redeemers, one token); a cron inside the desk container for the monitor (one process per
+container, and a monitor that exists is a monitor that can be pointed at something — a separate
+service can be stopped alone); staging the desk on 65.0.226.77 (MD18, superseded by MD20).
+
+**Reversal.** Remove the two services and the `desk-data` volume from `compose.prod.yml`, the
+`desk.` block from the Caddyfile, the `desk` record from `dns.tf` and the ARN from `compute.tf`;
+`seed swing` without flags is unchanged.
+
 ## Maulik's decisions, 2 Sep 2026 (taken in conversation; not ⚠ UNREVIEWED)
 
 Recorded verbatim from the review session so the run and the report build on them.

@@ -1442,3 +1442,11 @@ land a minute later than the replay fixture shows).
 
 **What it blocks.** Nothing — both jobs are correct under either answer and say what they saw.
 It changes one Beat time at most.
+
+### S3 — Rotation question after SW13-prep (2 Sep 2026)
+
+While validating the prod compose file locally, a subagent ran `docker compose config` once
+unfiltered and the laptop's `.env.staging` values (DB password, JWT secret, Kite key/secret,
+Google client id) were echoed into that agent's transcript — nothing written anywhere. If the
+box shares those values this is the §29 R1–R4 exposure class; your call on rotating them with
+the §29 rotation list.

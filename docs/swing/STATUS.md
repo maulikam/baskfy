@@ -1647,6 +1647,39 @@ go out); the test store's context carries the countdown; and
 
 ---
 
+## SW13 — The merged desk is a Baskfy service; deploy prepared, not run (no AWS session) ⏸
+
+**MD20:** one system. The desk (weekly book + swing) runs as compose services `desk` and
+`swing-monitor` on the Phase A box beside api/web/worker/beat — same Postgres (schema `desk`,
+`DESK_DB_BACKEND=postgres`), same Kite token store (`baskfy-state`, mounted **read-only**),
+reached at `https://desk.staging.baskfy.com` behind Caddy + the desk's own basic auth.
+`DRY_RUN=true` and all four `BASKFY_SWING_*` flags are compose defaults for the desk that only a
+line in `.env.staging.compose` can override. 65.0.226.77 is not a target.
+
+**Built and verified on the laptop:** `Dockerfile.desk` (root context, both trees, uid 1001,
+non-root, `desk-entrypoint` maps `BASKFY_KITE_*` → the desk's names and never the api secret;
+`swing-monitor-loop` idles with the flag off, runs `app.swing_monitor` at 09:14 IST weekdays);
+`compose.prod.yml` (+`desk`, `swing-monitor`, `desk-data`), `Caddyfile` (`desk.` vhost), `dns.tf`
+(`desk` A record on the EIP) + `compute.tf` (ECR pull for `baskfy-desk`, one line); `seed swing
+--capital --risk` (audited, idempotent; 4 tests); `push-images.sh` builds/pushes the desk image;
+`smoke-local.sh` brings the whole prod compose up locally → `SMOKE OK`; desk suite 1645 passed;
+`make lint` clean.
+
+**The driver's commands, in order, after `aws sso login --profile baskfy-poc`:**
+`bash tools/deploy/push-images.sh` → `bash tools/deploy/tf.sh plan` (expect: +1 A record, ~1
+IAM policy change) → `bash tools/deploy/tf.sh apply` → `bash tools/deploy/deploy-swing.sh` →
+`bash tools/deploy/verify-swing.sh`. Rollback: the three `BASKFY_*_IMAGE` lines in
+`/opt/baskfy/.env.staging.compose` back to the previous tag, the `.bak-sw13-<stamp>` files back,
+`up -d --force-recreate caddy`, `up -d` (deploy-swing.sh prints the exact lines).
+
+**Not done / box-side, unverifiable from here:** the desk's history (store A, 43,411 rows on
+65.0.226.77) is not in the box's Postgres — `tools/migrate-desk` needs SSH to the desk box; until
+it runs the desk service starts on an empty `desk` schema (it migrates its own tables). The desk
+process caches its Kite client, so **after each morning's Kite login: `box.sh '... restart
+desk'`** (QUESTIONS.md Q-SW13-1). The desk password is generated on the box; read it in an SSM
+shell (`grep BASKFY_DESK_PASSWORD /opt/baskfy/.env.staging.compose`), never through `box.sh`. The
+EIP is not yet Zerodha's registered order IP (docs/08 §5) — irrelevant while `DRY_RUN=true`.
+
 ## Not done (kept loud)
 
 - **SW10 onward.** The desk page and `/swing/execute` are in (SW7, both halves) and write

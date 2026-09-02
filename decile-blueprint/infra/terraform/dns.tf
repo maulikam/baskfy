@@ -35,6 +35,18 @@ resource "aws_route53_record" "host" {
   records = [aws_eip.box.public_ip]
 }
 
+# The desk's vhost (SW13, DECISIONS-SW MD20): the merged operator console runs on the same box
+# as a compose service behind the same Caddy, so `desk.<host>` is the same EIP — one record, one
+# certificate obtained by Caddy, nothing else. Mirrors `host` exactly; the desk box at
+# 65.0.226.77 and desk.modelbasket.in are not touched and not targets.
+resource "aws_route53_record" "desk" {
+  zone_id = local.zone_id
+  name    = "desk.${local.fqdn}"
+  type    = "A"
+  ttl     = 300
+  records = [aws_eip.box.public_ip]
+}
+
 # NO APEX RECORD. `baskfy.com` itself deliberately resolves to nothing.
 #
 # The four legal drafts under `apps/web/src/content/legal/` are unreviewed (NEEDS-MAULIK §19) and

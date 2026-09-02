@@ -11,6 +11,7 @@ Usage:
     python -m baskfy_api.seed bars               # 3 years of bars from FixtureProvider
     python -m baskfy_api.seed market             # index snapshots + market-health breadth
     python -m baskfy_api.seed swing              # sw_config for the sole tenant (SW2)
+    python -m baskfy_api.seed swing --capital 2500000 --risk 0.5   # ...and set the sleeve (SW13)
     python -m baskfy_api.seed e2e                # everything the browser acceptance suite needs
 
 ``bars`` is the local-development dataset docs/03 §Environments describes: "100-instrument
@@ -26,6 +27,7 @@ import datetime as dt
 import os
 import sys
 from collections.abc import Sequence
+from decimal import Decimal
 from typing import Final
 
 from sqlalchemy import func, select
@@ -41,6 +43,7 @@ from baskfy_api.curated_seed import (
 from baskfy_api.db import session_scope
 from baskfy_api.security import hash_password
 from baskfy_api.settings import get_settings
+from baskfy_api.swing_settings import SwingCeilings, SwingConfigPatch, apply_patch
 from baskfy_core.breadth import breadth_query
 from baskfy_core.models import (
     AppUser,
@@ -681,6 +684,50 @@ async def seed_swing_config(session: AsyncSession) -> int:
     return 1
 
 
+async def set_swing_sleeve(
+    session: AsyncSession,
+    *,
+    capital_inr: Decimal | None = None,
+    risk_pct: Decimal | None = None,
+    changed_by: str = "seed",
+) -> int:
+    """Write the sleeve's capital and/or risk per trade for the sole tenant (SW13, MD1/MD2).
+
+    The deploy has no session token, so this is ``PATCH /swing/config`` reached from the box
+    instead of from a browser — the **same** :func:`apply_patch`: the server ceilings are checked
+    first (a risk above ``BASKFY_SWING_RISK_PER_TRADE_PCT_MAX`` is refused, nothing written), and
+    every field that moves leaves its ``sw_config_audit`` row. Idempotent the way the settings
+    form is: a value already in force changes nothing and audits nothing, so running the deploy
+    twice does not write two rows.
+
+    Returns 1 when the row exists (whether or not anything moved), 0 when there is no
+    ``sw_config`` row yet — the case :func:`seed_swing_config` reports the same way, because no
+    account exists to key it on. It never creates the row: ``seed_swing_config`` owns creation.
+    """
+    user_id = await _sole_user_id(session)
+    if user_id is None:
+        return 0
+    # Round at write time (house rule 8) to the columns' own scales — MONEY is 2 dp, RISK_PCT is
+    # 3 dp — before the patch is compared with the row. `apply_patch` decides "moved" on the
+    # string form, so `0.5` against a stored `0.500` would otherwise audit a change every deploy.
+    patch = SwingConfigPatch(
+        sleeve_capital_inr=None if capital_inr is None else capital_inr.quantize(Decimal("0.01")),
+        risk_per_trade_pct=None if risk_pct is None else risk_pct.quantize(Decimal("0.001")),
+    )
+    if not patch.changes():
+        return 1
+    await apply_patch(
+        session,
+        user_id=user_id,
+        patch=patch,
+        ceilings=SwingCeilings.from_settings(get_settings()),
+        changed_by=changed_by,
+        now=dt.datetime.now(tz=dt.UTC),
+        note="baskfy_api.seed swing",
+    )
+    return 1
+
+
 async def _sole_user_id(session: AsyncSession) -> int | None:
     """The tenant ``sw_config`` belongs to, or ``None`` when no account exists yet.
 
@@ -718,7 +765,13 @@ async def seed_reference(session: AsyncSession) -> dict[str, int]:
     }
 
 
-async def _run(command: str, database_url: str | None) -> dict[str, int]:
+async def _run(
+    command: str,
+    database_url: str | None,
+    *,
+    capital: Decimal | None = None,
+    risk: Decimal | None = None,
+) -> dict[str, int]:
     async with session_scope(database_url) as session:
         counts: dict[str, int] = {}
         if command in ("all", "reference"):
@@ -748,6 +801,10 @@ async def _run(command: str, database_url: str | None) -> dict[str, int]:
         if command in ("all", "swing"):
             # After the account sets above, so the sole tenant exists to key the row on.
             counts["sw_config"] = await seed_swing_config(session)
+            if capital is not None or risk is not None:
+                counts["sw_config_sleeve"] = await set_swing_sleeve(
+                    session, capital_inr=capital, risk_pct=risk
+                )
         if command in ("all", "market"):
             await seed_reference(session)
             counts["index_snapshot_daily"] = await seed_index_snapshots(session)
@@ -788,9 +845,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="which seed set to apply",
     )
     parser.add_argument("--database-url", default=None, help="override BASKFY_DATABASE_URL")
+    # `swing` only: the sleeve's capital and risk per trade, through the settings write path with
+    # its ceilings and its audit — the deploy's stand-in for PATCH /swing/config (SW13).
+    parser.add_argument(
+        "--capital", type=Decimal, default=None, help="swing: sleeve_capital_inr, e.g. 2500000"
+    )
+    parser.add_argument(
+        "--risk", type=Decimal, default=None, help="swing: risk_per_trade_pct, e.g. 0.5"
+    )
     args = parser.parse_args(argv)
+    if (args.capital is not None or args.risk is not None) and args.command != "swing":
+        parser.error("--capital/--risk apply to the `swing` command only")
 
-    counts = asyncio.run(_run(args.command, args.database_url))
+    counts = asyncio.run(
+        _run(args.command, args.database_url, capital=args.capital, risk=args.risk)
+    )
     for table, count in counts.items():
         print(f"{table}: {count} rows")
     return 0

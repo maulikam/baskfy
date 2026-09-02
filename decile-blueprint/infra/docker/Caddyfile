@@ -224,3 +224,55 @@ Disallow: /
 		respond "{err.status_code} {err.status_text}" {err.status_code}
 	}
 }
+
+# ---------------------------------------------------------------------- the desk (SW13, MD20)
+#
+# The merged operator console, a second vhost on the same listener and the same ACME account:
+# `desk.staging.baskfy.com` on the box (`BASKFY_DESK_SITE_ADDRESS` defaults to `desk.` + the main
+# host in compose.prod.yml), `http://desk.localhost` in the local smoke. Caddy obtains the
+# certificate on its own exactly as it does for the main host; nothing here is specific to TLS.
+#
+# What is behind it places real orders behind a confirmation gate and the desk's own basic auth
+# (DESK_PASSWORD, app/core/websec.py — /status is the one route that answers without it, and it
+# reveals dry_run and whether a session exists, never a holding). The Host header is passed
+# through UNCHANGED, because websec.py checks it against DESK_ALLOWED_HOSTS; rewriting it here
+# would disable that defence silently. Same headers as the desk's own retired Caddyfile
+# (kite-momentum-rebalancer/deploy/caddy/Caddyfile) plus the noindex the main host carries.
+{$BASKFY_DESK_SITE_ADDRESS} {
+	encode zstd gzip
+
+	header {
+		X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	handle /robots.txt {
+		header Content-Type "text/plain; charset=utf-8"
+		respond `User-agent: *
+Disallow: /
+` 200
+	}
+
+	# Everything — pages, /static/* (the vendored stylesheet and fonts), /status, /swing —
+	# is the desk. No path is served from here or from the web app.
+	handle {
+		reverse_proxy desk:8420 {
+			header_up X-Forwarded-Proto {scheme}
+			# The plan page waits on Kite for holdings and quotes; a rebalance analysis can take
+			# longer than Caddy's default before the first byte.
+			transport http {
+				response_header_timeout 300s
+			}
+		}
+	}
+
+	handle_errors {
+		header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
+		header -Server
+		respond "{err.status_code} {err.status_text}" {err.status_code}
+	}
+}

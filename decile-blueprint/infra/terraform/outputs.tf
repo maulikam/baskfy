@@ -27,3 +27,8 @@ output "estimated_monthly_usd" {
   description = "docs/08 §7's Phase A line, restated so a plan shows it: EC2 32.26 + EBS 9.12 + EIP 3.60 + snapshots ~2 + S3 ~1 + CloudWatch ~2 + Route 53 0.50."
   value       = "~50 (beside the desk's Lightsail ~24 and Kite Connect Rs 500)"
 }
+
+output "desk_host" {
+  description = "The desk's vhost on the same EIP (SW13, MD20). Caddy obtains its certificate; the desk's basic auth sits behind it."
+  value       = aws_route53_record.desk.name
+}

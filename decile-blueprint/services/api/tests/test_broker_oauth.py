@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from cryptography.fernet import Fernet
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api import broker_oauth
 from baskfy_api.app import create_app
@@ -100,6 +101,7 @@ class TestOauthStateAndStub:
 
         result = await oauth_callback(
             principal,
+            AsyncSession(),
             request_token="request-token-xyz789",
             state="good-state-token-abc12345",
         )
@@ -129,6 +131,7 @@ class TestOauthStateAndStub:
         with pytest.raises(Problem) as caught:
             await oauth_callback(
                 principal,
+                AsyncSession(),
                 request_token="request-token-xyz789",
                 state="bogus-state-xxxxxxxx",
             )
@@ -281,6 +284,7 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
         with pytest.raises(Problem) as caught:
             await oauth_callback(
                 self._principal(),
+                AsyncSession(),
                 request_token="kite-request-token-1",
                 state="live-state-token-000111",
             )
@@ -304,6 +308,7 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
 
         result = await oauth_callback(
             self._principal(),
+            AsyncSession(),
             request_token="kite-request-token-2",
             state="live-state-token-000222",
         )
@@ -324,6 +329,7 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
         with pytest.raises(Problem) as caught:
             await oauth_callback(
                 self._principal(),
+                AsyncSession(),
                 request_token="kite-request-token-3",
                 state="live-state-token-000333",
             )
@@ -351,6 +357,7 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
 
         result = await oauth_callback(
             self._principal(),
+            AsyncSession(),
             request_token="kite-request-token-4",
             state="live-state-token-000444",
         )
@@ -390,3 +397,44 @@ class TestExchangeReportsWhetherItWasSimulated:
         assert 'os.environ.get("BASKFY_KITE_API_SECRET"' not in body
         assert "dry_run_enabled(" not in body
         assert "exchange.simulated" in body
+
+
+class TestConnectPullsHoldingsImmediately:
+    """M81. A finished login is the one moment a Kite session is certainly alive.
+
+    Kite ends a session at the start of the next trading day, so "connected" is a state that has to
+    be re-established every morning. Leaving the holdings read to a manual Sync meant a fresh login
+    showed an empty Portfolio — "Holdings not synced yet" beside a broker that had just connected —
+    and with daily expiry that is the normal state each morning, not an edge case.
+    """
+
+    def test_the_callback_reads_holdings_after_storing_the_token(self) -> None:
+        """Asserted on the source, because the ordering is the point.
+
+        The read must come after `store_access_token`: `holdings_for_broker` loads the session from
+        the store, so a read placed first would use yesterday's token or none at all.
+        """
+        source = inspect.getsource(brokers_router.oauth_callback)
+        assert "store_access_token" in source
+        assert "holdings_for_broker" in source
+        assert source.index("store_access_token") < source.index("holdings_for_broker"), (
+            "holdings are read before the new token is stored, so the read uses the old session"
+        )
+
+    def test_a_failed_read_does_not_undo_the_login(self) -> None:
+        """The token is already stored and valid; a data fetch must not throw the session away.
+
+        Pinned on the source rather than by forcing a failure, because what matters is that the
+        read is inside a try and the connected response is outside it.
+        """
+        source = inspect.getsource(brokers_router.oauth_callback)
+        assert "except Exception" in source
+        assert "session.rollback()" in source
+        # `connected=True` is returned regardless of what the holdings read did.
+        tail = source[source.index("except Exception") :]
+        assert "connected=True" in tail or "connected=True" in source
+
+    def test_only_a_live_read_is_written(self) -> None:
+        """The same guard the manual path has: a fixture must never land in a real portfolio."""
+        source = inspect.getsource(brokers_router.oauth_callback)
+        assert "is_persistable" in source

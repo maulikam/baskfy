@@ -172,6 +172,15 @@ class CallbackOut(BaseModel):
     simulated: bool = Field(
         description="True when the access token was minted by the DRY_RUN / missing-secret stub."
     )
+    holdings_synced: int = Field(
+        default=0,
+        description=(
+            "Holdings written into the broker's holding group during this callback. The session is "
+            "only just alive and Kite ends it at the start of the next trading day, so connect is "
+            "the moment there is certainly something to read; 0 means the read was refused or "
+            "failed, and `note` says which."
+        ),
+    )
     note: str = Field(
         description=(
             "The same statement as `connected` and `simulated`, in prose for a human. "
@@ -394,6 +403,7 @@ async def list_brokers(principal: AuthenticatedDep) -> BrokerListOut:
 )
 async def oauth_callback(
     principal: AuthenticatedDep,
+    session: SessionDep,
     request_token: Annotated[str, Query(min_length=8, max_length=128)],
     state: Annotated[str, Query(min_length=8, max_length=128)],
 ) -> CallbackOut:
@@ -467,12 +477,52 @@ async def oauth_callback(
         )
 
     store_access_token(exchange.access_token, store=token_store_for())
+
+    # PULL THE HOLDINGS NOW, NOT WHEN SOMEBODY REMEMBERS TO PRESS A BUTTON (M81).
+    #
+    # The session is only just alive and Kite ends it at the start of the next trading day, so this
+    # is the moment there is certainly something to read. Leaving it to a manual Sync meant a fresh
+    # login showed an empty Portfolio — "Holdings not synced yet" beside a broker that had just
+    # connected — and the daily expiry makes that the normal state every morning, not an edge case.
+    #
+    # Best-effort by construction. A holdings read that fails must not fail the login: the token is
+    # already stored and valid, the person is connected, and telling them otherwise would throw
+    # away a working session over a data fetch. The outcome is reported in `note` instead, and the
+    # Sync button remains for a re-read.
+    synced = 0
+    sync_note = ""
+    try:
+        result = holdings_for_broker(pending.broker_id)
+        if is_persistable(result):
+            broker_account_id = await ensure_default_broker_account(
+                session, user_id, broker_id=pending.broker_id
+            )
+            sync = await sync_holdings_into_portfolio(
+                session,
+                result,
+                user_id=user_id,
+                broker_account_id=broker_account_id,
+                broker_name=pending.broker_id,
+                as_of=dt.datetime.now(tz=IST).date(),
+            )
+            await session.commit()
+            synced, sync_note = sync.written, sync.reason
+        else:
+            sync_note = not_persisted(result).reason
+    except Exception as exc:
+        await session.rollback()
+        sync_note = f"holdings were not read on connect ({type(exc).__name__}); use Sync holdings."
+
     return CallbackOut(
         broker_id=pending.broker_id,
         connected=True,
         token_stored=True,
         simulated=False,
-        note=f"live: a real {pending.broker_id} session was exchanged and stored encrypted.",
+        holdings_synced=synced,
+        note=(
+            f"live: a real {pending.broker_id} session was exchanged and stored encrypted. "
+            f"{sync_note}"
+        ),
     )
 
 

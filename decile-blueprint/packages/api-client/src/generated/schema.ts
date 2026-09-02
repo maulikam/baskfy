@@ -4198,6 +4198,12 @@ export interface components {
              */
             connected: boolean;
             /**
+             * Holdings Synced
+             * @description Holdings written into the broker's holding group during this callback. The session is only just alive and Kite ends it at the start of the next trading day, so connect is the moment there is certainly something to read; 0 means the read was refused or failed, and `note` says which.
+             * @default 0
+             */
+            holdings_synced: number;
+            /**
              * Note
              * @description The same statement as `connected` and `simulated`, in prose for a human. Never an order path.
              */

@@ -68,6 +68,16 @@ export const PAGES = {
     blurb: "Companies that have recently joined the exchange.",
     formerly: "Listings",
   },
+  /* —— The swing hub (SW4, docs/swing/05 §2). Read-only: it shows what the detectors found
+     and what the tape allows. A line becomes an order in the desk console and nowhere else. —— */
+  "/swing": {
+    title: "Swing",
+    blurb: "Which leaders have finished resting, where they would break out, and where the stop goes.",
+  },
+  "/swing/market": {
+    title: "Market · Swing",
+    blurb: "Whether the tape is worth trading, and how much the allocation may carry.",
+  },
   "/discover": {
     title: "Discover",
     blurb: "Say how you want to invest, and see which baskets match it.",

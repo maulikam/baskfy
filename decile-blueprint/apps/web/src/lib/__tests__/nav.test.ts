@@ -88,7 +88,15 @@ describe("the primary consumer IA", () => {
     ]);
     expect(SECTION_TABS.discover.map((t) => t.href)).not.toContain("/create");
     // Create moved here out of Discover: it builds a strategy, which is this hub's job.
-    expect(SECTION_TABS.build.map((t) => t.label)).toEqual(["Screens", "Backtests", "Create"]);
+    /* SW4 added Swing: `docs/swing/05` §1 puts the swing hub inside Build rather than adding a
+       sixth primary destination, because HOME1 fixes the primary chrome at five. */
+    expect(SECTION_TABS.build.map((t) => t.label)).toEqual([
+      "Screens",
+      "Backtests",
+      "Create",
+      "Swing",
+    ]);
+    expect(SECTION_TABS.swing.map((t) => t.label)).toEqual(["Setups", "Market"]);
     expect(SECTION_TABS.build.map((t) => t.href)).toContain("/create");
     /*
       §2: `Me → Investments | Portfolios | Watchlist` becomes

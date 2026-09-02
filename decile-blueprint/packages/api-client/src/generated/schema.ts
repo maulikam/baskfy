@@ -3018,6 +3018,133 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/swing/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The swing book's settings
+         * @description The settings, the server's ceilings, and the two fields only a job may write.
+         *
+         *     The ceilings come back on every read so the form can render "max 1.0% — set by the server"
+         *     rather than discovering the limit by being refused.
+         */
+        get: operations["getConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a swing setting
+         * @description The one write on this surface, and it moves no money.
+         *
+         *     Seven numbers. No order path, no broker, no exposure rung: `SwingConfigPatch` forbids unknown
+         *     fields, so `{"exposure_level": 3}` is refused rather than ignored — a caller who asked to
+         *     climb the ladder is told the field does not exist here, instead of being answered `200` and
+         *     believing they had.
+         *
+         *     A value above its ceiling answers **422 `setting-above-ceiling`** naming the ceiling and the
+         *     environment variable that sets it, and the refusal is atomic: a two-field patch that crosses a
+         *     ceiling on the second field changes neither.
+         */
+        patch: operations["patchConfig"];
+        trace?: never;
+    };
+    "/api/v1/swing/market": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Breadth, the gate and the rung
+         * @description `05` §2's Market tab: the three breadth series, the gate band and the ladder over time.
+         */
+        get: operations["getMarket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/swing/sectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The sector strip
+         * @description Sector breadth for the day, with how many of the day's candidates sit in each.
+         *
+         *     The breadth figures were computed by the detection job over its own liquid universe, not read
+         *     from `market_health_daily` — which covers only the twelve size universes and has no sector
+         *     row at all (DECISIONS-SW SW3.1).
+         */
+        get: operations["getSectors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/swing/setups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The day's swing candidates
+         * @description `docs/swing/05` §2's Setups tab, in one call.
+         *
+         *     ``date`` defaults to the last day the **detectors** wrote, not to the published pipeline
+         *     date: the swing step can be skipped while the screener publishes normally, and a page asking
+         *     for the published date would then render an empty day rather than the last real one.
+         */
+        get: operations["getSetups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/swing/setups/{instrument_id}/bars": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The mini chart's series
+         * @description The last ``count`` adjusted closes with their 10- and 20-day averages.
+         *
+         *     Bounded at 500 because this is a *mini* chart: an unbounded count would let one request pull
+         *     a decade of bars for every row on a page of forty candidates.
+         */
+        get: operations["getBars"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/watchlist": {
         parameters: {
             query?: never;
@@ -3869,6 +3996,34 @@ export interface components {
             total_return?: number | null;
             /** Weighting */
             weighting: string;
+        };
+        /** BarOut */
+        BarOut: {
+            /** Close */
+            close: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Ma Fast */
+            ma_fast: string | null;
+            /** Ma Slow */
+            ma_slow: string | null;
+        };
+        /** BarsOut */
+        BarsOut: {
+            /**
+             * Adjusted
+             * @default true
+             */
+            adjusted: boolean;
+            /** Data */
+            data: components["schemas"]["BarOut"][];
+            /** Instrument Id */
+            instrument_id: number;
+            /** Symbol */
+            symbol: string;
         };
         /** BasketCardOut */
         BasketCardOut: {
@@ -6059,6 +6214,42 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** MarketDayOut */
+        MarketDayOut: {
+            /** Constituent Count */
+            constituent_count: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Exposure Level */
+            exposure_level: number;
+            /** Gate */
+            gate: string;
+            /** Index Close */
+            index_close: string | null;
+            /** Index Ma Fast */
+            index_ma_fast: string | null;
+            /** Index Ma Slow */
+            index_ma_slow: string | null;
+            /** Index Slug */
+            index_slug: string | null;
+            /** Max Exposure Pct */
+            max_exposure_pct: string;
+            /** Max Open Positions */
+            max_open_positions: number;
+            /** New Entries Allowed */
+            new_entries_allowed: boolean;
+            /** Parabolic Count */
+            parabolic_count: number;
+            /** Pct Above Ma Slow */
+            pct_above_ma_slow: string | null;
+            /** Pct New 52W High */
+            pct_new_52w_high: string | null;
+            /** Pct Up Strong 1M */
+            pct_up_strong_1m: string | null;
+        };
         /**
          * MarketHealthHistoryOut
          * @description docs/07: `GET /market-health/history?universe=&from=&to=`.
@@ -6122,6 +6313,11 @@ export interface components {
             pct_ret_1y_positive?: string | number | null;
             /** Pct Within 10Pct Ath */
             pct_within_10pct_ath?: string | number | null;
+        };
+        /** MarketOut */
+        MarketOut: {
+            /** Data */
+            data: components["schemas"]["MarketDayOut"][];
         };
         /**
          * MarketQualityOut
@@ -8021,6 +8217,26 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /** SectorOut */
+        SectorOut: {
+            /** Candidates */
+            candidates: number;
+            /** Hot */
+            hot: boolean;
+            /** Members */
+            members: number;
+            /** Pct Above Ma Slow */
+            pct_above_ma_slow: number;
+            /** Slug */
+            slug: string;
+        };
+        /** SectorsOut */
+        SectorsOut: {
+            /** As Of */
+            as_of: string | null;
+            /** Data */
+            data: components["schemas"]["SectorOut"][];
+        };
         /**
          * SelectionSpec
          * @description docs/10: ``{"top_n": 20, "hold_buffer": 10}``; "0 = strict top-N".
@@ -8071,6 +8287,81 @@ export interface components {
              * @default Bearer
              */
             token_type: string;
+        };
+        /**
+         * SetupOut
+         * @description One candidate row. Every price is an **exchange** price (SW3 divides by ``adj_factor``).
+         */
+        SetupOut: {
+            /** Adr Pct */
+            adr_pct: string | null;
+            /** Base Bars */
+            base_bars: number | null;
+            /** Base Depth Pct */
+            base_depth_pct: string | null;
+            /** Close */
+            close: string | null;
+            /** Dryup Ratio */
+            dryup_ratio: string | null;
+            /** Gap Pct */
+            gap_pct: string | null;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Listed Within 2Y */
+            listed_within_2y: boolean;
+            /** Locked Upper Circuit */
+            locked_upper_circuit: boolean;
+            /** Name */
+            name: string;
+            /** Pivot High */
+            pivot_high: string | null;
+            /** Prior Move Pct */
+            prior_move_pct: string | null;
+            /** Rvol */
+            rvol: string | null;
+            /** Score */
+            score: string;
+            /** Sector Slug */
+            sector_slug: string | null;
+            /** Setup */
+            setup: string;
+            /** Status */
+            status: string;
+            /** Stop Distance Pct */
+            stop_distance_pct: string | null;
+            /** Stop Ref */
+            stop_ref: string | null;
+            /** Symbol */
+            symbol: string;
+            /** Tightness Adr */
+            tightness_adr: string | null;
+            /** Trigger */
+            trigger: string | null;
+            /** Turnover Avg */
+            turnover_avg: number | null;
+            /** Up Streak */
+            up_streak: number | null;
+        };
+        /** SetupsOut */
+        SetupsOut: {
+            /** As Of */
+            as_of: string | null;
+            /** Data */
+            data: components["schemas"]["SetupOut"][];
+            /** Exposure Level */
+            exposure_level: number | null;
+            /** Funnel */
+            funnel: {
+                [key: string]: unknown;
+            } | null;
+            /** Gate */
+            gate: string | null;
+            /** Max Exposure Pct */
+            max_exposure_pct: string | null;
+            /** Max Open Positions */
+            max_open_positions: number | null;
+            /** New Entries Allowed */
+            new_entries_allowed: boolean | null;
         };
         /** SipBody */
         SipBody: {
@@ -8319,6 +8610,12 @@ export interface components {
             pipeline_running: boolean;
         };
         /**
+         * StopMode
+         * @description Where the initial stop comes from.
+         * @enum {string}
+         */
+        StopMode: "LOW_OF_DAY" | "OPENING_RANGE_LOW";
+        /**
          * SubtreeHoldingOut
          * @description One holding row inside the subtree, with the portfolio and account it belongs to.
          */
@@ -8449,6 +8746,79 @@ export interface components {
              * @enum {string}
              */
             topic: "A number looks wrong" | "Billing or invoices" | "My account" | "A feature request" | "Something else";
+        };
+        /**
+         * SwingConfigPatch
+         * @description A partial update. Every field optional; unset means "leave it alone".
+         *
+         *     ``extra="forbid"`` is the load-bearing line. Without it, ``PATCH {"exposure_level": 3}``
+         *     would be accepted, ignored and answered ``200`` — the caller believing they had climbed the
+         *     ladder by asking. With it, they are told the field does not exist here.
+         *
+         *     The bounds on each field are the *engine's* limits, not the server's ceilings: a negative
+         *     risk or a 0-minute opening range is nonsense at any ceiling, and nonsense is a 400. The
+         *     ceilings are checked afterwards, in :func:`apply_patch`, and answer 422 — a different
+         *     question with a different answer.
+         */
+        SwingConfigPatch: {
+            /** Adr Min Pct */
+            adr_min_pct?: number | string | null;
+            /** Max Open Positions */
+            max_open_positions?: number | null;
+            /** Max Position Pct */
+            max_position_pct?: number | string | null;
+            /** Or Window Minutes */
+            or_window_minutes?: (1 | 5 | 60) | null;
+            /** Price Min */
+            price_min?: number | string | null;
+            /** Risk Per Trade Pct */
+            risk_per_trade_pct?: number | string | null;
+            /** Sleeve Capital Inr */
+            sleeve_capital_inr?: number | string | null;
+            stop_mode?: components["schemas"]["StopMode"] | null;
+            /** Turnover Min Inr */
+            turnover_min_inr?: number | string | null;
+        };
+        /**
+         * SwingConfigView
+         * @description What a reader gets: the settings, the ceilings, and the two read-only system fields.
+         */
+        SwingConfigView: {
+            /** Adr Min Pct */
+            adr_min_pct: string;
+            /** Ceilings */
+            ceilings: {
+                [key: string]: string;
+            };
+            /** Execution Enabled */
+            execution_enabled: boolean;
+            /** Exposure Level */
+            exposure_level: number;
+            /** First Live Sessions Left */
+            first_live_sessions_left: number;
+            /** Max Open Positions */
+            max_open_positions: number;
+            /** Max Position Pct */
+            max_position_pct: string;
+            /** Or Window Minutes */
+            or_window_minutes: number;
+            /** Price Min */
+            price_min: string;
+            /** Risk Per Trade Pct */
+            risk_per_trade_pct: string;
+            /** Sleeve Capital Inr */
+            sleeve_capital_inr: string;
+            /** Stop Mode */
+            stop_mode: string;
+            /** Turnover Min Inr */
+            turnover_min_inr: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
         };
         /** SyncHoldingsOut */
         SyncHoldingsOut: {
@@ -9257,7 +9627,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9360,7 +9730,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9463,7 +9833,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9566,7 +9936,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9669,7 +10039,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9772,7 +10142,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9873,7 +10243,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9974,7 +10344,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10077,7 +10447,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10180,7 +10550,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10285,7 +10655,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10388,7 +10758,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10495,7 +10865,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10597,7 +10967,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10698,7 +11068,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10803,7 +11173,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10908,7 +11278,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11009,7 +11379,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11116,7 +11486,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11219,7 +11589,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11324,7 +11694,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11423,7 +11793,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11524,7 +11894,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11627,7 +11997,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11734,7 +12104,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11837,7 +12207,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11938,7 +12308,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12043,7 +12413,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12146,7 +12516,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12251,7 +12621,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12358,7 +12728,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12464,7 +12834,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12568,7 +12938,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12669,7 +13039,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12770,7 +13140,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12871,7 +13241,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12975,7 +13345,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13078,7 +13448,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13181,7 +13551,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13284,7 +13654,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13389,7 +13759,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13494,7 +13864,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13595,7 +13965,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13696,7 +14066,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13802,7 +14172,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13907,7 +14277,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14010,7 +14380,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14113,7 +14483,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14220,7 +14590,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14327,7 +14697,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14434,7 +14804,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14541,7 +14911,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14644,7 +15014,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14747,7 +15117,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14854,7 +15224,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14955,7 +15325,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15056,7 +15426,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15157,7 +15527,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15260,7 +15630,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15363,7 +15733,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15468,7 +15838,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15573,7 +15943,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15678,7 +16048,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15779,7 +16149,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15880,7 +16250,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15983,7 +16353,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16084,7 +16454,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16185,7 +16555,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16290,7 +16660,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16391,7 +16761,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16492,7 +16862,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16593,7 +16963,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16694,7 +17064,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16797,7 +17167,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16911,7 +17281,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17012,7 +17382,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17115,7 +17485,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17216,7 +17586,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17319,7 +17689,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17422,7 +17792,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17528,7 +17898,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17631,7 +18001,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17736,7 +18106,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17841,7 +18211,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17944,7 +18314,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18051,7 +18421,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18158,7 +18528,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18262,7 +18632,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18365,7 +18735,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18466,7 +18836,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18571,7 +18941,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18672,7 +19042,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18779,7 +19149,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18882,7 +19252,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18987,7 +19357,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19095,7 +19465,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19196,7 +19566,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19301,7 +19671,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19404,7 +19774,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19507,7 +19877,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19608,7 +19978,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19715,7 +20085,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19819,7 +20189,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19924,7 +20294,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20025,7 +20395,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20130,7 +20500,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20235,7 +20605,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20336,7 +20706,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20441,7 +20811,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20542,7 +20912,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20643,7 +21013,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20744,7 +21114,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20850,7 +21220,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20951,7 +21321,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21052,7 +21422,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21157,7 +21527,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21262,7 +21632,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21363,7 +21733,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21467,7 +21837,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21571,7 +21941,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21678,7 +22048,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21779,7 +22149,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21882,7 +22252,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21988,7 +22358,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22089,7 +22459,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22196,7 +22566,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22306,7 +22676,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22405,7 +22775,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22508,7 +22878,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22609,7 +22979,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22716,7 +23086,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22822,7 +23192,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22925,7 +23295,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23032,7 +23402,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23139,7 +23509,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23245,7 +23615,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23349,7 +23719,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23452,7 +23822,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23559,7 +23929,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23660,7 +24030,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23767,7 +24137,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23872,7 +24242,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23975,7 +24345,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24076,7 +24446,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24183,7 +24553,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24286,7 +24656,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24395,7 +24765,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24502,7 +24872,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24608,7 +24978,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24714,7 +25084,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24819,7 +25189,633 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwingConfigView"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patchConfig: {
+        parameters: {
+            query?: {
+                now?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwingConfigPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwingConfigView"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getMarket: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getSectors: {
+        parameters: {
+            query?: {
+                date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectorsOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getSetups: {
+        parameters: {
+            query?: {
+                date?: string | null;
+                setup?: string | null;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupsOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getBars: {
+        parameters: {
+            query?: {
+                date?: string | null;
+                count?: number;
+            };
+            header?: never;
+            path: {
+                instrument_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BarsOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24920,7 +25916,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25025,7 +26021,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25126,7 +26122,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25227,7 +26223,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25332,7 +26328,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25433,7 +26429,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25540,7 +26536,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25643,7 +26639,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25746,7 +26742,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25850,7 +26846,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description No trading day available for that date */
+            /** @description Setting exceeds the server's ceiling */
             422: {
                 headers: {
                     [name: string]: unknown;

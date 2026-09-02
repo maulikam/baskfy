@@ -12,8 +12,8 @@ done. A fresh session resumes from the first module not marked ✅.
 | SW0 — Baseline and read-in | ✅ | Both suites green at baseline; the numbers, the data date, the Alembic head, the Beat inventory and every `DRY_RUN` are recorded below |
 | SW1 — The pure core, re-verified | ✅ | Green in the repo's own `uv` environment; in the mutation harness for the first time, and three new contract modules took it from **41.0% to 83.4%** — above `factors`' 77.5% |
 | SW2 — Schema and settings | ✅ | Twelve `sw_` tables migrated and round-tripped, `sw_config` seeded at zero capital, the three flags and three ceilings wired into API, worker and desk, and a ceiling can never become a form field |
-| SW3 — Daily detection job | ⬜ | |
-| SW4 — API + Setups/Market pages | ⬜ | |
+| SW3 — Daily detection job | ✅ | `baskfy.swing.detect` writes `sw_setup_daily` + `sw_market_daily`, wired in as the chain's twelfth step (unable to fail the night), with `make swing DATE=…` and two Beat entries |
+| SW4 — API + Setups/Market pages | ✅ | Five `/swing` routes (four reads, one bounded settings write), the Setups and Market pages, and two read-only tests — one per side of the wire |
 | SW5 — Watchlist, plan preview, EOD, alert | ⬜ | |
 | SW6 — Premarket EP scan + opening-range monitor | ⬜ | |
 | SW7 — Desk page + `/swing/execute` (DRY_RUN) | ⬜ | |
@@ -263,6 +263,127 @@ Maulik decides what the book may risk (`02` §3.4).
 Among them: a patch that crosses a ceiling on its second field changes **neither** field; an
 accepted patch writes one audit row per field that actually moved (a no-op change writes none);
 and `ck_sw_position_stop_never_below_initial` refuses an `UPDATE` that lowers a stop.
+
+---
+
+## SW3 — The daily detection job ✅
+
+### What runs
+
+| | |
+|---|---|
+| `baskfy_worker.tasks.swing.run_detect_swing` | the job: bars → indicators → detectors → exchange prices → score adjustments → `sw_setup_daily`, then breadth → gate → ladder → `sw_market_daily` |
+| `PipelineStep.COMPUTE_SWING` | the chain's **twelfth** step, after `refresh_basket`, via `orchestrator.run_compute_swing_step` |
+| `baskfy.swing.detect` (Beat, 21:00 IST Mon–Fri) | the same job again, in case the chain failed its quality gate — the bars are still there and yesterday's setups are still worth having |
+| `baskfy.swing.weekend` (Beat, Sat 07:00 IST) | re-detects the last five sessions (`01` §8's weekend routine) |
+| `make swing DATE=… [SESSIONS=…]` | the same body without Celery, printing the funnel |
+
+### The three things the job does that core cannot
+
+1. **Exchange prices.** Every level comes out of the detector *adjusted* and is divided by the
+   row's `adj_factor` before storage, with the factor stored beside it. A person types a trigger
+   into a broker and the broker has never heard of our adjustment.
+2. **The circuit band, in the other direction.** `upper_circuit` is an exchange print and `high`
+   is adjusted in place, so the band is multiplied by the factor on the way *in*. Without it, the
+   morning after a 1:2 split every name would read as locked (or none would). DECISIONS-SW SW3.2.
+3. **The two `+5`s of `04` §2.6**, which need `instrument.listed_on` and `index_member_daily` —
+   tables law 1 forbids core from reading. Applied after the detector, capped at 100.
+
+### The sector strip
+
+`05` §2 says the strip comes from `market_health_daily`, which covers only the twelve **size**
+universes — no sector index has a breadth row, so as specified it has nothing to read. The job
+computes sector breadth itself over its own liquid universe and stores it in
+`sw_market_daily.detail.sectors`; `SECTOR_INDEX_SLUGS` in `baskfy_core.universes` is the explicit
+list of NSE's fifteen sectoral indices. DECISIONS-SW SW3.1.
+
+### Tests — `services/worker/tests/test_swing_detect.py`, 25 passed
+
+Every acceptance criterion, plus the ones the criteria imply:
+
+- running the job twice for a date changes no rows, and there is still exactly one market row;
+- a date with no published bars is `SKIPPED` with a reason, and a date where bars exist but none
+  is dated today is `SKIPPED` with a **different** reason;
+- a synthetic split inside a base (`adj_factor = 0.5`) stores a trigger equal to the raw price,
+  and the row carries the factor;
+- the step's failure leaves the run intact — asserted against `run_compute_swing_step`, which SW3
+  extracted from the orchestrator so the guarantee can be tested for what it is;
+- a deployment with no `BASKFY_SOLE_USER_ID` skips the step and says so;
+- the young-listing `+5` is exactly 5.00 more than the same flag without it, and the bonuses
+  cannot push a score past 100;
+- the sector is read **for the detection date** — membership a month earlier does not count;
+- the lookback is 200 *trading* days, not 200 calendar days.
+
+### What SW3 did NOT do
+
+- **Nothing has run the detectors over a real NSE day.** The dev database holds ten sessions of
+  bars; the detector needs 125. The "on the dev stack" criterion is met against bars the test
+  writes — a better test, and an honest gap. DECISIONS-SW SW3.3.
+- The `sw_watch` auto-watch rules, the EOD plan and the alert are SW5's; this job writes no
+  watchlist row and builds no plan.
+- `sw_market_daily.exposure_level` is computed and stored but `sw_config.exposure_level` is not
+  yet written back — SW8 closes that loop.
+
+---
+
+## SW4 — API and the Setups / Market pages ✅
+
+### The API
+
+| Route | What it answers |
+|---|---|
+| `GET /swing/setups?date&setup&status` | the day's candidates, **with the gate, the tier and the funnel** — so a page never makes a second call to learn whether the rows it is showing may be acted on |
+| `GET /swing/setups/{instrument_id}/bars?date&count` | the mini chart's series: adjusted closes with their 10- and 20-day averages, `None` before each window is full |
+| `GET /swing/market?from&to` | `sw_market_daily` over a span, oldest first |
+| `GET /swing/sectors?date` | the strip, with how many of the day's candidates sit in each sector |
+| `GET /swing/config` · `PATCH /swing/config` | the settings, the ceilings and the two read-only system fields |
+
+`baskfy_api/swing.py` owns the SQL, `routers/swing.py` owns the HTTP — the split `market_data.py`
+uses. Every route resolves the caller through `scoped_sole_user_id`, which **refuses** a principal
+who is not the sole tenant rather than serving them somebody else's book (the M43.4 failure).
+
+Prices and measurements are `Decimal` **all the way to the wire**: the response models declare
+`Decimal`, and `canonical_json` serialises them with their stored digits. A `float` anywhere in
+that chain turns a trigger of `149.60` into `149.6`, and that number is typed into a broker.
+
+OpenAPI and `packages/api-client` regenerated.
+
+### The pages
+
+`/swing` (Setups) and `/swing/market`, both server-rendered, both `force-dynamic` (a setup is a
+claim about *today*; the failure mode of a cached one is somebody acting on yesterday's pivot).
+
+The Setups page answers three questions in the order a person asks them — is the tape worth
+trading, which names are ready, where would each break out — and answers the first **above** the
+list, because a list of setups above a RED gate is a list of trades not to take. The empty state
+is written from the funnel, so "no flags today" says *how many names were liquid*.
+
+`docs/swing/05` §1's "the Build hub gains a section tab Swing" is done: `/swing` lights **Build**
+in the primary chrome rather than adding a sixth destination (HOME1 fixes it at five).
+
+### Two read-only tests, one per side of the wire
+
+| Test | What it asserts |
+|---|---|
+| `services/api/tests/test_swing_readonly.py` | five paths, four of them GET; the one PATCH is whitelisted by path; neither the router nor the service names the execution package, a broker or an order; no swing path contains `execute`/`gtt`/`order`; the two system-owned fields are not in the request model |
+| `apps/web/src/lib/swing/__tests__/read-only.test.ts` | the pages declare no server action and render no form; the fetch helper issues no non-GET; **every endpoint it names is on a whitelist**, because `/swing/execute` would match any pattern that allowed `/swing/setups` |
+
+`services/api/tests/test_api_swing.py` is the contract: the funnel survives an empty filter, the
+gate rides with the candidates, `149.60` stays `149.60` on the wire, another account is refused,
+and a setting above its ceiling answers 422 naming the ceiling.
+
+### What SW4 did NOT do
+
+- **The mini chart is an endpoint, not a drawing.** `GET /swing/setups/{id}/bars` returns the
+  130-point series `05` §2 asks for and is tested; the SVG on the row is not drawn yet.
+- **No Playwright check.** `05` §2's browser assertion ("renders the page with one flag and one
+  locked EP and shows the lock icon") is not written; the page is covered by the read-only test
+  and by the API contract, not by a rendered-DOM test.
+- **No p95 measurement.** The `< 300 ms` budget for `/swing/setups` is not measured — SW11 owns
+  the budget table (`benchmarks/AS-MEASURED.md`) and there is no 2,500-instrument dataset on this
+  machine to measure against.
+- The three remaining tabs (`Watchlist`, `Positions`, `Journal`) are SW5's and SW8's; the tab row
+  carries the two that exist rather than showing three dead links.
 
 ---
 

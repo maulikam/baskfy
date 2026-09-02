@@ -92,6 +92,7 @@ from baskfy_api.routers import (
     search,
     sleeves,
     support,
+    swing,
     track_b,
     webhook_endpoints,
 )
@@ -590,3 +591,6 @@ def _mount_routers(versioned: APIRouter) -> None:
     versioned.include_router(curated_drift.router)
     # SC10: Track B dark surfaces — 404 while subscriptions/fee-collection/public-signup stay off.
     versioned.include_router(track_b.router)
+    # SW4: the swing book's read surfaces and its one settings write. Read-only otherwise, and
+    # `test_swing_readonly.py` asserts that over the source and the OpenAPI document.
+    versioned.include_router(swing.router)

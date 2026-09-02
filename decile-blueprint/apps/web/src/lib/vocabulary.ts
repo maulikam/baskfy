@@ -86,6 +86,10 @@ export const PAGES = {
     title: "Market · Swing",
     blurb: "Whether the tape is worth trading, and how much the allocation may carry.",
   },
+  "/swing/journal": {
+    title: "Journal · Swing",
+    blurb: "What the closed trades add up to in R, and whether the ladder says press or sit.",
+  },
   "/discover": {
     title: "Discover",
     blurb: "Say how you want to invest, and see which baskets match it.",

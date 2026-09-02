@@ -726,6 +726,77 @@ settlement into the detection job means calling `settle_ladder` from `write_mark
 row it just upserted and deleting the call in the evening — the records make either job
 idempotent.
 
+## SW8.2 — The ladder sentence says what the next close does, at every rung; the empty journal counts sessions instead · ⚠ UNREVIEWED
+
+**Context.** `05` §2 asks the journal page for "the current loss streak and what it means for
+the ladder". The wire carries two numbers and a list — `stats.current_loss_streak`, the
+`ladder` card (`level`, `gate`, `new_entries_allowed`) and `ladder.last_r`, the closes the
+ladder read — and `04` §8.4 is four rules in precedence order (RED → rung 0 and no entries; a
+three-loss streak → one rung down; five closes net positive in GREEN → one rung up; AMBER
+holds). A page that printed the four rules would be a rule book; a page that printed the
+streak alone would leave the reader to work out which rule bites tonight.
+
+**The choice.**
+
+1. **One sentence per state, in `04` §8.4's precedence order, phrased as what the next close
+   does** (`journal/copy.ts::ladderSentence`). Rungs are said as people say them — `level` 0 is
+   "rung 1 of 4", the convention the Market and Setups pages already use.
+
+   | state | the sentence says |
+   |---|---|
+   | gate `UNKNOWN` (no market row) | the gate has not been measured, no entry is allowed, and no close moves the ladder until the detectors have run |
+   | gate RED | the ladder goes to rung 1 of 4 and allows no new entries whatever the next close says; it climbs again only once the gate turns |
+   | streak ≥ 3, rung > 1 | the ladder falls a rung **each evening** the streak stands (rung k becomes k−1 at the next settlement); another losing close keeps it falling; a close that is not a loss ends the streak and the rung follows the last five closes again |
+   | streak ≥ 3, rung 1 | already at the bottom; another loss keeps it there; a non-loss ends the streak; the rung can rise only after five closes net positive in GREEN |
+   | streak 2 | "one more losing close makes 3 and steps the ladder down from rung k to k−1" (at rung 1: "would call for a step down, but the ladder is already at rung 1"); then **otherwise** — the climb clause below |
+   | streak 0–1 | "N losing closes in a row would step the ladder down from rung k" (or the rung-1 variant); then **otherwise** — the climb clause |
+   | climb clause | fewer than five closes: "cannot climb until 5 trades have closed net positive in a GREEN tape (n so far)"; GREEN and net positive: "climbs to rung k+1 at the next settlement, and again each evening that holds" (at rung 4: "at the top"); GREEN and net ≤ 0: "rung k holds until they are net positive"; AMBER: "holds rung k with entries allowed at its size" |
+
+   "Each evening" and "at the next settlement" are deliberate: SW8.1 settles the ladder every
+   evening from the same closes, so a standing streak steps down again tomorrow with no new
+   trade, and a standing net-positive five climbs again — the page says the rule as the job
+   runs it, not as a reader might assume it ("once per trade").
+2. **The streak in the sentence is counted from `ladder.last_r`**, the closes the ladder
+   actually read, not from either card's `current_loss_streak`. The two agree whenever the
+   whole-record streak is under the lookback (five); when it is longer, the sentence says "5
+   losses in a row" and the card says "7 in a row" — both true, about different windows, and
+   the card the ladder reads is named under the sentence. The net R in the climb clause is the
+   sum of `last_r` rounded to two places, so a float residue cannot turn a Decimal zero into a
+   climb.
+3. **Three `MarketConfig` numbers are mirrored in the page** — four rungs, a five-close
+   lookback, a three-loss step-down — as named constants with the field they mirror, the way
+   the market page mirrors §8.3's two breadth thresholds. The API ships the rung and the closes,
+   not the rule; C2 fixes the wire and this leaf does not own the router.
+4. **The empty journal counts sessions.** With no closed trade the top sentence is "No
+   simulated trade has closed yet — N of 20 paper sessions logged, and the ladder is reading an
+   empty record"; each card still draws its six bars, empty, with a caption saying so; the
+   groupings say "No closed trades yet" / "No month has a closed trade yet"; the ladder sentence
+   is the streak-0 form with "(none so far)". A record with nothing in it is a fact about how
+   far the paper period has got, and the session count is the number that measures it.
+5. **The top sentence reads the record the ladder reads** (`ladder.reads`), simulated until the
+   flag flips. Two verdicts would be two sentences, and the point of `Answer` is one.
+6. **The backtest card's `stats` and `params` are rendered generically** — nested records opened
+   two levels as `group · key`, series as a count, `sleeve` in a key read as `allocation` and
+   `book` as `record` (SW4.2) — because C3 gives the shape to leaf 1.3.2. The heading is `02`
+   §3.3's, verbatim: "Backtest, EOD approximation".
+
+**Rejected.**
+
+* *Printing the four rules under the streak.* A rule book, and the reader still has to pick the
+  rule; the sentence picks it.
+* *One sentence for every state* ("Streak N; the ladder moves on the next close"). Wrong at
+  RED (nothing moves it), wrong at the bottom (nothing lowers it), and silent about the climb.
+* *Counting the streak from the card's statistics.* The card is the whole record; the ladder
+  reads five closes; a sentence about the ladder should be computed from the ladder's input.
+* *Asking 1.2.1 for a `rule` field on the wire.* Right in the long run; not this leaf's file,
+  and the mirror is three constants with tests at every branch.
+* *A combined "all closes" card with a simulated/real column.* `04` §10 says separately, and a
+  column is a step from a sum.
+
+**Reversal.** `ladderSentence` is one function with a test per branch; the three constants are
+three lines; the `Verdict` component picks the card in one expression; `flatten`/`label` are
+the generic renderer and go when SW9 draws its own card.
+
 ## SW9.1 — The backtest sizes every trade against a constant sleeve and re-settles the ladder at every close · ⚠ UNREVIEWED
 
 **Context.** `04` §11: "size by §5 on a constant ₹10 lakh sleeve with the ladder in force". Two

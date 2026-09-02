@@ -291,6 +291,10 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/swing/watch": {"get", "post"},
     "/swing/watch/{watch_id}": {"patch", "delete"},
     "/swing/positions": {"get"},
+    # SW8: the journal — the book's results in R, real and simulated in separate cards, the
+    # ladder rung `swing-eod` wrote back, and the session count against the 20-session gate.
+    # A read of closed positions; it writes nothing and names no broker.
+    "/swing/journal": {"get"},
     # NOT LISTED, and deliberately: nothing under `/api/public/v1`. The public tier's router is
     # not mounted while the data-redistribution review docs/11 §Compliance requires is
     # outstanding, so it is absent from this document by construction —

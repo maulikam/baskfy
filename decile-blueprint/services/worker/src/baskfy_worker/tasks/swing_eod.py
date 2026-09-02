@@ -1,7 +1,7 @@
 """SW5 — the evening job: manage the book, plan tomorrow, say so in an email.
 
 `docs/swing/01` §8's routine, in code: *"End of day: 15-30 minutes on positions and scans."* This
-is that half-hour. It runs after the detectors have written the day's candidates, and it does four
+is that half-hour. It runs after the detectors have written the day's candidates, and it does five
 things in an order that matters:
 
 1. **Auto-watch and expire.** The day's qualifying flags and every EP join the watchlist; rows
@@ -9,11 +9,17 @@ things in an order that matters:
 2. **Manage what is open.** `stops.manage` over every open `sw_position`, with today's bar and
    its two moving averages. The actions become tomorrow's exit lines: a `SELL_AT_OPEN` for a
    partial or a full exit, a `RAISE_GTT_STOP` for a stop that has earned its move.
-3. **Plan tomorrow.** `build_entries` over the watchlist with the day's tier, into an
+3. **Settle the ladder** (SW8). `exposure_tier` over the rung in force, the last closed trades
+   and the day's gate; the rung it answers is written back to `sw_config.exposure_level` —
+   audited, `changed_by="swing-eod"` — and into the day's `sw_market_daily`, so the plan, the
+   settings page, the morning rebuild and every hub tab read one number. `rung_in_force` says
+   why the rung it starts from is read from the previous settlement rather than from
+   `sw_config`.
+4. **Plan tomorrow.** `build_entries` over the watchlist with the settled tier, into an
    `sw_plan(source=EOD_PREVIEW)` with its lines **and its skips**. `04` §9's own words: "A
    watchlist of twelve names and a plan of two lines is only useful if the other ten explain
    themselves."
-4. **Send the email**, and count the session.
+5. **Send the email**, and count the session.
 
 **Exits are computed before entries, and the plan puts them first.** `04` §9.3: "the money they
 free is the money the entries spend". A plan that sized tomorrow's buys against today's cash
@@ -38,6 +44,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_api.email import Mailer, build_transport
 from baskfy_api.email.templates import SwingCandidate, SwingDigest, swing_eod
 from baskfy_api.settings import Settings, get_settings
+from baskfy_api.swing_journal import PAPER_SESSIONS_REQUIRED
+from baskfy_api.swing_settings import (
+    SYSTEM_OWNED_FIELDS,
+    SwingConfigNotSeeded,
+    record_system_change,
+)
 from baskfy_api.swing_watch import auto_watch, list_watch
 from baskfy_core.models import (
     AppUser,
@@ -54,7 +66,7 @@ from baskfy_core.models import (
 )
 from baskfy_core.models.swing import PLAN_TTL_MINUTES
 from baskfy_core.swing.config import DEFAULT_SWING_CONFIG, Setup, SwingConfig
-from baskfy_core.swing.market import ExposureTier, MarketGate
+from baskfy_core.swing.market import ExposureTier, MarketGate, exposure_tier
 from baskfy_core.swing.plan import (
     LineKind,
     PlanLine,
@@ -89,7 +101,12 @@ class EodReport:
 
     trade_date: dt.date
     gate: str
+    #: The rung the plan was built with — after the ladder settled, and equal to what
+    #: `sw_config.exposure_level` says once the evening has run.
     exposure_level: int
+    #: The rung in force coming into the evening, and the closes the ladder read to move it.
+    rung_before: int = 0
+    closed_r: list[str] = field(default_factory=list)
     watch_added: int = 0
     watch_expired: int = 0
     watching: int = 0
@@ -106,6 +123,11 @@ class EodReport:
             "trade_date": self.trade_date.isoformat(),
             "gate": self.gate,
             "exposure_level": self.exposure_level,
+            "ladder": {
+                "from": self.rung_before,
+                "to": self.exposure_level,
+                "closed_r_multiples": list(self.closed_r),
+            },
             "watch": {
                 "added": self.watch_added,
                 "expired": self.watch_expired,
@@ -450,6 +472,196 @@ async def _record_session(
     )
 
 
+#: Who the audit row says moved the rung. Read off the settings module's own table so the name
+#: the settings page shows and the name this job writes cannot drift apart.
+LADDER_CHANGED_BY: Final = SYSTEM_OWNED_FIELDS["exposure_level"]
+
+
+@dataclass(frozen=True, slots=True)
+class LadderSettlement:
+    """What the ladder did tonight, and what it read to do it."""
+
+    rung_before: int
+    tier: ExposureTier
+    #: The R-multiples the ladder read, oldest first — `sw_market_daily.detail` keeps them so the
+    #: rung is explainable (`03` §3), and the journal page shows them (`06` SW8's AC).
+    closed_r: tuple[Decimal, ...]
+    #: Which book they came from (PACK.6): ``"simulated"`` until execution is enabled.
+    reads: str
+
+
+async def closed_r_multiples(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    simulated: bool,
+    on: dt.date,
+    count: int,
+) -> tuple[Decimal, ...]:
+    """The last ``count`` closed trades' R, oldest first, closed **on or before** ``on``.
+
+    Bounded by date, unlike the detection job's reader, because the evening can be re-run for a
+    past session (a weekend re-detect, a `make swing DATE=` repair) and a ladder that read closes
+    from after that date would be sizing yesterday with tomorrow's results — house rule 5.
+    ``simulated`` selects the book (PACK.6); a `CLOSED` row without an `r_multiple` is a close-out
+    that never finished writing and is not a trade.
+    """
+    rows = await session.execute(
+        select(SwPosition.r_multiple)
+        .where(
+            SwPosition.user_id == user_id,
+            SwPosition.state == "CLOSED",
+            SwPosition.simulated.is_(simulated),
+            SwPosition.r_multiple.is_not(None),
+            SwPosition.closed_on.is_not(None),
+            SwPosition.closed_on <= on,
+        )
+        .order_by(SwPosition.closed_on.desc(), SwPosition.id.desc())
+        .limit(count)
+    )
+    values = [Decimal(row[0]) for row in rows if row[0] is not None]
+    return tuple(reversed(values))
+
+
+def _settled_rung(row: SwMarketDaily, key: str) -> int | None:
+    """The ``from`` or ``to`` rung `settle_ladder` recorded on a row, if it has been settled."""
+    detail = row.detail if isinstance(row.detail, dict) else {}
+    settled = detail.get("ladder")
+    if isinstance(settled, dict):
+        value = settled.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+    return None
+
+
+async def rung_in_force(session: AsyncSession, *, user_id: int, market: SwMarketDaily) -> int:
+    """The rung the book carried into the session ``market`` describes.
+
+    Three records can say it, read in this order, and each is one this job wrote itself:
+
+    1. **Today's own settlement**, if there is one. `settle_ladder` records the rung it started
+       from in ``detail.ladder.from``; a re-run reads that back rather than working it out again
+       from state the first run changed.
+    2. **The previous session's settlement** — ``detail.ladder.to`` on the newest earlier row.
+       That rung was "the tier for the next session" (`03` §3), so it *is* today's rung.
+    3. **`sw_config.exposure_level`** — the last rung any evening wrote, which is exact for the
+       evening being run tonight and the best available answer for a repair of an older one.
+
+    The previous row's ``exposure_level`` *column* is deliberately not on the list. The detection
+    job writes that column too, from `sw_config` and whatever closes exist when it runs; a
+    re-detect that runs *after* an evening has settled — the Saturday five-session re-scan does —
+    recomputes it from the rung the evening just wrote and lands one rung higher. The settlement
+    record is the fact; the column is the detection job's preview of it.
+
+    `sw_config` is last, not first, and the reason is idempotency (house rule 7). This job
+    *writes* `sw_config.exposure_level`; a job that also read its starting rung from there would
+    climb the ladder twice when the same evening ran twice — five good closes in a GREEN tape
+    would be rung 1 after the first run and rung 2 after a re-run that changed nothing else.
+    None of the three records moves when tonight's job re-runs, so tonight's answer is the same
+    however many times it is asked.
+    """
+    own = _settled_rung(market, "from")
+    if own is not None:
+        return own
+    previous = (
+        await session.execute(
+            select(SwMarketDaily)
+            .where(SwMarketDaily.user_id == user_id, SwMarketDaily.date < market.date)
+            .order_by(SwMarketDaily.date.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if previous is not None:
+        settled = _settled_rung(previous, "to")
+        if settled is not None:
+            return settled
+    configured = (
+        await session.execute(select(SwConfig.exposure_level).where(SwConfig.user_id == user_id))
+    ).scalar_one_or_none()
+    return int(configured or 0)
+
+
+async def settle_ladder(  # noqa: PLR0913 - one keyword per input the rung depends on
+    session: AsyncSession,
+    *,
+    user_id: int,
+    market: SwMarketDaily,
+    config: SwingConfig,
+    execution_enabled: bool,
+    now: dt.datetime,
+) -> LadderSettlement:
+    """`04` §8.4 for tonight, written to both places that carry the rung.
+
+    The gate is the day's, as the detectors measured it — this job never invents one. The rung
+    it starts from is :func:`rung_in_force`, and is recorded on the row (``detail.ladder.from``)
+    so a re-run starts from the same place; the closes are the last `lookback_trades` of the
+    book the ladder reads (PACK.6), on or before today. The answer goes:
+
+    * to `sw_config.exposure_level` through `record_system_change`, so an `sw_config_audit` row
+      says `swing-eod` moved it and from what — the same audit a person's settings change
+      leaves, because "why was the book allowed four positions on the 14th" has to have an
+      answer. A deployment with no `sw_config` row (nothing seeded) gets the market row only,
+      and a warning: a sleeve that has not been set up has no rung to keep;
+    * to the day's `sw_market_daily`, replacing the tier the detection job wrote at 21:00 from
+      the same inputs — identical on an ordinary evening, and the authoritative one on a re-run.
+      The morning rebuild (`swing-premarket`) and every hub tab read the row, so the row must
+      say what the plan was built with.
+
+    `record_system_change` writes nothing when the rung has not moved, so an unchanged evening
+    leaves no audit row: the audit is a history of changes, not a log of runs.
+    """
+    gate = MarketGate(market.gate)
+    rung_in = await rung_in_force(session, user_id=user_id, market=market)
+    closes = await closed_r_multiples(
+        session,
+        user_id=user_id,
+        simulated=not execution_enabled,
+        on=market.date,
+        count=config.market.lookback_trades,
+    )
+    tier = exposure_tier(
+        current_level=rung_in,
+        closed_r_multiples=closes,
+        gate=gate,
+        config=config.market,
+    )
+    try:
+        await record_system_change(
+            session,
+            user_id=user_id,
+            field="exposure_level",
+            value=tier.level,
+            changed_by=LADDER_CHANGED_BY,
+            now=now,
+            note=(
+                f"{market.date.isoformat()} {gate.value}: rung {rung_in} -> {tier.level} on "
+                f"{len(closes)} {'real' if execution_enabled else 'simulated'} closes "
+                f"[{', '.join(str(r) for r in closes)}]"
+            ),
+        )
+    except SwingConfigNotSeeded:
+        log.warning(
+            "no sw_config row for user %s; the rung is kept on the market row only", user_id
+        )
+
+    market.exposure_level = tier.level
+    market.max_open_positions = tier.max_open_positions
+    market.max_exposure_pct = Decimal(str(tier.max_exposure_pct)).quantize(Decimal("0.01"))
+    market.new_entries_allowed = tier.new_entries_allowed
+    reads = "real" if execution_enabled else "simulated"
+    detail = dict(market.detail) if isinstance(market.detail, dict) else {}
+    detail.update(
+        {
+            "closed_r_multiples": [str(r) for r in closes],
+            "closed_trades_read": reads,
+            "ladder": {"from": rung_in, "to": tier.level, "settled_by": LADDER_CHANGED_BY},
+        }
+    )
+    market.detail = detail
+    await session.flush()
+    return LadderSettlement(rung_before=rung_in, tier=tier, closed_r=closes, reads=reads)
+
+
 async def run_swing_eod(  # noqa: PLR0913 - one keyword per input the evening depends on
     session: AsyncSession,
     outcome: StepOutcome,
@@ -487,13 +699,7 @@ async def run_swing_eod(  # noqa: PLR0913 - one keyword per input the evening de
         return EodReport(trade_date=trade_date, gate="UNKNOWN", exposure_level=0)
 
     gate = MarketGate(market.gate)
-    tier = ExposureTier(
-        level=market.exposure_level,
-        max_open_positions=market.max_open_positions,
-        max_exposure_pct=float(market.max_exposure_pct),
-        new_entries_allowed=market.new_entries_allowed,
-    )
-    report = EodReport(trade_date=trade_date, gate=gate.value, exposure_level=tier.level)
+    report = EodReport(trade_date=trade_date, gate=gate.value, exposure_level=market.exposure_level)
 
     watched = await auto_watch(session, user_id=user_id, on=trade_date, config=config)
     report.watch_added = watched.added
@@ -505,6 +711,21 @@ async def run_swing_eod(  # noqa: PLR0913 - one keyword per input the evening de
     report.positions_managed = managed
     report.naked_positions = naked
     report.exit_lines = len(exits)
+
+    # After the book is managed and before tomorrow is planned: the plan must be built with the
+    # rung the evening leaves behind, or `sw_config` and the plan would say different numbers.
+    settled = await settle_ladder(
+        session,
+        user_id=user_id,
+        market=market,
+        config=config,
+        execution_enabled=execution_enabled,
+        now=stamp,
+    )
+    tier = settled.tier
+    report.rung_before = settled.rung_before
+    report.exposure_level = tier.level
+    report.closed_r = [str(r) for r in settled.closed_r]
 
     items, instrument_ids = await watch_items(session, user_id=user_id, on=trade_date)
     report.watching = len(items)
@@ -559,10 +780,6 @@ async def run_swing_eod(  # noqa: PLR0913 - one keyword per input the evening de
     outcome.rows_out = len(plan.lines)
     outcome.note(**report.as_detail(), email_sent_to=sent)
     return report
-
-
-#: `docs/swing/02` §3.2 — the paper track record the real-money flag is gated on.
-PAPER_SESSIONS_REQUIRED: Final = 20
 
 
 def _candidate(line: PlanLine) -> SwingCandidate:
@@ -661,13 +878,19 @@ async def held_instrument_ids(session: AsyncSession, *, user_id: int) -> dict[st
 
 
 __all__ = [
+    "LADDER_CHANGED_BY",
     "MA_LOOKBACK_SESSIONS",
+    "PAPER_SESSIONS_REQUIRED",
     "EodReport",
+    "LadderSettlement",
     "LineKind",
     "Skipped",
+    "closed_r_multiples",
     "held_instrument_ids",
     "manage_open_positions",
     "run_swing_eod",
+    "rung_in_force",
+    "settle_ladder",
     "sleeve_account",
     "store_plan",
     "watch_items",

@@ -3054,6 +3054,32 @@ export interface paths {
         patch: operations["patchConfig"];
         trace?: never;
     };
+    "/api/v1/swing/journal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The journal, in R
+         * @description `05` §2's Journal tab: two cards, the ladder, the session count, and SW9's card.
+         *
+         *     Real and simulated closes come back in **separate** cards and are never summed together
+         *     (`04` §10). The ladder card's ``level`` is `sw_config.exposure_level` — the number the EOD
+         *     job wrote back tonight — and ``reads`` says which book it read, so a paper rung is never
+         *     mistaken for a real one. An empty book is a page of zeros, not a 404: the surface exists
+         *     before the first trade does.
+         */
+        get: operations["getJournal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/swing/market": {
         parameters: {
             query?: never;
@@ -8666,6 +8692,31 @@ export interface components {
              */
             topic: "A number looks wrong" | "Billing or invoices" | "My account" | "A feature request" | "Something else";
         };
+        /**
+         * SwingBacktestCardOut
+         * @description SW9's card. The shape is C3's; SW9 fills it and owns its ``stats``.
+         *
+         *     Declared now so the TypeScript client carries the type before the run exists, and the page
+         *     can render "not run yet" against ``None`` rather than against an absent key.
+         */
+        SwingBacktestCardOut: {
+            /** Caveats */
+            caveats: string[];
+            /** Finished At */
+            finished_at: string | null;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Run Id */
+            run_id: number;
+            /** Started At */
+            started_at: string;
+            /** Stats */
+            stats: {
+                [key: string]: unknown;
+            };
+        };
         /** SwingBarOut */
         SwingBarOut: {
             /** Close */
@@ -8767,6 +8818,119 @@ export interface components {
             /** Updated By */
             updated_by: string | null;
         };
+        /** SwingHistogramBarOut */
+        SwingHistogramBarOut: {
+            /** Bucket */
+            bucket: string;
+            /** Count */
+            count: number;
+        };
+        /**
+         * SwingJournalCardOut
+         * @description One book — real or simulated, never both (`04` §10).
+         */
+        SwingJournalCardOut: {
+            /** By Month */
+            by_month: components["schemas"]["SwingMonthStatsOut"][];
+            /** By Setup */
+            by_setup: components["schemas"]["SwingSetupStatsOut"][];
+            /** Histogram */
+            histogram: components["schemas"]["SwingHistogramBarOut"][];
+            stats: components["schemas"]["SwingJournalStatsOut"];
+            /** Trades */
+            trades: components["schemas"]["SwingJournalTradeOut"][];
+        };
+        /** SwingJournalOut */
+        SwingJournalOut: {
+            backtest: components["schemas"]["SwingBacktestCardOut"] | null;
+            ladder: components["schemas"]["SwingLadderOut"];
+            real: components["schemas"]["SwingJournalCardOut"];
+            sessions: components["schemas"]["SwingSessionsOut"];
+            simulated: components["schemas"]["SwingJournalCardOut"];
+        };
+        /**
+         * SwingJournalStatsOut
+         * @description `04` §10's statistics, in R. An empty book is a row of zeros, not an error.
+         */
+        SwingJournalStatsOut: {
+            /** Avg Loss R */
+            avg_loss_r: string;
+            /** Avg Win R */
+            avg_win_r: string;
+            /** Current Loss Streak */
+            current_loss_streak: number;
+            /** Expectancy R */
+            expectancy_r: string;
+            /** Largest Loss R */
+            largest_loss_r: string;
+            /** Largest Win R */
+            largest_win_r: string;
+            /** Net R */
+            net_r: string;
+            /** Profit Factor */
+            profit_factor: string | null;
+            /** Trades */
+            trades: number;
+            /** Win Rate Pct */
+            win_rate_pct: string;
+        };
+        /**
+         * SwingJournalTradeOut
+         * @description One closed trade, with the numbers that were written at its close.
+         */
+        SwingJournalTradeOut: {
+            /** Close Reason */
+            close_reason: string | null;
+            /** Entry */
+            entry: string;
+            /**
+             * Entry Date
+             * Format: date
+             */
+            entry_date: string;
+            /** Exit Avg */
+            exit_avg: string;
+            /**
+             * Exit Date
+             * Format: date
+             */
+            exit_date: string;
+            /** Initial Stop */
+            initial_stop: string;
+            /** Pnl Inr */
+            pnl_inr: string;
+            /** Quantity */
+            quantity: number;
+            /** R Multiple */
+            r_multiple: string;
+            /** Setup */
+            setup: string;
+            /** Symbol */
+            symbol: string;
+        };
+        /**
+         * SwingLadderOut
+         * @description The rung in force, what it allows, and the closes it was computed from.
+         */
+        SwingLadderOut: {
+            /** Gate */
+            gate: string;
+            /** Last R */
+            last_r: string[];
+            /** Level */
+            level: number;
+            /** Max Exposure Pct */
+            max_exposure_pct: string;
+            /** Max Open Positions */
+            max_open_positions: number;
+            /** New Entries Allowed */
+            new_entries_allowed: boolean;
+            /**
+             * Reads
+             * @enum {string}
+             */
+            reads: "SIMULATED" | "REAL";
+        };
         /** SwingMarketDayOut */
         SwingMarketDayOut: {
             /** Constituent Count */
@@ -8807,6 +8971,15 @@ export interface components {
         SwingMarketOut: {
             /** Data */
             data: components["schemas"]["SwingMarketDayOut"][];
+        };
+        /** SwingMonthStatsOut */
+        SwingMonthStatsOut: {
+            /** Month */
+            month: string;
+            /** Net R */
+            net_r: string;
+            /** Trades */
+            trades: number;
         };
         /** SwingPlanLineOut */
         SwingPlanLineOut: {
@@ -8959,6 +9132,16 @@ export interface components {
             data: components["schemas"]["SwingSectorOut"][];
         };
         /**
+         * SwingSessionsOut
+         * @description `02` §3.2: "14 of 20 paper sessions logged".
+         */
+        SwingSessionsOut: {
+            /** Logged */
+            logged: number;
+            /** Required */
+            required: number;
+        };
+        /**
          * SwingSetupOut
          * @description One candidate row. Every price is an **exchange** price (SW3 divides by ``adj_factor``).
          */
@@ -9011,6 +9194,17 @@ export interface components {
             turnover_avg: number | null;
             /** Up Streak */
             up_streak: number | null;
+        };
+        /** SwingSetupStatsOut */
+        SwingSetupStatsOut: {
+            /** Expectancy R */
+            expectancy_r: string;
+            /** Net R */
+            net_r: string;
+            /** Setup */
+            setup: string;
+            /** Trades */
+            trades: number;
         };
         /** SwingSetupsOut */
         SwingSetupsOut: {
@@ -25640,6 +25834,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SwingConfigView"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getJournal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwingJournalOut"];
                 };
             };
             /** @description Invalid screen definition */

@@ -183,15 +183,16 @@ export const SECTION_TABS = {
     { href: "/swing" as Route, label: "Swing" },
   ],
   /*
-    The swing hub (SW4, `docs/swing/05` §2). Five tabs; three of them arrive with later modules
-    and are marked so rather than being hidden — a tab row that grows one entry at a time reads
-    as a product changing shape, while a `planned` marker reads as one being built.
+    The swing hub (SW4, `docs/swing/05` §2): "Setups | Watchlist | Market | Positions | Journal".
+    All five tabs are in as of SW8; the row carried only the pages that existed while the rest
+    were being built, rather than showing dead links.
   */
   swing: [
     { href: "/swing" as Route, label: "Setups" },
     { href: "/swing/watchlist" as Route, label: "Watchlist" },
     { href: "/swing/market" as Route, label: "Market" },
     { href: "/swing/positions" as Route, label: "Positions" },
+    { href: "/swing/journal" as Route, label: "Journal" },
   ],
   /*
     PORTFOLIO_REDESIGN.md §2, in order. Overview first because it is the default landing tab —

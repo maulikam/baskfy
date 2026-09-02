@@ -54,6 +54,7 @@ const ALLOWED_PATHS = [
   "/swing/config",
   "/swing/watch",
   "/swing/positions",
+  "/swing/journal",
 ];
 
 describe("the swing hub is read-only and cannot reach an order", () => {

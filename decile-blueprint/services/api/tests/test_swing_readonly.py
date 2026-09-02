@@ -29,7 +29,7 @@ import typing
 import pytest
 
 from baskfy_api import swing as swing_service
-from baskfy_api import swing_watch
+from baskfy_api import swing_journal, swing_watch
 from baskfy_api.app import create_app
 from baskfy_api.routers import swing as swing_router
 from baskfy_api.swing_settings import SYSTEM_OWNED_FIELDS, SwingConfigPatch
@@ -70,7 +70,7 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
     def test_the_swing_routes_exist(self, spec: OpenApiSpec) -> None:
         paths = _swing_paths(spec)
         assert paths, "the swing routes are not registered at all"
-        assert len(paths) == 8, f"expected eight swing paths, found {paths}"
+        assert len(paths) == 9, f"expected nine swing paths, found {paths}"
 
     def test_every_route_is_a_get_except_the_documented_writes(self, spec: OpenApiSpec) -> None:
         for path in _swing_paths(spec):
@@ -95,15 +95,18 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
         assert source.count("@router.delete(") == 1, "dismissing one"
         assert "@router.put(" not in source, "routers/swing.py declares a PUT"
 
-    def test_the_read_service_writes_nothing(self) -> None:
-        """`baskfy_api.swing` is the read layer, and it has no write in it at all.
+    def test_the_read_services_write_nothing(self) -> None:
+        """`baskfy_api.swing` and `baskfy_api.swing_journal` are the read layer, and neither has
+        a write in it at all.
 
         The watchlist's writes live in `baskfy_api.swing_watch`, which is a different module for
-        exactly this reason: one file that both reads and writes cannot be asserted about.
+        exactly this reason: one file that both reads and writes cannot be asserted about. The
+        ladder rung the journal shows is written by the EOD job, never by the page that shows it.
         """
-        source = inspect.getsource(swing_service)
-        for forbidden in ("insert(", "update(", "delete(", "session.add", "session.commit"):
-            assert forbidden not in source, f"baskfy_api/swing.py contains {forbidden}"
+        for module in (swing_service, swing_journal):
+            source = inspect.getsource(module)
+            for forbidden in ("insert(", "update(", "delete(", "session.add", "session.commit"):
+                assert forbidden not in source, f"{module.__name__} contains {forbidden}"
 
     def test_the_watchlist_writer_touches_only_the_watchlist(self) -> None:
         """`swing_watch` may write, and only to `sw_watch`.
@@ -119,8 +122,8 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
 
 
 class TestItCannotReachAnOrder:
-    def test_neither_module_names_the_execution_package(self) -> None:
-        for module in (swing_router, swing_service):
+    def test_no_module_names_the_execution_package(self) -> None:
+        for module in (swing_router, swing_service, swing_journal):
             source = inspect.getsource(module)
             for forbidden in (
                 "baskfy_execution",
@@ -158,7 +161,7 @@ class TestItCannotReachAnOrder:
             and getattr(value, "__module__", "") == swing_router.__name__
             and name.startswith(("get_", "post_", "patch_", "delete_"))
         ]
-        assert len(handlers) >= 8, f"only found {len(handlers)} route handlers"
+        assert len(handlers) >= 9, f"only found {len(handlers)} route handlers"
         for handler in handlers:
             hints = typing.get_type_hints(handler, include_extras=True)
             assert "principal" in hints, f"{handler.__name__} takes no principal"
@@ -167,7 +170,7 @@ class TestItCannotReachAnOrder:
         """One call to `scoped_sole_user_id` per handler. A route that read `principal.user_id`
         directly would serve whoever asked."""
         source = inspect.getsource(swing_router)
-        assert source.count("await scoped_sole_user_id(") >= 8
+        assert source.count("await scoped_sole_user_id(") >= 9
 
 
 class TestTheLadderCannotBeClimbedByAsking:

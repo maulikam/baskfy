@@ -1406,47 +1406,27 @@ It prints a receipt with the Kite user id and a sha256 prefix, never a token.
 
 ## Swing
 
-Appended by the SW run (docs/swing/). Everything here is something only you can supply; the
-modules that depend on it are named so nothing waits on it silently.
+Only what needs your hands (SW12, 3 Sep 2026). Everything else the run decided and recorded in
+`docs/swing/DECISIONS-SW.md`; the report is `SW-FINAL-REPORT.md`.
 
-### S1 — A notification channel for the opening-range monitor (SW6, 2 Sep 2026)
+| # | What | Why | What it blocks |
+|---|---|---|---|
+| SW-1 | **`aws sso login --profile baskfy-poc`**, then the five deploy commands in `SW-FINAL-REPORT.md` §"Deploy" (`push-images.sh` → `tf.sh plan` / `apply` → `deploy-swing.sh` → `verify-swing.sh`) | The box has no session an agent can open; SW13 built and smoke-tested the compose locally (`SMOKE OK`) and could not push | Every morning below |
+| SW-2 | **Confirm the sleeve.** `deploy-swing.sh` seeds `sw_config` with ₹25,00,000 at 0.5 % (MD1/MD2) — override with `SWING_CAPITAL=… SWING_RISK=…` before running it if either is wrong; afterwards `PATCH /swing/config` is the audited, bounded write (no web form yet — STATUS "Not done") | A sleeve of ₹0 plans nothing; a wrong one sizes every line wrong | The first plan |
+| SW-3 | **The desk-history migration — yes or no.** `tools/migrate-desk` (README there; `--fork-policy` required) moves store A (43,411 rows on 65.0.226.77) into the box's `desk` schema; it needs SSH to the old box, which agents do not have. Until it runs the desk service starts on an empty `desk` schema | D8: the file is evidence; the swing book does not need it, the weekly book's pages do | The weekly book's history on the new desk; nothing swing |
+| SW-4 | **The S2 probe morning.** One weekday: Kite login before 09:00, `BASKFY_SWING_TIMING_PROBE=true` in `.env.staging` for the worker (one line, revert after), read `docs/swing/status/S2-kite-timing.md` the same evening | Two Kite timing facts (pre-open `volume`, the forming 09:20 candle) were never observed; the 09:16 scan and the tick-built range are correct either way | Nothing — at most one Beat time moves back to 09:09 |
+| SW-5 | **The DRY_RUN drill morning** — `SW-FINAL-REPORT.md` §"The DRY_RUN drill morning", `02` §3.2 | The gate you rewrote (A11) asks for one real session under `DRY_RUN=true` before the flag | SW-7 |
+| SW-6 | **Telegram** (optional): create the bot, put `BASKFY_SWING_TELEGRAM_BOT_TOKEN` and `BASKFY_SWING_TELEGRAM_CHAT_ID` in the box's `.env.staging` (never as a `box.sh` argument), restart `desk` + `swing-monitor`. Email needs only the desk's `DESK_SMTP_*` / `DESK_NOTIFY_*` lines in `.env.staging` (`.env.example` §desk, system-only) | The 09:31 focus push; one-way, never a confirm path (MD3) | Nothing — email carries the same line |
+| SW-7 | **The flag flip**, by your hand only, after `02` §3.1–3.4 hold and your risk decision is written: `BASKFY_SWING_EXECUTION_ENABLED=true` + `BASKFY_SWING_MONITOR_ENABLED=true` + **`BASKFY_DRY_RUN=false`** in `/opt/baskfy/.env.staging.compose` (desk, swing-monitor, api) **and** `BASKFY_SWING_EXECUTION_ENABLED=true` + `BASKFY_SWING_EP_PREMARKET_ENABLED=true` in `.env.staging` (worker, beat) — two files, compose.prod.yml says why — then `up -d api worker beat desk swing-monitor`. A swing order is real only with **both** `DRY_RUN` off and the flag on (`swing_gates()`); `BASKFY_DRY_RUN=false` also takes the weekly book out of dry-run on this box (its `/execute` still needs your confirm) | Non-negotiable 1; Track B | Real orders |
+| SW-8 | **S3 — rotation** (2 Sep): a subagent once ran `docker compose config` unfiltered and the laptop's `.env.staging` values were echoed into its transcript; nothing was written anywhere. Your call under §29's rotation list | §29 R1–R4 class if the box shares those values | Nothing |
 
-**What.** When the monitor raises a `TRIGGERED` signal at 09:31, the only places it lands are
-the `sw_signal` row (the desk page polls it — SW7) and an INFO log line from the process. The
-desk has no push channel of any kind, and choosing one — Telegram, ntfy, iOS push, an SMS
-gateway — is a product and a spend decision (`docs/swing/DECISIONS-SW.md` SW6.3).
+Resolved: **S1** (notification channel) → MD3 / SW11: email now, Telegram dark behind SW-6.
+**S2** (the two Kite timing questions) → superseded by the 09:04 probe (MD5 / SW11), which is SW-4.
 
-**Why it matters.** His entries are the first 60–90 minutes; a signal read at lunch is a
-signal missed. A page you have open is enough on a morning you are at the desk; it is not
-enough on the other mornings.
+### S4 — One DNS record at GoDaddy for the desk vhost (3 Sep 2026, deploy of beb5ff5)
 
-**What it blocks.** Nothing in SW7–SW12. The plan line is written and expires in 30 minutes
-either way.
-
-**What was done meanwhile.** `PgSignalStore.raise_signal` is the single call site; a channel is
-one more line in it once you name the channel and hand over its credential.
-
-### S2 — One flagged morning to answer two Kite questions (SW6, 2 Sep 2026)
-
-**What.** With `BASKFY_SWING_EP_PREMARKET_ENABLED=true` and a Kite login on any weekday, run
-`make swing-premarket DATE=<today>` at 09:09 and `python -m app.swing_monitor` at 09:15 with
-`BASKFY_SWING_MONITOR_ENABLED=true`, both under `DRY_RUN=true` (the default), and send the two
-reports.
-
-**Why.** Two things about Kite's morning API could not be verified without a live session:
-(a) whether `/quote` at 09:09 reports the pre-open matched quantity as `volume`, or 0 until
-09:15 (`docs/swing/DECISIONS-SW.md` SW6.1 — if 0, the gap scan moves to 09:16, one line in
-`celery_app.py`); (b) whether `historical_data(interval="minute")` returns the forming 09:20
-candle at 09:20:xx or only from 09:21 (either way the monitor is correct; the first signal may
-land a minute later than the replay fixture shows).
-
-**What it blocks.** Nothing — both jobs are correct under either answer and say what they saw.
-It changes one Beat time at most.
-
-### S3 — Rotation question after SW13-prep (2 Sep 2026)
-
-While validating the prod compose file locally, a subagent ran `docker compose config` once
-unfiltered and the laptop's `.env.staging` values (DB password, JWT secret, Kite key/secret,
-Google client id) were echoed into that agent's transcript — nothing written anywhere. If the
-box shares those values this is the §29 R1–R4 exposure class; your call on rotating them with
-the §29 rotation list.
+`baskfy.com`'s nameservers are still GoDaddy's, so the Route 53 record Terraform created for
+`desk.staging.baskfy.com` is not authoritative and the name is NXDOMAIN publicly. Add at GoDaddy:
+`A  desk.staging  →  3.108.148.38` (or delegate the zone to Route 53). Caddy then passes ACME
+on its own; nothing on the box needs touching. Until then the desk service is up and verified on
+the box but not reachable from the internet.

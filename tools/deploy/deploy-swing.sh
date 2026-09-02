@@ -67,7 +67,11 @@ box \
 step() { echo "$1 >/tmp/sw13.log 2>&1 || { tail -30 /tmp/sw13.log; echo \"FAILED: $2\"; exit 1; }; tail -${3:-5} /tmp/sw13.log"; }
 
 say "3. pull + migrate"
-box "$(step "$C pull -q web api desk" pull 3); echo pulled" \
+# The box's ECR login is a 12-hour token; a deploy a day after the last one finds it expired and
+# `pull` fails with "Your authorization token has expired" (SW13-run, 3 Sep 2026). The login is
+# minted ON the box from the instance role — nothing crosses SSM but the registry's hostname.
+box "$(step "aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $REG" "ecr login on the box" 1)" \
+    "$(step "$C pull -q web api desk" pull 3); echo pulled" \
     "$(step "$C run --rm migrate" "alembic upgrade head" 5)" \
     "$C exec -T postgres psql -U baskfy -d baskfy -tAc 'select version_num from alembic_version'"
 

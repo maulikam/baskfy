@@ -499,7 +499,9 @@ class TestTheSessionCount:
     async def test_it_counts_against_twenty(
         self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """`02` §3.2, `05` §2: "14 of 20 paper sessions logged"."""
+        """`05` §2: "14 of 20 paper sessions logged" — the counter is information, not a gate,
+        since Maulik rewrote `02` §3 (STANDING-ANSWERS A11); the denominator stays 20 so the
+        page and the email say how many mornings the machinery has run."""
         user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
         await _sessions(screener_session, user_id=user_id, count=14)
 

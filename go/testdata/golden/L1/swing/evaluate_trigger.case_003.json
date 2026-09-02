@@ -1,0 +1,61 @@
+{
+ "fn": "baskfy_core.swing.opening_range.evaluate_trigger",
+ "inputs": {
+  "at": "2026-09-02T09:31:00",
+  "config": {
+   "break_buffer_pct": 0.1,
+   "default_window_minutes": 5,
+   "entry_limit_buffer_pct": 0.5,
+   "entry_limit_max_adr": 0.25,
+   "fill_poll_interval_seconds": 0.5,
+   "fill_poll_seconds": 10.0,
+   "gtt_sweep_at": [
+    15,
+    15
+   ],
+   "live_min_gap_pct": 10.0,
+   "live_min_volume_pace": 3.0,
+   "monitor_close": [
+    10,
+    45
+   ],
+   "quote_poll_min_seconds": 5.0,
+   "range_reconcile_delay_minutes": 1,
+   "session_open": [
+    9,
+    15
+   ],
+   "windows_minutes": [
+    1,
+    5,
+    60
+   ]
+  },
+  "last_price": "102.6",
+  "low_of_day": "99.5",
+  "opening": {
+   "candles": 5,
+   "complete": true,
+   "high": "102.4",
+   "low": "99.5",
+   "window_minutes": 5
+  },
+  "pivot_high": "105",
+  "upper_circuit": null
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "an ORH break below the daily pivot is BELOW_PIVOT. Prices are the adjusted series (house rule 6); Decimals are strings; dates are ISO days; a naive datetime is exchange-local IST. Fixtures: packages/core/tests/swing_fixtures.py and the swing test modules. Regenerate with `python tools/parity/golden.py swing` from decile-blueprint under `uv run`; packages/core/tests/test_swing_goldens.py recomputes every case from these stored inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "entry": null,
+  "range_high": "102.4",
+  "range_low": "99.5",
+  "state": "BELOW_PIVOT",
+  "stop": null
+ }
+}

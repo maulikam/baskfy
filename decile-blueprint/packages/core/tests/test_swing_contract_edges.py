@@ -418,6 +418,11 @@ class TestTheBreakoutDayStillNeedsItsBase:
         assert self._detects(replace(FlagConfig(), base_min_bars=bars)) is True
         assert self._detects(replace(FlagConfig(), base_min_bars=bars + 1)) is False
 
+    def test_the_breakout_path_enforces_the_base_length_ceiling(self) -> None:
+        bars = int(_f(self.row, "base_bars"))
+        assert self._detects(replace(FlagConfig(), base_max_bars=bars)) is True
+        assert self._detects(replace(FlagConfig(), base_max_bars=bars - 1)) is False
+
     def test_the_breakout_path_enforces_the_prior_move_floor(self) -> None:
         measured = _f(self.row, "prior_move_pct")
         assert self._detects(replace(FlagConfig(), flagpole_min_gain_pct=measured)) is True
@@ -434,6 +439,28 @@ class TestTheBreakoutDayStillNeedsItsBase:
         """A tightness ceiling far below the measurement would reject a `SETTING_UP` flag and
         must not reject this one: today's wide bar is the breakout."""
         assert self._detects(replace(FlagConfig(), tight_max_adr_multiple=0.01)) is True
+
+
+class TestAFlatBaseSitsExactlyOnItsRules:
+    """§2.3 and §2.5 are inclusive: a base that has gone dead flat for fifty bars has
+    `close == ma_trend`, `ma_slow == ma_slow[5 bars ago]` and both halves at the same low -
+    three boundaries at once, all of them by equality between two measurements - and it is a
+    flag."""
+
+    def setup_method(self) -> None:
+        rows = flag_series(base_bars=55)
+        for i in range(len(rows) - 55, len(rows)):
+            rows[i] = {**rows[i], "open": 144.0, "close": 144.0, "high": 146.88, "low": 141.12}
+        self.indicated = with_swing_indicators(pl.DataFrame(rows))
+
+    def test_the_bar_is_exactly_on_every_boundary(self) -> None:
+        last = self.indicated.row(-1, named=True)
+        assert _f(last, "close") == _f(last, "ma_trend") == _f(last, "ma_slow")
+        assert self.indicated["ma_slow"].tail(6).to_list() == [144.0] * 6
+
+    def test_on_the_fifty_day_on_a_flat_twenty_day_with_equal_lows_is_still_a_flag(self) -> None:
+        out = detect_flags(self.indicated, last_date())
+        assert out["status"].to_list() == [CandidateStatus.SETTING_UP.value]
 
 
 # ---------------------------------------------------------------------------

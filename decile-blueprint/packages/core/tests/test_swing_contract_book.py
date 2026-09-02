@@ -32,6 +32,7 @@ import pytest
 
 from baskfy_core.swing.config import (
     DEFAULT_SWING_CONFIG,
+    EpConfig,
     Setup,
     SizingConfig,
     StopConfig,
@@ -43,6 +44,7 @@ from baskfy_core.swing.market import (
     IndexReading,
     MarketGate,
     breadth_snapshot,
+    drawdown_locked,
     exposure_tier,
     market_gate,
 )
@@ -55,6 +57,7 @@ from baskfy_core.swing.opening_range import (
     TriggerVerdict,
     evaluate_trigger,
     live_gap,
+    live_gap_score,
     opening_range,
 )
 from baskfy_core.swing.plan import (
@@ -86,6 +89,7 @@ from baskfy_core.swing.stops import (
     initial_stop,
     manage,
     partial_quantity,
+    widest_stop_pct,
 )
 
 SIZING: Final = DEFAULT_SWING_CONFIG.sizing
@@ -1283,3 +1287,131 @@ class TestExitAverage:
     def test_no_quantity_is_an_error_rather_than_a_zero(self) -> None:
         with pytest.raises(ValueError, match="no exit quantity"):
             exit_average([])
+
+
+# ---------------------------------------------------------------------------
+# SW12 - the survivors of the mutation re-run, each a rule `04` states
+# ---------------------------------------------------------------------------
+
+
+class TestTheRulesTheMutationRunFoundUnstated:
+    def test_a_zero_quantity_always_carries_a_refusal_even_with_no_minimum_trade_value(
+        self,
+    ) -> None:
+        """§5: "`quantity == 0` always carries a `refusal`". A sleeve too small to buy one share
+        at the risk budget is refused, not handed a zero-share position, even when the minimum
+        trade value is switched off."""
+        sized = size_position(
+            equity=Decimal("1000"),
+            cash_available=Decimal("1000"),
+            entry=Decimal("500"),
+            stop=Decimal("480"),
+            avg_turnover_inr=None,
+            config=replace(SizingConfig(), min_trade_value_inr=0.0),
+            max_stop_distance_pct=Decimal("10"),
+        )
+        assert sized.quantity == 0
+        assert sized.refusal is SizeRefusal.BELOW_MIN_TRADE_VALUE
+
+    def test_the_widest_stop_scales_with_the_adr_multiple(self) -> None:
+        """§6: `widest = min(max_stop_distance_pct, adr_pct x max_stop_adr_multiple)` - half an
+        ADR on an 8% name is 4%; one and a half is capped at the absolute 10."""
+        half = replace(StopConfig(), max_stop_adr_multiple=0.5)
+        wide = replace(StopConfig(), max_stop_adr_multiple=1.5)
+        assert widest_stop_pct(Decimal("8"), half) == Decimal("4.00")
+        assert widest_stop_pct(Decimal("8"), wide) == Decimal("10.00")
+
+    def test_a_position_is_not_an_ep_gap_day_position_unless_said_so(self) -> None:
+        """§6.3's failed-EP rule is for an EP on its gap day only. A position built without the
+        flag (a flag bought at the pivot) that closes red on its entry day is held, not sold."""
+        position = OpenPosition(
+            symbol="FLAGCO",
+            entry_date=dt.date(2026, 9, 1),
+            entry=Decimal("100"),
+            initial_stop=Decimal("96"),
+            stop=Decimal("96"),
+            quantity=300,
+            partial_done=False,
+            trail=TrailMa.MA20,
+        )
+        assert position.is_ep_gap_day is False
+        bar = DailyBar(
+            date=dt.date(2026, 9, 1),
+            open=Decimal("101"),
+            high=Decimal("102"),
+            low=Decimal("97"),
+            close=Decimal("98"),
+            ma10=Decimal("90"),
+            ma20=Decimal("88"),
+            bars_since_entry=0,
+        )
+        assert [a.kind for a in manage(position, bar, StopConfig())] == [ActionKind.HOLD]
+
+    def test_the_lockout_releases_once_the_drawdown_is_back_inside_the_resume_line(
+        self,
+    ) -> None:
+        """§8.5: "stays locked until the drawdown is back inside `resume_drawdown_pct` [10]" -
+        at 10.00 exactly the sleeve is inside it, and released."""
+        assert drawdown_locked(drawdown_pct=10.0, was_locked=True, config=MARKET) is False
+        assert drawdown_locked(drawdown_pct=10.01, was_locked=True, config=MARKET) is True
+
+
+class TestTheLiveGapScore:
+    """§7.3: `live_gap_score = 35 x clamp(gap / 20) + 35 x clamp(volume_pace / 6)`, out of 70."""
+
+    def test_the_two_terms_are_the_formula(self) -> None:
+        verdict = LiveGapVerdict(True, Decimal("13.00"), Decimal("5.00"))
+        expected = Decimal(35) * Decimal(13) / Decimal(20) + Decimal(35) * Decimal(5) / Decimal(6)
+        assert live_gap_score(verdict, EpConfig()) == expected.quantize(Decimal("0.01"))
+        assert live_gap_score(verdict, EpConfig()) == Decimal("51.92")
+
+    def test_full_marks_at_twice_each_threshold_and_never_more(self) -> None:
+        at_twice = LiveGapVerdict(True, Decimal("20.00"), Decimal("6.00"))
+        far_beyond = LiveGapVerdict(True, Decimal("60.00"), Decimal("18.00"))
+        assert live_gap_score(at_twice, EpConfig()) == Decimal("70.00")
+        assert live_gap_score(far_beyond, EpConfig()) == Decimal("70.00")
+
+    def test_the_denominators_are_the_ep_thresholds_not_literals(self) -> None:
+        loose = EpConfig(min_gap_pct=5.0, min_rvol=1.0)
+        both = LiveGapVerdict(True, Decimal("10.00"), Decimal("2.00"))
+        half = LiveGapVerdict(True, Decimal("5.00"), Decimal("1.00"))
+        assert live_gap_score(both, loose) == Decimal("70.00")
+        assert live_gap_score(half, loose) == Decimal("35.00")
+
+
+class TestTheLiveGapGuards:
+    """§7.3 divides by `prev_close` and by the pro-rated average volume; a name with neither
+    cannot gap, and the verdict says zero rather than raising or reporting half a number."""
+
+    def test_no_previous_close_is_no_gap_and_no_numbers(self) -> None:
+        verdict = live_gap(
+            prev_close=Decimal("0"),
+            last_price=Decimal("113"),
+            volume_so_far=1,
+            avg_daily_volume=Decimal("1000"),
+            minutes_elapsed=10,
+            config=RANGE,
+        )
+        assert verdict == LiveGapVerdict(False, Decimal("0"), Decimal("0"))
+
+    def test_no_average_volume_is_no_pace_and_no_gap_reported(self) -> None:
+        verdict = live_gap(
+            prev_close=Decimal("100"),
+            last_price=Decimal("113"),
+            volume_so_far=1,
+            avg_daily_volume=Decimal("0"),
+            minutes_elapsed=10,
+            config=RANGE,
+        )
+        assert verdict == LiveGapVerdict(False, Decimal("0"), Decimal("0"))
+
+    def test_no_minute_elapsed_is_no_pace_and_no_gap_reported(self) -> None:
+        verdict = live_gap(
+            prev_close=Decimal("100"),
+            last_price=Decimal("113"),
+            volume_so_far=1,
+            avg_daily_volume=Decimal("1000"),
+            minutes_elapsed=0,
+            config=RANGE,
+        )
+        assert verdict == LiveGapVerdict(False, Decimal("0"), Decimal("0"))

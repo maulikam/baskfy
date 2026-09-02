@@ -49,7 +49,8 @@ illiquid name never reaches a detector. The ADR floor was 3.5 until SW9.5; his s
 ## §2 Setup 1 — FLAG (`detect_flags`, `FlagConfig`)
 
 Window: the last `lookback_bars + base_max_bars` [65 + 60 = 125] bars ending at `as_of`; the
-instrument must have a bar **on** `as_of`.
+instrument must have a bar **on** `as_of` and at least one bar before it (a name listed today has
+no pole and is not a flag — it is skipped, never an error).
 
 2.1 **Pole.** `pole_idx` = index of the highest `high` among the bars **before today**;
 `pole_high` = that high. `pole_low` = lowest `low` in `[max(pole_idx − lookback_bars, 0),
@@ -105,6 +106,9 @@ yesterday's streak ≥ `min_up_streak` (the first red close after the run).
 `trigger` = today's low (the level a short would key off), `stop_ref` = today's high — recorded
 for the journal of what the method *would* have done. `TRADEABLE_SETUPS` excludes it; no
 plan line may carry it (SW10 asserts).
+**Score** (0–100; written down at SW12, it was the engine's from SW1): `40 × clamp(ret_5 / 100)
++ 30 × clamp(dist_ma_fast_pct / (8 × adr_pct)) + 30 × clamp(up_streak / 6)` — each denominator
+twice its threshold, so an `EXHAUSTION` row earns nothing for the streak it no longer has.
 
 ## §5 Sizing (`sizing.size_position`, `SizingConfig`)
 

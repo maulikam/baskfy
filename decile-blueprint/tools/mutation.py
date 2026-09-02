@@ -128,6 +128,12 @@ SWING_TEST_SELECTION: Final[tuple[str, ...]] = (
     "packages/core/tests/test_swing_market.py",
     "packages/core/tests/test_swing_opening_range.py",
     "packages/core/tests/test_swing_plan_and_journal.py",
+    # SW12: the two files SW10 / SW10.5 added after this list was written. Without them every
+    # mutant of `first_live_multiplier`, `sizing_at`, `marketable_limit` and the PENDING_RANGE
+    # line "survived" — not because the rules were untested, but because the tests that assert
+    # A7, A8 and A9 were never in the selection.
+    "packages/core/tests/test_swing_pending_and_first_live.py",
+    "packages/core/tests/test_swing_safety_properties.py",
     # Last, because it is the slowest: a mutant of any other swing module that survives the nine
     # files above still has to survive a planted trade run end to end. Its speed test skips
     # itself inside the harness's workspace (a mutant's speed is not evidence).

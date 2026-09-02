@@ -52,25 +52,37 @@ and never from a form. Flags are **system-only** in `.env.example` (M4 conventio
    filing URL and **links out** — it never reproduces a filing's text; single-tenant own-use,
    nothing redistributed; fail soft (an empty catalyst is allowed, a crashed morning is not).
 
-## §3 — The real-money gate (the "four years of losses", compressed)
+## §3 — The real-money gate
+
+**Rewritten by Maulik, 2 Sep 2026 (STANDING-ANSWERS A11; DECISIONS-SW MD8′).** The
+twenty-session paper gate the pack proposed is withdrawn: the code work is complete, and the
+rehearsal it bought is bought instead by one DRY_RUN morning on a real session. The original
+five conditions are kept as history in git (`1c675f4`…`beb5ff5` built against them).
 
 `BASKFY_SWING_EXECUTION_ENABLED=true` may be set only when **all** of the following are true,
-each with evidence in `STATUS.md` and a NEEDS-MAULIK.md entry Maulik has ticked:
+each with its evidence in `SW-FINAL-REPORT.md`:
 
-1. SW10 green: with the flag false, a property test proves no swing code path calls
-   `OrderGateway.place`; with it true and `DRY_RUN=true`, the full morning drill produces
-   simulated fills and a simulated GTT for every confirmed line and **0 orders reach a broker**.
-2. **20 DRY_RUN sessions** logged in `sw_session` (one row per trading day the monitor or the
-   EOD plan ran), each with its plan, its confirms, its simulated fills and its `stops.manage`
-   actions — the paper track record.
-3. The backtest (SW9) over 2017→ has been run and its R-distribution, win rate and expectancy
-   are on the `/swing/journal` page under a **"Backtest, EOD approximation"** heading with its
-   caveats (no intraday history → entries at next-day open above pivot; no circuit modelling
-   before 2020).
-4. Maulik has read the paper journal and written in `DECISIONS-SW.md` the risk-per-trade and
-   sleeve capital he is starting with (the pack's defaults are 0.5% and ₹0 — a sleeve with no
-   capital plans nothing).
-5. The first real session runs at **half** the configured risk (`sw_config.first_live_sessions`
-   counts down from 5 with `risk_multiplier=0.5`) — the pack's version of "start small".
+1. **SW10 green.** With the flag false a property test proves no swing code path reaches
+   `OrderGateway.place`; with `DRY_RUN=true` the full drill (`tools/swing/drill.py`) produces a
+   simulated fill and a simulated GTT for every confirmed line and **0 orders reach a broker**.
+2. **One DRY_RUN drill morning on a real session.** On the deployed box, on a weekday, with a
+   Kite login before 09:00 and `DRY_RUN=true`: the 08:50 levels, the 09:04 probe, the 09:14
+   monitor to its 10:45 cutoff, the 09:16 gap scan and MORNING plan, the 09:17 catalyst, the
+   15:15 sweep, the 21:00 detect and the 21:05 evening all run on live quotes and write their
+   `sw_session` row with `mode=DRY_RUN`; every confirm that morning journals `simulated=true`.
+   The steps are in
+   `SW-FINAL-REPORT.md`. The session counter on `/swing/journal` and in the evening email
+   (`sessions.required = 20`) is **information**, not a gate — it says how many mornings the
+   machinery has run, nothing more.
+3. **The backtest on the page.** `tools/swing/backtest.py` has been run over the backfilled
+   bars and its R-distribution, win rate, expectancy, drawdown and gate-on/gate-off tables are on
+   `/swing/journal` under **"Backtest, EOD approximation"** with the caveats verbatim.
+4. **Maulik's written risk decision**, in `DECISIONS-SW.md`: sleeve ₹25,00,000 (MD1),
+   **0.5 % per trade** (MD2), **half risk for the first five live sessions** (MD12 / A9),
+   the **15 % / 10 % drawdown lock-out** (SW9.5), and **rung 0** to start (MD13 / A10).
+5. **The flag is flipped by his hand, never by the run** — `BASKFY_SWING_EXECUTION_ENABLED=true`
+   together with `BASKFY_DESK_DRY_RUN=false` in the box's `/opt/baskfy/.env.staging.compose` (a
+   swing order is real only when both hold — `swing_gates()`; the second line also takes the
+   weekly book out of dry-run), recorded in `NEEDS-MAULIK.md` under Swing.
 
 There is no engineering path around this gate. The run ends with the flag false.

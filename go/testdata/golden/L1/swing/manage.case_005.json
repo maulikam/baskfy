@@ -1,0 +1,58 @@
+{
+ "fn": "baskfy_core.swing.stops.manage",
+ "inputs": {
+  "bar": {
+   "bars_since_entry": 3,
+   "close": "108",
+   "date": "2026-09-04",
+   "high": "109.08",
+   "low": "106.92",
+   "ma10": "90",
+   "ma20": "88",
+   "open": "108"
+  },
+  "config": {
+   "breakeven_after_r": 1.0,
+   "fast_trail_min_adr_pct": 6.0,
+   "max_stop_adr_multiple": 1.0,
+   "max_stop_distance_pct": 10.0,
+   "partial_denominator": 3,
+   "partial_earliest_bar": 3,
+   "partial_latest_bar": 5,
+   "partial_numerator": 1
+  },
+  "position": {
+   "entry": "100",
+   "entry_date": "2026-09-01",
+   "initial_stop": "95",
+   "is_ep_gap_day": false,
+   "partial_done": false,
+   "quantity": 300,
+   "stop": "95",
+   "symbol": "X",
+   "trail": "MA10"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "day 3, green: a third sold and the stop to breakeven. Prices are the adjusted series (house rule 6); Decimals are strings; dates are ISO days; a naive datetime is exchange-local IST. Fixtures: packages/core/tests/swing_fixtures.py and the swing test modules. Regenerate with `python tools/parity/golden.py swing` from decile-blueprint under `uv run`; packages/core/tests/test_swing_goldens.py recomputes every case from these stored inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "kind": "SELL_PARTIAL",
+   "new_stop": null,
+   "quantity": 100,
+   "reason": "PARTIAL_INTO_STRENGTH"
+  },
+  {
+   "kind": "RAISE_STOP",
+   "new_stop": "100",
+   "quantity": 0,
+   "reason": "BREAKEVEN_AFTER_PARTIAL"
+  }
+ ]
+}

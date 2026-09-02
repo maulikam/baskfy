@@ -96,7 +96,6 @@ def upgrade() -> None:
 
     for table, (column, other_key) in REFERENCING.items():
         if other_key:
-            cols = ", ".join(other_key)
             s_cols = ", ".join(f"s.{c}" for c in other_key)
             on = " AND ".join(f"y.{c} IS NOT DISTINCT FROM s.{c}" for c in other_key)
             join = " AND ".join(f"x.{c} IS NOT DISTINCT FROM p.{c}" for c in other_key)

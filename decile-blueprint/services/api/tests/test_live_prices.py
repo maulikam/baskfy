@@ -14,7 +14,7 @@ import pytest
 from baskfy_execution.broker_ports import HoldingRow
 
 from baskfy_api import live_prices
-from baskfy_api.broker_holdings import HoldingsResult
+from baskfy_api.broker_holdings import HoldingsResult, HoldingsSource
 
 
 def _row(symbol: str, last: str | None) -> HoldingRow:
@@ -39,7 +39,7 @@ class TestOnlyALiveReadIsPriced:
 
     @pytest.mark.parametrize("source", ["fixture", "empty", "unwired"])
     def test_a_non_live_source_prices_nothing(
-        self, source: str, monkeypatch: pytest.MonkeyPatch
+        self, source: HoldingsSource, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         rows = (_row("RELIANCE", "100"),) if source == "fixture" else ()
         monkeypatch.setattr(

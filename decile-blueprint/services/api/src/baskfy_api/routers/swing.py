@@ -7,6 +7,7 @@
     GET   /swing/config                          the settings, the ceilings, and the rung
     PATCH /swing/config                          change a setting, audited, bounded
     GET   /swing/journal                         the book's results in R, and the ladder (SW8)
+    GET   /swing/signals?date&instrument_id      what the monitor raised in a session (SW14)
 
 READ-ONLY EXCEPT FOR ONE ROUTE, AND THAT ROUTE MOVES NO MONEY
 -------------------------------------------------------------
@@ -41,7 +42,7 @@ from decimal import Decimal
 from typing import Annotated, Final, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -225,10 +226,45 @@ class SwingMarketDayOut(BaseModel):
     max_exposure_pct: Decimal
     new_entries_allowed: bool
     parabolic_count: int
+    #: `04` §8.5 (SW9.5): the allocation's drawdown from its peak that evening, and whether the
+    #: lock-out held. Read from the row `swing-eod` wrote; the page shows "Locked out · 15.3%
+    #: below its peak" in place of the rung while `drawdown_locked` is true.
+    drawdown_pct: Decimal = Decimal(0)
+    drawdown_locked: bool = False
 
 
 class SwingMarketOut(BaseModel):
     data: list[SwingMarketDayOut]
+
+
+class SwingSignalOut(BaseModel):
+    """One verdict the monitor raised. A record, never an instruction."""
+
+    id: int
+    watch_id: int | None
+    instrument_id: int
+    symbol: str
+    name: str
+    setup: str
+    session_date: dt.date
+    raised_at: dt.datetime
+    state: str
+    or_window_minutes: int | None
+    range_high: Decimal | None
+    range_low: Decimal | None
+    low_of_day: Decimal | None
+    last_price: Decimal | None
+    entry: Decimal | None
+    stop: Decimal | None
+    #: Set when the signal became a SIGNAL plan line. The id is shown, not followed: the line
+    #: lives on the desk console and this surface has no route to it.
+    plan_line_id: int | None
+
+
+class SwingSignalsOut(BaseModel):
+    #: The session the rows belong to; `None` when the monitor has never written one.
+    session_date: dt.date | None
+    data: list[SwingSignalOut]
 
 
 class SwingSectorOut(BaseModel):
@@ -282,16 +318,29 @@ class SwingWatchListOut(BaseModel):
 
 
 class SwingWatchIn(BaseModel):
-    """Adding a name by hand. Levels optional — a name with no trigger is one to look at."""
+    """Adding a name by hand. Levels optional — a name with no trigger is one to look at.
+
+    The name is given either by ``instrument_id`` or by ``symbol`` (SW14): the web form's
+    lookup is `GET /search`, whose instrument hit carries the symbol and not the id, and a
+    server action that had to make a second call to translate one into the other would be a
+    second place for the two to disagree. Exactly one of the two is required.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    instrument_id: int
+    instrument_id: int | None = None
+    symbol: str | None = Field(default=None, min_length=1, max_length=32)
     setup: Literal["FLAG", "EP"]
     trigger: Decimal | None = Field(default=None, gt=0)
     stop_ref: Decimal | None = Field(default=None, gt=0)
     note: str | None = Field(default=None, max_length=2000)
     catalyst: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def _one_name(self) -> SwingWatchIn:
+        if (self.instrument_id is None) == (self.symbol is None):
+            raise ValueError("give exactly one of instrument_id or symbol")
+        return self
 
 
 class SwingWatchPatch(BaseModel):
@@ -446,7 +495,7 @@ class SwingJournalCardOut(BaseModel):
 
 
 class SwingSessionsOut(BaseModel):
-    """`02` §3.2: "14 of 20 paper sessions logged"."""
+    """The counter — "14 of 20 paper sessions logged" — information, not a gate (`02` §3, A11)."""
 
     logged: int
     required: int
@@ -646,9 +695,59 @@ async def get_market(
                     max_exposure_pct=row.max_exposure_pct,
                     new_entries_allowed=row.new_entries_allowed,
                     parabolic_count=row.parabolic_count,
+                    drawdown_pct=row.drawdown_pct,
+                    drawdown_locked=row.drawdown_locked,
                 )
                 for row in rows
             ]
+        )
+    )
+
+
+@router.get("/signals", response_model=SwingSignalsOut, summary="What the monitor raised")
+async def get_signals(
+    session: SessionDep,
+    principal: AuthenticatedDep,
+    date: Annotated[dt.date | None, Query()] = None,
+    instrument_id: Annotated[int | None, Query()] = None,
+) -> Response:
+    """`05` §2's "fired 09:23, 5-min range 412.30 to 418.90" under a watchlist row (SW14).
+
+    A read of `sw_signal`, the append-only record of every verdict — `TRIGGERED`, `BELOW_PIVOT`,
+    `LOCKED_UPPER_CIRCUIT` and the rest — for one session; the newest session when `date` is
+    absent. It answers "what did the system see yesterday" and nothing else: a row here is a
+    record, the plan line it may have become lives on the desk console, and there is no route on
+    this surface that reaches it.
+    """
+    user_id = await scoped_sole_user_id(session, principal.user_id)
+    as_of, rows = await swing_service.signals(
+        session, user_id=user_id, on=date, instrument_id=instrument_id
+    )
+    return _json(
+        SwingSignalsOut(
+            session_date=as_of,
+            data=[
+                SwingSignalOut(
+                    id=row.id,
+                    watch_id=row.watch_id,
+                    instrument_id=row.instrument_id,
+                    symbol=row.symbol,
+                    name=row.name,
+                    setup=row.setup,
+                    session_date=row.session_date,
+                    raised_at=row.raised_at,
+                    state=row.state,
+                    or_window_minutes=row.or_window_minutes,
+                    range_high=row.range_high,
+                    range_low=row.range_low,
+                    low_of_day=row.low_of_day,
+                    last_price=row.last_price,
+                    entry=row.entry,
+                    stop=row.stop,
+                    plan_line_id=row.plan_line_id,
+                )
+                for row in rows
+            ],
         )
     )
 
@@ -749,15 +848,20 @@ async def post_watch(
     two weeks is stale, and `PATCH … {"reconfirm": true}` is how they say they still want it.
     """
     user_id = await scoped_sole_user_id(session, principal.user_id)
-    instrument = (
-        await session.execute(select(Instrument.id).where(Instrument.id == payload.instrument_id))
+    lookup = (
+        Instrument.id == payload.instrument_id
+        if payload.instrument_id is not None
+        else Instrument.symbol == (payload.symbol or "").strip().upper()
+    )
+    instrument_id = (
+        await session.execute(select(Instrument.id).where(lookup))
     ).scalar_one_or_none()
-    if instrument is None:
-        raise not_found("instrument", str(payload.instrument_id))
+    if instrument_id is None:
+        raise not_found("instrument", str(payload.instrument_id or payload.symbol))
     row = await swing_watch.add_manual(
         session,
         user_id=user_id,
-        instrument_id=payload.instrument_id,
+        instrument_id=int(instrument_id),
         setup=payload.setup,
         on=dt.datetime.now(tz=dt.UTC).date(),
         trigger=payload.trigger,

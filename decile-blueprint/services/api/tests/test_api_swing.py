@@ -40,6 +40,7 @@ from baskfy_core.models import (
     SwMarketDaily,
     SwPosition,
     SwSetupDaily,
+    SwSignal,
     SwWatch,
 )
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
@@ -855,6 +856,199 @@ class TestTheCatalystFeedOnTheReads:
             "catalyst" in route.path for route in router.routes if isinstance(route, APIRoute)
         )
         assert any(isinstance(route, APIRoute) for route in router.routes)
+
+
+# --- SW14: what the monitor raised, and the drawdown on the market row -----------------
+
+
+async def _signal(  # noqa: PLR0913 - one keyword per stored column a test may set
+    session: AsyncSession,
+    *,
+    user_id: int,
+    instrument_id: int,
+    on: dt.date = AS_OF,
+    at: dt.time = dt.time(9, 23),
+    state: str = "TRIGGERED",
+    range_high: str | None = "418.90",
+    range_low: str | None = "412.30",
+    entry: str | None = "419.35",
+    stop: str | None = "412.30",
+) -> None:
+    session.add(
+        SwSignal(
+            user_id=user_id,
+            instrument_id=instrument_id,
+            setup="FLAG",
+            session_date=on,
+            raised_at=dt.datetime.combine(on, at, tzinfo=IST),
+            state=state,
+            or_window_minutes=5,
+            range_high=None if range_high is None else Decimal(range_high),
+            range_low=None if range_low is None else Decimal(range_low),
+            low_of_day=None if range_low is None else Decimal(range_low),
+            last_price=None if entry is None else Decimal(entry),
+            entry=None if entry is None else Decimal(entry),
+            stop=None if stop is None else Decimal(stop),
+        )
+    )
+    await session.flush()
+
+
+class TestTheSignalsRoute:
+    async def test_the_latest_session_comes_back_newest_first_with_its_levels(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`05` §2: "fired 09:23, 5-min range 412.30 to 418.90". Every verdict is a row — the
+        `BELOW_PIVOT` at 09:21 is the record of a break that was not a breakout — and an older
+        session's rows are not mixed in when no date is asked for."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+        await _signal(
+            screener_session,
+            user_id=user_id,
+            instrument_id=instrument_id,
+            at=dt.time(9, 21),
+            state="BELOW_PIVOT",
+            entry=None,
+            stop=None,
+        )
+        await _signal(screener_session, user_id=user_id, instrument_id=instrument_id)
+        await _signal(
+            screener_session,
+            user_id=user_id,
+            instrument_id=instrument_id,
+            on=AS_OF - dt.timedelta(days=1),
+            state="LOCKED_UPPER_CIRCUIT",
+        )
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/signals"), headers=bearer(public_id))
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["session_date"] == AS_OF.isoformat()
+        assert [(row["state"], row["symbol"]) for row in body["data"]] == [
+            ("TRIGGERED", "FLAGCO"),
+            ("BELOW_PIVOT", "FLAGCO"),
+        ]
+        fired = body["data"][0]
+        assert fired["or_window_minutes"] == 5
+        # The wire carries the instant (UTC); the page says "fired 09:23" in exchange time.
+        raised_at = dt.datetime.fromisoformat(fired["raised_at"]).astimezone(IST)
+        assert (raised_at.date(), raised_at.hour, raised_at.minute) == (AS_OF, 9, 23)
+        # House rule 8: the range is typed into a broker, and `412.30` is not `412.3`.
+        assert '"range_low":412.30' in response.text.replace(" ", "")
+        assert '"range_high":418.90' in response.text.replace(" ", "")
+        assert fired["plan_line_id"] is None
+
+    async def test_a_date_and_an_instrument_narrow_the_read(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        flagco = await _instrument(screener_session, "FLAGCO")
+        other = await _instrument(screener_session, "OTHERCO")
+        yesterday = AS_OF - dt.timedelta(days=1)
+        await _signal(screener_session, user_id=user_id, instrument_id=flagco, on=yesterday)
+        await _signal(screener_session, user_id=user_id, instrument_id=other, on=yesterday)
+        await _signal(screener_session, user_id=user_id, instrument_id=flagco)
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(
+                url("/swing/signals"),
+                params={"date": yesterday.isoformat(), "instrument_id": flagco},
+                headers=bearer(public_id),
+            )
+
+        body = response.json()
+        assert body["session_date"] == yesterday.isoformat()
+        assert [row["symbol"] for row in body["data"]] == ["FLAGCO"]
+
+    async def test_a_tenant_with_no_signals_reads_an_empty_session(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Before the monitor has run. Not a 404: the surface exists, the session does not."""
+        _, public_id = await _sole_tenant(screener_session, monkeypatch)
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/signals"), headers=bearer(public_id))
+
+        assert response.status_code == 200
+        assert response.json() == {"session_date": None, "data": []}
+
+    async def test_the_signals_belong_to_one_person(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_id, _ = await _sole_tenant(screener_session, monkeypatch)
+        _, intruder = await make_user(screener_session, "intruder3@example.com")
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+        await _signal(screener_session, user_id=user_id, instrument_id=instrument_id)
+
+        async with running_app(settings, screener_session) as client:
+            refused = await client.get(url("/swing/signals"), headers=bearer(intruder))
+            anonymous = await client.get(url("/swing/signals"))
+
+        assert refused.status_code == 404
+        assert anonymous.status_code == 401
+
+
+class TestTheMarketRowCarriesTheDrawdown:
+    async def test_the_lock_out_and_the_drawdown_ride_along(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`04` §8.5: the page shows "Locked out · 15.30% below its peak" in place of the rung,
+        and it can only do that if the row it reads says so."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        await _market_row(screener_session, user_id=user_id)
+        await screener_session.execute(
+            sa.update(SwMarketDaily)
+            .where(SwMarketDaily.user_id == user_id)
+            .values(drawdown_pct=Decimal("15.30"), drawdown_locked=True)
+        )
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/market"), headers=bearer(public_id))
+
+        row = response.json()["data"][-1]
+        assert row["drawdown_locked"] is True
+        assert '"drawdown_pct":15.30' in response.text.replace(" ", "")
+
+
+class TestWatchingBySymbol:
+    async def test_a_symbol_from_the_search_box_resolves_to_the_instrument(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """SW14: the web form's lookup is `GET /search`, whose instrument hit carries the
+        symbol; the add-manual action posts it as typed, and the route resolves it."""
+        _, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+
+        async with running_app(settings, screener_session) as client:
+            added = await client.post(
+                url("/swing/watch"),
+                json={"symbol": " flagco ", "setup": "FLAG", "trigger": "149.60"},
+                headers=bearer(public_id),
+            )
+            unknown = await client.post(
+                url("/swing/watch"),
+                json={"symbol": "NOSUCHCO", "setup": "FLAG"},
+                headers=bearer(public_id),
+            )
+            both = await client.post(
+                url("/swing/watch"),
+                json={"symbol": "FLAGCO", "instrument_id": instrument_id, "setup": "FLAG"},
+                headers=bearer(public_id),
+            )
+            neither = await client.post(
+                url("/swing/watch"), json={"setup": "FLAG"}, headers=bearer(public_id)
+            )
+
+        assert added.status_code == 200
+        assert added.json()["instrument_id"] == instrument_id
+        assert added.json()["symbol"] == "FLAGCO"
+        assert unknown.status_code == 404
+        assert both.status_code == 400
+        assert neither.status_code == 400
 
 
 def test_the_helpers_are_the_ones_this_module_thinks() -> None:

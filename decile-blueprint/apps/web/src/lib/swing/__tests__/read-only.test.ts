@@ -19,6 +19,10 @@ import { describe, expect, it } from "vitest";
  * "change no money" — the watchlist, a note, the catalyst field (SW5) and the settings form. So
  * the assertion is not "no mutation exists" but **"no mutation reaches an order path"**, plus a
  * whitelist of the endpoints the fetch helper is allowed to name.
+ *
+ * SW14 gave the hub its forms. The writes live in `lib/swing/write.ts` and in the `actions.ts`
+ * files under the pages — never in `fetch.ts`, which stays GET-only, and never inline in a
+ * `page.tsx`. `app/(app)/swing/__tests__/read-only.test.tsx` enumerates the actions themselves.
  */
 
 const APP = join(__dirname, "..", "..", "..", "app", "(app)");
@@ -49,13 +53,18 @@ const SOURCES = [
  */
 const ALLOWED_PATHS = [
   "/swing/setups",
+  "/swing/setups/{id}/bars",
   "/swing/sectors",
   "/swing/market",
   "/swing/config",
   "/swing/watch",
   "/swing/positions",
   "/swing/journal",
+  "/swing/signals",
 ];
+
+/** The paths the write helper may be asked for — `02` Track A's non-money writes, by name. */
+const ALLOWED_WRITE_PATHS = ["/swing/watch", "/swing/watch/${number}", "/swing/config"];
 
 describe("the swing hub is read-only and cannot reach an order", () => {
   it("covers the pages that exist", () => {
@@ -114,28 +123,45 @@ describe("the swing hub is read-only and cannot reach an order", () => {
 
   it("reads only from the endpoints on the whitelist", () => {
     const fetcher = readFileSync(join(__dirname, "..", "fetch.ts"), "utf8");
-    const paths = [...fetcher.matchAll(/readOrNull<[^>]*>\(\s*"([^"]+)"/g)].map(
-      (match) => match[1],
+    const paths = [...fetcher.matchAll(/readOrNull<[^>]*>\(\s*["`]([^"`]+)["`]/g)].map(
+      (match) => (match[1] ?? "").replace(/\$\{[^}]*\}/g, "{id}"),
     );
-    expect(paths.length).toBeGreaterThan(0);
+    expect(paths.length).toBeGreaterThanOrEqual(ALLOWED_PATHS.length);
     for (const path of paths) {
       expect(ALLOWED_PATHS, `${path} is not on the swing whitelist`).toContain(path);
     }
   });
 
-  it("declares no server action on a page", () => {
-    for (const path of PAGES) {
+  it("writes only to the paths Track A permits, and the helper's type says so", () => {
+    /*
+      `write.ts` is the only file under `lib/swing` allowed a non-GET verb. Its path type is a
+      closed union — a caller asking for `/swing/execute` fails to compile — and this reads the
+      union back out of the source so the whitelist has a diff on it.
+    */
+    const writer = readFileSync(join(__dirname, "..", "write.ts"), "utf8");
+    const union = writer.match(/export type SwingWritePath =([^;]+);/)?.[1] ?? "";
+    const paths = [...union.matchAll(/["`]([^"`]+)["`]/g)].map((match) => match[1]);
+    expect(paths.sort()).toEqual([...ALLOWED_WRITE_PATHS].sort());
+    expect(writer).not.toMatch(/method:\s*"PUT"/);
+  });
+
+  it("declares no server action inline in a page", () => {
+    // The actions live in `actions.ts` files, where the read-only assertion over `(app)/swing`
+    // enumerates them by name. A page that declared its own would sit outside that census.
+    for (const path of PAGES.filter((file) => file.endsWith("page.tsx"))) {
       expect(readFileSync(path, "utf8"), `${path} declares a server action`).not.toContain(
         '"use server"',
       );
     }
   });
 
-  it("renders no form and no submit control on the read pages", () => {
+  it("binds every form to a server action and never to a URL", () => {
+    // A `<form action="/...">` would post straight to a route; the hub's forms post to a
+    // server action, which is the only way the bearer stays on the server.
     for (const path of PAGES) {
       const source = readFileSync(path, "utf8");
-      expect(source, `${path} renders a form`).not.toMatch(/<form[\s>]/);
-      expect(source, `${path} renders a submit button`).not.toMatch(/type="submit"/);
+      expect(source, `${path} posts a form to a URL`).not.toMatch(/<form[^>]*action="/);
+      expect(source, `${path} posts a form with a method`).not.toMatch(/<form[^>]*method=/);
     }
   });
 

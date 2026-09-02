@@ -812,7 +812,38 @@ invested in it is owed or told.
 
 ---
 
-## 20. ⚠️ URGENT — the Kite token's encryption key is committed and pushed
+## 20. ✅ RESOLVED 2 Sep 2026 — the Kite token encryption keys
+
+**Resolved in two parts, because there were two stores and only one was in this heading.**
+
+**Baskfy's store, re-keyed.** Not what §20 originally described, and the more urgent of the two: it
+held a *live* token. Re-encrypted under a freshly generated Fernet key that has never left the box,
+verified before and after — `api` and `worker` both decrypt it and Kite answers 200 for YP8452, and
+the previous key can no longer decrypt the store. The old key and ciphertext are backed up on the
+box as `.env.staging.pre-fernet-*` and `kite-token.enc.pre-fernet-*`.
+
+**The desk's store, deleted.** This is the key the heading below was about. Maulik confirmed the
+desk has been dead since M70; its token was issued 22 Aug and Kite ends a session overnight, so it
+was ten days stale. Key and ciphertext were copied to `~/baskfy-retired-credentials/` outside the
+repo and removed from the working tree, and the `.key` is untracked. `portfolio.db` — the
+unrebuildable evidence — was checked and is intact at 6,029,312 bytes.
+
+**Also rotated:** the Kite API secret, by Maulik, in the Kite console. Worth recording that this
+did **not** invalidate the live access token, contrary to what was predicted here: Kite validates an
+issued token independently of the secret, which only signs the checksum that mints one. The new
+secret takes effect at the next Connect.
+
+**What remains, and it is a decision rather than a task.** The dead key is still in commit
+`44c029c` on `origin/developer`. Removing it needs `git filter-repo` and a force-push, which
+rewrites every SHA on the branch and obliges anyone with a clone to re-clone. It is now worth
+little: the key decrypts a file that no longer exists.
+
+`tools/deploy/verify-safety.sh` no longer carries a by-name exemption for the path — it passes on
+its own terms.
+
+<details><summary>The original entry, for the record</summary>
+
+### ⚠️ URGENT — the Kite token's encryption key is committed and pushed
 
 **This one is not about the deployment; the deployment's safety check found it.**
 
@@ -849,6 +880,8 @@ it is worth more than any feature currently in flight.
 `tools/deploy/verify-safety.sh` now fails the build if a secret-shaped file is ever tracked again.
 The file is left in the index untouched, because untracking it without rotating the key would look
 like a fix while changing nothing.
+
+</details>
 
 ---
 

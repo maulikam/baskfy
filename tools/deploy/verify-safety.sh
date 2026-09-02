@@ -6,20 +6,22 @@ cd "$ROOT" || exit 1
 # 1. Nothing secret is tracked. `git ls-files` is the question that matters — a file can be on
 #    disk and ignored, which is fine; tracked is not.
 #
-#    KNOWN, FILED, NOT FIXED HERE: `kite-momentum-rebalancer/data/.kite_token.json.key` is a
-#    Fernet key committed in 44c029c (22 Aug 2026) and present in origin/developer. This check
-#    FOUND it; it is exempted by name rather than by widening the pattern, because the real fix is
-#    rotating the key (NEEDS-MAULIK §20) and untracking it without rotating would look like a fix
-#    while changing nothing. The gitignore gap that let it in is closed, so nothing new can follow
-#    it. Remove this line once §20 step 1 is done.
-KNOWN_EXPOSED="kite-momentum-rebalancer/data/.kite_token.json.key"
+#    RESOLVED 2 Sep 2026 (NEEDS-MAULIK §20). This check found a Fernet key committed in 44c029c
+#    (22 Aug 2026) and present in origin/developer, and carried a by-name exemption for it because
+#    untracking a key without rotating it looks like a fix while changing nothing.
+#
+#    Both halves are now done, in the order that makes the second honest. Baskfy's own token store
+#    was re-keyed and verified — the old key no longer decrypts it, and `api` and `worker` both
+#    read the new one against a live Kite 200. The desk's store, dead since M70 (its token was
+#    issued 22 Aug and Kite ends a session overnight), was backed up outside the repo and deleted,
+#    key and ciphertext together. So the exemption is gone rather than widened: the key in git
+#    history now decrypts a file that no longer exists.
+#
+#    What history still holds is a dead key. Removing it needs `git filter-repo` and a force-push,
+#    which is a separate, coordinated decision and is not what this check is for.
 TRACKED="$(git ls-files | grep -E '(^|/)\.env($|\.)|\.pem$|\.key$|\.env\.staging' \
-  | grep -v '\.example$' | grep -vFx "$KNOWN_EXPOSED" || true)"
+  | grep -v '\.example$' || true)"
 [ -z "$TRACKED" ] || fail "tracked secret-shaped files: $TRACKED"
-
-if git ls-files --error-unmatch "$KNOWN_EXPOSED" >/dev/null 2>&1; then
-  echo "  ⚠ NEEDS-MAULIK §20 still open: $KNOWN_EXPOSED is tracked and pushed. Rotate the key." >&2
-fi
 
 for f in .env.staging .env.staging.compose; do
   [ -e "$f" ] || continue

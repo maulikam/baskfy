@@ -34,7 +34,7 @@
       {% for href, label in [
            ('/', 'Desk'), ('/indices', 'Indices'), ('/performance', 'Performance'), ('/regime', 'Regime'),
            ('/regime/backtest', 'Backtest'), ('/tradebook', 'Tradebook'),
-           ('/stops', 'Stops'), ('/reconcile', 'Reconcile')]
+           ('/stops', 'Stops'), ('/reconcile', 'Reconcile'), ('/swing', 'Swing')]
            + ([('/options', 'Options')] if options_enabled else [])
            + [('/ops', 'Operations'), ('/settings', 'Settings')] %}
         <a href="{{ href }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>

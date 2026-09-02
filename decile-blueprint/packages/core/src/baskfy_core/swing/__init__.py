@@ -23,10 +23,18 @@ Module map
 ``opening_range``   ORH/ORL from intraday candles, and the trigger verdict for the live monitor
 ``plan``            a day's watchlist + account → a plan the desk can confirm line by line
 ``journal``         R-multiples and the statistics progressive exposure reads
+``backtest``        `04` §11: the EOD approximation of all of the above over history, with caveats
 """
 
 from __future__ import annotations
 
+from baskfy_core.swing.backtest import (
+    CAVEATS,
+    BacktestParams,
+    BacktestResult,
+    BacktestTrade,
+    run_backtest,
+)
 from baskfy_core.swing.config import (
     DEFAULT_SWING_CONFIG,
     EpConfig,
@@ -43,7 +51,11 @@ from baskfy_core.swing.config import (
 )
 
 __all__ = [
+    "CAVEATS",
     "DEFAULT_SWING_CONFIG",
+    "BacktestParams",
+    "BacktestResult",
+    "BacktestTrade",
     "EpConfig",
     "FlagConfig",
     "LiquidityConfig",
@@ -55,4 +67,5 @@ __all__ = [
     "StopConfig",
     "SwingConfig",
     "WatchConfig",
+    "run_backtest",
 ]

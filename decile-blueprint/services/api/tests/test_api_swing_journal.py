@@ -12,15 +12,20 @@ the ones `docs/swing/04` §10 and `05` §2 make and a reader would be surprised 
   number the EOD job wrote, with the last five R values and which book they came from;
 * **the session count is against twenty** (`02` §3.2);
 * **numbers keep their stored precision** — `2.50` arrives as `2.50`;
-* **the book belongs to one person** (M43.4).
+* **the book belongs to one person** (M43.4);
+* **the backtest card** (SW9, appended below) is the latest *finished* run in C2's shape with
+  `04` §11's caveats verbatim, and null until one exists.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import sys
 from decimal import Decimal
+from pathlib import Path
 
 import api_helpers
+import polars as pl
 import pytest
 from api_helpers import bearer, make_user, running_app, url
 from screener_helpers import requires_db
@@ -29,7 +34,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_api.settings import Settings
 from baskfy_api.swing_journal import HISTOGRAM_BUCKETS, PAPER_SESSIONS_REQUIRED, bucket_of
 from baskfy_core.models import Instrument, SwConfig, SwMarketDaily, SwPosition, SwSession
+from baskfy_core.models.swing import SwBacktestRun
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
+from baskfy_core.swing.backtest import CAVEATS, BacktestParams, run_backtest
 
 pytestmark = [requires_db, pytest.mark.db]
 
@@ -514,3 +521,244 @@ class TestTheBookBelongsToOnePerson:
             response = await client.get(url("/swing/journal"))
 
         assert response.status_code == 401
+
+
+# --- SW9: the backtest card (leaf 1.3.2) ---------------------------------------------------------
+#
+# The stored run is a real one: `run_backtest` over the core suite's planted year, whose one trade
+# is R = 0.28 worked by hand in the fixture's docstring. Imported from the core suite's directory
+# rather than retyped, because a second copy could drift from the one the engine is proved against.
+
+CORE_TESTS = Path(__file__).resolve().parents[3] / "packages" / "core" / "tests"
+if str(CORE_TESTS) not in sys.path:
+    sys.path.insert(0, str(CORE_TESTS))
+
+from swing_backtest_fixtures import PLANTED, planted_frame  # noqa: E402 - path above
+
+T0 = dt.datetime(2026, 9, 1, 10, 0, tzinfo=dt.UTC)
+
+
+def planted_run() -> tuple[BacktestParams, dict[str, object]]:
+    """A finished run's stored JSON — the engine's own `to_json()` over the planted year."""
+    frame, calendar = planted_frame()
+    params = BacktestParams(start=calendar[0], end=calendar[-1])
+    return params, run_backtest(frame, params, calendar=calendar).to_json()
+
+
+def stored_params(stored: dict[str, object]) -> dict[str, object]:
+    """``to_json()['params']`` — what the runner writes to the row's `params` column."""
+    params = stored["params"]
+    assert isinstance(params, dict)
+    return params
+
+
+def stored_curve(stored: dict[str, object]) -> list[list[str]]:
+    curve = stored["equity_curve"]
+    assert isinstance(curve, list)
+    return curve
+
+
+async def _run(  # noqa: PLR0913 - one keyword per column a test may set
+    session: AsyncSession,
+    *,
+    user_id: int,
+    stats: dict[str, object] | None,
+    params: dict[str, object] | None = None,
+    started_at: dt.datetime = T0,
+    finished_at: dt.datetime | None = T0 + dt.timedelta(minutes=5),
+    error: str | None = None,
+) -> int:
+    row = SwBacktestRun(
+        user_id=user_id,
+        params=params if params is not None else {"start": "2025-10-01", "end": "2026-05-01"},
+        started_at=started_at,
+        finished_at=finished_at,
+        stats=stats,
+        error=error,
+    )
+    session.add(row)
+    await session.flush()
+    return int(row.id)
+
+
+class TestTheBacktestCard:
+    async def test_it_is_null_until_a_run_has_finished(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A run in flight and a run that failed are rows, not results: the card stays null and
+        the page keeps saying "not run yet"."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        await _run(screener_session, user_id=user_id, stats=None, finished_at=None)
+        await _run(
+            screener_session,
+            user_id=user_id,
+            stats=None,
+            finished_at=T0 + dt.timedelta(minutes=1),
+            error="ValueError: end 2024-06-03 is before start 2024-06-07",
+        )
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/journal"), headers=bearer(public_id))
+
+        assert response.status_code == 200
+        assert response.json()["backtest"] is None
+
+    async def test_it_is_c2s_card_with_the_caveats_verbatim_and_the_params(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`06` SW9: "the page shows the caveats verbatim from `04` §11; the run's parameters
+        are on the card"."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        params, stored = planted_run()
+        run_id = await _run(
+            screener_session, user_id=user_id, stats=stored, params=stored_params(stored)
+        )
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/journal"), headers=bearer(public_id))
+
+        card = response.json()["backtest"]
+        assert set(card) == {"run_id", "params", "started_at", "finished_at", "stats", "caveats"}
+        assert card["run_id"] == run_id
+        assert card["caveats"] == list(CAVEATS)
+        assert card["caveats"] == [
+            "No intraday data (so no ORH filter — real entries are more selective).",
+            "No circuit history before 2020.",
+            "Survivorship handled by instrument.delisted_on.",
+        ]
+        assert card["started_at"] == "2026-09-01T10:00:00+00:00"
+        assert card["finished_at"] == "2026-09-01T10:05:00+00:00"
+        assert card["params"]["start"] == params.start.isoformat()
+        assert card["params"]["end"] == params.end.isoformat()
+        # Money is a number on the wire, with its precision, not the stored string.
+        assert card["params"]["sleeve_inr"] == 1000000
+        assert card["params"]["cost_pct_per_side"] == 0.13
+        assert card["params"]["config"]["sizing"]["risk_per_trade_pct"] == 0.5
+        assert card["params"]["config"]["liquidity"]["adr_min_pct"] == 3.5
+
+    async def test_the_stats_are_the_headline_numbers_the_six_buckets_and_the_groupings(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`02` §3.3: "its R-distribution, win rate and expectancy" on the page. The headline
+        `04` §10 numbers sit at the top level of `stats`, the distribution is the journal's own
+        six buckets in order, and the groupings are §10's statistics per setup and per year."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        _, stored = planted_run()
+        await _run(screener_session, user_id=user_id, stats=stored)
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/journal"), headers=bearer(public_id))
+
+        stats = response.json()["backtest"]["stats"]
+        assert stats["trades"] == 1
+        assert stats["win_rate_pct"] == 100
+        assert stats["expectancy_r"] == float(PLANTED.r_multiple) == 0.28
+        assert stats["net_r"] == 0.28
+        assert stats["avg_win_r"] == 0.28
+        assert stats["avg_loss_r"] == 0
+        assert stats["profit_factor"] is None
+        assert stats["largest_win_r"] == 0.28
+        assert stats["current_loss_streak"] == 0
+        assert [bar["bucket"] for bar in stats["histogram"]] == list(HISTOGRAM_BUCKETS)
+        assert [bar["count"] for bar in stats["histogram"]] == [0, 0, 1, 0, 0, 0]
+        assert set(stats["by_setup"]) == {"FLAG", "EP"}
+        assert stats["by_setup"]["FLAG"]["trades"] == 1
+        assert stats["by_setup"]["FLAG"]["net_r"] == 0.28
+        assert stats["by_setup"]["EP"]["trades"] == 0
+        assert stats["by_setup"]["EP"]["profit_factor"] is None
+        years = stats["by_year"]
+        assert list(years) == sorted(years)
+        assert sum(year["trades"] for year in years.values()) == 1
+        assert stats["funnel"]["entered"] == 1
+        curve = stored_curve(stored)
+        assert stats["funnel"]["sessions"] == len(curve)
+        assert stats["equity"]["sessions"] == len(curve)
+        assert stats["equity"]["start"] == 1000000
+        assert stats["equity"]["end"] == float(curve[-1][1])
+        assert stats["equity"]["low"] <= stats["equity"]["start"] <= stats["equity"]["high"]
+        # The card is a card: the trade list, the curve and the ladder trace stay on the row.
+        assert "trades_list" not in stats
+        assert "equity_curve" not in stats
+        assert "ladder" not in stats
+
+    async def test_it_is_the_latest_finished_run_not_the_latest_started(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A later run still running, and a later re-run that failed, never displace the last
+        good number; between two finished runs the later finish wins."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        _, stored = planted_run()
+        older = await _run(
+            screener_session,
+            user_id=user_id,
+            stats=stored,
+            started_at=T0,
+            finished_at=T0 + dt.timedelta(minutes=5),
+        )
+        newer = await _run(
+            screener_session,
+            user_id=user_id,
+            stats=stored,
+            started_at=T0 + dt.timedelta(hours=1),
+            finished_at=T0 + dt.timedelta(hours=1, minutes=5),
+        )
+        await _run(
+            screener_session,
+            user_id=user_id,
+            stats=None,
+            started_at=T0 + dt.timedelta(hours=2),
+            finished_at=None,
+        )
+        await _run(
+            screener_session,
+            user_id=user_id,
+            stats=None,
+            started_at=T0 + dt.timedelta(hours=3),
+            finished_at=T0 + dt.timedelta(hours=3, minutes=1),
+            error="RuntimeError: the bars were not there",
+        )
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/journal"), headers=bearer(public_id))
+
+        card = response.json()["backtest"]
+        assert card["run_id"] == newer != older
+        assert card["finished_at"] == "2026-09-01T11:05:00+00:00"
+
+    async def test_an_empty_run_is_a_card_of_zeros(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A run over a range with no bars finished honestly; the card says zero, not null."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        params = BacktestParams(start=dt.date(2024, 6, 3), end=dt.date(2024, 6, 7))
+        empty = pl.DataFrame(
+            schema={"instrument_id": pl.Int64, "symbol": pl.String, "date": pl.Date}
+        )
+        stored = run_backtest(
+            empty, params, calendar=[dt.date(2024, 6, 3) + dt.timedelta(days=i) for i in range(5)]
+        ).to_json()
+        await _run(screener_session, user_id=user_id, stats=stored, params=stored_params(stored))
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/journal"), headers=bearer(public_id))
+
+        card = response.json()["backtest"]
+        assert card is not None
+        assert card["stats"]["trades"] == 0
+        assert [bar["count"] for bar in card["stats"]["histogram"]] == [0] * 6
+        assert card["stats"]["funnel"]["sessions"] == 5
+        assert card["stats"]["equity"]["sessions"] == 5
+        assert card["caveats"] == list(CAVEATS)
+
+    async def test_another_accounts_run_is_not_this_accounts_card(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _, public_id = await _sole_tenant(screener_session, monkeypatch)
+        other_id, _ = await make_user(screener_session, "other-backtest@example.com")
+        _, stored = planted_run()
+        await _run(screener_session, user_id=other_id, stats=stored)
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/journal"), headers=bearer(public_id))
+
+        assert response.json()["backtest"] is None

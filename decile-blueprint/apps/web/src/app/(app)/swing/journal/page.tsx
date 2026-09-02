@@ -41,6 +41,13 @@ export const metadata: Metadata = {
   description: PAGES["/swing/journal"].blurb,
 };
 
+/**
+ * `04` §10's statistics as the API ships them — `SwingJournalCard["stats"]` for the two journal
+ * cards, and the same ten numbers read out of the backtest card's `stats` object (SW9 puts them
+ * at its top level so the two cards can share every component).
+ */
+type JournalStatsLike = SwingJournalCard["stats"];
+
 const HEAD_CELL = "py-2 pr-3 font-medium";
 const HEAD_ROW =
   "border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground";
@@ -77,15 +84,25 @@ function Stat({ label, value }: { label: string; value: string }) {
  * a record of three trades reads as three trades. At zero trades every bar is empty and the
  * caption says so — a flat chart with no words is a chart that failed to load.
  */
-function Histogram({ card, id }: { card: SwingJournalCard; id: string }) {
-  const most = Math.max(0, ...card.histogram.map((bar) => bar.count));
+function Histogram({
+  histogram,
+  trades,
+  id,
+  empty = "No closed trades yet — every bar is empty.",
+}: {
+  histogram: readonly { bucket: string; count: number }[];
+  trades: number;
+  id: string;
+  empty?: string;
+}) {
+  const most = Math.max(0, ...histogram.map((bar) => bar.count));
   return (
     <div className="space-y-2" data-testid={`${id}-histogram`}>
       <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         R distribution
       </h4>
       <ul className="space-y-1" aria-label="Trades by R bucket">
-        {card.histogram.map((bar) => {
+        {histogram.map((bar) => {
           const losing = bar.bucket.startsWith("<") || bar.bucket.startsWith("-");
           const width = most > 0 ? (bar.count / most) * 100 : 0;
           return (
@@ -108,41 +125,16 @@ function Histogram({ card, id }: { card: SwingJournalCard; id: string }) {
           );
         })}
       </ul>
-      {card.stats.trades === 0 ? (
-        <p className="text-xs text-muted-foreground">No closed trades yet — every bar is empty.</p>
-      ) : null}
+      {trades === 0 ? <p className="text-xs text-muted-foreground">{empty}</p> : null}
     </div>
   );
 }
 
-/**
- * One record. `title` is the only thing the two instances share; each is handed its own card
- * and reads nothing outside it.
- */
-function JournalCard({
-  id,
-  title,
-  blurb,
-  card,
-}: {
-  id: "real" | "simulated";
-  title: string;
-  blurb: string;
-  card: SwingJournalCard;
-}) {
-  const { stats } = card;
+/** `04` §10's ten statistics as tiles — the journal cards' and the backtest card's alike. */
+function StatTiles({ stats, id }: { stats: JournalStatsLike; id: string }) {
   const streak = stats.current_loss_streak;
   return (
-    <section
-      aria-label={title}
-      data-testid={`journal-card-${id}`}
-      className="space-y-5 rounded-lg border border-border bg-card p-4"
-    >
-      <div className="space-y-1">
-        <h3 className="text-lg font-medium">{title}</h3>
-        <p className="max-w-[60ch] text-sm text-muted-foreground">{blurb}</p>
-      </div>
-
+    <>
       <dl
         className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5"
         data-testid={`${id}-stats`}
@@ -170,8 +162,40 @@ function JournalCard({
           measure against.
         </p>
       ) : null}
+    </>
+  );
+}
 
-      <Histogram card={card} id={id} />
+/**
+ * One record. `title` is the only thing the two instances share; each is handed its own card
+ * and reads nothing outside it.
+ */
+function JournalCard({
+  id,
+  title,
+  blurb,
+  card,
+}: {
+  id: "real" | "simulated";
+  title: string;
+  blurb: string;
+  card: SwingJournalCard;
+}) {
+  const { stats } = card;
+  return (
+    <section
+      aria-label={title}
+      data-testid={`journal-card-${id}`}
+      className="space-y-5 rounded-lg border border-border bg-card p-4"
+    >
+      <div className="space-y-1">
+        <h3 className="text-lg font-medium">{title}</h3>
+        <p className="max-w-[60ch] text-sm text-muted-foreground">{blurb}</p>
+      </div>
+
+      <StatTiles stats={stats} id={id} />
+
+      <Histogram histogram={card.histogram} trades={stats.trades} id={id} />
 
       <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-2">
@@ -433,6 +457,281 @@ function GenericList({ title, record }: { title: string; record: Record<string, 
   );
 }
 
+// --- the backtest card's own shape (SW9, leaf 1.3.2) ------------------------------------------
+//
+// The API types `stats` and `params` as objects because the engine owns their shape (C2); the
+// page reads the parts it knows how to draw and renders the rest generically, so a field the
+// engine adds later is shown rather than dropped.
+
+function isNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+const STAT_KEYS = [
+  "trades",
+  "win_rate_pct",
+  "avg_win_r",
+  "avg_loss_r",
+  "expectancy_r",
+  "net_r",
+  "largest_win_r",
+  "largest_loss_r",
+  "current_loss_streak",
+] as const;
+
+/** The ten `04` §10 numbers, when a record carries all of them. */
+function readStats(record: Record<string, unknown>): JournalStatsLike | null {
+  if (!STAT_KEYS.every((key) => isNumber(record[key]))) return null;
+  const pf = record.profit_factor;
+  if (pf !== null && !isNumber(pf)) return null;
+  return {
+    trades: record.trades as number,
+    win_rate_pct: record.win_rate_pct as number,
+    avg_win_r: record.avg_win_r as number,
+    avg_loss_r: record.avg_loss_r as number,
+    expectancy_r: record.expectancy_r as number,
+    profit_factor: pf,
+    net_r: record.net_r as number,
+    largest_win_r: record.largest_win_r as number,
+    largest_loss_r: record.largest_loss_r as number,
+    current_loss_streak: record.current_loss_streak as number,
+  };
+}
+
+type HistogramBar = { bucket: string; count: number };
+
+/** The journal's six-bucket histogram, when the card carries one in that shape. */
+function readHistogram(value: unknown): HistogramBar[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const bars: HistogramBar[] = [];
+  for (const item of value) {
+    if (!isRecord(item) || typeof item.bucket !== "string" || !isNumber(item.count)) return null;
+    bars.push({ bucket: item.bucket, count: item.count });
+  }
+  return bars;
+}
+
+/** `by_setup` / `by_year`: a record of `04` §10 statistics per group, in the API's order. */
+function readGroups(value: unknown): [string, JournalStatsLike][] | null {
+  if (!isRecord(value)) return null;
+  const out: [string, JournalStatsLike][] = [];
+  for (const [key, stats] of Object.entries(value)) {
+    if (!isRecord(stats)) return null;
+    const read = readStats(stats);
+    if (read === null) return null;
+    out.push([key, read]);
+  }
+  return out;
+}
+
+function readNumbers(value: unknown): [string, number][] | null {
+  if (!isRecord(value)) return null;
+  const out: [string, number][] = [];
+  for (const [key, item] of Object.entries(value)) {
+    if (!isNumber(item)) return null;
+    out.push([key, item]);
+  }
+  return out;
+}
+
+/** The keys of `stats` the card draws itself; anything else is listed generically after them. */
+const DRAWN_STAT_KEYS = new Set<string>([
+  ...STAT_KEYS,
+  "profit_factor",
+  "histogram",
+  "by_setup",
+  "by_year",
+  "funnel",
+  "equity",
+]);
+
+/** The keys of `params` the card shows as tiles; `config` opens on request, the rest is listed. */
+const DRAWN_PARAM_KEYS = new Set<string>(["start", "end", "sleeve_inr", "cost_pct_per_side", "config"]);
+
+function rest(record: Record<string, unknown>, drawn: Set<string>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(record).filter(([key]) => !drawn.has(key)));
+}
+
+function GroupTable({
+  title,
+  groupLabel,
+  groups,
+  name,
+}: {
+  title: string;
+  groupLabel: string;
+  groups: [string, JournalStatsLike][];
+  name: (key: string) => string;
+}) {
+  return (
+    <div className="space-y-2">
+      <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h4>
+      {groups.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing to group yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className={HEAD_ROW}>
+                <th className={HEAD_CELL}>{groupLabel}</th>
+                <th className={HEAD_CELL}>Trades</th>
+                <th className={HEAD_CELL}>Win rate</th>
+                <th className={HEAD_CELL}>Expectancy</th>
+                <th className={HEAD_CELL}>Net R</th>
+                <th className={HEAD_CELL}>Profit factor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map(([key, stats]) => (
+                <tr key={key} className={BODY_ROW}>
+                  <td className="py-2 pr-3 font-medium">{name(key)}</td>
+                  <td className="py-2 pr-3 tabular-nums">{stats.trades}</td>
+                  <td className="py-2 pr-3 tabular-nums">{stats.win_rate_pct.toFixed(0)}%</td>
+                  <td className="py-2 pr-3 tabular-nums">{signedR(stats.expectancy_r)}</td>
+                  <td className="py-2 pr-3 tabular-nums">{signedR(stats.net_r)}</td>
+                  <td className="py-2 pr-3 tabular-nums">
+                    {stats.profit_factor === null ? "—" : stats.profit_factor.toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Whole rupees with Indian grouping, for the equity ends: `₹10,01,443`. */
+function rupees(value: number): string {
+  return `₹${Math.round(value).toLocaleString("en-IN")}`;
+}
+
+/**
+ * The run's numbers: `02` §3.3's "R-distribution, win rate and expectancy" first, as the same
+ * tiles and bars the two journal cards use, then by setup and by year, the funnel, and where
+ * the allocation started and ended. A `stats` without the ten headline numbers — an older run,
+ * or a shape this page predates — is listed generically rather than hidden.
+ */
+function BacktestResults({ stats }: { stats: Record<string, unknown> }) {
+  const headline = readStats(stats);
+  if (headline === null) {
+    return <GenericList title="Results" record={stats} />;
+  }
+  const histogram = readHistogram(stats.histogram);
+  const bySetup = readGroups(stats.by_setup);
+  const byYear = readGroups(stats.by_year);
+  const funnel = readNumbers(stats.funnel);
+  const equity = isRecord(stats.equity) ? stats.equity : null;
+  const sessions = equity && isNumber(equity.sessions) ? equity.sessions : null;
+  const other = rest(stats, DRAWN_STAT_KEYS);
+  return (
+    <div className="space-y-5" data-testid="journal-backtest-results">
+      <p className="text-sm" data-testid="journal-backtest-verdict">
+        {headline.trades === 0
+          ? `No trade was taken${sessions === null ? "" : ` over ${sessions} sessions`}: the rules found nothing to enter, or the tape never allowed it.`
+          : `${headline.trades} ${headline.trades === 1 ? "trade" : "trades"}${
+              sessions === null ? "" : ` over ${sessions} sessions`
+            }: ${signedR(headline.expectancy_r)} a trade, ${headline.win_rate_pct.toFixed(0)}% winners, ${signedR(headline.net_r)} in all.`}
+      </p>
+      <StatTiles stats={headline} id="backtest" />
+      {histogram ? (
+        <Histogram
+          histogram={histogram}
+          trades={headline.trades}
+          id="backtest"
+          empty="No trade in the run — every bar is empty."
+        />
+      ) : null}
+      <div className="grid gap-6 md:grid-cols-2">
+        {bySetup ? (
+          <GroupTable title="By setup" groupLabel="Setup" groups={bySetup} name={setupName} />
+        ) : null}
+        {byYear ? (
+          <GroupTable title="By year closed" groupLabel="Year" groups={byYear} name={(key) => key} />
+        ) : null}
+      </div>
+      {equity && isNumber(equity.start) && isNumber(equity.end) ? (
+        <dl
+          className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4"
+          data-testid="journal-backtest-equity"
+        >
+          <Stat label="Allocation at the start" value={rupees(equity.start)} />
+          <Stat label="At the end" value={rupees(equity.end)} />
+          {isNumber(equity.low) ? <Stat label="Lowest close" value={rupees(equity.low)} /> : null}
+          {isNumber(equity.high) ? <Stat label="Highest close" value={rupees(equity.high)} /> : null}
+        </dl>
+      ) : null}
+      {funnel ? (
+        <div className="space-y-2" data-testid="journal-backtest-funnel">
+          <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            What happened to every candidate
+          </h4>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
+            {funnel.map(([key, value]) => (
+              <Stat key={key} label={label(key)} value={String(value)} />
+            ))}
+          </dl>
+        </div>
+      ) : null}
+      {Object.keys(other).length > 0 ? <GenericList title="Other results" record={other} /> : null}
+    </div>
+  );
+}
+
+/**
+ * The run's parameters (`06` SW9: "the run's parameters are on the card"): the four the run
+ * was asked for as tiles, the method's configuration behind a disclosure — every threshold,
+ * because the run is reproducible from them and the bars alone — and anything else listed.
+ */
+function BacktestParameters({ params }: { params: Record<string, unknown> }) {
+  const config = isRecord(params.config) ? flatten(params.config) : [];
+  const other = rest(params, DRAWN_PARAM_KEYS);
+  return (
+    <div className="space-y-3" data-testid="journal-backtest-params">
+      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Parameters
+      </h3>
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+        <Stat
+          label="First session"
+          value={typeof params.start === "string" ? formatTradeDate(params.start) : generic(params.start)}
+        />
+        <Stat
+          label="Last session"
+          value={typeof params.end === "string" ? formatTradeDate(params.end) : generic(params.end)}
+        />
+        <Stat
+          label="Allocation, constant"
+          value={isNumber(params.sleeve_inr) ? rupees(params.sleeve_inr) : generic(params.sleeve_inr)}
+        />
+        <Stat
+          label="Cost per side"
+          value={
+            isNumber(params.cost_pct_per_side)
+              ? `${params.cost_pct_per_side.toFixed(2)}%`
+              : generic(params.cost_pct_per_side)
+          }
+        />
+      </dl>
+      {config.length > 0 ? (
+        <details className="text-sm" data-testid="journal-backtest-config">
+          <summary className="cursor-pointer text-muted-foreground">
+            Method configuration ({config.length} settings, the pack&apos;s defaults with the
+            allocation&apos;s liquidity floors)
+          </summary>
+          <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
+            {config.map(([name, value]) => (
+              <Stat key={name} label={name} value={value} />
+            ))}
+          </dl>
+        </details>
+      ) : null}
+      {Object.keys(other).length > 0 ? <GenericList title="Other parameters" record={other} /> : null}
+    </div>
+  );
+}
+
 function Backtest({ backtest }: { backtest: SwingBacktestCard | null }) {
   return (
     <section
@@ -476,8 +775,13 @@ function Backtest({ backtest }: { backtest: SwingBacktestCard | null }) {
               </ul>
             )}
           </div>
-          <GenericList title="Results" record={backtest.stats} />
-          <GenericList title="Parameters" record={backtest.params} />
+          <p className="max-w-[70ch] text-xs text-muted-foreground">
+            Entry and exit prices in this run carry the cost per side, so a stop hit exactly reads
+            a little worse than -1R — the truth of a round trip. Every trade is sized against the
+            same constant allocation; nothing compounds.
+          </p>
+          <BacktestResults stats={backtest.stats} />
+          <BacktestParameters params={backtest.params} />
         </div>
       )}
     </section>

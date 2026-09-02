@@ -18,8 +18,8 @@ done. A fresh session resumes from the first module not marked ✅.
 | SW6 — Premarket EP scan + opening-range monitor | ✅ | The morning job refreshes levels, scans the pre-open for gaps behind its flag (≤ 500 a call, inside the limiter) and rebuilds the plan as `MORNING`; the desk's opening-range monitor raises `sw_signal` rows and one-line `SIGNAL` plans behind its flag, holds no gateway, and replays a fixture morning exactly |
 | SW7 — Desk page + `/swing/execute` (DRY_RUN) | ✅ | ✅ execute logic: `app/swing_execute.py` turns a confirmed line into a LIMIT buy + a GTT in the same call, a market sell that re-sizes the stop, or a raised stop — through the real gateway in its dry-run branch, 70 tests, 0 orders reach a broker · ✅ page: `GET /swing` with its three panels and status bar, `PgSwingStore` over the desk's Postgres adapter (sqlite twin in tests), `POST /swing/execute` / `/swing/rearm` through `execute_line` — 73 tests, the buy → position → GTT path proven end to end over an exploding broker client |
 | SW8 — Journal + ladder closes the loop | ✅ | ✅ ladder + API: the evening settles the rung and writes it to `sw_config` (audited, `swing-eod`) and the day's market row, and the plan is built with it; `GET /swing/journal` answers C2's shape — real and simulated cards apart, the six-bucket histogram, by setup, by month, the ladder card, 14-of-20 · ✅ page: `/swing/journal` renders it — two cards that never mix, six bars that read at zero, the one sentence on what the next close does to the ladder, "14 of 20 paper sessions logged", and the backtest heading with its caveats verbatim or an honest "not run yet"; 30 rendered-DOM tests, the fifth tab in the row |
-| SW9 — EOD backtest | 🔄 | Core half (1.3.1): `baskfy_core.swing.backtest` runs `04` §11 through the live book's own functions; a planted flag reproduces R = 0.28 to the paisa; 300 × 8y in 24 s; runner and card are 1.3.2's |
-| SW10 — Gating and safety proof | ⬜ | |
+| SW9 — EOD backtest | ✅ | ✅ core (1.3.1): `baskfy_core.swing.backtest` runs `04` §11 through the live book's own functions; a planted flag reproduces R = 0.28 to the paisa; 300 × 8y in 24 s · ✅ runner (1.3.2): `sw_backtest_run` (migration 0029, append-only), `baskfy.swing.backtest` on the compute queue loading bars as the detectors do plus the names that died inside the run, `tools/swing/backtest.py` (`--fixture` with no database, or the task body against `BASKFY_DATABASE_URL`), `GET /swing/journal.backtest` as C2's card with the caveats verbatim, and the page drawing the run's R distribution, win rate and expectancy with the journal cards' own tiles and bars — 18 + 6 + 6 tests; the 2017→ run itself is **not measurable on this machine** (ten sessions of bars, database at 0026) and extrapolates to 4–5 min against the 30 |
+| SW10 — Gating and safety proof | ✅ | Every Track-B/C claim is a test: hypothesis over random watchlists (no `PARABOLIC_SHORT` line, a stop never falls, a SELL never exceeds the book), a spy over the real gateway through `/swing/execute` (eight calls, all dry, under both `DRY_RUN` values), source scans with docstrings/comments stripped over the web hub, the API and the monitor, every `sw_` write named with its `user_id`; and `tools/swing/drill.py` runs the whole paper session against Postgres — evening → LEVELS → MORNING → replayed morning through `PgSignalStore` → two confirms through `execute_line` → EOD → next morning — **0 orders reach a broker**, `confirms=2 fills=2`, one finding recorded (SW10.2) |
 | SW11 — Hardening and observability | ⬜ | |
 | SW12 — Verification, goldens, final report | ⬜ | |
 
@@ -934,11 +934,11 @@ reads).
 
 ---
 
-## SW9 — The EOD backtest 🔄
+## SW9 — The EOD backtest ✅
 
-**This section covers the pure engine in `packages/core` (leaf 1.3.1). The runner task, the
-`sw_backtest_run` table, the CLI and the journal card are leaf 1.3.2's and are appended below
-it — (runner: see 1.3.2).**
+**The first half of this section covers the pure engine in `packages/core` (leaf 1.3.1). The
+runner task, the `sw_backtest_run` table, the CLI and the journal card (leaf 1.3.2) follow under
+"The runner".**
 
 ### What `baskfy_core.swing.backtest` does
 
@@ -972,7 +972,7 @@ trace `(session, gate, rung)` that C3 did not name and the runner stores as-is (
 `to_json()` is plain JSON with a fixed key order: `params, trades, stats, by_setup, by_year,
 equity_curve, funnel, ladder, caveats`. `CAVEATS` is §11's three sentences.
 
-### Tests — `packages/core/tests/test_swing_backtest.py`, 36 passed
+### Tests — `packages/core/tests/test_swing_backtest.py`, 44 passed
 
 `swing_backtest_fixtures.py` plants **one flag** — `swing_fixtures.flag_series`, the base the
 detector suite already proves is `SETTING_UP` on its last bar, re-dated onto weekdays and
@@ -989,10 +989,16 @@ one-trade lookback); a RED tape refusing every candidate; `by_setup` and `by_yea
 `summarize` over the right subsets; the curve marking open shares at the close and ending at
 the realised rupees; the funnel identity on five frames; a locked EP counted, never entered;
 a GAP_DAY EP entered the next session and *not* sold for a red close that day (§6.4.2 is the
-gap day's rule); a gap through the stop filling at the open; an entry-day stop-out filling at
-the stop; `END_OF_RUN` and `NO_BAR` closes; a same-symbol duplicate entering once; a candidate
-on the last session counted, not entered; a Saturday bar never traded; the empty typed frame
-running flat; byte-identical JSON across two runs; the frozen contract objects.
+gap day's rule); a gap through the stop filling at the open (on day eight, and on day one); an
+entry-day stop-out filling at the stop; a close below the trail MA selling everything at the
+next open; `END_OF_RUN` and `NO_BAR` closes with their counts and the curve's last point at
+the price received; a pending partial waiting for a bar that never comes; a same-symbol
+duplicate entering once; a second position the day after the first refused `EXPOSURE_FULL`
+against the book at cost; the ladder starting at rung 0; the gate reading only the session's
+own close (a tape that turns later is RED until it does — house rule 5); a candidate on the
+last session counted, not entered; a Saturday bar never traded; a one-session run; a repeated
+calendar day refused; the empty typed frame running flat; byte-identical JSON across two runs;
+the frozen contract objects.
 
 ### Speed, measured
 
@@ -1008,7 +1014,29 @@ workspace (a mutant's speed proves nothing).
 
 `tools/mutation.py` knows `swing/backtest.py` (100 mutants; primary test file
 `test_swing_backtest.py`, which is also appended, last, to the selection every other swing
-module is scored against). MUTATION_SCORE_PLACEHOLDER
+module is scored against). Two runs, same 100 mutants: **62.0% → 76.0%** (76 killed, 24
+survived), above the 70% this leaf's gate asks for and just under `factors`' 77.5%. The first
+run's fourteen extra survivors were real gaps — no trail-MA exit, no gap through the stop on
+day one, no high *exactly* at the trigger, no exact funnel counts, no pending sell across
+missing bars, no one-session run, no repeated calendar day, and a breadth slice that could
+have read tomorrow's rows — and each became a spec test. The 24 that remain, by family: eleven
+`slots=True` / `frozen=True` flips on the private dataclasses (`_Panel`, `_Position`,
+`_Candidate`) and `slots` on the public three (the same equivalent mutant
+`reconciliation/MUTANTS.md` already justifies for `factors`); the `row_of` guard for an
+instrument absent from the panel (unreachable: a candidate detected today has a bar today);
+`open >= trigger` read as `>` (an open exactly on the trigger falls through to "high ≥ trigger"
+and fills at the same price — equivalent by construction, and the test for it passes both
+ways); `RED or not new_entries_allowed` read as `and` (RED implies the second); the empty-day
+`BreadthSnapshot(0, 0.0, ...)` constants (a one-name universe with nobody up 25% is RED just
+the same); `_MIN_WINDOW_BARS` 2 → 3 and `>=` → `>` (a two-bar name cannot set up either); the
+detection window one session longer or shorter (`first ± 1` — the planted base is 35 bars
+inside a 126-session window); the window slice extended past today (the detector's own
+`date <= as_of` filter is the look-ahead guard, so the mutant changes nothing — and that is the
+right place for the guard to live); `cash_available = sleeve + open_cost` (the tier's exposure
+ceiling refuses a position before §5's cash cap can bind, at every rung); and `missing = 1` as
+a default that the entry day's bar resets to 0 before it is ever read. Report and JSON are in
+the leaf's scratchpad; `reconciliation/MUTANTS.md` is `make mutants`' and was not regenerated
+here (SW12).
 
 ### What SW9 (core half) did NOT do
 
@@ -1035,15 +1063,203 @@ module is scored against). MUTATION_SCORE_PLACEHOLDER
   over every target and is shared); the backtest's own survivors are listed above and left for
   SW12's justification pass.
 
+### The runner (1.3.2) — `sw_backtest_run`, `baskfy.swing.backtest`, the CLI, the card
+
+**What runs.** `baskfy_worker.tasks.swing_backtest` does the three things the pure engine may
+not: it loads the bars, it supplies the calendar, and it stores the run.
+
+| | |
+|---|---|
+| the bars | the frame `load_swing_bars` gives the nightly job — adjusted, the cash series, `upper_circuit` multiplied into the adjusted space, the user's own liquidity floors from `sw_config` over the pack's defaults — over `lookback_start(start, 200)..end`, so the run's first session is detected on the same 200 sessions the live job would have had that night. One clause differs, and it is the one `04` §11 names: names **delisted on or after `start`** are kept (the nightly query keeps none), and the engine's `NO_BAR` rule sells them when they stop printing. Survivorship handled by `instrument.delisted_on`, as the caveat says (SW9.6) |
+| the calendar | `trading_day` for the NSE over the same window; a bar on a holiday is read by the detectors and never traded on |
+| the sleeve | `params.sleeve_inr`, `04` §11's constant ₹10 lakh — never `sw_config.sleeve_capital_inr`, which is ₹0 until Maulik sets it; risk per trade is the pack's 0.5% |
+| the row | `sw_backtest_run` (migration `0029_swing_backtest`, model `SwBacktestRun`, `03` §10): `params` written on the way in, `stats = BacktestResult.to_json()` on the way out — the trade list, the equity curve and the ladder trace included, every price a string of its exact decimal — and **never edited**: a re-run is a second row. A run that raises records `"{Type}: {message}"` and the traceback in `error`, sets `finished_at`, and **re-raises** so Celery sees it |
+| the task | `baskfy.swing.backtest(start, end, sleeve_inr, cost_pct_per_side)` on the **compute** queue (set on the task: no `baskfy.swing.*` route exists and there is no Beat entry to carry the option); the body commits the started row first and the result or the error after, so a failed nine-year run is a durable row, not a rollback. `start` defaults to 2017-01-01, `end` to today in IST |
+| the CLI | `tools/swing/backtest.py` at the repo root. `--fixture` runs the planted year with no database, prints the table and the planted trade beside the number the fixture expects (`planted R=0.28 expected R=0.28: reproduced`), exit 1 otherwise. The default mode runs the task body against `BASKFY_DATABASE_URL` for `--start/--end` (`--sleeve-inr`, `--cost-pct`, `--user-id`, `--json` for the stored row), stores the run and prints the statistics **and the elapsed time** — the `< 30 min` measurement, when it is taken |
+| the card | `GET /swing/journal.backtest` is the latest **finished** run — `finished_at` set and `error` null, ordered by finish, so a run in flight or a failed re-run never displaces the last good number — as contract C2's `{run_id, params, started_at, finished_at, stats, caveats}`. `caveats` is `baskfy_core.swing.CAVEATS` verbatim, from the constant, not the row. `stats` is a card, not the row (SW9.7): `04` §10's ten numbers at the top level, the journal's own six-bucket `histogram` (`bucket_of` over the stored trades — one bucketing for the paper book and the backtest), `by_setup`, `by_year`, `funnel`, and `equity {sessions, start, end, low, high}`; every stored decimal a `Decimal`, so `0.28` reaches the page as `0.28` |
+| the page | under `02` §3.3's heading, "Backtest, EOD approximation": the run line, the three caveats verbatim, a note that entry and exit prices carry the cost per side and nothing compounds, then **one sentence** ("412 trades over 2300 sessions: +0.31R a trade, 42% winners, +127.75R in all"), the same ten tiles and six bars the two journal cards draw (`StatTiles` and `Histogram` are now shared), by setup and by year closed as tables, the allocation's start and end, the funnel, and any key the page does not know under "Other results". Parameters: first and last session, the constant allocation, the cost per side as tiles, and the whole method configuration behind a disclosure. A `stats` without the ten headline numbers falls back to 1.2.2's generic listing, kept by a test |
+
+**Not measured: the 2017→ run.** `06` SW9's "the run over the full history completes on the dev
+box in < 30 minutes" cannot be measured on this machine: the dev database holds **ten sessions**
+of bars for 180 instruments and is deliberately at migration `0026` (SW0.2, SW3.3); there is
+nothing for a 2017→ run to read, and no run was faked against it. The honest number is the
+extrapolation from 1.3.1's speed test — 300 instruments × 2,000 sessions in **24.1 s**, the
+detectors linear in the universe — which puts 2,500 instruments × 2,300 sessions at **about four
+to five minutes**, six times inside the 30 min budget, plus one query over ~5.7 million
+`ohlcv_daily` rows and one JSONB write. The CLI prints the elapsed time; the first
+`uv run python ../tools/swing/backtest.py --start 2017-01-01` on a backfilled database is where
+the measured number goes (SW-FINAL-REPORT's first-morning steps). The database mode *was*
+exercised end to end here, against the leaf's private test database, over a five-session range
+with no bars: an honest empty run stored and printed, and a reversed range stored as a failed
+row and reported — the CLI and the task body are proven, the history is not (SW9.8).
+
+### Tests (1.3.2)
+
+| Suite | |
+|---|---|
+| `services/worker/tests/test_swing_backtest_task.py` | **18 passed**, against the real database. The planted year written into `ohlcv_daily` on the NSE calendar, read back and run through `run_swing_backtest`: the one trade is `FLAGWIN`, 492 shares at 152.1976, stop 141.855, exit 155.13, **R = 0.28** — `06` SW9's acceptance through the whole runner, not the engine alone; the stored `stats` equals `result.to_json()` and `params` equals `to_json()["params"]`, with the caveats and the funnel's session count; the run trades at 492 shares with `sw_config.sleeve_capital_inr = 0`; the user's `adr_min_pct` is the run's config and everything else is the pack's; a given sleeve and cost override the defaults. The bars: the frame **equals `load_swing_bars`** over the lookback window, column for column; a run starting on the detection day still finds the flag (the 140 bars before it are in the frame); the calendar is `trading_day`'s over the same window with no weekday holiday in it; a name delisted inside the run is in the frame, one delisted before it is not, and the nightly loader has neither; a name delisted on the first session is kept. A run is a fact: two runs are two rows and the first is untouched (and the second is byte-identical — determinism); a range with no bars stores an honest empty result; `end < start` is recorded as `ValueError: end … is before start …` with the traceback, `finished_at` set, `stats` null, and re-raised. The binding: named `baskfy.swing.backtest`, `queue == "compute"`, `acks_late`, no Beat entry; 2017 is the default start; no `BASKFY_SOLE_USER_ID` skips rather than inventing a tenant; through `run_checkpointed`, a failed body leaves a durable error row and a good one returns the summary of the row it stored |
+| `services/api/tests/test_api_swing_journal.py` | **24 passed** (18 + 6): null with a run in flight and a failed run present; C2's card with the three caveats verbatim, the run's parameters (money as numbers with their precision, the config's thresholds) and IST-formattable timestamps; the headline numbers, the six buckets in order with the planted trade in `0..1`, `by_setup` (FLAG 1, EP zeros, profit factor null), `by_year` sorted, the funnel and the equity ends — and no trade list, curve or ladder on the card; the latest *finished* run wins over a later-started unfinished one and a later failed one, and the later finish wins between two finished; an empty run is a card of zeros, not null; another account's run is not this account's card |
+| `apps/web/.../journal/__tests__/page.test.tsx` | **36 passed** (30 + 6): the caveats verbatim (unchanged); a `stats` without the ten headline numbers falls back to the generic listing; the sentence, the tiles, the six bars with their `aria-label`s and the `>3` count; the by-setup and by-year rows, the funnel, the allocation's start and end in Indian grouping; the four parameter tiles and the configuration disclosure, and no "sleeve" anywhere; a run with no trade says so and draws six empty bars; an unknown result or parameter is listed, never dropped |
+| `packages/core/tests/test_schema_matches_docs.py` | 199 passed — `sw_backtest_run` in the table list and in `03`; `test_migrations.py`, `test_celery_config.py`, `test_swing_eod/ladder/detect/premarket.py` re-run green (113); `test_swing_readonly.py` and `test_api_artifacts.py` green; alembic's `compare_metadata` reports no diff for the table |
+
+`make lint` clean; `test_no_escape_hatches` green; `openapi.json` and `schema.ts` regenerated with
+**no change** — 1.2.1 had already declared `SwingBacktestCardOut`, and the card fills it.
+
+### Decisions (1.3.2)
+
+SW9.6 (the append-only row, the survivorship clause, the config and the sleeve, the queue),
+SW9.7 (the card's `stats` shape and the page), SW9.8 (the CLI's two modes and why the 2017→ run
+is an extrapolation here).
+
+### What SW9 (1.3.2) did NOT do
+
+- **The 2017→ run has not been run**, and its `< 30 min` is an extrapolation, above. The number
+  `02` §3.3 wants on the page does not exist until a backfilled database exists; the card says
+  "not run yet" until then, truthfully.
+- **The bars reader is mirrored, not shared.** `bars_frame` in `tasks/swing_backtest.py` is
+  `load_swing_bars`'s row-to-frame reading again, because the delisting clause needed a
+  different query and `tasks/swing.py` is SW3's. A `delisted_since` keyword on `load_swing_bars`
+  is the one-line merge, for SW12's pass; a test asserts the two frames are equal meanwhile.
+- **No `+5/+5` score adjustments** in the backtest (the core half's note stands): the runner
+  hands the engine bars, not `instrument.listed_on` or `index_member_daily`. The scores decide
+  only the order candidates are considered in.
+- **The card is the latest finished run; there is no run picker** and no way to compare two
+  runs on the page. `tools/swing/backtest.py --json` prints any run's row for a diff.
+- **No telemetry** on the task (SW11 owns spans and metrics for `swing*.py`).
+- **The Celery binding itself is tested for its name, queue and skip**, and its body through
+  `run_checkpointed`; the `build_pipeline_dependencies()` call in front of it is not driven in a
+  test (it builds the provider stack from settings, which the other swing bindings also leave to
+  the drill).
+- The planted year is reached from the worker and API suites by putting
+  `packages/core/tests` on `sys.path` (SW9.8) — a departure from `test_swing_detect.py`'s
+  retyping, taken so the runner's acceptance is the fixture's own trade, not a copy of it.
+
+---
+
+## SW10 — Gating and safety proof, and the DRY_RUN morning drill ✅
+
+**Goal, from `06`:** "the Track-B and Track-C claims are theorems, not intentions." Each claim in
+`02` Track B / Track C that the code makes about itself is now a test that fails the moment it
+stops being true, and the whole paper session runs end to end through the production code
+paths with the orders counted.
+
+### The theorems, and where each lives
+
+| Claim (`02`) | Asserted how | Where |
+|---|---|---|
+| Track C §1 — `PARABOLIC_SHORT` is never a plan line | **hypothesis**, 500 examples from a fixed seed (`SEED = 20260902`, in every assertion message): random watchlists mixing all three setups, any score, stops from 15 % below to 2 % *above* the trigger, locked flags, held names, any gate, the ladder's rungs and random tiers, sleeves from ₹0 to ₹5 cr. `build_entries` never emits a line carrying it, always answers it `NOT_TRADEABLE_SETUP` — that reason and no other, before the gate or the money are consulted — and every watched name is answered exactly once. Plus the strongest hand-built counter-example (perfect score, GREEN, top rung, ₹1 cr, deep turnover: no line) and the constant itself (`TRADEABLE_SETUPS == {FLAG, EP}`) | `packages/core/tests/test_swing_safety_properties.py` |
+| `04` §6.5 — a stop never falls | over `apply` with random action sequences that include a `RAISE_STOP` *below* the resting stop: the stop after is ≥ the stop before, ≥ every level a RAISE asked for, never a level nobody named, idempotent under re-application; and over random walks of `manage` → `apply` day after day: every RAISE the rules emit is to the entry and above the resting stop, and the book's stop is monotone until the position is gone | same file |
+| Track C §5 — a SELL never exceeds what the sleeve owns | over `manage` → `exit_lines`: every SELL is for shares the position holds, a partial is strictly less than the whole, a close-out is exactly the whole, `apply` never goes negative, a RAISE line never sits below the resting stop; `build_entries` has no SELL in its vocabulary and never lines a held name (`ALREADY_HELD`); the entries never spend more than the cash, never push the book over the rung's ceiling, never exceed the rung's position count, and each risks no more than the budget | same file |
+| Track C §5, at the desk | `execute_line`'s guard as a seeded loop of **500** random books and SELL lines through the real dry-run gateway: `BLOCKED` iff the line asks for more than `quantity_open` (or nothing, or a name the book does not hold), the book untouched; otherwise one fill for exactly the line's quantity and `quantity_open` never below zero. And `_sell`'s code reads `open_position_for`, never a holdings call | `kite-momentum-rebalancer/tests/test_swing_track_c.py` |
+| `04` §6.5, at the desk | 500 random resting stops and RAISE levels: at or below → `BLOCKED` with "never falls" and the trigger untouched; above and below the last price → re-armed at exactly that level | same file |
+| Track C §4 — no web route under `/swing` reaches an order | from the API's side of the wire: **every** `.ts`/`.tsx` under `apps/web/src/app/(app)/swing` and `lib/swing` — nine files, counted, seven routes and two tests — read through a small TypeScript lexer that tells code from strings, regex literals and comments. A route's *code* names no execute/rearm path, placing verb, `kiteconnect`, `OrderGateway`, `baskfy_execution`, `confirm=true`, non-GET method, server action or form, and imports nothing whose specifier says execution/gateway/kite/broker/order/desk; a test file may *name* those words (they are the vitest's vocabulary) but with every string blanked calls no `fetch(` and declares no server action; every `readOrNull` path in `fetch.ts` is on the same seven-entry read whitelist the vitest keeps. The lexer has its own test | `services/api/tests/test_swing_track_c.py` |
+| Track C §4 — the API has no path to the gateway | every `import` in `baskfy_api` scanned: the only `baskfy_execution` pieces it may import are the pure shapes it already does (`broker_ports`, `tenancy`, `client_ids`, and `TenantIds` / `mint_client_id` / `refuse_cross_tenant` from the root); the gateway, `gtt`, the adapters, the guards, `kiteconnect` and the desk's `app.` are offenders; and the code (docstrings stripped) never names `OrderGateway`, `place_order`, `place_gtt`, `.place(` | same file |
+| Track B — with the flag false no path from `/swing/execute` reaches a non-dry-run adapter | a **spy** wraps the REAL swing gateway built by `build_swing_gateway` over an exploding broker client and records the gates every `place` / `place_gtt_stop` / `delete_gtt` ran under, **through the route** — a buy (LIMIT + GTT), a partial sell (MARKET + cancel + GTT), a raised stop (cancel + GTT) and a re-arm — with `DRY_RUN` true *and* false: eight calls, every one `dry_run=True`, every journal event a dry run, every row `simulated`. The truth table has exactly one live cell (flag on **and** `DRY_RUN=false`), and the spy is shown not to be blind: under that cell it records `dry_run=False` and the exploding fake is what stops the order (`REJECTED`, no position, no stop, an `error` in the journal). The gateway is built lazily and holds `swing_gates` as a callable | desk file |
+| Track C §3 — the monitor's strategy has no place call | over the strategy's and the runner's code with docstrings stripped, a word-boundary scan (`\bplace\b`, `place_order`, `place_gtt`, `.place(`, `delete_gtt`, `OrderGateway`, `\border\b`; the strategy also `self.gw`, `kc.`, `kiteconnect`, `kite_client` — the runner may name the Kite wrapper because it *reads* quotes and candles through it); `main` hands `gateway=None`; `build_monitor(enabled=False)` builds nothing; `generate_targets` answers `[]` at runtime. And the scan is shown to read code, not prose: the docstring says "place", the code does not | desk file |
+| Track C §6 — every `sw_` write carries `BASKFY_SOLE_USER_ID` | **schema:** every `sw_` table in the ORM (twelve, plus 0029's `sw_backtest_run`) has a NOT NULL `user_id`. **API + worker code:** every `SwX(...)` constructor, every `insert(SwX).values(...)` (a bulk `values(batch)` is accepted only if the enclosing function builds `"user_id"` into the payload) and every raw `INSERT INTO sw_` / `UPDATE sw_` — fourteen sites, counted, the two easy-to-miss shapes asserted present — names `user_id`; the tenant is resolved once in `providers.py` from `BASKFY_SOLE_USER_ID` and the swing tasks neither read the environment nor pass a literal; every `routers/swing.py` handler calls `scoped_sole_user_id`. **Desk code:** every `INSERT` / `UPDATE` in `swing_desk` / `swing_monitor` / `swing_execute` — statement by statement, f-strings rendered, a dynamic column list (`create_position`, `add_fill`) accepted only when the function builds it with `'user_id'` — names the user, with one whitelisted `UPDATE sw_signal … WHERE id = ?` and its reason (the row was inserted with the store's user four lines earlier and is addressed by the id that INSERT returned; the whitelist is asserted still real); the id is `C.SOLE_USER_ID` / `BASKFY_SOLE_USER_ID` and never a literal. **Runtime:** after a buy, a sell, a raise and a re-arm through the real module every row in every `sw_` table is the user's, and another tenant's store over the same file sees nothing | both files |
+| Track C §1/§2 at the desk — CNC only, no leverage | both `gw.place(` calls in `swing_execute` pass `product="CNC"`, `exchange="NSE"`, `order_type` LIMIT or MARKET and no `variety`; the code names no `"MIS"`, `"NFO"`, `"BFO"`, `"co"`, `"bo"`, `MTF`; `swing_gates()` refuses intraday and options even with the weekly desk's `INTRADAY_ENABLED` / `OPTIONS_ENABLED` on; and a hand-edited `product="MIS"` is `BLOCKED` inside the gateway itself | desk file |
+
+Numbers: `test_swing_safety_properties.py` **8 passed** (5 properties × 500 examples + 3 exact),
+`services/api/tests/test_swing_track_c.py` **19 passed**, `kite-momentum-rebalancer/tests/test_swing_track_c.py`
+**37 passed**; desk suite green; `make lint` clean; `test_no_escape_hatches` green over the two
+new decile test files.
+
+### The DRY_RUN morning drill — `tools/swing/drill.py`
+
+`RUN-AND-TEST.md` §"The swing book's DRY_RUN morning drill (SW10)" has the command, the
+printed run and what "0 orders" is proven by. In one line: the evening before (`run_swing_eod`,
+18 Aug — the watchlist fills itself from the detectors' rows) → 08:50 `LEVELS` → 09:09 the
+`MORNING` plan (flag off, no quote) → the fixture morning replayed through
+`SwingBreakout` + **`PgSignalStore` over the desk's Postgres adapter into the same database**
+(four signals, exactly the fixture's; two `SIGNAL` lines; `monitor_ran` marked) → the two
+`TRIGGERED` lines confirmed through **`execute_line` + `PgSwingStore` + the real gateway** over
+an exploding broker client (two `SIMULATED` positions with `DRY-…` stops, two simulated fills,
+the swing journal exactly `dry_run, gtt_dry_run` twice, broker touched 0 times) → the close
+prints → 21:05 `run_swing_eod` (two positions managed; ALPHAFLAG up 1.23R, so `BREAKEVEN_AT_R`
+raises its stop to the entry; the ladder settles; the preview is built; the second session is
+counted) → the next morning's `LEVELS` and `MORNING` plan (the `RAISE_GTT_STOP` line, the two
+held names `ALREADY_HELD`, `DELTAWAIT` `TIER_FULL` at rung 0, `GAMMALOCK` locked). Then every
+`sw_` row is checked to be the sole user's (51 rows), and the counters print:
+
+```
+sw_session 2026-08-18: mode=DRY_RUN monitor_ran=False signals=0 confirms=0 fills=0 manage_actions=0 plans=1
+sw_session 2026-08-19: mode=DRY_RUN monitor_ran=True  signals=4 confirms=2 fills=2 manage_actions=0 plans=1
+orders that reached a broker: 0   (journal: dry_run, gtt_dry_run, dry_run, gtt_dry_run)
+DRILL OK
+```
+
+It exits 0 in about 20 s against `baskfy_sw_t3` (most of it `alembic upgrade head`). It refuses
+to start with `DRY_RUN=false` or the execution flag on, refuses to reset a database whose name
+does not say it is disposable, and exits 1 with the reason on any step that does not do what
+the rules say. **This is the first time the desk's `PgSwingStore` and `PgSignalStore` have
+written a real Postgres** — SW7's "no morning has been rendered against Postgres" is now false
+for the store (the page itself is still rendered over sqlite only).
+
+### What the drill found
+
+- **A morning's SIGNAL plans do not see each other's confirms** (SW10.2). The monitor reads
+  its context — the rung, the open symbols, the cash — once at 09:15 (SW6's design), so the
+  09:45 `BETAEP` line was sized against a book that did not yet hold `ALPHAFLAG`: the two
+  confirmed lines together are ₹3.43 lakh, 34 % of the sleeve, over rung 0's 25 % ceiling. Each
+  line alone respected every rule; the two together did not. The drill prints it as a `WARNING`
+  and does not fail on it: it is a ladder-fidelity gap, not a Track C breach (the cash was
+  there; nothing was sold; nothing was leveraged). The fix is the runner's (SW11's file) and
+  SW10.2 names it.
+- `sw_session.plan_ids` records only the evening's plan (`plans=1` on a day that built a
+  `MORNING` plan and two `SIGNAL` plans besides) — the premarket job and the monitor do not
+  append theirs. Recorded, not fixed: the fields belong to SW5/SW6's files.
+
+### Decisions
+
+SW10.1 (how the drill fakes the broker and the clock, and why the monitor flag stays false),
+SW10.2 (the SIGNAL plans sized against the 09:15 context — a finding, and the one-call
+reversal), SW10.3 (what the source scans admit and why: the API's three pure imports from
+`baskfy_execution`, the runner's Kite reads, the one `UPDATE … WHERE id = ?`).
+
+### What SW10 did NOT do
+
+- **Nothing was fixed.** SW10 owns tests, the drill and the docs; the two findings above are
+  recorded for their files' owners (the monitor's per-trigger context is SW11's file; the
+  session's `plan_ids` are SW5/SW6's).
+- **The drill does not run the detectors.** They need 125 sessions of history per name; the
+  drill writes the two tables they would have produced (`sw_setup_daily`, `sw_market_daily`)
+  by hand for four synthetic names and says so. The detectors have their own suite (SW3) and
+  the nightly chain runs them for real.
+- **The drill does not render the desk page or post through the route.** It calls
+  `execute_line` the way the route does (a `PgSwingStore`, the swing gateway, a tz-aware
+  `now`, no price for a buy). The route itself is proven through the sqlite twin (SW7's 73
+  tests and the spy tests here); the page over Postgres remains unrendered.
+- **The drill's morning is the synthetic fixture**, not a recorded one. `tools/swing/replay.py
+  --journal` can replay a real `bus.last_tick` journal, and nothing writes one yet (SW6).
+- **Property tests cover the pure core and `execute_line`'s guards**, not the evening job's
+  SQL or the store's SQL; those are covered by their own database-backed suites (SW5, SW7) and
+  by the drill end to end.
+- **`hypothesis` is not in the desk's venv** (`docs/02` locks it for the screener), so the
+  desk's two property loops are `random.Random(SEED)` over 500 cases rather than shrinking
+  strategies. The seed is in every message; a failure reproduces exactly but does not shrink.
+- **No Playwright, no Mailpit.** The evening email is handed to a recording transport and its
+  subject printed.
+- The desk test file imports `tests.test_swing_desk` and `tests.test_swing_execute` as modules
+  for their fixtures (the sqlite DDL twin, `MemoryStore`, `ExplodingKC`); a change to either
+  suite's fixtures is a change to this one. Deliberate — one DDL twin, not two.
+- **The drill and the worker suite share `baskfy_sw_t3` and alternate cleanly** — proven by
+  running drill → suites → drill → suite — but only after a defect the first pass hid: the
+  drill's user sat on `@example.com` with a `broker_account` row, and the worker conftest's
+  sweep of that domain then failed 17 tests with a foreign-key violation *behind a green
+  `LINT_OK`*. The drill now owns its id outright and names its user outside the sweep
+  (SW10.1 §5). The lesson for G8-shaped gates: an `EXPECT` that matches the last line of a
+  chain can pass over a red suite earlier in it; the numbers above were re-measured by hand.
+
 ---
 
 ## Not done (kept loud)
 
-- **SW9 onward.** The desk page and `/swing/execute` are in (SW7, both halves) and write
+- **SW10 onward.** The desk page and `/swing/execute` are in (SW7, both halves) and write
   `sw_position` / `sw_fill` on confirm; the ladder write-back, `GET /swing/journal` and the
-  journal page are in (SW8, both halves); no backtest run stored, no goldens, no safety proof
-  beyond each module's own tests. The journal's backtest card says "not run yet" until SW9
-  stores one.
+  journal page are in (SW8, both halves); the backtest engine, its runner, table, CLI and card
+  are in (SW9, both halves) — but **no run over real bars has been stored**: the journal's
+  backtest card says "not run yet" until `tools/swing/backtest.py` is run against a backfilled
+  database. No goldens, no safety proof beyond each module's own tests.
 - **`sw_position` has been written only by tests** (SW7). No confirm has run against a real
   database; the book is empty there, and every position test still builds its rows directly.
 - **The dev database is at `0026`.** Nothing swing-shaped has run against real NSE bars; the ten

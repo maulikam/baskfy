@@ -36,7 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_core.models import Instrument, SwConfig, SwMarketDaily, SwPosition, SwSession
 from baskfy_core.models.base import JsonObject
 from baskfy_core.models.swing import SwBacktestRun
-from baskfy_core.swing.backtest import CAVEATS
+from baskfy_core.swing.backtest import CAVEATS, INDEX_ABSENT_CAVEAT, GateMode
 from baskfy_core.swing.config import DEFAULT_SWING_CONFIG, SwingConfig
 from baskfy_core.swing.journal import ClosedTrade, JournalStats, summarize
 
@@ -160,7 +160,10 @@ class BacktestCard:
     two journal cards use), ``by_setup`` and ``by_year`` are §10's statistics per group,
     ``funnel`` is the engine's counts, and ``equity`` summarises the curve. Every stored decimal
     string is a ``Decimal`` here, so it reaches the wire as a number with its precision
-    (DECISIONS-SW SW9.7).
+    (DECISIONS-SW SW9.7). SW9.6 adds ``max_drawdown_pct`` at the top level, ``drawdown`` (the
+    constant-sleeve curve's deepest peak-to-trough and how long the lock-out held) and
+    ``comparison`` — gate-off, breadth-only and full side by side, overall, by year entered and
+    by setup, with breadth's and the index rule's contributions (STANDING-ANSWERS A12).
     """
 
     run_id: int
@@ -169,7 +172,8 @@ class BacktestCard:
     finished_at: str | None
     stats: JsonObject
     #: `04` §11's sentences, verbatim, from the engine's own constant — never from the row, so a
-    #: run stored under an older wording still shows the sentences the document has today.
+    #: run stored under an older wording still shows the sentences the document has today — plus
+    #: the index-absent sentence when the stored run says its gate was breadth-only (SW9.6).
     caveats: tuple[str, ...]
 
     def as_json(self) -> JsonObject:
@@ -419,6 +423,79 @@ def _equity_summary(curve: object) -> JsonObject:
     }
 
 
+#: The books in the order the page draws them — the engine's own (gate off, breadth only, full).
+#: JSONB keeps no key order, so the card restores it.
+GATE_MODE_ORDER: Final[tuple[str, ...]] = tuple(mode.value for mode in GateMode)
+
+
+def _by_mode(value: object) -> list[tuple[str, object]]:
+    record = _record(value)
+    return [(mode, record[mode]) for mode in GATE_MODE_ORDER if mode in record]
+
+
+def _cells(value: object) -> JsonObject:
+    """``{mode: cell}`` in the engine's mode order, every cell's numbers as ``Decimal``."""
+    return {mode: _numbers(_record(cell)) for mode, cell in _by_mode(value)}
+
+
+def _grouped_cells(value: object) -> JsonObject:
+    """``{year or setup: {mode: cell}}``, the groups sorted."""
+    return {key: _cells(cells) for key, cells in sorted(_record(value).items())}
+
+
+def _contribution(value: object) -> JsonObject | None:
+    """One contribution — ``overall``, ``by_year``, ``by_setup`` — or ``None`` as stored."""
+    if value is None:
+        return None
+    record = _record(value)
+    return {
+        "overall": _numbers(_record(record.get("overall"))),
+        "by_year": {
+            key: _numbers(_record(cell))
+            for key, cell in sorted(_record(record.get("by_year")).items())
+        },
+        "by_setup": {
+            key: _numbers(_record(cell))
+            for key, cell in sorted(_record(record.get("by_setup")).items())
+        },
+    }
+
+
+def backtest_comparison(stored: JsonObject) -> JsonObject | None:
+    """The stored ``comparison`` with its numbers as ``Decimal``; ``None`` for a run stored
+    before SW9.6, which the page reads as "no comparison in this run"."""
+    value = stored.get("comparison")
+    if not isinstance(value, dict):
+        return None
+    record = _record(value)
+    contribution = _record(record.get("contribution"))
+    return {
+        "index_supplied": bool(record.get("index_supplied", False)),
+        "primary": record.get("primary"),
+        "modes": dict(_by_mode(record.get("modes"))),
+        "overall": _cells(record.get("overall")),
+        "by_year": _grouped_cells(record.get("by_year")),
+        "by_setup": _grouped_cells(record.get("by_setup")),
+        "contribution": {
+            "breadth": _contribution(contribution.get("breadth")),
+            "index_rule": _contribution(contribution.get("index_rule")),
+        },
+    }
+
+
+def index_supplied(stored: JsonObject) -> bool:
+    """Did the stored run read an index? A run stored before SW9.6 had none."""
+    comparison = stored.get("comparison")
+    return isinstance(comparison, dict) and bool(comparison.get("index_supplied", False))
+
+
+def backtest_caveats(stored: JsonObject) -> tuple[str, ...]:
+    """The engine's standing sentences, plus the index-absent one when the run had no index."""
+    if index_supplied(stored):
+        return CAVEATS
+    return (*CAVEATS, INDEX_ABSENT_CAVEAT)
+
+
 def backtest_stats(stored: JsonObject) -> JsonObject:
     """The card's ``stats`` from a row's stored ``BacktestResult.to_json()``."""
     headline = _numbers(_record(stored.get("stats")))
@@ -428,8 +505,10 @@ def backtest_stats(stored: JsonObject) -> JsonObject:
         if "r_multiple" in trade
     ]
     counts = Counter(bucket_of(r) for r in r_values)
+    drawdown = _numbers(_record(stored.get("drawdown")))
     return {
         **headline,
+        "max_drawdown_pct": drawdown.get("max_pct"),
         "histogram": [
             {"bucket": bucket, "count": counts.get(bucket, 0)} for bucket in HISTOGRAM_BUCKETS
         ],
@@ -442,6 +521,8 @@ def backtest_stats(stored: JsonObject) -> JsonObject:
         },
         "funnel": _record(stored.get("funnel")),
         "equity": _equity_summary(stored.get("equity_curve")),
+        "drawdown": drawdown,
+        "comparison": backtest_comparison(stored),
     }
 
 
@@ -454,13 +535,14 @@ def backtest_params(stored: JsonObject) -> JsonObject:
 
 
 def backtest_card(row: SwBacktestRun) -> BacktestCard:
+    stored = row.stats or {}
     return BacktestCard(
         run_id=int(row.id),
         params=backtest_params(row.params),
         started_at=row.started_at.isoformat(),
         finished_at=row.finished_at.isoformat() if row.finished_at is not None else None,
-        stats=backtest_stats(row.stats or {}),
-        caveats=CAVEATS,
+        stats=backtest_stats(stored),
+        caveats=backtest_caveats(stored),
     )
 
 
@@ -518,6 +600,7 @@ async def journal(
 
 
 __all__ = [
+    "GATE_MODE_ORDER",
     "GATE_UNKNOWN",
     "HISTOGRAM_BUCKETS",
     "MAX_TRADES",
@@ -532,11 +615,14 @@ __all__ = [
     "SetupStats",
     "TradeRow",
     "backtest_card",
+    "backtest_caveats",
+    "backtest_comparison",
     "backtest_params",
     "backtest_stats",
     "bucket_of",
     "card",
     "closed_trades",
+    "index_supplied",
     "journal",
     "ladder",
     "latest_backtest",

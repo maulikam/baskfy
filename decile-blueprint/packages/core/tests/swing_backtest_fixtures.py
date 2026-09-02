@@ -127,6 +127,35 @@ HOLD_TAIL: tuple[Bar, ...] = (
     Bar(169.0, 176.0, 168.0, 175.0),
 )
 
+#: A crash tail for the drawdown at the real 15 % line (SW9.6): LOSE_TAIL's first eight sessions,
+#: then a gap to a seventh of the entry on day 8 — the GTT fills at the open (SW9.3) — and a
+#: series that stays there. On a 20 % position that is a loss of about 17 % of the sleeve.
+CRASH_TAIL: tuple[Bar, ...] = (
+    *LOSE_TAIL[:8],
+    Bar(22.0, 23.0, 20.0, 21.0),
+    Bar(21.0, 22.0, 20.0, 21.0),
+    Bar(21.0, 22.0, 20.0, 21.0),
+    Bar(21.0, 22.0, 20.0, 21.0),
+    Bar(21.0, 22.0, 20.0, 21.0),
+    Bar(21.0, 22.0, 20.0, 21.0),
+    Bar(21.0, 22.0, 20.0, 21.0),
+    Bar(21.0, 22.0, 20.0, 21.0),
+    Bar(21.0, 22.0, 20.0, 21.0),
+    Bar(21.0, 22.0, 20.0, 21.0),
+)
+
+#: HOLD_TAIL, then a rally that keeps going: 190, 200, 210, 212, 214 on days 13-17. A 20 %
+#: position that rises 58 a share from 152 recovers about 7.6 % of the sleeve — the way a sleeve
+#: locked out at 17 % gets back inside the 10 % release line without a new entry.
+RECOVER_TAIL: tuple[Bar, ...] = (
+    *HOLD_TAIL,
+    Bar(176.0, 191.0, 175.0, 190.0),
+    Bar(191.0, 201.0, 190.0, 200.0),
+    Bar(201.0, 211.0, 200.0, 210.0),
+    Bar(211.0, 213.0, 209.0, 212.0),
+    Bar(213.0, 215.0, 211.0, 214.0),
+)
+
 #: The entry-day bar variants for the entry rule (`04` §11): open below the pivot but the high
 #: through it (fill at the trigger), and a day that never reaches it (no trade).
 THROUGH_TRIGGER_DAY = Bar(147.0, 152.0, 146.0, 151.0)
@@ -276,6 +305,22 @@ def second_flag(
     return rows
 
 
+def flag_detected_on(
+    symbol: str,
+    calendar: list[dt.date],
+    *,
+    detection_index: int,
+    tail: tuple[Bar, ...],
+    instrument_id: int,
+) -> list[dict[str, object]]:
+    """A copy of the flag whose detection bar lands on ``calendar[detection_index]``, followed
+    by ``tail`` — for a name that has to set up late in a long run (the release of a lock-out)."""
+    start = detection_index - DETECTION_BAR
+    assert start >= 0, "the flag needs its 140 bars before the detection day"
+    assert start + FLAG_BARS + len(tail) <= len(calendar), "the tail runs past the calendar"
+    return _flag_rows(instrument_id, symbol, calendar[start:], tail)
+
+
 EP_BARS = 140
 
 
@@ -314,6 +359,34 @@ def ep_rows(
 def entry_variant(day: Bar) -> tuple[Bar, ...]:
     """The winning tail with a different entry-day bar."""
     return (day, *WIN_TAIL[1:])
+
+
+#: A crash big enough to pull a rising index's 10-day average under its 20-day on the day it
+#: happens (see :func:`index_series`): on a series rising one point a session the fast average
+#: sits five points over the slow one, and a drop of ``d`` moves them by ``d/10`` and ``d/20``,
+#: so any ``d > 100`` crosses them the same day.
+INDEX_CRASH = 150.0
+
+
+def index_series(
+    calendar: list[dt.date], *, crash_on: int | None = None, shift: int = 0
+) -> pl.DataFrame:
+    """An index close series over ``calendar`` for the index rule (`04` §8.2, A12).
+
+    Rising one point a session from 1000 — the 10-day average above the 20-day from the
+    twentieth close on, so the reading is ``long_bias`` — and, with ``crash_on``, falling
+    :data:`INDEX_CRASH` points on that session and one point a session after it, so the reading
+    is ``bearish`` from ``crash_on`` **itself** (the crash is in that session's own close) and
+    stays so. ``shift`` re-dates every close that many sessions later (a look-ahead probe: the
+    same series, seen one session late).
+    """
+    n = len(calendar)
+    closes = [1000.0 + i for i in range(n)]
+    if crash_on is not None:
+        for i in range(crash_on, n):
+            closes[i] = 1000.0 + crash_on - INDEX_CRASH - (i - crash_on)
+    rows = [{"date": calendar[i + shift], "close": closes[i]} for i in range(n) if i + shift < n]
+    return pl.DataFrame(rows, schema={"date": pl.Date, "close": pl.Float64})
 
 
 def speed_frame(

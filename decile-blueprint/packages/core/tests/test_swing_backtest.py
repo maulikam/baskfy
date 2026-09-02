@@ -19,17 +19,21 @@ import polars as pl
 import pytest
 from swing_backtest_fixtures import (
     BELOW_TRIGGER_DAY,
+    CRASH_TAIL,
     DETECTION_BAR,
     ENTRY_BAR,
     HOLD_TAIL,
     LOSE_TAIL,
     LOW_FACTOR,
     PLANTED,
+    RECOVER_TAIL,
     THROUGH_TRIGGER_DAY,
     WIN_TAIL,
     Bar,
     entry_variant,
     ep_rows,
+    flag_detected_on,
+    index_series,
     planted_frame,
     second_flag,
     speed_frame,
@@ -45,7 +49,12 @@ from baskfy_core.swing import (
     BacktestTrade,
     run_backtest,
 )
-from baskfy_core.swing.backtest import BacktestCloseReason
+from baskfy_core.swing.backtest import (
+    INDEX_ABSENT_CAVEAT,
+    BacktestCloseReason,
+    GateCell,
+    GateMode,
+)
 from baskfy_core.swing.config import (
     DEFAULT_SWING_CONFIG,
     MarketConfig,
@@ -55,9 +64,23 @@ from baskfy_core.swing.config import (
 )
 from baskfy_core.swing.indicators import with_swing_indicators
 from baskfy_core.swing.journal import summarize
-from baskfy_core.swing.market import MarketGate, drawdown_pct
+from baskfy_core.swing.market import (
+    BreadthSnapshot,
+    IndexReading,
+    MarketGate,
+    drawdown_pct,
+    market_gate,
+)
 from baskfy_core.swing.setups import detect_flags
-from baskfy_core.swing.stops import ActionReason, widest_stop_pct
+from baskfy_core.swing.stops import (
+    ActionKind,
+    ActionReason,
+    DailyBar,
+    OpenPosition,
+    TrailMa,
+    manage,
+    widest_stop_pct,
+)
 
 D = Decimal
 FOUR_DP = D("0.0001")
@@ -93,6 +116,8 @@ def run(  # noqa: PLR0913 - one keyword per parameter of a run
     sleeve_inr: Decimal | None = None,
     cost_pct_per_side: Decimal | None = None,
     config: SwingConfig | None = None,
+    index: pl.DataFrame | None = None,
+    delisted: dict[int, dt.date] | None = None,
 ) -> BacktestResult:
     params = params_for(
         calendar,
@@ -102,7 +127,7 @@ def run(  # noqa: PLR0913 - one keyword per parameter of a run
         cost_pct_per_side=cost_pct_per_side,
         config=config,
     )
-    return run_backtest(frame, params, calendar=calendar)
+    return run_backtest(frame, params, calendar=calendar, index=index, delisted=delisted)
 
 
 def only_trade(result: BacktestResult) -> BacktestTrade:
@@ -702,6 +727,559 @@ def test_a_sleeve_with_no_session_behind_it_is_not_in_drawdown() -> None:
     assert drawdown_pct(peak=D(100), equity=D(85)) == 15.0
 
 
+# --- SW9.6: the index rule, the drawdown on the constant sleeve, gate-on vs gate-off ----------
+#
+# STANDING-ANSWERS A12 and B1-B5. The index is `index_series`: rising a point a session (the
+# 10-day average five points over the 20-day: `long_bias`) until an optional crash pulls the fast
+# average under the slow one on the crash session itself (`bearish`), so the gate turns RED on a
+# session the test names.
+
+
+def gates_of(result: BacktestResult) -> dict[dt.date, str]:
+    return {day: gate for day, gate, _ in result.ladder}
+
+
+def test_index_rule_turns_the_gate_red_on_the_session_of_its_own_close_and_refuses_the_entry() -> (
+    None
+):
+    """`04` §8.2-8.3 inside the run: the 10-day under the 20-day is RED, whatever breadth says.
+    A crash in the detection day's own close is read at that close (A12: "up to and including
+    the session's own close"), the gate is RED that evening, and the planted flag — GREEN by
+    breadth — is refused as a gate skip and never entered."""
+    frame, calendar = planted_frame()
+    result = run(frame, calendar, index=index_series(calendar, crash_on=DETECTION_BAR))
+    gates = gates_of(result)
+    assert gates[calendar[DETECTION_BAR - 1]] == MarketGate.GREEN.value
+    assert gates[calendar[DETECTION_BAR]] == MarketGate.RED.value
+    assert result.trades == ()
+    assert result.funnel["skipped_gate"] >= 1
+    assert result.comparison is not None
+    assert result.comparison.index_supplied is True
+    assert result.comparison.primary is GateMode.FULL
+    assert result.params.index_slug is None, "a label the runner sets; the engine never needs it"
+
+
+def test_index_look_ahead_shifting_the_series_one_session_moves_the_gate_by_exactly_one() -> None:
+    """House rule 5 for the index: the same closes dated one session later change the gate on
+    the boundary session only — the crash session reads GREEN until the crash is in its own
+    close — and never a session earlier. The flag is then entered, because the detection close
+    saw a rising benchmark."""
+    frame, calendar = planted_frame()
+    k = DETECTION_BAR
+    on_time = gates_of(run(frame, calendar, index=index_series(calendar, crash_on=k)))
+    late = run(frame, calendar, index=index_series(calendar, crash_on=k, shift=1))
+    late_gates = gates_of(late)
+    for day in calendar[:k]:
+        assert on_time[day] == late_gates[day], (
+            f"{day}: the shift reached back to an earlier session"
+        )
+    assert on_time[calendar[k]] == MarketGate.RED.value
+    assert late_gates[calendar[k]] == MarketGate.GREEN.value
+    for day in calendar[k + 1 :]:
+        assert on_time[day] == late_gates[day] == MarketGate.RED.value
+    assert only_trade(late).r_multiple == PLANTED.r_multiple
+
+
+def test_index_reading_mirrors_the_workers_last_twenty_closes_and_is_ignored_until_they_exist() -> (
+    None
+):
+    """The reading is the mean of the last `index_ma_fast` / `index_ma_slow` closes on or before
+    the session — the nightly job's `load_index_reading` — and until `index_ma_slow` closes
+    exist the index is ignored (`04` §8.2: "none → the index is ignored"), so the gate is
+    breadth's. With nineteen closes before the detection day a crash reads as nothing; with
+    twenty it reads as bearish."""
+    frame, calendar = planted_frame()
+    slow = DEFAULT_SWING_CONFIG.market.index_ma_slow
+    fast = DEFAULT_SWING_CONFIG.market.index_ma_fast
+    full = index_series(calendar, crash_on=DETECTION_BAR)
+    closes = full["close"].to_list()
+    reading = IndexReading(
+        close=closes[DETECTION_BAR],
+        ma_fast=sum(closes[DETECTION_BAR + 1 - fast : DETECTION_BAR + 1]) / fast,
+        ma_slow=sum(closes[DETECTION_BAR + 1 - slow : DETECTION_BAR + 1]) / slow,
+    )
+    assert reading.bearish, "the fixture's crash crosses the averages on its own session"
+    green_breadth = BreadthSnapshot(3, 33.33, 0.0, 66.67)
+    assert market_gate(green_breadth, reading, DEFAULT_SWING_CONFIG.market) is MarketGate.RED
+    assert market_gate(green_breadth, None, DEFAULT_SWING_CONFIG.market) is MarketGate.GREEN
+
+    too_few = full.slice(DETECTION_BAR + 2 - slow, slow - 1)  # nineteen closes ending on the day
+    assert too_few.height == slow - 1 and too_few["date"].max() == calendar[DETECTION_BAR]
+    ignored = run(frame, calendar, index=too_few)
+    assert gates_of(ignored)[calendar[DETECTION_BAR]] == MarketGate.GREEN.value
+    assert only_trade(ignored).r_multiple == PLANTED.r_multiple
+
+    just_enough = full.slice(DETECTION_BAR + 1 - slow, slow)
+    assert just_enough.height == slow
+    read = run(frame, calendar, index=just_enough)
+    assert gates_of(read)[calendar[DETECTION_BAR]] == MarketGate.RED.value
+    assert read.trades == ()
+
+
+def test_index_none_keeps_the_breadth_only_gate_and_the_caveats_say_so() -> None:
+    frame, calendar = planted_frame()
+    without = run(frame, calendar)
+    assert without.comparison is not None
+    assert without.comparison.index_supplied is False
+    assert without.comparison.primary is GateMode.BREADTH_ONLY
+    assert without.comparison.index_rule is None
+    assert without.caveats == (*CAVEATS, INDEX_ABSENT_CAVEAT)
+    assert without.to_json()["caveats"] == [*CAVEATS, INDEX_ABSENT_CAVEAT]
+    with_index = run(frame, calendar, index=index_series(calendar))
+    assert with_index.caveats == CAVEATS
+    assert with_index.comparison is not None
+    assert with_index.comparison.index_rule is not None
+    assert only_trade(with_index).r_multiple == only_trade(without).r_multiple
+
+
+def test_index_frame_is_checked_before_a_session_runs() -> None:
+    frame, calendar = planted_frame()
+    with pytest.raises(ValueError, match="close column"):
+        run(frame, calendar, index=index_series(calendar).drop("close"))
+    doubled = pl.concat([index_series(calendar), index_series(calendar).head(1)])
+    with pytest.raises(ValueError, match="two closes"):
+        run(frame, calendar, index=doubled)
+    labelled = replace(params_for(calendar), index_slug="nifty-500")
+    with pytest.raises(ValueError, match="not supplied"):
+        run_backtest(frame, labelled, calendar=calendar)
+    named = run_backtest(frame, labelled, calendar=calendar, index=index_series(calendar))
+    stored = named.to_json()["params"]
+    assert isinstance(stored, dict)
+    assert stored["index_slug"] == "nifty-500"
+
+
+# -- the drawdown on the constant-sleeve curve --------------------------------------------------
+
+
+SLEEVE = D(1_000_000)
+
+
+def curve_drawdown_pct(result: BacktestResult, sleeve: Decimal = SLEEVE) -> list[Decimal]:
+    """A12's measurement, by hand: peak-to-trough as a percentage of the sleeve, per session."""
+    out: list[Decimal] = []
+    peak = sleeve
+    for _, equity in result.equity_curve:
+        peak = max(peak, equity)
+        out.append(((peak - equity) / sleeve * 100).quantize(TWO_DP) if equity < peak else D(0))
+    return out
+
+
+def test_drawdown_is_peak_to_trough_as_a_percentage_of_the_constant_sleeve() -> None:
+    """The curve is realised P&L plus open positions marked at the close; the drawdown is how
+    far it sits under its highest close, in percent of the ₹10 lakh every trade is sized on."""
+    frame, calendar = planted_frame(tail=LOSE_TAIL)
+    result = run(frame, calendar)
+    by_hand = curve_drawdown_pct(result)
+    assert result.drawdown.max_pct == max(by_hand) > D(0)
+    trough_index = by_hand.index(max(by_hand))
+    assert result.drawdown.trough_date == calendar[trough_index]
+    assert result.drawdown.trough == result.equity_curve[trough_index][1]
+    assert result.drawdown.peak == max(e for _, e in result.equity_curve[: trough_index + 1])
+    assert result.drawdown.locked_sessions == 0, "0.61% is nowhere near the 15% line"
+    # The loss itself: 492 shares bought at 152.1976, sold at the day-8 open less costs.
+    loss = (paid(PLANTED.entry_open) - received(D(repr(LOSE_TAIL[8].open)))) * PLANTED.quantity
+    assert result.drawdown.max_pct == (loss / D(1_000_000) * 100).quantize(TWO_DP) == D("0.61")
+    assert result.to_json()["drawdown"] == {
+        "max_pct": "0.61",
+        "peak": str(result.drawdown.peak),
+        "trough": str(result.drawdown.trough),
+        "trough_date": calendar[trough_index].isoformat(),
+        "locked_sessions": 0,
+    }
+
+
+def test_drawdown_of_sixteen_percent_locks_out_new_entries_until_back_within_ten() -> None:
+    """`04` §8.5 at its real numbers, on the constant-sleeve curve (A12). Two 20 % positions
+    (risk 2 % a trade caps at `max_position_pct`, 1,315 shares each): FLAGCRASH gaps to 22 on
+    day 8 and the sleeve closes about 17 % under its peak — locked; FLAGMID, set up that
+    evening, is refused `DRAWDOWN_LOCKOUT`; the lock holds through 10.84 % on day 14 (outside
+    the 10 % release line) and lifts on day 15 at 9.52 %, so FLAGLATE, set up that close, is
+    entered on day 16 at rung 0. Every percentage is worked by hand from the fixture's prices."""
+    calendar = planted_frame(tail=RECOVER_TAIL)[1]
+    extra = (
+        second_flag("FLAGCRASH", CRASH_TAIL, calendar)
+        + second_flag("FLAGMID", WIN_TAIL, calendar, offset=9, instrument_id=6)
+        + flag_detected_on(
+            "FLAGLATE",
+            calendar,
+            detection_index=ENTRY_BAR + 15,
+            tail=WIN_TAIL[:2],
+            instrument_id=7,
+        )
+    )
+    frame, calendar = planted_frame(tail=RECOVER_TAIL, symbol="FLAGHOLD", extra=extra)
+    heavy = SwingConfig(
+        sizing=SizingConfig(risk_per_trade_pct=2.0),
+        market=MarketConfig(tiers=((10, 100.0),)),
+    )
+    result = run(frame, calendar, config=heavy)
+    e = ENTRY_BAR
+    quantity = int(D(1_000_000) * 20 / 100 / PLANTED.entry_open)
+    assert quantity == 1315
+    paid_each = (paid(PLANTED.entry_open) * quantity).quantize(TWO_DP)
+    crash_proceeds = (received(D(repr(CRASH_TAIL[8].open))) * quantity).quantize(TWO_DP)
+
+    def equity_on(day: int) -> Decimal:
+        cash = D(1_000_000) - 2 * paid_each + crash_proceeds
+        return cash + quantity * D(repr(RECOVER_TAIL[day].close))
+
+    def drawdown_on(day: int) -> Decimal:
+        return ((D(1_000_000) - equity_on(day)) / D(1_000_000) * 100).quantize(TWO_DP)
+
+    curve = dict(result.equity_curve)
+    for day in range(8, 16):
+        assert curve[calendar[e + day]] == equity_on(day), day
+    assert drawdown_on(8) == D("16.99") >= D(15)
+    assert drawdown_on(14) == D("10.84") > D(10)
+    assert drawdown_on(15) == D("9.52") <= D(10)
+    assert result.drawdown.max_pct == D("16.99")
+    assert result.drawdown.trough_date == calendar[e + 8]
+    entries = {t.symbol: t.entry_date for t in result.trades}
+    assert entries == {
+        "FLAGCRASH": calendar[e],
+        "FLAGHOLD": calendar[e],
+        "FLAGLATE": calendar[e + 16],
+    }, "FLAGMID never entered; FLAGLATE the morning after the release"
+    assert result.funnel["skipped_drawdown"] >= 1
+    assert result.funnel["skipped_gate"] == 0, "the tape stayed GREEN; the drawdown did it"
+    locked = [day for day, _, _ in result.ladder if calendar[e + 8] <= day <= calendar[e + 14]]
+    assert len(locked) == 7
+    assert result.drawdown.locked_sessions == 7
+    assert {level for day, _, level in result.ladder if day >= calendar[e + 8]} == {0}
+
+
+# -- gate-on against gate-off (A12) -----------------------------------------------------------
+
+
+def test_gate_off_never_enters_fewer_than_gate_on_and_a_red_tape_shows_what_breadth_costs() -> None:
+    """Gate-off is GREEN every session with the ladder and the lock-out still in force, so on
+    these frames it enters everything the gated books enter and more. Without TAPECO the tape
+    is RED: breadth-only enters nothing, gate-off enters the planted flag, and breadth's
+    contribution is exactly minus that trade."""
+    calendar = planted_frame()[1]
+    frames = [
+        planted_frame(),
+        planted_frame(tail=LOSE_TAIL),
+        planted_frame(extra=second_flag("FLAGLOSE", LOSE_TAIL, calendar)),
+        (planted_frame()[0].filter(pl.col("symbol") != "TAPECO"), calendar),
+    ]
+    for frame, days in frames:
+        comparison = run(frame, days, index=index_series(days)).comparison
+        assert comparison is not None
+        off = comparison.overall[GateMode.GATE_OFF].entered
+        assert off >= comparison.overall[GateMode.BREADTH_ONLY].entered
+        assert off >= comparison.overall[GateMode.FULL].entered
+    red = run(frames[3][0], calendar)
+    assert red.trades == ()
+    assert red.comparison is not None
+    assert red.comparison.overall[GateMode.BREADTH_ONLY].entered == 0
+    assert red.comparison.overall[GateMode.GATE_OFF] == GateCell(
+        entered=1,
+        net_r=PLANTED.r_multiple,
+        expectancy_r=PLANTED.r_multiple,
+        win_rate_pct=D("100.00"),
+        max_drawdown_pct=red.comparison.overall[GateMode.GATE_OFF].max_drawdown_pct,
+    )
+    assert red.comparison.breadth.overall.entered == -1
+    assert red.comparison.breadth.overall.net_r == -PLANTED.r_multiple
+
+
+def test_comparison_reports_the_three_books_per_year_and_per_setup() -> None:
+    """A crash in the detection day's close: full refuses the flag, breadth-only and gate-off
+    take it. Three columns, keyed by the year entered and by setup, with the index rule's
+    contribution — full less breadth-only — labelled apart from breadth's."""
+    frame, calendar = planted_frame()
+    result = run(frame, calendar, index=index_series(calendar, crash_on=DETECTION_BAR))
+    comparison = result.comparison
+    assert comparison is not None
+    assert comparison.modes == (GateMode.GATE_OFF, GateMode.BREADTH_ONLY, GateMode.FULL)
+    assert [cell.entered for cell in comparison.overall.values()] == [1, 1, 0]
+    year = calendar[ENTRY_BAR].year
+    assert set(comparison.by_year) == {2025, 2026} and year == 2026
+    assert [comparison.by_year[year][m].entered for m in comparison.modes] == [1, 1, 0]
+    assert [comparison.by_year[2025][m].entered for m in comparison.modes] == [0, 0, 0]
+    assert set(comparison.by_setup) == {Setup.FLAG.value, Setup.EP.value}
+    assert [comparison.by_setup["FLAG"][m].net_r for m in comparison.modes] == [
+        PLANTED.r_multiple,
+        PLANTED.r_multiple,
+        D(0),
+    ]
+    assert all(cell.max_drawdown_pct is None for cell in comparison.by_setup["FLAG"].values())
+    assert comparison.breadth.overall == GateCell(0, D(0), D(0), D(0), D(0))
+    assert comparison.index_rule is not None
+    assert comparison.index_rule.overall.entered == -1
+    assert comparison.index_rule.overall.net_r == -PLANTED.r_multiple
+    assert comparison.index_rule.by_year[year].entered == -1
+    assert comparison.index_rule.by_setup["FLAG"].net_r == -PLANTED.r_multiple
+    assert comparison.index_rule.by_setup["EP"].entered == 0
+
+
+def test_contribution_is_with_minus_without_on_every_scope() -> None:
+    calendar = planted_frame()[1]
+    frame, calendar = planted_frame(extra=second_flag("FLAGLOSE", LOSE_TAIL, calendar))
+    comparison = run(
+        frame, calendar, index=index_series(calendar, crash_on=ENTRY_BAR + 2)
+    ).comparison
+    assert comparison is not None
+    assert comparison.index_rule is not None
+
+    def check(
+        cells: dict[GateMode, GateCell], delta: GateCell, *, with_it: GateMode, without: GateMode
+    ) -> None:
+        a, b = cells[with_it], cells[without]
+        assert delta.entered == a.entered - b.entered
+        assert delta.net_r == a.net_r - b.net_r
+        assert delta.expectancy_r == a.expectancy_r - b.expectancy_r
+        assert delta.win_rate_pct == a.win_rate_pct - b.win_rate_pct
+        if a.max_drawdown_pct is None:
+            assert delta.max_drawdown_pct is None
+        else:
+            assert b.max_drawdown_pct is not None
+            assert delta.max_drawdown_pct == a.max_drawdown_pct - b.max_drawdown_pct
+
+    for contribution, with_it, without in (
+        (comparison.breadth, GateMode.BREADTH_ONLY, GateMode.GATE_OFF),
+        (comparison.index_rule, GateMode.FULL, GateMode.BREADTH_ONLY),
+    ):
+        check(comparison.overall, contribution.overall, with_it=with_it, without=without)
+        for year, cells in comparison.by_year.items():
+            check(cells, contribution.by_year[year], with_it=with_it, without=without)
+        for setup, cells in comparison.by_setup.items():
+            check(cells, contribution.by_setup[setup], with_it=with_it, without=without)
+
+
+def test_comparison_is_on_the_wire_with_the_mode_definitions() -> None:
+    frame, calendar = planted_frame()
+    payload = run(frame, calendar, index=index_series(calendar)).to_json()
+    comparison = payload["comparison"]
+    assert isinstance(comparison, dict)
+    assert list(comparison) == [
+        "index_supplied",
+        "primary",
+        "modes",
+        "overall",
+        "by_year",
+        "by_setup",
+        "contribution",
+    ]
+    assert comparison["index_supplied"] is True
+    assert comparison["primary"] == "full"
+    assert list(comparison["modes"]) == ["gate_off", "breadth_only", "full"]
+    assert "GREEN every session" in comparison["modes"]["gate_off"]
+    assert comparison["overall"]["full"]["net_r"] == str(PLANTED.r_multiple)
+    assert comparison["contribution"]["breadth"]["overall"]["entered"] == 0
+    assert comparison["contribution"]["index_rule"]["by_setup"]["EP"]["max_drawdown_pct"] is None
+    without = run(frame, calendar).to_json()["comparison"]
+    assert isinstance(without, dict)
+    assert list(without["modes"]) == ["gate_off", "breadth_only"]
+    assert without["contribution"]["index_rule"] is None
+    json.dumps(payload)
+
+
+def test_gate_on_books_share_one_detection_pass_so_the_primary_book_is_unchanged() -> None:
+    """Three books cost one detection: the primary book's trade, funnel and curve are what the
+    single-book engine produced before the comparison existed."""
+    frame, calendar = planted_frame()
+    result = run(frame, calendar)
+    assert only_trade(result).r_multiple == PLANTED.r_multiple
+    assert result.funnel["entered"] == 1
+    assert result.comparison is not None
+    assert result.comparison.overall[GateMode.BREADTH_ONLY].entered == 1
+    assert result.comparison.overall[GateMode.BREADTH_ONLY].net_r == result.stats.net_r
+
+
+# -- B1-B3: costs, circuits, the calendar, delisted names, fills at the next open --------------
+
+
+def test_circuit_lock_is_read_from_upper_circuit_where_present_and_never_assumed_where_absent() -> (
+    None
+):
+    """B1: `upper_circuit` at the high is a lock (`04` §3.5); a band above the high is not; and
+    a null band — every bar before 2020 — is no lock at all, which the fourth caveat says."""
+    calendar = planted_frame()[1]
+    locked = planted_frame(extra=ep_rows(calendar, locked=True))[0]
+    assert run(locked, calendar).funnel["skipped_locked"] == 1
+
+    absent = planted_frame(extra=ep_rows(calendar))[0]
+    gap_day = absent.filter(
+        (pl.col("symbol") == "EPCO") & (pl.col("date") == calendar[DETECTION_BAR])
+    )
+    assert gap_day["upper_circuit"].item() is None
+    entered = run(absent, calendar)
+    assert entered.funnel["skipped_locked"] == 0
+    assert {t.symbol for t in entered.trades} == {PLANTED.symbol, "EPCO"}
+
+    above = absent.with_columns(
+        pl.when((pl.col("symbol") == "EPCO") & (pl.col("date") == calendar[DETECTION_BAR]))
+        .then(pl.col("high") * 1.5)
+        .otherwise(pl.col("upper_circuit"))
+        .alias("upper_circuit")
+    )
+    assert run(above, calendar).funnel["skipped_locked"] == 0
+    assert "upper_circuit is absent no lock is assumed" in CAVEATS[3]
+
+
+def test_delisted_name_is_sold_at_its_last_close_on_its_last_bar_and_counted_delisted() -> None:
+    """B2: a name the runner keeps past its end (`instrument.delisted_on`) is sold at its last
+    close — on the delisting day when it printed a bar, or the first session it did not — and
+    counted `DELISTED`, never `NO_BAR` and never after the screener's five-session tolerance."""
+    frame, calendar = planted_frame()
+    last_bar = calendar[ENTRY_BAR + 1]
+    gone = frame.filter(~((pl.col("symbol") == PLANTED.symbol) & (pl.col("date") > last_bar)))
+
+    on_its_last_bar = only_trade(
+        run(gone, calendar, cost_pct_per_side=D(0), delisted={1: last_bar})
+    )
+    assert on_its_last_bar.close_reason == BacktestCloseReason.DELISTED.value
+    assert on_its_last_bar.exit_date == last_bar
+    assert on_its_last_bar.exit_avg == D(repr(WIN_TAIL[1].close)).quantize(TWO_DP)
+
+    later = calendar[ENTRY_BAR + 4]
+    result = run(gone, calendar, cost_pct_per_side=D(0), delisted={1: later})
+    trade = only_trade(result)
+    assert trade.close_reason == BacktestCloseReason.DELISTED.value
+    assert trade.exit_date == calendar[ENTRY_BAR + 2], "the first session it printed nothing"
+    assert trade.exit_avg == D(repr(WIN_TAIL[1].close)).quantize(TWO_DP)
+    assert result.funnel["closed_delisted"] == 1
+    assert result.funnel["closed_no_bar"] == 0
+    assert result.funnel["closed"] == result.funnel["entered"] == 1
+
+    unknown = only_trade(run(gone, calendar, cost_pct_per_side=D(0)))
+    assert unknown.close_reason == BacktestCloseReason.NO_BAR.value
+    assert unknown.exit_date == calendar[ENTRY_BAR + 1 + MISSING_BAR_TOLERANCE_DAYS]
+
+
+def test_calendar_holiday_bar_is_not_a_session_so_a_low_through_the_stop_on_it_never_fills() -> (
+    None
+):
+    """B2: only sessions the calendar names trade. A bar printed on a weekday the calendar
+    leaves out (a holiday in the data) is neither managed nor filled — a low through the stop on
+    it is not a stop-out — and the planted trade comes out exactly as on the clean calendar."""
+    holiday_bar = Bar(150.0, 151.0, 120.0, 149.0)
+    tail = (WIN_TAIL[0], WIN_TAIL[1], holiday_bar, *WIN_TAIL[2:])
+    frame, dated = planted_frame(tail=tail)
+    holiday = dated[ENTRY_BAR + 2]
+    assert D(repr(holiday_bar.low)) < PLANTED.stop
+    calendar = [day for day in dated if day != holiday]
+    result = run(frame, calendar)
+    trade = only_trade(result)
+    assert trade.r_multiple == PLANTED.r_multiple
+    assert trade.close_reason == ActionReason.HARD_STOP_HIT.value
+    assert trade.exit_date == calendar[ENTRY_BAR + PLANTED.exit_day]
+    assert holiday not in dict(result.equity_curve)
+    assert result.funnel["sessions"] == len(calendar)
+
+
+def test_partial_next_open_after_the_day_3_to_5_signal_is_stops_manage_own_decision() -> None:
+    """B3: the third sells at the next open after the day-3 close above the entry, and the
+    decision is `stops.manage`'s — the same call, on the same bar, answers `SELL_PARTIAL` with
+    the same quantity."""
+    frame, calendar = planted_frame()
+    trade = only_trade(run(frame, calendar, cost_pct_per_side=D(0)))
+    signal_day = 3
+    assert WIN_TAIL[signal_day].close > float(PLANTED.entry_open)
+    assert WIN_TAIL[signal_day - 1].close > float(PLANTED.entry_open), "day 2 is before the window"
+    position = OpenPosition(
+        symbol=PLANTED.symbol,
+        entry_date=calendar[ENTRY_BAR],
+        entry=PLANTED.entry_open,
+        initial_stop=PLANTED.stop,
+        stop=PLANTED.stop,
+        quantity=PLANTED.quantity,
+        partial_done=False,
+        trail=TrailMa(PLANTED.trail),
+        is_ep_gap_day=False,
+    )
+    bar = WIN_TAIL[signal_day]
+    decided = manage(
+        position,
+        DailyBar(
+            date=calendar[ENTRY_BAR + signal_day],
+            open=D(repr(bar.open)),
+            high=D(repr(bar.high)),
+            low=D(repr(bar.low)),
+            close=D(repr(bar.close)),
+            ma10=D(150),
+            ma20=D(146),
+            bars_since_entry=signal_day,
+        ),
+        DEFAULT_SWING_CONFIG.stops,
+    )
+    assert [a.kind for a in decided] == [ActionKind.SELL_PARTIAL, ActionKind.RAISE_STOP]
+    assert decided[0].quantity == PLANTED.partial_quantity
+    # The fill: the *next* session's open, not the signal day's close.
+    q, part = PLANTED.quantity, PLANTED.partial_quantity
+    expected = ((part * PLANTED.partial_fill + (q - part) * PLANTED.final_fill) / q).quantize(
+        TWO_DP
+    )
+    assert PLANTED.partial_fill == D(repr(WIN_TAIL[signal_day + 1].open))
+    assert PLANTED.partial_fill != D(repr(WIN_TAIL[signal_day].close))
+    assert trade.exit_avg == expected
+
+
+def test_trail_next_open_after_the_close_below_the_ma_is_stops_manage_own_decision() -> None:
+    """B3: a close below the trail MA sells everything at the next session's open, and it is
+    `stops.manage` that says so (`CLOSE_BELOW_TRAIL_MA`) — the backtest adds no exit rule."""
+    tail = (
+        Bar(152.0, 155.0, 150.0, 154.0),
+        Bar(153.0, 154.0, 142.5, 143.0),  # above the stop, below the 10-day MA
+        Bar(144.0, 146.0, 143.0, 145.0),
+        *WIN_TAIL[3:],
+    )
+    frame, calendar = planted_frame(tail=tail)
+    result = run(frame, calendar, cost_pct_per_side=D(0))
+    trade = only_trade(result)
+    assert trade.close_reason == ActionReason.CLOSE_BELOW_TRAIL_MA.value
+    assert trade.exit_date == calendar[ENTRY_BAR + 2]
+    assert trade.exit_avg == D(repr(tail[2].open)).quantize(TWO_DP)
+    assert trade.exit_avg != D(repr(tail[1].close)).quantize(TWO_DP)
+    indicated = with_swing_indicators(frame).filter(
+        (pl.col("symbol") == PLANTED.symbol) & (pl.col("date") == calendar[ENTRY_BAR + 1])
+    )
+    ma10 = D(repr(indicated["ma_fast"].item())).quantize(FOUR_DP)
+    assert D(repr(tail[1].close)) < ma10
+    position = OpenPosition(
+        symbol=PLANTED.symbol,
+        entry_date=calendar[ENTRY_BAR],
+        entry=PLANTED.entry_open,
+        initial_stop=PLANTED.stop,
+        stop=PLANTED.stop,
+        quantity=PLANTED.quantity,
+        partial_done=False,
+        trail=TrailMa(PLANTED.trail),
+        is_ep_gap_day=False,
+    )
+    decided = manage(
+        position,
+        DailyBar(
+            date=calendar[ENTRY_BAR + 1],
+            open=D(repr(tail[1].open)),
+            high=D(repr(tail[1].high)),
+            low=D(repr(tail[1].low)),
+            close=D(repr(tail[1].close)),
+            ma10=ma10,
+            ma20=D(repr(indicated["ma_slow"].item())).quantize(FOUR_DP),
+            bars_since_entry=1,
+        ),
+        DEFAULT_SWING_CONFIG.stops,
+    )
+    assert [(a.kind, a.reason) for a in decided] == [
+        (ActionKind.SELL_ALL, ActionReason.CLOSE_BELOW_TRAIL_MA)
+    ]
+
+
+def test_determinism_holds_with_the_index_and_the_delisting_map() -> None:
+    """B5: two runs with the same params and data are byte-identical, comparison included."""
+    calendar = planted_frame()[1]
+    frame, calendar = planted_frame(extra=second_flag("FLAGLOSE", LOSE_TAIL, calendar))
+    index = index_series(calendar, crash_on=ENTRY_BAR + 6)
+    delisted = {4: calendar[ENTRY_BAR + 4]}  # FLAGLOSE, four sessions before its stop-out
+    first = json.dumps(run(frame, calendar, index=index, delisted=delisted).to_json())
+    second = json.dumps(run(frame, calendar, index=index, delisted=delisted).to_json())
+    assert first.encode() == second.encode()
+    assert '"comparison"' in first and '"DELISTED"' in first
+
+
 # --- determinism, purity, the wire shape (G4) -------------------------------------------
 
 
@@ -726,6 +1304,8 @@ def test_to_json_is_plain_and_its_keys_are_in_a_fixed_order() -> None:
         "equity_curve",
         "funnel",
         "ladder",
+        "drawdown",
+        "comparison",
         "caveats",
     ]
     json.dumps(payload)  # nothing left that json cannot carry
@@ -743,20 +1323,22 @@ def test_to_json_is_plain_and_its_keys_are_in_a_fixed_order() -> None:
     assert isinstance(market, dict)
     # `04` §8.4 as amended by `07`: the top rung is his "typical" ten, not eight.
     assert market["tiers"] == [[2, 25.0], [4, 50.0], [6, 75.0], [10, 100.0]]
-    assert payload["caveats"] == list(CAVEATS)
+    assert payload["caveats"] == [*CAVEATS, INDEX_ABSENT_CAVEAT], "no index in this run"
     by_year = payload["by_year"]
     assert isinstance(by_year, dict)
     assert list(by_year) == ["2025", "2026"]
 
 
-def test_caveats_are_the_three_sentences_of_section_11() -> None:
+def test_caveats_are_the_sentences_of_section_11() -> None:
+    """Every standing caveat is a sentence of `04` §11: the three SW9 carried and B1's circuit
+    caveat (SW9.6). The index-absent caveat is a run's own and is tested with the index."""
     rules = next(
         parent / "docs" / "swing" / "04-business-rules.md"
         for parent in Path(__file__).resolve().parents
         if (parent / "docs" / "swing" / "04-business-rules.md").is_file()
     ).read_text(encoding="utf-8")
     section = re.sub(r"\s+", " ", rules[rules.index("## §11") :].replace("`", ""))
-    assert len(CAVEATS) == 3
+    assert len(CAVEATS) == 4
     for caveat in CAVEATS:
         phrase = caveat.rstrip(".")
         phrase = phrase[0].lower() + phrase[1:]

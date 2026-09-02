@@ -543,7 +543,277 @@ const DRAWN_STAT_KEYS = new Set<string>([
   "by_year",
   "funnel",
   "equity",
+  "max_drawdown_pct",
+  "drawdown",
+  "comparison",
 ]);
+
+// --- the gate comparison (SW9.6, STANDING-ANSWERS A12) ----------------------------------------
+//
+// The engine keeps three records over one run — the gate off, breadth only, breadth with the
+// index rule — and reports each overall, by the year entered and by setup, with breadth's and
+// the index rule's contributions as differences. The page draws what the API sends and knows
+// the three mode names only to label them; a fourth would be shown under its key.
+
+/** One record's numbers over one scope, or the difference between two records' numbers. */
+type GateCell = {
+  entered: number;
+  net_r: number;
+  expectancy_r: number;
+  win_rate_pct: number;
+  max_drawdown_pct: number | null;
+};
+
+type GateRow = { label: string; cells: Record<string, GateCell> };
+
+type GateComparisonView = {
+  indexSupplied: boolean;
+  primary: string | null;
+  modes: [string, string][];
+  overall: Record<string, GateCell>;
+  byYear: [string, Record<string, GateCell>][];
+  bySetup: [string, Record<string, GateCell>][];
+  breadth: GateRow[] | null;
+  indexRule: GateRow[] | null;
+};
+
+const MODE_LABELS: Record<string, string> = {
+  gate_off: "Gate off",
+  breadth_only: "Breadth only",
+  full: "Breadth + index rule",
+};
+
+function modeLabel(mode: string): string {
+  return MODE_LABELS[mode] ?? label(mode);
+}
+
+function readGateCell(value: unknown): GateCell | null {
+  if (!isRecord(value)) return null;
+  const { entered, net_r, expectancy_r, win_rate_pct, max_drawdown_pct } = value;
+  if (!isNumber(entered) || !isNumber(net_r) || !isNumber(expectancy_r) || !isNumber(win_rate_pct)) {
+    return null;
+  }
+  if (max_drawdown_pct !== null && !isNumber(max_drawdown_pct)) return null;
+  return { entered, net_r, expectancy_r, win_rate_pct, max_drawdown_pct };
+}
+
+function readGateCells(value: unknown): Record<string, GateCell> | null {
+  if (!isRecord(value)) return null;
+  const out: Record<string, GateCell> = {};
+  for (const [mode, cell] of Object.entries(value)) {
+    const read = readGateCell(cell);
+    if (read === null) return null;
+    out[mode] = read;
+  }
+  return out;
+}
+
+function readGroupedCells(value: unknown): [string, Record<string, GateCell>][] | null {
+  if (!isRecord(value)) return null;
+  const out: [string, Record<string, GateCell>][] = [];
+  for (const [key, cells] of Object.entries(value)) {
+    const read = readGateCells(cells);
+    if (read === null) return null;
+    out.push([key, read]);
+  }
+  return out;
+}
+
+/** A contribution — `overall`, `by_year`, `by_setup` of deltas — as rows under one column. */
+function readContribution(value: unknown, column: string): GateRow[] | null {
+  if (!isRecord(value)) return null;
+  const overall = readGateCell(value.overall);
+  if (overall === null) return null;
+  const rows: GateRow[] = [{ label: "All years", cells: { [column]: overall } }];
+  for (const group of ["by_year", "by_setup"] as const) {
+    const record = value[group];
+    if (!isRecord(record)) return null;
+    for (const [key, cell] of Object.entries(record)) {
+      const read = readGateCell(cell);
+      if (read === null) return null;
+      rows.push({ label: group === "by_setup" ? setupName(key) : key, cells: { [column]: read } });
+    }
+  }
+  return rows;
+}
+
+function readGateComparison(value: unknown): GateComparisonView | null {
+  if (!isRecord(value)) return null;
+  const overall = readGateCells(value.overall);
+  const byYear = readGroupedCells(value.by_year);
+  const bySetup = readGroupedCells(value.by_setup);
+  if (overall === null || byYear === null || bySetup === null) return null;
+  const modes: [string, string][] = Object.keys(overall).map((mode) => [
+    mode,
+    isRecord(value.modes) && typeof value.modes[mode] === "string" ? String(value.modes[mode]) : "",
+  ]);
+  const contribution = isRecord(value.contribution) ? value.contribution : {};
+  return {
+    indexSupplied: value.index_supplied === true,
+    primary: typeof value.primary === "string" ? value.primary : null,
+    modes,
+    overall,
+    byYear,
+    bySetup,
+    breadth: contribution.breadth == null ? null : readContribution(contribution.breadth, "breadth"),
+    indexRule:
+      contribution.index_rule == null ? null : readContribution(contribution.index_rule, "index_rule"),
+  };
+}
+
+function signedCount(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
+}
+
+function percent(value: number): string {
+  return `${value.toFixed(2)}%`;
+}
+
+function signedPercent(value: number): string {
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+/**
+ * The gate's worth, in one table per question. "Entries and net R" shows what each record took
+ * and made, overall, by the year entered and by setup; "Deepest drawdown" shows what each
+ * curve went through. The two contribution columns are differences — with the rule, less
+ * without it — so a reader sees what breadth bought and what the index rule bought on top.
+ */
+function GateComparison({ comparison }: { comparison: GateComparisonView }) {
+  const modes = comparison.modes.map(([mode]) => mode);
+  const scopes: GateRow[] = [
+    { label: "All years", cells: comparison.overall },
+    ...comparison.byYear.map(([year, cells]) => ({ label: year, cells })),
+    ...comparison.bySetup.map(([setup, cells]) => ({ label: setupName(setup), cells })),
+  ];
+  const contributions: [string, string, GateRow[] | null][] = [
+    ["breadth", "Breadth's contribution", comparison.breadth],
+    ["index_rule", "Index rule's contribution", comparison.indexRule],
+  ];
+  const present = contributions.filter((entry): entry is [string, string, GateRow[]] => entry[2] !== null);
+  const delta = (rows: GateRow[], scope: string, column: string): GateCell | null =>
+    rows.find((row) => row.label === scope)?.cells[column] ?? null;
+  return (
+    <div className="space-y-4" data-testid="journal-backtest-comparison">
+      <div className="space-y-1">
+        <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          What the gate buys
+        </h4>
+        <p className="max-w-[70ch] text-sm text-muted-foreground">
+          The same run kept {modes.length} records side by side over one pass of the detectors;
+          only the market gate differed. Contributions are differences: with the rule, less
+          without it. Years are by the session entered, because the gate decides entries.
+          {comparison.indexSupplied
+            ? ""
+            : " No index series was read in this run, so there is no index rule column."}
+        </p>
+        <ul className="space-y-0.5 text-xs text-muted-foreground" data-testid="journal-backtest-modes">
+          {comparison.modes.map(([mode, definition]) => (
+            <li key={mode}>
+              <span className="font-medium">{modeLabel(mode)}</span>
+              {definition ? ` — ${definition}` : ""}
+              {mode === comparison.primary ? " (the record the numbers above are from)" : ""}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[48rem] border-collapse text-sm" data-testid="journal-backtest-gate-entries">
+          <caption className="pb-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Entries and net R
+          </caption>
+          <thead>
+            <tr className={HEAD_ROW}>
+              <th className={HEAD_CELL}>Scope</th>
+              {modes.map((mode) => (
+                <th key={mode} className={HEAD_CELL}>
+                  {modeLabel(mode)}
+                </th>
+              ))}
+              {present.map(([column, title]) => (
+                <th key={column} className={HEAD_CELL}>
+                  {title}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {scopes.map((row) => (
+              <tr key={row.label} className={BODY_ROW} data-testid={`gate-entries-${row.label}`}>
+                <td className="py-2 pr-3 font-medium">{row.label}</td>
+                {modes.map((mode) => {
+                  const cell = row.cells[mode];
+                  return (
+                    <td key={mode} className="py-2 pr-3 tabular-nums">
+                      {cell ? `${cell.entered} entered · ${signedR(cell.net_r)}` : "—"}
+                    </td>
+                  );
+                })}
+                {present.map(([column, , rows]) => {
+                  const cell = delta(rows, row.label, column);
+                  return (
+                    <td key={column} className="py-2 pr-3 tabular-nums">
+                      {cell ? `${signedCount(cell.entered)} entered · ${signedR(cell.net_r)}` : "—"}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[40rem] border-collapse text-sm" data-testid="journal-backtest-gate-drawdown">
+          <caption className="pb-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Deepest drawdown of the curve, as a share of the allocation
+          </caption>
+          <thead>
+            <tr className={HEAD_ROW}>
+              <th className={HEAD_CELL}>Scope</th>
+              {modes.map((mode) => (
+                <th key={mode} className={HEAD_CELL}>
+                  {modeLabel(mode)}
+                </th>
+              ))}
+              {present.map(([column, title]) => (
+                <th key={column} className={HEAD_CELL}>
+                  {title}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {scopes
+              .filter((row) => Object.values(row.cells).some((cell) => cell.max_drawdown_pct !== null))
+              .map((row) => (
+                <tr key={row.label} className={BODY_ROW} data-testid={`gate-drawdown-${row.label}`}>
+                  <td className="py-2 pr-3 font-medium">{row.label}</td>
+                  {modes.map((mode) => {
+                    const value = row.cells[mode]?.max_drawdown_pct;
+                    return (
+                      <td key={mode} className="py-2 pr-3 tabular-nums">
+                        {isNumber(value) ? percent(value) : "—"}
+                      </td>
+                    );
+                  })}
+                  {present.map(([column, , rows]) => {
+                    const value = delta(rows, row.label, column)?.max_drawdown_pct;
+                    return (
+                      <td key={column} className="py-2 pr-3 tabular-nums">
+                        {isNumber(value) ? signedPercent(value) : "—"}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 /** The keys of `params` the card shows as tiles; `config` opens on request, the rest is listed. */
 const DRAWN_PARAM_KEYS = new Set<string>(["start", "end", "sleeve_inr", "cost_pct_per_side", "config"]);
@@ -624,6 +894,10 @@ function BacktestResults({ stats }: { stats: Record<string, unknown> }) {
   const funnel = readNumbers(stats.funnel);
   const equity = isRecord(stats.equity) ? stats.equity : null;
   const sessions = equity && isNumber(equity.sessions) ? equity.sessions : null;
+  const drawdown = isRecord(stats.drawdown) ? stats.drawdown : null;
+  const maxDrawdown = isNumber(stats.max_drawdown_pct) ? stats.max_drawdown_pct : null;
+  const lockedSessions = drawdown && isNumber(drawdown.locked_sessions) ? drawdown.locked_sessions : null;
+  const comparison = readGateComparison(stats.comparison);
   const other = rest(stats, DRAWN_STAT_KEYS);
   return (
     <div className="space-y-5" data-testid="journal-backtest-results">
@@ -662,6 +936,28 @@ function BacktestResults({ stats }: { stats: Record<string, unknown> }) {
           {isNumber(equity.high) ? <Stat label="Highest close" value={rupees(equity.high)} /> : null}
         </dl>
       ) : null}
+      {maxDrawdown !== null ? (
+        <dl
+          className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4"
+          data-testid="journal-backtest-drawdown"
+        >
+          <Stat label="Deepest drawdown" value={`${percent(maxDrawdown)} of the allocation`} />
+          {drawdown && typeof drawdown.trough_date === "string" ? (
+            <Stat label="Reached on" value={formatTradeDate(drawdown.trough_date)} />
+          ) : null}
+          {lockedSessions !== null ? (
+            <Stat
+              label="Lock-out held"
+              value={
+                lockedSessions === 0
+                  ? "never"
+                  : `${lockedSessions} ${lockedSessions === 1 ? "session" : "sessions"}`
+              }
+            />
+          ) : null}
+        </dl>
+      ) : null}
+      {comparison ? <GateComparison comparison={comparison} /> : null}
       {funnel ? (
         <div className="space-y-2" data-testid="journal-backtest-funnel">
           <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

@@ -1309,7 +1309,7 @@ SW9.5 case — are byte-for-byte what the single-book engine produced; the funne
 |---|---|
 | `packages/core/tests/test_swing_backtest.py` | **68 passed** (49 + 19), 91 s |
 | `test_speed_300_instruments_over_8_years_runs_under_60s` | **26.9 s** with three books (27.5 s with one, measured before the change) — the detectors are the cost and they run once |
-| `packages/core/tests` less SW10's `test_swing_safety_properties.py` (G7) | see the ledger row — measured after this section was written |
+| `packages/core/tests` less SW10's `test_swing_safety_properties.py` (G7) | **2683 passed, 2 skipped**, 166 s |
 | `services/worker/tests/test_swing_backtest_task.py` on `baskfy_sw_t2` | **24 passed** (18 + 6) |
 | `services/api/tests/test_api_swing_journal.py` + `test_swing_readonly.py` | **43 passed** (27 + 16) |
 | `apps/web` `tsc --noEmit` + `vitest run "src/app/(app)/swing/journal"` | **42 passed** (36 + 6); `no-jargon`, `jargon-ban`, `no-any` green |

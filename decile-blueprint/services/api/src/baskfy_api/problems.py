@@ -37,6 +37,12 @@ class ProblemType(StrEnum):
     #: returning HTML or a bare 500 body from a service that promises problem+json everywhere
     #: would be worse than naming it.
     INTERNAL_ERROR = "internal-error"
+    #: SW2, also not in docs/07's table. A settings write that exceeds a server-side ceiling is
+    #: not "your JSON is wrong" (400) — the payload is well formed and the value is a number a
+    #: person can legitimately want. It is the M4.1 boundary refusing, and the caller needs the
+    #: ceiling itself back so the form can say "max 1.0% — set by the server" rather than
+    #: "invalid". docs/swing/DECISIONS-SW.md SW2.3.
+    SETTING_ABOVE_CEILING = "setting-above-ceiling"
 
 
 #: The status docs/07 pairs with each type. Kept beside the enum so a handler cannot pick a
@@ -51,6 +57,7 @@ STATUS_FOR: Final[Mapping[ProblemType, int]] = {
     ProblemType.RATE_LIMITED: 429,
     ProblemType.PIPELINE_DEGRADED: 503,
     ProblemType.INTERNAL_ERROR: 500,
+    ProblemType.SETTING_ABOVE_CEILING: 422,
 }
 
 TITLE_FOR: Final[Mapping[ProblemType, str]] = {
@@ -63,6 +70,7 @@ TITLE_FOR: Final[Mapping[ProblemType, str]] = {
     ProblemType.RATE_LIMITED: "Too many requests",
     ProblemType.PIPELINE_DEGRADED: "Data pipeline is degraded",
     ProblemType.INTERNAL_ERROR: "Internal server error",
+    ProblemType.SETTING_ABOVE_CEILING: "Setting exceeds the server's ceiling",
 }
 
 #: docs/07 §Entitlements: 'A 402 `payment_required` problem response carries
@@ -172,3 +180,23 @@ def invalid_screen_definition(errors: Sequence[Mapping[str, object]]) -> Problem
 def pipeline_degraded(detail: str) -> Problem:
     """docs/07: "503 — last run failed its QA gate". docs/11: serve the last good version."""
     return Problem(ProblemType.PIPELINE_DEGRADED, detail)
+
+
+def setting_above_ceiling(*, field: str, value: object, ceiling: object, env_var: str) -> Problem:
+    """SW2 / the M4.1 boundary: a user setting may not exceed its server-side maximum.
+
+    The ceiling and the environment variable that sets it are both on the response, deliberately.
+    A refusal that says only "too large" makes the person guess, and the guess they make is to try
+    a slightly smaller number until one is accepted — which is a worse experience than being told
+    the limit, and tells them nothing about *who* set it. "max 1.0% — set by the server" is the
+    sentence the settings form renders, and it renders it from these fields.
+    """
+    return Problem(
+        ProblemType.SETTING_ABOVE_CEILING,
+        f"{field} may not exceed {ceiling}; {value} was requested. "
+        f"This ceiling is server configuration ({env_var}) and is not editable here.",
+        field=field,
+        requested=str(value),
+        ceiling=str(ceiling),
+        env_var=env_var,
+    )

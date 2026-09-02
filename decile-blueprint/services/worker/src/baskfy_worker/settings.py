@@ -35,6 +35,28 @@ class WorkerSettings(BaseSettings):
     #: assertion 8 — sigma multiple for the ret_12m median.
     gate_ret_median_sigma: float = Field(default=3.0, gt=0)
 
+    # --- The swing book (docs/swing) -----------------------------------------
+    #
+    # The worker reads all three Track-B flags at startup, not per task. ``docs/swing/02``: "A
+    # flag is read once per process at startup ... and never from a form." A task that re-read
+    # the environment could change behaviour halfway through a night; a process that reads it
+    # once either runs the premarket scan or does not, and the log line says which.
+    #
+    # ``swing_execution_enabled`` appears here even though the worker places nothing, because the
+    # EOD job's ladder reads simulated closes while it is false and real ones once it is true
+    # (PACK.6). A worker that could not see the flag would summarise the wrong book.
+    swing_execution_enabled: bool = False
+    swing_monitor_enabled: bool = False
+    swing_ep_premarket_enabled: bool = False
+    #: The ceilings, mirrored from the API's settings so that a task writing ``sw_config`` (the
+    #: first-live-session countdown, the exposure rung) validates against the same numbers the
+    #: form does. Mirrored rather than imported: the worker does not depend on ``baskfy_api``.
+    swing_risk_per_trade_pct_max: float = Field(default=1.0, gt=0, le=5)
+    swing_max_position_pct_max: float = Field(default=25.0, gt=0, le=100)
+    swing_max_open_positions_max: int = Field(default=10, gt=0, le=50)
+    #: The benchmark the market gate reads (``docs/swing/04`` §8.2), ``nifty-50`` as fallback.
+    swing_index_slug: str = "nifty-500"
+
     #: Task-level retry budget (deliverable 1).
     task_max_retries: int = Field(default=3, ge=0)
     task_retry_backoff_seconds: int = Field(default=60, gt=0)

@@ -36,6 +36,21 @@ SYSTEM_ONLY = (
 )
 
 
+#: SW2. The swing book brings the same two categories with it: three safety switches (which
+#: decide whether a market process runs at all, and whether a confirmed line may reach a broker)
+#: and three ceilings for `sw_config`. docs/swing/02-scope-and-gating.md marks every one of them
+#: **system-only**, and §3 puts five conditions in front of the execution flag — a settings form
+#: that could flip it would make those conditions decoration.
+SWING_SYSTEM_ONLY = (
+    "BASKFY_SWING_EXECUTION_ENABLED",
+    "BASKFY_SWING_MONITOR_ENABLED",
+    "BASKFY_SWING_EP_PREMARKET_ENABLED",
+    "BASKFY_SWING_RISK_PER_TRADE_PCT_MAX",
+    "BASKFY_SWING_MAX_POSITION_PCT_MAX",
+    "BASKFY_SWING_MAX_OPEN_POSITIONS_MAX",
+)
+
+
 def _editable(key: str) -> bool:
     """Could a browser change this key through the settings route?"""
     return key in st.BY_KEY and key not in st.SECRET_KEYS and key not in st.LOCKED_KEYS
@@ -69,6 +84,54 @@ class TestRiskCeilings:
         """Catches a RISK_* knob added later without reading any of this."""
         leaked = sorted(k for k in st.BY_KEY if k.startswith("RISK_") and _editable(k))
         assert leaked == [], f"new user-editable risk knobs: {leaked}"
+
+
+class TestTheSwingBoundary:
+    """docs/swing/02 §Track B and the M4.1 ceilings, asserted the same way as the risk ones."""
+
+    @pytest.mark.parametrize("key", SWING_SYSTEM_ONLY)
+    def test_swing_switch_or_ceiling_is_env_only(self, key: str) -> None:
+        assert key in st.LOCKED_KEYS, (
+            f"{key} is not in settings.LOCKED_KEYS. docs/swing/02-scope-and-gating.md makes "
+            f"every BASKFY_SWING_* key system-only; being absent from BY_KEY today is an "
+            f"accident of nobody having written a Spec, not a boundary."
+        )
+        assert not _editable(key)
+
+    def test_no_swing_key_at_all_leaks_in_by_prefix(self) -> None:
+        """Catches a BASKFY_SWING_* knob added later without reading any of this."""
+        leaked = sorted(k for k in st.BY_KEY if k.startswith("BASKFY_SWING_") and _editable(k))
+        assert leaked == [], f"new user-editable swing knobs: {leaked}"
+
+    def test_the_execution_flag_defaults_to_false_in_the_config_module(self) -> None:
+        """The run ends with the flag false (docs/swing/02 §3). The default is where that lives.
+
+        Read off the module rather than off the environment: a developer with the variable
+        exported would otherwise see this pass for the wrong reason, and the question here is
+        what a machine with no configuration does.
+        """
+        import os
+
+        from app import config as C
+
+        assert "BASKFY_SWING_EXECUTION_ENABLED" not in os.environ or (
+            os.environ["BASKFY_SWING_EXECUTION_ENABLED"].lower() != "true"
+        ), "this suite must not run with swing execution enabled"
+        assert C.SWING_EXECUTION_ENABLED is False
+        assert C.SWING_MONITOR_ENABLED is False
+        assert C.SWING_EP_PREMARKET_ENABLED is False
+
+    def test_the_swing_stop_band_is_not_the_weekly_book_s(self) -> None:
+        """PACK.3: a swing stop at the low of the day is 2-6% away, not 8-12%.
+
+        Asserted because the failure is silent in both directions — a swing stop armed under the
+        desk's band is journalled as out-of-band on every single trade, and widening the desk's
+        band to stop that would change the weekly book's own findings.
+        """
+        from app import config as C
+
+        assert (C.SWING_STOP_BAND_MIN, C.SWING_STOP_BAND_MAX) == (0.005, 0.10)
+        assert (C.STOP_MIN, C.STOP_MAX) == (0.08, 0.12), "the weekly book's band moved"
 
 
 class TestTheSettingsPageItself:

@@ -131,6 +131,21 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # docs/DECISIONS.md §17.
     "entitlement_override": ("id",),
     "admin_action": ("id",),
+    # The swing book — docs/swing/03-data-model.md (SW2). Eleven tables, every one keyed with
+    # `user_id` (docs/swing/02 Track C §6). `sw_setup_daily` and `sw_market_daily` carry it in
+    # the primary key rather than beside it; docs/swing/DECISIONS-SW.md SW2.1 says why.
+    "sw_config": ("user_id",),
+    "sw_config_audit": ("id",),
+    "sw_setup_daily": ("user_id", "date", "instrument_id", "setup"),
+    "sw_market_daily": ("user_id", "date"),
+    "sw_watch": ("id",),
+    "sw_signal": ("id",),
+    "sw_plan": ("id",),
+    "sw_plan_line": ("id",),
+    "sw_plan_skip": ("id",),
+    "sw_position": ("id",),
+    "sw_fill": ("id",),
+    "sw_session": ("user_id", "session_date"),
 }
 
 #: docs/04 opening paragraph: "Money in numeric, never float."
@@ -215,6 +230,34 @@ def test_smallcase_tables_are_recorded_in_docs() -> None:
         "cb_subscription",
     ):
         assert table in smallcase_model, f"{table} is not described in docs/smallcase/03"
+
+
+def test_swing_tables_are_recorded_in_docs() -> None:
+    """SW2 tables live in docs/swing/03, not docs/04 — the same rule as the smallcase ones.
+
+    The list is written out rather than derived from `Base.metadata` on purpose: deriving it
+    would make the test "every sw_ table this file already knows about is documented", which is
+    true by construction. Typing the eleven names is what makes adding a twelfth a deliberate
+    act in two places.
+    """
+    swing_model = (MONOREPO_ROOT / "docs" / "swing" / "03-data-model.md").read_text(
+        encoding="utf-8"
+    )
+    for table in (
+        "sw_config",
+        "sw_config_audit",
+        "sw_setup_daily",
+        "sw_market_daily",
+        "sw_watch",
+        "sw_signal",
+        "sw_plan",
+        "sw_plan_line",
+        "sw_plan_skip",
+        "sw_position",
+        "sw_fill",
+        "sw_session",
+    ):
+        assert table in swing_model, f"{table} is not described in docs/swing/03"
 
 
 def test_billing_tables_are_recorded_in_decisions() -> None:

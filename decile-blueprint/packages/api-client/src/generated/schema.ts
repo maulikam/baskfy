@@ -3194,6 +3194,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/swing/signals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the monitor raised
+         * @description `05` §2's "fired 09:23, 5-min range 412.30 to 418.90" under a watchlist row (SW14).
+         *
+         *     A read of `sw_signal`, the append-only record of every verdict — `TRIGGERED`, `BELOW_PIVOT`,
+         *     `LOCKED_UPPER_CIRCUIT` and the rest — for one session; the newest session when `date` is
+         *     absent. It answers "what did the system see yesterday" and nothing else: a row here is a
+         *     record, the plan line it may have become lives on the desk console, and there is no route on
+         *     this surface that reaches it.
+         */
+        get: operations["getSignals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/swing/watch": {
         parameters: {
             query?: never;
@@ -8963,6 +8989,16 @@ export interface components {
              * Format: date
              */
             date: string;
+            /**
+             * Drawdown Locked
+             * @default false
+             */
+            drawdown_locked: boolean;
+            /**
+             * Drawdown Pct
+             * @default 0
+             */
+            drawdown_pct: string;
             /** Exposure Level */
             exposure_level: number;
             /** Gate */
@@ -9156,7 +9192,7 @@ export interface components {
         };
         /**
          * SwingSessionsOut
-         * @description `02` §3.2: "14 of 20 paper sessions logged".
+         * @description The counter — "14 of 20 paper sessions logged" — information, not a gate (`02` §3, A11).
          */
         SwingSessionsOut: {
             /** Logged */
@@ -9252,14 +9288,72 @@ export interface components {
             new_entries_allowed: boolean | null;
         };
         /**
+         * SwingSignalOut
+         * @description One verdict the monitor raised. A record, never an instruction.
+         */
+        SwingSignalOut: {
+            /** Entry */
+            entry: string | null;
+            /** Id */
+            id: number;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Last Price */
+            last_price: string | null;
+            /** Low Of Day */
+            low_of_day: string | null;
+            /** Name */
+            name: string;
+            /** Or Window Minutes */
+            or_window_minutes: number | null;
+            /** Plan Line Id */
+            plan_line_id: number | null;
+            /**
+             * Raised At
+             * Format: date-time
+             */
+            raised_at: string;
+            /** Range High */
+            range_high: string | null;
+            /** Range Low */
+            range_low: string | null;
+            /**
+             * Session Date
+             * Format: date
+             */
+            session_date: string;
+            /** Setup */
+            setup: string;
+            /** State */
+            state: string;
+            /** Stop */
+            stop: string | null;
+            /** Symbol */
+            symbol: string;
+            /** Watch Id */
+            watch_id: number | null;
+        };
+        /** SwingSignalsOut */
+        SwingSignalsOut: {
+            /** Data */
+            data: components["schemas"]["SwingSignalOut"][];
+            /** Session Date */
+            session_date: string | null;
+        };
+        /**
          * SwingWatchIn
          * @description Adding a name by hand. Levels optional — a name with no trigger is one to look at.
+         *
+         *     The name is given either by ``instrument_id`` or by ``symbol`` (SW14): the web form's
+         *     lookup is `GET /search`, whose instrument hit carries the symbol and not the id, and a
+         *     server action that had to make a second call to translate one into the other would be a
+         *     second place for the two to disagree. Exactly one of the two is required.
          */
         SwingWatchIn: {
             /** Catalyst */
             catalyst?: string | null;
             /** Instrument Id */
-            instrument_id: number;
+            instrument_id?: number | null;
             /** Note */
             note?: string | null;
             /**
@@ -9269,6 +9363,8 @@ export interface components {
             setup: "FLAG" | "EP";
             /** Stop Ref */
             stop_ref?: number | string | null;
+            /** Symbol */
+            symbol?: string | null;
             /** Trigger */
             trigger?: number | string | null;
         };
@@ -26499,6 +26595,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SwingBarsOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data version is no longer current */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getSignals: {
+        parameters: {
+            query?: {
+                date?: string | null;
+                instrument_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwingSignalsOut"];
                 };
             };
             /** @description Invalid screen definition */

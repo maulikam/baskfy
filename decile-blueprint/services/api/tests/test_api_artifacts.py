@@ -295,6 +295,10 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # ladder rung `swing-eod` wrote back, and the session count against the 20-session gate.
     # A read of closed positions; it writes nothing and names no broker.
     "/swing/journal": {"get"},
+    # SW14: what the monitor raised in a session — `sw_signal`, append-only, every verdict. The
+    # watchlist page shows yesterday's rows under a name. A read; the plan line a signal may
+    # have become is named by id and not reachable from here.
+    "/swing/signals": {"get"},
     # NOT LISTED, and deliberately: nothing under `/api/public/v1`. The public tier's router is
     # not mounted while the data-redistribution review docs/11 §Compliance requires is
     # outstanding, so it is absent from this document by construction —

@@ -132,7 +132,13 @@ describe("the primary consumer IA", () => {
        (`docs/DECISIONS-MERGE.md` M46) — there is no credential of ours left to manage, so the tab
        had nowhere to point. What it used to say is now a sentence on `/profile` telling the
        reader their sign-in lives in their Google account. */
-    expect(SECTION_TABS.me.map((t) => t.label)).toEqual(["Profile", "Brokers", "Subscription"]);
+    /* SW14: `docs/swing/05` §2 puts the swing settings "inside `/me`, not a hub tab". */
+    expect(SECTION_TABS.me.map((t) => t.label)).toEqual([
+      "Profile",
+      "Brokers",
+      "Subscription",
+      "Swing settings",
+    ]);
     for (const tab of SECTION_TABS.me) {
       expect(tab.href.startsWith("/portfolio"), `${tab.href} is money, not account`).toBe(false);
     }
@@ -231,6 +237,8 @@ describe("the sidebar IA", () => {
       "/fees",
       "/profile",
       "/brokers",
+      // SW14: the swing settings, under Me (`docs/swing/05` §2).
+      "/me/swing",
     ]);
   });
 

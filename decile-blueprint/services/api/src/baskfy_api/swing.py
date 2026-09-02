@@ -30,6 +30,7 @@ from baskfy_core.models import (
     SwPlanSkip,
     SwPosition,
     SwSetupDaily,
+    SwSignal,
 )
 from baskfy_core.swing.config import Setup
 from baskfy_core.swing.setups import CandidateStatus
@@ -128,6 +129,39 @@ class MarketRow:
     new_entries_allowed: bool
     parabolic_count: int
     detail: dict[str, object] | None
+    #: `04` §8.5 (SW9.5): how far the allocation sits below its peak that evening, and whether
+    #: the lock-out was in force. Written by `swing-eod`; a page shows them in place of the rung.
+    drawdown_pct: Decimal = Decimal(0)
+    drawdown_locked: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SignalRow:
+    """One verdict the monitor raised (`sw_signal`), joined to its instrument.
+
+    `docs/swing/05` §2 shows yesterday's rows under a watchlist name — "fired 09:23, 5-min range
+    412.30 to 418.90" — and every state is a row, not only the triggers: a `LOCKED_UPPER_CIRCUIT`
+    is the record of why no trade happened. Nothing here is an order, and the read carries the
+    `plan_line_id` only so a page can say a line was made; it cannot reach the line.
+    """
+
+    id: int
+    watch_id: int | None
+    instrument_id: int
+    symbol: str
+    name: str
+    setup: str
+    session_date: dt.date
+    raised_at: dt.datetime
+    state: str
+    or_window_minutes: int | None
+    range_high: Decimal | None
+    range_low: Decimal | None
+    low_of_day: Decimal | None
+    last_price: Decimal | None
+    entry: Decimal | None
+    stop: Decimal | None
+    plan_line_id: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -362,8 +396,68 @@ async def market_history(
             new_entries_allowed=row.new_entries_allowed,
             detail=row.detail if isinstance(row.detail, dict) else None,
             parabolic_count=row.parabolic_count,
+            drawdown_pct=row.drawdown_pct,
+            drawdown_locked=row.drawdown_locked,
         )
         for row in rows
+    )
+
+
+async def latest_signal_date(session: AsyncSession, user_id: int) -> dt.date | None:
+    """The newest session the monitor wrote a verdict for — "yesterday", on a page."""
+    return (
+        await session.execute(
+            select(func.max(SwSignal.session_date)).where(SwSignal.user_id == user_id)
+        )
+    ).scalar_one_or_none()
+
+
+async def signals(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    on: dt.date | None = None,
+    instrument_id: int | None = None,
+) -> tuple[dt.date | None, tuple[SignalRow, ...]]:
+    """A session's `sw_signal` rows, newest first; the latest session when ``on`` is absent.
+
+    Append-only rows read back as they were written: the page renders the range and the levels
+    with their stored digits, and nothing is recomputed. An empty session is `(date, ())`, and a
+    tenant with no signals at all is `(None, ())` — the surface exists before the monitor has run.
+    """
+    as_of = on or await latest_signal_date(session, user_id)
+    if as_of is None:
+        return None, ()
+    query = (
+        select(SwSignal, Instrument.symbol, Instrument.name)
+        .join(Instrument, Instrument.id == SwSignal.instrument_id)
+        .where(SwSignal.user_id == user_id, SwSignal.session_date == as_of)
+        .order_by(SwSignal.raised_at.desc(), SwSignal.id.desc())
+    )
+    if instrument_id is not None:
+        query = query.where(SwSignal.instrument_id == instrument_id)
+    found = (await session.execute(query)).all()
+    return as_of, tuple(
+        SignalRow(
+            id=row.id,
+            watch_id=row.watch_id,
+            instrument_id=row.instrument_id,
+            symbol=symbol,
+            name=name,
+            setup=row.setup,
+            session_date=row.session_date,
+            raised_at=row.raised_at,
+            state=row.state,
+            or_window_minutes=row.or_window_minutes,
+            range_high=row.range_high,
+            range_low=row.range_low,
+            low_of_day=row.low_of_day,
+            last_price=row.last_price,
+            entry=row.entry,
+            stop=row.stop,
+            plan_line_id=row.plan_line_id,
+        )
+        for row, symbol, name in found
     )
 
 

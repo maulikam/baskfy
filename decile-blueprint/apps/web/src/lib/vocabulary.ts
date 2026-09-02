@@ -90,6 +90,12 @@ export const PAGES = {
     title: "Journal · Swing",
     blurb: "What the closed trades add up to in R, and whether the ladder says press or sit.",
   },
+  /* The settings live under Me, not the hub (docs/swing/05 §2): they are about the person's
+     money and limits, not today's tape. */
+  "/me/swing": {
+    title: "Swing settings",
+    blurb: "How much the swing allocation may risk, and where the server's ceilings sit.",
+  },
   "/discover": {
     title: "Discover",
     blurb: "Say how you want to invest, and see which baskets match it.",

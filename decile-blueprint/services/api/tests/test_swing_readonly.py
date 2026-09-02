@@ -70,7 +70,7 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
     def test_the_swing_routes_exist(self, spec: OpenApiSpec) -> None:
         paths = _swing_paths(spec)
         assert paths, "the swing routes are not registered at all"
-        assert len(paths) == 9, f"expected nine swing paths, found {paths}"
+        assert len(paths) == 10, f"expected ten swing paths, found {paths}"
 
     def test_every_route_is_a_get_except_the_documented_writes(self, spec: OpenApiSpec) -> None:
         for path in _swing_paths(spec):
@@ -161,7 +161,7 @@ class TestItCannotReachAnOrder:
             and getattr(value, "__module__", "") == swing_router.__name__
             and name.startswith(("get_", "post_", "patch_", "delete_"))
         ]
-        assert len(handlers) >= 9, f"only found {len(handlers)} route handlers"
+        assert len(handlers) >= 10, f"only found {len(handlers)} route handlers"
         for handler in handlers:
             hints = typing.get_type_hints(handler, include_extras=True)
             assert "principal" in hints, f"{handler.__name__} takes no principal"
@@ -170,7 +170,7 @@ class TestItCannotReachAnOrder:
         """One call to `scoped_sole_user_id` per handler. A route that read `principal.user_id`
         directly would serve whoever asked."""
         source = inspect.getsource(swing_router)
-        assert source.count("await scoped_sole_user_id(") >= 9
+        assert source.count("await scoped_sole_user_id(") >= 10
 
 
 class TestTheLadderCannotBeClimbedByAsking:

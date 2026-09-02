@@ -1,7 +1,12 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { SwingSetup, SwingSetups } from "@/lib/swing/fetch";
+import type {
+  SwingMarketDay,
+  SwingSetup,
+  SwingSetups,
+  SwingWatchRow,
+} from "@/lib/swing/fetch";
 
 import SwingSetupsPage from "../page";
 
@@ -18,13 +23,68 @@ import SwingSetupsPage from "../page";
 vi.mock("@/lib/swing/fetch", () => ({
   fetchSetups: vi.fn(),
   fetchSectors: vi.fn(),
+  fetchWatchlist: vi.fn(),
+  fetchMarket: vi.fn(),
+  fetchBars: vi.fn(),
+}));
+
+// The actions reach `next-auth` through the write helper; the page only binds them to forms.
+vi.mock("../actions", () => ({
+  watchAdd: vi.fn(),
+  watchDismiss: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/swing",
 }));
 
-const { fetchSetups, fetchSectors } = await import("@/lib/swing/fetch");
+const { fetchSetups, fetchSectors, fetchWatchlist, fetchMarket, fetchBars } =
+  await import("@/lib/swing/fetch");
+
+function marketDay(overrides: Partial<SwingMarketDay> = {}): SwingMarketDay {
+  return {
+    date: "2026-09-02",
+    constituent_count: 41,
+    pct_up_strong_1m: 5.8,
+    pct_new_52w_high: 3.1,
+    pct_above_ma_slow: 55,
+    index_slug: "nifty-500",
+    index_close: 20240,
+    index_ma_fast: 20200,
+    index_ma_slow: 20150,
+    gate: "GREEN",
+    exposure_level: 1,
+    max_open_positions: 6,
+    max_exposure_pct: 75,
+    new_entries_allowed: true,
+    parabolic_count: 1,
+    drawdown_pct: 2.1,
+    drawdown_locked: false,
+    ...overrides,
+  };
+}
+
+function watchRow(overrides: Partial<SwingWatchRow> = {}): SwingWatchRow {
+  return {
+    id: 7,
+    instrument_id: 1,
+    symbol: "FLAGCO",
+    name: "FLAGCO LIMITED",
+    setup: "FLAG",
+    source: "DETECTOR",
+    added_on: "2026-09-01",
+    expires_on: "2026-09-15",
+    trigger: 149.6,
+    stop_ref: 141.86,
+    distance_to_trigger_pct: 3.01,
+    last_close: 145.1,
+    note: null,
+    catalyst: null,
+    state: "WATCHING",
+    focus: false,
+    ...overrides,
+  };
+}
 
 const FILING =
   "https://nsearchives.nseindia.com/corporate/FLAGCO_02092026084105_PR.pdf?x=1&y=2";
@@ -73,10 +133,32 @@ function page(rows: SwingSetup[]): SwingSetups {
   };
 }
 
-async function renderWith(rows: SwingSetup[]) {
-  vi.mocked(fetchSetups).mockResolvedValue(page(rows));
+async function renderWith(
+  rows: SwingSetup[],
+  extra: {
+    watch?: SwingWatchRow[];
+    day?: SwingMarketDay | null;
+    setups?: Partial<SwingSetups>;
+    status?: string;
+  } = {},
+) {
+  vi.mocked(fetchSetups).mockResolvedValue({ ...page(rows), ...extra.setups });
   vi.mocked(fetchSectors).mockResolvedValue({ as_of: "2026-09-02", data: [] });
-  return render(await SwingSetupsPage());
+  vi.mocked(fetchWatchlist).mockResolvedValue({ data: extra.watch ?? [] });
+  vi.mocked(fetchMarket).mockResolvedValue(
+    extra.day === null ? null : { data: [extra.day ?? marketDay()] },
+  );
+  vi.mocked(fetchBars).mockResolvedValue({
+    data: [
+      { date: "2026-09-01", close: 140, ma_fast: null, ma_slow: null },
+      { date: "2026-09-02", close: 145.1, ma_fast: 142, ma_slow: 141 },
+    ],
+  });
+  return render(
+    await SwingSetupsPage({
+      searchParams: Promise.resolve(extra.status ? { status: extra.status } : {}),
+    }),
+  );
 }
 
 describe("the setups page links out to the catalyst and never reproduces it", () => {
@@ -123,5 +205,114 @@ describe("the setups page links out to the catalyst and never reproduces it", ()
     ).toBeInTheDocument();
     expect(screen.queryByText(/nseindia/)).toBeNull();
     expect(screen.queryByText(/earnings/i)).toBeNull();
+  });
+});
+
+/**
+ * SW14 — the cells `05` §2 names that the page lacked: the gate with its two breadth numbers
+ * and the index word, the rung or the lock-out in its place, the parabolic heading verbatim,
+ * Watch and Dismiss on a row, the focus mark, the filter chips, the chart, and an empty state
+ * written from the funnel.
+ */
+describe("the setups header says why the gate is what it is", () => {
+  it("shows the two breadth numbers, the index word and the rung", async () => {
+    await renderWith([setup()]);
+    const detail = screen.getByTestId("gate-detail");
+    expect(detail).toHaveTextContent("5.8% of names up 25% in a month");
+    expect(detail).toHaveTextContent("3.1% at a year high");
+    expect(detail).toHaveTextContent("10-day above 20-day");
+    expect(screen.getByText(/Rung 2 of 4 · up to 6 positions · 75% of the allocation/)).toBeInTheDocument();
+  });
+
+  it("puts the lock-out line in place of the rung when the drawdown has locked the allocation", async () => {
+    await renderWith([setup()], {
+      day: marketDay({ drawdown_locked: true, drawdown_pct: 15.3, index_ma_fast: 20100 }),
+    });
+    expect(
+      screen.getByText(/Locked out · allocation 15.3% below its peak · resumes inside 10%/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Rung 2 of 4/)).toBeNull();
+    expect(screen.getByTestId("gate-detail")).toHaveTextContent("10-day below 20-day");
+  });
+
+  it("says no index when the averages are not there", async () => {
+    await renderWith([setup()], { day: marketDay({ index_ma_fast: null, index_ma_slow: null }) });
+    expect(screen.getByTestId("gate-detail")).toHaveTextContent("no index");
+  });
+
+  it("heads the parabolic list with the sentence, verbatim, and gives its rows no action", async () => {
+    await renderWith([setup({ setup: "PARABOLIC_SHORT", symbol: "VERTCO", up_streak: 7 })]);
+    expect(
+      screen.getByRole("heading", {
+        name: "Parabolic — for the record. Not tradeable on NSE delivery.",
+      }),
+    ).toBeInTheDocument();
+    const row = screen.getByText("VERTCO").closest("tr");
+    expect(row?.querySelector("button")).toBeNull();
+    expect(row).toHaveTextContent("7 up");
+  });
+});
+
+describe("the row actions are Watch and Dismiss, and nothing else", () => {
+  it("offers Watch, carrying the row's levels, for a candidate not yet on the list", async () => {
+    await renderWith([setup()]);
+    const row = screen.getByText("FLAGCO").closest("tr");
+    const button = within(row as HTMLElement).getByRole("button", { name: "Watch" });
+    const form = button.closest("form");
+    expect(form?.querySelector('input[name="instrument_id"]')).toHaveValue("1");
+    expect(form?.querySelector('input[name="trigger"]')).toHaveValue("149.60");
+    expect(form?.querySelector('input[name="stop_ref"]')).toHaveValue("141.86");
+    expect(form?.querySelector('input[name="setup"]')).toHaveValue("FLAG");
+    expect(within(row as HTMLElement).queryByRole("button", { name: "Dismiss" })).toBeNull();
+  });
+
+  it("offers Dismiss, carrying the watch row's id, for a candidate already watched", async () => {
+    await renderWith([setup()], { watch: [watchRow({ id: 42 })] });
+    const row = screen.getByText("FLAGCO").closest("tr");
+    const button = within(row as HTMLElement).getByRole("button", { name: "Dismiss" });
+    expect(button.closest("form")?.querySelector('input[name="id"]')).toHaveValue("42");
+    expect(within(row as HTMLElement).queryByRole("button", { name: "Watch" })).toBeNull();
+    expect(row).toHaveTextContent("watching");
+  });
+
+  it("renders no other button on the page", async () => {
+    await renderWith([setup()], { watch: [watchRow()] });
+    const names = screen.getAllByRole("button").map((button) => button.textContent?.trim());
+    expect(new Set(names)).toEqual(new Set(["Dismiss"]));
+  });
+});
+
+describe("focus, filters, the chart and the empty state", () => {
+  it("marks a focus row and counts it in the header", async () => {
+    await renderWith([setup()], { watch: [watchRow({ focus: true })] });
+    const row = screen.getByText("FLAGCO").closest("tr");
+    expect(row).toHaveAttribute("data-focus", "true");
+    expect(within(row as HTMLElement).getByLabelText("focus")).toBeInTheDocument();
+    expect(screen.getByTestId("gate-detail")).toHaveTextContent("marks the 1 in today’s focus");
+  });
+
+  it("passes the status chip through to the read and marks the chip current", async () => {
+    await renderWith([setup({ status: "TRIGGERED" })], { status: "TRIGGERED" });
+    expect(fetchSetups).toHaveBeenLastCalledWith({ status: "TRIGGERED" });
+    expect(screen.getByRole("link", { name: "Triggered" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Every status" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("draws the mini chart from the row's bars", async () => {
+    await renderWith([setup()]);
+    expect(fetchBars).toHaveBeenCalledWith(1, "2026-09-02");
+    expect(screen.getByRole("img", { name: /FLAGCO: the last 2 closes/ })).toBeInTheDocument();
+  });
+
+  it("writes the empty state from the funnel", async () => {
+    await renderWith([], { setups: { funnel: { instruments: 2500, liquid: 41, candidates: { FLAG: 0 } } } });
+    expect(
+      screen.getByText(/No flags today — 2,500 names had a bar, 41 of them were liquid enough, and 0 met the rules\./),
+    ).toBeInTheDocument();
+  });
+
+  it("says that no scan has run when there is no funnel at all", async () => {
+    await renderWith([], { setups: { funnel: null, gate: null, as_of: null }, day: null });
+    expect(screen.getAllByText(/no scan has run yet/i).length).toBeGreaterThan(0);
   });
 });

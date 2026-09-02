@@ -2147,6 +2147,51 @@ ported anyway).
 Regenerating is `uv run python ../tools/parity/golden.py swing` from `decile-blueprint` and one
 commit that says why.
 
+**The mutation re-run (same decision, second half).** Two things the harness itself needed:
+(a) `SWING_TEST_SELECTION` gains `test_swing_pending_and_first_live.py` and
+`test_swing_safety_properties.py` — written at SW10/SW10.5, after the list, so every mutant of
+`first_live_multiplier`, `sizing_at`, `marketable_limit` and the `PENDING_RANGE` line had
+"survived" against tests that were never run; (b) `04` §4 gains the parabolic **score** the
+engine has computed since SW1 (`40 × clamp(ret_5/100) + 30 × clamp(dist/(8 × ADR)) + 30 ×
+clamp(streak/6)`), because fourteen survivors sat in a formula the document did not state and
+house rule 2 forbids a test that asserts the code — the sentence is the code's, written down,
+⚠ UNREVIEWED as a spec addition. Every remaining survivor is justified **by name** in
+`reconciliation/mutant-justifications.json` (rendered into `MUTANTS.md`): `slots=True` flips,
+`maintain_order`, double guards, unreachable branches, and float-equality boundaries between
+two measurements. The tick-snap observation the goldens surfaced is `QUESTIONS.md` Q-SW12-1,
+not fixed (the goldens dump the code as it is).
+
+## SW14.1 — The hub's five actions, a symbol on the wire, and two GET-only reads · Maulik, 2 Sep 2026 (STANDING-ANSWERS A14) · ⚠ UNREVIEWED on three details
+
+**Context.** `05` §2 names four server actions (`watchAdd`, `watchDismiss`, `watchAnnotate`,
+`settingsSave`); A14 added the "Still watching" control after that sentence was written. The
+add-manual form's lookup is `GET /search`, whose instrument hit carries the **symbol** and not
+the id `POST /swing/watch` wanted. The Setups header needs the drawdown and the index averages,
+and the watchlist needs yesterday's `sw_signal` rows — neither was on the wire.
+
+**Choices.** (1) **`watchReconfirm` is the fifth action** and `05` §2's sentence names it; the
+read-only assertion is an exact set of five, over `(app)/swing` and `(app)/me/swing`, each a
+`(prev, FormData) → {ok, error?}` that makes one call through `lib/swing/write.ts` (a closed path
+type, no pattern) and never reads a token itself. (2) **`POST /swing/watch` accepts `symbol`** as
+an alternative to `instrument_id` (exactly one, `extra="forbid"` kept), resolved server-side,
+upper-cased; the action posts the symbol as typed, so a name that is not listed is a 404 the
+form renders, and no second call translates one into the other. (3) **`GET /swing/signals`**
+(`date`, `instrument_id`; the newest session when no date) and **`drawdown_pct` /
+`drawdown_locked` on `GET /swing/market`'s row** — reads only; the API's swing surface is ten
+paths, still four writes. (4) Two display numbers on the pages — `RESUME_DRAWDOWN_PCT` (10) in
+`swing/copy.ts` beside the Market page's existing `04` §8.3 thresholds, and A14's 20/5 on the
+watchlist header — are copy, not decisions; the decision (`drawdown_locked`, `focus`) is read
+from the row. (5) Settings sit at **`/me/swing`**, reached from the user menu's Account group
+and a fourth Me tab; the profile page itself is not edited.
+
+**Unreviewed.** The symbol on the wire (a public-contract widening); the mini chart's cost —
+one `bars` call per row, in parallel, capped at 24 rows by score; the trail distance on the
+Positions page reads each open position's own bars (one call per position).
+
+**Reversal.** Delete `symbol` from `SwingWatchIn` and the form's action resolves through a
+second read; delete the signals route and the watchlist loses the line under the row; the
+five-action set is one list in one test.
+
 ## Maulik's decisions, 2 Sep 2026 (taken in conversation; not ⚠ UNREVIEWED)
 
 Recorded verbatim from the review session so the run and the report build on them.

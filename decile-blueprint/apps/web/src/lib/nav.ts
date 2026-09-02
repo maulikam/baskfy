@@ -216,6 +216,8 @@ export const SECTION_TABS = {
     { href: "/profile" as Route, label: "Profile" },
     { href: "/brokers" as Route, label: "Brokers" },
     { href: "/pricing" as Route, label: "Subscription" },
+    /* `docs/swing/05` §2: the swing settings sit "inside `/me`, not a hub tab" (SW14). */
+    { href: "/me/swing" as Route, label: "Swing settings" },
   ],
 } as const;
 
@@ -351,6 +353,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       page("/fees", "percent"),
       page("/profile", "user"),
       page("/brokers", "plug"),
+      /* SW14: the swing allocation's limits, under Me (`docs/swing/05` §2). */
+      page("/me/swing" as PagePath & Route, "wrench"),
     ],
   },
   {

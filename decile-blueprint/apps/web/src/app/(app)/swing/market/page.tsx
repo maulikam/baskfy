@@ -7,6 +7,8 @@ import { formatTradeDate } from "@/lib/format";
 import { fetchMarket, type SwingMarketDay } from "@/lib/swing/fetch";
 import { PAGES } from "@/lib/vocabulary";
 
+import { breadthLine, indexWord, tierLine } from "../copy";
+
 /**
  * `/swing/market` — the Market tab of `docs/swing/05` §2.
  *
@@ -17,6 +19,10 @@ import { PAGES } from "@/lib/vocabulary";
  *
  * `05` §2 asks for a line saying **what would change the gate**, and that line is the point of
  * the page: a gate is only useful if you can see how far from the other side of it you are.
+ *
+ * SW14 completes `05` §2's list: the gate as a colour band over time, the rung and the
+ * allocation's drawdown session by session with the lock-out shaded (`04` §8.5), the parabolic
+ * count, and the index with its 10- and 20-day averages.
  *
  * Read-only. No form, no action, nothing that reaches an order path.
  */
@@ -38,6 +44,38 @@ function percent(value: number | null): string {
   return value === null ? "—" : `${value.toFixed(2)}%`;
 }
 
+function price(value: number | null): string {
+  return value === null ? "—" : value.toFixed(2);
+}
+
+/** The band's colour per gate — the `market/mood` conventions: green, amber, red, grey for unknown. */
+const BAND: Record<string, string> = {
+  GREEN: "bg-emerald-500",
+  AMBER: "bg-amber-400",
+  RED: "bg-red-500",
+};
+
+/** `05` §2: "the gate as a colour band over time … with the lock-out shaded". */
+function GateBand({ days }: { days: SwingMarketDay[] }) {
+  return (
+    <ol
+      aria-label="The gate, session by session"
+      className="flex h-6 w-full gap-px overflow-hidden rounded-sm"
+      data-testid="gate-band"
+    >
+      {days.map((day) => (
+        <li
+          key={day.date}
+          title={`${formatTradeDate(day.date)}: ${day.gate} · rung ${day.exposure_level + 1} of 4${day.drawdown_locked ? " · locked out" : ""}`}
+          data-gate={day.gate}
+          data-locked={day.drawdown_locked ? "true" : undefined}
+          className={`flex-1 ${BAND[day.gate] ?? "bg-muted"} ${day.drawdown_locked ? "border-b-4 border-red-800 opacity-60" : ""}`}
+        />
+      ))}
+    </ol>
+  );
+}
+
 /**
  * `05` §2: "GREEN needs ≥ 5.0% of names up 25% in a month; today 3.8%".
  *
@@ -47,14 +85,15 @@ function percent(value: number | null): string {
 function whatWouldChangeIt(day: SwingMarketDay): string {
   const today = day.pct_up_strong_1m;
   if (today === null) return "Breadth has not been measured for this session.";
+  const index = indexWord(day);
   if (day.gate === "GREEN") {
     const room = (today - RED_MAX_PCT_UP).toFixed(1);
-    return `GREEN holds while at least ${GREEN_MIN_PCT_UP.toFixed(1)}% of liquid names are up 25% in a month; today ${today.toFixed(1)}%. It turns RED below ${RED_MAX_PCT_UP.toFixed(1)}% — ${room} points of room.`;
+    return `GREEN holds while at least ${GREEN_MIN_PCT_UP.toFixed(1)}% of liquid names are up 25% in a month and the 10-day stays above the 20-day; today ${today.toFixed(1)}%, ${index}. It turns RED below ${RED_MAX_PCT_UP.toFixed(1)}% — ${room} points of room.`;
   }
   if (day.gate === "RED") {
-    return `RED while ${RED_MAX_PCT_UP.toFixed(1)}% or fewer of liquid names are up 25% in a month, or the index sits below both its 10- and 20-day averages; today ${today.toFixed(1)}%.`;
+    return `RED while ${RED_MAX_PCT_UP.toFixed(1)}% or fewer of liquid names are up 25% in a month, or the 10-day sits below the 20-day; today ${today.toFixed(1)}%, ${index}.`;
   }
-  return `GREEN needs at least ${GREEN_MIN_PCT_UP.toFixed(1)}% of liquid names up 25% in a month and the index above both its averages; today ${today.toFixed(1)}%.`;
+  return `GREEN needs at least ${GREEN_MIN_PCT_UP.toFixed(1)}% of liquid names up 25% in a month and the 10-day above the 20-day; today ${today.toFixed(1)}%, ${index}.`;
 }
 
 export default async function SwingMarketPage() {
@@ -85,12 +124,12 @@ export default async function SwingMarketPage() {
       >
         {latest ? (
           <>
-            The tape is <Mark>{latest.gate}</Mark>, and the allocation may carry{" "}
-            <Mark>{latest.max_open_positions} positions</Mark> at up to{" "}
-            <Mark>{latest.max_exposure_pct.toFixed(0)}% of the allocation</Mark>.{" "}
-            {latest.new_entries_allowed
-              ? "New entries are allowed."
-              : "No new entries — manage what is open."}
+            The tape is <Mark>{latest.gate}</Mark>. <Mark>{tierLine(latest)}</Mark>.{" "}
+            {latest.drawdown_locked
+              ? "No new entries until the allocation is back inside the line."
+              : latest.new_entries_allowed
+                ? "New entries are allowed."
+                : "No new entries — manage what is open."}
           </>
         ) : (
           <>No market row has been written yet, so there is nothing to say about the tape.</>
@@ -103,6 +142,21 @@ export default async function SwingMarketPage() {
             What would change it
           </h2>
           <p className="max-w-[70ch] text-sm">{whatWouldChangeIt(latest)}</p>
+          <p className="max-w-[70ch] text-sm text-muted-foreground" data-testid="gate-detail">
+            {latest.gate} because {breadthLine(latest)}.
+          </p>
+        </section>
+      ) : null}
+
+      {days.length > 0 ? (
+        <section aria-label="The gate over time" className="space-y-2">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+            The gate over {days.length} sessions
+          </h2>
+          <GateBand days={days} />
+          <p className="text-xs text-muted-foreground">
+            Oldest on the left. A dark underline is a session the drawdown lock-out held.
+          </p>
         </section>
       ) : null}
 
@@ -125,12 +179,24 @@ export default async function SwingMarketPage() {
                   <th className="py-2 pr-3 font-medium">Above the 20-day</th>
                   <th className="py-2 pr-3 font-medium">Liquid names</th>
                   <th className="py-2 pr-3 font-medium">Rung</th>
+                  <th className="py-2 pr-3 font-medium">Drawdown</th>
                   <th className="py-2 pr-3 font-medium">Parabolic</th>
+                  <th className="py-2 pr-3 font-medium">Index</th>
+                  <th className="py-2 pr-3 font-medium">10-day</th>
+                  <th className="py-2 pr-3 font-medium">20-day</th>
                 </tr>
               </thead>
               <tbody>
                 {[...days].reverse().map((day) => (
-                  <tr key={day.date} className="border-b border-border/40">
+                  <tr
+                    key={day.date}
+                    className={
+                      day.drawdown_locked
+                        ? "border-b border-border/40 bg-red-500/10"
+                        : "border-b border-border/40"
+                    }
+                    data-locked={day.drawdown_locked ? "true" : undefined}
+                  >
                     <td className="py-2 pr-3 tabular-nums">{formatTradeDate(day.date)}</td>
                     <td className="py-2 pr-3">{day.gate}</td>
                     <td className="py-2 pr-3 tabular-nums">{percent(day.pct_up_strong_1m)}</td>
@@ -140,7 +206,16 @@ export default async function SwingMarketPage() {
                       {day.constituent_count.toLocaleString("en-IN")}
                     </td>
                     <td className="py-2 pr-3 tabular-nums">{day.exposure_level + 1} of 4</td>
+                    <td className="py-2 pr-3 tabular-nums">
+                      {percent(day.drawdown_pct)}
+                      {day.drawdown_locked ? (
+                        <span className="ml-1.5 text-xs font-medium text-red-700">locked out</span>
+                      ) : null}
+                    </td>
                     <td className="py-2 pr-3 tabular-nums">{day.parabolic_count}</td>
+                    <td className="py-2 pr-3 tabular-nums">{price(day.index_close)}</td>
+                    <td className="py-2 pr-3 tabular-nums">{price(day.index_ma_fast)}</td>
+                    <td className="py-2 pr-3 tabular-nums">{price(day.index_ma_slow)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -157,8 +232,8 @@ export default async function SwingMarketPage() {
           <p className="max-w-[70ch] text-sm text-muted-foreground">
             {latest.index_slug} closed at {latest.index_close?.toFixed(2) ?? "—"}, against a
             10-day average of {latest.index_ma_fast?.toFixed(2) ?? "—"} and a 20-day average of{" "}
-            {latest.index_ma_slow?.toFixed(2) ?? "—"}. Breadth decides the gate; the index can
-            only make it worse, never better.
+            {latest.index_ma_slow?.toFixed(2) ?? "—"} — {indexWord(latest)}. Breadth decides the
+            gate; the index can only make it worse, never better.
           </p>
         </section>
       ) : null}

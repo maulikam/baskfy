@@ -79,7 +79,7 @@ Closed positions below with R and reason. Every row labelled **Simulated** while
 `journal.summarize` over closed positions — real and simulated in **two separate cards**; the
 R-distribution histogram; by setup; by month; the current loss streak and what it means for the
 ladder; the **backtest card** (SW9) under its own heading with its caveats verbatim from `04` §11.
-`sw_session` count against the 20-session gate (`02` §3.2): "14 of 20 paper sessions logged".
+`sw_session` count, "14 of 20 paper sessions logged" — information only since `02` §3 was rewritten (A11), not a gate.
 
 ### `/swing/settings` (inside `/me`, not a hub tab)
 
@@ -90,8 +90,9 @@ not editable. The execution flag is displayed as "Execution: disabled on this se
 a control.
 
 **Read-only assertion:** `apps/web/src/app/(app)/swing/__tests__/read-only.test.tsx` asserts
-that the only server actions under `/swing` are `watchAdd`, `watchDismiss`, `watchAnnotate`,
-`settingsSave`, and that none imports anything from `baskfy_execution` or calls
+that the only server actions under `/swing` (and `/me/swing`, where the settings form lives)
+are `watchAdd`, `watchDismiss`, `watchAnnotate`, `watchReconfirm` (A14's "Still watching" —
+SW14.1), `settingsSave`, and that none imports anything from `baskfy_execution` or calls
 `/desk/*` / `/swing/execute`.
 
 ## 3. The desk console `/swing` (Jinja, `kite-momentum-rebalancer/app`)

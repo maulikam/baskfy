@@ -103,6 +103,9 @@ export interface SwingMarketDay {
   max_exposure_pct: number;
   new_entries_allowed: boolean;
   parabolic_count: number;
+  /** `04` §8.5: the allocation's drawdown from its peak that evening, and whether the lock-out held. */
+  drawdown_pct: number;
+  drawdown_locked: boolean;
 }
 
 export interface SwingSector {
@@ -195,9 +198,105 @@ export interface SwingWatchRow {
   note: string | null;
   catalyst: string | null;
   state: string;
+  /**
+   * SW10.5 (STANDING-ANSWERS A14): the score the row is ranked by, the ADR it was watched with,
+   * whether it is in today's focus (top 5 flags by score + every EP), and when a MANUAL row was
+   * last re-confirmed — its ten-session clock runs from there.
+   */
+  score?: number | null;
+  adr_pct?: number | null;
+  focus?: boolean;
+  reconfirmed_on?: string | null;
   /** SW11B: the earnings flag the 09:10 feed keeps on the row, and the newest filing's link. */
   earnings_date?: string | null;
   catalyst_feed?: SwingCatalystFeed | null;
+}
+
+/**
+ * One verdict the monitor raised (`sw_signal`) — SW14, `05` §2's "fired 09:23, 5-min range
+ * 412.30–418.90" under a watchlist row. A record, never an instruction: `plan_line_id` names
+ * the line a trigger became on the desk console, and nothing here can reach it.
+ */
+export interface SwingSignal {
+  id: number;
+  watch_id: number | null;
+  instrument_id: number;
+  symbol: string;
+  name: string;
+  setup: string;
+  session_date: string;
+  /** The instant, ISO 8601 with its offset; pages render it in exchange time. */
+  raised_at: string;
+  state: string;
+  or_window_minutes: number | null;
+  range_high: number | null;
+  range_low: number | null;
+  low_of_day: number | null;
+  last_price: number | null;
+  entry: number | null;
+  stop: number | null;
+  plan_line_id: number | null;
+}
+
+export interface SwingSignals {
+  /** The session the rows belong to; `null` before the monitor has ever written one. */
+  session_date: string | null;
+  data: SwingSignal[];
+}
+
+export async function fetchSignals(params: {
+  date?: string;
+  instrument_id?: number;
+} = {}): Promise<SwingSignals | null> {
+  const search: Record<string, string> = {};
+  if (params.date) search.date = params.date;
+  if (params.instrument_id !== undefined) search.instrument_id = String(params.instrument_id);
+  return readOrNull<SwingSignals>("/swing/signals", search);
+}
+
+/**
+ * `GET /swing/config` — the settings form's read (`05` §2 "/swing/settings"). The three
+ * ceilings come back as strings so the form can say "max 1.0% — set by the server" before a
+ * save is refused; `exposure_level` and `first_live_sessions_left` are shown and never posted.
+ */
+export interface SwingConfig {
+  sleeve_capital_inr: number;
+  risk_per_trade_pct: number;
+  max_position_pct: number;
+  max_open_positions: number;
+  or_window_minutes: number;
+  stop_mode: string;
+  adr_min_pct: number;
+  turnover_min_inr: number;
+  price_min: number;
+  exposure_level: number;
+  first_live_sessions_left: number;
+  updated_at: string;
+  updated_by: string | null;
+  ceilings: Record<string, string>;
+  execution_enabled: boolean;
+}
+
+export async function fetchConfig(): Promise<SwingConfig | null> {
+  return readOrNull<SwingConfig>("/swing/config");
+}
+
+/** The mini chart's series — `GET /swing/setups/{id}/bars`, adjusted closes with their averages. */
+export interface SwingBar {
+  date: string;
+  close: number;
+  ma_fast: number | null;
+  ma_slow: number | null;
+}
+
+export async function fetchBars(
+  instrumentId: number,
+  date?: string,
+): Promise<{ data: SwingBar[] } | null> {
+  return readOrNull<{ data: SwingBar[] }>(
+    `/swing/setups/${instrumentId}/bars`,
+    date ? { date } : {},
+  );
 }
 
 export interface SwingPlanLine {

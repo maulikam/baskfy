@@ -56,6 +56,7 @@ from baskfy_providers.records import (
     BrokerAccountRef,
     BrokerHoldingRecord,
     InstrumentRecord,
+    QuoteRecord,
     conform,
     empty_frame,
 )
@@ -67,6 +68,11 @@ PROVIDER_NAME: Final = "kite"
 
 #: Kite's `day` interval history cap. docs/09: "chunk backfills into <= 2000-day slices".
 DEFAULT_MAX_DAYS_PER_REQUEST: Final = 2000
+
+#: Kite's ``GET /quote`` accepts up to 500 instruments per call (docs/swing/01 §"Pre-open":
+#: "≤ 6 calls of 500" for the liquid universe). A larger batch is refused by Kite with a 400,
+#: which the retry policy would then repeat — so the cap is enforced here, before the call.
+QUOTE_BATCH_SIZE: Final = 500
 
 #: The catalog id (``baskfy_core.broker_connections``) this adapter is the adapter *for*. A ref
 #: naming any other broker is refused rather than served, because "the holdings provider" and
@@ -105,6 +111,8 @@ class KiteClientLike(Protocol):
     def holdings(self) -> list[dict[str, object]]: ...
 
     def margins(self, segment: str | None = None) -> dict[str, object]: ...
+
+    def quote(self, *instruments: str) -> dict[str, dict[str, object]]: ...
 
 
 def _default_client_factory(api_key: str) -> KiteClientLike:
@@ -287,6 +295,30 @@ class KiteProvider:
         self._require_own_account(account)
         payload = self._call(lambda client: client.margins(_EQUITY_SEGMENT))
         return _equity_net_cash(payload)
+
+    # --- Quotes (SW6) ---------------------------------------------------------
+
+    def quotes(self, symbols: Sequence[str], *, exchange: str = "NSE") -> list[QuoteRecord]:
+        """``GET /quote`` for ``symbols``, in batches of at most :data:`QUOTE_BATCH_SIZE`.
+
+        Every batch is one throttled call — so a 2,000-name universe is four tokens from the
+        shared limiter, never one unthrottled burst. Read-only, like everything on this class:
+        a quote is a price, and nothing here can act on one (law 2).
+
+        A symbol Kite does not answer for is absent from the result rather than invented; a
+        row that cannot be read is skipped the way ``broker_holdings`` skips one, because one
+        malformed quote must not cost the scan the other 499.
+        """
+        wanted = [symbol for symbol in symbols if symbol]
+        records: list[QuoteRecord] = []
+        for start in range(0, len(wanted), QUOTE_BATCH_SIZE):
+            batch = [f"{exchange}:{symbol}" for symbol in wanted[start : start + QUOTE_BATCH_SIZE]]
+            payload = self._call(_quote_call(batch))
+            for key, row in payload.items():
+                record = _to_quote_record(key, row)
+                if record is not None:
+                    records.append(record)
+        return records
 
     def _require_own_account(self, account: BrokerAccountRef) -> None:
         """Refuse a read for an account this adapter's credentials do not belong to.
@@ -512,6 +544,47 @@ def _to_holding_record(row: dict[str, object]) -> BrokerHoldingRecord | None:
         # own mapping still escapes. See broker_holdings' docstring for why one bad row does
         # not fail the whole fetch.
         return None
+
+
+def _quote_call(batch: list[str]) -> Callable[[KiteClientLike], dict[str, dict[str, object]]]:
+    """Bind one batch to a call, so the loop above does not close over a changing name."""
+
+    def call(client: KiteClientLike) -> dict[str, dict[str, object]]:
+        return client.quote(*batch)
+
+    return call
+
+
+def _to_quote_record(key: str, row: object) -> QuoteRecord | None:
+    """One ``/quote`` entry → :class:`QuoteRecord`, or ``None`` when it cannot be read.
+
+    Kite keys the payload by ``EXCHANGE:SYMBOL`` and nests the day's OHLC under ``ohlc``.
+    """
+    if not isinstance(row, dict):
+        return None
+    exchange, _, symbol = key.partition(":")
+    if not symbol:
+        return None
+    last = _decimal(row.get("last_price"))
+    if last is None:
+        return None
+    ohlc = row.get("ohlc")
+    bands = ohlc if isinstance(ohlc, dict) else {}
+    stamp = row.get("timestamp") or row.get("last_trade_time")
+    return QuoteRecord(
+        symbol=symbol,
+        exchange=exchange or "NSE",
+        instrument_token=_int(row.get("instrument_token")),
+        last_price=last,
+        volume=_int(row.get("volume") or row.get("volume_traded")) or 0,
+        prev_close=_decimal(bands.get("close")),
+        open=_decimal(bands.get("open")),
+        high=_decimal(bands.get("high")),
+        low=_decimal(bands.get("low")),
+        upper_circuit=_decimal(row.get("upper_circuit_limit")),
+        lower_circuit=_decimal(row.get("lower_circuit_limit")),
+        as_of=stamp if isinstance(stamp, dt.datetime) else None,
+    )
 
 
 def _equity_net_cash(payload: dict[str, object]) -> Decimal | None:

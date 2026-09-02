@@ -26,7 +26,12 @@ from baskfy_providers.errors import (
     UnexpectedPayload,
     UpstreamUnavailable,
 )
-from baskfy_providers.kite import DEFAULT_MAX_DAYS_PER_REQUEST, KiteProvider, KiteRuntime
+from baskfy_providers.kite import (
+    DEFAULT_MAX_DAYS_PER_REQUEST,
+    QUOTE_BATCH_SIZE,
+    KiteProvider,
+    KiteRuntime,
+)
 from baskfy_providers.ports import BARS_CAPABILITIES, HOLDINGS_CAPABILITIES, Capability
 from baskfy_providers.records import DAILY_BARS_SCHEMA, BrokerAccountRef, InstrumentRecord
 from baskfy_providers.retry import RetryHooks, RetryPolicy
@@ -55,7 +60,9 @@ class FakeKiteClient:
         fail_times: int | None = None,
         positions: list[dict[str, object]] | None = None,
         margins: dict[str, object] | None = None,
+        quotes: dict[str, dict[str, object]] | None = None,
     ) -> None:
+        self._quotes = quotes or {}
         self._candles = candles or []
         self._instruments = instruments or []
         self._raises = raises
@@ -67,6 +74,7 @@ class FakeKiteClient:
         self.instrument_calls: int = 0
         self.holdings_calls: int = 0
         self.margin_segments: list[str | None] = []
+        self.quote_batches: list[tuple[str, ...]] = []
 
     def set_access_token(self, access_token: str) -> None:
         self.access_tokens.append(access_token)
@@ -107,6 +115,11 @@ class FakeKiteClient:
         self.margin_segments.append(segment)
         self._maybe_raise()
         return self._margins
+
+    def quote(self, *instruments: str) -> dict[str, dict[str, object]]:
+        self.quote_batches.append(tuple(instruments))
+        self._maybe_raise()
+        return {key: self._quotes[key] for key in instruments if key in self._quotes}
 
 
 def _candle_date(candle: dict[str, object]) -> dt.date:
@@ -821,3 +834,89 @@ class TestEmergeSymbolNormalisation:
         """SME trades in lots and `SME_EQUITY_L.csv` has no MARKET_LOT column. Kite does."""
         record = self._record(configured_settings, stored_token, "SHEETAL-SM")
         assert record.lot_size == 1000
+
+
+class TestQuotes:
+    """SW6 (docs/swing/06): "a quote batch never exceeds 500 symbols and never exceeds the
+    limiter". The premarket EP scan reads the liquid universe through this method."""
+
+    @staticmethod
+    def _quote(last: str, **extra: object) -> dict[str, object]:
+        row: dict[str, object] = {
+            "instrument_token": 408065,
+            "last_price": float(last),
+            "volume": 120_000,
+            "ohlc": {"open": 101.0, "high": 104.0, "low": 100.5, "close": 96.0},
+            "upper_circuit_limit": 115.2,
+            "lower_circuit_limit": 76.8,
+        }
+        row.update(extra)
+        return row
+
+    def test_a_universe_larger_than_the_cap_is_split_into_batches_of_at_most_500(
+        self, configured_settings: ProviderSettings, stored_token: AccessTokenStore
+    ) -> None:
+        symbols = [f"SYM{i:04d}" for i in range(1_234)]
+        client = FakeKiteClient(quotes={f"NSE:{s}": self._quote("10") for s in symbols})
+        provider = build_provider(configured_settings, client, stored_token)
+        records = provider.quotes(symbols)
+        assert len(records) == 1_234
+        assert [len(batch) for batch in client.quote_batches] == [500, 500, 234]
+        assert all(len(batch) <= QUOTE_BATCH_SIZE for batch in client.quote_batches)
+
+    def test_every_batch_takes_one_token_from_the_limiter(
+        self, configured_settings: ProviderSettings, stored_token: AccessTokenStore
+    ) -> None:
+        limiter = UnlimitedBucket()
+        symbols = [f"SYM{i:04d}" for i in range(1_001)]
+        client = FakeKiteClient(quotes={f"NSE:{s}": self._quote("10") for s in symbols})
+        provider = KiteProvider(
+            configured_settings,
+            KiteRuntime(
+                rate_limiter=limiter, client_factory=lambda _k: client, token_store=stored_token
+            ),
+        )
+        provider.quotes(symbols)
+        assert limiter.acquisitions == 3, "three batches, three tokens — never a burst"
+
+    def test_prices_arrive_as_decimal_with_the_exchange_previous_close_and_bands(
+        self, configured_settings: ProviderSettings, stored_token: AccessTokenStore
+    ) -> None:
+        client = FakeKiteClient(quotes={"NSE:INFY": self._quote("110.5")})
+        provider = build_provider(configured_settings, client, stored_token)
+        (record,) = provider.quotes(["INFY"])
+        assert record.symbol == "INFY"
+        assert record.exchange == "NSE"
+        assert record.instrument_token == 408065
+        assert record.last_price == Decimal("110.5")
+        assert record.volume == 120_000
+        assert record.prev_close == Decimal("96.0")
+        assert record.upper_circuit == Decimal("115.2")
+        assert record.lower_circuit == Decimal("76.8")
+        assert record.low == Decimal("100.5")
+        assert isinstance(record.last_price, Decimal)
+
+    def test_a_symbol_kite_does_not_answer_for_is_absent_not_invented(
+        self, configured_settings: ProviderSettings, stored_token: AccessTokenStore
+    ) -> None:
+        client = FakeKiteClient(quotes={"NSE:INFY": self._quote("110.5")})
+        provider = build_provider(configured_settings, client, stored_token)
+        records = provider.quotes(["INFY", "NOSUCH"])
+        assert [r.symbol for r in records] == ["INFY"]
+
+    def test_a_row_without_a_price_is_skipped_and_costs_nobody_else_the_scan(
+        self, configured_settings: ProviderSettings, stored_token: AccessTokenStore
+    ) -> None:
+        client = FakeKiteClient(
+            quotes={"NSE:INFY": self._quote("110.5"), "NSE:BROKEN": {"ohlc": {}}}
+        )
+        provider = build_provider(configured_settings, client, stored_token)
+        assert [r.symbol for r in provider.quotes(["BROKEN", "INFY"])] == ["INFY"]
+
+    def test_an_empty_request_makes_no_call(
+        self, configured_settings: ProviderSettings, stored_token: AccessTokenStore
+    ) -> None:
+        client = FakeKiteClient()
+        provider = build_provider(configured_settings, client, stored_token)
+        assert provider.quotes([]) == []
+        assert client.quote_batches == []

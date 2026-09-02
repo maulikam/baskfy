@@ -61,6 +61,7 @@ from baskfy_providers.records import (
     IndexSnapshot,
     InstrumentRecord,
     ListingRecord,
+    QuoteRecord,
 )
 from baskfy_providers.retry import RetryHooks, RetryPolicy, call_with_retry
 from baskfy_providers.settings import ProviderSettings, get_provider_settings
@@ -103,6 +104,7 @@ __all__ = [
     "ProviderHealth",
     "ProviderSettings",
     "ProviderUnavailable",
+    "QuoteRecord",
     "RateLimited",
     "RateLimiter",
     "RawArchive",

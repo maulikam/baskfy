@@ -265,7 +265,7 @@ def _as_open_position(row: SwPosition, symbol: str) -> OpenPosition:
     )
 
 
-async def _account(
+async def sleeve_account(
     session: AsyncSession, *, user_id: int, config_row: SwConfig | None
 ) -> SwingAccount:
     """The sleeve's own money — never the whole account (`02` Track C §5).
@@ -295,7 +295,7 @@ async def _account(
     )
 
 
-async def _watch_items(
+async def watch_items(
     session: AsyncSession, *, user_id: int, on: dt.date
 ) -> tuple[list[WatchItem], dict[str, int]]:
     """The watchlist as the plan builder wants it, plus symbol → instrument id for the writer.
@@ -336,7 +336,7 @@ async def _watch_items(
     return items, ids
 
 
-async def _store_plan(  # noqa: PLR0913 - one keyword per part of the plan being written
+async def store_plan(  # noqa: PLR0913 - one keyword per part of the plan being written
     session: AsyncSession,
     plan: SwingPlan,
     *,
@@ -506,9 +506,9 @@ async def run_swing_eod(  # noqa: PLR0913 - one keyword per input the evening de
     report.naked_positions = naked
     report.exit_lines = len(exits)
 
-    items, instrument_ids = await _watch_items(session, user_id=user_id, on=trade_date)
+    items, instrument_ids = await watch_items(session, user_id=user_id, on=trade_date)
     report.watching = len(items)
-    account = await _account(session, user_id=user_id, config_row=config_row)
+    account = await sleeve_account(session, user_id=user_id, config_row=config_row)
     entries, skipped = build_entries(
         as_of=trade_date,
         watch=items,
@@ -530,8 +530,8 @@ async def run_swing_eod(  # noqa: PLR0913 - one keyword per input the evening de
     )
     # The exit lines name symbols that are held rather than watched, so their instrument ids come
     # from the book rather than from the watchlist.
-    instrument_ids.update(await _held_instrument_ids(session, user_id=user_id))
-    report.plan_id = await _store_plan(
+    instrument_ids.update(await held_instrument_ids(session, user_id=user_id))
+    report.plan_id = await store_plan(
         session,
         plan,
         user_id=user_id,
@@ -651,7 +651,7 @@ async def _watchlist_candidates(
     )
 
 
-async def _held_instrument_ids(session: AsyncSession, *, user_id: int) -> dict[str, int]:
+async def held_instrument_ids(session: AsyncSession, *, user_id: int) -> dict[str, int]:
     rows = await session.execute(
         select(Instrument.symbol, SwPosition.instrument_id)
         .join(Instrument, Instrument.id == SwPosition.instrument_id)
@@ -665,6 +665,10 @@ __all__ = [
     "EodReport",
     "LineKind",
     "Skipped",
+    "held_instrument_ids",
     "manage_open_positions",
     "run_swing_eod",
+    "sleeve_account",
+    "store_plan",
+    "watch_items",
 ]

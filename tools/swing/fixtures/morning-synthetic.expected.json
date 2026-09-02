@@ -1,0 +1,30 @@
+[
+  {
+    "symbol": "GAMMALOCK",
+    "state": "LOCKED_UPPER_CIRCUIT",
+    "at": "2026-08-19T09:20:00",
+    "entry": null,
+    "stop": null
+  },
+  {
+    "symbol": "ALPHAFLAG",
+    "state": "TRIGGERED",
+    "at": "2026-08-19T09:31:00",
+    "entry": "100.80",
+    "stop": "97.80"
+  },
+  {
+    "symbol": "DELTAWAIT",
+    "state": "BELOW_PIVOT",
+    "at": "2026-08-19T09:35:00",
+    "entry": null,
+    "stop": null
+  },
+  {
+    "symbol": "BETAEP",
+    "state": "TRIGGERED",
+    "at": "2026-08-19T09:45:00",
+    "entry": "210.50",
+    "stop": "204.50"
+  }
+]

@@ -15,7 +15,7 @@ done. A fresh session resumes from the first module not marked ✅.
 | SW3 — Daily detection job | ✅ | `baskfy.swing.detect` writes `sw_setup_daily` + `sw_market_daily`, wired in as the chain's twelfth step (unable to fail the night), with `make swing DATE=…` and two Beat entries |
 | SW4 — API + Setups/Market pages | ✅ | Five `/swing` routes (four reads, one bounded settings write), the Setups and Market pages, and two read-only tests — one per side of the wire |
 | SW5 — Watchlist, plan preview, EOD, alert | ✅ | The evening job manages the book, plans tomorrow with its skips, fills and prunes the watchlist, emails the summary and counts the session; two more pages and four more routes |
-| SW6 — Premarket EP scan + opening-range monitor | ⬜ | |
+| SW6 — Premarket EP scan + opening-range monitor | ✅ | The morning job refreshes levels, scans the pre-open for gaps behind its flag (≤ 500 a call, inside the limiter) and rebuilds the plan as `MORNING`; the desk's opening-range monitor raises `sw_signal` rows and one-line `SIGNAL` plans behind its flag, holds no gateway, and replays a fixture morning exactly |
 | SW7 — Desk page + `/swing/execute` (DRY_RUN) | ⬜ | |
 | SW8 — Journal + ladder closes the loop | ⬜ | |
 | SW9 — EOD backtest | ⬜ | |
@@ -468,14 +468,109 @@ is one.
 
 ---
 
+## SW6 — Premarket EP scan and the opening-range monitor ✅
+
+### The morning, in order
+
+| When (IST) | What | Where |
+|---|---|---|
+| 08:50 | `baskfy.swing.premarket --stage LEVELS`: every `WATCHING` row that a detector wrote has its `trigger`/`stop_ref` re-expressed under the latest bar's `adj_factor` (`03` §9 — a split since detection would otherwise leave the person watching the wrong price by exactly that ratio). `MANUAL` rows keep what was typed. No Kite call | `services/worker/.../tasks/swing_premarket.py` `refresh_levels` |
+| 09:09 | `--stage GAPS`: with `BASKFY_SWING_EP_PREMARKET_ENABLED=true`, the liquid universe as of the last close (the detectors' own `liquid_expr`, over the same bars) is quoted through `KiteProvider.quotes` — **≤ 500 symbols a call, one limiter token a call** — and every name `live_gap` accepts becomes an `sw_watch` row: setup `EP`, source `DETECTOR`, catalyst empty, trigger = the indicative price, **no stop yet** (SW6.2), expiring after `ep.valid_bars` sessions. A name already watched is not duplicated. With the flag off, no quote is pulled and the report says `universe: 0` | `liquid_universe`, `evaluate_gaps`, `watch_live_gaps` |
+| 09:09 | Either way: the plan is rebuilt from the same watchlist as the evening's preview, with the last close's gate and rung, as `sw_plan.source = MORNING` (`03` §6) | `build_morning_plan` — SW5's `watch_items` / `sleeve_account` / `store_plan`, now public |
+| 09:15 → 10:45 | `python -m app.swing_monitor` in the desk, only with `BASKFY_SWING_MONITOR_ENABLED=true`: loads the watchlist (tokens from `instrument.kite_token`, circuit bands from one quote pass), subscribes on the `TickBus`, builds each name's opening range at window close from `historical_data(interval="minute")` (fallback: the ticks' own high/low), runs `evaluate_trigger` on every tick | `kite-momentum-rebalancer/app/swing_monitor.py`, `app/strategies/swing_breakout.py` |
+| on a break | `TRIGGERED` → one `sw_signal` row **and** one `sw_plan(source=SIGNAL)` whose single line is sized by the same `build_entries` the evening uses — so a RED gate, a full tier, an already-held name or an empty sleeve produce a plan with a *skip and its reason*, never a line. `LOCKED_UPPER_CIRCUIT` / `BELOW_PIVOT` → a signal row and nothing else, once each. A name that triggered is done for the session. The line is `PROPOSED`; nothing on this path can move it | `PgSignalStore` |
+| 10:45 | The monitor stops and marks `sw_session.monitor_ran` for the day (upsert; the evening fills in the rest) | `run_until_close`, `record_monitor_ran` |
+
+### The provider grew one read
+
+`KiteProvider.quotes(symbols)` — `GET /quote` in batches of `QUOTE_BATCH_SIZE = 500`, each batch
+one throttled `_call`, rows mapped onto a new `QuoteRecord` (Decimal prices, the exchange's own
+previous close and circuit bands). Read-only like everything on that class; the composite router
+does not route it (no `Capability` was added — the only thing that pulls quotes is this job, and
+it asks the Kite provider by name). `packages/providers/tests/test_kite.py::TestQuotes`, 6 tests:
+1,234 symbols → batches of 500/500/234; three batches take three limiter tokens; a symbol Kite
+does not answer for is absent, not invented; a row with no price is skipped.
+
+### The replay harness
+
+`tools/swing/replay.py` feeds a minute-candle CSV (or a `bus.last_tick` journal, `--journal`)
+through `SwingBreakout` with a list for a store and the CSV for a candle source — no broker, no
+bus, no database — and prints what was raised; `--expect` compares against a JSON expectation and
+exits 1 on a mismatch. The fixture morning `tools/swing/fixtures/morning-synthetic.*` has four
+names and raises exactly four signals:
+
+```
+09:20  LOCKED_UPPER_CIRCUIT   GAMMALOCK    entry=       - stop=       -
+09:31  TRIGGERED              ALPHAFLAG    entry=  100.80 stop=   97.80
+09:35  BELOW_PIVOT            DELTAWAIT    entry=       - stop=       -
+09:45  TRIGGERED              BETAEP       entry=  210.50 stop=  204.50
+```
+
+Each is a rule of `04` §7.2, not a number typed into the fixture: ALPHAFLAG's entry is the first
+tick over the 09:15–09:19 range high × 1.001 that is also above its pivot (09:31's open), and its
+stop is the lower of the range low (98.0) and the low of the day (97.8 at 09:22).
+
+### Tests
+
+| Suite | |
+|---|---|
+| `services/worker/tests/test_swing_premarket.py` | **20 passed.** The gap rule through the scan's plumbing (12 % on 4.17× pace is a candidate; the gap alone is not; the volume alone is not; the exchange's previous close beats the bar table across a bonus; the pace clock starts at 09:00 and is never zero); a 1:2 split rescales a watched level 110 → 220 and a MANUAL row keeps its number; the liquid universe is the detectors' own; **with the flag off no quote is pulled** and the plan is still built; with it on exactly the liquid universe is quoted; a live gap becomes an EP row with no stop and a three-session expiry; not twice; idempotent; the morning plan is `MORNING` with the last close's gate; a live EP without a stop is not a line; no market row → SKIPPED with the reason |
+| `packages/providers/tests/test_kite.py::TestQuotes` | 6 passed — the 500 cap and the limiter, as above |
+| `kite-momentum-rebalancer/tests/test_swing_monitor.py` | **20 passed.** With the flag off `SwingBreakout.__init__` is never called (a spy on the constructor); `generate_targets` is `[]`; the strategy's *code* (docstrings stripped by `ast`) never names `self.gw`, a placing verb, `kc.` or `kiteconnect`; the runner never names one either and builds the monitor with `gateway=None`; the fixture morning raises exactly the expected signals and the harness exits 0; a name triggers once and is then done; a locked name yields one `LOCKED_UPPER_CIRCUIT` and never triggers; a foreign token is ignored; nothing after 10:45; a failing store does not stop the monitor; a 7-minute window is refused at start-up; a trigger writes a signal row and a one-line SIGNAL plan (qty 1,666 = 0.5 % of ₹10 lakh over a ₹3 stop, `client_id = plan_id:AAA:BUY_ON_TRIGGER`, 30-minute expiry); **a locked name writes a signal row and no plan and no line**; a RED gate writes the trigger, a plan and a `GATE_RED` skip |
+| Desk suite | 1,367 passed, 17 skipped (was 1,345) |
+
+`make lint` clean; `test_no_escape_hatches` green over the new worker and provider code.
+
+### Commands
+
+```
+make swing-premarket DATE=2026-09-02 STAGE=LEVELS      # 08:50's job, by hand
+make swing-premarket DATE=2026-09-02                   # 09:09's; quotes only with the flag on
+cd kite-momentum-rebalancer && python -m app.swing_monitor      # exits 0 and builds nothing with the flag off
+cd kite-momentum-rebalancer && .venv/bin/python ../tools/swing/replay.py \
+    ../tools/swing/fixtures/morning-synthetic.csv \
+    --watchlist ../tools/swing/fixtures/morning-synthetic.watchlist.json \
+    --expect ../tools/swing/fixtures/morning-synthetic.expected.json
+```
+
+### Decisions
+
+SW6.1 (the pace clock starts at 09:00), SW6.2 (a live gap has a trigger and no stop), SW6.3
+("desk notification" is the row and a log line — the desk has no channel), SW6.4 (the monitor is
+built with no gateway at all).
+
+### What SW6 did NOT do
+
+- **No live morning has run.** Whether Kite's `volume` at 09:09 carries the pre-open matched
+  quantity (SW6.1) and whether `historical_data(interval="minute")` returns the forming 09:20
+  candle at 09:20:xx or only from 09:21 are both unknown until a flagged morning answers them.
+  With either answer the code is correct — the scan reports `candidates: []` and the monitor
+  asks for the range again on the next tick — but the *timing* of the first signal may be a
+  minute later than the fixture shows.
+- **The dev database is still at `0026`**, deliberately: another session is working against it.
+  `make migrate` is the first line of the DRY_RUN morning drill (SW10). The premarket CLI was
+  exercised against a migrated test database only.
+- No push channel (SW6.3 → NEEDS-MAULIK).
+- The monitor does not journal ticks. `bus.last_tick` is a dict, not a log; the `--journal`
+  input to the replay harness reads a file nothing writes yet. SW11.
+- `sw_watch.trigger` for a live EP is not updated to the range high at 09:20 — the signal row
+  carries `range_high`, and the watch row keeps the indicative price it was found at.
+
+---
+
 ## Not done (kept loud)
 
-- **Everything from SW1 on.** No migration applied to the dev database, no worker task, no
-  router, no page, no desk route, no monitor, no backtest, no goldens.
-- The core's flag score does not yet include the `+5/+5` (young listing / hot sector) of `04`
-  §2.6 — that is SW3's, because it needs `instrument.listed_on` and `index_member_daily`, which
-  core must not read.
+- **SW7 onward.** No desk page, no `/swing/execute`, no fills, no journal, no ladder, no backtest,
+  no goldens, no safety proof beyond each module's own tests.
+- **`sw_position` is written by nothing yet** (SW7). The book is empty on every real database;
+  every position test builds its rows directly.
+- **The dev database is at `0026`.** Nothing swing-shaped has run against real NSE bars; the ten
+  sessions of 180 instruments it holds cannot feed the detectors' 200-session lookback anyway
+  (SW3.3).
+- No live morning has run the premarket scan or the monitor (SW6, above).
 - `sw_config.first_live_sessions_left` / `risk_multiplier` (`02` §3.5) has no core function yet;
   SW7 multiplies `risk_per_trade_pct` before calling `size_position`.
-- The dev database holds ten sessions of bars for 180 instruments and **no factor rows**. Every
-  "on the dev stack" acceptance criterion in SW3–SW5 has to reckon with that.
+- `sw_config.exposure_level` is never written back from the ladder (SW8).
+- The watchlist page is read-only; the API's three writes have no form yet.
+- Deferred to SW11: the Playwright check and p95 for `/swing/setups`; a tick journal for the
+  replay harness. Deferred to SW12: mutation survivors not individually justified.

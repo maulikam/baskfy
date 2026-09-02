@@ -157,6 +157,32 @@ class BrokerAccountRef(_Record):
     kite_user_id: str | None = None
 
 
+class QuoteRecord(_Record):
+    """One instrument's live quote, as ``KiteProvider.quotes`` reports it (docs/swing/06 SW6).
+
+    Read by the premarket EP scan and nothing else so far. ``last_price`` is the print (during
+    NSE's pre-open, the indicative equilibrium price), ``volume`` the session's volume so far,
+    ``prev_close`` the exchange's own previous close — the number ``live_gap`` measures the gap
+    from, and it comes with the quote rather than from our bar table so a corporate action
+    between the two cannot manufacture a gap. The circuit bands are the exchange's for the day.
+    Prices are Decimal at the boundary, never float (house rule 9).
+    """
+
+    symbol: str = Field(min_length=1)
+    exchange: str = "NSE"
+    instrument_token: int | None = None
+    last_price: Decimal
+    volume: int = 0
+    prev_close: Decimal | None = None
+    open: Decimal | None = None
+    high: Decimal | None = None
+    low: Decimal | None = None
+    upper_circuit: Decimal | None = None
+    lower_circuit: Decimal | None = None
+    #: The exchange's own timestamp for the print, when the quote carries one.
+    as_of: dt.datetime | None = None
+
+
 class BrokerHoldingRecord(_Record):
     """One equity position as a broker reports it — the physical truth of §4.6's layer 1.
 

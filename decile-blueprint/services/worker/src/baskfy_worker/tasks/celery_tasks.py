@@ -27,12 +27,15 @@ from baskfy_api.screener import (
 )
 from baskfy_core.models.base import JsonObject
 from baskfy_providers.errors import TransientProviderError
+from baskfy_providers.factory import build_kite_provider
+from baskfy_providers.settings import get_provider_settings
 from baskfy_worker import kite_session_cli, ops
 from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
 from baskfy_worker.celery_app import IST, QUEUES
 from baskfy_worker.db import run_in_session
 from baskfy_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
 from baskfy_worker.providers import build_cache, build_pipeline_dependencies
+from baskfy_worker.settings import get_worker_settings
 from baskfy_worker.steps import StepOutcome
 from baskfy_worker.tasks.adjustments import instruments_with_actions, reprocess_instrument
 from baskfy_worker.tasks.alerts import SWEEP_BATCH, run_alert_dispatch, run_webhook_sweep
@@ -56,6 +59,8 @@ from baskfy_worker.tasks.swing import (
     run_detect_swing,
 )
 from baskfy_worker.tasks.swing_eod import run_swing_eod
+from baskfy_worker.tasks.swing_premarket import STAGE_GAPS, QuoteSource, run_swing_premarket
+from baskfy_worker.telemetry import provider_retry_hooks
 
 #: Earliest IST wall-clock at which a session's own data can exist. NSE closes at 15:30 and
 #: publishes the bhavcopy afterwards; the schedule itself fires at 18:45 for that reason. Used to
@@ -585,6 +590,40 @@ def swing_eod_task(trade_date: str | None = None) -> JsonObject:
             day,
             user_id=int(deps.swing_user_id or 0),
             execution_enabled=deps.swing_execution_enabled,
+        )
+        return {"date": day.isoformat(), **report.as_detail()}
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.swing.premarket", acks_late=True)
+def swing_premarket_task(session_date: str | None = None, stage: str = STAGE_GAPS) -> JsonObject:
+    """SW6: refresh the levels (08:50), scan the pre-open for gaps and plan the morning (09:09).
+
+    The quote source is the Kite provider, built here and only when
+    ``BASKFY_SWING_EP_PREMARKET_ENABLED`` is true — with the flag off the task makes no Kite
+    call at all, and the tests assert that by handing the job a fake that counts.
+    """
+    day = dt.date.fromisoformat(session_date) if session_date else dt.datetime.now(tz=IST).date()
+    deps = build_pipeline_dependencies()
+    if deps.swing_user_id is None:
+        return {"date": day.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+    settings = get_worker_settings()
+    quotes: QuoteSource | None = None
+    if settings.swing_ep_premarket_enabled and stage == STAGE_GAPS:
+        quotes = build_kite_provider(get_provider_settings(), provider_retry_hooks())
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        outcome = StepOutcome()
+        report = await run_swing_premarket(
+            session,
+            outcome,
+            day,
+            user_id=int(deps.swing_user_id or 0),
+            stage=stage,
+            ep_premarket_enabled=settings.swing_ep_premarket_enabled,
+            quotes=quotes,
+            now=dt.datetime.now(tz=IST).replace(tzinfo=None),
         )
         return {"date": day.isoformat(), **report.as_detail()}
 

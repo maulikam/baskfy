@@ -118,6 +118,14 @@ services:
       # failed. Escape each `$` as `$$` in the env file; `tools/deploy/gate-password.sh` does it
       # for you and is the only supported way to generate this.
       BASKFY_GATE_PASSWORD_HASH: ${BASKFY_GATE_PASSWORD_HASH:?set BASKFY_GATE_PASSWORD_HASH — bcrypt with $$-escaping, from tools/deploy/gate-password.sh}
+      # The desk's own vhost (SW13, MD20): `desk.<main host>` by default, so on the box it is
+      # desk.staging.baskfy.com with the same ACME account and the same headers. The local smoke
+      # overrides it to `http://desk.localhost` — a scheme-qualified address is how Caddy is told
+      # not to obtain a certificate for it.
+      BASKFY_DESK_SITE_ADDRESS: ${BASKFY_DESK_SITE_ADDRESS:-desk.${BASKFY_SITE_ADDRESS}}
+    # `desk` is deliberately NOT a dependency: Caddy resolves `desk:8420` per request and answers
+    # 502 on that vhost while the desk is down, whereas a depends_on would keep the whole edge —
+    # and the main site — from starting the day the desk image fails to pull.
     depends_on: [web, api]
 
   # ------------------------------------------------------------------ app
@@ -251,6 +259,86 @@ services:
     deploy:
       replicas: 1
 
+  # ------------------------------------------------------------------ the desk (SW13, MD20)
+  # The merged operator console — weekly momentum book and swing book — on the same Postgres
+  # (schema `desk`, DESK_DB_BACKEND=postgres) and the same Kite token store as api/worker/beat.
+  # Reached only through Caddy at desk.<host>, behind the desk's own basic auth (DESK_PASSWORD;
+  # app/core/websec.py). `x-python-image` is not reused: the env file and the token volume are
+  # shared, the image and the command are not.
+  desk: &desk
+    image: ${BASKFY_DESK_IMAGE:-baskfy-desk:local}
+    restart: unless-stopped
+    env_file: [.env.staging]
+    volumes:
+      # READ-ONLY. The api/worker write the encrypted token after the morning login (M74); the
+      # desk reads it at start-up and must not be able to write, rotate or delete it. A Kite
+      # request_token is single-use, so there is exactly one redeemer and one store.
+      - baskfy-state:/var/lib/baskfy/state:ro
+      # Everything the desk writes under its tree: retained scan uploads, ops job logs. Not the
+      # book — that is Postgres — and never a token.
+      - desk-data:/desk/data
+    environment:
+      TZ: Asia/Kolkata
+      DESK_DB_BACKEND: postgres
+      DESK_DB_SCHEMA: desk
+      DESK_DATABASE_URL: postgresql://baskfy:${BASKFY_DB_PASSWORD:?set BASKFY_DB_PASSWORD}@postgres:5432/baskfy
+      TOKEN_FILE: /var/lib/baskfy/state/kite-token.enc
+      # The desk's Host check (websec.py) refuses any name not listed here: Caddy's vhost, plus
+      # loopback for the healthcheck. `desk` is the compose-network name, for `curl` from a
+      # sibling container.
+      DESK_ALLOWED_HOSTS: "127.0.0.1,localhost,desk,${BASKFY_DESK_HOST:-desk.${BASKFY_SITE_ADDRESS}}"
+      DESK_PORT: "8420"
+      DESK_DOCS: "false"
+      # From the box's compose env file (`.env.staging.compose`), generated there by
+      # tools/deploy/deploy-swing.sh if absent — the same place the gate hash and the JWT secret
+      # live, and never an argument to box.sh. Any username; only the password is checked.
+      DESK_PASSWORD: ${BASKFY_DESK_PASSWORD:?set BASKFY_DESK_PASSWORD in .env.staging.compose (tools/deploy/deploy-swing.sh generates it on the box)}
+      # Blanked on purpose, even if the env file carries the desk's copy: with no secret the
+      # desk's /callback cannot redeem a request_token, so it can never race Baskfy for the
+      # single-use token. The key and the token-encryption key are mapped by the entrypoint.
+      KITE_API_SECRET: ""
+      # The safety rails, stated here so this file tells the truth about the box (root
+      # CLAUDE.md; docs/swing/02 §3). DRY_RUN is the weekly book's; the four BASKFY_SWING_*
+      # flags are the swing book's, each independent, each false. `environment:` beats
+      # `env_file:`, so a value in `.env.staging` cannot flip any of them for this container —
+      # the process that can reach an order. The only override is a line in
+      # `.env.staging.compose` (compose interpolation, the same file that carries BASKFY_DRY_RUN
+      # for the api), written by Maulik's hand; api/worker/beat read their copies of the swing
+      # flags from `.env.staging`, so a live flip is two deliberate lines, not one.
+      DRY_RUN: "${BASKFY_DRY_RUN:-true}"
+      BASKFY_SWING_EXECUTION_ENABLED: "${BASKFY_SWING_EXECUTION_ENABLED:-false}"
+      BASKFY_SWING_MONITOR_ENABLED: "${BASKFY_SWING_MONITOR_ENABLED:-false}"
+      BASKFY_SWING_EP_PREMARKET_ENABLED: "${BASKFY_SWING_EP_PREMARKET_ENABLED:-false}"
+      BASKFY_SWING_TIMING_PROBE: "${BASKFY_SWING_TIMING_PROBE:-false}"
+      # BASKFY_SOLE_USER_ID / BASKFY_SOLE_BROKER_ACCOUNT_ID (P4.3, the tenant pair every order
+      # carries) come from `.env.staging` through env_file, exactly as the api reads them —
+      # deliberately not restated here, where a compose default would shadow the file's value.
+      INTRADAY_ENABLED: "false"
+      OPTIONS_ENABLED: "false"
+    expose: ["8420"]
+    healthcheck:
+      # /status is the one route websec.py answers without the password. It reports dry_run and
+      # whether a Kite session exists; it never touches an order.
+      test: ["CMD", "curl", "-fsS", "http://localhost:8420/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  # The opening-range monitor as its own process (docs/swing/06 SW6): the image's
+  # `swing-monitor-loop` sleeps until 09:14 IST on a weekday, runs `python -m app.swing_monitor`,
+  # and sleeps to the next weekday. With BASKFY_SWING_MONITOR_ENABLED=false (the default above)
+  # the monitor exits 0 without constructing the strategy and the loop idles — so this service
+  # can exist before the flag does. Same image, same env, same read-only token, no port.
+  swing-monitor:
+    <<: *desk
+    command: [swing-monitor-loop]
+    expose: []
+    healthcheck:
+      disable: true
+
   # One-shot. Not started by `up`; run explicitly before a deploy switches traffic:
   #     docker compose -f infra/docker/compose.prod.yml run --rm migrate
   # A profile rather than a `depends_on`, because a migration that runs on every container restart
@@ -335,6 +423,7 @@ services:
 volumes:
   baskfy-archive: {}
   baskfy-state: {}
+  desk-data: {}
   baskfy-pgdata:
   baskfy-redisdata:
   baskfy-beat:

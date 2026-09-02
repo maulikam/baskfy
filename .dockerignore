@@ -1,0 +1,27 @@
+# Build context for infra/docker/Dockerfile.desk, which needs BOTH trees (the desk's app plus the
+# three Baskfy packages). Allow-list, not deny-list: this directory holds `.env.staging`,
+# `kite-momentum-rebalancer/.env`, `kite-momentum-rebalancer/data/portfolio.db` and the regression
+# corpus, none of which may enter an image layer. Everything is excluded unless named below.
+#
+# `docker build decile-blueprint` (Dockerfile.python / Dockerfile.web) reads decile-blueprint's
+# own .dockerignore, not this one.
+*
+!decile-blueprint/packages/core
+!decile-blueprint/packages/execution
+!decile-blueprint/packages/providers
+!kite-momentum-rebalancer/app
+!kite-momentum-rebalancer/config
+!kite-momentum-rebalancer/scripts
+!kite-momentum-rebalancer/requirements.txt
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/tests
+**/node_modules
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.db

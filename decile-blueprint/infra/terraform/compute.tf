@@ -91,6 +91,8 @@ resource "aws_iam_role_policy" "ecr_pull" {
         Resource = [
           "arn:aws:ecr:${var.region}:${data.aws_caller_identity.current.account_id}:repository/baskfy-web",
           "arn:aws:ecr:${var.region}:${data.aws_caller_identity.current.account_id}:repository/baskfy-py",
+          # SW13 (MD20): the merged desk's image, pushed by tools/deploy/push-images.sh.
+          "arn:aws:ecr:${var.region}:${data.aws_caller_identity.current.account_id}:repository/baskfy-desk",
         ]
       },
     ]

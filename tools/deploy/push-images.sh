@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build both images for the deployment host and push them to ECR.
+# Build the three images for the deployment host (arm64) and push them to ECR: web, python, and
+# since SW13 the desk (`baskfy-desk`, built from the REPO ROOT — Dockerfile.desk copies both trees).
 #
 #     AWS_PROFILE=baskfy-poc bash tools/deploy/push-images.sh
 #
@@ -33,6 +34,17 @@ echo "── build python ($TAG)"
 docker build --platform linux/arm64 -f "$BLUE/infra/docker/Dockerfile.python" \
   -t "$REG/baskfy-py:$TAG" -t "$REG/baskfy-py:latest" "$BLUE"
 
+# The web and py repositories were created by hand (runbook §1); the desk's is created here the
+# first time, idempotently, so a fresh SSO session needs nothing beyond this script. The box's
+# pull policy names it in infra/terraform/compute.tf (SW13) — `tf.sh apply` once after this.
+aws ecr describe-repositories --region "$REGION" --repository-names baskfy-desk >/dev/null 2>&1 \
+  || aws ecr create-repository --region "$REGION" --repository-name baskfy-desk \
+       --image-scanning-configuration scanOnPush=true >/dev/null
+
+echo "── build desk ($TAG) — the weekly book and the swing book, DRY_RUN baked in"
+docker build --platform linux/arm64 -f "$BLUE/infra/docker/Dockerfile.desk" \
+  -t "$REG/baskfy-desk:$TAG" -t "$REG/baskfy-desk:latest" "$ROOT"
+
 echo "── push"
 # Retried. A layer push timed out once on a home connection ("net/http: timeout awaiting response
 # headers"), `set -e` aborted the script, and the box then pulled a stale `latest` that still had
@@ -52,8 +64,11 @@ push "$REG/baskfy-web:$TAG"
 push "$REG/baskfy-web:latest"
 push "$REG/baskfy-py:$TAG"
 push "$REG/baskfy-py:latest"
+push "$REG/baskfy-desk:$TAG"
+push "$REG/baskfy-desk:latest"
 
 echo
 echo "PUSHED $TAG"
 echo "  $REG/baskfy-web:$TAG"
 echo "  $REG/baskfy-py:$TAG"
+echo "  $REG/baskfy-desk:$TAG"

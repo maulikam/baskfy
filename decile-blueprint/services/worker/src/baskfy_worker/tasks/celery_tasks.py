@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+from decimal import Decimal
 from typing import Final
 
 from celery import shared_task
@@ -31,8 +32,8 @@ from baskfy_providers.factory import build_kite_provider
 from baskfy_providers.settings import get_provider_settings
 from baskfy_worker import kite_session_cli, ops
 from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
-from baskfy_worker.celery_app import IST, QUEUES
-from baskfy_worker.db import run_in_session
+from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
+from baskfy_worker.db import run_checkpointed, run_in_session
 from baskfy_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
 from baskfy_worker.providers import build_cache, build_pipeline_dependencies
 from baskfy_worker.settings import get_worker_settings
@@ -58,6 +59,7 @@ from baskfy_worker.tasks.swing import (
     recent_trading_days,
     run_detect_swing,
 )
+from baskfy_worker.tasks.swing_backtest import DEFAULT_START, SWING_BACKTEST_TASK, run_and_commit
 from baskfy_worker.tasks.swing_eod import run_swing_eod
 from baskfy_worker.tasks.swing_premarket import STAGE_GAPS, QuoteSource, run_swing_premarket
 from baskfy_worker.telemetry import provider_retry_hooks
@@ -594,6 +596,42 @@ def swing_eod_task(trade_date: str | None = None) -> JsonObject:
         return {"date": day.isoformat(), **report.as_detail()}
 
     return run_in_session(_run)
+
+
+@shared_task(name=SWING_BACKTEST_TASK, acks_late=True, queue=QUEUE_COMPUTE)
+def swing_backtest_task(
+    start: str | None = None,
+    end: str | None = None,
+    sleeve_inr: str | None = None,
+    cost_pct_per_side: str | None = None,
+) -> JsonObject:
+    """SW9: run `04` §11 over ``start..end`` and store the run in ``sw_backtest_run``.
+
+    No Beat entry — a run over nine years is something a person asks for, from
+    ``tools/swing/backtest.py`` or by name — and the compute queue, because it is a few minutes
+    of Polars over every bar since 2017 and must not sit in front of an alert. ``start``
+    defaults to `04` §11's 2017; ``end`` to today in IST. Money arrives as strings so it can be
+    ``Decimal`` all the way (house rule 9). The body owns its commits (``run_checkpointed``) so
+    a failed run is a durable row with its error, not a rollback.
+    """
+    first = dt.date.fromisoformat(start) if start else DEFAULT_START
+    last = dt.date.fromisoformat(end) if end else dt.datetime.now(tz=IST).date()
+    deps = build_pipeline_dependencies()
+    if deps.swing_user_id is None:
+        return {"start": first.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+    user_id = int(deps.swing_user_id or 0)
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        return await run_and_commit(
+            session,
+            user_id=user_id,
+            start=first,
+            end=last,
+            sleeve_inr=Decimal(sleeve_inr) if sleeve_inr else None,
+            cost_pct_per_side=Decimal(cost_pct_per_side) if cost_pct_per_side else None,
+        )
+
+    return run_checkpointed(_run)
 
 
 @shared_task(name="baskfy.swing.premarket", acks_late=True)

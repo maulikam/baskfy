@@ -678,3 +678,40 @@ class SwSession(Base):
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[CreatedAt]
     updated_at: Mapped[UpdatedAt]
+
+
+class SwBacktestRun(Base):
+    """One run of the swing EOD backtest (`docs/swing/03` §10, SW9). Append-only.
+
+    The engine (``baskfy_core.swing.backtest``) is pure and this row is where its answer lands.
+    A run is a *fact*: re-running inserts a new row and nothing edits a stored ``stats``, so the
+    number that was on the page the week the flag was considered is still there after a detector
+    recalibration produces a different one.
+
+    ``params`` is written on the way in (what the run was asked to do), ``stats`` on the way out
+    (``BacktestResult.to_json()``, stored as-is — every price a string of its exact decimal), and
+    a run that raised carries the exception in ``error`` with ``finished_at`` set. "Finished" for
+    the journal means ``finished_at`` set **and** ``error`` null.
+    """
+
+    __tablename__ = "sw_backtest_run"
+    __table_args__ = (
+        CheckConstraint(
+            "finished_at IS NULL OR finished_at >= started_at",
+            name="finished_after_started",
+        ),
+        Index("ix_sw_backtest_run_user_id_finished_at", "user_id", "finished_at"),
+    )
+
+    id: Mapped[BigIntPk]
+    user_id: Mapped[int] = _user_fk()
+    #: ``BacktestParams`` as JSON: ``start``, ``end``, ``sleeve_inr``, ``cost_pct_per_side`` and
+    #: the whole ``config`` — the run is reproducible from this column and the bars alone.
+    params: Mapped[JsonObject] = mapped_column(JSONB, nullable=False)
+    started_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    #: ``BacktestResult.to_json()``: ``params, trades, stats, by_setup, by_year, equity_curve,
+    #: funnel, ladder, caveats``. Null until the run finishes, and forever if it failed.
+    stats: Mapped[JsonObject | None] = mapped_column(JSONB)
+    #: ``"{ExceptionType}: {message}"`` and the traceback, when the run raised.
+    error: Mapped[str | None] = mapped_column(Text)

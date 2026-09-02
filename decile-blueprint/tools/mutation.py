@@ -90,6 +90,11 @@ SWING_TARGETS: Final[tuple[str, ...]] = (
     "swing/opening_range.py",
     "swing/plan.py",
     "swing/journal.py",
+    # SW9: the EOD backtest. Its own logic is the session order, the entry rule, the fill prices
+    # and the funnel — comparisons and arithmetic again — and its tests plant a trade whose every
+    # rupee is worked by hand, so a flipped `>=` in the entry rule or a `+` for a `-` in a cost
+    # shows up as a different R.
+    "swing/backtest.py",
 )
 
 TARGETS: Final[tuple[str, ...]] = FACTOR_TARGETS + SWING_TARGETS
@@ -123,6 +128,10 @@ SWING_TEST_SELECTION: Final[tuple[str, ...]] = (
     "packages/core/tests/test_swing_market.py",
     "packages/core/tests/test_swing_opening_range.py",
     "packages/core/tests/test_swing_plan_and_journal.py",
+    # Last, because it is the slowest: a mutant of any other swing module that survives the nine
+    # files above still has to survive a planted trade run end to end. Its speed test skips
+    # itself inside the harness's workspace (a mutant's speed is not evidence).
+    "packages/core/tests/test_swing_backtest.py",
 )
 
 #: The one file most likely to kill a mutant of each module, tried first. ``pytest`` runs with
@@ -137,6 +146,7 @@ SWING_PRIMARY_TEST: Final[dict[str, str]] = {
     "swing/opening_range.py": "packages/core/tests/test_swing_contract_book.py",
     "swing/plan.py": "packages/core/tests/test_swing_contract_book.py",
     "swing/journal.py": "packages/core/tests/test_swing_contract_book.py",
+    "swing/backtest.py": "packages/core/tests/test_swing_backtest.py",
 }
 
 

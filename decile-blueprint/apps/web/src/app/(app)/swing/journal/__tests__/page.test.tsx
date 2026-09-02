@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type {
+  SwingBacktestCard,
   SwingJournal,
   SwingJournalCard,
   SwingJournalTrade,
@@ -18,7 +19,8 @@ import SwingJournalPage from "../page";
  * - the six R buckets render in the API's order, and read at zero trades;
  * - "N of 20 paper sessions logged" (`02` §3.2);
  * - the backtest card carries the caveats **verbatim** when a run exists and says "not run yet"
- *   when it does not (`02` §3.3, `04` §11);
+ *   when it does not (`02` §3.3, `04` §11), and draws the run's R distribution, win rate and
+ *   expectancy with the same tiles and bars the two journal cards use (SW9, leaf 1.3.2);
  * - the ladder sentence says what the next close does at each rung and gate (`04` §8.4).
  *
  * The fetch is mocked at the module the page imports, so the page renders exactly what contract
@@ -124,6 +126,73 @@ function ladder(overrides: Partial<SwingLadder> = {}): SwingLadder {
     new_entries_allowed: true,
     last_r: [1.0, -1.0, 2.0, 3.0, -0.5],
     reads: "SIMULATED",
+    ...overrides,
+  };
+}
+
+function zeroStats(): Record<string, number | null> {
+  return {
+    trades: 0,
+    win_rate_pct: 0,
+    avg_win_r: 0,
+    avg_loss_r: 0,
+    expectancy_r: 0,
+    profit_factor: null,
+    net_r: 0,
+    largest_win_r: 0,
+    largest_loss_r: 0,
+    current_loss_streak: 0,
+  };
+}
+
+function stats(overrides: Record<string, number | null>): Record<string, number | null> {
+  return { ...zeroStats(), ...overrides };
+}
+
+/** A stored run's card as SW9's API ships it: the ten headline numbers at the top level of
+ * `stats`, the journal's six buckets, the groupings, the funnel, the equity ends. */
+function backtestCard(overrides: Partial<SwingBacktestCard> = {}): SwingBacktestCard {
+  return {
+    run_id: 7,
+    params: {
+      start: "2017-01-02",
+      end: "2026-08-29",
+      sleeve_inr: 1000000,
+      cost_pct_per_side: 0.13,
+      config: { liquidity: { adr_min_pct: 3.5, price_min: 20 }, sizing: { risk_per_trade_pct: 0.5 } },
+    },
+    started_at: "2026-09-01T15:30:00+05:30",
+    finished_at: "2026-09-01T15:52:10+05:30",
+    stats: {
+      ...stats({
+        trades: 412,
+        win_rate_pct: 41.5,
+        avg_win_r: 1.6,
+        avg_loss_r: -0.6,
+        expectancy_r: 0.31,
+        profit_factor: 1.62,
+        net_r: 127.75,
+        largest_win_r: 6.4,
+        largest_loss_r: -1.3,
+        current_loss_streak: 2,
+      }),
+      histogram: histogram([12, 229, 61, 58, 31, 21]),
+      by_setup: {
+        FLAG: stats({ trades: 300, win_rate_pct: 40, expectancy_r: 0.3, net_r: 90.5, profit_factor: 1.55 }),
+        EP: stats({ trades: 112, win_rate_pct: 46.4, expectancy_r: 0.33, net_r: 37.25, profit_factor: 1.8 }),
+      },
+      by_year: {
+        "2017": stats({ trades: 40, win_rate_pct: 40, expectancy_r: 0.1, net_r: 4, profit_factor: 1.2 }),
+        "2018": stats({ trades: 2, win_rate_pct: 100, expectancy_r: 0.5, net_r: 1, profit_factor: null }),
+      },
+      funnel: { sessions: 2300, candidates: 5000, entered: 412, skipped_locked: 9 },
+      equity: { sessions: 2300, start: 1000000, end: 1638750, low: 985000, high: 1650000 },
+    },
+    caveats: [
+      "No intraday data (so no ORH filter — real entries are more selective).",
+      "No circuit history before 2020.",
+      "Survivorship handled by instrument.delisted_on.",
+    ],
     ...overrides,
   };
 }
@@ -401,13 +470,19 @@ describe("the backtest card", () => {
       "No circuit history before 2020; a locked name may have been entered that could not have been.",
       "Survivorship is handled by instrument.delisted_on, nothing more.",
     ];
+    await renderPage(journal({ backtest: backtestCard({ caveats }) }));
+    const list = screen.getByTestId("journal-backtest-caveats");
+    const items = Array.from(list.querySelectorAll("li")).map((item) => item.textContent);
+    expect(items).toEqual(caveats);
+    expect(screen.queryByTestId("journal-backtest-empty")).toBeNull();
+    expect(screen.getByText(/^Run 7, started 1 Sept? 2026, 15:30 IST, finished 1 Sept? 2026, 15:52 IST\.$/)).toBeInTheDocument();
+  });
+
+  it("falls back to a generic listing when stats lack the ten headline numbers", async () => {
+    // An older run, or a shape this page predates: shown as label/value pairs, never hidden.
     await renderPage(
       journal({
-        backtest: {
-          run_id: 7,
-          params: { start: "2017-01-02", end: "2026-08-29", sleeve_inr: 1000000, cost_pct_per_side: 0.13 },
-          started_at: "2026-09-01T15:30:00+05:30",
-          finished_at: "2026-09-01T15:52:10+05:30",
+        backtest: backtestCard({
           stats: {
             trades: 412,
             win_rate_pct: 41.5,
@@ -416,24 +491,117 @@ describe("the backtest card", () => {
             by_setup: { FLAG: { trades: 300, net_r: 90.5 }, EP: { trades: 112, net_r: 37.25 } },
             equity_curve: [["2017-01-02", 1000000], ["2017-01-03", 1000000]],
           },
-          caveats,
-        },
+        }),
       }),
     );
-    const list = screen.getByTestId("journal-backtest-caveats");
-    const items = Array.from(list.querySelectorAll("li")).map((item) => item.textContent);
-    expect(items).toEqual(caveats);
-    expect(screen.queryByTestId("journal-backtest-empty")).toBeNull();
-    expect(screen.getByText(/^Run 7, started 1 Sept? 2026, 15:30 IST, finished 1 Sept? 2026, 15:52 IST\.$/)).toBeInTheDocument();
+    expect(screen.queryByTestId("journal-backtest-results")).toBeNull();
     expect(screen.getByText("expectancy r").nextSibling).toHaveTextContent("0.31");
     expect(screen.getByText("profit factor").nextSibling).toHaveTextContent("—");
     // Nested records are opened up two levels; a series is a count, never a dump.
     expect(screen.getByText("by setup · FLAG · trades").nextSibling).toHaveTextContent("300");
     expect(screen.getByText("by setup · EP · net r").nextSibling).toHaveTextContent("37.25");
     expect(screen.getByText("equity curve").nextSibling).toHaveTextContent("2 entries");
+  });
+
+  it("draws the R distribution, win rate and expectancy of the run (02 §3.3)", async () => {
+    await renderPage(journal({ backtest: backtestCard() }));
+    const results = screen.getByTestId("journal-backtest-results");
+    expect(within(results).getByTestId("journal-backtest-verdict")).toHaveTextContent(
+      "412 trades over 2300 sessions: +0.31R a trade, 42% winners, +127.75R in all.",
+    );
+    const tiles = within(results).getByTestId("backtest-stats");
+    expect(within(tiles).getByText("Closed trades").nextSibling).toHaveTextContent("412");
+    expect(within(tiles).getByText("Expectancy").nextSibling).toHaveTextContent("+0.31R a trade");
+    expect(within(tiles).getByText("Win rate").nextSibling).toHaveTextContent("42%");
+    expect(within(tiles).getByText("Profit factor").nextSibling).toHaveTextContent("1.62");
+    expect(within(tiles).getByText("Largest loss").nextSibling).toHaveTextContent("-1.30R");
+    expect(within(tiles).getByText("Loss streak").nextSibling).toHaveTextContent("2 in a row");
+    // The six buckets, in the API's order, drawn with the journal cards' own component.
+    const bars = within(results).getByTestId("backtest-histogram");
+    const labels = within(bars)
+      .getAllByRole("listitem")
+      .map((item) => item.getAttribute("aria-label"));
+    expect(labels).toEqual([
+      "<-1: 12 trades",
+      "-1..0: 229 trades",
+      "0..1: 61 trades",
+      "1..2: 58 trades",
+      "2..3: 31 trades",
+      ">3: 21 trades",
+    ]);
+    expect(within(bars).getByTestId("backtest-bucket->3")).toHaveTextContent("21");
+  });
+
+  it("groups by setup and by year closed, and counts the funnel", async () => {
+    await renderPage(journal({ backtest: backtestCard() }));
+    const results = screen.getByTestId("journal-backtest-results");
+    expect(within(results).getAllByRole("table")).toHaveLength(2);
+    const rows = within(results)
+      .getAllByRole("row")
+      .map((row) => row.textContent);
+    expect(rows).toContain("FLAG30040%+0.30R+90.50R1.55");
+    expect(rows).toContain("EP11246%+0.33R+37.25R1.80");
+    expect(rows).toContain("20174040%+0.10R+4.00R1.20");
+    expect(rows).toContain("20182100%+0.50R+1.00R—");
+    expect(within(results).getByText("By year closed")).toBeInTheDocument();
+    const funnel = within(results).getByTestId("journal-backtest-funnel");
+    expect(within(funnel).getByText("sessions").nextSibling).toHaveTextContent("2300");
+    expect(within(funnel).getByText("skipped locked").nextSibling).toHaveTextContent("9");
+    const equity = within(results).getByTestId("journal-backtest-equity");
+    expect(within(equity).getByText("Allocation at the start").nextSibling).toHaveTextContent("₹10,00,000");
+    expect(within(equity).getByText("At the end").nextSibling).toHaveTextContent("₹16,38,750");
+  });
+
+  it("shows the run's parameters as tiles and the configuration behind a disclosure", async () => {
+    await renderPage(journal({ backtest: backtestCard() }));
+    const params = screen.getByTestId("journal-backtest-params");
+    expect(within(params).getByText("First session").nextSibling).toHaveTextContent("2 Jan 2017");
+    expect(within(params).getByText("Last session").nextSibling).toHaveTextContent("29 Aug 2026");
+    expect(within(params).getByText("Allocation, constant").nextSibling).toHaveTextContent("₹10,00,000");
+    expect(within(params).getByText("Cost per side").nextSibling).toHaveTextContent("0.13%");
+    const config = within(params).getByTestId("journal-backtest-config");
+    expect(config.querySelector("summary")).toHaveTextContent("Method configuration (3 settings");
+    expect(within(config).getByText("liquidity · adr min pct").nextSibling).toHaveTextContent("3.50");
+    expect(within(config).getByText("sizing · risk per trade pct").nextSibling).toHaveTextContent("0.50");
     // The schema's word stays in the JSON; the reader sees the product's (SW4.2).
-    expect(screen.getByText("allocation inr").nextSibling).toHaveTextContent("1000000");
     expect(screen.queryByText(/sleeve/)).toBeNull();
+  });
+
+  it("says so when the run took no trade, and draws six empty bars", async () => {
+    await renderPage(
+      journal({
+        backtest: backtestCard({
+          stats: {
+            ...zeroStats(),
+            histogram: BUCKETS.map((bucket) => ({ bucket, count: 0 })),
+            by_setup: { FLAG: zeroStats(), EP: zeroStats() },
+            by_year: {},
+            funnel: { sessions: 5, candidates: 0, entered: 0 },
+            equity: { sessions: 5, start: 1000000, end: 1000000, low: 1000000, high: 1000000 },
+          },
+        }),
+      }),
+    );
+    expect(screen.getByTestId("journal-backtest-verdict")).toHaveTextContent(
+      "No trade was taken over 5 sessions: the rules found nothing to enter, or the tape never allowed it.",
+    );
+    expect(screen.getByText("No trade in the run — every bar is empty.")).toBeInTheDocument();
+    expect(screen.getByText("Nothing to group yet.")).toBeInTheDocument();
+  });
+
+  it("lists a result or parameter it does not know how to draw rather than dropping it", async () => {
+    await renderPage(
+      journal({
+        backtest: backtestCard({
+          stats: { ...backtestCard().stats, sharpe_like: 1.25 },
+          params: { ...backtestCard().params, seed: 7 },
+        }),
+      }),
+    );
+    expect(screen.getByText("Other results")).toBeInTheDocument();
+    expect(screen.getByText("sharpe like").nextSibling).toHaveTextContent("1.25");
+    expect(screen.getByText("Other parameters")).toBeInTheDocument();
+    expect(screen.getByText("seed").nextSibling).toHaveTextContent("7");
   });
 });
 

@@ -1,6 +1,6 @@
 # 03 — Data model: the `sw_` schema
 
-Postgres, Alembic migration `0028_swing.py` in `services/api/alembic/versions/`, SQLAlchemy
+Postgres, Alembic migration `0028_swing.py` (and `0029_swing_backtest.py` for §10) in `services/api/alembic/versions/`, SQLAlchemy
 models in `packages/core/src/baskfy_core/models/swing.py`. Conventions inherited from
 `models/base.py`: `PRICE` (18,2) for prices and levels, `PRICE_RAW` (18,4) where an exchange
 print must survive adjustment, `INR` (12,2) for money, `BREADTH` (7,4) for breadth percentages,
@@ -182,3 +182,22 @@ Bars enter core **adjusted**; levels leave core adjusted and are converted to ex
 by the task (`level / adj_factor` of the as-of row) before they are stored or shown. A split
 between detection and the morning invalidates the level: `swing-premarket` recomputes from the
 latest bar rather than trusting last night's number.
+
+## 10. `sw_backtest_run` — one row per run of the EOD backtest (SW9)
+
+`BigIntPk`; migration `0029_swing_backtest.py`; model `SwBacktestRun`. **Append-only**: a re-run
+inserts a new row and nothing edits a stored result, for the same reason `sw_setup_daily` is a
+snapshot — the number that was on the page when the flag was considered must survive a detector
+recalibration that produces a different one.
+
+| Column | Meaning |
+|---|---|
+| `user_id` | Track C §6, as on every `sw_` row; the run is sized against `params.sleeve_inr`, never `sw_config.sleeve_capital_inr` |
+| `params` | JSONB — `BacktestParams` as JSON: `start`, `end`, `sleeve_inr`, `cost_pct_per_side` and the whole `config` (the user's liquidity floors, the pack's defaults for everything else). Written on the way **in**, so a run that never finished still says what it was asked |
+| `started_at`, `finished_at` | timestamptz; `finished_at` is set on success *and* on failure |
+| `stats` | JSONB — `BacktestResult.to_json()` stored as-is: `params, trades, stats, by_setup, by_year, equity_curve, funnel, ladder, caveats`, every price a string of its exact decimal. Null until the run finishes, forever if it failed |
+| `error` | text — `"{ExceptionType}: {message}"` and the traceback when the run raised; the exception is re-raised after it is recorded, so Celery sees the failure too |
+
+Index `(user_id, finished_at)`: the journal's one query is this user's latest **finished** run
+(`finished_at` set, `error` null) — the latest *finished*, not the latest started, so a run in
+flight or a failed re-run never displaces the last good number on `/swing/journal`.

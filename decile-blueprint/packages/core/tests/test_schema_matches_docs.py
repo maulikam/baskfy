@@ -131,9 +131,10 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # docs/DECISIONS.md §17.
     "entitlement_override": ("id",),
     "admin_action": ("id",),
-    # The swing book — docs/swing/03-data-model.md (SW2). Eleven tables, every one keyed with
+    # The swing book — docs/swing/03-data-model.md (SW2). Twelve tables, every one keyed with
     # `user_id` (docs/swing/02 Track C §6). `sw_setup_daily` and `sw_market_daily` carry it in
     # the primary key rather than beside it; docs/swing/DECISIONS-SW.md SW2.1 says why.
+    # `sw_backtest_run` is SW9's (docs/swing/03 §10, migration 0029): one append-only row per run.
     "sw_config": ("user_id",),
     "sw_config_audit": ("id",),
     "sw_setup_daily": ("user_id", "date", "instrument_id", "setup"),
@@ -146,6 +147,7 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "sw_position": ("id",),
     "sw_fill": ("id",),
     "sw_session": ("user_id", "session_date"),
+    "sw_backtest_run": ("id",),
 }
 
 #: docs/04 opening paragraph: "Money in numeric, never float."
@@ -237,8 +239,8 @@ def test_swing_tables_are_recorded_in_docs() -> None:
 
     The list is written out rather than derived from `Base.metadata` on purpose: deriving it
     would make the test "every sw_ table this file already knows about is documented", which is
-    true by construction. Typing the eleven names is what makes adding a twelfth a deliberate
-    act in two places.
+    true by construction. Typing the names is what makes adding another a deliberate act in
+    two places.
     """
     swing_model = (MONOREPO_ROOT / "docs" / "swing" / "03-data-model.md").read_text(
         encoding="utf-8"
@@ -256,6 +258,7 @@ def test_swing_tables_are_recorded_in_docs() -> None:
         "sw_position",
         "sw_fill",
         "sw_session",
+        "sw_backtest_run",
     ):
         assert table in swing_model, f"{table} is not described in docs/swing/03"
 

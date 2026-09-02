@@ -12,7 +12,8 @@ Four things on one page, and each answers a different question:
   values the ladder read — so a person can see *why* the rung is what it is.
 * **The session count** against the twenty-session paper gate (`02` §3.2): "14 of 20 paper
   sessions logged".
-* **The backtest card**, filled by SW9; ``None`` until a run exists, and the page says so.
+* **The backtest card** (SW9): the latest **finished** run in `sw_backtest_run` — `04` §11's
+  numbers with its caveats verbatim — and ``None`` until one exists, which the page says.
 
 The arithmetic is `baskfy_core.swing.journal`'s. This module reads closed positions, hands them
 to `summarize`, and shapes the result. Like `baskfy_api.swing`, it is **read-only,
@@ -33,6 +34,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import Instrument, SwConfig, SwMarketDaily, SwPosition, SwSession
+from baskfy_core.models.base import JsonObject
+from baskfy_core.models.swing import SwBacktestRun
+from baskfy_core.swing.backtest import CAVEATS
 from baskfy_core.swing.config import DEFAULT_SWING_CONFIG, SwingConfig
 from baskfy_core.swing.journal import ClosedTrade, JournalStats, summarize
 
@@ -58,6 +62,8 @@ GATE_UNKNOWN: Final = "UNKNOWN"
 
 _ZERO = Decimal(0)
 _TWO_DP = Decimal("0.01")
+#: A stored equity-curve point is ``[date, equity]``.
+_CURVE_POINT_ARITY: Final = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,13 +150,50 @@ class LadderCard:
 
 
 @dataclass(frozen=True, slots=True)
+class BacktestCard:
+    """SW9's card: the latest finished run, in contract C2's shape.
+
+    ``stats`` is **not** the stored JSON: the row keeps ``BacktestResult.to_json()`` whole (the
+    trade list, the equity curve, the ladder trace), and a card is what a page can read. The
+    headline `04` §10 statistics sit at the top level, the R distribution is the journal's own
+    six buckets (:data:`HISTOGRAM_BUCKETS`, so the page draws it with the same component the
+    two journal cards use), ``by_setup`` and ``by_year`` are §10's statistics per group,
+    ``funnel`` is the engine's counts, and ``equity`` summarises the curve. Every stored decimal
+    string is a ``Decimal`` here, so it reaches the wire as a number with its precision
+    (DECISIONS-SW SW9.7).
+    """
+
+    run_id: int
+    params: JsonObject
+    started_at: str
+    finished_at: str | None
+    stats: JsonObject
+    #: `04` §11's sentences, verbatim, from the engine's own constant — never from the row, so a
+    #: run stored under an older wording still shows the sentences the document has today.
+    caveats: tuple[str, ...]
+
+    def as_json(self) -> JsonObject:
+        return {
+            "run_id": self.run_id,
+            "params": self.params,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "stats": self.stats,
+            "caveats": list(self.caveats),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class JournalView:
     real: JournalCard
     simulated: JournalCard
     sessions: SessionsCard
     ladder: LadderCard
-    #: SW9's. ``None`` until a backtest run exists; the page renders "not run yet".
-    backtest: None
+    #: SW9's card as C2's JSON object (``BacktestCard.as_json()``), or ``None`` until a finished
+    #: run exists — the page renders "not run yet". A plain object rather than the dataclass
+    #: because the route hands it to ``SwingBacktestCardOut`` as-is, and pydantic validates a
+    #: mapping into a model where it would refuse a foreign dataclass.
+    backtest: JsonObject | None
 
 
 def bucket_of(r: Decimal) -> str:
@@ -327,6 +370,119 @@ async def ladder(
     )
 
 
+def _record(value: object) -> JsonObject:
+    """A JSON object out of stored JSON, or an empty one — never a crash on a missing key."""
+    if isinstance(value, dict):
+        return {str(k): v for k, v in value.items()}
+    return {}
+
+
+def _entries(value: object) -> list[JsonObject]:
+    if isinstance(value, list):
+        return [_record(item) for item in value]
+    return []
+
+
+def _number(value: object) -> object:
+    """The engine stores every ``Decimal`` as its string; the card carries the ``Decimal``, so
+    the canonical encoder puts a number with its precision on the wire. Anything else is
+    passed through as stored."""
+    if isinstance(value, str):
+        try:
+            return Decimal(value)
+        except ArithmeticError:
+            return value
+    return value
+
+
+def _numbers(record: JsonObject) -> JsonObject:
+    return {key: _number(value) for key, value in record.items()}
+
+
+def _equity_summary(curve: object) -> JsonObject:
+    """``equity_curve`` is one point per session; the card says where it started, ended and
+    ranged. The curve itself stays on the row."""
+    points = curve if isinstance(curve, list) else []
+    values = [
+        Decimal(str(point[1]))
+        for point in points
+        if isinstance(point, list) and len(point) == _CURVE_POINT_ARITY
+    ]
+    if not values:
+        return {"sessions": 0, "start": None, "end": None, "low": None, "high": None}
+    return {
+        "sessions": len(values),
+        "start": values[0],
+        "end": values[-1],
+        "low": min(values),
+        "high": max(values),
+    }
+
+
+def backtest_stats(stored: JsonObject) -> JsonObject:
+    """The card's ``stats`` from a row's stored ``BacktestResult.to_json()``."""
+    headline = _numbers(_record(stored.get("stats")))
+    r_values = [
+        Decimal(str(trade["r_multiple"]))
+        for trade in _entries(stored.get("trades"))
+        if "r_multiple" in trade
+    ]
+    counts = Counter(bucket_of(r) for r in r_values)
+    return {
+        **headline,
+        "histogram": [
+            {"bucket": bucket, "count": counts.get(bucket, 0)} for bucket in HISTOGRAM_BUCKETS
+        ],
+        "by_setup": {
+            setup: _numbers(_record(stats))
+            for setup, stats in _record(stored.get("by_setup")).items()
+        },
+        "by_year": {
+            year: _numbers(_record(stats)) for year, stats in _record(stored.get("by_year")).items()
+        },
+        "funnel": _record(stored.get("funnel")),
+        "equity": _equity_summary(stored.get("equity_curve")),
+    }
+
+
+def backtest_params(stored: JsonObject) -> JsonObject:
+    """The run's parameters as the card shows them: the money as numbers, the rest as stored."""
+    return {
+        key: _number(value) if key in ("sleeve_inr", "cost_pct_per_side") else value
+        for key, value in stored.items()
+    }
+
+
+def backtest_card(row: SwBacktestRun) -> BacktestCard:
+    return BacktestCard(
+        run_id=int(row.id),
+        params=backtest_params(row.params),
+        started_at=row.started_at.isoformat(),
+        finished_at=row.finished_at.isoformat() if row.finished_at is not None else None,
+        stats=backtest_stats(row.stats or {}),
+        caveats=CAVEATS,
+    )
+
+
+async def latest_backtest(session: AsyncSession, *, user_id: int) -> BacktestCard | None:
+    """The latest **finished** run — ``finished_at`` set and ``error`` null — not the latest
+    started: a run in flight, or a re-run that failed, never displaces the last good number."""
+    row = (
+        await session.execute(
+            select(SwBacktestRun)
+            .where(
+                SwBacktestRun.user_id == user_id,
+                SwBacktestRun.finished_at.is_not(None),
+                SwBacktestRun.error.is_(None),
+                SwBacktestRun.stats.is_not(None),
+            )
+            .order_by(SwBacktestRun.finished_at.desc(), SwBacktestRun.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return None if row is None else backtest_card(row)
+
+
 async def journal(
     session: AsyncSession,
     *,
@@ -353,7 +509,11 @@ async def journal(
             last_r=_r_values(ladder_rows),
             config=config,
         ),
-        backtest=None,
+        backtest=(
+            backtest.as_json()
+            if (backtest := await latest_backtest(session, user_id=user_id)) is not None
+            else None
+        ),
     )
 
 
@@ -362,6 +522,7 @@ __all__ = [
     "HISTOGRAM_BUCKETS",
     "MAX_TRADES",
     "PAPER_SESSIONS_REQUIRED",
+    "BacktestCard",
     "HistogramBar",
     "JournalCard",
     "JournalView",
@@ -370,10 +531,14 @@ __all__ = [
     "SessionsCard",
     "SetupStats",
     "TradeRow",
+    "backtest_card",
+    "backtest_params",
+    "backtest_stats",
     "bucket_of",
     "card",
     "closed_trades",
     "journal",
     "ladder",
+    "latest_backtest",
     "sessions_logged",
 ]

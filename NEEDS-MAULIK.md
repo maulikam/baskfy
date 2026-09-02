@@ -1403,3 +1403,42 @@ It prints a receipt with the Kite user id and a sha256 prefix, never a token.
   on the desk, the forced command drives the desk's own `/callback`, and the desk's
   `generate_session` was reached and answered by Kite (with `Token is invalid or has expired`, for
   a synthetic token). The first real login is the first full run.
+
+## Swing
+
+Appended by the SW run (docs/swing/). Everything here is something only you can supply; the
+modules that depend on it are named so nothing waits on it silently.
+
+### S1 — A notification channel for the opening-range monitor (SW6, 2 Sep 2026)
+
+**What.** When the monitor raises a `TRIGGERED` signal at 09:31, the only places it lands are
+the `sw_signal` row (the desk page polls it — SW7) and an INFO log line from the process. The
+desk has no push channel of any kind, and choosing one — Telegram, ntfy, iOS push, an SMS
+gateway — is a product and a spend decision (`docs/swing/DECISIONS-SW.md` SW6.3).
+
+**Why it matters.** His entries are the first 60–90 minutes; a signal read at lunch is a
+signal missed. A page you have open is enough on a morning you are at the desk; it is not
+enough on the other mornings.
+
+**What it blocks.** Nothing in SW7–SW12. The plan line is written and expires in 30 minutes
+either way.
+
+**What was done meanwhile.** `PgSignalStore.raise_signal` is the single call site; a channel is
+one more line in it once you name the channel and hand over its credential.
+
+### S2 — One flagged morning to answer two Kite questions (SW6, 2 Sep 2026)
+
+**What.** With `BASKFY_SWING_EP_PREMARKET_ENABLED=true` and a Kite login on any weekday, run
+`make swing-premarket DATE=<today>` at 09:09 and `python -m app.swing_monitor` at 09:15 with
+`BASKFY_SWING_MONITOR_ENABLED=true`, both under `DRY_RUN=true` (the default), and send the two
+reports.
+
+**Why.** Two things about Kite's morning API could not be verified without a live session:
+(a) whether `/quote` at 09:09 reports the pre-open matched quantity as `volume`, or 0 until
+09:15 (`docs/swing/DECISIONS-SW.md` SW6.1 — if 0, the gap scan moves to 09:16, one line in
+`celery_app.py`); (b) whether `historical_data(interval="minute")` returns the forming 09:20
+candle at 09:20:xx or only from 09:21 (either way the monitor is correct; the first signal may
+land a minute later than the replay fixture shows).
+
+**What it blocks.** Nothing — both jobs are correct under either answer and say what they saw.
+It changes one Beat time at most.

@@ -445,3 +445,68 @@ word would then differ from the database word for the benefit of a regex.
 
 **Reversal.** Restore the single-word ban and drop `gtt_id` from `SwingPositionOut`; the page then
 cannot tell a protected position from an unprotected one.
+
+## SW6.1 — The pre-open pace counts minutes from 09:00, never zero · ⚠ UNREVIEWED
+
+**Context.** `04` §7.3 pro-rates an average day's volume by `minutes_elapsed / 375` and the Beat
+entry runs at 09:09, when the *session* has not opened (09:15). Zero minutes makes `live_gap`
+answer "not a candidate" for every name — for the wrong reason — and the doc does not say what
+the clock is measured from.
+
+**The choice.** `minutes_elapsed = max(1, minutes since 09:00 IST)`: the pre-open order
+collection window is when the matched quantity Kite reports as `volume` starts accumulating, and
+that is the number the pace is a pace *of*. `PREOPEN_START` is a module constant in
+`tasks/swing_premarket.py`, like `SESSION_MINUTES` in core — a fact about the exchange, not a
+threshold (`02`: thresholds are config fields; the pre-open's start is not something to tune).
+
+**What is not yet known.** Whether Kite's `volume` at 09:09 carries the pre-open matched quantity
+or reads 0 until 09:15. The first flagged morning answers that (`STATUS.md` → NEEDS-MAULIK); if
+it reads 0 the scan finds nothing and says so in its report, and the fix is a second Beat entry at
+09:16 — one line in `celery_app.py`.
+
+**Rejected.** Measuring from 09:15 with a floor of 1 — the volume then reads as 375× pace at 09:16
+and every gapper qualifies. Measuring from midnight — the pace becomes meaningless.
+
+**Reversal.** Change the constant; the tests name the arithmetic (nine minutes of 375) in their
+docstring so the expected values move with it.
+
+## SW6.2 — A live gap is watched with a trigger and no stop · ⚠ UNREVIEWED
+
+**Context.** `06` SW6: the 09:09 scan writes "new `sw_watch` rows (setup EP, source `DETECTOR`,
+catalyst empty)". A watch row carries `trigger` and `stop_ref`; for a live gap, the stop is "the
+range low or the low of the day" (`04` §7.2) and at 09:09 there is no range and no day.
+
+**The choice.** `trigger` = the indicative price (what the monitor's break is measured against
+until the range replaces it), `stop_ref` = NULL. The morning plan then skips the name — `06`
+SW5's `watch_items` drops rows without a stop, because a plan line has to size against one — and
+the `SIGNAL` plan the monitor builds when the range breaks carries the verdict's own entry and
+stop. The name is therefore on the desk page as *watched*, never as a line the plan invented a
+stop for.
+
+**Rejected.** `stop_ref = last × (1 − max_stop_distance_pct)` so the morning plan can size it —
+a stop nobody's rule produced, sitting in a plan a person can confirm.
+
+**Reversal.** Compute a provisional stop in `watch_live_gaps`; one line, and one fewer honest NULL.
+
+## SW6.3 — "Desk notification" is the row and a log line · ⚠ UNREVIEWED
+
+**Context.** `06` SW6: "`TRIGGERED` → `sw_signal` row + a one-line `sw_plan(source=SIGNAL)` +
+desk notification." The desk has no notification channel of any kind — no Telegram, no push, no
+mail from the desk process; its alerts are pages a person opens.
+
+**The choice.** The notification is the `sw_signal` row the desk page (SW7) polls plus an INFO log
+line from the monitor process. Building a channel is a product decision (which one, to whose
+phone, paid or not) and belongs to Maulik — appended to `NEEDS-MAULIK.md` under Swing.
+
+**Rejected.** Re-using the API's mailer from the desk — the desk process does not import
+`baskfy_api`, and an email at 09:31 is not a notification anyone acts on at 09:31.
+
+**Reversal.** `PgSignalStore.raise_signal` is the one call site; a channel is a second line in it.
+
+## SW6.4 — The monitor is built with no gateway at all · (a stronger reading of the AC)
+
+`06` SW6 says the strategy "implements `BaseStrategy`" and `BaseStrategy` takes a gateway. The
+strategy keeps that signature — it is the desk's plugin shape, and the same runner could host it
+— but `app.swing_monitor.main` hands it `gateway=None`. A process that holds no gateway cannot be
+talked into using one, which is stronger than "holds one and never calls it". The test asserts
+both: the source never names `self.gw` or a placing verb, and `main` passes `None`.

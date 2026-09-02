@@ -12,6 +12,7 @@ thresholds.
 
     uv run python -m baskfy_worker.swing_cli --date 2026-09-01
     uv run python -m baskfy_worker.swing_cli --date 2026-09-01 --sessions 5
+    uv run python -m baskfy_worker.swing_cli --date 2026-09-02 --premarket GAPS
 
 ``--sessions`` re-runs the last N trading days, which is what the Saturday scan does. Every date
 is idempotent, so re-running one changes nothing but the row's ``created_at`` default.
@@ -19,6 +20,11 @@ is idempotent, so re-running one changes nothing but the row's ``created_at`` de
 **It writes and nothing else.** No order path, no broker, no Kite call: it reads `ohlcv_daily`,
 `instrument`, `index_member_daily` and `index_snapshot_daily`, and writes `sw_setup_daily` and
 `sw_market_daily`.
+
+``--premarket LEVELS|GAPS`` runs SW6's morning job for the date instead (`docs/swing/06`): the
+level refresh, and — with ``BASKFY_SWING_EP_PREMARKET_ENABLED=true`` — one quote pass over the
+liquid universe through the rate-limited Kite provider. That is the only Kite call this module
+can make, and only on that stage with that flag.
 """
 
 from __future__ import annotations
@@ -37,6 +43,12 @@ from baskfy_worker.celery_app import IST
 from baskfy_worker.providers import build_pipeline_dependencies
 from baskfy_worker.steps import StepOutcome
 from baskfy_worker.tasks.swing import recent_trading_days, run_detect_swing
+from baskfy_worker.tasks.swing_premarket import (
+    STAGE_GAPS,
+    STAGE_LEVELS,
+    QuoteSource,
+    run_swing_premarket,
+)
 
 
 async def _detect_one(
@@ -90,6 +102,42 @@ async def _run(day: dt.date, sessions: int) -> JsonObject:
         await engine.dispose()
 
 
+async def _run_premarket(day: dt.date, stage: str) -> JsonObject:
+    from baskfy_providers.factory import build_kite_provider  # noqa: PLC0415 - flag-gated
+    from baskfy_providers.settings import get_provider_settings  # noqa: PLC0415
+    from baskfy_worker.settings import get_worker_settings  # noqa: PLC0415
+
+    deps = build_pipeline_dependencies()
+    if deps.swing_user_id is None:
+        return {"error": "BASKFY_SOLE_USER_ID is not set, and the sw_ schema is keyed by user."}
+    settings = get_worker_settings()
+    quotes: QuoteSource | None = None
+    if settings.swing_ep_premarket_enabled and stage == STAGE_GAPS:
+        quotes = build_kite_provider(get_provider_settings())
+    engine = create_async_engine(get_settings().database_url, pool_pre_ping=True)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with maker() as session, session.begin():
+            outcome = StepOutcome()
+            report = await run_swing_premarket(
+                session,
+                outcome,
+                day,
+                user_id=deps.swing_user_id,
+                stage=stage,
+                ep_premarket_enabled=settings.swing_ep_premarket_enabled,
+                quotes=quotes,
+                now=dt.datetime.now(tz=IST).replace(tzinfo=None),
+            )
+            return {
+                "user_id": deps.swing_user_id,
+                "status": outcome.status.value,
+                **report.as_detail(),
+            }
+    finally:
+        await engine.dispose()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Detect swing setups for one date")
     parser.add_argument("--date", help="Trading day (YYYY-MM-DD). Default: today IST.")
@@ -99,9 +147,17 @@ def main(argv: list[str] | None = None) -> int:
         default=1,
         help="Re-detect the last N trading days ending at --date. Default: 1.",
     )
+    parser.add_argument(
+        "--premarket",
+        choices=(STAGE_LEVELS, STAGE_GAPS),
+        help="Run SW6's morning job for --date at this stage instead of detecting.",
+    )
     args = parser.parse_args(argv)
     day = dt.date.fromisoformat(args.date) if args.date else dt.datetime.now(tz=IST).date()
-    result = asyncio.run(_run(day, args.sessions))
+    if args.premarket:
+        result = asyncio.run(_run_premarket(day, args.premarket))
+    else:
+        result = asyncio.run(_run(day, args.sessions))
     print(json.dumps(result, indent=2, default=str))
     return 1 if "error" in result else 0
 

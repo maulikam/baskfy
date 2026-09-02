@@ -125,6 +125,41 @@ two tables; **it places nothing and makes no Kite call.**
 **It needs 125 sessions of history per name.** A database with a few weeks of bars produces no
 candidates and says so in the funnel rather than failing.
 
+### The swing book's morning (SW6)
+
+Two Beat entries and one desk process, all three dark by default:
+
+```bash
+cd decile-blueprint
+make swing-premarket DATE=2026-09-02 STAGE=LEVELS   # 08:50: re-express watched levels under today's adj_factor
+make swing-premarket DATE=2026-09-02                # 09:09: the pre-open gap scan + the MORNING plan
+```
+
+The 09:09 stage pulls quotes **only** with `BASKFY_SWING_EP_PREMARKET_ENABLED=true`, and then
+through the rate-limited Kite provider in batches of at most 500; with the flag off (the
+default) it makes no Kite call and still rebuilds the plan. It prints the report: levels
+refreshed, universe quoted, gap candidates, and the plan id.
+
+```bash
+cd kite-momentum-rebalancer
+python -m app.swing_monitor       # 09:15-10:45: the opening-range monitor. Needs a Kite login.
+```
+
+With `BASKFY_SWING_MONITOR_ENABLED=false` (the default) it logs one line and exits 0 without
+building anything — a launchd entry can exist before the flag does. With it on, it watches the
+`WATCHING` rows, and a break of the 5-minute opening range writes an `sw_signal` row and a
+one-line `sw_plan` of `source=SIGNAL`. **It holds no gateway and cannot place**; the line it
+writes is `PROPOSED` and only the desk page's confirm (SW7) can move it.
+
+To see what a morning would have raised without a broker at all:
+
+```bash
+cd kite-momentum-rebalancer
+.venv/bin/python ../tools/swing/replay.py ../tools/swing/fixtures/morning-synthetic.csv \
+    --watchlist ../tools/swing/fixtures/morning-synthetic.watchlist.json \
+    --expect ../tools/swing/fixtures/morning-synthetic.expected.json
+```
+
 ### Filling market cap and P/E for a date the pipeline already published
 
 Step 6 fetches NSE fundamentals as part of a night. For a **past** date — a table that was never

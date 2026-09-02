@@ -156,6 +156,9 @@ bhavcopy:      ## Bar backfill from the NSE bhavcopy (no Kite needed): make bhav
 swing:         ## Detect swing setups for one date: make swing DATE=2026-09-01 [SESSIONS=5]
 	$(UV) python -m baskfy_worker.swing_cli $(if $(DATE),--date $(DATE),) $(if $(SESSIONS),--sessions $(SESSIONS),)
 
+swing-premarket: ## SW6's morning job: make swing-premarket DATE=2026-09-02 [STAGE=LEVELS|GAPS]
+	$(UV) python -m baskfy_worker.swing_cli $(if $(DATE),--date $(DATE),) --premarket $(or $(STAGE),GAPS)
+
 explain:       ## Audit one factor: make explain SYMBOL=CUPID DATE=2026-08-18 FACTOR=sharpe_12m
 	$(UV) python -m baskfy_worker.factors_cli explain --symbol $(SYMBOL) --date $(DATE) --factor $(FACTOR)
 

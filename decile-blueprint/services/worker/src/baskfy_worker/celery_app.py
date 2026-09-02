@@ -231,6 +231,25 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=7, minute=0, day_of_week="sat"),
         "options": {"queue": QUEUE_COMPUTE},
     },
+    # --- SW6: the morning before the open (docs/swing/06) --------------------------
+    #
+    # 08:50: re-express every watched level under the latest bar's adjustment factor. No Kite
+    # call. 09:09: the pre-open has printed its indicative prices (09:00-09:08); pull quotes for
+    # the liquid universe (≤ 500 a call, inside the 3 req/s limiter) when
+    # `BASKFY_SWING_EP_PREMARKET_ENABLED` allows, watch the live gaps, and rebuild the morning
+    # plan either way. Both are idempotent; the flag gates the quote pull and nothing else.
+    "swing-premarket-levels": {
+        "task": "baskfy.swing.premarket",
+        "schedule": crontab(hour=8, minute=50, day_of_week="mon-fri"),
+        "kwargs": {"stage": "LEVELS"},
+        "options": {"queue": QUEUE_COMPUTE},
+    },
+    "swing-premarket-gaps": {
+        "task": "baskfy.swing.premarket",
+        "schedule": crontab(hour=9, minute=9, day_of_week="mon-fri"),
+        "kwargs": {"stage": "GAPS"},
+        "options": {"queue": QUEUE_COMPUTE},
+    },
     # --- T8.3: one email per REBALANCE_AVAILABLE (payload.notified_at) -----------
     "cb-rebalance-notify": {
         # After SIP reminders (09:00); before the cash session is busy.

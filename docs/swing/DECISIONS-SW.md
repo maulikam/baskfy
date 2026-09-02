@@ -1479,6 +1479,203 @@ with it.
    UPDATE) name `user_id` and the Track C §6 scan finds them; the `SELECT … FOR UPDATE` ends its
    literal so the scan's `UPDATE\s+` cannot mistake it for a write.
 
+## SW10.5.1 — A live gap is a `PENDING_RANGE` line that holds a session slot, not a seat in the rung · Maulik, 2 Sep 2026 (STANDING-ANSWERS A7) · ⚠ UNREVIEWED on three details
+
+**Context.** A7 amends SW6.2: "keep no-stop; show it in the MORNING plan as a `PENDING_RANGE`
+line: no qty, no stop, not confirmable, reserves one of the session's new-entry slots,
+information-only preview at a 1-ADR stop … wider than 1 ADR → `STOP_TOO_WIDE`, slot released;
+unreleased slots freed at 10:45; a `PENDING_RANGE` line can never reach `/swing/execute`."
+
+**What was built.** `LineKind.PENDING_RANGE` and `EXECUTABLE_KINDS` in `plan.py`;
+`WatchItem.stop_ref` may be `None`; `build_entries` emits the pending line after the same
+refusals a buy faces (setup, lock-out, gate, held, session cap) with the preview in its note;
+`watch_items` keeps a row with a trigger and no stop; `sw_plan_line.kind` gains the value
+(`0031`); the monitor's `load_context` counts today's `PROPOSED` pending lines as `reserved`
+and `entries_now` adds them (less the name's own) to `entries_already_today`; `PgSignalStore.
+release_reservation` marks the name's pending line `SKIPPED` the moment it triggers (an
+`UPDATE … WHERE state = 'PROPOSED'`, so once); `cutoff_open_orders` → `store.expire_pending`
+frees what is left at 10:45 (`EXPIRED`); `_validate` and the route refuse a non-executable kind
+with a 400 before anything is read or locked; the page renders the row with no button.
+
+**The three readings, mine.** (1) **A session slot, not a tier seat.** The pending line counts
+against `max_new_entries_per_session` for the names after it and is *not* refused by, nor
+counted in, `min(rung, max_open_positions)`. It holds nothing; one of the plan's buys may
+never trigger; the SIGNAL plan at range close answers `TIER_FULL` against the book as it is
+then. The drill shows the consequence: at rung 0 with one buy lined and two `EXPOSURE_FULL`
+skips the gap is still shown pending. (2) **A locked live gap is shown pending with the lock
+noted** ("locked at the upper band: no fill until it unlocks") rather than skipped
+`LOCKED_UPPER_CIRCUIT` as a priced flag is — MD10's own preview text names the case, and a
+lock at 09:09 can open during the session; the slot is reserved either way. (3) **The gap is
+ranked by a provisional score out of 70** — `live_gap_score`, the two terms of `04` §3 the
+pre-open knows (gap, pace) — stored on `sw_watch.score`; a 72-score flag outranks any live gap,
+which is his funnel's own order (a flag that set up over weeks over a gap nobody has seen
+close). `sw_watch.adr_pct` carries the ADR the bars measured, because the gap has no
+detection row and SW9.5.2 refuses a stop nobody can measure against one ADR — the monitor's
+context and the plan fall back to it.
+
+**Rejected.** Reserving a tier seat too (a reservation that refuses a priced flag for a name
+with no stop). Computing the preview quantity into `quantity` (a confirmable-looking number
+on a line that must not be confirmable). Writing a `sw_setup_daily` row for the gap at 09:09
+(the detectors' snapshot table, with a status it did not measure).
+
+**Reversal.** Move the `stop_ref is None` branch below the `TIER_FULL` check (four lines);
+delete the locked-pending branch in `_pending_line`; drop `score`/`adr_pct` from the watch row
+and read `live_gap_score` off the note.
+
+## SW10.5.2 — The live buy is a marketable LIMIT that is polled, grown by postback and cancelled at 10:45; the desk pulls the order book rather than exposing a postback URL · Maulik, 2 Sep 2026 (STANDING-ANSWERS A8) · ⚠ UNREVIEWED on the transport and four details
+
+**Context.** A8 amends SW7.1: a marketable LIMIT at `min(trigger × 1.005, range_high + 0.25 ×
+ADR)`, never MARKET; poll ≤ 10 s at ≤ 2 req/s; COMPLETE → GTT + position in the same request;
+partial → `SENT` with the filled quantity and a GTT for it; later fills via `on_order_update`
+modify the GTT (never a second); cancel the remainder at 10:45; the 15:15 sweep is SW11's.
+
+**What was built.** `plan.marketable_limit` (two `OpeningRangeConfig` fields, B13) and the
+poll's two (`fill_poll_seconds`, `fill_poll_interval_seconds`); `execute_line(orders, clock,
+sleep)` with an injectable `OrderSource`; one bookkeeping path `_apply_buy_fill` for a whole,
+a partial and a dry-run fill (`simulated` decides the rows' flag); `on_order_update` — idempotent
+on `filled_quantity ≤ quantity_entered`, the delta at the price that keeps the averages
+consistent, `gw.modify_gtt_quantity` (new on the gateway, with its own guards, journal and
+dry-run branch) for the new open quantity, an arm for a naked partial, never a second GTT;
+`cutoff_open_orders` (reconcile → `gw.cancel_order`, also new on the gateway → line `FILLED` /
+`EXPIRED`, GTT untouched → `expire_pending`); `eod_gtt_sweep` as the 15:15 hook; the context
+counts a partially filled order's **resting remainder at the trigger** as exposure.
+
+**The transport, mine.** The desk gets no HTTP postback URL. Kite's postback is an
+unauthenticated POST from Kite's servers; the desk's `websec` refuses every state-changing
+request without a recognised Origin, and opening that middleware for one path is a wider
+security boundary than this run should draw on its own. Instead the same handler is fed by a
+**pull**: `POST /swing/reconcile` (a websec-covered form) reads today's `SENT` buys' order
+history through the Kite wrapper (a read) and applies each; the 10:45 sweep does the same
+before cancelling. `on_order_update` takes Kite's postback dict shape unchanged, so wiring the
+KiteTicker's `on_order_update` callback (a websocket, no HTTP) or a checksum-verified route is
+a one-line call site when SW11 wants push. **Four details:** (1) a cancel with shares held
+closes the line `FILLED` (the position stands for what filled; the note says the rest never
+did), with none held `EXPIRED`; (2) a simulated (`DRY-…`) GTT is "modified" locally, as a
+simulated delete already is — nothing exists at the exchange; (3) `cancel_order` is
+order-shaped, so it lives on the gateway behind the tenant, untouchable and journal layers
+(law 2), with the kill switch *not* refusing it (a cancelled buy reduces exposure); its
+statuses are named constants like the GTT ones so the weekly execution report and the
+`/execute` breaker — which read `place()`'s literals — are unaffected, byte for byte; (4) an
+order source that answers nothing (no Kite session) leaves the line `SENT` and the confirm
+says so, never a guessed fill.
+
+**Rejected.** MARKET after a `TRIGGERED` signal (`04` §9.4's old wording; A8 says never).
+Arming the GTT for the requested quantity on `PLACED` (EXCESS). Polling inside the dry-run
+path (it completes immediately; the gates' words). A `sw_order` table (the line's
+`journal_ref` + `position_id` + the fill rows are the record).
+
+**Reversal.** `ORDER_OPEN_STATUSES` and the poll are one function; the reconcile route is
+twenty lines; a push transport calls `on_order_update` with the same dict.
+
+## SW10.5.3 — Half risk is applied to the risk budget at plan time, only when a confirm would be real, and the evening counts the sessions down · Maulik, 2 Sep 2026 (STANDING-ANSWERS A9) · ⚠ UNREVIEWED on "execution is enabled"
+
+**Context.** A9 amends SW7.2: `risk_multiplier = 0.5` before `size_position` while
+`first_live_sessions_left > 0` **and** execution is enabled; paper plans full size (record
+this reading); SELL/RAISE untouched; the countdown in `sw_config`, decremented once when a
+LIVE `sw_session` closes, never by a request; a restart changes nothing; header text; a tag.
+
+**What was built.** `SizingConfig.risk_multiplier_first_live` [0.5] and `first_live_sessions`
+[5]; `plan.first_live_multiplier` / `sizing_at`; `build_entries(risk_multiplier=1)`; the
+evening (`count_first_live_session`, before the plan, through `record_system_change` — audited,
+`changed_by="swing-eod"`, `sw_session.first_live_counted` the once-mark), the premarket and
+the monitor's `entries_now` all size with it; the desk's `sizing_config(risk_multiplier=…)`
+re-sizes with it at confirm; `sw_position.half_risk`; `first_live_quantity`,
+`_FIRST_LIVE_COUNTED` and the desk's write to `first_live_sessions_left` are gone (the
+Protocol keeps C1's method; a test asserts the module never calls it);
+`SYSTEM_OWNED_FIELDS["first_live_sessions_left"]` is `swing-eod`. The header is a sentence the
+worker's report and the desk's view both build ("first live sessions: N left · risk 0.250%").
+
+**The reading recorded, mine.** "Execution is enabled" means *a confirm would place a real
+order*: the swing flag on **and** `DRY_RUN` off at the desk (`swing_gates().dry_run` false);
+in the worker, its own `swing_execution_enabled` setting. A flagged desk in `DRY_RUN` plans
+full size — its confirms are simulated, and the paper record is meant to rehearse the rules
+at the size the rules describe. The countdown moves when the evening closes a session with
+the worker's flag on, whether or not an order went out that day: "never by a request" is the
+rule, and a live session with no trigger is still a live session the operator sat through.
+
+**Rejected.** Halving at send time (SW7.2 — a page that shows one size and sends another, and
+every refusal seeing the wrong size). Decrementing from the desk at the first real order
+(a request; a restart double-counts). A `sw_plan` header column (the sentence is derived from
+two numbers both readers already have).
+
+**Reversal.** `first_live_multiplier` is one function; the evening's call is eight lines.
+
+## SW10.5.4 — The ladder reads real closes from day one; PACK.6's paper clause is void · Maulik, 2 Sep 2026 (STANDING-ANSWERS A10)
+
+**Context.** A10: real closes from day one, rung starts at 0, one idempotent date-bound
+settlement at 21:05, the 09:09 job settles only as a catch-up when no record exists.
+
+**What was built.** `closed_r_multiples` / `load_closed_trades` / `sleeve_nav` /
+`sleeve_drawdown` read `simulated = False`; `_book_switched` and the peak reset are gone
+(there is no switch); `closed_trades_read` is always `"real"`; `swing_premarket.
+catch_up_ladder` runs `settle_ladder` for the last close **only** when its row has no
+`detail.ladder.settled_by` record — the same function, the same closes, the same date bound —
+and a session the evening settled is never settled twice (three tests). The ladder tests were
+re-pinned: the fixtures plant real closes; the paper-book case now asserts that five paper
+wins move nothing with the flag off *and* on.
+
+**Residual, not mine to fix.** `baskfy_api.swing_journal` still reports `ladder.reads =
+"SIMULATED"` while the flag is false (PACK.6's wording on the journal card). The file is leaf
+1.3.4's this session; the card's `reads` should become `"REAL"` unconditionally, and the
+`sessions` counter's "paper sessions" label is MD8′'s to soften. Listed in STATUS.
+
+**Reversal.** One keyword on each reader.
+
+## SW10.5.5 — The funnel: the top 20 flags by score each evening, the top 5 plus every EP in focus, and MANUAL rows on a ten-session clock · Maulik, 2 Sep 2026 (STANDING-ANSWERS A14) · ⚠ UNREVIEWED on two details
+
+**Context.** A14 amends SW5.1: top 20 SETTING_UP flags by score + every EP auto-watched; the
+monitor watches all; daily focus = top 5 + every EP → push + top of page; DETECTOR flags expire
+after 10 sessions or on trigger; MANUAL rows expire after 10 sessions unless re-confirmed.
+
+**What was built.** `WatchConfig.auto_watch_top_n` [20], `focus_top_n` [5],
+`manual_valid_bars` [10]; `auto_watch` takes tonight's candidates through `_top_flags` (every
+EP + the top 20 flags by score, ties to the lower id) and writes `score` / `adr_pct` on the
+row; `refresh_focus` recomputes `sw_watch.focus` from the whole `WATCHING` list (every EP +
+the top 5 flags by score), called by the evening and by the premarket after the gap scan;
+`add_manual` sets a ten-session expiry, `reconfirm` restarts it (`reconfirmed_on`),
+`expire_stale` gives a pre-0031 MANUAL row its clock from `added_on` once and then retires it
+like any other; `PATCH /swing/watch/{id}` accepts `reconfirm: true` (a DETECTOR row is refused
+400); the read model carries `score`, `adr_pct`, `focus`, `reconfirmed_on`; the desk page sorts
+focus triggers first. The web hub's "Still watching" control is `05`'s spec, not built here.
+
+**Two details, mine.** (1) **"Top 20" is per evening, of tonight's candidates.** A row already
+watching keeps its own ten-session clock; the list can therefore hold more than twenty flags
+across evenings, and the focus five are chosen from all of them. The alternative — retiring
+the twenty-first-best row because a better one arrived — is a state change MD16 did not ask
+for and would make "what did I miss" unanswerable. (2) **Focus is recomputed, never
+accumulated**: a better flag tonight pushes yesterday's fifth out of focus; the row stays.
+
+**Reversal.** `_top_flags` and `refresh_focus` are twenty lines between them.
+
+## SW10.5.6 — The drill's late partial fill is a SENT line the drill writes and a postback the handler applies · Maulik, 2 Sep 2026 (STANDING-ANSWERS B7) · ⚠ UNREVIEWED on the one written state
+
+**Context.** B7: one flag break, one EP, one locked circuit, one late partial fill → two
+confirms → 10:45 sweep → (15:15 if the stub exists) → EOD → next morning; the counters; 0
+orders reaching a broker. The drill's own rule (SW10.1) is the real gateway over an exploding
+broker client, and the gateway's dry-run branch fills every order whole — it cannot produce a
+partially filled live order.
+
+**The choice.** The drill keeps SW10's four signals and adds the live gap (`EPSILONGAP`, a
+fifth fixture set `morning-live-gap.*` beside `morning-synthetic.*`, which stays as SW6 left
+it) for A7; for A8 it takes `ALPHAFLAG`'s SIGNAL line through the live *shape*: the line is
+marked `SENT` with an order id under the session lock, exactly as `execute_line` leaves an
+accepted-but-unfilled marketable LIMIT (SW7.1), **and the drill prints that it wrote this state
+because the dry-run branch cannot**; the 10:20 partial then arrives through
+`on_order_update` — the real handler, the real gateway's dry-run GTT for exactly the filled
+1,000, a repeated postback shown to write nothing — `BETAEP` is confirmed at 09:55 against a
+book that counts the resting order (re-sized 833 → 389, 24.98 %, A5's story intact), the 10:45
+sweep cancels the 666 remainder through the gateway's dry-run cancel with the GTT untouched,
+and the 15:15 hook finds no naked position. The journal is exactly `dry_run, gtt_dry_run,
+gtt_dry_run, order_cancel_dry_run`; the broker client is touched 0 times.
+
+**Rejected.** A `RecordingGateway` in the drill (the drill's whole point is the real gateway).
+A dry-run branch that answers `PLACED` when an order source is present (the gates' words are
+"the dry-run path completes immediately"). Modifying the shared `morning-synthetic` fixture
+(SW6's tests and STATUS pin four names).
+
+**Reversal.** The written state is six lines in `confirm_two_lines`; a live-shaped dry-run
+branch would let the drill run `execute_line` for both lines and delete them.
+
 ## SW9.5.1 — The sleeve's EOD NAV is computed from the book, and the peak is the evening's · ⚠ UNREVIEWED
 
 **Context.** `07` says `03` §1's `sleeve_peak_inr` / `drawdown_pct` / `drawdown_locked` are
@@ -1761,3 +1958,6 @@ Recorded verbatim from the review session so the run and the report build on the
 | MD15 | **SW9.2 / SW9.3 kept** (A13) | — |
 | MD16 | **SW5.1 amended — the watch funnel** (A14): top 20 flags by score + every EP auto-watched; the monitor watches all; daily focus = top 5 + every EP → push + top of page; the rest below the fold, never pushed; MANUAL rows expire after 10 sessions unless re-confirmed | SW10.5 |
 | MD17 | **Process** (STANDING-ANSWERS header + §C): read `STANDING-ANSWERS.md` before any question; apply it and cite "(STANDING-ANSWERS §n)"; otherwise the pack default, decide-record-continue; ask only for a Kite credential, a data-losing schema change, the weekly book / R1–R4, or a Track C boundary; everything else → `docs/swing/QUESTIONS.md` with the recommendation applied, ⚠ UNREVIEWED | this run |
+| MD18 | **Deployment (Maulik, 2 Sep, 23:00).** No local run. When the code is complete: migrate, commit, deploy to AWS. Baskfy side (api/web/worker/beat) to staging.baskfy.com via the existing ECR + SSM path — after Maulik's `aws sso login` (asked only once the code is done). **Desk half to the desk box (65.0.226.77) now, before Friday's rebalance** — his call over the standing rail, taken with: a verified `python -m scripts.backup` + dated copy first, the desk suite green on the box before the restart, `DRY_RUN=true` and every swing flag false in the box's `.env`, and a rollback (`git checkout <previous sha>` + restart) written into the deploy leaf | SW13 (deploy) |
+| MD19 | **Documentation minimised** from here: STATUS/DECISIONS entries a few lines each; the final report short; tokens go to code | this run |
+| MD20 | **One system: Baskfy.** (Maulik, 2 Sep, 23:10.) The desk box at 65.0.226.77 is not a deploy target and will not rebalance; the merged desk — weekly book and swing — runs as a service on the Baskfy box beside api/web/worker/beat, on the same Postgres and the same Kite token store, `DRY_RUN=true` and every swing flag false until his hand flips them. Supersedes MD18's desk-box clause | SW13 (deploy) |

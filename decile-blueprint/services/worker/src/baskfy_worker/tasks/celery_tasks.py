@@ -662,6 +662,7 @@ def swing_premarket_task(session_date: str | None = None, stage: str = STAGE_GAP
             ep_premarket_enabled=settings.swing_ep_premarket_enabled,
             quotes=quotes,
             now=dt.datetime.now(tz=IST).replace(tzinfo=None),
+            execution_enabled=settings.swing_execution_enabled,
         )
         return {"date": day.isoformat(), **report.as_detail()}
 

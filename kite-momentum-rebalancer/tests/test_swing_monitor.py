@@ -25,6 +25,7 @@ from pathlib import Path
 
 import pytest
 
+from app import config as C
 from app import swing_monitor
 from app.strategies import swing_breakout
 from app.strategies.swing_breakout import Signal, SwingBreakout, WatchedName
@@ -83,9 +84,17 @@ class FakeConn:
     `stats` the detection rows. Only the table named in the SQL decides the answer."""
 
     def __init__(self, *, gate: str = "GREEN", rung: int = 3, capital: str = "1000000",
-                 stats: dict[str, tuple[str, int, str]] | None = None) -> None:
+                 stats: dict[str, tuple[str, int, str]] | None = None,
+                 first_live_left: int = 0) -> None:
         self.statements: list[tuple[str, tuple]] = []
         self._next = 100
+        self.first_live_left = first_live_left
+        #: SW10.5: today's PENDING_RANGE lines still PROPOSED (symbols), and the watch rows'
+        #: own ADR / score for names with no detection row.
+        self.reserved: list[str] = []
+        self.watch_stats: dict[str, tuple[str, str]] = {}
+        #: The UPDATE that releases a reservation answers these ids (A7).
+        self.releasable: list[int] = []
         tiers = {0: (2, 25.0), 1: (4, 50.0), 2: (6, 75.0), 3: (10, 100.0)}
         count, pct = tiers[rung]
         self.market: dict | None = {
@@ -109,14 +118,23 @@ class FakeConn:
             one = conn.market
             conn.context_reads += 1
         elif flat.startswith("SELECT sleeve_capital_inr"):
-            one = {"sleeve_capital_inr": conn.capital}
+            one = {"sleeve_capital_inr": conn.capital,
+                   "first_live_sessions_left": conn.first_live_left}
         elif "FROM public.sw_position p" in flat:
             many = list(conn.held)
+        elif "FROM public.sw_plan_line l" in flat and "PENDING_RANGE" in flat:
+            many = [{"symbol": symbol} for symbol in conn.reserved]
         elif "FROM public.sw_plan_line l" in flat:
-            many = list(conn.taken)
+            many = [{"entered": None, **row} for row in conn.taken]
         elif "FROM public.sw_setup_daily s" in flat:
             many = [{"symbol": k, "adr_pct": v[0], "turnover_avg": v[1], "score": v[2]}
                     for k, v in conn.stats.items()]
+        elif "FROM public.sw_watch w" in flat and "adr_pct" in flat:
+            many = [{"symbol": k, "adr_pct": v[0], "score": v[1]}
+                    for k, v in conn.watch_stats.items()]
+        elif flat.startswith("UPDATE public.sw_plan_line SET state = 'SKIPPED'"):
+            many = [{"id": i} for i in conn.releasable]
+            conn.releasable = []
 
         class _Cur:
             def fetchone(self_inner):
@@ -522,3 +540,115 @@ class TestTheContextIsReReadPerTrigger:
                 config.sizing.max_open_positions) == (0.25, 15.0, 4)
         assert config.liquidity.adr_min_pct == 4.5
         assert config.stops == DEFAULT_SWING_CONFIG.stops, "only the person's knobs move"
+
+
+# =======================================================================================
+# SW10.5 — STANDING-ANSWERS A7 (reserved slots released once) and A9 (half risk at the SIGNAL
+# plan) in the monitor's context and store.
+# =======================================================================================
+class TestReservedSlotsAndHalfRisk:
+    def test_load_context_carries_the_reserved_slots_the_first_live_count_and_the_watch_adr(self):
+        conn = FakeConn(first_live_left=3)
+        conn.reserved = ["GAPCO"]
+        conn.watch_stats = {"GAPCO": ("6.19", "46.20")}
+        context = swing_monitor.load_context(conn, user_id=1, day=DAY)
+        assert context.reserved == ("GAPCO",)
+        assert context.first_live_sessions_left == 3
+        assert context.detected["GAPCO"] == (Decimal("6.19"), None, Decimal("46.20"))
+        assert context.detected["AAA"][0] == Decimal("5.00"), "a detection row still wins"
+
+    def test_a_reserved_slot_counts_against_the_session_cap_for_other_names(self):
+        """A7: two entries taken plus one reserved slot is the whole session; the next trigger
+        of another name is SESSION_CAP — the gap crowded it out, as MD10 wants."""
+        conn = FakeConn(rung=3)
+        conn.taken = [
+            {"id": 1, "symbol": "AAA", "quantity": 100, "trigger": 100.0, "state": "FILLED",
+             "position_id": 1},
+            {"id": 2, "symbol": "BBB", "quantity": 100, "trigger": 100.0, "state": "FILLED",
+             "position_id": 2},
+        ]
+        conn.held = [{"symbol": "AAA", "entry_avg": 100.0, "quantity_open": 100},
+                     {"symbol": "BBB", "entry_avg": 100.0, "quantity_open": 100}]
+        conn.reserved = ["GAPCO"]
+        store = _store(conn)
+        store.raise_signal(_signal(_name("CCC", 3), TriggerState.TRIGGERED,
+                                   entry="100.80", stop="97.80"))
+        assert conn.inserted("sw_plan_line") == []
+        (skip,) = conn.inserted("sw_plan_skip")
+        assert skip[4] == "SESSION_CAP"
+
+    def test_the_reserved_name_itself_is_not_counted_against_its_own_slot(self):
+        """The gap's own trigger: its reservation is released first and never counted
+        against it, so with two entries taken it is still lined as the third."""
+        conn = FakeConn(rung=3, stats={"GAPCO": ("6.19", 100_000_000, "46.20")})
+        conn.taken = [
+            {"id": 1, "symbol": "AAA", "quantity": 100, "trigger": 100.0, "state": "FILLED",
+             "position_id": 1},
+            {"id": 2, "symbol": "BBB", "quantity": 100, "trigger": 100.0, "state": "FILLED",
+             "position_id": 2},
+        ]
+        conn.held = [{"symbol": "AAA", "entry_avg": 100.0, "quantity_open": 100},
+                     {"symbol": "BBB", "entry_avg": 100.0, "quantity_open": 100}]
+        conn.reserved = ["GAPCO"]
+        conn.releasable = [77]
+        store = _store(conn)
+        store.raise_signal(_signal(_name("GAPCO", 9, setup=Setup.EP, pivot=None),
+                                   TriggerState.TRIGGERED, entry="112.50", stop="107.50"))
+        (line,) = conn.inserted("sw_plan_line")
+        assert line[2] == "BUY_ON_TRIGGER" and line[5] > 0
+        releases = [s for s, _ in conn.statements
+                    if s.startswith("UPDATE public.sw_plan_line SET state = 'SKIPPED'")]
+        assert len(releases) == 1, "released exactly once, before the plan was sized"
+        assert "user_id = ?" in releases[0] and "kind = 'PENDING_RANGE'" in releases[0]
+        assert "state = 'PROPOSED'" in releases[0]
+
+    def test_a_wide_stop_on_a_live_gap_is_stop_too_wide_and_the_slot_is_released(self):
+        """A7: stop wider than one ADR → SIZE_REFUSED / STOP_TOO_WIDE; the reservation was
+        released on the trigger, so nothing holds the slot afterwards."""
+        conn = FakeConn(rung=3)
+        conn.watch_stats = {"GAPCO": ("5.00", "46.20")}
+        conn.reserved = ["GAPCO"]
+        conn.releasable = [77]
+        store = _store(conn)
+        store.raise_signal(_signal(_name("GAPCO", 9, setup=Setup.EP, pivot=None),
+                                   TriggerState.TRIGGERED, entry="112.50", stop="105.00"))
+        assert conn.inserted("sw_plan_line") == []
+        (skip,) = conn.inserted("sw_plan_skip")
+        assert (skip[4], skip[5]) == ("SIZE_REFUSED", "STOP_TOO_WIDE")
+        assert store.release_reservation(90, dt.datetime(2026, 8, 19, 9, 40)) == 0
+
+    def test_a_live_gap_with_no_detection_row_is_sized_off_the_watch_rows_adr(self):
+        """SW9.5.2's gap closed for live gaps: the watch row's ADR (6.19) admits a 4.4% stop."""
+        conn = FakeConn(rung=3)
+        conn.watch_stats = {"GAPCO": ("6.19", "46.20")}
+        store = _store(conn)
+        store.raise_signal(_signal(_name("GAPCO", 9, setup=Setup.EP, pivot=None),
+                                   TriggerState.TRIGGERED, entry="112.50", stop="107.50"))
+        (line,) = conn.inserted("sw_plan_line")
+        assert line[2] == "BUY_ON_TRIGGER" and line[5] == 1000
+
+    def test_the_signal_plan_is_half_risk_only_while_counting_down_and_live(self, monkeypatch):
+        """A9 at the monitor: 1,666 → 833 with the count at 5 and a real order ahead; 1,666
+        with the count at 5 on paper; 1,666 with the count at 0 and live."""
+        sizes = []
+        for left, live in ((5, True), (5, False), (0, True)):
+            monkeypatch.setattr(C, "SWING_EXECUTION_ENABLED", live)
+            monkeypatch.setattr(C, "DRY_RUN", not live)
+            conn = FakeConn(rung=3, first_live_left=left)
+            store = _store(conn)
+            store.raise_signal(_signal(_name("AAA", 1), TriggerState.TRIGGERED,
+                                       entry="100.80", stop="97.80"))
+            (line,) = conn.inserted("sw_plan_line")
+            sizes.append(line[5])
+        assert sizes == [833, 1666, 1666]
+
+    def test_the_context_counts_a_partial_fills_open_remainder_as_exposure(self):
+        """A8: a SENT line with 40 of 100 filled — a position for 40 and 60 still resting —
+        counts 40 at cost and 60 at the trigger, so the next confirm sizes against both."""
+        conn = FakeConn(rung=3)
+        conn.held = [{"symbol": "AAA", "entry_avg": 100.0, "quantity_open": 40}]
+        conn.taken = [{"id": 1, "symbol": "AAA", "quantity": 100, "trigger": 101.0,
+                       "state": "SENT", "position_id": 1, "entered": 40}]
+        context = swing_monitor.load_context(conn, user_id=1, day=DAY)
+        assert context.account.open_exposure_inr == Decimal("4000") + Decimal("6060")
+        assert context.entries_today == 1 and context.pending == ()

@@ -539,21 +539,21 @@ async def _index_levels(session: AsyncSession, on: dt.date, slug: str, count: in
     return list(reversed(levels))
 
 
-async def load_closed_trades(
-    session: AsyncSession, *, user_id: int, simulated: bool
-) -> list[Decimal]:
-    """The R-multiples of the last closed trades, oldest first (PACK.6).
+async def load_closed_trades(session: AsyncSession, *, user_id: int) -> list[Decimal]:
+    """The R-multiples of the last **real** closed trades, oldest first.
 
-    ``simulated`` selects which book the ladder reads: paper closes while
-    ``BASKFY_SWING_EXECUTION_ENABLED`` is false, real ones once it is true. Mixing them would let
-    a paper winning streak size real money.
+    The ladder reads real closes from day one (STANDING-ANSWERS A10, SW10.5): there is no paper
+    book for it to read — PACK.6's paper clause is void — and a simulated close, whatever
+    ``DRY_RUN`` or the flag said when it was written, never moves the rung. A paper winning
+    streak sizing real money was the failure PACK.6 named; reading nothing but real closes is
+    the stricter answer to it.
     """
     rows = await session.execute(
         select(SwPosition.r_multiple)
         .where(
             SwPosition.user_id == user_id,
             SwPosition.state == "CLOSED",
-            SwPosition.simulated.is_(simulated),
+            SwPosition.simulated.is_(False),
             SwPosition.r_multiple.is_not(None),
         )
         .order_by(SwPosition.closed_on.desc(), SwPosition.id.desc())
@@ -602,10 +602,17 @@ async def _mark_of(
 
 
 async def sleeve_nav(
-    session: AsyncSession, *, user_id: int, on: dt.date, capital: Decimal, simulated: bool
+    session: AsyncSession,
+    *,
+    user_id: int,
+    on: dt.date,
+    capital: Decimal,
+    simulated: bool = False,
 ) -> Decimal:
     """`03` §1: the sleeve's EOD NAV (SW9.5.1) — nothing in `portfolio_nav_daily` describes this
-    sleeve, so it is computed here from the book itself, for the book the ladder reads.
+    sleeve, so it is computed here from the book itself. The ladder and the drawdown read the
+    **real** book (``simulated=False``, the default — A10, SW10.5); the keyword remains for a
+    reader that wants the paper book's own NAV (the journal page, a report), never the rung.
 
     ``capital + Σ pnl_inr (CLOSED, closed on or before ``on``) + Σ (mark - entry_avg) x
     quantity_open (OPEN / PARTIAL) + Σ (fill - entry_avg) x quantity over the SELL fills of those
@@ -655,32 +662,27 @@ async def sleeve_nav(
     return nav.quantize(_TWO_DP)
 
 
-async def sleeve_drawdown(  # noqa: PLR0913 - one keyword per input the measurement depends on
+async def sleeve_drawdown(
     session: AsyncSession,
     *,
     user_id: int,
     on: dt.date,
     config_row: SwConfig | None,
-    simulated: bool,
-    reset_peak: bool = False,
 ) -> SleeveDrawdown:
-    """Tonight's :class:`SleeveDrawdown`, read without writing anything.
+    """Tonight's :class:`SleeveDrawdown`, read without writing anything — over the real book.
 
     A deployment with no ``sw_config`` row has no sleeve, no peak and no drawdown. Otherwise the
     peak the sleeve carries (``sleeve_peak_inr``) is raised to tonight's NAV if that is higher;
     a null peak — the first evening — is tonight's NAV, so the first session is never locked.
-    ``reset_peak`` starts the peak over at tonight's NAV: the evening passes it on the night the
-    ladder switches books (PACK.6 — paper closes until the execution flag is on, real ones
-    after), because the paper book's peak is not a level the real book has ever been at, and a
-    lock-out inherited from paper profits would stop the real book on its first day.
+    There is no book switch to reset the peak for since SW10.5 (A10): the ladder and the
+    drawdown have read the real book from the first evening, and a paper position never
+    counted toward the NAV the peak is measured on.
     """
     if config_row is None:
         return SleeveDrawdown(nav=Decimal(0), peak=Decimal(0), pct=Decimal(0), was_locked=False)
-    nav = await sleeve_nav(
-        session, user_id=user_id, on=on, capital=config_row.sleeve_capital_inr, simulated=simulated
-    )
+    nav = await sleeve_nav(session, user_id=user_id, on=on, capital=config_row.sleeve_capital_inr)
     stored = config_row.sleeve_peak_inr
-    peak = nav if stored is None or reset_peak else max(Decimal(stored), nav)
+    peak = nav if stored is None else max(Decimal(stored), nav)
     pct = Decimal(str(drawdown_pct(peak=peak, equity=nav))).quantize(_TWO_DP)
     return SleeveDrawdown(nav=nav, peak=peak, pct=pct, was_locked=bool(config_row.drawdown_locked))
 
@@ -836,20 +838,14 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
     )
     gate = market_gate(breadth, reading, config.market)
 
-    closed = await load_closed_trades(session, user_id=user_id, simulated=not execution_enabled)
+    closed = await load_closed_trades(session, user_id=user_id)
     config_row = (
         await session.execute(select(SwConfig).where(SwConfig.user_id == user_id))
     ).scalar_one_or_none()
     current = 0 if config_row is None else int(config_row.exposure_level)
     # `04` §8.5: the sleeve's drawdown, read the way the evening reads it (the evening's
     # `settle_ladder` is the one that writes the peak back; this is the preview, as the rung is).
-    drawdown = await sleeve_drawdown(
-        session,
-        user_id=user_id,
-        on=trade_date,
-        config_row=config_row,
-        simulated=not execution_enabled,
-    )
+    drawdown = await sleeve_drawdown(session, user_id=user_id, on=trade_date, config_row=config_row)
     tier = exposure_tier(
         current_level=current,
         closed_r_multiples=closed,
@@ -861,7 +857,8 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
 
     detail: dict[str, object] = {
         "closed_r_multiples": [str(value) for value in closed],
-        "closed_trades_read": "simulated" if not execution_enabled else "real",
+        # A10 (SW10.5): the ladder reads real closes only; the flag no longer picks a book.
+        "closed_trades_read": "real",
         "drawdown": {
             "nav": str(drawdown.nav),
             "peak": str(drawdown.peak),

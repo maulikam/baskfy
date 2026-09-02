@@ -35,6 +35,8 @@ from baskfy_core.models import (
     SwMarketDaily,
     SwPlan,
     SwPlanLine,
+    SwPlanSkip,
+    SwPosition,
     SwSetupDaily,
     SwWatch,
     TradingDay,
@@ -43,10 +45,12 @@ from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_core.swing.config import DEFAULT_SWING_CONFIG
 from baskfy_providers.records import QuoteRecord
 from baskfy_worker.steps import StepOutcome, StepStatus
+from baskfy_worker.tasks.swing_eod import run_swing_eod
 from baskfy_worker.tasks.swing_premarket import (
     STAGE_GAPS,
     STAGE_LEVELS,
     LiquidName,
+    catch_up_ladder,
     evaluate_gaps,
     liquid_universe,
     minutes_since_preopen,
@@ -471,6 +475,13 @@ class TestTheGapScan:
         assert row.trigger == Decimal("112.50")
         assert row.stop_ref is None
         assert row.added_on == SESSION
+        # SW10.5 (A14, A7): ranked by the provisional EP score the pre-open knows — a 12.5%
+        # gap is 35 x 12.5/20 = 21.875 and a 4.17x pace is 35 x 4.17/6 = 24.325, 46.20 of 70 —
+        # and sized against the ADR the bars measured (3% either side of the close: 1.03/0.97
+        # is 6.19%).
+        assert row.score == Decimal("46.20")
+        assert row.adr_pct == Decimal("6.19")
+        assert row.focus is False, "focus is refreshed by the job after the scan, not here"
         # `04` §3: an EP is watched for `valid_bars` [3] sessions.
         ahead = await session.execute(
             sa.select(TradingDay.date)
@@ -560,14 +571,18 @@ class TestTheMorningPlan:
         )
         assert outcome.status is not StepStatus.SKIPPED
 
-    async def test_a_live_ep_without_a_stop_is_not_a_line(self, session: AsyncSession) -> None:
-        """SW6.2: the plan cannot size a name whose stop the opening range has not set yet. The
-        monitor's SIGNAL plan carries it once the range breaks."""
+    async def test_a_live_ep_without_a_stop_is_a_pending_range_line_not_a_buy(
+        self, session: AsyncSession
+    ) -> None:
+        """A7 (SW10.5; SW6.2 amended): the plan cannot size a name whose stop the opening range
+        has not set, so it shows it as a `PENDING_RANGE` line — no quantity, no stop, a preview
+        at a 1-ADR stop — and counts it as a reserved slot, not as an entry. The monitor's SIGNAL
+        plan carries it once the range breaks."""
         user_id = await _user(session)
         last = (await _sessions_before(session, SESSION, 1))[0]
         await _market(session, user_id=user_id, on=last)
         gapper = await make_instrument(session, "GAPPER")
-        await _watch(
+        watch_id = await _watch(
             session,
             user_id=user_id,
             instrument_id=gapper,
@@ -576,13 +591,107 @@ class TestTheMorningPlan:
             trigger="112.50",
             stop_ref=None,
         )
+        row = (await session.execute(sa.select(SwWatch).where(SwWatch.id == watch_id))).scalar_one()
+        row.adr_pct = Decimal("6.18")
+        row.score = Decimal("46.20")
+        await session.flush()
 
         report = await run_swing_premarket(
             session, StepOutcome(), SESSION, user_id=user_id, now=NINE_OH_NINE
         )
 
         assert report.plan_id is not None
-        assert report.entry_lines == 0
+        assert (report.entry_lines, report.pending_lines) == (0, 1)
+        line = (await session.execute(sa.select(SwPlanLine))).scalar_one()
+        assert line.kind == "PENDING_RANGE"
+        assert (line.quantity, line.stop, line.trigger) == (0, None, Decimal("112.50"))
+        assert line.risk_inr == 0 and line.position_value == 0
+        assert line.state == "PROPOSED"
+        assert line.note is not None and "slot reserved" in line.note
+        assert "1 ADR (6.18%)" in line.note
+        assert line.client_id.endswith(":GAPPER:PENDING_RANGE")
+
+    async def test_a_pending_range_line_reserves_a_slot_ahead_of_lower_scored_flags(
+        self, session: AsyncSession
+    ) -> None:
+        """A7: the session allows three new entries; a live gap scoring above three flags takes
+        one slot, two flags get the other two, and the third flag is `SESSION_CAP`."""
+        user_id = await _user(session)
+        last = (await _sessions_before(session, SESSION, 1))[0]
+        await _market(session, user_id=user_id, on=last)
+        for index in range(3):
+            flag = await make_instrument(session, f"FLAG{index}")
+            await _bars(session, flag, [last])
+            await _setup(session, user_id=user_id, instrument_id=flag, on=last)
+            await _watch(session, user_id=user_id, instrument_id=flag, on=last)
+        gapper = await make_instrument(session, "GAPPER")
+        watch_id = await _watch(
+            session,
+            user_id=user_id,
+            instrument_id=gapper,
+            on=SESSION,
+            setup="EP",
+            trigger="112.50",
+            stop_ref=None,
+        )
+        row = (await session.execute(sa.select(SwWatch).where(SwWatch.id == watch_id))).scalar_one()
+        row.adr_pct, row.score = Decimal("6.18"), Decimal("80.00")
+        await session.flush()
+
+        report = await run_swing_premarket(
+            session, StepOutcome(), SESSION, user_id=user_id, now=NINE_OH_NINE
+        )
+
+        assert (report.entry_lines, report.pending_lines, report.skips) == (2, 1, 1)
+        kinds = (
+            (await session.execute(sa.select(SwPlanLine.kind).order_by(SwPlanLine.id)))
+            .scalars()
+            .all()
+        )
+        assert list(kinds) == ["PENDING_RANGE", "BUY_ON_TRIGGER", "BUY_ON_TRIGGER"]
+        skip = (await session.execute(sa.select(SwPlanSkip))).scalar_one()
+        assert skip.reason == "SESSION_CAP"
+
+    async def test_the_morning_plan_carries_the_first_live_risk_multiplier_when_live(
+        self, session: AsyncSession
+    ) -> None:
+        """A9: with the countdown running and execution enabled the morning plan is sized at
+        half risk (1,666 → 833 on a ₹6 stop); with execution disabled the same countdown plans
+        full size — a paper plan rehearses the rules at the size the rules describe."""
+        user_id = await _user(session)
+        last = (await _sessions_before(session, SESSION, 1))[0]
+        await _market(session, user_id=user_id, on=last)
+        flag = await make_instrument(session, "GOODFLAG")
+        await _bars(session, flag, [last])
+        await _setup(session, user_id=user_id, instrument_id=flag, on=last)
+        await _watch(session, user_id=user_id, instrument_id=flag, on=last)
+        config = (await session.execute(sa.select(SwConfig))).scalar_one()
+        assert config.first_live_sessions_left == 5
+
+        paper = await run_swing_premarket(
+            session,
+            StepOutcome(),
+            SESSION,
+            user_id=user_id,
+            now=NINE_OH_NINE,
+            execution_enabled=False,
+        )
+        live = await run_swing_premarket(
+            session,
+            StepOutcome(),
+            SESSION,
+            user_id=user_id,
+            now=NINE_OH_NINE,
+            execution_enabled=True,
+        )
+
+        lines = (
+            (await session.execute(sa.select(SwPlanLine).order_by(SwPlanLine.id))).scalars().all()
+        )
+        assert [line.quantity for line in lines] == [833, 416]
+        assert (paper.risk_multiplier, paper.risk_pct_in_force) == ("1", "0.500")
+        assert (live.risk_multiplier, live.risk_pct_in_force) == ("0.5", "0.250")
+        assert live.first_live_sessions_left == 5
 
     async def test_without_a_market_row_the_morning_is_skipped_and_says_why(
         self, session: AsyncSession
@@ -596,3 +705,161 @@ class TestTheMorningPlan:
         assert report.plan_id is None
         assert report.skipped_reason is not None
         assert "sw_market_daily" in report.skipped_reason
+
+
+# --- A10: the 09:09 catch-up settlement --------------------------------------------------
+
+
+@pytest.mark.db
+class TestTheCatchUpSettlement:
+    async def _evening_missed(self, session: AsyncSession) -> tuple[int, dt.date]:
+        """A market row the detection job wrote for the last close, with no settlement record —
+        the evening never ran — and five real closes the ladder should have read."""
+        user_id = await _user(session)
+        last = (await _sessions_before(session, SESSION, 1))[0]
+        await _market(session, user_id=user_id, on=last)
+        for index, r in enumerate(("2.00", "-1.00", "1.50", "-0.50", "2.50")):
+            instrument_id = await make_instrument(session, f"DONE{index}")
+            session.add(
+                SwPosition(
+                    user_id=user_id,
+                    instrument_id=instrument_id,
+                    setup="FLAG",
+                    entry_date=last - dt.timedelta(days=10),
+                    entry_avg=Decimal("100.0000"),
+                    quantity_entered=100,
+                    initial_stop=Decimal("96.00"),
+                    stop=Decimal("96.00"),
+                    trail="MA20",
+                    quantity_open=0,
+                    state="CLOSED",
+                    closed_on=last - dt.timedelta(days=5 - index),
+                    exit_avg=Decimal(100) + Decimal(r) * 4,
+                    close_reason="CLOSE_BELOW_TRAIL_MA",
+                    r_multiple=Decimal(r),
+                    pnl_inr=Decimal(r) * 400,
+                    simulated=False,
+                )
+            )
+        await session.flush()
+        return user_id, last
+
+    async def test_the_morning_settles_the_previous_session_only_as_a_catch_up(
+        self, session: AsyncSession
+    ) -> None:
+        """A10: no settlement record for the last close → the 09:09 job settles it (five good
+        real closes in GREEN move the rung to 1), records it as the evening would, and the
+        morning plan is built on the settled rung, not the detection job's preview of 3."""
+        user_id, last = await self._evening_missed(session)
+
+        report = await run_swing_premarket(
+            session, StepOutcome(), SESSION, user_id=user_id, now=NINE_OH_NINE
+        )
+
+        assert report.ladder_caught_up is True
+        market = (
+            await session.execute(
+                sa.select(SwMarketDaily).where(
+                    SwMarketDaily.user_id == user_id, SwMarketDaily.date == last
+                )
+            )
+        ).scalar_one()
+        assert isinstance(market.detail, dict)
+        assert market.detail["ladder"] == {"from": 0, "to": 1, "settled_by": "swing-eod"}
+        assert market.detail["closed_trades_read"] == "real"
+        assert market.exposure_level == 1
+        config = (await session.execute(sa.select(SwConfig))).scalar_one()
+        assert config.exposure_level == 1
+        plan = (await session.execute(sa.select(SwPlan))).scalar_one()
+        assert plan.exposure_level == 1
+
+    async def test_a_session_the_evening_settled_is_never_a_second_settlement(
+        self, session: AsyncSession
+    ) -> None:
+        """A10: one settlement per date. The evening ran (rung 0 → 1 on the record); the 09:09
+        job reads the record and leaves it — a second settlement would climb 1 → 2 on the same
+        five closes."""
+        user_id, last = await self._evening_missed(session)
+        evening = await run_swing_eod(session, StepOutcome(), last, user_id=user_id)
+        assert (evening.rung_before, evening.exposure_level) == (0, 1)
+
+        report = await run_swing_premarket(
+            session, StepOutcome(), SESSION, user_id=user_id, now=NINE_OH_NINE
+        )
+
+        assert report.ladder_caught_up is False
+        market = (
+            await session.execute(
+                sa.select(SwMarketDaily).where(
+                    SwMarketDaily.user_id == user_id, SwMarketDaily.date == last
+                )
+            )
+        ).scalar_one()
+        assert isinstance(market.detail, dict)
+        assert market.detail["ladder"] == {"from": 0, "to": 1, "settled_by": "swing-eod"}
+        config = (await session.execute(sa.select(SwConfig))).scalar_one()
+        assert config.exposure_level == 1
+
+    async def test_the_catch_up_itself_runs_once(self, session: AsyncSession) -> None:
+        """Two 09:09 runs (a Beat retry) settle once: the first leaves the record the second
+        reads."""
+        user_id, last = await self._evening_missed(session)
+        config = DEFAULT_SWING_CONFIG
+        now = dt.datetime(2026, 8, 19, 9, 9, tzinfo=dt.UTC)
+        first = await catch_up_ladder(
+            session,
+            user_id=user_id,
+            last_session=last,
+            config=config,
+            execution_enabled=False,
+            now=now,
+        )
+        second = await catch_up_ladder(
+            session,
+            user_id=user_id,
+            last_session=last,
+            config=config,
+            execution_enabled=False,
+            now=now,
+        )
+        assert (first, second) == (True, False)
+        row = (await session.execute(sa.select(SwConfig))).scalar_one()
+        assert row.exposure_level == 1
+
+    async def test_the_catch_up_reads_real_closes_only(self, session: AsyncSession) -> None:
+        """A10: five paper wins on a missed evening move nothing at 09:09 either."""
+        user_id = await _user(session)
+        last = (await _sessions_before(session, SESSION, 1))[0]
+        await _market(session, user_id=user_id, on=last)
+        for index, r in enumerate(("2.00", "1.00", "1.50", "0.50", "2.50")):
+            instrument_id = await make_instrument(session, f"PAPER{index}")
+            session.add(
+                SwPosition(
+                    user_id=user_id,
+                    instrument_id=instrument_id,
+                    setup="FLAG",
+                    entry_date=last - dt.timedelta(days=10),
+                    entry_avg=Decimal("100.0000"),
+                    quantity_entered=100,
+                    initial_stop=Decimal("96.00"),
+                    stop=Decimal("96.00"),
+                    trail="MA20",
+                    quantity_open=0,
+                    state="CLOSED",
+                    closed_on=last - dt.timedelta(days=5 - index),
+                    exit_avg=Decimal(100) + Decimal(r) * 4,
+                    close_reason="CLOSE_BELOW_TRAIL_MA",
+                    r_multiple=Decimal(r),
+                    pnl_inr=Decimal(r) * 400,
+                    simulated=True,
+                )
+            )
+        await session.flush()
+
+        report = await run_swing_premarket(
+            session, StepOutcome(), SESSION, user_id=user_id, now=NINE_OH_NINE
+        )
+
+        assert report.ladder_caught_up is True
+        config = (await session.execute(sa.select(SwConfig))).scalar_one()
+        assert config.exposure_level == 0

@@ -5,18 +5,28 @@ weekend produces "a watchlist of a few dozen forming flags, the levels that woul
 week", and the first hour of a session is spent watching those levels rather than looking for new
 ones. So this module owns three things and nothing else:
 
-**Who gets on it.** The detectors do most of the work: a flag that scores
-``watch.auto_watch_min_score`` [60] or better and is still `SETTING_UP`, and **every** `GAP_DAY`
-EP whatever it scored — an EP is enterable for three sessions and there is no second chance to
+**Who gets on it.** The detectors do most of the work: the top ``watch.auto_watch_top_n``
+[20] `SETTING_UP` flags by score at ``watch.auto_watch_min_score`` [60] or better — his weekly
+focus list of 5-20 (`docs/swing/07`, STANDING-ANSWERS A14) — and **every** `GAP_DAY` EP
+whatever it scored: an EP is enterable for three sessions and there is no second chance to
 notice one. A person can add a name by hand, and a `MANUAL` row keeps the levels they typed.
 
-**Who comes off it.** A flag after ten sessions without a trigger, an EP after three. Expiry is a
+**Who is in focus.** The daily focus (A14) is the top ``watch.focus_top_n`` [5] flags by score
+plus every EP — what the notifier pushes and what the desk page puts on top. The other rows are
+watched, signalled and logged, never pushed; they feed the journal's "missed setups". The
+`focus` flag is set here (:func:`refresh_focus`) by the evening and by the premarket once the
+live gaps are on the list.
+
+**Who comes off it.** A flag after ten sessions without a trigger, an EP after three, and —
+since SW10.5 (A14) — a `MANUAL` row after ``watch.manual_valid_bars`` [10] sessions unless a
+person re-confirms it on the watchlist page (:func:`reconfirm`, which resets the clock): a
+two-week-old typed pivot is stale, and MANUAL levels are not refreshed premarket. Expiry is a
 **state change**, never a delete: the record of what was watched is the record of what was passed
 over, and a journal that only remembers the trades taken cannot answer "what did I miss".
 
 **What a person may change.** The note and the catalyst — `01` §3's "news check", which Baskfy
-cannot do for them because it holds no news feed (D10). Those are free text and move no money,
-which is why `docs/swing/02` Track A allows them on a read-only surface.
+cannot do for them because it holds no news feed (D10) — and the re-confirmation of a MANUAL
+row. Those move no money, which is why `docs/swing/02` Track A allows them on a read-only surface.
 
 Nothing here sizes a position, builds a plan or reaches a broker.
 """
@@ -71,6 +81,12 @@ class WatchRow:
     #: The latest close, so the page can show how far the price is from the trigger without a
     #: second request. `None` when the instrument has no bar yet.
     last_close: Decimal | None = None
+    #: SW10.5 (A14): the score the row is ranked by, the ADR it was watched with, whether it is
+    #: in today's focus, and when a MANUAL row was last re-confirmed.
+    score: Decimal | None = None
+    adr_pct: Decimal | None = None
+    focus: bool = False
+    reconfirmed_on: dt.date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +97,8 @@ class AutoWatchResult:
     already_watching: int
     expired: int
     considered: int
+    #: How many rows are in today's focus after the refresh (A14).
+    focus: int = 0
 
 
 async def _sessions_ahead(session: AsyncSession, start: dt.date, count: int) -> dt.date | None:
@@ -111,6 +129,17 @@ def _valid_bars(setup: str, config: SwingConfig) -> int:
     return config.watch.flag_valid_bars
 
 
+def _top_flags(candidates: list[SwSetupDaily], config: SwingConfig) -> list[SwSetupDaily]:
+    """Every EP, and the top ``auto_watch_top_n`` flags by score (A14, his weekly focus list).
+    Ties on a score go to the lower instrument id, so the cut is the same on a re-run."""
+    eps = [row for row in candidates if row.setup == Setup.EP.value]
+    flags = sorted(
+        (row for row in candidates if row.setup != Setup.EP.value),
+        key=lambda row: (-Decimal(row.score), row.instrument_id),
+    )
+    return eps + flags[: config.watch.auto_watch_top_n]
+
+
 async def auto_watch(
     session: AsyncSession,
     *,
@@ -128,7 +157,7 @@ async def auto_watch(
     watchlist is a list of things to buy; putting one on it would be an invitation nobody can act
     on.
     """
-    expired = await expire_stale(session, user_id=user_id, on=on)
+    expired = await expire_stale(session, user_id=user_id, on=on, config=config)
 
     candidates = (
         (
@@ -152,6 +181,7 @@ async def auto_watch(
         .scalars()
         .all()
     )
+    chosen = _top_flags(list(candidates), config)
 
     existing = {
         (row.instrument_id, row.setup)
@@ -164,7 +194,7 @@ async def auto_watch(
 
     added = 0
     already = 0
-    for candidate in candidates:
+    for candidate in chosen:
         if (candidate.instrument_id, candidate.setup) in existing:
             already += 1
             continue
@@ -180,23 +210,87 @@ async def auto_watch(
                 stop_ref=candidate.stop_ref,
                 setup_daily_date=candidate.date,
                 state=WATCHING,
+                score=candidate.score,
+                adr_pct=candidate.adr_pct,
             )
         )
         existing.add((candidate.instrument_id, candidate.setup))
         added += 1
     await session.flush()
+    focus = await refresh_focus(session, user_id=user_id, config=config)
     return AutoWatchResult(
-        added=added, already_watching=already, expired=expired, considered=len(candidates)
+        added=added,
+        already_watching=already,
+        expired=expired,
+        considered=len(candidates),
+        focus=focus,
     )
 
 
-async def expire_stale(session: AsyncSession, *, user_id: int, on: dt.date) -> int:
+async def refresh_focus(
+    session: AsyncSession, *, user_id: int, config: SwingConfig = DEFAULT_SWING_CONFIG
+) -> int:
+    """Set `focus` on today's focus rows and clear it on the rest (A14). Returns the count.
+
+    Every `WATCHING` EP is in focus — a gap is enterable for three sessions and there is no
+    second look — and the top ``focus_top_n`` [5] flags by score; a row with no score (a MANUAL
+    name nobody scored) ranks at zero. Ties go to the lower id, so two runs agree. Idempotent:
+    the flags are recomputed from the list, never accumulated.
+    """
+    rows = (
+        (
+            await session.execute(
+                select(SwWatch).where(SwWatch.user_id == user_id, SwWatch.state == WATCHING)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    flags = sorted(
+        (row for row in rows if row.setup != Setup.EP.value),
+        key=lambda row: (-(Decimal(row.score) if row.score is not None else Decimal(0)), row.id),
+    )
+    chosen = {row.id for row in rows if row.setup == Setup.EP.value}
+    chosen.update(row.id for row in flags[: config.watch.focus_top_n])
+    for row in rows:
+        wanted = row.id in chosen
+        if bool(row.focus) != wanted:
+            row.focus = wanted
+    await session.flush()
+    return len(chosen)
+
+
+async def expire_stale(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    on: dt.date,
+    config: SwingConfig = DEFAULT_SWING_CONFIG,
+) -> int:
     """Move every `WATCHING` row whose `expires_on` has passed to `EXPIRED`. Returns the count.
 
-    A `MANUAL` row has no `expires_on` and is therefore never touched: a person who typed a level
-    is watching for a reason the detector does not know about, and retiring it for them would be
-    the system overruling them.
+    A `MANUAL` row expires too, since SW10.5 (A14): ``manual_valid_bars`` [10] sessions after
+    it was added or last re-confirmed. A row written before the rule (no `expires_on`) is given
+    its expiry from `added_on` / `reconfirmed_on` first, so the rule reaches every row exactly
+    once and a row re-confirmed yesterday is not retired today.
     """
+    unbounded = (
+        (
+            await session.execute(
+                select(SwWatch).where(
+                    SwWatch.user_id == user_id,
+                    SwWatch.state == WATCHING,
+                    SwWatch.source == SOURCE_MANUAL,
+                    SwWatch.expires_on.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for row in unbounded:
+        since = row.reconfirmed_on or row.added_on
+        row.expires_on = await _sessions_ahead(session, since, config.watch.manual_valid_bars)
     rows = (
         (
             await session.execute(
@@ -282,6 +376,10 @@ async def list_watch(
             catalyst=row.catalyst,
             state=row.state,
             last_close=latest.get(row.instrument_id),
+            score=row.score,
+            adr_pct=row.adr_pct,
+            focus=bool(row.focus),
+            reconfirmed_on=row.reconfirmed_on,
         )
         for row, symbol, name in rows
     )
@@ -313,12 +411,14 @@ async def add_manual(  # noqa: PLR0913 - one keyword per field a person types
     stop_ref: Decimal | None = None,
     note: str | None = None,
     catalyst: str | None = None,
+    config: SwingConfig = DEFAULT_SWING_CONFIG,
 ) -> SwWatch:
     """A name a person put on the list themselves.
 
-    No expiry: a `MANUAL` row stays until it is dismissed. The person is watching for a reason
-    the detectors do not know — a chart they read, something they heard — and a system that
-    retired it after ten sessions would be overruling a judgement it cannot see.
+    It expires after ``manual_valid_bars`` [10] sessions unless re-confirmed (A14, SW10.5): a
+    person is watching for a reason the detectors do not know, but a typed pivot from two weeks
+    ago is a level nobody has looked at since, and MANUAL levels are not refreshed premarket.
+    Re-adding a name already on the list refreshes its levels and its clock.
     """
     existing = (
         await session.execute(
@@ -343,6 +443,8 @@ async def add_manual(  # noqa: PLR0913 - one keyword per field a person types
         if catalyst is not None:
             existing.catalyst = catalyst
         existing.source = SOURCE_MANUAL
+        existing.reconfirmed_on = on
+        existing.expires_on = await _sessions_ahead(session, on, config.watch.manual_valid_bars)
         await session.flush()
         return existing
 
@@ -352,7 +454,7 @@ async def add_manual(  # noqa: PLR0913 - one keyword per field a person types
         setup=setup,
         source=SOURCE_MANUAL,
         added_on=on,
-        expires_on=None,
+        expires_on=await _sessions_ahead(session, on, config.watch.manual_valid_bars),
         trigger=trigger,
         stop_ref=stop_ref,
         note=note,
@@ -378,6 +480,36 @@ async def annotate(
         row.note = note
     if catalyst is not None:
         row.catalyst = catalyst
+    await session.flush()
+    return row
+
+
+class NotReconfirmable(ValueError):
+    """Only a MANUAL row is re-confirmed by a person; a detector's row is the detector's to
+    refresh, and it expires on its own clock or on its trigger (A14)."""
+
+
+async def reconfirm(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    watch_id: int,
+    on: dt.date,
+    config: SwingConfig = DEFAULT_SWING_CONFIG,
+) -> SwWatch:
+    """A person looked at a MANUAL row again and still wants it: the clock restarts (A14).
+
+    ``reconfirmed_on = on`` and ``expires_on`` is ``manual_valid_bars`` sessions ahead. A row
+    that is not `WATCHING` cannot be re-confirmed back to life — an expired name is re-added,
+    which is a new row and a new record. Moves no money.
+    """
+    row = await load(session, user_id=user_id, watch_id=watch_id)
+    if row.source != SOURCE_MANUAL:
+        raise NotReconfirmable(f"watch row {watch_id} is a {row.source} row")
+    if row.state != WATCHING:
+        raise NotReconfirmable(f"watch row {watch_id} is {row.state}, not {WATCHING}")
+    row.reconfirmed_on = on
+    row.expires_on = await _sessions_ahead(session, on, config.watch.manual_valid_bars)
     await session.flush()
     return row
 

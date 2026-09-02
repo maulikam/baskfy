@@ -22,6 +22,7 @@ done. A fresh session resumes from the first module not marked ✅.
 | SW9.5 — Reconcile with the primary sources | ✅ | The rules are his, quoted (`07`): the stop is one ADR or tighter and a wider one is skipped, the gate's index rule is the 10-day over the 20-day, at most three new entries a session, the plan takes `min(rung, max_open_positions)` with the top rung at 10, the sleeve locks out new entries 15 % below its peak until back within 10 % (settled by the evening from the sleeve's own NAV, migration `0030`), the swing GTT rests 3 % under its trigger through an additive keyword the weekly book never sees, ceilings 30 % / 20, ADR floor 4.0 — the patch applied, 41 red tests re-pinned by re-deriving each number, 7 acceptance tests in `test_swing_primary_sources.py`, 4 backtest cases and 9 ladder cases new; core **2665 passed**, G5 **445 passed**, execution **170**, desk **1553 passed, 17 skipped** |
 | SW9.6 — The index rule, the drawdown, gate-on vs gate-off in the backtest | ✅ | STANDING-ANSWERS A12 and B1–B5: `run_backtest` takes the benchmark's closes (NIFTY 500 from `index_snapshot_daily`, NIFTY 50 fallback, resolved once per run) and reads the 10/20 averages in-frame up to and including the session's own close (a look-ahead test shifts the series by one session and the gate moves by exactly one); the drawdown lock-out runs on the constant-sleeve curve, peak-to-trough as % of the sleeve, with the live 15 %/10 % hysteresis (a 16.99 % drawdown locks, 10.84 % holds, 9.52 % releases); three books over one detection pass — gate off, breadth only, full — reported per year entered and per setup with breadth's and the index rule's contributions as differences; `DELISTED` beside `NO_BAR`, B1's circuit caveat verbatim in `04` §11, the card and the page draw the drawdown and the two comparison tables; core backtest **68 passed**, speed **26.9 s** for three books, worker **24**, API **43**, web **42**, `make lint` clean |
 | SW10 — Gating and safety proof | ✅ | Every Track-B/C claim is a test: hypothesis over random watchlists (no `PARABOLIC_SHORT` line, a stop never falls, a SELL never exceeds the book), a spy over the real gateway through `/swing/execute` (eight calls, all dry, under both `DRY_RUN` values), source scans with docstrings/comments stripped over the web hub, the API and the monitor, every `sw_` write named with its `user_id`; **the confirm-time gate (STANDING-ANSWERS A5, SW10.4)**: `POST /swing/execute` re-derives the book under `SELECT … FOR UPDATE` on the day's `sw_session` and re-sizes or refuses (`EXPOSURE_FULL` / `TIER_FULL` / `SESSION_CAP`), the monitor re-reads context per trigger, 500 seeded confirm sequences never exceed the ceiling, the count or the cap; and `tools/swing/drill.py` runs the whole paper session against Postgres — evening → LEVELS → MORNING → replayed morning through `PgSignalStore` → two confirms through `execute_line` (the second re-sized 833 → 389) → EOD → next morning — **0 orders reach a broker**, `confirms=2 fills=2`, **`EXPOSURE after confirms … = 25.0%`** (was 34.3 %; SW10.2 closed). Desk **1,599 passed** |
+| SW10.5 — Maulik's review corrections (A7, A8, A9, A10, A14, B7) | ✅ | STANDING-ANSWERS applied across core, worker, API, gateway and desk: a live gap is a `PENDING_RANGE` line holding a session slot, released once at its trigger or freed at 10:45, never executable (route + module + source set); the live buy is a marketable LIMIT (`min(trigger × 1.005, range high + 0.25 ADR)`) polled ≤ 10 s at ≤ 2 req/s, a partial is `SENT` with a GTT for exactly what filled, later fills grow the position and **modify** the GTT through a new guarded `modify_gtt_quantity`, the 10:45 sweep cancels remainders through a new guarded `cancel_order`; half risk at plan time via `risk_multiplier` while the countdown runs and a confirm would be real, the countdown moved once per LIVE session by the evening; the ladder reads real closes from day one with a 09:09 catch-up; top-20 auto-watch, top-5 + every-EP focus, MANUAL rows on a ten-session clock with `PATCH … {"reconfirm": true}`; migration `0031`; the drill replays five signals and a late partial fill — **0 orders reach a broker**. Core +26, execution +18, worker +23, API +3, desk **1,644 passed** |
 | SW11 — Hardening and observability | ⬜ | |
 | SW12 — Verification, goldens, final report | ⬜ | |
 
@@ -1520,6 +1521,132 @@ fit whole is taken at the size that fits; the evening and the morning plans stil
 
 ---
 
+## SW10.5 — Maulik's review corrections: A7, A8, A9, A10, A14, B7 ✅
+
+**Goal, from `STANDING-ANSWERS.md`:** apply the six answers that change behaviour, on top of
+SW10 (`f17412f`), and record each as "Maulik, 2 Sep 2026 (STANDING-ANSWERS §n)". Everything
+below was **measured on this machine on 2 Sep 2026**, on `baskfy_sw_t3`.
+
+### What changed, answer by answer
+
+| Answer | Where it now lives | Proven by |
+|---|---|---|
+| **A7 — `PENDING_RANGE`.** A live gap (trigger, no stop) is a line on the MORNING plan: no quantity, no stop, a preview at a 1-ADR stop, sorted by score, holding one of the session's three new-entry slots (not a seat in the rung — SW10.5.1); real only through the SIGNAL plan with `stop = min(range low, LOD)`; wider than one ADR → `STOP_TOO_WIDE` and the slot released the moment the name triggers (once); slots nothing claimed freed at 10:45; never executable | `plan.LineKind.PENDING_RANGE`, `plan.EXECUTABLE_KINDS`, `WatchItem.stop_ref: Decimal \| None`, `build_entries`; `swing_eod.watch_items` (keeps a stop-less row; the watch row's ADR/score when no detection row); `swing_premarket` (live gaps written with `score` + `adr_pct`, `pending_lines` on the report); `swing_monitor.load_context.reserved` / `entries_now` / `PgSignalStore.release_reservation`; `swing_execute.EXECUTABLE_KINDS` + `_validate`'s 400 + `cutoff_open_orders` → `expire_pending`; the desk route's own 400; the page's row with no button; `0031` rebuilt `ck_sw_plan_line_kind_known` | core `test_swing_pending_and_first_live.py::TestPendingRange` (12 incl. a hypothesis property: never a quantity, a stop or cash on a pending line, every name answered once); worker `test_swing_premarket` (a live EP is a pending line, not a buy; a gap outscoring three flags takes a slot and the third flag is `SESSION_CAP`); desk `test_swing_execute` (400 before the lock under both gate settings; the source set), `test_swing_desk` (no button, the route's 400 with the module never asked, the sqlite twin's `expire_pending` once), `test_swing_monitor` (a reserved slot counts for other names, not for its own; released exactly once before the plan is sized; `STOP_TOO_WIDE` releases) |
+| **A8 — the fill gap.** Marketable LIMIT at `min(trigger × 1.005, range_high + 0.25 × ADR)`, snapped down, never MARKET; the request polls the order ≤ 10 s at 2/s (injectable `OrderSource`, clock and sleep); COMPLETE → position + fill + GTT in the request; partial/open → `SENT` with the filled quantity and a GTT for exactly it; `on_order_update` grows the position at the price that keeps the averages consistent and **modifies** the GTT, never a second one, idempotent on a repeat; 10:45 cancels the remainder through the gateway, GTT untouched; 15:15 hook re-arms naked positions; the dry-run path is the same bookkeeping with `simulated=true` and no poll | `plan.marketable_limit`; `OpeningRangeConfig.entry_limit_buffer_pct` [0.5], `entry_limit_max_adr` [0.25], `fill_poll_seconds` [10], `fill_poll_interval_seconds` [0.5]; `baskfy_execution.OrderGateway.modify_gtt_quantity` and `cancel_order` (additive; tenant, untouchables, stop check, kill-switch note, rate limit, journal, dry-run branch; the weekly paths byte-for-byte unchanged); `swing_execute._apply_buy_fill` / `_poll_fill` / `on_order_update` / `_grow_position` / `cutoff_open_orders` / `eod_gtt_sweep`; `swing_desk.KiteOrders` (order history — a read), `POST /swing/reconcile`, `POST /swing/cutoff`; `load_context` counts a resting remainder at the trigger | execution `test_gtt_modify_and_cancel.py` **18** (a modify addresses the resting id and never places; dry-run touches nothing; untouchables, cross-tenant, zero shares, a malformed id, a non-stop trigger refused before the broker; the kill switch does not stop a re-size; twice is not a duplicate; a cancel reaches the broker once, dry-run does not, the weekly files never name either); desk `test_swing_execute` (**117**: the limit 101.25 on a 100.80 break of a 100.00 range; the journal's dry-run price is the limit; 21 reads and 20 half-second sleeps in ten seconds, early stop on COMPLETE; COMPLETE → position/fill/GTT/`FILLED`; a partial is `SENT` with a GTT for 40 of 100; partial-then-complete ends with one GTT modified 40 → 100 and the 60 at 100.50; a repeated and a stale postback write nothing; the first fill by postback; modify never above the filled quantity; a naked partial armed for the whole; the cutoff cancels the remainder, leaves the GTT, applies a fill that arrived since, expires an unfilled line, reports a refused cancel, leaves a completed order alone, frees unclaimed slots once; a dry-run fill follows the same path without polling; a rejected order writes no book; the 15:15 stub) |
+| **A9 — half risk at plan time.** `risk_multiplier` 0.5 on `risk_per_trade_pct` before `size_position` while `first_live_sessions_left > 0` **and** a confirm would be real (paper plans full size — SW10.5.3 records the reading); SELL/RAISE untouched; the evening decrements once when a LIVE session closes (`sw_session.first_live_counted`, audited `swing-eod`), never a request; a restart changes nothing; the fifth session → 0 and the sixth plans at full risk; header "first live sessions: N left · risk 0.250%"; `sw_position.half_risk` | `SizingConfig.risk_multiplier_first_live` [0.5], `first_live_sessions` [5]; `plan.first_live_multiplier`, `sizing_at`, `build_entries(risk_multiplier=)`; `swing_eod.count_first_live_session` + `first_live_header` + `risk_pct_in_force`; the premarket and the monitor size with it; `swing_execute.risk_multiplier_for` + `sizing_config(risk_multiplier=)`; `first_live_quantity` / `_FIRST_LIVE_COUNTED` / the desk's countdown write **removed**; `SYSTEM_OWNED_FIELDS["first_live_sessions_left"] = "swing-eod"`; the desk view's `first_live_header` / `half_risk` | core `TestRiskMultiplier` (7 incl. a hypothesis property: the risk scales linearly, every refusal still applies; SELL/RAISE lines byte-identical with and without); worker `test_swing_eod::TestTheFirstLiveCountdown` (**5**: decremented once across a re-run, audited `5 → 4`; a DRY_RUN session moves nothing; 833 on paper and 416 live from one countdown, the header text; six live evenings `[4,3,2,1,0,0]` planning `[416,416,416,416,833,833]`; a second call after a "restart" moves nothing), `test_swing_premarket` (the morning plan at half risk only when live); desk (1,666 → 833 sent, written back and tagged; never halved simulated; full size at 0; no request moves the count — asserted on the store's write log and the module's code; SELL/RAISE never halved), monitor (833 / 1,666 / 1,666 across the three flag states) |
+| **A10 — real closes from day one.** The ladder, the NAV and the drawdown read `simulated = False`; PACK.6's paper clause and the book-switch peak reset are gone; the 09:09 job settles the previous session only when no settlement record exists, never twice | `tasks/swing.load_closed_trades`, `sleeve_nav`, `sleeve_drawdown`; `swing_eod.closed_r_multiples` (default `simulated=False`), `settle_ladder` (`reads = "real"`, `_book_switched` deleted); `swing_premarket.catch_up_ladder` (+ `ladder_caught_up` on the report) | worker `test_swing_ladder` (re-pinned: real closes move the rung with the flag off; five paper wins move nothing with the flag off and on; a paper close never counts toward the NAV the peak is measured on), `test_swing_premarket::TestTheCatchUpSettlement` (**4**: a missed evening is settled at 09:09 on real closes and the plan built on it; a settled session is never a second settlement; the catch-up itself runs once; paper closes move nothing at 09:09 either), `test_swing_detect` (`closed_trades_read == "real"`) |
+| **A14 — the funnel.** Top 20 `SETTING_UP` flags by score + every EP auto-watched each evening (rows carry `score`, `adr_pct`); the monitor watches all; daily focus = top 5 by score + every EP (`sw_watch.focus`, recomputed by the evening and the premarket after the gap scan; the desk page puts focus triggers first); DETECTOR flags expire after 10 sessions or on trigger; MANUAL rows after 10 sessions unless re-confirmed (`PATCH /swing/watch/{id}` `{"reconfirm": true}`; a DETECTOR row is refused 400; a pre-0031 MANUAL row gets its clock once) | `WatchConfig.auto_watch_top_n` [20], `focus_top_n` [5], `manual_valid_bars` [10]; `swing_watch._top_flags`, `refresh_focus`, `reconfirm`, `NotReconfirmable`, `expire_stale`'s backfill, `add_manual`'s expiry; `SwingWatchOut.score/adr_pct/focus/reconfirmed_on`, `SwingWatchPatch.reconfirm`; `swing_desk.signals_for` joins `focus`; `openapi.json` + `schema.ts` regenerated (additions only) | worker `test_swing_eod::TestTheWatchFunnel` (**5**: 25 flags → the top 20 by score + the EP, with score and ADR on the row; focus = `EPCO` + the top five; focus recomputed, not accumulated; a MANUAL row expires on day 11 and a re-confirmed one does not; a pre-rule MANUAL row is given its clock once); API `test_api_swing` (a hand-added row now expires; re-confirm restarts the clock and moves no level; a DETECTOR row is refused; `focus` / `score` / `adr_pct` on the read model) |
+| **B7 — the drill.** Five signals (flag break, EP, locked circuit, below-pivot, and the live gap's break skipped `STOP_TOO_WIDE` with its slot released), a late partial fill through the postback handler, two confirms (one re-sized 833 → 389 against a book that counts the resting remainder), the 10:45 sweep cancelling the 666 remainder with the GTT untouched, the 15:15 hook, EOD, the next morning's plan showing the pending line again; the counters; **0 orders reach a broker** | `tools/swing/drill.py` (`DrillQuotes`, `DrillOrders`, the live gap seeded liquid with 60 bars, `confirm_two_lines` restructured — SW10.5.6 on the one state the drill writes), `tools/swing/fixtures/morning-live-gap.{csv,watchlist.json,expected.json}` (the four names of `morning-synthetic.*` plus `EPSILONGAP`; the SW6 fixture untouched) | the drill itself, exit 0 (the printed run is below); `tools/swing/replay.py --expect` on the new fixture exits 0 |
+
+### The schema (`0031_swing_review_corrections`)
+
+`sw_watch.score` (5,2), `adr_pct` (10,2), `focus` bool, `reconfirmed_on` date;
+`sw_position.half_risk` bool; `sw_session.first_live_counted` bool; `ck_sw_plan_line_kind_known`
+rebuilt with `PENDING_RANGE` (the migration writes the list out; a test asserts it equals
+`SW_LINE_KINDS`). Round-tripped `upgrade → downgrade 0030 → upgrade` on `baskfy_sw_t3`. `03`
+§1, §1b, §4, §6, §7, §8 amended; `test_schema_matches_docs` names all six columns.
+
+### The drill, as printed (2 Sep 2026, `baskfy_sw_t3`)
+
+```
+  3. 09:09 MORNING   MORNING plan 2026-08-19: universe 1, quotes pulled 1 (scripted), gaps ['EPSILONGAP'] (+1), entries 1, pending 1, exits 0, skips 3, focus 5, ladder caught up: False
+                       SWING BUY ALPHAFLAG x1666 @ 100.00 stop 97.00 risk ₹4998.00 [PROPOSED]
+                       SWING PENDING EPSILONGAP — range at 92.00, no stop yet; EP score 55.42; live gap, stop set by the opening range at window close; slot reserved; preview: ≈ 1063 shares (₹4996.10 at risk) if the stop lands 1 ADR (5.13%) below 92.00 [PROPOSED]
+  4. 09:15-10:45     replayed morning-live-gap.csv through PgSignalStore: 5 signals, 2 SIGNAL lines, gate GREEN rung 0
+                       09:38  TRIGGERED              EPSILONGAP entry=   94.60 stop=   88.00
+                       EPSILONGAP: SIGNAL plan skipped it SIZE_REFUSED STOP_TOO_WIDE (…); the PENDING_RANGE slot is released — slot released at 09:38
+  5. confirm         09:50 SWING BUY ALPHAFLAG x1666 @ 100.80 stop 97.80 → SENT as a live marketable LIMIT would be (limit 100.75 = min(100.80 x 1.005, range high 100.50 + 0.25 x 5% ADR)), order DRILL-ORD-1, nothing filled yet; the drill wrote this state — the dry-run branch cannot
+                       09:55 SWING BUY BETAEP x833 @ 210.50 stop 204.50 → SIMULATED; position 1 x389 gtt DRY-… simulated=True
+                         re-sized at confirm 833 → 389 (A5): … book ₹167,932.80 + ₹81,884.50 = 24.98% of the sleeve, ceiling 25% at rung 0, 1 entry today
+                       10:20 postback: 1000 of 1666 ALPHAFLAG filled at 100.85 → position 2 x1000 gtt DRY-…:ALPHAFLAG:GTT (for exactly 1000, the real gateway's dry-run branch), line SENT — the remaining 666 still resting
+                       EXPOSURE after confirms ₹249,867.30 = 25.0% of the sleeve — ALPHAFLAG ₹100,850.00 filled + ₹67,132.80 still resting at the trigger + BETAEP ₹81,884.50 (rung ceiling 25% = ₹250,000.00); 2 entries today, 2 of 2 positions at rung 0
+  6. 10:45 sweep     reconciled 1, cancelled 1, refused 0, slots freed 0
+                       ALPHAFLAG order DRILL-ORD-1: remainder 666 cancelled through the gateway (dry-run), line FILLED, position x1000 gtt DRY-… — 10:45 cutoff: 1000 filled, the remaining 666 cancelled (DRILL-ORD-1); GTT untouched
+                       15:15 sweep hook: 0 naked position(s) re-armed
+                       swing journal (swing_orders_journal.jsonl): dry_run, gtt_dry_run, gtt_dry_run, order_cancel_dry_run
+                       broker client touched: 0
+  8. 21:05 EOD       EOD 2026-08-19: gate GREEN rung 0→0 (real closes: none), watch +0 −0, managed 2, exits 1, entries 0, pending 1, skips 4, naked none, sessions logged 2, first live sessions left 5 (risk x1: 0.500%)
+  sw_session 2026-08-18: mode=DRY_RUN monitor_ran=False signals=0 confirms=0 fills=0 manage_actions=0 plans=1
+  sw_session 2026-08-19: mode=DRY_RUN monitor_ran=True  signals=5 confirms=2 fills=2 manage_actions=0 plans=1
+  orders that reached a broker: 0   (journal: dry_run, gtt_dry_run, gtt_dry_run, order_cancel_dry_run)
+  late partial fill: 1000 of 1666 ALPHAFLAG at 100.85 by postback, the rest cancelled at 10:45; one GTT, for exactly 1000
+DRILL OK
+```
+
+### Numbers, re-measured
+
+| Suite | Result |
+|---|---|
+| core `packages/core/tests` (the whole package; docs parity included) | green — `test_swing_pending_and_first_live.py` **26 passed** (2 hypothesis × 200), `test_swing_docs_parity` green with the nine new fields and the new kind named in `04` |
+| execution `packages/execution/tests` | **188 passed** (170 + 18) |
+| worker `test_swing_eod` / `test_swing_ladder` / `test_swing_premarket` / `test_swing_detect` | **green** on `baskfy_sw_t3` (+10 eod, +4 premarket A7/A9, +4 catch-up; ladder re-pinned, 3 replaced) |
+| API `test_api_swing` / `test_swing_readonly` / `test_swing_schema_and_settings` / `test_swing_track_c` / `test_api_artifacts` / `test_schema_matches_docs` | **green** (+3 API, +2 schema, +6 docs) |
+| desk `tests/` | **1,645 passed, 17 skipped** — `test_swing_execute` **118**, `test_swing_desk` **105**, `test_swing_monitor` **34**, `test_swing_track_c` **39** |
+| `make lint` | clean (ruff, format, mypy) |
+| the drill | `DRILL OK`, 0 orders, 58 `sw_` rows all the sole user's |
+
+### Decisions
+
+SW10.5.1 (A7 — a session slot, not a tier seat; the locked pending line; the provisional score
+and the watch row's ADR — ⚠ UNREVIEWED on those three), SW10.5.2 (A8 — the pull transport
+instead of an unauthenticated postback URL, the cancel's line state, the local simulated modify,
+`cancel_order` on the gateway with named statuses, the resting remainder as exposure — ⚠
+UNREVIEWED), SW10.5.3 (A9 — "execution is enabled" read as "a confirm would be real"; the
+countdown moves on a LIVE evening with or without an order — ⚠ UNREVIEWED on the reading),
+SW10.5.4 (A10 — no judgement call; the journal card's `reads` is leaf 1.3.4's file), SW10.5.5
+(A14 — top 20 per evening, focus recomputed — ⚠ UNREVIEWED), SW10.5.6 (B7 — the one state the
+drill writes by hand — ⚠ UNREVIEWED).
+
+### A defect the re-read caught before it shipped
+
+The desk's confirm applied the half-risk multiplier **twice** on a real Postgres context:
+`sizing_config` scaled `risk_per_trade_pct` to 0.25 % and `entries_now` scaled it again from
+the context's `first_live_sessions_left` (which `PgSwingStore.session_context` carries and the
+in-memory test store did not) — 0.125 %, a 416-share line where 833 was right. The multiplier
+is now applied in exactly one place (`entries_now`, from the context, when a real order would
+go out); the test store's context carries the countdown; and
+`test_first_live_risk_multiplier_is_applied_once_not_twice` pins it, including a scan that
+`_buy` never scales the config itself.
+
+### What SW10.5 did NOT do
+
+- **No push transport for order updates.** The desk has no Kite postback URL: `websec` refuses
+  a POST with no recognised Origin, and opening it for one path is a boundary this run did not
+  draw on its own (SW10.5.2). Fills arrive by the confirm's own poll, by **Reconcile fills**
+  on the page, by the 10:45 sweep — all pulls of the order book through the Kite wrapper. The
+  KiteTicker's `on_order_update` websocket callback and a checksum-verified route are each a
+  one-line call into `swing_execute.on_order_update`; SW11 chooses.
+- **The 10:45 and 15:15 sweeps are routes and hooks, not scheduled.** `POST /swing/cutoff` and
+  `eod_gtt_sweep` exist and are exercised; nothing fires them at 10:45 / 15:15 yet (a Beat
+  entry cannot — the sweeps need the desk's gateway — so it is a launchd/cron POST or a desk
+  timer, SW11's, with `SWING_ORDER_OPEN_AFTER_CUTOFF` and `SWING_GTT_MISSING_AT_1515`).
+- **The journal card still says `reads: SIMULATED`** while the flag is false
+  (`baskfy_api.swing_journal`, leaf 1.3.4's file this session); the ladder reads real closes
+  regardless (A10). One keyword for SW11, and MD8′'s "paper sessions" wording with it.
+- **`sw_position.half_risk` is a column only.** The journal's tag on the page is SW11's (the
+  journal module is 1.3.4's).
+- **The web hub has no "Still watching" control and does not show `focus`/`score`.** The API
+  carries them; `05` §2 is the spec. The desk page sorts focus first and shows the pending row.
+- **A live gap's provisional score is out of 70** and a 72-score flag always outranks it
+  (SW10.5.1). If the funnel should let a strong gap crowd out a flag, the score's denominator
+  is one line.
+- **"Top 20" is per evening** (SW10.5.5): the list can hold more than twenty flags across
+  evenings; nothing retires a row because a better one arrived.
+- **The marketable limit's ADR comes from the context's detection row / watch row**; a BUY
+  line for a name with neither (a hand-added row with no detection) is refused
+  `SIZE_REFUSED` at the confirm gate before the limit is ever computed, as SW9.5.2 says.
+- **`execute_line` polls only a live order.** A dry-run confirm never consults the order
+  source (asserted); a live confirm with no Kite session answers `SENT` without polling.
+- **The drill's late partial fill starts from a state the drill writes** (SW10.5.6): the line
+  is marked `SENT` by hand, because the dry-run gateway fills whole. Everything after that —
+  the handler, the GTT for the filled quantity, the re-sized confirm against the resting
+  remainder, the cancel — is the production path over the real gateway.
+- **`write_market_row` still takes `execution_enabled`** (unused since A10) so its callers in
+  `celery_tasks` / `orchestrator` are untouched; SW11 may drop it.
+- **No `hypothesis` on the desk** (as SW10); the new desk cases are exact.
+
+---
+
 ## Not done (kept loud)
 
 - **SW10 onward.** The desk page and `/swing/execute` are in (SW7, both halves) and write
@@ -1534,8 +1661,9 @@ fit whole is taken at the size that fits; the evening and the morning plans stil
   sessions of 180 instruments it holds cannot feed the detectors' 200-session lookback anyway
   (SW3.3).
 - No live morning has run the premarket scan or the monitor (SW6, above).
-- `sw_config.first_live_sessions_left` / `risk_multiplier` (`02` §3.5) has no core function yet;
-  SW7 multiplies `risk_per_trade_pct` before calling `size_position`.
+- ~~`sw_config.first_live_sessions_left` / `risk_multiplier` (`02` §3.5) has no core function
+  yet~~ — closed by SW10.5 (A9): `plan.first_live_multiplier` / `build_entries(risk_multiplier=)`
+  size at plan time; the evening counts the sessions down.
 - `sw_config.exposure_level` is written back by the evening job (SW8), but the detection job's
   Saturday re-scan can still overwrite a settled market row one rung too high (SW8, "did NOT do").
 - The watchlist page is read-only; the API's three writes have no form yet.

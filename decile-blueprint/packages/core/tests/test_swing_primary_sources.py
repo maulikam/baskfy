@@ -70,6 +70,7 @@ def _why(what: str) -> str:
 
 def _distance_pct(item: WatchItem) -> Decimal:
     """`04` §5.1's own arithmetic: `(entry - stop) / entry x 100`, 2 dp."""
+    assert item.stop_ref is not None, "every item here carries a stop (SW10.5: a live gap has none)"
     return ((item.trigger - item.stop_ref) / item.trigger * _PCT).quantize(_TWO_DP)
 
 

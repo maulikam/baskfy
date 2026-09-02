@@ -63,7 +63,9 @@ EDITABLE_FIELDS: Final[tuple[str, ...]] = (
 #: settings page comes to believe it saved something it did not.
 SYSTEM_OWNED_FIELDS: Final[Mapping[str, str]] = {
     "exposure_level": "swing-eod",
-    "first_live_sessions_left": "/swing/execute",
+    # SW10.5 (STANDING-ANSWERS A9): the countdown is the evening's — decremented once when a
+    # LIVE session closes, never by a request.
+    "first_live_sessions_left": "swing-eod",
     # `04` §8.5 (SW9.5): the sleeve's peak NAV, its drawdown and the lock-out are the evening
     # job's measurements of the book. A person who could reset the peak could trade through a
     # drawdown, which is the failure the rule exists to prevent.

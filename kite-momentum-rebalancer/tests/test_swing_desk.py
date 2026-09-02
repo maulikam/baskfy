@@ -158,7 +158,7 @@ DDL = [
         position_id INTEGER,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        CHECK (kind IN ('BUY_ON_TRIGGER', 'SELL_AT_OPEN', 'RAISE_GTT_STOP')),
+        CHECK (kind IN ('BUY_ON_TRIGGER', 'SELL_AT_OPEN', 'RAISE_GTT_STOP', 'PENDING_RANGE')),
         CHECK (state IN ('PROPOSED','CONFIRMED','SENT','FILLED','REJECTED','EXPIRED','SKIPPED')))""",
     """CREATE TABLE sw_plan_skip(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -178,6 +178,9 @@ DDL = [
         trigger NUMERIC, stop_ref NUMERIC, setup_daily_date TEXT,
         note TEXT, catalyst TEXT,
         state TEXT NOT NULL DEFAULT 'WATCHING',
+        score NUMERIC, adr_pct NUMERIC,
+        focus BOOLEAN NOT NULL DEFAULT false,
+        reconfirmed_on TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""",
     """CREATE TABLE sw_signal(
@@ -219,6 +222,7 @@ DDL = [
         r_multiple NUMERIC,
         pnl_inr NUMERIC,
         simulated BOOLEAN NOT NULL DEFAULT true,
+        half_risk BOOLEAN NOT NULL DEFAULT false,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CHECK (setup IN ('FLAG', 'EP', 'PARABOLIC_SHORT')),
@@ -252,6 +256,7 @@ DDL = [
         fills INTEGER NOT NULL DEFAULT 0,
         manage_actions INTEGER NOT NULL DEFAULT 0,
         notes TEXT,
+        first_live_counted BOOLEAN NOT NULL DEFAULT false,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (user_id, session_date),
@@ -492,9 +497,11 @@ def fake_execute(exec_module, monkeypatch):
     pass a working store — and raises 400/404/410/409 exactly where the contract says."""
     calls: list[dict] = []
 
-    async def execute_line(store, gw, *, plan_id, line_id, confirm, now, last_price=None):
+    async def execute_line(store, gw, *, plan_id, line_id, confirm, now, last_price=None,
+                           orders=None):
         calls.append({"store": store, "gw": gw, "plan_id": plan_id, "line_id": line_id,
-                      "confirm": confirm, "now": now, "last_price": last_price})
+                      "confirm": confirm, "now": now, "last_price": last_price,
+                      "orders": orders})
         if confirm != "true":
             raise HTTPException(400, "Execution requires explicit confirmation.")
         plan = store.plan(plan_id)
@@ -539,6 +546,7 @@ def client(scenario, monkeypatch, tmp_path):
     monkeypatch.setattr(swing_desk, "_now", lambda: NOW)
     monkeypatch.setattr(swing_desk, "swing_gateway", lambda: "fake-gateway")
     monkeypatch.setattr(swing_desk, "last_price", lambda symbol: LAST_PRICES.get(symbol))
+    monkeypatch.setattr(swing_desk, "order_source", lambda: None)
     monkeypatch.setattr(C, "TOKEN_FILE", str(tmp_path / "no-such-token.json"))
     return TestClient(M.app)
 
@@ -985,6 +993,7 @@ def real_client(scenario, monkeypatch, tmp_path):
                         lambda: contextlib.nullcontext(scenario.store()))
     monkeypatch.setattr(swing_desk, "_now", lambda: NOW)
     monkeypatch.setattr(swing_desk, "last_price", lambda symbol: LAST_PRICES.get(symbol))
+    monkeypatch.setattr(swing_desk, "order_source", lambda: None)
     monkeypatch.setattr(C, "TOKEN_FILE", str(tmp_path / "no-such-token.json"))
     gw = real_execute.build_swing_gateway(ExplodingKC(), RiskManager())
     monkeypatch.setattr(swing_desk, "_swing_gateway", gw)
@@ -1627,3 +1636,205 @@ class TestTheRouteReSizesThroughTheRealModule:
         assert j["status"] == "SIMULATED" and j["gtt"]["qty"] == 1666
         line = scenario.store().line(ids["trigger_line"])
         assert line["quantity"] == 1666 and line["note"] is None
+
+
+# ---------------------------------------------------------------------------------------
+# SW10.5 — STANDING-ANSWERS A7 (PENDING_RANGE on the page and at the route), A8 (the store's
+# late-fill reads, the reconcile and the 10:45 sweep routes), A9 (the header), A14 (focus).
+# ---------------------------------------------------------------------------------------
+class TestPendingRangeOnTheDesk:
+    def _pending(self, scenario) -> tuple[int, str, int]:
+        scenario.config()
+        pk, plan_id = scenario.plan(source="MORNING",
+                                    built_at=dt.datetime(2026, 9, 2, 9, 12, tzinfo=IST))
+        line_id = scenario.line(pk, plan_id, kind="PENDING_RANGE", instrument_id=5,
+                                symbol="EPSILON", quantity=0, trigger="112.50", stop=None,
+                                setup="EP", note="EP score 46.20; live gap; slot reserved")
+        return pk, plan_id, line_id
+
+    def test_a_pending_range_line_renders_with_no_confirm_button(self, client, scenario):
+        _, _, line_id = self._pending(scenario)
+        html = client.get("/swing").text
+        row = re.search(r'data-line-id="%d".*?</tr>' % line_id, html, re.S).group(0)
+        assert "SWING PENDING EPSILON" in row and "no stop yet" in row
+        assert _forms(row, "/swing/execute") == []
+        assert "pending the opening range" in row and "not confirmable" in row
+
+    def test_the_route_refuses_a_pending_range_line_with_400_before_the_module(
+        self, client, scenario, fake_execute
+    ):
+        _, plan_id, line_id = self._pending(scenario)
+        r = client.post("/swing/execute", data={"plan_id": plan_id, "line_id": line_id,
+                                                "confirm": "true"})
+        assert r.status_code == 400 and "PENDING_RANGE" in r.text
+        assert fake_execute == [], "the execute module was never asked"
+        assert scenario.store().line(line_id)["state"] == "PROPOSED"
+
+    def test_the_real_module_refuses_a_pending_range_line_too(self, real_client, scenario):
+        _, plan_id, line_id = self._pending(scenario)
+        r = real_client.post("/swing/execute", data={"plan_id": plan_id, "line_id": line_id,
+                                                     "confirm": "true"})
+        assert r.status_code == 400
+        assert scenario.store().line(line_id)["state"] == "PROPOSED"
+
+    def test_the_view_lists_pending_lines_apart_from_the_buys_and_in_the_fingerprint(
+        self, scenario, store
+    ):
+        _, _, line_id = self._pending(scenario)
+        view = swing_desk.build_view(store, now=NOW, dry_run=True, execution_enabled=False,
+                                     monitor_enabled=False, token={"present": False,
+                                     "label": "-", "age_minutes": None, "expired": True})
+        plan = view["plans"]["morning"]
+        assert [ln["id"] for ln in plan["pending"]] == [line_id] and plan["buys"] == []
+        assert plan["pending"][0]["confirmable"] is False
+        before = view["fingerprint"]
+        store.expire_pending(TODAY)
+        after = swing_desk.build_view(store, now=NOW, dry_run=True, execution_enabled=False,
+                                      monitor_enabled=False, token=view["status"]["token"])
+        assert after["fingerprint"] != before
+
+    def test_expire_pending_frees_only_todays_proposed_pending_lines(self, scenario, store):
+        _, _, line_id = self._pending(scenario)
+        pk, plan_id = scenario.plan(source="MORNING", as_of=TODAY - dt.timedelta(days=1),
+                                    built_at=dt.datetime(2026, 9, 1, 9, 12, tzinfo=IST))
+        yesterday = scenario.line(pk, plan_id, kind="PENDING_RANGE", instrument_id=3,
+                                  symbol="GAMMALOCK", quantity=0, trigger="50.00", stop=None,
+                                  setup="EP")
+        assert store.expire_pending(TODAY) == 1
+        assert store.line(line_id)["state"] == "EXPIRED"
+        assert "slot freed at 10:45" in store.line(line_id)["note"]
+        assert store.line(yesterday)["state"] == "PROPOSED"
+        assert store.expire_pending(TODAY) == 0, "freed exactly once"
+
+
+class TestTheLateFillReads:
+    def test_range_high_for_reads_the_signal_that_became_the_line(self, scenario, store):
+        ids = scenario.morning()
+        assert store.range_high_for(ids["trigger_line"]) == Decimal("100.50")
+        assert store.range_high_for(ids["waiting"]) is None, "an EOD entry has no range"
+
+    def test_line_by_order_and_sent_buy_lines_find_only_sent_buys(self, scenario, store):
+        ids = scenario.morning()
+        assert store.line_by_order("ORD-9") is None and store.sent_buy_lines(TODAY) == []
+        store.set_line(ids["trigger_line"], state="SENT", journal_ref="ORD-9")
+        found = store.line_by_order("ORD-9")
+        assert found is not None and found["id"] == ids["trigger_line"]
+        assert [ln["id"] for ln in store.sent_buy_lines(TODAY)] == [ids["trigger_line"]]
+        store.set_line(ids["trigger_line"], state="FILLED")
+        assert store.line_by_order("ORD-9") is None
+
+    def test_note_line_appends_and_a_position_carries_half_risk(self, scenario, store):
+        ids = scenario.morning()
+        store.note_line(ids["trigger_line"], "10:45 cutoff: 40 filled")
+        store.note_line(ids["trigger_line"], "again")
+        assert store.line(ids["trigger_line"])["note"].endswith("10:45 cutoff: 40 filled; again")
+        pid = store.create_position({
+            "instrument_id": 5, "symbol": "EPSILON", "setup": "FLAG", "entry_date": TODAY,
+            "entry_avg": Decimal("100.10"), "quantity_entered": 40, "quantity_open": 40,
+            "initial_stop": Decimal("96.00"), "stop": Decimal("96.00"), "trail": "MA20",
+            "state": "OPEN", "simulated": False, "half_risk": True,
+        })
+        assert store.position(pid)["half_risk"] is True
+        assert store.position(ids["held"])["half_risk"] is False
+
+
+class TestTheSweepRoutes:
+    def test_the_cutoff_route_frees_slots_and_needs_confirm(self, real_client, scenario):
+        scenario.config()
+        pk, plan_id = scenario.plan(source="MORNING",
+                                    built_at=dt.datetime(2026, 9, 2, 9, 12, tzinfo=IST))
+        line_id = scenario.line(pk, plan_id, kind="PENDING_RANGE", instrument_id=5,
+                                symbol="EPSILON", quantity=0, trigger="112.50", stop=None,
+                                setup="EP")
+        assert real_client.post("/swing/cutoff", data={"confirm": "no"}).status_code == 400
+        r = real_client.post("/swing/cutoff", data={"confirm": "true"})
+        assert r.status_code == 200, r.text
+        assert r.json() == {"reconciled": 0, "cancelled": 0, "cancel_failed": 0,
+                            "slots_freed": 1, "outcomes": []}
+        assert scenario.store().line(line_id)["state"] == "EXPIRED"
+
+    def test_the_reconcile_route_applies_the_brokers_fill_through_the_handler(
+        self, real_client, scenario, monkeypatch
+    ):
+        """A SENT live buy the broker has since filled in part: the reconcile writes the
+        position for the filled 40 and a (dry-run) GTT for exactly 40 — the same handler the
+        postback would call — and the page then shows the resting remainder."""
+        ids = scenario.morning()
+        store = scenario.store()
+        store.set_line(ids["trigger_line"], state="SENT", journal_ref="ORD-9")
+
+        class Orders:
+            def order_status(self, order_id):
+                return real_execute.OrderReport("OPEN", 40, Decimal("100.90"))
+
+        monkeypatch.setattr(swing_desk, "order_source", lambda: Orders())
+        assert real_client.post("/swing/reconcile", data={"confirm": "no"}).status_code == 400
+        r = real_client.post("/swing/reconcile", data={"confirm": "true"})
+        assert r.status_code == 200, r.text
+        (applied,) = r.json()["reconciled"]
+        # Under the desk's dry-run gates the fill is booked simulated=true (the gateway's
+        # branch); the line stays SENT with the position on it, as a live partial would.
+        assert applied["status"] == "SIMULATED" and applied["filled_quantity"] == 40
+        pos = store.position(applied["position_id"])
+        assert pos["quantity_open"] == 40 and pos["gtt_id"].startswith("DRY-")
+        line = store.line(ids["trigger_line"])
+        assert line["state"] == "SENT" and line["position_id"] == pos["id"]
+        html = real_client.get("/swing").text
+        assert "not yet complete" in html and "ORD-9" in html
+        assert _forms(html, "/swing/reconcile") and _forms(html, "/swing/cutoff")
+
+    def test_the_sweeps_are_covered_by_websec(self, scenario, monkeypatch):
+        scenario.config()
+        monkeypatch.setattr(swing_desk, "open_store",
+                            lambda: contextlib.nullcontext(scenario.store()))
+        c = TestClient(M.app, headers={"Origin": "http://evil.example"})
+        assert c.post("/swing/cutoff", data={"confirm": "true"}).status_code == 403
+        assert c.post("/swing/reconcile", data={"confirm": "true"}).status_code == 403
+
+
+class TestFirstLiveHeaderAndFocus:
+    def test_the_header_says_half_risk_only_when_a_confirm_would_be_real(self, scenario, store):
+        scenario.config(first_live=3)
+        token = {"present": False, "label": "-", "age_minutes": None, "expired": True}
+        paper = swing_desk.build_view(store, now=NOW, dry_run=True, execution_enabled=False,
+                                      monitor_enabled=False, token=token)
+        live = swing_desk.build_view(store, now=NOW, dry_run=False, execution_enabled=True,
+                                     monitor_enabled=False, token=token)
+        assert paper["sleeve"]["first_live_header"] == "first live sessions: 3 left · risk 0.500%"
+        assert paper["sleeve"]["half_risk"] is False
+        assert live["sleeve"]["first_live_header"] == "first live sessions: 3 left · risk 0.250%"
+        assert live["sleeve"]["half_risk"] is True and live["sleeve"]["risk_multiplier"] == "0.5"
+
+    def test_the_header_is_empty_once_the_countdown_is_done(self, scenario, store):
+        scenario.config(first_live=0)
+        token = {"present": False, "label": "-", "age_minutes": None, "expired": True}
+        view = swing_desk.build_view(store, now=NOW, dry_run=False, execution_enabled=True,
+                                     monitor_enabled=False, token=token)
+        assert view["sleeve"]["first_live_header"] == "" and view["sleeve"]["half_risk"] is False
+
+    def test_the_page_shows_the_start_small_banner(self, client, scenario):
+        scenario.config(first_live=5)
+        html = client.get("/swing").text
+        assert 'id="swFirstLive"' in html and "first live sessions: 5 left" in html
+
+    def test_focus_triggers_are_listed_first(self, scenario, store):
+        """A14: the desk page puts focus names on top — a focus row raised at 09:20 sits above
+        a non-focus row raised at 09:35, newest-first within each group."""
+        scenario.config()
+        scenario.conn.execute(
+            "INSERT INTO sw_watch(id, user_id, instrument_id, setup, source, added_on, focus) "
+            "VALUES (1, ?, 3, 'FLAG', 'DETECTOR', ?, true), (2, ?, 5, 'FLAG', 'DETECTOR', ?, false)",
+            (USER, TODAY.isoformat(), USER, TODAY.isoformat()),
+        )
+        scenario.conn.execute(
+            "INSERT INTO sw_signal(user_id, watch_id, instrument_id, setup, session_date, "
+            "raised_at, state, last_price) VALUES (?, 1, 3, 'FLAG', ?, ?, 'BELOW_PIVOT', 50), "
+            "(?, 2, 5, 'FLAG', ?, ?, 'BELOW_PIVOT', 300)",
+            (USER, TODAY.isoformat(), dt.datetime(2026, 9, 2, 9, 20, tzinfo=IST).isoformat(),
+             USER, TODAY.isoformat(), dt.datetime(2026, 9, 2, 9, 35, tzinfo=IST).isoformat()),
+        )
+        view = swing_desk.build_view(store, now=NOW, dry_run=True, execution_enabled=False,
+                                     monitor_enabled=False, token={"present": False,
+                                     "label": "-", "age_minutes": None, "expired": True})
+        assert [(t["symbol"], t["focus"]) for t in view["triggers"]] == [
+            ("GAMMALOCK", True), ("EPSILON", False)]

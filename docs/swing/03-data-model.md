@@ -2,7 +2,10 @@
 
 Postgres, Alembic migration `0028_swing.py` (`0029_swing_backtest.py` for §10;
 `0030_swing_primary_sources.py` for SW9.5's drawdown columns, two defaults and the two new skip
-reasons) in `services/api/alembic/versions/`, SQLAlchemy
+reasons; `0031_swing_review_corrections.py` for SW10.5's review corrections — the watch
+funnel's `score` / `adr_pct` / `focus` / `reconfirmed_on`, the journal's `half_risk` tag, the
+session's `first_live_counted`, and the `PENDING_RANGE` line kind) in
+`services/api/alembic/versions/`, SQLAlchemy
 models in `packages/core/src/baskfy_core/models/swing.py`. Conventions inherited from
 `models/base.py`: `PRICE` (18,2) for prices and levels, `PRICE_RAW` (18,4) where an exchange
 print must survive adjustment, `INR` (12,2) for money, `BREADTH` (7,4) for breadth percentages,
@@ -34,7 +37,7 @@ desk journal (order_journal / fills, via packages/execution)  ← fills for sw_p
 | `stop_mode` | text | `LOW_OF_DAY` / `OPENING_RANGE_LOW`; default `LOW_OF_DAY` |
 | `adr_min_pct`, `turnover_min_inr`, `price_min` | numeric | the liquidity floors; defaults **4.0** (since SW9.5, was 3.5; user-raisable) / 5e7 / 20 |
 | `exposure_level` | smallint | the ladder rung in force, 0–3; written by `swing-eod`, never by a form |
-| `first_live_sessions_left` | smallint | counts down from 5 once execution is enabled; `risk_multiplier` 0.5 while > 0 (`02` §3.5) |
+| `first_live_sessions_left` | smallint | counts down from 5 (`SizingConfig.first_live_sessions`) once execution is enabled; while > 0 **and** execution is enabled the plan is sized at `risk_multiplier_first_live` [0.5] × `risk_per_trade_pct` (`02` §3.5, `04` §5.4). **Decremented by `swing-eod`, once, when a LIVE `sw_session` closes** (`sw_session.first_live_counted` records which sessions were counted, so a re-run of the evening and a desk restart mid-countdown change nothing) — never by a request (SW10.5, STANDING-ANSWERS A9; until then `/swing/execute` halved the sent quantity and counted in-process) |
 | `sleeve_peak_inr` | INR, nullable | the highest EOD NAV the sleeve has reached (`04` §8.5); **null until the first evening has run** — a sleeve with no session behind it is at its peak, not in drawdown. Written by `swing-eod`, only ever raised — except the night the ladder switches books (PACK.6), when it starts over at that night's NAV (SW9.5.1) |
 | `drawdown_pct` | numeric(10,2) | how far below `sleeve_peak_inr` tonight's NAV sits, `(peak − nav) / peak × 100`; 0 at or above the peak, 0 when the peak is not positive. Written by `swing-eod` |
 | `drawdown_locked` | bool | the lock-out in force for the next session (`04` §8.5, hysteresis: on at 15%, off inside 10%). Written by `swing-eod`, **audited** on every change (`swing-eod` in `sw_config_audit`, the NAV and the peak in the note); `sleeve_peak_inr` and `drawdown_pct` are measurements and are not audited — the day's `sw_market_daily` row is their history |
@@ -62,7 +65,7 @@ the desk's and written in the same transaction as the change.
 | `id` `BigIntPk`, `user_id` | |
 | `key` | the `sw_config` column that changed, e.g. `risk_per_trade_pct` |
 | `old_value`, `new_value` | rendered as text, as the desk's table does — one row **per field** |
-| `changed_at`, `changed_by` | a user id, or a job name for the fields a job owns (`swing-eod` writes `exposure_level`; `/swing/execute` writes `first_live_sessions_left`) |
+| `changed_at`, `changed_by` | a user id, or a job name for the fields a job owns (`swing-eod` writes `exposure_level` and, since SW10.5, `first_live_sessions_left`) |
 | `note` | free text, e.g. the reason a ceiling-bound value was lowered |
 
 Every threshold **not** listed here (base geometry, EP gap, ladder tiers…) is a
@@ -117,13 +120,17 @@ liquid universe. Written by `swing-eod`.
 | Column | Meaning |
 |---|---|
 | `instrument_id`, `setup`, `source` | `source` ∈ `DETECTOR` / `MANUAL` |
-| `added_on`, `expires_on` | flags expire after 10 sessions without a trigger, EPs after `ep.valid_bars` (3) |
-| `trigger`, `stop_ref` | exchange prices, refreshed by `swing-premarket` from the latest bar; a MANUAL row keeps what Maulik typed |
+| `added_on`, `expires_on` | flags expire after 10 sessions without a trigger, EPs after `ep.valid_bars` (3); **MANUAL rows after `watch.manual_valid_bars` (10) sessions unless re-confirmed** (SW10.5, STANDING-ANSWERS A14 — until then a MANUAL row never expired) |
+| `trigger`, `stop_ref` | exchange prices, refreshed by `swing-premarket` from the latest bar; a MANUAL row keeps what Maulik typed. A live gap found at 09:09 has a `trigger` and **no `stop_ref`** until the opening range sets one — the MORNING plan shows it as a `PENDING_RANGE` line (§6) |
 | `setup_daily_date` | FK back to the `sw_setup_daily` row it came from (nullable for MANUAL) |
+| `score` | numeric(5,2), nullable — what the row is ranked by (SW10.5, A14): the detection row's score at watch time; for a live gap the provisional EP score the pre-open knows (`04` §7.3); null for a MANUAL row nobody scored (ranks at zero) |
+| `adr_pct` | numeric(10,2), nullable — the name's ADR when the row was written, read by the plan and the monitor when no detection row exists (a live gap, a MANUAL name), so a stop can be measured against one ADR (`04` §6.1, SW9.5.2) |
+| `focus` | bool — **the daily focus** (A14): the top `watch.focus_top_n` [5] flags by score plus every EP, recomputed by `swing-eod` and by `swing-premarket` after the gap scan (`swing_watch.refresh_focus`). The desk page puts focus names on top; the notifier (SW11) pushes only these; the rest are watched, signalled and logged below the fold |
+| `reconfirmed_on` | date, nullable — when a person last re-confirmed a MANUAL row (`PATCH /swing/watch/{id}` with `reconfirm: true`); `expires_on` runs `manual_valid_bars` sessions from it |
 | `note`, `catalyst` | free text (the "news check") |
 | `state` | `WATCHING` / `TRIGGERED` / `EXPIRED` / `DISMISSED` |
 
-The web app may add/dismiss/annotate rows (they move no money). Nothing else on `/swing` mutates.
+The web app may add/dismiss/annotate/re-confirm rows (they move no money). Nothing else on `/swing` mutates.
 
 ## 5. `sw_signal` — what the monitor raised
 
@@ -146,10 +153,19 @@ Mirrors the desk's plan lifecycle: `plan_id` (uuid), `built_at`, **`expires_at =
 EOD job is a **preview**; the morning plan is rebuilt at 09:10 from the same watchlist with
 pre-open prices, and a `SIGNAL` plan is built the moment a trigger fires (one line).
 
-`sw_plan_line`: `kind` (`BUY_ON_TRIGGER` / `SELL_AT_OPEN` / `RAISE_GTT_STOP`), `instrument_id`,
+`sw_plan_line`: `kind` (`BUY_ON_TRIGGER` / `SELL_AT_OPEN` / `RAISE_GTT_STOP` /
+**`PENDING_RANGE`** — SW10.5, A7: a live gap on the MORNING plan with `quantity` 0 and `stop`
+null, reserving one of the session's new-entry slots, never executable; `0031` rebuilt the
+`kind` constraint), `instrument_id`,
 `setup`, `quantity`, `trigger`, `stop`, `risk_inr`, `position_value`, `trail`, `note`, `state`
 (`PROPOSED` / `CONFIRMED` / `SENT` / `FILLED` / `REJECTED` / `EXPIRED` / `SKIPPED`),
 `client_id = plan_id:symbol:kind` (the gateway's idempotency key, as the desk does), `journal_ref`.
+A `PENDING_RANGE` line's states: `PROPOSED` while the slot is reserved; `SKIPPED` once the name
+has triggered (its SIGNAL plan lined or skipped it — the reservation is spent either way);
+`EXPIRED` when the 10:45 sweep frees a slot nothing claimed. A `SENT` line of a live LIMIT
+buy (A8) carries the broker's order id in `journal_ref` and, once any of it has filled, its
+`position_id`; the desk's `on_order_update` handler raises the position and its GTT as more
+fills arrive, and the 10:45 sweep cancels what is still open.
 
 `sw_plan_skip`: `(plan_id, instrument_id, reason, detail)` — the `Skipped` tuples. A plan is
 not honest without them. `reason` is check-constrained to `SkipReason`; `0030` rebuilt the
@@ -172,7 +188,8 @@ is a second row).
 | `state` | `OPEN` / `PARTIAL` / `CLOSED` |
 | `closed_on`, `exit_avg`, `close_reason` | `ActionReason` value or `MANUAL` |
 | `r_multiple`, `pnl_inr` | written at close from `journal.ClosedTrade` |
-| `simulated` | bool — **true for every DRY_RUN / flag-off fill**; the journal page labels them |
+| `simulated` | bool — **true for every DRY_RUN / flag-off fill**; the journal page labels them. The ladder reads real closes only, from day one (SW10.5, A10; PACK.6's paper clause is void) |
+| `half_risk` | bool — the entry was planned at the first-live `risk_multiplier` (0.5 × `risk_per_trade_pct`; `04` §5.4, A9). The journal's tag — a column only until SW11 surfaces it on the page |
 
 `sw_fill`: one row per fill (`position_id`, `side`, `quantity`, `price`, `filled_at`,
 `journal_ref`, `simulated`), so `exit_avg` is derivable and auditable.
@@ -180,7 +197,10 @@ is a second row).
 ## 8. `sw_session` — one row per session the system ran
 
 `session_date` PK, `mode` (`DRY_RUN` / `LIVE`), `monitor_ran`, `plan_ids`, `signals`,
-`confirms`, `fills`, `manage_actions`, `notes`. This is the paper track record `02` §3.2 counts.
+`confirms`, `fills`, `manage_actions`, `notes`, and `first_live_counted` (SW10.5, A9: the
+evening decremented `sw_config.first_live_sessions_left` for this LIVE session — set once, read
+back on a re-run so the countdown moves once per session). This is the paper track record `02`
+§3.2 counts.
 
 ## 9. What the worker reads to compute a day
 

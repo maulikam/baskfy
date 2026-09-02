@@ -234,6 +234,13 @@ class SwingWatchOut(BaseModel):
     note: str | None
     catalyst: str | None
     state: str
+    #: SW10.5 (STANDING-ANSWERS A14): the score the row is ranked by, the ADR it was watched
+    #: with, whether it is in today's focus (top 5 flags by score + every EP — pushed and shown
+    #: on top), and when a MANUAL row was last re-confirmed (its expiry runs from there).
+    score: Decimal | None = None
+    adr_pct: Decimal | None = None
+    focus: bool = False
+    reconfirmed_on: dt.date | None = None
 
 
 class SwingWatchListOut(BaseModel):
@@ -254,18 +261,21 @@ class SwingWatchIn(BaseModel):
 
 
 class SwingWatchPatch(BaseModel):
-    """The two free-text fields, and nothing else.
+    """The two free-text fields and the re-confirmation, and nothing else.
 
     `docs/swing/02` Track A allows the watchlist's writes because they "change no money" — which
-    is true of a note and a catalyst, and would stop being true the moment this model grew a
-    `trigger`. A level a person can edit after the fact is a level that can be edited to match
-    a price, which is how a plan comes to justify a trade rather than the other way round.
+    is true of a note, a catalyst and a re-confirmation (A14: a MANUAL row expires after ten
+    sessions unless a person says they still want it; `reconfirm: true` restarts that clock and
+    changes no level), and would stop being true the moment this model grew a `trigger`. A
+    level a person can edit after the fact is a level that can be edited to match a price,
+    which is how a plan comes to justify a trade rather than the other way round.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     note: str | None = Field(default=None, max_length=2000)
     catalyst: str | None = Field(default=None, max_length=2000)
+    reconfirm: bool = False
 
 
 class SwingPlanLineOut(BaseModel):
@@ -667,6 +677,10 @@ def _watch_out(row: swing_watch.WatchRow) -> SwingWatchOut:
         note=row.note,
         catalyst=row.catalyst,
         state=row.state,
+        score=row.score,
+        adr_pct=row.adr_pct,
+        focus=row.focus,
+        reconfirmed_on=row.reconfirmed_on,
     )
 
 
@@ -693,8 +707,9 @@ async def post_watch(
 ) -> Response:
     """Add a name by hand. It moves no money (`02` Track A) and it reaches no broker.
 
-    A `MANUAL` row never expires: the person is watching for a reason the detectors cannot see,
-    and retiring it after ten sessions would be the system overruling a judgement.
+    A `MANUAL` row expires after ten sessions unless re-confirmed (A14, SW10.5): the person is
+    watching for a reason the detectors cannot see, but a typed level nobody has looked at in
+    two weeks is stale, and `PATCH … {"reconfirm": true}` is how they say they still want it.
     """
     user_id = await scoped_sole_user_id(session, principal.user_id)
     instrument = (
@@ -720,10 +735,12 @@ async def post_watch(
 async def patch_watch(
     session: SessionDep, principal: AuthenticatedDep, watch_id: int, payload: SwingWatchPatch
 ) -> Response:
-    """The note and the catalyst — `01` §3's "news check", which a person does and Baskfy cannot.
+    """The note and the catalyst — `01` §3's "news check", which a person does and Baskfy cannot
+    — and, with `reconfirm: true`, a MANUAL row's clock restarted (A14).
 
     Levels are deliberately not editable here. A trigger a person can revise after the fact is a
-    trigger that can be revised to match a price they already paid.
+    trigger that can be revised to match a price they already paid. Re-confirming a detector's
+    row is refused: its expiry is the detector's, and it is refreshed every evening.
     """
     user_id = await scoped_sole_user_id(session, principal.user_id)
     try:
@@ -734,8 +751,21 @@ async def patch_watch(
             note=payload.note,
             catalyst=payload.catalyst,
         )
+        if payload.reconfirm:
+            await swing_watch.reconfirm(
+                session,
+                user_id=user_id,
+                watch_id=watch_id,
+                on=dt.datetime.now(tz=dt.UTC).date(),
+            )
     except swing_watch.WatchNotFound as exc:
         raise not_found("watchlist row", str(watch_id)) from exc
+    except swing_watch.NotReconfirmable as exc:
+        raise Problem(
+            ProblemType.INVALID_SCREEN_DEFINITION,
+            f"Only a WATCHING MANUAL row can be re-confirmed: {exc}.",
+            errors=[{"field": "reconfirm", "message": str(exc)}],
+        ) from exc
     return _json(await _one_watch(session, user_id=user_id, watch_id=watch_id))
 
 

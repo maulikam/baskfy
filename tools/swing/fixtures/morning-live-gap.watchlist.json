@@ -1,0 +1,51 @@
+{
+  "day": "2026-08-19",
+  "window_minutes": 5,
+  "names": [
+    {
+      "watch_id": 1,
+      "instrument_id": 11,
+      "token": 1001,
+      "symbol": "ALPHAFLAG",
+      "setup": "FLAG",
+      "pivot_high": "100.00",
+      "upper_circuit": "118.00"
+    },
+    {
+      "watch_id": 2,
+      "instrument_id": 12,
+      "token": 1002,
+      "symbol": "BETAEP",
+      "setup": "EP",
+      "pivot_high": null,
+      "upper_circuit": "248.00"
+    },
+    {
+      "watch_id": 3,
+      "instrument_id": 13,
+      "token": 1003,
+      "symbol": "GAMMALOCK",
+      "setup": "FLAG",
+      "pivot_high": "50.00",
+      "upper_circuit": "52.50"
+    },
+    {
+      "watch_id": 4,
+      "instrument_id": 14,
+      "token": 1004,
+      "symbol": "DELTAWAIT",
+      "setup": "FLAG",
+      "pivot_high": "300.00",
+      "upper_circuit": "356.00"
+    },
+    {
+      "watch_id": 5,
+      "instrument_id": 15,
+      "token": 1005,
+      "symbol": "EPSILONGAP",
+      "setup": "EP",
+      "pivot_high": null,
+      "upper_circuit": "96.00"
+    }
+  ]
+}

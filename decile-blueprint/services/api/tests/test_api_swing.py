@@ -25,6 +25,7 @@ import api_helpers
 import httpx
 import pytest
 import screener_helpers
+import sqlalchemy as sa
 from api_helpers import bearer, make_user, running_app, url
 from screener_helpers import requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +38,7 @@ from baskfy_core.models import (
     SwMarketDaily,
     SwPosition,
     SwSetupDaily,
+    SwWatch,
 )
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 
@@ -493,12 +495,116 @@ class TestTheWatchlistRoutes:
 
         assert annotated.json()["catalyst"] == "Q2 result, order book up"
         assert annotated.json()["source"] == "MANUAL"
-        # A hand-added row has no expiry: the person is watching for a reason the detectors
-        # cannot see, and retiring it would be the system overruling them.
-        assert annotated.json()["expires_on"] is None
+        # SW10.5 (STANDING-ANSWERS A14): a hand-added row expires after ten sessions unless it
+        # is re-confirmed — a two-week-old typed pivot is stale. Until SW10.5 it never expired.
+        assert annotated.json()["expires_on"] is not None
+        assert annotated.json()["expires_on"] > annotated.json()["added_on"]
+        assert annotated.json()["focus"] is False, "focus is the evening's to set"
         assert [row["symbol"] for row in listed.json()["data"]] == ["FLAGCO"]
         assert dismissed.json()["state"] == "DISMISSED"
         assert after.json()["data"] == []
+
+    async def test_a_manual_row_can_be_reconfirmed_and_the_clock_restarts(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A14: `PATCH /swing/watch/{id} {"reconfirm": true}` is the one way a MANUAL row
+        outlives its ten sessions. A non-money write: no level moves, `reconfirmed_on` is
+        today and `expires_on` is ten sessions from today."""
+        _, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+
+        async with running_app(settings, screener_session) as client:
+            added = await client.post(
+                url("/swing/watch"),
+                json={
+                    "instrument_id": instrument_id,
+                    "setup": "FLAG",
+                    "trigger": "149.60",
+                    "stop_ref": "141.86",
+                },
+                headers=bearer(public_id),
+            )
+            watch_id = added.json()["id"]
+            # Age the row: added and expiring in the past, as a fortnight-old row would be.
+            await screener_session.execute(
+                sa.update(SwWatch)
+                .where(SwWatch.id == watch_id)
+                .values(added_on=dt.date(2026, 8, 3), expires_on=dt.date(2026, 8, 17))
+            )
+            await screener_session.flush()
+            reconfirmed = await client.patch(
+                url(f"/swing/watch/{watch_id}"),
+                json={"reconfirm": True},
+                headers=bearer(public_id),
+            )
+
+        body = reconfirmed.json()
+        assert reconfirmed.status_code == 200
+        today = dt.datetime.now(tz=dt.UTC).date().isoformat()
+        assert body["reconfirmed_on"] == today
+        assert body["expires_on"] > today
+        assert body["expires_on"] > "2026-08-17"
+        assert '"trigger":149.60' in reconfirmed.text and '"stop_ref":141.86' in reconfirmed.text
+        assert body["source"] == "MANUAL" and body["state"] == "WATCHING"
+
+    async def test_a_detector_row_cannot_be_reconfirmed(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The detectors refresh their own rows every evening; a person cannot extend one."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+        row = SwWatch(
+            user_id=user_id,
+            instrument_id=instrument_id,
+            setup="FLAG",
+            source="DETECTOR",
+            added_on=dt.date(2026, 8, 18),
+            expires_on=dt.date(2026, 9, 1),
+            trigger=Decimal("149.60"),
+            stop_ref=Decimal("141.86"),
+            state="WATCHING",
+        )
+        screener_session.add(row)
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.patch(
+                url(f"/swing/watch/{row.id}"), json={"reconfirm": True}, headers=bearer(public_id)
+            )
+
+        assert response.status_code == 400
+        assert "MANUAL" in response.json()["detail"]
+
+    async def test_the_focus_flag_is_on_the_read_model(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A14: the daily focus — top 5 flags by score + every EP — is a stored flag the desk
+        page and the notifier read; the hub shows it beside the score."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+        row = SwWatch(
+            user_id=user_id,
+            instrument_id=instrument_id,
+            setup="FLAG",
+            source="DETECTOR",
+            added_on=dt.date(2026, 8, 18),
+            expires_on=dt.date(2026, 9, 1),
+            trigger=Decimal("149.60"),
+            stop_ref=Decimal("141.86"),
+            state="WATCHING",
+            score=Decimal("81.50"),
+            adr_pct=Decimal("6.10"),
+            focus=True,
+        )
+        screener_session.add(row)
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session) as client:
+            listed = await client.get(url("/swing/watch"), headers=bearer(public_id))
+
+        (item,) = listed.json()["data"]
+        assert item["focus"] is True
+        assert '"score":81.50' in listed.text and '"adr_pct":6.10' in listed.text
 
     async def test_a_level_cannot_be_edited_after_the_fact(
         self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch

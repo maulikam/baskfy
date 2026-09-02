@@ -104,6 +104,8 @@ class MemoryStore:
         self.locks: list[dt.date] = []
         self.resizes: list[dict] = []
         self.context_reads = 0
+        #: line_id → the signal's range high (A8); a line no signal produced has none.
+        self.range_highs: dict[int, Decimal] = {}
 
     # -- setup helpers (not part of the protocol) --
     def add_plan(self, *, built_at: dt.datetime = NOW - dt.timedelta(minutes=5)) -> str:
@@ -136,6 +138,14 @@ class MemoryStore:
         fields.setdefault("symbol", "ALPHA")
         fields.setdefault("instrument_id", 11)
         return self.create_position(fields)
+
+    def add_pending(self, plan_id: str, **fields) -> int:
+        """A7: a PENDING_RANGE line as the morning plan writes it — no quantity, no stop."""
+        base = {"kind": "PENDING_RANGE", "quantity": 0, "stop": None, "trigger": D("112.50"),
+                "risk_inr": D(0), "position_value": D(0), "setup": "EP", "symbol": "GAPCO",
+                "instrument_id": 19, "note": "EP score 46.20; live gap; slot reserved"}
+        base.update(fields)
+        return self.add_line(plan_id, **base)
 
     # -- the protocol --
     def plan(self, plan_id):
@@ -240,6 +250,7 @@ class MemoryStore:
                                  open_symbols=frozenset(symbols), open_exposure_inr=exposure),
             detected=dict(self.detected),
             entries_today=len(taken),
+            first_live_sessions_left=int(self._config["first_live_sessions_left"]),
         )
 
     def resize_line(self, line_id, *, quantity, risk_inr, position_value, note):
@@ -249,6 +260,40 @@ class MemoryStore:
         self.resizes.append({"line_id": line_id, "quantity": quantity, "risk_inr": risk_inr,
                              "position_value": position_value, "note": note})
 
+    # -- SW10.5 (A7, A8) --
+    def range_high_for(self, line_id):
+        return self.range_highs.get(line_id)
+
+    def line_by_order(self, order_id):
+        for row in self.lines.values():
+            if (row["kind"] == "BUY_ON_TRIGGER" and row["state"] == "SENT"
+                    and row.get("journal_ref") == order_id):
+                return dict(row)
+        return None
+
+    def sent_buy_lines(self, day):
+        return [dict(ln) for ln in self.lines.values()
+                if ln["kind"] == "BUY_ON_TRIGGER" and ln["state"] == "SENT"
+                and self.plans[ln["plan_id"]]["as_of"] == day]
+
+    def note_line(self, line_id, note):
+        row = self.lines[line_id]
+        row["note"] = f"{row.get('note') or ''}; {note}".strip("; ")
+
+    def expire_pending(self, day):
+        freed = 0
+        for ln in self.lines.values():
+            if (ln["kind"] == "PENDING_RANGE" and ln["state"] == "PROPOSED"
+                    and self.plans[ln["plan_id"]]["as_of"] == day):
+                ln["state"] = "EXPIRED"
+                self.line_history.append((ln["id"], "EXPIRED"))
+                freed += 1
+        return freed
+
+    def open_positions(self):
+        return [dict(p) for p in self.positions.values()
+                if p["state"] != "CLOSED" and int(p["quantity_open"]) > 0]
+
 
 @pytest.fixture(autouse=True)
 def _flag_off(monkeypatch, tmp_path):
@@ -256,7 +301,6 @@ def _flag_off(monkeypatch, tmp_path):
     monkeypatch.setattr(C, "SWING_EXECUTION_ENABLED", False)
     monkeypatch.setattr(C, "DRY_RUN", True)
     monkeypatch.chdir(tmp_path)
-    X._FIRST_LIVE_COUNTED.clear()
 
 
 @pytest.fixture()
@@ -296,10 +340,12 @@ def execute(store, gw, plan_id, line_id, *, confirm="true", now=NOW, last_price=
 
 def test_contract_surface_by_name() -> None:
     for name in ("SwingStore", "ExecOutcome", "swing_gates", "build_swing_gateway",
-                 "execute_line", "rearm_gtt"):
+                 "execute_line", "rearm_gtt", "on_order_update", "cutoff_open_orders",
+                 "eod_gtt_sweep", "EXECUTABLE_KINDS"):
         assert hasattr(X, name), name
     fields = X.ExecOutcome.__dataclass_fields__
-    assert list(fields) == ["status", "reason", "order", "gtt", "position_id", "simulated"]
+    assert list(fields) == ["status", "reason", "order", "gtt", "position_id", "simulated",
+                            "filled_quantity"]
 
 
 def test_swing_gates_dry_run_unless_both_flags_allow(monkeypatch) -> None:
@@ -972,7 +1018,7 @@ def test_rearm_gtt_breakeven_stop_needs_a_last_price(gw) -> None:
     assert out.status == "SIMULATED"
 
 
-# --- G6: first_live_sessions_left (SW7.2) --------------------------------------------------
+# --- G6: the first live sessions (SW7.2, amended by SW10.5 / STANDING-ANSWERS A9) -------------
 
 
 class RecordingGateway:
@@ -982,6 +1028,10 @@ class RecordingGateway:
     def __init__(self) -> None:
         self.orders: list[dict] = []
         self.gtts: list[dict] = []
+        self.modified: list[dict] = []
+        self.cancelled: list[dict] = []
+        self.deleted: list[dict] = []
+        self.next_gtt_id = 4242
 
     async def place(self, **kw):
         self.orders.append(kw)
@@ -989,11 +1039,22 @@ class RecordingGateway:
 
     async def place_gtt_stop(self, **kw):
         self.gtts.append(kw)
-        return {"symbol": kw["symbol"], "status": "GTT_PLACED", "gtt_id": 4242,
+        gtt_id = self.next_gtt_id + len(self.gtts) - 1
+        return {"symbol": kw["symbol"], "status": "GTT_PLACED", "gtt_id": gtt_id,
                 "trigger": kw["trigger"], "limit": kw["trigger"] * 0.995}
 
     async def delete_gtt(self, **kw):
+        self.deleted.append(kw)
         return {"symbol": kw["symbol"], "gtt_id": kw["gtt_id"], "status": "GTT_DELETED"}
+
+    async def modify_gtt_quantity(self, **kw):
+        self.modified.append(kw)
+        return {"symbol": kw["symbol"], "gtt_id": kw["gtt_id"], "status": "GTT_MODIFIED",
+                "trigger": kw["trigger"], "qty": kw["qty"]}
+
+    async def cancel_order(self, **kw):
+        self.cancelled.append(kw)
+        return {"symbol": kw["symbol"], "order_id": kw["order_id"], "status": "ORDER_CANCELLED"}
 
 
 @pytest.fixture()
@@ -1005,95 +1066,486 @@ def live(monkeypatch):
     return RecordingGateway()
 
 
-def test_first_live_quantity_rule() -> None:
-    assert X.first_live_quantity(100, sessions_left=5, simulated=False) == 50
-    assert X.first_live_quantity(101, sessions_left=1, simulated=False) == 50   # round down
-    assert X.first_live_quantity(1, sessions_left=5, simulated=False) == 1      # min 1
-    assert X.first_live_quantity(2, sessions_left=5, simulated=False) == 1
-    assert X.first_live_quantity(100, sessions_left=0, simulated=False) == 100
-    assert X.first_live_quantity(100, sessions_left=5, simulated=True) == 100
+class ScriptedOrders:
+    """An `OrderSource` that answers a script of reports, one per poll, and counts the polls."""
+
+    def __init__(self, *reports: tuple[str, int, str]) -> None:
+        self.script = [X.OrderReport(status, filled, D(price)) for status, filled, price in reports]
+        self.polls: list[str] = []
+
+    def order_status(self, order_id):
+        self.polls.append(order_id)
+        index = min(len(self.polls) - 1, len(self.script) - 1)
+        return self.script[index]
 
 
-def test_first_live_halves_quantity_only_when_not_simulated(gw) -> None:
-    """Simulated: the paper record is at full size, and the counter does not move."""
+class FakeClock:
+    """A monotonic clock and a sleep that advance together, so ten seconds take no time."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.slept: list[float] = []
+
+    def __call__(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+def execute_live(store, gw, plan_id, line_id, *, orders=None, clock=None, now=NOW):
+    clock = clock or FakeClock()
+    return run(X.execute_line(store, gw, plan_id=plan_id, line_id=line_id, confirm="true",
+                              now=now, orders=orders, clock=clock, sleep=clock.sleep)), clock
+
+
+def test_risk_multiplier_for_is_half_only_for_a_real_order_with_sessions_left() -> None:
+    """A9: the reading recorded — a paper confirm is full size."""
+    cfg = {"first_live_sessions_left": 5}
+    assert X.risk_multiplier_for(cfg, simulated=False) == D("0.5")
+    assert X.risk_multiplier_for(cfg, simulated=True) == D(1)
+    assert X.risk_multiplier_for({"first_live_sessions_left": 0}, simulated=False) == D(1)
+    assert X.sizing_config(cfg, risk_multiplier=D("0.5")).sizing.risk_per_trade_pct == 0.25
+    assert X.sizing_config(cfg).sizing.risk_per_trade_pct == 0.5
+
+
+def test_first_live_risk_multiplier_halves_the_risk_at_plan_time_not_the_quantity(live) -> None:
+    """A9: a 1,666-share line (0.5% of ₹10 lakh over a ₹3 stop) is re-sized at confirm to the
+    half-risk size — 833 — and THAT is what is sent, written back to the row and carried by
+    the position: the line shown is the line sent. Nothing halves a quantity after sizing."""
     store = MemoryStore(first_live_sessions_left=5)
     plan_id = store.add_plan()
-    line_id = store.add_line(plan_id, quantity=100)
+    line_id = store.add_line(plan_id, quantity=1666, trigger=D("100.00"), stop=D("97.00"))
+    orders = ScriptedOrders(("COMPLETE", 833, "100.20"))
+    out, _ = execute_live(store, live, plan_id, line_id, orders=orders)
+    assert out.status == "FILLED" and out.filled_quantity == 833
+    assert live.orders[0]["qty"] == 833
+    assert store.lines[line_id]["quantity"] == 833 and "re-sized" in store.lines[line_id]["note"]
+    assert store.positions[out.position_id]["quantity_entered"] == 833
+    assert store.positions[out.position_id]["half_risk"] is True
+    assert live.gtts[0]["qty"] == 833
+
+
+def test_first_live_risk_multiplier_is_applied_once_not_twice(live) -> None:
+    """The defect the re-read found: `sizing_config` scaled the risk AND `entries_now` scaled
+    it again from the context's countdown — 0.125% on a real Postgres context. Half of
+    1,666 is 833; a quarter would be 416."""
+    store = MemoryStore(first_live_sessions_left=5)
+    assert store.session_context(NOW.date()).first_live_sessions_left == 5
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=1666, trigger=D("100.00"), stop=D("97.00"))
+    execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("COMPLETE", 833, "100.20")))
+    assert live.orders[0]["qty"] == 833
+    code = _code_only(inspect.getsource(X._buy))
+    assert "risk_multiplier=" not in code, "the multiplier is applied in entries_now, once"
+
+
+def test_first_live_never_halves_a_simulated_confirm(gw) -> None:
+    """A9's reading: paper plans are full size, and the tag is off."""
+    store = MemoryStore(first_live_sessions_left=5)
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=1666, trigger=D("100.00"), stop=D("97.00"))
     out = execute(store, gw, plan_id, line_id)
     assert out.simulated is True
-    assert store.positions[out.position_id]["quantity_entered"] == 100
-    assert store.first_live_writes == []
-    assert store.config()["first_live_sessions_left"] == 5
+    assert store.positions[out.position_id]["quantity_entered"] == 1666
+    assert store.positions[out.position_id]["half_risk"] is False
+    assert sent_quantities(gw) == [1666]
 
 
-def test_first_live_halves_a_live_buy_and_counts_down_once_per_session(live) -> None:
+def test_first_live_at_zero_sends_full_size_and_tags_nothing(live) -> None:
+    store = MemoryStore(first_live_sessions_left=0)
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=1666, trigger=D("100.00"), stop=D("97.00"))
+    out, _ = execute_live(store, live, plan_id, line_id,
+                          orders=ScriptedOrders(("COMPLETE", 1666, "100.10")))
+    assert live.orders[0]["qty"] == 1666
+    assert store.positions[out.position_id]["half_risk"] is False
+
+
+def test_first_live_countdown_is_never_moved_by_a_request(live) -> None:
+    """A9: the evening job decrements once per LIVE session; a confirm — any number of them —
+    writes nothing to `first_live_sessions_left`. Asserted on the store's write log and on
+    the module's code."""
     store = MemoryStore(first_live_sessions_left=5)
     plan_id = store.add_plan()
     a = store.add_line(plan_id, quantity=100, symbol="ALPHA", instrument_id=11)
-    b = store.add_line(plan_id, quantity=51, symbol="BETA", instrument_id=12)
-    out_a = execute(store, live, plan_id, a)
-    out_b = execute(store, live, plan_id, b)
-    assert out_a.status == out_b.status == "SENT"
-    assert [o["qty"] for o in live.orders] == [50, 25]
-    assert store.first_live_writes == [4], "decremented once for the session, not per order"
-    next_day = NOW + dt.timedelta(days=1)
-    plan2 = store.add_plan(built_at=next_day)
-    c = store.add_line(plan2, quantity=100, symbol="GAMMA", instrument_id=13)
-    execute(store, live, plan2, c, now=next_day)
-    assert store.first_live_writes == [4, 3]
+    b = store.add_line(plan_id, quantity=100, symbol="BETA", instrument_id=12)
+    for line_id in (a, b):
+        execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("COMPLETE", 50, "100")))
+    assert store.first_live_writes == []
+    assert store.config()["first_live_sessions_left"] == 5
+    code = _code_only(inspect.getsource(X))
+    # The Protocol declares the write (C1); the module's code never calls it.
+    assert "store.set_first_live_sessions_left(" not in code
+    assert ".set_first_live_sessions_left(" not in code.replace(
+        "def set_first_live_sessions_left(", "")
+    assert "first_live_quantity" not in code and "_FIRST_LIVE_COUNTED" not in code
 
 
-def test_first_live_at_zero_sends_full_size(live) -> None:
-    store = MemoryStore(first_live_sessions_left=0)
+def test_first_live_sell_and_raise_are_never_halved(live) -> None:
+    """A9: only new entries start small. A SELL of 100 sends 100; a RAISE re-arms the whole
+    open quantity — with the countdown at 5 and the gates live."""
+    store = MemoryStore(first_live_sessions_left=5)
+    pid = store.add_position(gtt_id="123", stop=D("96.00"))
     plan_id = store.add_plan()
-    line_id = store.add_line(plan_id, quantity=100)
-    execute(store, live, plan_id, line_id)
-    assert live.orders[0]["qty"] == 100 and store.first_live_writes == []
+    sell = store.add_line(plan_id, kind="SELL_AT_OPEN", quantity=100, trigger=None, stop=None)
+    raise_ = store.add_line(plan_id, kind="RAISE_GTT_STOP", quantity=0, trigger=None,
+                            stop=D("100.00"))
+    execute(store, live, plan_id, sell, last_price=D("104"))
+    execute(store, live, plan_id, raise_, last_price=D("104"))
+    assert live.orders[0]["qty"] == 100
+    assert live.gtts[0]["qty"] == 300 and store.positions[pid]["quantity_open"] == 300
 
 
-def test_live_buy_not_yet_filled_is_SENT_with_no_position_and_no_gtt(live) -> None:
-    """SW7.1: a PLACED live order is not a fill — no position, no stop, line SENT with the
-    order id, so the fill can be reconciled later and the stop armed for what filled."""
+# --- SW10.5 / A8: the marketable limit, the poll, the late fill, the cutoff ------------------
+
+
+def test_the_buy_is_a_marketable_limit_never_market(live) -> None:
+    """A8: min(trigger x 1.005, range_high + 0.25 x ADR). Trigger 100.80 broke a 100.00
+    range on a 5% ADR: chase cap 101.30, range reach 100 + 0.25 x 5.04 = 101.26 → 101.25."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, trigger=D("100.80"), stop=D("97.80"))
+    store.range_highs[line_id] = D("100.00")
+    execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("COMPLETE", 100, "100.9")))
+    order = live.orders[0]
+    assert order["order_type"] == "LIMIT" and order["price"] == 101.25
+    code = _code_only(inspect.getsource(X._buy))
+    assert '"MARKET"' not in code
+
+
+def test_the_marketable_limit_is_a_limit_in_the_dry_run_journal_too(gw) -> None:
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, trigger=D("100.00"), stop=D("96.00"))
+    execute(store, gw, plan_id, line_id)
+    rows = [json.loads(r) for r in pathlib.Path(gw._journal_path).read_text().splitlines()]
+    assert rows[0]["event"] == "dry_run" and rows[0]["price"] == 100.5
+
+
+def test_the_request_polls_the_order_at_most_ten_seconds_at_two_a_second(live) -> None:
+    """A8: ≤ 10 s, ≤ 2 req/s. An order that stays OPEN is asked about every half second and
+    the request answers after ten seconds — twenty-one reads, twenty sleeps of 0.5 s."""
     store = MemoryStore()
     plan_id = store.add_plan()
     line_id = store.add_line(plan_id)
-    out = execute(store, live, plan_id, line_id)
-    assert out.status == "SENT" and out.simulated is False and out.position_id is None
-    assert out.gtt is None and live.gtts == []
-    assert store.positions == {} and store.fills == []
+    orders = ScriptedOrders(("OPEN", 0, "0"))
+    out, clock = execute_live(store, live, plan_id, line_id, orders=orders)
+    assert out.status == "SENT" and out.position_id is None and out.filled_quantity == 0
+    assert len(orders.polls) <= 21 and len(orders.polls) >= 19
+    assert all(step == 0.5 for step in clock.slept)
+    assert clock.now <= 10.0
+    assert store.lines[line_id]["state"] == "SENT" and live.gtts == []
+
+
+def test_the_poll_stops_early_on_complete(live) -> None:
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=100)
+    orders = ScriptedOrders(("OPEN", 0, "0"), ("OPEN", 40, "100.10"), ("COMPLETE", 100, "100.15"))
+    out, clock = execute_live(store, live, plan_id, line_id, orders=orders)
+    assert out.status == "FILLED" and len(orders.polls) == 3 and clock.now == 1.0
+
+
+def test_complete_writes_the_position_the_fill_and_the_gtt_in_the_same_request(live) -> None:
+    """A8: COMPLETE → GTT + sw_position in one request, simulated=false, at the average."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=100, trigger=D("100.00"), stop=D("96.00"))
+    out, _ = execute_live(store, live, plan_id, line_id,
+                          orders=ScriptedOrders(("COMPLETE", 100, "100.15")))
+    assert out.status == "FILLED" and out.simulated is False and out.filled_quantity == 100
+    pos = store.positions[out.position_id]
+    assert pos["quantity_entered"] == pos["quantity_open"] == 100
+    assert pos["entry_avg"] == D("100.1500") and pos["simulated"] is False
+    assert pos["gtt_id"] == "4242" and pos["gtt_trigger"] == D("96.00")
+    assert store.fills == [{"position_id": out.position_id, "side": "BUY", "quantity": 100,
+                            "price": D("100.15"), "filled_at": NOW, "journal_ref": "ORD1",
+                            "simulated": False}]
+    assert live.gtts[0]["qty"] == 100 and live.gtts[0]["last_price"] == 100.15
+    assert store.lines[line_id]["state"] == "FILLED"
+    assert store.lines[line_id]["position_id"] == out.position_id
+    assert store.sessions[NOW.date()]["fills"] == 1
+
+
+def test_a_partial_fill_is_SENT_with_the_filled_quantity_and_a_gtt_for_exactly_it(live) -> None:
+    """A8: OPEN with 40 of 100 filled after ten seconds → SENT, a position for 40, a GTT for
+    40 — never for the 100 the line asked for (the EXCESS case)."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=100, trigger=D("100.00"), stop=D("96.00"))
+    out, _ = execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("OPEN", 40, "100.10")))
+    assert out.status == "SENT" and out.filled_quantity == 40 and out.position_id is not None
+    pos = store.positions[out.position_id]
+    assert (pos["quantity_entered"], pos["quantity_open"]) == (40, 40)
+    assert live.gtts[0]["qty"] == 40
     assert store.lines[line_id]["state"] == "SENT"
+    assert store.lines[line_id]["position_id"] == out.position_id
     assert store.lines[line_id]["journal_ref"] == "ORD1"
-    assert store.sessions[NOW.date()] == {"mode": "LIVE", "confirms": 1, "fills": 0,
-                                          "manage_actions": 0}
-    order = live.orders[0]
-    assert order["side"] == "BUY" and order["product"] == "CNC" and order["order_type"] == "LIMIT"
-    assert order["price"] == 100.0 and order["client_id"] == f"{plan_id}:ALPHA:BUY"
-    assert order["tenant"].user_id == C.SOLE_USER_ID
+    assert store.sessions[NOW.date()]["fills"] == 1
 
 
-def test_live_sell_not_yet_filled_is_SENT_and_book_unchanged(live) -> None:
+def test_partial_then_complete_ends_with_one_gtt_covering_exactly_the_filled_quantity(live) -> None:
+    """MD11's own test: 40 fill in the request, 60 more arrive by postback → one GTT, modified
+    from 40 to 100, one position of 100 at the share-weighted average, two fill rows."""
     store = MemoryStore()
-    pid = store.add_position(gtt_id="123")
     plan_id = store.add_plan()
-    line_id = store.add_line(plan_id, kind="SELL_AT_OPEN", quantity=100, trigger=None, stop=None)
-    out = execute(store, live, plan_id, line_id)
-    assert out.status == "SENT" and out.position_id == pid
-    assert store.positions[pid]["quantity_open"] == 300 and store.positions[pid]["gtt_id"] == "123"
-    assert store.fills == []
-    assert live.orders[0]["order_type"] == "MARKET" and live.orders[0]["side"] == "SELL"
+    line_id = store.add_line(plan_id, quantity=100, trigger=D("100.00"), stop=D("96.00"))
+    out, _ = execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("OPEN", 40, "100.00")))
+    later = run(X.on_order_update(store, live, {"order_id": "ORD1", "status": "COMPLETE",
+                                                "filled_quantity": 100, "average_price": "100.30"},
+                                  now=NOW + dt.timedelta(minutes=20)))
+    assert later is not None and later.status == "FILLED" and later.filled_quantity == 100
+    pos = store.positions[out.position_id]
+    assert (pos["quantity_entered"], pos["quantity_open"]) == (100, 100)
+    assert pos["entry_avg"] == D("100.3000")
+    assert [f["quantity"] for f in store.fills] == [40, 60]
+    assert store.fills[1]["price"] == D("100.5000"), "the 60 alone: (100 x 100.30 - 40 x 100) / 60"
+    assert len(live.gtts) == 1, "never a second GTT"
+    assert [m["qty"] for m in live.modified] == [100]
+    assert live.modified[0]["gtt_id"] == 4242 and live.modified[0]["trigger"] == 96.0
+    assert store.lines[line_id]["state"] == "FILLED"
 
 
-def test_live_raise_records_the_exchange_gtt_id(live) -> None:
+def test_on_order_update_is_idempotent_on_a_repeated_postback(live) -> None:
     store = MemoryStore()
-    pid = store.add_position(gtt_id="123", stop=D("96.00"))
     plan_id = store.add_plan()
-    line_id = store.add_line(plan_id, kind="RAISE_GTT_STOP", quantity=0, trigger=None,
-                             stop=D("100.00"))
-    out = execute(store, live, plan_id, line_id, last_price=D("104"))
-    assert out.status == "FILLED" and out.simulated is False
-    pos = store.positions[pid]
-    assert pos["gtt_id"] == "4242" and pos["stop"] == D("100.00")
-    assert live.gtts[0]["qty"] == 300 and live.gtts[0]["trigger"] == 100.0
+    line_id = store.add_line(plan_id, quantity=100, trigger=D("100.00"), stop=D("96.00"))
+    execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("OPEN", 40, "100.00")))
+    update = {"order_id": "ORD1", "status": "OPEN", "filled_quantity": 70,
+              "average_price": "100.20"}
+    first = run(X.on_order_update(store, live, update, now=NOW))
+    second = run(X.on_order_update(store, live, update, now=NOW))
+    third = run(X.on_order_update(store, live, {**update, "filled_quantity": 55}, now=NOW))
+    assert first is not None and first.filled_quantity == 70
+    assert second is not None and second.filled_quantity == 70 and third.filled_quantity == 70
+    assert [f["quantity"] for f in store.fills] == [40, 30], "the repeat and the stale wrote nothing"
+    assert [m["qty"] for m in live.modified] == [70]
+    pos = store.positions[first.position_id]
+    assert (pos["quantity_entered"], pos["quantity_open"]) == (70, 70)
+    assert store.lines[line_id]["state"] == "SENT"
+
+
+def test_on_order_update_creates_the_position_when_the_request_saw_nothing_filled(live) -> None:
+    """The order was OPEN with 0 filled for ten seconds; the first fill arrives by postback."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=100, trigger=D("100.00"), stop=D("96.00"))
+    execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("OPEN", 0, "0")))
+    assert store.positions == {}
+    out = run(X.on_order_update(store, live, {"order_id": "ORD1", "status": "OPEN",
+                                              "filled_quantity": 25, "average_price": "100.05"},
+                                now=NOW))
+    assert out is not None and out.position_id is not None and out.filled_quantity == 25
+    assert live.gtts[0]["qty"] == 25 and live.modified == []
+    assert store.lines[line_id]["position_id"] == out.position_id
+    assert store.sessions[NOW.date()]["fills"] == 1
+
+
+def test_the_postback_modifies_the_gtt_never_places_a_second_one(live) -> None:
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=100, trigger=D("100.00"), stop=D("96.00"))
+    execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("OPEN", 10, "100.00")))
+    for filled in (20, 30, 100):
+        run(X.on_order_update(store, live, {"order_id": "ORD1", "status": "OPEN" if filled < 100
+                                            else "COMPLETE", "filled_quantity": filled,
+                                            "average_price": "100.00"}, now=NOW))
+    assert len(live.gtts) == 1 and [m["qty"] for m in live.modified] == [20, 30, 100]
+    assert all(m["gtt_id"] == 4242 for m in live.modified)
+    assert store.positions[1]["quantity_open"] == 100
+
+
+def test_the_postback_never_modifies_the_gtt_above_the_filled_quantity(live) -> None:
+    """The modify's quantity is the open quantity, which is at most what filled."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=100, trigger=D("100.00"), stop=D("96.00"))
+    execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("OPEN", 10, "100.00")))
+    for filled in (33, 57, 90):
+        run(X.on_order_update(store, live, {"order_id": "ORD1", "status": "OPEN",
+                                            "filled_quantity": filled, "average_price": "100"},
+                                now=NOW))
+        assert live.modified[-1]["qty"] <= filled
+        assert live.modified[-1]["qty"] == store.positions[1]["quantity_open"]
+
+
+def test_a_postback_for_an_unknown_or_weekly_order_is_ignored(live) -> None:
+    store = MemoryStore()
+    assert run(X.on_order_update(store, live, {"order_id": "WEEKLY-1", "status": "COMPLETE",
+                                               "filled_quantity": 10, "average_price": "1"},
+                                 now=NOW)) is None
+    assert store.positions == {} and live.modified == [] and live.gtts == []
+
+
+def test_a_postback_arms_a_naked_partial_for_the_whole(live) -> None:
+    """The first arm was refused (naked); the next fill arms one GTT for everything open."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=100, trigger=D("100.00"), stop=D("96.00"))
+    execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("OPEN", 40, "100.00")))
+    store.update_position(1, {"gtt_id": None, "gtt_trigger": None})
+    run(X.on_order_update(store, live, {"order_id": "ORD1", "status": "OPEN",
+                                        "filled_quantity": 70, "average_price": "100"}, now=NOW))
+    assert len(live.gtts) == 2 and live.gtts[-1]["qty"] == 70 and live.modified == []
+    assert store.positions[1]["gtt_id"] == "4243"
+
+
+def test_the_cutoff_cancels_the_open_remainder_and_leaves_the_gtt_untouched(live) -> None:
+    """A8: 40 of 100 filled by 10:45 → the order's remainder is cancelled through the gateway,
+    the line closes FILLED for the 40, and the GTT for 40 is neither modified nor re-armed."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=100, trigger=D("100.00"), stop=D("96.00"))
+    execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("OPEN", 40, "100.00")))
+    cutoff = NOW.replace(hour=10, minute=45)
+    report = run(X.cutoff_open_orders(store, live, orders=ScriptedOrders(("OPEN", 40, "100.00")),
+                                      now=cutoff))
+    assert (report.reconciled, report.cancelled, report.cancel_failed) == (1, 1, 0)
+    assert live.cancelled == [{"order_id": "ORD1", "symbol": "ALPHA",
+                               "client_id": f"{plan_id}:ALPHA:CANCEL",
+                               "tenant": live.cancelled[0]["tenant"],
+                               "plan_tenant": live.cancelled[0]["plan_tenant"]}]
+    assert live.modified == [] and len(live.gtts) == 1 and live.deleted == []
+    assert store.positions[1]["quantity_open"] == 40 and store.positions[1]["gtt_id"] == "4242"
+    assert store.lines[line_id]["state"] == "FILLED"
+    assert "remaining 60 cancelled" in store.lines[line_id]["note"]
+
+
+def test_the_cutoff_applies_a_fill_that_arrived_since_before_cancelling(live) -> None:
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=100, trigger=D("100.00"), stop=D("96.00"))
+    execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("OPEN", 40, "100.00")))
+    report = run(X.cutoff_open_orders(store, live, orders=ScriptedOrders(("OPEN", 75, "100.00")),
+                                      now=NOW.replace(hour=10, minute=45)))
+    assert report.cancelled == 1
+    assert store.positions[1]["quantity_open"] == 75 and [m["qty"] for m in live.modified] == [75]
+    assert "remaining 25 cancelled" in store.lines[line_id]["note"]
+
+
+def test_the_cutoff_expires_a_line_nothing_filled_and_reports_a_refused_cancel(live) -> None:
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    a = store.add_line(plan_id, quantity=100, symbol="ALPHA", instrument_id=11)
+    b = store.add_line(plan_id, quantity=100, symbol="BETA", instrument_id=12)
+    for line_id in (a, b):
+        execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("OPEN", 0, "0")))
+
+    class Refusing(RecordingGateway):
+        async def cancel_order(self, **kw):
+            if kw["symbol"] == "BETA":
+                return {"symbol": "BETA", "order_id": kw["order_id"], "status": "ORDER_CANCEL_ERROR",
+                        "error": "broker down"}
+            return await super().cancel_order(**kw)
+
+    refusing = Refusing()
+    report = run(X.cutoff_open_orders(store, refusing, orders=ScriptedOrders(("OPEN", 0, "0")),
+                                      now=NOW.replace(hour=10, minute=45)))
+    assert (report.cancelled, report.cancel_failed) == (1, 1)
+    assert store.lines[a]["state"] == "EXPIRED" and store.positions == {}
+    assert store.lines[b]["state"] == "SENT" and "cancel refused" in store.lines[b]["note"]
+
+
+def test_the_cutoff_leaves_a_completed_order_alone(live) -> None:
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=100, trigger=D("100.00"), stop=D("96.00"))
+    execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("OPEN", 40, "100.00")))
+    report = run(X.cutoff_open_orders(store, live, orders=ScriptedOrders(("COMPLETE", 100, "100.10")),
+                                      now=NOW.replace(hour=10, minute=45)))
+    assert report.cancelled == 0 and live.cancelled == []
+    assert store.lines[line_id]["state"] == "FILLED" and store.positions[1]["quantity_open"] == 100
+
+
+def test_the_cutoff_frees_the_unclaimed_pending_range_slots(gw) -> None:
+    """A7: a reserved slot nothing claimed by 10:45 is freed — the PENDING_RANGE line EXPIRES."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    pending = store.add_pending(plan_id)
+    spent = store.add_pending(plan_id, symbol="DONECO", instrument_id=20, state="SKIPPED")
+    report = run(X.cutoff_open_orders(store, gw, orders=None, now=NOW.replace(hour=10, minute=45)))
+    assert report.slots_freed == 1
+    assert store.lines[pending]["state"] == "EXPIRED" and store.lines[spent]["state"] == "SKIPPED"
+    assert run(X.cutoff_open_orders(store, gw, orders=None,
+                                    now=NOW.replace(hour=10, minute=46))).slots_freed == 0
+
+
+def test_a_dry_run_fill_follows_the_same_path_with_simulated_true(gw) -> None:
+    """A8: the gateway's dry-run order is a complete fill at the trigger through
+    `_apply_buy_fill` — the same bookkeeping as a live COMPLETE — with simulated=true on the
+    position and the fill, and no poll: the dry-run path completes immediately."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, quantity=100, trigger=D("100.00"), stop=D("96.00"))
+    orders = ScriptedOrders(("OPEN", 0, "0"))
+    clock = FakeClock()
+    out = run(X.execute_line(store, gw, plan_id=plan_id, line_id=line_id, confirm="true", now=NOW,
+                             orders=orders, clock=clock, sleep=clock.sleep))
+    assert out.status == "SIMULATED" and out.simulated is True and out.filled_quantity == 100
+    assert orders.polls == [] and clock.now == 0.0
+    pos = store.positions[out.position_id]
+    assert pos["simulated"] is True and store.fills[0]["simulated"] is True
+    assert pos["entry_avg"] == D("100.0000") and pos["quantity_open"] == 100
+    assert journal_events(gw) == ["dry_run", "gtt_dry_run"]
+
+
+def test_a_rejected_order_with_nothing_filled_is_REJECTED_and_writes_no_book(live) -> None:
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id)
+    out, _ = execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("REJECTED", 0, "0")))
+    assert out.status == "REJECTED" and store.positions == {} and live.gtts == []
+    assert store.lines[line_id]["state"] == "REJECTED"
+
+
+def test_the_1515_sweep_stub_re_arms_naked_positions_given_a_price(gw) -> None:
+    store = MemoryStore()
+    naked = store.add_position(gtt_id=None, gtt_trigger=None, stop=D("96.00"))
+    covered = store.add_position(symbol="BETA", instrument_id=12, gtt_id="DRY-x")
+    outcomes = run(X.eod_gtt_sweep(store, gw, now=NOW.replace(hour=15, minute=15),
+                                   prices={"ALPHA": D("104")}))
+    assert [o.position_id for o in outcomes] == [naked]
+    assert store.positions[naked]["gtt_id"] is not None
+    assert store.positions[covered]["gtt_id"] == "DRY-x"
+
+
+# --- SW10.5 / A7: a PENDING_RANGE line can never reach /swing/execute ------------------------
+
+
+def test_pending_range_is_refused_400_by_execute_line_before_the_lock(gw) -> None:
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_pending(plan_id)
+    with pytest.raises(HTTPException) as refused:
+        execute(store, gw, plan_id, line_id)
+    assert refused.value.status_code == 400 and "PENDING_RANGE" in refused.value.detail
+    assert store.locks == [] and store.line_history == []
+    assert store.lines[line_id]["state"] == "PROPOSED"
+    assert journal_events(gw) == [] and store.positions == {}
+
+
+def test_pending_range_is_refused_under_live_gates_too(live) -> None:
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_pending(plan_id)
+    with pytest.raises(HTTPException) as refused:
+        execute(store, live, plan_id, line_id)
+    assert refused.value.status_code == 400 and live.orders == [] and live.gtts == []
+
+
+def test_pending_range_is_not_in_the_executable_kinds_at_source_level() -> None:
+    from baskfy_core.swing.plan import EXECUTABLE_KINDS, LineKind
+
+    assert X.PENDING_RANGE not in X.EXECUTABLE_KINDS
+    assert X.EXECUTABLE_KINDS == {"BUY_ON_TRIGGER", "SELL_AT_OPEN", "RAISE_GTT_STOP"}
+    assert X.EXECUTABLE_KINDS == {k.value for k in EXECUTABLE_KINDS}
+    assert LineKind.PENDING_RANGE not in EXECUTABLE_KINDS
+    code = _code_only(inspect.getsource(X))
+    # The refusal reads the set, and no branch of the module executes the kind.
+    assert "not in EXECUTABLE_KINDS" in code
+    assert "== PENDING_RANGE" not in code and "kind == X.PENDING_RANGE" not in code
 
 
 # --- G8: the code names no broker method ---------------------------------------------------
@@ -1123,7 +1575,9 @@ def test_prices_are_float_at_the_gateway_boundary(live) -> None:
     plan_id = store.add_plan()
     line_id = store.add_line(plan_id, trigger=D("123.45"), stop=D("119.90"))
     execute(store, live, plan_id, line_id)
-    assert isinstance(live.orders[0]["price"], float) and live.orders[0]["price"] == 123.45
+    # A8: the price is the marketable limit — 123.45 x 1.005 = 124.067 → 124.05 (the range
+    # reach, with no range, is 123.45 + 0.25 x 5% x 123.45 = 124.99, so the chase cap binds).
+    assert isinstance(live.orders[0]["price"], float) and live.orders[0]["price"] == 124.05
 
 
 def test_prices_stay_decimal_in_the_store(gw) -> None:
@@ -1203,13 +1657,18 @@ def test_line_with_no_quantity_is_BLOCKED(gw) -> None:
     assert out.status == "BLOCKED" and gw._sent == {}
 
 
-def test_unknown_kind_is_BLOCKED_and_sends_nothing(gw) -> None:
+def test_unknown_kind_is_refused_400_before_anything_and_sends_nothing(gw) -> None:
+    """Re-pinned for SW10.5 (A7): a kind outside `EXECUTABLE_KINDS` is refused with a 400 in
+    `_validate` — before the lock, before the row is touched — so the line stays exactly as
+    it was rather than being marked REJECTED."""
     store = MemoryStore()
     plan_id = store.add_plan()
     line_id = store.add_line(plan_id, kind="SHORT_ON_TRIGGER")
-    out = execute(store, gw, plan_id, line_id)
-    assert out.status == "BLOCKED" and gw._sent == {} and gw._gtt_sent == {}
-    assert store.lines[line_id]["state"] == "REJECTED"
+    with pytest.raises(HTTPException) as refused:
+        execute(store, gw, plan_id, line_id)
+    assert refused.value.status_code == 400
+    assert gw._sent == {} and gw._gtt_sent == {}
+    assert store.lines[line_id]["state"] == "PROPOSED" and store.line_history == []
 
 
 def test_rearm_twice_on_one_day_is_DUPLICATE_BLOCKED(gw) -> None:

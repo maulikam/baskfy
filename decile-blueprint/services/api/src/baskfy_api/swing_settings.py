@@ -259,6 +259,11 @@ async def apply_patch(  # noqa: PLR0913 - one keyword per input the audit row ne
         )
     row.updated_by = changed_by
     await session.flush()
+    # `updated_at` carries `onupdate=func.now()`, so the flush expires it to pick up the value
+    # the database generated. Reading it afterwards would be a lazy load from synchronous code —
+    # `MissingGreenlet` at response-serialisation time — so it is fetched here, where there is a
+    # coroutine to await in.
+    await session.refresh(row)
     return row
 
 
@@ -301,6 +306,7 @@ async def record_system_change(  # noqa: PLR0913 - one keyword per input the aud
         )
         row.updated_by = changed_by
         await session.flush()
+        await session.refresh(row)
     return row
 
 

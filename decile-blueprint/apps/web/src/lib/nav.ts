@@ -179,6 +179,17 @@ export const SECTION_TABS = {
     /* Create left Discover; this is where it lives. Removing it from one hub without giving it
        a home in the other would have hidden a real surface behind a direct link. */
     { href: "/create" as Route, label: "Create" },
+    /* `docs/swing/05` §1: "The **Build** hub gains a section tab **Swing**". */
+    { href: "/swing" as Route, label: "Swing" },
+  ],
+  /*
+    The swing hub (SW4, `docs/swing/05` §2). Five tabs; three of them arrive with later modules
+    and are marked so rather than being hidden — a tab row that grows one entry at a time reads
+    as a product changing shape, while a `planned` marker reads as one being built.
+  */
+  swing: [
+    { href: "/swing" as Route, label: "Setups" },
+    { href: "/swing/market" as Route, label: "Market" },
   ],
   /*
     PORTFOLIO_REDESIGN.md §2, in order. Overview first because it is the default landing tab —
@@ -217,6 +228,7 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   market: "Market",
   discover: "Discover",
   build: "Build",
+  swing: "Build",
   portfolio: "Portfolio",
   me: "Me",
 };
@@ -275,6 +287,10 @@ export function primarySection(pathname: string): SectionKey | null {
     return "discover";
   if (pathname === "/build" || pathname.startsWith("/build/") || pathname === "/create")
     return "build";
+  // `docs/swing/05` §1: "The **Build** hub gains a section tab **Swing**". The swing pages light
+  // Build in the primary chrome rather than adding a sixth destination — HOME1 fixes the primary
+  // nav at five.
+  if (pathname === "/swing" || pathname.startsWith("/swing/")) return "swing";
   /* `/portfolios` (plural, the desk's rebalance sub-pages) must not match here — hence the exact
      compare and the trailing slash, never a bare `startsWith("/portfolio")`. */
   if (pathname === "/portfolio" || pathname.startsWith("/portfolio/")) return "portfolio";

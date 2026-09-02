@@ -1706,6 +1706,83 @@
         "title": "BacktestSummaryOut",
         "type": "object"
       },
+      "BarOut": {
+        "properties": {
+          "close": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Close",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "ma_fast": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ma Fast"
+          },
+          "ma_slow": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ma Slow"
+          }
+        },
+        "required": [
+          "date",
+          "close",
+          "ma_fast",
+          "ma_slow"
+        ],
+        "title": "BarOut",
+        "type": "object"
+      },
+      "BarsOut": {
+        "properties": {
+          "adjusted": {
+            "default": true,
+            "title": "Adjusted",
+            "type": "boolean"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/BarOut"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "symbol",
+          "data"
+        ],
+        "title": "BarsOut",
+        "type": "object"
+      },
       "BasketCardOut": {
         "properties": {
           "access": {
@@ -7577,6 +7654,146 @@
         "title": "MarkOut",
         "type": "object"
       },
+      "MarketDayOut": {
+        "properties": {
+          "constituent_count": {
+            "title": "Constituent Count",
+            "type": "integer"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "exposure_level": {
+            "title": "Exposure Level",
+            "type": "integer"
+          },
+          "gate": {
+            "title": "Gate",
+            "type": "string"
+          },
+          "index_close": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Close"
+          },
+          "index_ma_fast": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Ma Fast"
+          },
+          "index_ma_slow": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Ma Slow"
+          },
+          "index_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Slug"
+          },
+          "max_exposure_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Max Exposure Pct",
+            "type": "string"
+          },
+          "max_open_positions": {
+            "title": "Max Open Positions",
+            "type": "integer"
+          },
+          "new_entries_allowed": {
+            "title": "New Entries Allowed",
+            "type": "boolean"
+          },
+          "parabolic_count": {
+            "title": "Parabolic Count",
+            "type": "integer"
+          },
+          "pct_above_ma_slow": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Above Ma Slow"
+          },
+          "pct_new_52w_high": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct New 52W High"
+          },
+          "pct_up_strong_1m": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Up Strong 1M"
+          }
+        },
+        "required": [
+          "date",
+          "constituent_count",
+          "pct_up_strong_1m",
+          "pct_new_52w_high",
+          "pct_above_ma_slow",
+          "index_slug",
+          "index_close",
+          "index_ma_fast",
+          "index_ma_slow",
+          "gate",
+          "exposure_level",
+          "max_open_positions",
+          "max_exposure_pct",
+          "new_entries_allowed",
+          "parabolic_count"
+        ],
+        "title": "MarketDayOut",
+        "type": "object"
+      },
       "MarketHealthHistoryOut": {
         "additionalProperties": false,
         "description": "docs/07: `GET /market-health/history?universe=&from=&to=`.\n\n\"The four series for charting\", plus the overlay docs/08 §\"Market Health\" asks for.",
@@ -7802,6 +8019,22 @@
           "date"
         ],
         "title": "MarketHealthPointOut",
+        "type": "object"
+      },
+      "MarketOut": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MarketDayOut"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "MarketOut",
         "type": "object"
       },
       "MarketQualityOut": {
@@ -12675,6 +12908,68 @@
         "title": "ScreenUpdate",
         "type": "object"
       },
+      "SectorOut": {
+        "properties": {
+          "candidates": {
+            "title": "Candidates",
+            "type": "integer"
+          },
+          "hot": {
+            "title": "Hot",
+            "type": "boolean"
+          },
+          "members": {
+            "title": "Members",
+            "type": "integer"
+          },
+          "pct_above_ma_slow": {
+            "title": "Pct Above Ma Slow",
+            "type": "number"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "pct_above_ma_slow",
+          "members",
+          "candidates",
+          "hot"
+        ],
+        "title": "SectorOut",
+        "type": "object"
+      },
+      "SectorsOut": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SectorOut"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "as_of",
+          "data"
+        ],
+        "title": "SectorsOut",
+        "type": "object"
+      },
       "SelectionSpec": {
         "additionalProperties": false,
         "description": "docs/10: ``{\"top_n\": 20, \"hold_buffer\": 10}``; \"0 = strict top-N\".",
@@ -12751,6 +13046,363 @@
           "email"
         ],
         "title": "SessionOut",
+        "type": "object"
+      },
+      "SetupOut": {
+        "description": "One candidate row. Every price is an **exchange** price (SW3 divides by ``adj_factor``).",
+        "properties": {
+          "adr_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adr Pct"
+          },
+          "base_bars": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Bars"
+          },
+          "base_depth_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Depth Pct"
+          },
+          "close": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close"
+          },
+          "dryup_ratio": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dryup Ratio"
+          },
+          "gap_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gap Pct"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "listed_within_2y": {
+            "title": "Listed Within 2Y",
+            "type": "boolean"
+          },
+          "locked_upper_circuit": {
+            "title": "Locked Upper Circuit",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pivot_high": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pivot High"
+          },
+          "prior_move_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Move Pct"
+          },
+          "rvol": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rvol"
+          },
+          "score": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Score",
+            "type": "string"
+          },
+          "sector_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sector Slug"
+          },
+          "setup": {
+            "title": "Setup",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "stop_distance_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Distance Pct"
+          },
+          "stop_ref": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Ref"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "tightness_adr": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tightness Adr"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger"
+          },
+          "turnover_avg": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnover Avg"
+          },
+          "up_streak": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Up Streak"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "symbol",
+          "name",
+          "setup",
+          "status",
+          "score",
+          "close",
+          "trigger",
+          "stop_ref",
+          "pivot_high",
+          "stop_distance_pct",
+          "adr_pct",
+          "prior_move_pct",
+          "base_depth_pct",
+          "tightness_adr",
+          "dryup_ratio",
+          "rvol",
+          "gap_pct",
+          "turnover_avg",
+          "base_bars",
+          "up_streak",
+          "locked_upper_circuit",
+          "sector_slug",
+          "listed_within_2y"
+        ],
+        "title": "SetupOut",
+        "type": "object"
+      },
+      "SetupsOut": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SetupOut"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "exposure_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exposure Level"
+          },
+          "funnel": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Funnel"
+          },
+          "gate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gate"
+          },
+          "max_exposure_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Exposure Pct"
+          },
+          "max_open_positions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Open Positions"
+          },
+          "new_entries_allowed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Entries Allowed"
+          }
+        },
+        "required": [
+          "as_of",
+          "gate",
+          "exposure_level",
+          "max_open_positions",
+          "max_exposure_pct",
+          "new_entries_allowed",
+          "funnel",
+          "data"
+        ],
+        "title": "SetupsOut",
         "type": "object"
       },
       "SipBody": {
@@ -13438,6 +14090,15 @@
         "title": "StatusOut",
         "type": "object"
       },
+      "StopMode": {
+        "description": "Where the initial stop comes from.",
+        "enum": [
+          "LOW_OF_DAY",
+          "OPENING_RANGE_LOW"
+        ],
+        "title": "StopMode",
+        "type": "string"
+      },
       "SubtreeHoldingOut": {
         "description": "One holding row inside the subtree, with the portfolio and account it belongs to.",
         "properties": {
@@ -13651,6 +14312,250 @@
           "message"
         ],
         "title": "SupportMessageIn",
+        "type": "object"
+      },
+      "SwingConfigPatch": {
+        "additionalProperties": false,
+        "description": "A partial update. Every field optional; unset means \"leave it alone\".\n\n``extra=\"forbid\"`` is the load-bearing line. Without it, ``PATCH {\"exposure_level\": 3}``\nwould be accepted, ignored and answered ``200`` — the caller believing they had climbed the\nladder by asking. With it, they are told the field does not exist here.\n\nThe bounds on each field are the *engine's* limits, not the server's ceilings: a negative\nrisk or a 0-minute opening range is nonsense at any ceiling, and nonsense is a 400. The\nceilings are checked afterwards, in :func:`apply_patch`, and answer 422 — a different\nquestion with a different answer.",
+        "properties": {
+          "adr_min_pct": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adr Min Pct"
+          },
+          "max_open_positions": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Open Positions"
+          },
+          "max_position_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Position Pct"
+          },
+          "or_window_minutes": {
+            "anyOf": [
+              {
+                "enum": [
+                  1,
+                  5,
+                  60
+                ],
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Or Window Minutes"
+          },
+          "price_min": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Min"
+          },
+          "risk_per_trade_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Per Trade Pct"
+          },
+          "sleeve_capital_inr": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleeve Capital Inr"
+          },
+          "stop_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StopMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "turnover_min_inr": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnover Min Inr"
+          }
+        },
+        "title": "SwingConfigPatch",
+        "type": "object"
+      },
+      "SwingConfigView": {
+        "description": "What a reader gets: the settings, the ceilings, and the two read-only system fields.",
+        "properties": {
+          "adr_min_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Adr Min Pct",
+            "type": "string"
+          },
+          "ceilings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Ceilings",
+            "type": "object"
+          },
+          "execution_enabled": {
+            "title": "Execution Enabled",
+            "type": "boolean"
+          },
+          "exposure_level": {
+            "title": "Exposure Level",
+            "type": "integer"
+          },
+          "first_live_sessions_left": {
+            "title": "First Live Sessions Left",
+            "type": "integer"
+          },
+          "max_open_positions": {
+            "title": "Max Open Positions",
+            "type": "integer"
+          },
+          "max_position_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Max Position Pct",
+            "type": "string"
+          },
+          "or_window_minutes": {
+            "title": "Or Window Minutes",
+            "type": "integer"
+          },
+          "price_min": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Price Min",
+            "type": "string"
+          },
+          "risk_per_trade_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Risk Per Trade Pct",
+            "type": "string"
+          },
+          "sleeve_capital_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Sleeve Capital Inr",
+            "type": "string"
+          },
+          "stop_mode": {
+            "title": "Stop Mode",
+            "type": "string"
+          },
+          "turnover_min_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Turnover Min Inr",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "sleeve_capital_inr",
+          "risk_per_trade_pct",
+          "max_position_pct",
+          "max_open_positions",
+          "or_window_minutes",
+          "stop_mode",
+          "adr_min_pct",
+          "turnover_min_inr",
+          "price_min",
+          "exposure_level",
+          "first_live_sessions_left",
+          "updated_at",
+          "updated_by",
+          "ceilings",
+          "execution_enabled"
+        ],
+        "title": "SwingConfigView",
         "type": "object"
       },
       "SyncHoldingsOut": {
@@ -15611,7 +16516,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -15737,7 +16642,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -15862,7 +16767,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -15988,7 +16893,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -16111,7 +17016,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -16235,7 +17140,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -16347,7 +17252,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -16459,7 +17364,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -16585,7 +17490,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -16709,7 +17614,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -16847,7 +17752,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -16969,7 +17874,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -17102,7 +18007,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -17226,7 +18131,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -17337,7 +18242,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -17457,7 +18362,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -17579,7 +18484,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -17694,7 +18599,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -17824,7 +18729,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -17947,7 +18852,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -18069,7 +18974,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -18174,7 +19079,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -18286,7 +19191,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -18411,7 +19316,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -18549,7 +19454,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -18665,7 +19570,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -18786,7 +19691,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -18930,7 +19835,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -19053,7 +19958,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -19187,7 +20092,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -19355,7 +20260,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -19506,7 +20411,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -19639,7 +20544,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -19751,7 +20656,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -19863,7 +20768,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -19975,7 +20880,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -20111,7 +21016,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -20235,7 +21140,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -20360,7 +21265,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -20485,7 +21390,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -20607,7 +21512,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -20729,7 +21634,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -20840,7 +21745,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -20951,7 +21856,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -21096,7 +22001,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -21218,7 +22123,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -21340,7 +22245,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -21463,7 +22368,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -21594,7 +22499,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -21727,7 +22632,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -21860,7 +22765,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -21983,7 +22888,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -22114,7 +23019,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -22236,7 +23141,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -22367,7 +23272,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -22478,7 +23383,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -22589,7 +23494,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -22701,7 +23606,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -22823,7 +23728,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -22945,7 +23850,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -23064,7 +23969,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -23183,7 +24088,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -23302,7 +24207,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -23413,7 +24318,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -23525,7 +24430,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -23649,7 +24554,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -23761,7 +24666,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -23873,7 +24778,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -23995,7 +24900,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -24106,7 +25011,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -24217,7 +25122,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -24328,7 +25233,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -24439,7 +25344,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -24564,7 +25469,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -24847,7 +25752,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -24958,7 +25863,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -25082,7 +25987,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -25193,7 +26098,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -25317,7 +26222,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -25441,7 +26346,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -25584,7 +26489,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -25715,7 +26620,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -25854,7 +26759,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -25994,7 +26899,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -26117,7 +27022,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -26284,7 +27189,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -26430,7 +27335,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -26572,7 +27477,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -26691,7 +27596,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -26803,7 +27708,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -26923,7 +27828,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -27039,7 +27944,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -27172,7 +28077,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -27295,7 +28200,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -27428,7 +28333,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -27638,7 +28543,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -27749,7 +28654,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -27869,7 +28774,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -27994,7 +28899,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -28116,7 +29021,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -28228,7 +29133,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -28363,7 +29268,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -28504,7 +29409,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -28662,7 +29567,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -28784,7 +29689,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -28894,7 +29799,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -29014,7 +29919,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -29126,7 +30031,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -29248,7 +30153,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -29364,7 +30269,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -29480,7 +30385,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -29592,7 +30497,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -29730,7 +30635,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -29846,7 +30751,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -29958,7 +30863,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -30080,7 +30985,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -30225,7 +31130,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -30337,7 +31242,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -30462,7 +31367,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -30594,7 +31499,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -30728,7 +31633,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -30840,7 +31745,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -30964,7 +31869,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -31099,7 +32004,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -31211,7 +32116,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -31349,7 +32254,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -31522,7 +32427,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -31627,7 +32532,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -31743,7 +32648,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -31863,7 +32768,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -31994,7 +32899,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -32129,7 +33034,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -32252,7 +33157,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -32383,7 +33288,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -32516,7 +33421,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -32667,7 +33572,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -32799,7 +33704,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -32921,7 +33826,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -33052,7 +33957,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -33164,7 +34069,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -33301,7 +34206,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -33423,7 +34328,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -33538,7 +34443,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -33658,7 +34563,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -33788,7 +34693,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -33921,7 +34826,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -34077,7 +34982,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -34217,7 +35122,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -34368,7 +35273,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -34509,7 +35414,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -34631,7 +35536,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -34667,6 +35572,851 @@
         "summary": "Send a support message",
         "tags": [
           "support"
+        ]
+      }
+    },
+    "/api/v1/swing/config": {
+      "get": {
+        "description": "The settings, the server's ceilings, and the two fields only a job may write.\n\nThe ceilings come back on every read so the form can render \"max 1.0% — set by the server\"\nrather than discovering the limit by being refused.",
+        "operationId": "getConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwingConfigView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The swing book's settings",
+        "tags": [
+          "swing"
+        ]
+      },
+      "patch": {
+        "description": "The one write on this surface, and it moves no money.\n\nSeven numbers. No order path, no broker, no exposure rung: `SwingConfigPatch` forbids unknown\nfields, so `{\"exposure_level\": 3}` is refused rather than ignored — a caller who asked to\nclimb the ladder is told the field does not exist here, instead of being answered `200` and\nbelieving they had.\n\nA value above its ceiling answers **422 `setting-above-ceiling`** naming the ceiling and the\nenvironment variable that sets it, and the refusal is atomic: a two-field patch that crosses a\nceiling on the second field changes neither.",
+        "operationId": "patchConfig",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "now",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Now"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwingConfigPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwingConfigView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Change a swing setting",
+        "tags": [
+          "swing"
+        ]
+      }
+    },
+    "/api/v1/swing/market": {
+      "get": {
+        "description": "`05` §2's Market tab: the three breadth series, the gate band and the ladder over time.",
+        "operationId": "getMarket",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Breadth, the gate and the rung",
+        "tags": [
+          "swing"
+        ]
+      }
+    },
+    "/api/v1/swing/sectors": {
+      "get": {
+        "description": "Sector breadth for the day, with how many of the day's candidates sit in each.\n\nThe breadth figures were computed by the detection job over its own liquid universe, not read\nfrom `market_health_daily` — which covers only the twelve size universes and has no sector\nrow at all (DECISIONS-SW SW3.1).",
+        "operationId": "getSectors",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SectorsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The sector strip",
+        "tags": [
+          "swing"
+        ]
+      }
+    },
+    "/api/v1/swing/setups": {
+      "get": {
+        "description": "`docs/swing/05` §2's Setups tab, in one call.\n\n``date`` defaults to the last day the **detectors** wrote, not to the published pipeline\ndate: the swing step can be skipped while the screener publishes normally, and a page asking\nfor the published date would then render an empty day rather than the last real one.",
+        "operationId": "getSetups",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "setup",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Setup"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The day's swing candidates",
+        "tags": [
+          "swing"
+        ]
+      }
+    },
+    "/api/v1/swing/setups/{instrument_id}/bars": {
+      "get": {
+        "description": "The last ``count`` adjusted closes with their 10- and 20-day averages.\n\nBounded at 500 because this is a *mini* chart: an unbounded count would let one request pull\na decade of bars for every row on a page of forty candidates.",
+        "operationId": "getBars",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instrument_id",
+            "required": true,
+            "schema": {
+              "title": "Instrument Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "count",
+            "required": false,
+            "schema": {
+              "default": 130,
+              "maximum": 500,
+              "minimum": 20,
+              "title": "Count",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BarsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data version is no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The mini chart's series",
+        "tags": [
+          "swing"
         ]
       }
     },
@@ -34742,7 +36492,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -34861,7 +36611,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -34978,7 +36728,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -35089,7 +36839,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -35208,7 +36958,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -35323,7 +37073,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -35453,7 +37203,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -35575,7 +37325,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -35698,7 +37448,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {
@@ -35844,7 +37594,7 @@
                 }
               }
             },
-            "description": "No trading day available for that date"
+            "description": "Setting exceeds the server's ceiling"
           },
           "429": {
             "content": {

@@ -36,7 +36,12 @@ from baskfy_api.swing_journal import HISTOGRAM_BUCKETS, PAPER_SESSIONS_REQUIRED,
 from baskfy_core.models import Instrument, SwConfig, SwMarketDaily, SwPosition, SwSession
 from baskfy_core.models.swing import SwBacktestRun
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
-from baskfy_core.swing.backtest import CAVEATS, BacktestParams, run_backtest
+from baskfy_core.swing.backtest import (
+    CAVEATS,
+    INDEX_ABSENT_CAVEAT,
+    BacktestParams,
+    run_backtest,
+)
 
 pytestmark = [requires_db, pytest.mark.db]
 
@@ -533,16 +538,29 @@ CORE_TESTS = Path(__file__).resolve().parents[3] / "packages" / "core" / "tests"
 if str(CORE_TESTS) not in sys.path:
     sys.path.insert(0, str(CORE_TESTS))
 
-from swing_backtest_fixtures import PLANTED, planted_frame  # noqa: E402 - path above
+from swing_backtest_fixtures import (  # noqa: E402 - path above
+    DETECTION_BAR,
+    PLANTED,
+    index_series,
+    planted_frame,
+)
 
 T0 = dt.datetime(2026, 9, 1, 10, 0, tzinfo=dt.UTC)
 
 
-def planted_run() -> tuple[BacktestParams, dict[str, object]]:
-    """A finished run's stored JSON — the engine's own `to_json()` over the planted year."""
+def planted_run(*, crash_on: int | None = None) -> tuple[BacktestParams, dict[str, object]]:
+    """A finished run's stored JSON — the engine's own `to_json()` over the planted year.
+
+    Without ``crash_on`` the run has no index (breadth-only, and its caveats say so); with it,
+    NIFTY 500's fixture series crashes on that session and the full book reads it (SW9.6).
+    """
     frame, calendar = planted_frame()
-    params = BacktestParams(start=calendar[0], end=calendar[-1])
-    return params, run_backtest(frame, params, calendar=calendar).to_json()
+    if crash_on is None:
+        params = BacktestParams(start=calendar[0], end=calendar[-1])
+        return params, run_backtest(frame, params, calendar=calendar).to_json()
+    params = BacktestParams(start=calendar[0], end=calendar[-1], index_slug="nifty-500")
+    index = index_series(calendar, crash_on=crash_on)
+    return params, run_backtest(frame, params, calendar=calendar, index=index).to_json()
 
 
 def stored_params(stored: dict[str, object]) -> dict[str, object]:
@@ -620,12 +638,18 @@ class TestTheBacktestCard:
         card = response.json()["backtest"]
         assert set(card) == {"run_id", "params", "started_at", "finished_at", "stats", "caveats"}
         assert card["run_id"] == run_id
-        assert card["caveats"] == list(CAVEATS)
+        # A run with no index carries the engine's standing sentences and the index-absent one.
+        assert card["caveats"] == [*CAVEATS, INDEX_ABSENT_CAVEAT]
         assert card["caveats"] == [
             "No intraday data (so no ORH filter — real entries are more selective).",
             "No circuit history before 2020.",
             "Survivorship handled by instrument.delisted_on.",
+            "Where upper_circuit is absent no lock is assumed, so a name that was locked may "
+            "have been entered here.",
+            "No index series was supplied, so the gate is breadth-only and the index rule was "
+            "not applied.",
         ]
+        assert card["params"]["index_slug"] is None
         assert card["started_at"] == "2026-09-01T10:00:00+00:00"
         assert card["finished_at"] == "2026-09-01T10:05:00+00:00"
         assert card["params"]["start"] == params.start.isoformat()
@@ -681,6 +705,94 @@ class TestTheBacktestCard:
         assert "trades_list" not in stats
         assert "equity_curve" not in stats
         assert "ladder" not in stats
+
+    async def test_the_stats_carry_the_max_drawdown_and_the_gate_comparison(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """SW9.6 (A12): the constant-sleeve curve's deepest drawdown, and gate-off, breadth-only
+        and full side by side — overall, by year entered, by setup — with breadth's and the
+        index rule's contributions labelled apart; every number a number. A crash in the
+        detection day's close: full refuses the planted flag, the other two take it."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        _, stored = planted_run(crash_on=DETECTION_BAR)
+        await _run(screener_session, user_id=user_id, stats=stored, params=stored_params(stored))
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/journal"), headers=bearer(public_id))
+
+        card = response.json()["backtest"]
+        assert card["caveats"] == list(CAVEATS), "an index was read: no index-absent caveat"
+        assert card["params"]["index_slug"] == "nifty-500"
+        stats = card["stats"]
+        assert stats["trades"] == 0, "the full book refused the flag"
+        assert stats["max_drawdown_pct"] == 0
+        assert stats["drawdown"]["max_pct"] == 0
+        assert stats["drawdown"]["locked_sessions"] == 0
+        comparison = stats["comparison"]
+        assert comparison["index_supplied"] is True
+        assert comparison["primary"] == "full"
+        assert list(comparison["modes"]) == ["gate_off", "breadth_only", "full"]
+        assert comparison["modes"]["gate_off"].startswith("Gate off:")
+        overall = comparison["overall"]
+        assert [overall[m]["entered"] for m in ("gate_off", "breadth_only", "full")] == [1, 1, 0]
+        assert overall["gate_off"]["net_r"] == 0.28
+        assert overall["gate_off"]["win_rate_pct"] == 100
+        assert overall["full"]["net_r"] == 0
+        assert isinstance(overall["gate_off"]["max_drawdown_pct"], float | int)
+        year = str(stored_params(stored)["end"])[:4]
+        assert comparison["by_year"][year]["breadth_only"]["entered"] == 1
+        assert comparison["by_year"][year]["full"]["entered"] == 0
+        assert comparison["by_setup"]["FLAG"]["gate_off"]["net_r"] == 0.28
+        assert comparison["by_setup"]["FLAG"]["gate_off"]["max_drawdown_pct"] is None
+        assert comparison["by_setup"]["EP"]["full"]["entered"] == 0
+        breadth = comparison["contribution"]["breadth"]
+        assert breadth["overall"]["entered"] == 0
+        assert breadth["overall"]["net_r"] == 0
+        index_rule = comparison["contribution"]["index_rule"]
+        assert index_rule["overall"]["entered"] == -1
+        assert index_rule["overall"]["net_r"] == -0.28
+        assert index_rule["by_year"][year]["entered"] == -1
+        assert index_rule["by_setup"]["FLAG"]["net_r"] == -0.28
+
+    async def test_a_run_with_no_index_has_no_index_contribution(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        _, stored = planted_run()
+        await _run(screener_session, user_id=user_id, stats=stored, params=stored_params(stored))
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/journal"), headers=bearer(public_id))
+
+        stats = response.json()["backtest"]["stats"]
+        comparison = stats["comparison"]
+        assert comparison["index_supplied"] is False
+        assert comparison["primary"] == "breadth_only"
+        assert list(comparison["modes"]) == ["gate_off", "breadth_only"]
+        assert comparison["contribution"]["index_rule"] is None
+        assert comparison["contribution"]["breadth"]["overall"]["entered"] == 0
+        assert stats["max_drawdown_pct"] == float(stats["drawdown"]["max_pct"]) > 0
+        assert stats["drawdown"]["trough_date"] is not None
+
+    async def test_a_run_stored_before_the_comparison_existed_still_renders(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A SW9 row has no `drawdown` and no `comparison`: the card carries `None` for both,
+        `max_drawdown_pct` null, and the index-absent caveat — that run had no index."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        _, stored = planted_run()
+        older = {k: v for k, v in stored.items() if k not in ("drawdown", "comparison")}
+        await _run(screener_session, user_id=user_id, stats=older, params=stored_params(stored))
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/journal"), headers=bearer(public_id))
+
+        card = response.json()["backtest"]
+        assert card["stats"]["trades"] == 1
+        assert card["stats"]["comparison"] is None
+        assert card["stats"]["max_drawdown_pct"] is None
+        assert card["stats"]["drawdown"] == {}
+        assert card["caveats"] == [*CAVEATS, INDEX_ABSENT_CAVEAT]
 
     async def test_it_is_the_latest_finished_run_not_the_latest_started(
         self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
@@ -749,7 +861,9 @@ class TestTheBacktestCard:
         assert [bar["count"] for bar in card["stats"]["histogram"]] == [0] * 6
         assert card["stats"]["funnel"]["sessions"] == 5
         assert card["stats"]["equity"]["sessions"] == 5
-        assert card["caveats"] == list(CAVEATS)
+        assert card["caveats"] == [*CAVEATS, INDEX_ABSENT_CAVEAT]
+        assert card["stats"]["max_drawdown_pct"] == 0
+        assert card["stats"]["comparison"]["overall"]["gate_off"]["entered"] == 0
 
     async def test_another_accounts_run_is_not_this_accounts_card(
         self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch

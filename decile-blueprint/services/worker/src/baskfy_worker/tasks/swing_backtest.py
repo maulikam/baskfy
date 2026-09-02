@@ -23,6 +23,14 @@ printing bars (DECISIONS-SW SW9.4, SW9.6).
 ``end``; the engine trades only on days the calendar names, so a bar on a holiday is read by the
 detectors and never traded on.
 
+**It supplies the index and the delisting dates** (SW9.6, STANDING-ANSWERS A12 and B2). The
+index rule of `04` §8.2 reads NIFTY 500's closes from ``index_snapshot_daily`` — the nightly
+job's slug, with the same NIFTY 50 fallback when NIFTY 500 has too few rows in the window, and
+no index at all when neither has (the result's caveats say so) — and ``params.index_slug``
+records which series the run read. The engine computes the two averages in-frame from the closes
+on or before each session. ``instrument.delisted_on`` for every name in the frame is handed over
+so a held name is sold at its last close on its last bar and counted ``DELISTED``.
+
 **It stores the run.** One ``sw_backtest_run`` row per run, written on the way in (``params``)
 and on the way out (``stats = result.to_json()``), never edited afterwards: a re-run is a second
 row. A run that raises records the exception in ``error`` with ``finished_at`` set and
@@ -45,10 +53,10 @@ from decimal import Decimal
 from typing import Final
 
 import polars as pl
-from sqlalchemy import Row, Select, or_, select
+from sqlalchemy import Row, Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import Instrument, OhlcvDaily, TradingDay
+from baskfy_core.models import IndexDef, IndexSnapshotDaily, Instrument, OhlcvDaily, TradingDay
 from baskfy_core.models.base import JsonObject
 from baskfy_core.models.swing import SwBacktestRun
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
@@ -69,6 +77,14 @@ DEFAULT_START: Final = dt.date(2017, 1, 1)
 
 #: The task name, so the binding, the CLI and the tests spell it once.
 SWING_BACKTEST_TASK: Final = "baskfy.swing.backtest"
+
+#: The index the gate reads (`04` §8.2), and the one it falls back to — the nightly job's own
+#: pair (``run_detect_swing``'s ``index_slug`` and its ``fallback``).
+INDEX_SLUG: Final = "nifty-500"
+INDEX_FALLBACK_SLUG: Final = "nifty-50"
+
+#: The columns of the index frame the engine reads.
+INDEX_SCHEMA: Final = pl.Schema({"date": pl.Date, "close": pl.Float64})
 
 
 def utc_now() -> dt.datetime:
@@ -195,6 +211,87 @@ async def load_backtest_calendar(session: AsyncSession, params: BacktestParams) 
     return [row[0] for row in rows]
 
 
+async def _index_rows(
+    session: AsyncSession, slug: str, *, window_start: dt.date, end: dt.date
+) -> int:
+    return int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(IndexSnapshotDaily)
+                .join(IndexDef, IndexDef.id == IndexSnapshotDaily.index_id)
+                .where(
+                    IndexDef.slug == slug,
+                    IndexSnapshotDaily.date >= window_start,
+                    IndexSnapshotDaily.date <= end,
+                    IndexSnapshotDaily.level.is_not(None),
+                )
+            )
+        ).scalar_one()
+    )
+
+
+async def resolve_index_slug(  # noqa: PLR0913 - the window, the config, the two slugs
+    session: AsyncSession,
+    *,
+    start: dt.date,
+    end: dt.date,
+    config: SwingConfig,
+    slug: str = INDEX_SLUG,
+    fallback: str = INDEX_FALLBACK_SLUG,
+) -> str | None:
+    """Which index series the run reads — the nightly job's rule, once for the whole window.
+
+    ``load_index_reading`` takes ``slug`` when it has ``index_ma_slow`` levels on or before the
+    date and ``fallback`` otherwise; a run reads one series throughout, so the choice is made on
+    the window: the first of the two with at least ``index_ma_slow`` levels between the lookback
+    start and ``end``. Neither → ``None``, and the engine's caveats say the gate was breadth-only.
+    """
+    window_start = await lookback_start(session, start, LOOKBACK_SESSIONS)
+    for candidate in (slug, fallback):
+        rows = await _index_rows(session, candidate, window_start=window_start, end=end)
+        if rows >= config.market.index_ma_slow:
+            return candidate
+    return None
+
+
+async def load_backtest_index(session: AsyncSession, params: BacktestParams) -> pl.DataFrame | None:
+    """``params.index_slug``'s closes from the lookback start to ``params.end``, oldest first —
+    the ``(date, close)`` frame the engine's index rule reads; ``None`` with no slug resolved."""
+    if params.index_slug is None:
+        return None
+    window_start = await lookback_start(session, params.start, LOOKBACK_SESSIONS)
+    rows = await session.execute(
+        select(IndexSnapshotDaily.date, IndexSnapshotDaily.level)
+        .join(IndexDef, IndexDef.id == IndexSnapshotDaily.index_id)
+        .where(
+            IndexDef.slug == params.index_slug,
+            IndexSnapshotDaily.date >= window_start,
+            IndexSnapshotDaily.date <= params.end,
+            IndexSnapshotDaily.level.is_not(None),
+        )
+        .order_by(IndexSnapshotDaily.date)
+    )
+    records = [(on, float(level)) for on, level in rows if level is not None]
+    return pl.DataFrame(
+        {"date": [on for on, _ in records], "close": [close for _, close in records]},
+        schema=INDEX_SCHEMA,
+    )
+
+
+async def load_delisted(session: AsyncSession, bars: pl.DataFrame) -> dict[int, dt.date]:
+    """``instrument_id -> delisted_on`` for every name in the frame that has one (B2)."""
+    if bars.is_empty():
+        return {}
+    ids = [int(value) for value in bars["instrument_id"].unique().to_list()]
+    rows = await session.execute(
+        select(Instrument.id, Instrument.delisted_on).where(
+            Instrument.id.in_(ids), Instrument.delisted_on.is_not(None)
+        )
+    )
+    return {int(instrument_id): on for instrument_id, on in rows if on is not None}
+
+
 async def params_for(  # noqa: PLR0913 - one keyword per parameter a run can be given
     session: AsyncSession,
     *,
@@ -204,6 +301,8 @@ async def params_for(  # noqa: PLR0913 - one keyword per parameter a run can be 
     sleeve_inr: Decimal | None = None,
     cost_pct_per_side: Decimal | None = None,
     config: SwingConfig | None = None,
+    index_slug: str = INDEX_SLUG,
+    index_fallback: str = INDEX_FALLBACK_SLUG,
 ) -> BacktestParams:
     """``BacktestParams`` for a run: the user's liquidity floors, the pack's defaults otherwise.
 
@@ -211,10 +310,14 @@ async def params_for(  # noqa: PLR0913 - one keyword per parameter a run can be 
     three floors over ``DEFAULT_SWING_CONFIG``) so the backtest's universe is the one the user
     actually trades. The sleeve is ``params.sleeve_inr`` — `04` §11's constant ₹10 lakh — and
     never ``sw_config.sleeve_capital_inr``, which is ₹0 until Maulik sets it and would plan
-    nothing (SW9.6).
+    nothing (SW9.6). ``index_slug`` is resolved here (:func:`resolve_index_slug`) so the row's
+    ``params`` names the series the run read from the moment the run is started.
     """
     resolved = config if config is not None else await load_swing_config(session, user_id)
-    params = BacktestParams(start=start, end=end, config=resolved)
+    slug = await resolve_index_slug(
+        session, start=start, end=end, config=resolved, slug=index_slug, fallback=index_fallback
+    )
+    params = BacktestParams(start=start, end=end, config=resolved, index_slug=slug)
     if sleeve_inr is not None:
         params = replace(params, sleeve_inr=sleeve_inr)
     if cost_pct_per_side is not None:
@@ -268,15 +371,21 @@ async def finish_run(
     try:
         bars = await load_backtest_bars(session, params)
         calendar = await load_backtest_calendar(session, params)
+        index = await load_backtest_index(session, params)
+        delisted = await load_delisted(session, bars)
         log.info(
-            "swing backtest %s: %d bars, %d calendar days, %s..%s",
+            "swing backtest %s: %d bars, %d calendar days, %s..%s, index %s (%d closes), "
+            "%d delisted",
             row.id,
             bars.height,
             len(calendar),
             params.start,
             params.end,
+            params.index_slug,
+            0 if index is None else index.height,
+            len(delisted),
         )
-        result = run_backtest(bars, params, calendar=calendar)
+        result = run_backtest(bars, params, calendar=calendar, index=index, delisted=delisted)
     except Exception as exc:
         row.error = f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()}"
         row.finished_at = clock()
@@ -342,16 +451,27 @@ async def run_and_commit(  # noqa: PLR0913 - one keyword per parameter a run can
 def summary(row: SwBacktestRun, result: BacktestResult) -> JsonObject:
     """What the task returns: enough to read the run without opening the row."""
     stats = result.stats
+    comparison = result.comparison
     return {
         "run_id": int(row.id),
         "start": result.params.start.isoformat(),
         "end": result.params.end.isoformat(),
+        "index_slug": result.params.index_slug,
         "sessions": len(result.equity_curve),
         "trades": stats.trades,
         "win_rate_pct": str(stats.win_rate_pct),
         "expectancy_r": str(stats.expectancy_r),
         "net_r": str(stats.net_r),
         "profit_factor": None if stats.profit_factor is None else str(stats.profit_factor),
+        "max_drawdown_pct": str(result.drawdown.max_pct),
+        "gate_comparison": (
+            None
+            if comparison is None
+            else {
+                mode.value: {"entered": cell.entered, "net_r": str(cell.net_r)}
+                for mode, cell in comparison.overall.items()
+            }
+        ),
         "funnel": dict(result.funnel),
         "started_at": row.started_at.isoformat(),
         "finished_at": row.finished_at.isoformat() if row.finished_at is not None else None,
@@ -361,13 +481,19 @@ def summary(row: SwBacktestRun, result: BacktestResult) -> JsonObject:
 __all__ = [
     "BARS_SCHEMA",
     "DEFAULT_START",
+    "INDEX_FALLBACK_SLUG",
+    "INDEX_SCHEMA",
+    "INDEX_SLUG",
     "SWING_BACKTEST_TASK",
     "bars_frame",
     "finish_run",
     "load_backtest_bars",
     "load_backtest_calendar",
+    "load_backtest_index",
+    "load_delisted",
     "params_for",
     "params_json",
+    "resolve_index_slug",
     "run_and_commit",
     "run_swing_backtest",
     "start_run",

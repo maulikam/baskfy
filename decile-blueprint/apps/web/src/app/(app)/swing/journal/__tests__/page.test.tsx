@@ -197,6 +197,71 @@ function backtestCard(overrides: Partial<SwingBacktestCard> = {}): SwingBacktest
   };
 }
 
+/** One record's numbers over one scope (SW9.6's `GateCell`), or a difference of two. */
+function cell(entered: number, netR: number, drawdown: number | null = 0): Record<string, unknown> {
+  return {
+    entered,
+    net_r: netR,
+    expectancy_r: entered === 0 ? 0 : Number((netR / entered).toFixed(2)),
+    win_rate_pct: 40,
+    max_drawdown_pct: drawdown,
+  };
+}
+
+/** SW9.6's comparison as the API ships it: three records, by year entered and by setup, and
+ * the two contributions as differences. `withIndex: false` is a breadth-only run: two records,
+ * no index-rule contribution. */
+function gateComparison(withIndex = true): Record<string, unknown> {
+  const modes = withIndex ? ["gate_off", "breadth_only", "full"] : ["gate_off", "breadth_only"];
+  const numbers: Record<string, [number, number, number]> = {
+    gate_off: [600, 80.5, 22.4],
+    breadth_only: [450, 118.25, 14.1],
+    full: [412, 127.75, 9.8],
+  };
+  const cells = (scale: number, drawdown: boolean): Record<string, unknown> =>
+    Object.fromEntries(
+      modes.map((mode) => {
+        const [entered, netR, dd] = numbers[mode]!;
+        return [mode, cell(Math.round(entered * scale), Number((netR * scale).toFixed(2)), drawdown ? dd : null)];
+      }),
+    );
+  const contribution = (withIt: string, without: string): Record<string, unknown> => {
+    const d = (scope: Record<string, unknown>): Record<string, unknown> => {
+      const a = scope[withIt] as Record<string, number>;
+      const b = scope[without] as Record<string, number>;
+      return {
+        entered: a.entered! - b.entered!,
+        net_r: Number((a.net_r! - b.net_r!).toFixed(2)),
+        expectancy_r: 0,
+        win_rate_pct: 0,
+        max_drawdown_pct:
+          a.max_drawdown_pct == null ? null : Number((a.max_drawdown_pct - b.max_drawdown_pct!).toFixed(2)),
+      };
+    };
+    return {
+      overall: d(cells(1, true)),
+      by_year: { "2017": d(cells(0.5, true)), "2018": d(cells(0.5, true)) },
+      by_setup: { FLAG: d(cells(0.7, false)), EP: d(cells(0.3, false)) },
+    };
+  };
+  return {
+    index_supplied: withIndex,
+    primary: withIndex ? "full" : "breadth_only",
+    modes: {
+      gate_off: "Gate off: the market gate is GREEN every session; the ladder and the drawdown lock-out still apply.",
+      breadth_only: "Breadth only: the gate reads breadth and no index.",
+      ...(withIndex ? { full: "Full: the gate reads breadth and the index rule (the 10-day average over the 20-day)." } : {}),
+    },
+    overall: cells(1, true),
+    by_year: { "2017": cells(0.5, true), "2018": cells(0.5, true) },
+    by_setup: { FLAG: cells(0.7, false), EP: cells(0.3, false) },
+    contribution: {
+      breadth: contribution("breadth_only", "gate_off"),
+      index_rule: withIndex ? contribution("full", "breadth_only") : null,
+    },
+  };
+}
+
 function journal(overrides: Partial<SwingJournal> = {}): SwingJournal {
   return {
     real: emptyCard(),
@@ -602,6 +667,111 @@ describe("the backtest card", () => {
     expect(screen.getByText("sharpe like").nextSibling).toHaveTextContent("1.25");
     expect(screen.getByText("Other parameters")).toBeInTheDocument();
     expect(screen.getByText("seed").nextSibling).toHaveTextContent("7");
+  });
+});
+
+describe("the backtest card's gate comparison and drawdown (SW9.6)", () => {
+  function withComparison(withIndex = true): SwingBacktestCard {
+    const base = backtestCard();
+    return {
+      ...base,
+      stats: {
+        ...base.stats,
+        max_drawdown_pct: 9.8,
+        drawdown: { max_pct: 9.8, peak: 1650000, trough: 1552000, trough_date: "2022-06-17", locked_sessions: 0 },
+        comparison: gateComparison(withIndex),
+      },
+    };
+  }
+
+  it("shows the deepest drawdown of the curve as a share of the allocation", async () => {
+    await renderPage(journal({ backtest: withComparison() }));
+    const drawdown = screen.getByTestId("journal-backtest-drawdown");
+    expect(within(drawdown).getByText("Deepest drawdown").nextSibling).toHaveTextContent("9.80% of the allocation");
+    expect(within(drawdown).getByText("Reached on").nextSibling).toHaveTextContent("17 Jun 2022");
+    expect(within(drawdown).getByText("Lock-out held").nextSibling).toHaveTextContent("never");
+    // Drawn, so not listed again under "Other results".
+    expect(screen.queryByText("Other results")).toBeNull();
+  });
+
+  it("counts the sessions the lock-out held", async () => {
+    const card = withComparison();
+    card.stats.drawdown = { ...(card.stats.drawdown as object), locked_sessions: 37 };
+    await renderPage(journal({ backtest: card }));
+    expect(screen.getByText("Lock-out held").nextSibling).toHaveTextContent("37 sessions");
+  });
+
+  it("shows gate-on against gate-off per year and per setup, with the two contributions apart", async () => {
+    await renderPage(journal({ backtest: withComparison() }));
+    const comparison = screen.getByTestId("journal-backtest-comparison");
+    expect(within(comparison).getByText("What the gate buys")).toBeInTheDocument();
+    const entries = within(comparison).getByTestId("journal-backtest-gate-entries");
+    const headers = within(entries)
+      .getAllByRole("columnheader")
+      .map((header) => header.textContent);
+    expect(headers).toEqual([
+      "Scope",
+      "Gate off",
+      "Breadth only",
+      "Breadth + index rule",
+      "Breadth's contribution",
+      "Index rule's contribution",
+    ]);
+    expect(within(entries).getByTestId("gate-entries-All years")).toHaveTextContent(
+      "All years600 entered · +80.50R450 entered · +118.25R412 entered · +127.75R-150 entered · +37.75R-38 entered · +9.50R",
+    );
+    expect(within(entries).getByTestId("gate-entries-2017")).toHaveTextContent(
+      "2017300 entered · +40.25R225 entered · +59.13R206 entered · +63.88R-75 entered · +18.88R-19 entered · +4.75R",
+    );
+    expect(within(entries).getByTestId("gate-entries-EP")).toHaveTextContent(/^EP180 entered/);
+    expect(within(entries).getByTestId("gate-entries-FLAG")).toHaveTextContent(/^FLAG420 entered/);
+    const drawdown = within(comparison).getByTestId("journal-backtest-gate-drawdown");
+    expect(within(drawdown).getByTestId("gate-drawdown-All years")).toHaveTextContent(
+      "All years22.40%14.10%9.80%-8.30%-4.30%",
+    );
+    expect(within(drawdown).getByTestId("gate-drawdown-2018")).toBeInTheDocument();
+    // A setup shares one curve with the other setup's trades: no drawdown row for it.
+    expect(within(drawdown).queryByTestId("gate-drawdown-FLAG")).toBeNull();
+    // The three records are named and defined, and the primary one is pointed at.
+    const modes = within(comparison).getByTestId("journal-backtest-modes");
+    const items = Array.from(modes.querySelectorAll("li")).map((item) => item.textContent);
+    expect(items[0]).toMatch(/^Gate off — Gate off: the market gate is GREEN every session/);
+    expect(items[2]).toMatch(/^Breadth \+ index rule — Full: .*\(the record the numbers above are from\)$/);
+  });
+
+  it("drops the index rule column when the run read no index, and says so", async () => {
+    await renderPage(journal({ backtest: withComparison(false) }));
+    const comparison = screen.getByTestId("journal-backtest-comparison");
+    const headers = within(comparison)
+      .getAllByRole("columnheader")
+      .map((header) => header.textContent);
+    expect(headers).toEqual([
+      "Scope",
+      "Gate off",
+      "Breadth only",
+      "Breadth's contribution",
+      "Scope",
+      "Gate off",
+      "Breadth only",
+      "Breadth's contribution",
+    ]);
+    expect(comparison).toHaveTextContent("No index series was read in this run, so there is no index rule column.");
+    expect(within(comparison).getByTestId("gate-entries-All years")).toHaveTextContent(
+      "All years600 entered · +80.50R450 entered · +118.25R-150 entered · +37.75R",
+    );
+  });
+
+  it("draws no comparison for a run stored before one existed", async () => {
+    await renderPage(journal({ backtest: backtestCard() }));
+    expect(screen.queryByTestId("journal-backtest-comparison")).toBeNull();
+    expect(screen.queryByTestId("journal-backtest-drawdown")).toBeNull();
+    expect(screen.getByTestId("journal-backtest-results")).toBeInTheDocument();
+  });
+
+  it("never says sleeve or book in the comparison copy", async () => {
+    await renderPage(journal({ backtest: withComparison() }));
+    expect(screen.queryByText(/\bsleeve\b/i)).toBeNull();
+    expect(screen.queryByText(/\bbook\b/i)).toBeNull();
   });
 });
 

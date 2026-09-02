@@ -15,13 +15,18 @@ in ``sw_backtest_run``. Then the claims the runner makes on its own:
 * **a failure is recorded and re-raised** — ``error`` with the traceback, ``finished_at`` set,
   ``stats`` null, and the exception still reaches the caller;
 * **the Celery binding** is ``baskfy.swing.backtest`` on the compute queue with no Beat entry,
-  and its two-commit body leaves a failed run durable.
+  and its two-commit body leaves a failed run durable;
+* **the index rule reads NIFTY 500 from ``index_snapshot_daily``** with the nightly job's NIFTY 50
+  fallback, in-frame, and a run with no index says so in its caveats (SW9.6, A12);
+* **a name delisted inside the run is sold at its last close and counted ``DELISTED``** (B2);
+* **two runs with the same params and data are byte-identical** (B5).
 """
 
 from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import json
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -32,10 +37,24 @@ import sqlalchemy as sa
 from helpers import make_instrument, requires_db
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from baskfy_core.models import AppUser, Instrument, OhlcvDaily, SwConfig, TradingDay
+from baskfy_core.models import (
+    AppUser,
+    IndexDef,
+    IndexSnapshotDaily,
+    Instrument,
+    OhlcvDaily,
+    SwConfig,
+    TradingDay,
+)
 from baskfy_core.models.swing import SwBacktestRun
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
-from baskfy_core.swing.backtest import CAVEATS, BacktestParams
+from baskfy_core.swing.backtest import (
+    CAVEATS,
+    INDEX_ABSENT_CAVEAT,
+    BacktestCloseReason,
+    BacktestParams,
+    GateMode,
+)
 from baskfy_core.swing.config import DEFAULT_SWING_CONFIG, Setup
 from baskfy_worker.celery_app import BEAT_SCHEDULE, QUEUE_COMPUTE
 from baskfy_worker.db import run_checkpointed
@@ -44,11 +63,17 @@ from baskfy_worker.tasks.swing import LOOKBACK_SESSIONS, load_swing_bars, lookba
 from baskfy_worker.tasks.swing_backtest import (
     BARS_SCHEMA,
     DEFAULT_START,
+    INDEX_FALLBACK_SLUG,
+    INDEX_SCHEMA,
+    INDEX_SLUG,
     SWING_BACKTEST_TASK,
     load_backtest_bars,
     load_backtest_calendar,
+    load_backtest_index,
+    load_delisted,
     params_for,
     params_json,
+    resolve_index_slug,
     run_and_commit,
     run_swing_backtest,
 )
@@ -61,7 +86,14 @@ CORE_TESTS = Path(__file__).resolve().parents[3] / "packages" / "core" / "tests"
 if str(CORE_TESTS) not in sys.path:
     sys.path.insert(0, str(CORE_TESTS))
 
-from swing_backtest_fixtures import PLANTED, planted_frame  # noqa: E402 - path above
+from swing_backtest_fixtures import (  # noqa: E402 - path above
+    DETECTION_BAR,
+    ENTRY_BAR,
+    PLANTED,
+    WIN_TAIL,
+    index_series,
+    planted_frame,
+)
 
 pytestmark = [requires_db, pytest.mark.db]
 
@@ -213,7 +245,7 @@ class TestThePlantedYearThroughTheDatabase:
         assert row.error is None
         assert row.started_at == clock.readings[0]
         assert row.finished_at == clock.readings[1]
-        assert row.stats["caveats"] == list(CAVEATS)
+        assert row.stats["caveats"] == list(result.caveats) == [*CAVEATS, INDEX_ABSENT_CAVEAT]
         funnel = row.stats["funnel"]
         assert isinstance(funnel, dict)
         assert funnel["sessions"] == len(sessions)
@@ -440,6 +472,224 @@ class TestARunIsAFact:
         assert row.started_at == clock.readings[0]
         assert row.finished_at == clock.readings[1]
         assert row.params == params_json(params)
+
+
+async def write_index(
+    session: AsyncSession,
+    slug: str,
+    frame: pl.DataFrame,
+    dates: dict[dt.date, dt.date],
+    *,
+    keep: int | None = None,
+) -> int:
+    """``index_snapshot_daily`` rows for ``slug`` from an ``index_series`` frame, each date
+    mapped through ``dates``; ``keep`` writes only the last that many closes."""
+    index_id = (
+        await session.execute(sa.select(IndexDef.id).where(IndexDef.slug == slug))
+    ).scalar_one()
+    rows = list(frame.iter_rows(named=True))
+    if keep is not None:
+        rows = rows[-keep:]
+    for row in rows:
+        session.add(
+            IndexSnapshotDaily(
+                index_id=index_id,
+                date=dates[row["date"]],
+                level=Decimal(str(round(row["close"], 2))),
+            )
+        )
+    await session.flush()
+    return len(rows)
+
+
+class TestTheIndexRule:
+    async def test_the_index_is_nifty_500_from_index_snapshot_daily_read_in_frame(
+        self, session: AsyncSession
+    ) -> None:
+        """A12: NIFTY 500's closes, the averages computed from the closes on or before each
+        session. A crash in the detection day's close turns the gate RED that evening — the
+        planted flag is refused — and the stored run names the series it read."""
+        user_id = await _user(session)
+        frame, weekday_calendar = planted_frame()
+        sessions = await nse_sessions(session, FIXTURE_START, len(weekday_calendar))
+        mapping = dict(zip(weekday_calendar, sessions, strict=True))
+        await write_frame(session, frame, mapping)
+        await write_index(
+            session, INDEX_SLUG, index_series(weekday_calendar, crash_on=DETECTION_BAR), mapping
+        )
+        params = await params_for(session, user_id=user_id, start=sessions[0], end=sessions[-1])
+        assert params.index_slug == INDEX_SLUG == "nifty-500"
+
+        row, result = await run_swing_backtest(session, user_id=user_id, params=params)
+
+        assert result.trades == ()
+        assert result.funnel["skipped_gate"] >= 1
+        assert result.comparison is not None
+        assert result.comparison.index_supplied is True
+        assert result.comparison.primary is GateMode.FULL
+        assert result.comparison.overall[GateMode.BREADTH_ONLY].entered == 1
+        assert result.comparison.index_rule is not None
+        assert result.comparison.index_rule.overall.entered == -1
+        assert result.caveats == CAVEATS
+        assert row.params["index_slug"] == "nifty-500"
+        assert row.stats is not None
+        assert row.stats["caveats"] == list(CAVEATS)
+        stored_ladder = row.stats["ladder"]
+        assert isinstance(stored_ladder, list)
+        ladder = {day: gate for day, gate, _ in stored_ladder}
+        assert ladder[sessions[DETECTION_BAR - 1].isoformat()] == "GREEN"
+        assert ladder[sessions[DETECTION_BAR].isoformat()] == "RED"
+
+    async def test_the_runner_falls_back_to_nifty_50_when_nifty_500_has_too_few_closes(
+        self, session: AsyncSession
+    ) -> None:
+        """The nightly job's fallback, on the window: NIFTY 500 with fewer than `index_ma_slow`
+        closes in it is not a series; NIFTY 50 with enough is."""
+        user_id = await _user(session)
+        frame, weekday_calendar = planted_frame()
+        sessions = await nse_sessions(session, FIXTURE_START, len(weekday_calendar))
+        mapping = dict(zip(weekday_calendar, sessions, strict=True))
+        await write_frame(session, frame, mapping)
+        slow = DEFAULT_SWING_CONFIG.market.index_ma_slow
+        await write_index(
+            session, INDEX_SLUG, index_series(weekday_calendar), mapping, keep=slow - 1
+        )
+        await write_index(session, INDEX_FALLBACK_SLUG, index_series(weekday_calendar), mapping)
+
+        slug = await resolve_index_slug(
+            session, start=sessions[0], end=sessions[-1], config=DEFAULT_SWING_CONFIG
+        )
+        assert slug == INDEX_FALLBACK_SLUG == "nifty-50"
+        params = await params_for(session, user_id=user_id, start=sessions[0], end=sessions[-1])
+        assert params.index_slug == "nifty-50"
+
+        row, result = await run_swing_backtest(session, user_id=user_id, params=params)
+
+        assert [t.symbol for t in result.trades] == [PLANTED.symbol], "a rising index is long"
+        assert result.trades[0].r_multiple == PLANTED.r_multiple
+        assert result.caveats == CAVEATS
+        assert row.params["index_slug"] == "nifty-50"
+
+    async def test_no_index_at_all_is_a_breadth_only_run_and_the_caveat_says_so(
+        self, session: AsyncSession
+    ) -> None:
+        user_id = await _user(session)
+        sessions, _ = await write_planted_year(session)
+
+        params = await params_for(session, user_id=user_id, start=sessions[0], end=sessions[-1])
+        assert params.index_slug is None
+        assert await load_backtest_index(session, params) is None
+        row, result = await run_swing_backtest(session, user_id=user_id, params=params)
+
+        assert result.comparison is not None
+        assert result.comparison.index_supplied is False
+        assert result.comparison.primary is GateMode.BREADTH_ONLY
+        assert result.comparison.index_rule is None
+        assert INDEX_ABSENT_CAVEAT in result.caveats
+        assert row.stats is not None
+        stored_caveats = row.stats["caveats"]
+        assert isinstance(stored_caveats, list)
+        assert INDEX_ABSENT_CAVEAT in stored_caveats
+        assert row.params["index_slug"] is None
+
+    async def test_the_index_frame_covers_the_lookback_window_oldest_first(
+        self, session: AsyncSession
+    ) -> None:
+        await _user(session)
+        frame, weekday_calendar = planted_frame()
+        sessions = await nse_sessions(session, FIXTURE_START, len(weekday_calendar))
+        mapping = dict(zip(weekday_calendar, sessions, strict=True))
+        await write_frame(session, frame, mapping)
+        await write_index(session, INDEX_SLUG, index_series(weekday_calendar), mapping)
+        start, end = sessions[60], sessions[-10]
+        params = BacktestParams(start=start, end=end, index_slug=INDEX_SLUG)
+
+        index = await load_backtest_index(session, params)
+
+        assert index is not None
+        assert index.schema == INDEX_SCHEMA
+        window_start = await lookback_start(session, start, LOOKBACK_SESSIONS)
+        assert window_start < sessions[0], "200 sessions reach back before the written year"
+        assert index["date"].min() == sessions[0], "every written close inside the window is read"
+        assert index["date"].max() == end
+        assert index["date"].is_sorted()
+        assert index.height == len([s for s in sessions if window_start <= s <= end])
+        assert index["close"][0] == 1000.0
+
+
+class TestDelistedNames:
+    async def test_a_name_delisted_inside_the_run_is_sold_at_its_last_close_and_counted(
+        self, session: AsyncSession
+    ) -> None:
+        """B2 through the runner: `instrument.delisted_on` reaches the engine, the planted name
+        is sold at its last close on its last bar, and the funnel says `DELISTED`."""
+        user_id = await _user(session)
+        frame, weekday_calendar = planted_frame()
+        sessions = await nse_sessions(session, FIXTURE_START, len(weekday_calendar))
+        mapping = dict(zip(weekday_calendar, sessions, strict=True))
+        last_bar = weekday_calendar[ENTRY_BAR + 1]
+        gone = frame.filter(~((pl.col("symbol") == PLANTED.symbol) & (pl.col("date") > last_bar)))
+        ids = await write_frame(
+            session, gone, mapping, delisted={PLANTED.symbol: mapping[last_bar]}
+        )
+        params = await params_for(session, user_id=user_id, start=sessions[0], end=sessions[-1])
+
+        bars = await load_backtest_bars(session, params)
+        assert await load_delisted(session, bars) == {ids[PLANTED.symbol]: mapping[last_bar]}
+        row, result = await run_swing_backtest(session, user_id=user_id, params=params)
+
+        assert [t.symbol for t in result.trades] == [PLANTED.symbol]
+        trade = result.trades[0]
+        assert trade.close_reason == BacktestCloseReason.DELISTED.value
+        assert trade.exit_date == mapping[last_bar]
+        assert trade.exit_avg == (
+            Decimal(str(WIN_TAIL[1].close)) * (1 - params.cost_pct_per_side / 100)
+        ).quantize(Decimal("0.01"))
+        assert result.funnel["closed_delisted"] == 1
+        assert result.funnel["closed_no_bar"] == 0
+        assert row.stats is not None
+        stored_funnel = row.stats["funnel"]
+        assert isinstance(stored_funnel, dict)
+        assert stored_funnel["closed_delisted"] == 1
+
+
+class TestDeterminism:
+    async def test_two_runs_with_the_same_params_and_data_are_byte_identical(
+        self, session: AsyncSession
+    ) -> None:
+        """B5, with the index and a delisting in play: the engine's JSON is the same bytes twice,
+        and so are the two stored rows once JSONB has had its way with the key order."""
+        user_id = await _user(session)
+        frame, weekday_calendar = planted_frame()
+        sessions = await nse_sessions(session, FIXTURE_START, len(weekday_calendar))
+        mapping = dict(zip(weekday_calendar, sessions, strict=True))
+        await write_frame(
+            session, frame, mapping, delisted={"TAPECO": mapping[weekday_calendar[-3]]}
+        )
+        await write_index(
+            session, INDEX_SLUG, index_series(weekday_calendar, crash_on=ENTRY_BAR + 6), mapping
+        )
+        params = await params_for(session, user_id=user_id, start=sessions[0], end=sessions[-1])
+        assert params.index_slug == INDEX_SLUG
+
+        first_row, first = await run_swing_backtest(session, user_id=user_id, params=params)
+        second_row, second = await run_swing_backtest(session, user_id=user_id, params=params)
+
+        assert json.dumps(first.to_json()).encode() == json.dumps(second.to_json()).encode()
+        assert first_row.id != second_row.id
+        assert json.dumps(first_row.stats, sort_keys=True) == json.dumps(
+            second_row.stats, sort_keys=True
+        )
+        assert first_row.params == second_row.params == params_json(params)
+        stats = first_row.stats
+        assert stats is not None
+        comparison = stats["comparison"]
+        assert isinstance(comparison, dict)
+        assert comparison["index_supplied"] is True
+        assert sorted(comparison["modes"]) == ["breadth_only", "full", "gate_off"]
+        drawdown = stats["drawdown"]
+        assert isinstance(drawdown, dict)
+        assert drawdown["max_pct"] == str(first.drawdown.max_pct)
 
 
 class TestTheCeleryBinding:

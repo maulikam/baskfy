@@ -8749,6 +8749,26 @@ export interface components {
             symbol: string;
         };
         /**
+         * SwingCatalystOut
+         * @description SW11B (STANDING-ANSWERS A3): a link, never the filing.
+         *
+         *     ``headline`` / ``published_at`` / ``url`` are the newest NSE announcement the feed stored
+         *     for the name; ``earnings_date`` the nearest result meeting the event calendar lists. Any
+         *     of the four may be null. A page renders ``url`` as a link that opens the exchange's own
+         *     copy (``target=_blank rel=noopener``) and ``earnings_date`` as a badge — nothing here is
+         *     text to reproduce, and nothing here is redistributed (Track C §7 amendment).
+         */
+        SwingCatalystOut: {
+            /** Earnings Date */
+            earnings_date: string | null;
+            /** Headline */
+            headline: string | null;
+            /** Published At */
+            published_at: string | null;
+            /** Url */
+            url: string | null;
+        };
+        /**
          * SwingConfigPatch
          * @description A partial update. Every field optional; unset means "leave it alone".
          *
@@ -9155,6 +9175,7 @@ export interface components {
             base_bars: number | null;
             /** Base Depth Pct */
             base_depth_pct: string | null;
+            catalyst_feed?: components["schemas"]["SwingCatalystOut"] | null;
             /** Close */
             close: string | null;
             /** Dryup Ratio */
@@ -9267,8 +9288,11 @@ export interface components {
             adr_pct?: string | null;
             /** Catalyst */
             catalyst: string | null;
+            catalyst_feed?: components["schemas"]["SwingCatalystOut"] | null;
             /** Distance To Trigger Pct */
             distance_to_trigger_pct: string | null;
+            /** Earnings Date */
+            earnings_date?: string | null;
             /** Expires On */
             expires_on: string | null;
             /**

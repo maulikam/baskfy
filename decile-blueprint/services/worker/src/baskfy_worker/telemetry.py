@@ -21,13 +21,16 @@ wrote onto the message, so ``POST /backtests`` and the job that runs it are one 
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
+import time
+from collections.abc import Iterator
 from typing import Final
 
 from opentelemetry import trace
 
-from baskfy_api.metrics import REGISTRY, observe_provider_call
+from baskfy_api.metrics import REGISTRY, observe_provider_call, observe_swing_task
 from baskfy_api.sentry import configure_sentry
 from baskfy_api.settings import Settings, get_settings
 from baskfy_api.telemetry import annotate_current_span, build_provider
@@ -40,6 +43,8 @@ __all__ = [
     "install_worker_observability",
     "provider_retry_hooks",
     "start_metrics_server",
+    "swing_span",
+    "swing_timed",
 ]
 
 #: What the worker calls itself in Sentry and in the OTel resource. Distinct from the API's
@@ -130,3 +135,62 @@ def provider_retry_hooks() -> RetryHooks:
         )
 
     return RetryHooks(on_retry=on_retry)
+
+
+# --- SW11: spans and timings over the swing jobs, unable to raise into them ------------------
+#
+# `docs/swing/06` SW11: "Spans/metrics over detect, premarket, monitor, execute (M20 pattern,
+# optional, unable to raise into the order path)." The OTel API's no-op tracer never raises, but
+# a configured exporter, a sink replaced in a test, or a histogram with a broken label can — so
+# both helpers catch everything at the call site, and ``tests/test_swing_telemetry.py`` hands
+# them a tracer and a sink that raise and asserts the job still completes.
+
+
+@contextlib.contextmanager
+def swing_span(name: str, **attributes: str | int | float | bool) -> Iterator[None]:
+    """One span around a swing job, or nothing at all — never an exception of its own.
+
+    The span is opened and closed by hand rather than with ``with``, so that a tracer that
+    fails to *open* leaves the body to run untraced, and a body that raises comes back out as
+    its own exception with the span closed on it — never a second error from the closing.
+    """
+    scope: contextlib.AbstractContextManager[trace.Span] | None = None
+    try:
+        scope = trace.get_tracer(WORKER_SERVICE_NAME).start_as_current_span(name)
+        span = scope.__enter__()
+        for key, value in attributes.items():
+            span.set_attribute(key, value)
+    except Exception:
+        log.debug("swing span %s unavailable", name, exc_info=True)
+        scope = None
+    try:
+        yield None
+    except BaseException as exc:
+        if scope is not None:
+            with contextlib.suppress(Exception):
+                scope.__exit__(type(exc), exc, exc.__traceback__)
+        raise
+    else:
+        if scope is not None:
+            with contextlib.suppress(Exception):
+                scope.__exit__(None, None, None)
+
+
+@contextlib.contextmanager
+def swing_timed(task: str) -> Iterator[None]:
+    """Record the wall time of one swing job as ``baskfy_swing_task_duration_seconds``; the
+    status is ``failed`` when the body raised, ``ok`` otherwise. Never raises itself."""
+    started = time.perf_counter()
+    status = "ok"
+    try:
+        yield None
+    except BaseException:
+        status = "failed"
+        raise
+    finally:
+        try:
+            observe_swing_task(
+                task=task, status=status, duration_seconds=time.perf_counter() - started
+            )
+        except Exception:
+            log.debug("swing task timing unavailable", exc_info=True)

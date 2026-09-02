@@ -2113,3 +2113,62 @@ def test_sizing_config_carries_the_three_knobs_and_nothing_else() -> None:
     assert config.sizing.max_new_entries_per_session == 3, "the session cap is not a setting"
     assert config.stops == X.DEFAULT_SWING_CONFIG.stops and config.market == X.DEFAULT_SWING_CONFIG.market
     assert X.sizing_config({}).sizing == X.DEFAULT_SWING_CONFIG.sizing
+
+
+# --- SW11: observability cannot reach the order path -------------------------------------------
+
+
+def test_telemetry_never_raises_into_execute_line(gw, monkeypatch) -> None:
+    """Every telemetry helper replaced by a sink that raises through: the confirm still runs
+    end to end — the line filled, the GTT armed, the session counted — and a refusal keeps
+    its own exception type (a 400 must not become a RuntimeError under a span)."""
+    from app import telemetry
+
+    def boom(*a, **k):
+        raise RuntimeError("telemetry sink down")
+
+    for name in ("count", "observe", "capture", "span", "gauge"):
+        monkeypatch.setattr(telemetry, name, boom)
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id)
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "SIMULATED" and out.gtt["status"] == DRY_RUN_GTT
+    assert store.lines[line_id]["state"] == "FILLED"
+    with pytest.raises(HTTPException) as refused:
+        execute(store, gw, plan_id, line_id, confirm="no")
+    assert refused.value.status_code == 400
+
+
+def test_observe_raises_inside_a_real_span_keeps_the_bodys_exception(monkeypatch) -> None:
+    """`app.telemetry.span` with a tracer installed: a body that raises HTTPException(409)
+    comes out as that, not as `RuntimeError: generator didn't stop after throw()`."""
+    from app import telemetry
+
+    class Scope:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def set_attribute(self, k, v):
+            pass
+
+    class Tracer:
+        def start_as_current_span(self, name):
+            return Scope()
+
+    monkeypatch.setattr(telemetry, "_tracer", Tracer())
+    with pytest.raises(HTTPException) as caught, telemetry.span("swing.test", kind="BUY"):
+        raise HTTPException(409, "twice")
+    assert caught.value.status_code == 409
+
+    class Broken(Tracer):
+        def start_as_current_span(self, name):
+            raise RuntimeError("collector unreachable")
+
+    monkeypatch.setattr(telemetry, "_tracer", Broken())
+    with telemetry.span("swing.test") as current:
+        ran = True
+    assert ran and current is None

@@ -22,10 +22,22 @@ unused, so the class can be hosted by the same runner as any strategy that does 
 WHAT IT READS
 -------------
 Every verdict is `baskfy_core.swing.opening_range.evaluate_trigger`, a pure function.
-This module owns the plumbing: which names are watched, which candles make the range,
-what the low of the day has been so far, and the fact that a name that has triggered
-once is done for the session. Law 1 applies to the core; the clock and the store live
-here.
+This module owns the plumbing: which names are watched, what makes the range, what the low
+of the day has been so far, and the fact that a name that has triggered once is done for
+the session. Law 1 applies to the core; the clock and the store live here.
+
+THE RANGE IS THE TICKS' (SW11, STANDING-ANSWERS A4)
+---------------------------------------------------
+The opening range is built from the ticks seen inside ``[open, open + window)`` at the first
+tick at or after the window's end — the same half-open window `opening_range` reads off
+candles. Zerodha's historical API "was never built for polling during market hours", so the
+minute candles are fetched **once**, ``range_reconcile_delay_minutes`` after the window closed,
+and only to reconcile: a candle range that differs replaces the tick range for every verdict
+that follows (a tick feed that connected late, or dropped a print, is corrected by the
+exchange's own bar), and a signal already raised on the tick range stands — it is a row and a
+line, not an order, and the confirm re-reads everything. A name with no tick inside the window
+has no range until the candles say otherwise; the candle source is then asked at the reconcile
+moment, never on every tick.
 
 The store is a protocol, so the replay harness (`tools/swing/replay.py`) can feed a
 recorded morning through exactly this class and assert the signals it raises, with no
@@ -35,6 +47,8 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Protocol
@@ -69,6 +83,9 @@ class WatchedName:
     setup: Setup
     pivot_high: Decimal | None
     upper_circuit: Decimal | None
+    #: A14 / A2: in today's daily focus (top ``focus_top_n`` by score plus every EP) — the
+    #: names whose signals are pushed. Everything else is a row and a line, never a push.
+    focus: bool = False
 
 
 @dataclass(frozen=True)
@@ -106,9 +123,14 @@ class _NameState:
     """Per-name mutable state for one session. Prices are Decimal (house rule 9)."""
 
     low_of_day: Decimal | None = None
+    #: The ticks' own high/low **inside the window** — what the range is built from (A4).
     tick_high: Decimal | None = None
     tick_low: Decimal | None = None
     opening: OpeningRange | None = None
+    #: Whether the minute candles have been asked for (once) to reconcile the tick range.
+    reconciled: bool = False
+    #: Set when the candle range replaced a tick range that differed — for the log and tests.
+    reconcile_note: str | None = None
     triggered: bool = False
     last_state: TriggerState | None = None
     #: The non-TRIGGERED verdicts already recorded this session, so a LOCKED or BELOW_PIVOT
@@ -152,15 +174,28 @@ class SwingBreakout(BaseStrategy):
         hour, minute = config.opening_range.session_open
         self._open = dt.datetime.combine(day, dt.time(hour, minute))
         self._window_end = self._open + dt.timedelta(minutes=self.window_minutes)
+        self._reconcile_at = self._window_end + dt.timedelta(
+            minutes=config.opening_range.range_reconcile_delay_minutes
+        )
+        #: SW11: how long each verdict took, in seconds — the tick→verdict budget (B9) is
+        #: measured off this by the desk suite; the telemetry sink reads it too.
+        self.verdict_seconds: list[float] = []
+        self._observe: Callable[[float], None] | None = None
 
     @property
     def tokens(self) -> list[int]:
         return list(self.watchlist)
 
+    def observe_with(self, sink: Callable[[float], None] | None) -> None:
+        """Hand every verdict's duration to ``sink`` (the desk's telemetry). A sink that raises
+        is dropped and logged — observability never stops a verdict (SW11, B8)."""
+        self._observe = sink
+
     # --- the one hook that matters ------------------------------------------------------
 
     async def on_tick(self, tick: dict) -> None:
         """One quote snapshot. Evaluates the name it belongs to; raises at most one signal."""
+        started = time.perf_counter()
         token = int(tick.get("instrument_token") or 0)
         watched = self.watchlist.get(token)
         if watched is None:
@@ -173,17 +208,24 @@ class SwingBreakout(BaseStrategy):
         if price is None:
             return
 
-        # Track the session's own extremes from the ticks: the low of the day is the stop
-        # reference (docs/swing/04 §6.1), and the tick range is the fallback when minute
-        # candles are not available at window close.
-        state.tick_high = price if state.tick_high is None else max(state.tick_high, price)
-        state.tick_low = price if state.tick_low is None else min(state.tick_low, price)
+        # The low of the day is the stop reference (docs/swing/04 §6.1): the exchange's own
+        # running low when the tick carries it, else the lowest print this process has seen.
         day_low = _decimal((tick.get("ohlc") or {}).get("low"))
-        state.low_of_day = day_low if day_low is not None else state.tick_low
+        state.low_of_day = (
+            day_low if day_low is not None
+            else (price if state.low_of_day is None else min(state.low_of_day, price))
+        )
+        # The range is the ticks' inside the window, half-open like the candle rule (A4).
+        if self._open <= at < self._window_end:
+            state.tick_high = price if state.tick_high is None else max(state.tick_high, price)
+            state.tick_low = price if state.tick_low is None else min(state.tick_low, price)
 
         if state.opening is None and at >= self._window_end:
-            state.opening = self._build_range(token, at, state)
+            state.opening = self._tick_range(state)
+        if not state.reconciled and at >= self._reconcile_at:
+            self._reconcile(token, at, state)
         if state.opening is None:
+            self._took(started)
             return
 
         verdict = evaluate_trigger(
@@ -196,6 +238,7 @@ class SwingBreakout(BaseStrategy):
             config=self.config.opening_range,
         )
         state.last_state = verdict.state
+        self._took(started)
         if verdict.state is TriggerState.TRIGGERED:
             state.triggered = True
             self._raise(watched, at, price, verdict, state)
@@ -205,33 +248,59 @@ class SwingBreakout(BaseStrategy):
                 state.recorded.add(verdict.state)
                 self._raise(watched, at, price, verdict, state)
 
-    def _build_range(self, token: int, at: dt.datetime, state: _NameState) -> OpeningRange | None:
-        """The range at window close: minute candles when Kite has them, else the ticks.
+    def _took(self, started: float) -> None:
+        elapsed = time.perf_counter() - started
+        self.verdict_seconds.append(elapsed)
+        if self._observe is None:
+            return
+        try:
+            self._observe(elapsed)
+        except Exception as exc:  # noqa: BLE001 - telemetry never stops a verdict
+            log.debug("verdict sink failed and was dropped: %s", exc)
+            self._observe = None
 
-        ``None`` means "not yet": the candles exist but the one that proves the window closed
-        has not been printed, so the next tick asks again. The tick fallback is used only when
-        the candle source has nothing at all — a failed call, or a morning with no history yet.
+    def _tick_range(self, state: _NameState) -> OpeningRange | None:
+        """The range at window close, from the ticks inside the window (A4).
+
+        ``None`` when no tick landed inside the window — the ticker connected late, or the
+        name did not print — and then the reconcile a minute later is the first chance at a
+        range. Marked complete because the window has closed: that is the fact `opening_range`
+        reads off the candles, and here the clock the tick carries says it.
         """
+        if state.tick_high is None or state.tick_low is None:
+            return None
+        return OpeningRange(
+            high=state.tick_high, low=state.tick_low, window_minutes=self.window_minutes,
+            complete=True, candles=1,
+        )
+
+    def _reconcile(self, token: int, at: dt.datetime, state: _NameState) -> None:
+        """Ask the candle source once, ``range_reconcile_delay_minutes`` after the window
+        closed, and let the exchange's own bars correct the tick range if they differ."""
+        state.reconciled = True
         try:
             candles = self.candles.minute_candles(token, self.day, at)
         except Exception as exc:  # noqa: BLE001 - a candle failure must not stop the monitor
-            log.warning("minute candles failed for %s: %s; using ticks", token, exc)
-            candles = []
-        if candles:
-            built = opening_range(
-                candles,
-                day=self.day,
-                window_minutes=self.window_minutes,
-                config=self.config.opening_range,
-            )
-            return built if built.complete and built.candles > 0 else None
-        # Fallback: the ticks' own high/low over the window. Marked complete because the
-        # window has closed — that is the fact `opening_range` reads off the candles.
-        high = state.tick_high if state.tick_high is not None else Decimal(0)
-        low = state.tick_low if state.tick_low is not None else Decimal(0)
-        return OpeningRange(
-            high=high, low=low, window_minutes=self.window_minutes, complete=True, candles=1
+            log.warning("minute candles failed for %s: %s; the tick range stands", token, exc)
+            return
+        if not candles:
+            return
+        built = opening_range(
+            candles, day=self.day, window_minutes=self.window_minutes,
+            config=self.config.opening_range,
         )
+        if not built.complete or built.candles == 0:
+            return
+        before = state.opening
+        if before is not None and (before.high, before.low) == (built.high, built.low):
+            return
+        state.opening = built
+        state.reconcile_note = (
+            f"range from ticks {before.low}-{before.high} reconciled to candles "
+            f"{built.low}-{built.high}" if before is not None
+            else f"range from candles {built.low}-{built.high} (no tick inside the window)"
+        )
+        log.info("%s: %s", token, state.reconcile_note)
 
     def _raise(  # noqa: PLR0913 - the verdict and what it was reached from
         self,

@@ -30,6 +30,18 @@
   <div class="sw-outcome muted" data-outcome-for="{{ line.id }}" aria-live="polite"></div>
 {%- endmacro %}
 
+{#- SW11B (STANDING-ANSWERS A3): the catalyst is a LINK to the exchange's copy of the filing,
+    opened in a new tab, plus an earnings badge when the calendar names a result. Never the
+    filing's text; nothing here is redistributed (Track C §7 amendment). -#}
+{% macro catalyst(c) -%}
+  {% if c %}
+    {% if c.url %}<a class="sw-catalyst" href="{{ c.url }}" target="_blank" rel="noopener noreferrer"
+      title="NSE filing{% if c.published_at %}, {{ c.published_at.strftime('%d %b %H:%M') }}{% endif %} — opens on nseindia.com">{{ c.headline or 'NSE filing' }}</a>{% endif %}
+    {% if c.earnings_date %}<span class="pill warn sw-earnings"
+      title="A result meeting is on the exchange's calendar">earnings {{ c.earnings_date.strftime('%d %b') }}</span>{% endif %}
+  {% endif %}
+{%- endmacro %}
+
 {% macro countdown(text, expires_at, expired) -%}
   <span class="sw-countdown {{ 'bad' if expired else '' }}"
         data-expires-at="{{ expires_at.isoformat() if expires_at else '' }}">{{ text }}</span>
@@ -79,7 +91,7 @@
   <div class="card scroll">
     <table aria-label="Today's triggers">
       <thead><tr><th>Time</th><th>Symbol</th><th>Setup</th><th>What happened</th><th>Entry</th>
-        <th>Stop</th><th>Line</th><th>Plan</th><th>Action</th></tr></thead>
+        <th>Stop</th><th>Line</th><th>Plan</th><th>Catalyst</th><th>Action</th></tr></thead>
       <tbody>
       {% for s in v.triggers %}
         <tr class="sw-trigger sw-trigger-{{ s.state | lower }}" data-signal-id="{{ s.id }}">
@@ -110,10 +122,11 @@
             {% elif s.skip %}<code>{{ s.skip.plan_id[:8] }}</code>
             {% else %}—{% endif %}
           </td>
+          <td style="text-align:left;white-space:normal" class="muted">{% if s.catalyst %}{{ catalyst(s.catalyst) }}{% else %}—{% endif %}</td>
           <td>{% if s.line %}{{ confirm_form(s.line) }}{% elif s.locked %}<span class="muted">locked</span>{% else %}—{% endif %}</td>
         </tr>
       {% else %}
-        <tr><td colspan="9" class="muted">No signals today{% if v.status.monitor.state == 'not enabled' %}
+        <tr><td colspan="10" class="muted">No signals today{% if v.status.monitor.state == 'not enabled' %}
           &mdash; the opening-range monitor is not enabled, so the only entries are the plan's
           waiting buys below{% endif %}.</td></tr>
       {% endfor %}
@@ -145,7 +158,7 @@
           <td>{{ ln.symbol }}</td>
           <td>{{ '{:,}'.format(ln.quantity) }}</td>
           <td>{{ px(ln.stop) }}</td>
-          <td style="text-align:left;white-space:normal" class="muted">{{ ln.note or '' }}</td>
+          <td style="text-align:left;white-space:normal" class="muted">{{ ln.note or '' }} {{ catalyst(ln.catalyst) }}</td>
           <td>{{ ln.state }}</td>
           <td>{{ confirm_form(ln) }}</td>
         </tr>
@@ -168,7 +181,7 @@
           <td>{{ px(ln.trigger) }}</td>
           <td class="muted">range</td>
           <td class="muted">—</td>
-          <td class="muted" style="text-align:left;white-space:normal">{{ ln.note or '' }}</td>
+          <td class="muted" style="text-align:left;white-space:normal">{{ ln.note or '' }} {{ catalyst(ln.catalyst) }}</td>
           <td>{{ ln.state }}</td>
           <td><span class="muted sw-why-not">{{ ln.why_not }}</span></td>
         </tr>
@@ -182,7 +195,8 @@
           <td>{{ px(ln.trigger) }}</td>
           <td>{{ px(ln.stop) }}</td>
           <td>{{ inr(ln.risk_inr) }}</td>
-          <td>{{ inr(ln.position_value) }} <span class="muted">({{ pct(ln.pct_of_sleeve) }})</span></td>
+          <td>{{ inr(ln.position_value) }} <span class="muted">({{ pct(ln.pct_of_sleeve) }})</span>
+            {% if ln.catalyst %}<span class="muted" style="display:block">{{ catalyst(ln.catalyst) }}</span>{% endif %}</td>
           <td>{{ ln.state }}</td>
           <td>{{ confirm_form(ln) }}</td>
         </tr>

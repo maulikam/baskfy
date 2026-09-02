@@ -14,16 +14,20 @@ single-date 271-row export is not the same claim as the same budget measured on 
 
 | Surface | Target | As measured | Verdict | Method | Measured against |
 |---|---|---|---|---|---|
-| Screen run, warm cache | p95 < 150 ms | 4 ms | PASS | p95 of 40 in-process ASGI requests, all cache hits | the seeded dataset (docs/13's 271-row export) |
-| Screen run, cold | p95 < 800 ms | 20 ms | PASS | p95 of 40 in-process ASGI requests, every one a cache miss | the seeded dataset (docs/13's 271-row export) |
-| Instrument factsheet (RSC) — TTFB | TTFB < 300 ms | 9 ms | PASS | median of 20 in-process ASGI requests for GET /instruments/CUPID | the seeded dataset (docs/13's 271-row export, 117 indices) |
-| Instrument factsheet (RSC) — LCP | LCP < 1.8 s | 0.05 s | PASS | median largest-contentful-paint over 5 loads of /instruments/CUPID | the e2e database (baskfy_e2e), production build |
+| Screen run, warm cache | p95 < 150 ms | 9 ms | PASS | p95 of 40 in-process ASGI requests, all cache hits | the seeded dataset (docs/13's 271-row export) |
+| Screen run, cold | p95 < 800 ms | 47 ms | PASS | p95 of 40 in-process ASGI requests, every one a cache miss | the seeded dataset (docs/13's 271-row export) |
+| Instrument factsheet (RSC) — TTFB | TTFB < 300 ms | 11 ms | PASS | median of 20 in-process ASGI requests for GET /instruments/CUPID | the seeded dataset (docs/13's 271-row export, 117 indices) |
+| Instrument factsheet (RSC) — LCP | LCP < 1.8 s | 0.12 s | PASS | median largest-contentful-paint over 5 loads of /instruments/CUPID | the e2e database (baskfy_e2e), production build |
 | Dashboard (145 indices) | < 500 ms | 9 ms | PASS | median of 20 in-process ASGI requests over 117 indices | the seeded dataset (docs/13's 271-row export, 117 indices) |
 | Backtest (15y, monthly, 20 names) | < 10 s | 0.23 s | PASS | run_backtest + compute_metrics over 15 years, monthly, top 20 of 300 names | the synthetic market in packages/core/tests/backtest_fixtures.py — NOT the seeded dataset, which holds no price history (docs/DECISIONS.md §15) |
 | Nightly pipeline end-to-end | < 45 min | **not measured** | — | — | not measured — needs a real backfill (see benchmarks/README.md) |
-| …of which: compute_factors (2,300 instruments) | no separate budget in docs/11 | 31.54 s | n/a | one call to baskfy_core.factors.compute_factors over 2300 instruments x 500 bars | a synthetic seeded random walk; NO database read or write, so this is the engine only and not docs/03 step 7 end to end |
-| CSV export (4,000 rows) | < 2 s | 0.13 s | PASS | one streamed GET /screens/{id}/csv returning 4000 rows | the seeded dataset plus 4200 synthetic instruments over 2 trading days |
-| 50 concurrent screen runs (Prompt 16 acceptance criterion, not docs/11) | p95 < 400 ms, no errors | 325 ms | PASS | p95 of 500 requests from 50 concurrent in-process workers, cold cache, 419 req/s, 0 errors | the seeded dataset; in-process ASGI, so no socket and one event loop |
-| Client JS on the screens route | < 250 KB gzip | 166 KB | PASS | sum of gzip(level 9) over the route's first-load JS in app-build-manifest.json | a production `next build` of apps/web |
+| …of which: compute_factors (2,300 instruments) | no separate budget in docs/11 | 33.01 s | n/a | one call to baskfy_core.factors.compute_factors over 2300 instruments x 500 bars | a synthetic seeded random walk; NO database read or write, so this is the engine only and not docs/03 step 7 end to end |
+| CSV export (4,000 rows) | < 2 s | 0.16 s | PASS | one streamed GET /screens/{id}/csv returning 4000 rows | the seeded dataset plus 4200 synthetic instruments over 2 trading days |
+| 50 concurrent screen runs (Prompt 16 acceptance criterion, not docs/11) | p95 < 400 ms, no errors | 317 ms | PASS | p95 of 500 requests from 50 concurrent in-process workers, cold cache, 384 req/s, 0 errors | the seeded dataset; in-process ASGI, so no socket and one event loop |
+| Client JS on the screens route | < 250 KB gzip | 100 KB | PASS | sum of gzip(level 9) over the route's first-load JS in app-build-manifest.json | a production `next build` of apps/web |
+| GET /swing/setups (2,500 instruments) — `swing_setups_p95` | p95 < 300 ms | 183 ms | PASS | p95 of 40 in-process ASGI GET /swing/setups, every one serialising 2500 candidate rows (median 112 ms) | the seeded dataset plus 2500 synthetic instruments each with a detection row for the day — the route's worst case, not a typical morning |
+| Opening-range monitor, tick → verdict (in-process) — `swing_tick_to_verdict` | p95 < 5 ms | 0.002 ms | PASS | p95 of 2000 in-process `SwingBreakout.on_tick` calls over 20 names after the 5-minute range closed (median 0.002 ms) | synthetic ticks; no bus, no broker, no database — the strategy alone |
+| Swing detect step (2,500 synthetic instruments) — `swing_detect_2500` | < 3 min | 0.21 s | PASS | one pass of with_swing_indicators + liquid_expr + detect_setups + apply_score_adjustments + apply_storage_precision over 2500 instruments x 200 sessions (0.2 s; 2495 liquid, 8 candidates) | a synthetic random-walk universe with a flag shape planted on every fortieth name; NO database read or write, so this is the engine and not the step end to end |
+| Swing confirm path: lock + re-size + place + GTT (DRY_RUN) — `swing_confirm_path` | < 2 s | 0.23 s | PASS | p95 of 20 `execute_line` confirms (max 0.2690 s): session lock, re-size, LIMIT buy, GTT, rows | DRY_RUN through the real swing gateway over an exploding broker client and an in-memory store — no network, no Postgres |
 
 A row reading **not measured** means the harness named in the last column did not run or did not reach its assertion. Run `make bench` with `make up` running and `BASKFY_TEST_DATABASE_URL` exported.

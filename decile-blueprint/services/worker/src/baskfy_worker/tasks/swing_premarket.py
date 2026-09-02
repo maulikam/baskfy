@@ -86,6 +86,7 @@ from baskfy_worker.tasks.swing_eod import (
     store_plan,
     watch_items,
 )
+from baskfy_worker.telemetry import swing_span, swing_timed
 
 log = logging.getLogger(__name__)
 
@@ -334,6 +335,14 @@ def minutes_since_preopen(now: dt.time) -> int:
     return max(elapsed, 1)
 
 
+def gap_price(quote: QuoteRecord) -> Decimal:
+    """The price the gap is measured at: ``ohlc.open`` when the quote carries a positive one
+    (A4), else the last print."""
+    if quote.open is not None and quote.open > 0:
+        return quote.open
+    return quote.last_price
+
+
 def evaluate_gaps(
     names: Sequence[LiquidName],
     quotes: Sequence[QuoteRecord],
@@ -346,6 +355,14 @@ def evaluate_gaps(
     The previous close is the exchange's own (``QuoteRecord.prev_close``) when the quote carries
     it, and the last bar's raw close otherwise: a corporate action between the two would show
     up as a gap that is not one, and the exchange's number already has it applied.
+
+    The gap is measured from the exchange's **open** (``QuoteRecord.open``, Kite's ``ohlc.open``
+    — STANDING-ANSWERS A4, SW11) when the quote carries a positive one, and from the last print
+    otherwise: the pre-open LTP updates once, at 09:07-09:08, and after 09:15 the open is the
+    equilibrium price the auction settled on, which is the gap. The volume pace is the quote's
+    ``volume`` over the minutes since the pre-open began (SW6.1) — at 09:16 that is the matched
+    quantity plus a minute of trading; the desk's ticker carries the same number as
+    ``volume_traded`` from then on and is not re-read here (the watch row is the decision).
     """
     by_symbol = {quote.symbol: quote for quote in quotes}
     minutes = minutes_since_preopen(at)
@@ -357,7 +374,7 @@ def evaluate_gaps(
         prev_close = quote.prev_close if quote.prev_close else name.prev_close
         verdict = live_gap(
             prev_close=prev_close,
-            last_price=quote.last_price,
+            last_price=gap_price(quote),
             volume_so_far=quote.volume,
             avg_daily_volume=name.avg_daily_volume,
             minutes_elapsed=minutes,
@@ -605,9 +622,40 @@ async def run_swing_premarket(  # noqa: PLR0913 - one keyword per input the morn
     a paper plan is full size — and is the worker's own reading of the flag.
 
     ``now`` is the wall clock in IST as a naive datetime, injectable so the tests can put the
-    scan at 09:09 without waiting for it. The quote source is injected for the same reason, and
+    scan at 09:16 without waiting for it. The quote source is injected for the same reason, and
     because a job that built its own broker client would be a job the tests cannot run.
     """
+    with (
+        swing_span("swing.premarket", date=session_date.isoformat(), stage=stage),
+        swing_timed(f"premarket_{stage.lower()}"),
+    ):
+        return await _premarket(
+            session,
+            outcome,
+            session_date,
+            user_id=user_id,
+            stage=stage,
+            ep_premarket_enabled=ep_premarket_enabled,
+            quotes=quotes,
+            now=now,
+            config=config,
+            execution_enabled=execution_enabled,
+        )
+
+
+async def _premarket(  # noqa: PLR0913 - one keyword per input the morning depends on
+    session: AsyncSession,
+    outcome: StepOutcome,
+    session_date: dt.date,
+    *,
+    user_id: int,
+    stage: str,
+    ep_premarket_enabled: bool,
+    quotes: QuoteSource | None,
+    now: dt.datetime | None,
+    config: SwingConfig | None,
+    execution_enabled: bool,
+) -> PremarketReport:
     stamp = now or dt.datetime.now()
     report = PremarketReport(session_date=session_date, stage=stage)
     resolved = config or await load_swing_config(session, user_id) or DEFAULT_SWING_CONFIG
@@ -693,6 +741,7 @@ __all__ = [
     "build_morning_plan",
     "catch_up_ladder",
     "evaluate_gaps",
+    "gap_price",
     "liquid_universe",
     "minutes_since_preopen",
     "refresh_levels",

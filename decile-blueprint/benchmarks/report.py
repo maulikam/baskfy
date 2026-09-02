@@ -39,7 +39,9 @@ _TABLE_HEAD = (
 def _format(measurement: Measurement) -> str:
     value = measurement.value
     if measurement.unit == "ms":
-        return f"{value:.0f} ms"
+        # A sub-millisecond reading (the monitor's tick → verdict) would round to "0 ms", which
+        # reads as unmeasured; three places keep it a number.
+        return f"{value:.3f} ms" if value < 1 else f"{value:.0f} ms"
     if measurement.unit == "s":
         return f"{value:.2f} s"
     if measurement.unit == "min":

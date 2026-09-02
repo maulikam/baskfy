@@ -22,9 +22,11 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Sequence
 from decimal import Decimal
+from typing import cast
 
 import pytest
 import sqlalchemy as sa
+from celery.schedules import crontab
 from helpers import make_instrument, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +46,7 @@ from baskfy_core.models import (
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_core.swing.config import DEFAULT_SWING_CONFIG
 from baskfy_providers.records import QuoteRecord
+from baskfy_worker.celery_app import BEAT_SCHEDULE
 from baskfy_worker.steps import StepOutcome, StepStatus
 from baskfy_worker.tasks.swing_eod import run_swing_eod
 from baskfy_worker.tasks.swing_premarket import (
@@ -52,6 +55,7 @@ from baskfy_worker.tasks.swing_premarket import (
     LiquidName,
     catch_up_ladder,
     evaluate_gaps,
+    gap_price,
     liquid_universe,
     minutes_since_preopen,
     refresh_levels,
@@ -285,6 +289,38 @@ class TestTheGapRule:
             config=DEFAULT_SWING_CONFIG,
         )
         assert len(found) == 1
+
+    def test_the_gap_is_measured_from_ohlc_open_when_the_quote_carries_it(self) -> None:
+        """A4 (SW11): after the open, `ohlc.open` is the auction's equilibrium price — the gap.
+        The last print may already have faded; it is not the gap. Here the open is 12% up and
+        the last print 4% up: a candidate, at the open's 12."""
+        quote = QuoteRecord(
+            symbol="GAPPER",
+            last_price=Decimal("104"),
+            volume=200_000,
+            prev_close=Decimal(100),
+            open=Decimal("112"),
+        )
+        found = evaluate_gaps([self.NAME], [quote], at=dt.time(9, 16), config=DEFAULT_SWING_CONFIG)
+        assert [(n.symbol, v.gap_pct) for n, _, v in found] == [("GAPPER", Decimal("12.00"))]
+        assert gap_price(quote) == Decimal("112")
+
+    def test_without_an_ohlc_open_the_last_print_is_the_gap(self) -> None:
+        """A quote with no open (the pre-open, before 09:07) or a zero one reads the last
+        price, as SW6 did."""
+        assert gap_price(_quote("GAPPER", "112", volume=1)) == Decimal("112")
+        zero = QuoteRecord(symbol="GAPPER", last_price=Decimal("111"), volume=1, open=Decimal(0))
+        assert gap_price(zero) == Decimal("111")
+
+    def test_the_gap_scan_beat_entry_is_nine_sixteen_ist(self) -> None:
+        """MD5: the scan moved from 09:09 to 09:16, defensively, until the S2 probe answers
+        whether the 09:09 reading was ever usable; the volume at 09:16 is sixteen minutes of
+        375 against the pre-open match plus one minute of trading."""
+        entry = BEAT_SCHEDULE["swing-premarket-gaps"]
+        schedule = cast(crontab, entry["schedule"])
+        assert (schedule.hour, schedule.minute) == ({9}, {16})
+        assert entry["kwargs"] == {"stage": "GAPS"}
+        assert minutes_since_preopen(dt.time(9, 16)) == 16
 
     def test_a_name_with_no_quote_is_not_a_candidate(self) -> None:
         found = evaluate_gaps([self.NAME], [], at=NINE_OH_NINE.time(), config=DEFAULT_SWING_CONFIG)

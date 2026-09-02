@@ -1,0 +1,30 @@
+[
+  {
+    "symbol": "INFY",
+    "company": "Infosys Limited",
+    "purpose": "Annual General Meeting",
+    "bm_desc": "To consider the business set out in the notice of the 45th AGM.",
+    "bm_date": "25-Jun-2026"
+  },
+  {
+    "symbol": "INFY",
+    "company": "Infosys Limited",
+    "purpose": "Financial Results/Dividend",
+    "bm_desc": "To consider and approve the audited financial results for the quarter and year and to recommend a final dividend.",
+    "bm_date": "16-Apr-2026"
+  },
+  {
+    "symbol": "INFY",
+    "company": "Infosys Limited",
+    "purpose": "Financial Results",
+    "bm_desc": "To consider and approve the unaudited financial results for the quarter ending 30 September 2026.",
+    "bm_date": "15-Oct-2026"
+  },
+  {
+    "symbol": "INFY",
+    "company": "Infosys Limited",
+    "purpose": "Financial Results",
+    "bm_desc": "A row with no date, as the calendar occasionally publishes it.",
+    "bm_date": ""
+  }
+]

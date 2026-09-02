@@ -148,6 +148,8 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "sw_fill": ("id",),
     "sw_session": ("user_id", "session_date"),
     "sw_backtest_run": ("id",),
+    # SW11B (docs/swing/03 §11, migration 0032): a headline, a stamp and a link per watched name.
+    "sw_catalyst": ("id",),
 }
 
 #: docs/04 opening paragraph: "Money in numeric, never float."
@@ -259,6 +261,7 @@ def test_swing_tables_are_recorded_in_docs() -> None:
         "sw_fill",
         "sw_session",
         "sw_backtest_run",
+        "sw_catalyst",
     ):
         assert table in swing_model, f"{table} is not described in docs/swing/03"
 
@@ -302,6 +305,13 @@ def test_swing_drawdown_columns_are_modelled_and_recorded_in_docs(table: str, co
         ("sw_watch", "reconfirmed_on"),
         ("sw_position", "half_risk"),
         ("sw_session", "first_live_counted"),
+        # SW11B (A3, migration 0032): the earnings flag and the catalyst row's columns.
+        ("sw_watch", "earnings_date"),
+        ("sw_catalyst", "headline"),
+        ("sw_catalyst", "published_at"),
+        ("sw_catalyst", "url"),
+        ("sw_catalyst", "source"),
+        ("sw_catalyst", "earnings_date"),
     ],
 )
 def test_swing_review_columns_are_modelled_and_recorded_in_docs(table: str, column: str) -> None:

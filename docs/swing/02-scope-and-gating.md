@@ -44,7 +44,13 @@ and never from a form. Flags are **system-only** in `.env.example` (M4 conventio
    migration — but no second user exists in this run.
 7. **No new data provider, no scraping.** Bars from `ohlcv_daily`; intraday from the Kite
    provider's `historical_data(interval="minute"|"5minute")` and the ticker, through the
-   existing rate limiter (3 req/s). No news source (D10).
+   existing rate limiter (3 req/s). ~~No news source (D10).~~ **Amended by Maulik, 2 Sep 2026
+   (STANDING-ANSWERS A3, DECISIONS-SW SW11B.1):** the one news source is NSE's own free
+   corporate-announcement and event-calendar reads, through the **existing NSE provider** and
+   its cookie discipline and limiter (no new provider, no scraping around it), for the
+   watchlist and EP-candidate symbols only; Baskfy stores a headline, a timestamp and the
+   filing URL and **links out** — it never reproduces a filing's text; single-tenant own-use,
+   nothing redistributed; fail soft (an empty catalyst is allowed, a crashed morning is not).
 
 ## §3 — The real-money gate (the "four years of losses", compressed)
 

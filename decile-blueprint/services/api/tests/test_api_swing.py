@@ -27,6 +27,7 @@ import pytest
 import screener_helpers
 import sqlalchemy as sa
 from api_helpers import bearer, make_user, running_app, url
+from fastapi.routing import APIRoute
 from screener_helpers import requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,6 +35,7 @@ from baskfy_api.settings import Settings
 from baskfy_core.models import (
     Instrument,
     OhlcvDaily,
+    SwCatalyst,
     SwConfig,
     SwMarketDaily,
     SwPosition,
@@ -714,6 +716,145 @@ class TestThePositionsRoute:
         row = response.json()["data"][0]
         assert row["naked"] is True
         assert row["simulated"] is True
+
+
+# --- SW11B: the catalyst feed on the two GETs (STANDING-ANSWERS A3) ----------------------
+
+IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+FILING = "https://nsearchives.nseindia.com/corporate/FLAGCO_18082026183211_PR.pdf?x=1&y=2"
+CALENDAR = (
+    "https://www.nseindia.com/companies-listing/corporate-filings-event-calendar?symbol=FLAGCO"
+)
+
+
+async def _catalyst_rows(session: AsyncSession, *, user_id: int, instrument_id: int) -> None:
+    """Two announcements (the newer one second, so order is by stamp, not by id) and the
+    calendar row the feed keeps for the nearest result meeting."""
+    session.add_all(
+        [
+            SwCatalyst(
+                user_id=user_id,
+                instrument_id=instrument_id,
+                headline="Updates — capex approved",
+                published_at=dt.datetime(2026, 8, 17, 9, 0, tzinfo=IST),
+                url="https://nsearchives.nseindia.com/corporate/FLAGCO_older.pdf",
+                source="NSE_ANNOUNCEMENT",
+            ),
+            SwCatalyst(
+                user_id=user_id,
+                instrument_id=instrument_id,
+                headline="Press Release - FLAGCO wins a multi-year order",
+                published_at=dt.datetime(2026, 8, 18, 18, 32, 11, tzinfo=IST),
+                url=FILING,
+                source="NSE_ANNOUNCEMENT",
+            ),
+            SwCatalyst(
+                user_id=user_id,
+                instrument_id=instrument_id,
+                headline="Financial Results",
+                published_at=None,
+                url=CALENDAR,
+                source="NSE_EVENT_CALENDAR",
+                earnings_date=dt.date(2026, 10, 15),
+            ),
+        ]
+    )
+    await session.flush()
+
+
+class TestTheCatalystFeedOnTheReads:
+    async def test_a_setup_row_carries_the_newest_headline_its_link_and_the_earnings_date(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A3: headline + timestamp + filing URL, and the earnings flag — four fields, never
+        the filing's text. The URL is verbatim, query string and all."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+        await _setup_row(screener_session, user_id=user_id, instrument_id=instrument_id)
+        await _catalyst_rows(screener_session, user_id=user_id, instrument_id=instrument_id)
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/setups"), headers=bearer(public_id))
+
+        feed = response.json()["data"][0]["catalyst_feed"]
+        # The instant, whichever offset the wire spells it in.
+        assert dt.datetime.fromisoformat(feed.pop("published_at")) == dt.datetime(
+            2026, 8, 18, 18, 32, 11, tzinfo=IST
+        )
+        assert feed == {
+            "headline": "Press Release - FLAGCO wins a multi-year order",
+            "url": FILING,
+            "earnings_date": "2026-10-15",
+        }
+
+    async def test_a_name_the_feed_has_nothing_for_reads_null_not_an_empty_object(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+        await _setup_row(screener_session, user_id=user_id, instrument_id=instrument_id)
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/setups"), headers=bearer(public_id))
+
+        assert response.json()["data"][0]["catalyst_feed"] is None
+
+    async def test_a_watch_row_carries_the_feed_beside_its_own_text_and_earnings_flag(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`catalyst` is the person's text (or the auto-fill); `catalyst_feed` is the link;
+        `earnings_date` the flag the 09:10 job keeps on the row. Three separate things."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+        await _catalyst_rows(screener_session, user_id=user_id, instrument_id=instrument_id)
+        screener_session.add(
+            SwWatch(
+                user_id=user_id,
+                instrument_id=instrument_id,
+                setup="FLAG",
+                source="MANUAL",
+                added_on=AS_OF,
+                trigger=Decimal("149.60"),
+                stop_ref=Decimal("141.86"),
+                catalyst="typed by hand",
+                earnings_date=dt.date(2026, 10, 15),
+                state="WATCHING",
+            )
+        )
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/watch"), headers=bearer(public_id))
+
+        row = response.json()["data"][0]
+        assert row["catalyst"] == "typed by hand"
+        assert row["earnings_date"] == "2026-10-15"
+        assert row["catalyst_feed"]["url"] == FILING
+        assert row["catalyst_feed"]["headline"].startswith("Press Release")
+
+    async def test_the_feed_belongs_to_the_tenant_that_stored_it(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Track C §6: a row another user's job stored is not this user's link."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        other_id, _ = await make_user(screener_session, "swing-other@example.com")
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+        await _setup_row(screener_session, user_id=user_id, instrument_id=instrument_id)
+        await _catalyst_rows(screener_session, user_id=other_id, instrument_id=instrument_id)
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/setups"), headers=bearer(public_id))
+
+        assert response.json()["data"][0]["catalyst_feed"] is None
+
+    def test_the_feed_adds_no_route(self) -> None:
+        """A GET-only addition: the read-only proofs stay exactly as strict."""
+        from baskfy_api.routers.swing import router  # noqa: PLC0415
+
+        assert not any(
+            "catalyst" in route.path for route in router.routes if isinstance(route, APIRoute)
+        )
+        assert any(isinstance(route, APIRoute) for route in router.routes)
 
 
 def test_the_helpers_are_the_ones_this_module_thinks() -> None:

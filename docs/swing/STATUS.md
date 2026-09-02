@@ -23,7 +23,7 @@ done. A fresh session resumes from the first module not marked ✅.
 | SW9.6 — The index rule, the drawdown, gate-on vs gate-off in the backtest | ✅ | STANDING-ANSWERS A12 and B1–B5: `run_backtest` takes the benchmark's closes (NIFTY 500 from `index_snapshot_daily`, NIFTY 50 fallback, resolved once per run) and reads the 10/20 averages in-frame up to and including the session's own close (a look-ahead test shifts the series by one session and the gate moves by exactly one); the drawdown lock-out runs on the constant-sleeve curve, peak-to-trough as % of the sleeve, with the live 15 %/10 % hysteresis (a 16.99 % drawdown locks, 10.84 % holds, 9.52 % releases); three books over one detection pass — gate off, breadth only, full — reported per year entered and per setup with breadth's and the index rule's contributions as differences; `DELISTED` beside `NO_BAR`, B1's circuit caveat verbatim in `04` §11, the card and the page draw the drawdown and the two comparison tables; core backtest **68 passed**, speed **26.9 s** for three books, worker **24**, API **43**, web **42**, `make lint` clean |
 | SW10 — Gating and safety proof | ✅ | Every Track-B/C claim is a test: hypothesis over random watchlists (no `PARABOLIC_SHORT` line, a stop never falls, a SELL never exceeds the book), a spy over the real gateway through `/swing/execute` (eight calls, all dry, under both `DRY_RUN` values), source scans with docstrings/comments stripped over the web hub, the API and the monitor, every `sw_` write named with its `user_id`; **the confirm-time gate (STANDING-ANSWERS A5, SW10.4)**: `POST /swing/execute` re-derives the book under `SELECT … FOR UPDATE` on the day's `sw_session` and re-sizes or refuses (`EXPOSURE_FULL` / `TIER_FULL` / `SESSION_CAP`), the monitor re-reads context per trigger, 500 seeded confirm sequences never exceed the ceiling, the count or the cap; and `tools/swing/drill.py` runs the whole paper session against Postgres — evening → LEVELS → MORNING → replayed morning through `PgSignalStore` → two confirms through `execute_line` (the second re-sized 833 → 389) → EOD → next morning — **0 orders reach a broker**, `confirms=2 fills=2`, **`EXPOSURE after confirms … = 25.0%`** (was 34.3 %; SW10.2 closed). Desk **1,599 passed** |
 | SW10.5 — Maulik's review corrections (A7, A8, A9, A10, A14, B7) | ✅ | STANDING-ANSWERS applied across core, worker, API, gateway and desk: a live gap is a `PENDING_RANGE` line holding a session slot, released once at its trigger or freed at 10:45, never executable (route + module + source set); the live buy is a marketable LIMIT (`min(trigger × 1.005, range high + 0.25 ADR)`) polled ≤ 10 s at ≤ 2 req/s, a partial is `SENT` with a GTT for exactly what filled, later fills grow the position and **modify** the GTT through a new guarded `modify_gtt_quantity`, the 10:45 sweep cancels remainders through a new guarded `cancel_order`; half risk at plan time via `risk_multiplier` while the countdown runs and a confirm would be real, the countdown moved once per LIVE session by the evening; the ladder reads real closes from day one with a 09:09 catch-up; top-20 auto-watch, top-5 + every-EP focus, MANUAL rows on a ten-session clock with `PATCH … {"reconfirm": true}`; migration `0031`; the drill replays five signals and a late partial fill — **0 orders reach a broker**. Core +26, execution +18, worker +23, API +3, desk **1,644 passed** |
-| SW11 — Hardening and observability | ⬜ | |
+| SW11 — Hardening and observability | ✅ | Five `SWING_*` rules over five DB-derived gauges the API refreshes per scrape, evaluated from synthetic series in `test_swing_alerts.py`, plus four in-process worker checks (09:20/10:50/15:20/21:30) and runbook 6; the desk is the clock (cutoff at 10:45, GTT sweep at 15:15 in `app/swing_clock.py`); the tick-built opening range with a one-shot candle reconcile (A4); the quote fallback capped at one call per 5 s (B10); the one-way email + dark Telegram notifier for the daily focus (A2); the S2 timing probe (Beat 09:04, gated, self-disabling) and the gap scan at 09:16 from `ohlc.open`; `write_market_row` keeps a settled row and bounds its closes; the journal reads REAL; four budgets measured — `/swing/setups` p95 **183 ms**, tick→verdict p95 **0.0017 ms**, detect 2,500 **0.21 s** (engine only), confirm path p95 **0.22 s**; Playwright `/swing` spec written, unrunnable since M46 (its sign-in setup). Desk **1,694 passed, 17 skipped**; worker +41, API +16 |
 | SW12 — Verification, goldens, final report | ⬜ | |
 
 States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked · 🟡 partial.
@@ -1680,6 +1680,108 @@ desk'`** (QUESTIONS.md Q-SW13-1). The desk password is generated on the box; rea
 shell (`grep BASKFY_DESK_PASSWORD /opt/baskfy/.env.staging.compose`), never through `box.sh`. The
 EIP is not yet Zerodha's registered order IP (docs/08 §5) — irrelevant while `DRY_RUN=true`.
 
+## SW11B — The catalyst feed: a headline, a stamp and a link per watched name ✅
+
+STANDING-ANSWERS A3 / MD4. `NSEProvider.announcements` / `results_calendar` (recorded synthetic
+fixtures in `packages/providers/tests/fixtures/nse/`, provenance noted; 17 tests, no network);
+migration `0032_swing_catalyst.py` (`sw_catalyst`, `sw_watch.earnings_date`); `baskfy.swing.
+catalyst` at 09:10 IST weekdays (`tasks/swing_catalyst.py`, 19 tests: symbols = WATCHING +
+last session's EPs, idempotent on the URL, auto-fill only while empty, the flag refreshed and
+cleared, fail soft per symbol); `catalyst_feed` on `GET /swing/setups` and `GET /swing/watch`
+(5 tests; no new route; client regenerated); `CatalystLink` on the setups and watchlist pages
+(6 vitests); the desk page's triggers and plan lines link out (`catalysts_for`, 5 tests). Track C
+§7 amended in `02` under Maulik's name; `03` §11; `05`; DECISIONS-SW SW11B.1.
+
+**Not done:** the fixtures are hand-written from the endpoints' known shape, not captured —
+re-record on the first session that may reach `nseindia.com`; no morning has run the feed.
+
+## SW11 — Hardening and observability ✅
+
+Short, per MD19. Decisions in DECISIONS-SW SW11.1–SW11.6.
+
+- **Alerts (B8).** `infra/prometheus/alerts.yml` group `baskfy-swing`: `SWING_POSITION_NAKED`
+  (any time, 10 m), `SWING_MONITOR_DID_NOT_START` (09:20–10:45 IST, flag on, no `monitor_ran`),
+  `SWING_DETECT_STALE` (21:30–23:30, no market row for the published date),
+  `SWING_ORDER_OPEN_AFTER_CUTOFF` (10:50–15:30, a BUY still `SENT`), `SWING_GTT_MISSING_AT_1515`
+  (15:20–21:00, still naked). Each reads a gauge `baskfy_api.metrics.refresh_swing_metrics`
+  re-reads from `baskfy_api/swing_health.py` on every `/metrics` scrape (M20's DB-derived
+  pattern); `services/api/tests/test_swing_alerts.py` evaluates every rule from a synthetic series
+  with a PromQL-subset evaluator (no `promtool` on the stack) — inside its window it fires,
+  healthy it does not, outside it does not, on a Saturday it does not — and asserts every gauge is
+  read by a rule and every rule reads a gauge. The same four time-of-day facts are raised
+  in-process by `baskfy_worker/tasks/swing_ops.py` (Beat 09:20 / 10:50 / 15:20 / 21:30, default
+  queue) through `alerts.dispatch`, the `publish_late` two-mechanism pattern. Runbook
+  `docs/runbooks/06-swing-morning.md`, five entries. The existing harness's parity regex still
+  read `decile[_:]` after M2 and matched nothing; repointed at `baskfy` (both tests still green).
+- **The desk is the clock (A8).** The monitor writes `sw_session.monitor_ran` on the **first
+  tick it handles** (pushed or polled; at once when there is nothing to watch — SW11.2), watches
+  to 10:45, then `app/swing_clock.py` runs the cutoff at once and sleeps to
+  `gtt_sweep_at` [15:15] for the GTT sweep — both through the swing gateway built only for the
+  chore, the strategy still holding none (SW6.4 kept); each chore is a line on
+  `sw_session.notes` (`PgSwingStore.note_session`) and a `desk_swing_sweeps_total` count.
+  `tests/test_swing_clock.py`, 10 tests, DRY_RUN over the exploding broker.
+- **The range is the ticks' (A4).** `SwingBreakout` builds the range from the ticks inside
+  `[09:15, 09:20)` at the first tick at or after 09:20 and asks for minute candles **once**, at
+  `range_reconcile_delay_minutes` [1] after, only to reconcile; a name that triggered is never
+  asked for. The fixture morning still raises exactly its four signals; the candle source is
+  asked once per name, at ≥ 09:21. One strategy test's 09:20 tick sat on the window's edge and
+  moved inside it (SW11.3). `QuoteFallback` (B10): Kite `/quote` for the watchlist at most once
+  per `quote_poll_min_seconds` [5], asked only when the ticker has been quiet that long; the cap
+  is the object's, tested with a hundred asks in five seconds.
+- **The notifier (A2).** `app/swing_notify.py`: stdlib SMTP (`DESK_SMTP_*`, `DESK_NOTIFY_*`)
+  and a Telegram `sendMessage` sender constructed only when both `BASKFY_SWING_TELEGRAM_*` are
+  set; `PgSignalStore` pushes a `TRIGGERED` signal of a daily-focus name (`sw_watch.focus`) with
+  the whole line or the skip reason; a channel that raises is logged and the plan is still
+  written. The module's code names no execute route, gateway, broker client or read-back
+  (`tests/test_swing_notify.py`, 12 tests).
+- **The S2 probe (A4/MD5).** `baskfy.swing.timing_probe` (Beat 09:04, `BASKFY_SWING_TIMING_PROBE`
+  default false, `.done` marker after one good run) samples `/quote` through the pre-open and the
+  first minute and asks for the 09:20 candle at 09:20:05 / 09:20:35 / 09:21:05, writes
+  `docs/swing/status/S2-kite-timing.md` (placeholder committed: NOT RUN YET);
+  `tools/swing/kite_timing_probe.py --dry-run` prints the shape. The gap scan Beat is **09:16**
+  and `evaluate_gaps` measures from `ohlc.open` when the quote carries one (SW11.4).
+- **Carry-forwards closed.** `write_market_row` keeps a row `settled_by: swing-eod` (tier columns
+  and ladder record) and bounds its closes by `trade_date`; `GET /swing/journal` `reads` is
+  `REAL` always (A10). Telemetry: `desk_swing_*` metrics and guarded spans in `execute_line`,
+  the monitor and the clock; `baskfy_swing_task_duration_seconds` and `swing_span` around
+  detect / premarket / eod — a raising sink is survived in both trees (`telemetry_never_raises`
+  tests), and `app.telemetry.span` now re-raises the body's own exception instead of a
+  `RuntimeError` from the generator (a latent M20 defect, SW11.5).
+- **Budgets (B9)**, in `benchmarks/AS-MEASURED.md`: `/swing/setups` p95 **183 ms** (2,500
+  candidate rows, the worst case); tick→verdict p95 **0.0017 ms**; detect over 2,500 × 200
+  synthetic **0.21 s** (engine only, no DB — labelled like `compute_factors`); confirm path p95
+  **0.22 s** (DRY_RUN, in-memory store). `benchmarks/budgets.py` gains the four rows; the two
+  desk-measured ones are `gate="none"` (the data plant's CI cannot run the desk suite).
+- **Playwright (G6) — harness exists, cannot sign in.** `apps/web/e2e` is real and
+  `e2e/swing.spec.ts` is written (renders `/swing` signed in — heading, funnel empty state,
+  "nothing on this page can place an order" — and the market and journal tabs; it does **not**
+  show "one flag and one locked EP with the lock icon", no detection fixture in the e2e seed,
+  SW4.3 stands on that half). The run reached the browser: both servers built and started
+  (after the local `baskfy_e2e` database was recreated — migration 0021 refused rows left by
+  earlier runs), but `e2e/auth.setup.ts` still clicks a "Password" tab that **M46 removed**
+  (Google-only sign-in), so every signed-in spec in the suite has been unrunnable since M46 —
+  not this leaf's break. Gate G6 is ABANDONed on that reason; the spec runs the day the
+  suite's sign-in setup is rewritten for Google (a Track A item, not swing's).
+
+### What SW11 did NOT do
+
+- No push transport for order updates (SW10.5's item stands: the 10:45 cutoff and Reconcile
+  fills are pulls). No tick journal for the replay harness (`--journal` still reads a file
+  nothing writes).
+- The alert on the monitor flag reads the **API's** copy of `BASKFY_SWING_MONITOR_ENABLED`
+  (MD20: one env file); a box with two env files could alert on the wrong value — runbook 6 says.
+- The 15:15 sweep runs inside the monitor process; a monitor that never started (or was killed
+  after 10:45) sweeps nothing — `SWING_GTT_MISSING_AT_1515` is what says so. `POST /swing/cutoff`
+  and the page's re-arm remain the by-hand path.
+- `SWING_POSITION_NAKED` is Prometheus-only (a condition over ten minutes); the worker's four
+  checks cover the other rules. The worker's intraday checks stay quiet on an NSE holiday the
+  calendar names; the Prometheus rules know only weekdays, and the monitor itself has no
+  holiday calendar — on a weekday holiday it watches stale quotes for ninety minutes (no
+  break can occur on a price that does not move) and writes `monitor_ran` off the fallback.
+- The catalyst Beat (SW11B, 09:10) was written to follow a 09:09 gap scan; with the scan at 09:16
+  its live-gap rows arrive after it — one line in `celery_app.py` (09:17) for the driver to move.
+- `write_market_row` still takes `execution_enabled` (unused since A10) for its callers.
+
 ## Not done (kept loud)
 
 - **SW10 onward.** The desk page and `/swing/execute` are in (SW7, both halves) and write
@@ -1697,8 +1799,10 @@ EIP is not yet Zerodha's registered order IP (docs/08 §5) — irrelevant while 
 - ~~`sw_config.first_live_sessions_left` / `risk_multiplier` (`02` §3.5) has no core function
   yet~~ — closed by SW10.5 (A9): `plan.first_live_multiplier` / `build_entries(risk_multiplier=)`
   size at plan time; the evening counts the sessions down.
-- `sw_config.exposure_level` is written back by the evening job (SW8), but the detection job's
-  Saturday re-scan can still overwrite a settled market row one rung too high (SW8, "did NOT do").
+- ~~`sw_config.exposure_level` is written back by the evening job (SW8), but the detection job's
+  Saturday re-scan can still overwrite a settled market row one rung too high~~ — closed by SW11:
+  `write_market_row` keeps a row the evening settled and bounds its closes by date.
 - The watchlist page is read-only; the API's three writes have no form yet.
-- Deferred to SW11: the Playwright check and p95 for `/swing/setups`; a tick journal for the
-  replay harness. Deferred to SW12: mutation survivors not individually justified.
+- ~~Deferred to SW11: the Playwright check and p95 for `/swing/setups`~~ — both in SW11 (the
+  browser check without the lock-icon fixture); a tick journal for the replay harness is still
+  not written. Deferred to SW12: mutation survivors not individually justified.

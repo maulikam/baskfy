@@ -135,6 +135,21 @@ SWING_STOP_BAND_MAX = float(os.getenv("BASKFY_SWING_STOP_BAND_MAX", "0.10"))
 # a fast-falling book, leaving a tight swing stop resting unfilled. 0.97 rests it 3% under.
 # Passed per call to place_gtt_stop, so the weekly book's GTTs are byte-for-byte as before.
 SWING_GTT_LIMIT_FRACTION = float(os.getenv("BASKFY_SWING_GTT_LIMIT_FRACTION", "0.97"))
+# ---- The swing book's notifier (SW11, STANDING-ANSWERS A2) -------------------------------
+# One-way. A TRIGGERED signal for a daily-focus name is emailed with the whole line; nothing
+# that comes back — a reply, a tap — can reach an order. The desk does not import the data
+# plant's mailer, so this is a stdlib SMTP sender with its own five knobs; blank host = off.
+DESK_SMTP_HOST = os.getenv("DESK_SMTP_HOST", "")
+DESK_SMTP_PORT = int(os.getenv("DESK_SMTP_PORT", "587") or 587)
+DESK_SMTP_USER = os.getenv("DESK_SMTP_USER", "")
+DESK_SMTP_PASSWORD = os.getenv("DESK_SMTP_PASSWORD", "")
+DESK_SMTP_STARTTLS = os.getenv("DESK_SMTP_STARTTLS", "true").lower() != "false"
+DESK_NOTIFY_FROM = os.getenv("DESK_NOTIFY_FROM", "")
+DESK_NOTIFY_TO = os.getenv("DESK_NOTIFY_TO", "")
+# The Telegram sender is scaffolded DARK: constructed only when BOTH are set, one-way, and it
+# has no command handler, no polling, no reply path — a token that can only tell, never act.
+SWING_TELEGRAM_BOT_TOKEN = os.getenv("BASKFY_SWING_TELEGRAM_BOT_TOKEN", "")
+SWING_TELEGRAM_CHAT_ID = os.getenv("BASKFY_SWING_TELEGRAM_CHAT_ID", "")
 
 # ---- Options research engines (PAPER-ONLY; the product gates above remain OFF) --------
 # Return figures are evaluation benchmarks, never an instruction to trade until hit.

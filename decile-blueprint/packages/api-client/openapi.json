@@ -13790,6 +13790,65 @@
         "title": "SwingBarsOut",
         "type": "object"
       },
+      "SwingCatalystOut": {
+        "description": "SW11B (STANDING-ANSWERS A3): a link, never the filing.\n\n``headline`` / ``published_at`` / ``url`` are the newest NSE announcement the feed stored\nfor the name; ``earnings_date`` the nearest result meeting the event calendar lists. Any\nof the four may be null. A page renders ``url`` as a link that opens the exchange's own\ncopy (``target=_blank rel=noopener``) and ``earnings_date`` as a badge — nothing here is\ntext to reproduce, and nothing here is redistributed (Track C §7 amendment).",
+        "properties": {
+          "earnings_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earnings Date"
+          },
+          "headline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headline"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "headline",
+          "published_at",
+          "url",
+          "earnings_date"
+        ],
+        "title": "SwingCatalystOut",
+        "type": "object"
+      },
       "SwingConfigPatch": {
         "additionalProperties": false,
         "description": "A partial update. Every field optional; unset means \"leave it alone\".\n\n``extra=\"forbid\"`` is the load-bearing line. Without it, ``PATCH {\"exposure_level\": 3}``\nwould be accepted, ignored and answered ``200`` — the caller believing they had climbed the\nladder by asking. With it, they are told the field does not exist here.\n\nThe bounds on each field are the *engine's* limits, not the server's ceilings: a negative\nrisk or a 0-minute opening range is nonsense at any ceiling, and nonsense is a 400. The\nceilings are checked afterwards, in :func:`apply_patch`, and answer 422 — a different\nquestion with a different answer.",
@@ -15060,6 +15119,16 @@
             ],
             "title": "Base Depth Pct"
           },
+          "catalyst_feed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SwingCatalystOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "close": {
             "anyOf": [
               {
@@ -15535,6 +15604,16 @@
             ],
             "title": "Catalyst"
           },
+          "catalyst_feed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SwingCatalystOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "distance_to_trigger_pct": {
             "anyOf": [
               {
@@ -15546,6 +15625,18 @@
               }
             ],
             "title": "Distance To Trigger Pct"
+          },
+          "earnings_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earnings Date"
           },
           "expires_on": {
             "anyOf": [

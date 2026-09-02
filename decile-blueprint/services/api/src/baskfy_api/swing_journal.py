@@ -134,8 +134,10 @@ class LadderCard:
 
     ``level`` is `sw_config.exposure_level` — the number the EOD job writes back and the plan is
     built with — rather than the market row's copy, so the card shows the loop closed rather than
-    one end of it. ``reads`` names the book the ladder is reading (PACK.6): the simulated one
-    until `BASKFY_SWING_EXECUTION_ENABLED` is true, the real one after.
+    one end of it. ``reads`` names the book the ladder is reading: always the real one since
+    SW10.5 (STANDING-ANSWERS A10 — the ladder reads real closes from day one, PACK.6's paper
+    clause is void). The ``SIMULATED`` literal stays in the type for the wire contract; nothing
+    writes it any more (SW11).
     """
 
     level: int
@@ -361,7 +363,7 @@ async def ladder(
             max_exposure_pct=Decimal(str(exposure)).quantize(_TWO_DP),
             new_entries_allowed=False,
             last_r=recent,
-            reads="REAL" if execution_enabled else "SIMULATED",
+            reads="REAL",
         )
     return LadderCard(
         level=rung,
@@ -370,7 +372,7 @@ async def ladder(
         max_exposure_pct=market.max_exposure_pct,
         new_entries_allowed=market.new_entries_allowed,
         last_r=recent,
-        reads="REAL" if execution_enabled else "SIMULATED",
+        reads="REAL",
     )
 
 
@@ -575,8 +577,9 @@ async def journal(
     """The whole page in one read."""
     real_trades, real_rows = await closed_trades(session, user_id=user_id, simulated=False)
     paper_trades, paper_rows = await closed_trades(session, user_id=user_id, simulated=True)
-    # PACK.6: the ladder reads the real book once execution is enabled, the paper one before.
-    ladder_rows = real_rows if execution_enabled else paper_rows
+    # A10 (SW10.5, closed by SW11): the ladder reads the real book from day one, whatever the
+    # flag says; the paper card is still shown, apart, and never feeds the rung.
+    ladder_rows = real_rows
     return JournalView(
         real=card(real_trades, real_rows),
         simulated=card(paper_trades, paper_rows),

@@ -104,6 +104,7 @@ from baskfy_worker.tasks.swing import (
     lookback_start,
     sleeve_drawdown,
 )
+from baskfy_worker.telemetry import swing_span, swing_timed
 
 log = logging.getLogger(__name__)
 
@@ -859,6 +860,28 @@ async def run_swing_eod(  # noqa: PLR0913 - one keyword per input the evening de
     Returns rather than raises when there is no market row for the date: the detectors have not
     run, and an evening job that invented a gate would be planning against a tape nobody measured.
     """
+    with swing_span("swing.eod", date=trade_date.isoformat()), swing_timed("eod"):
+        return await _swing_eod(
+            session,
+            outcome,
+            trade_date,
+            user_id=user_id,
+            execution_enabled=execution_enabled,
+            now=now,
+            mailer=mailer,
+        )
+
+
+async def _swing_eod(  # noqa: PLR0913 - one keyword per input the evening depends on
+    session: AsyncSession,
+    outcome: StepOutcome,
+    trade_date: dt.date,
+    *,
+    user_id: int,
+    execution_enabled: bool,
+    now: dt.datetime | None,
+    mailer: Mailer | None,
+) -> EodReport:
     stamp = now or dt.datetime.now(tz=dt.UTC)
     config_row = (
         await session.execute(select(SwConfig).where(SwConfig.user_id == user_id))

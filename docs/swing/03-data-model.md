@@ -4,7 +4,8 @@ Postgres, Alembic migration `0028_swing.py` (`0029_swing_backtest.py` for §10;
 `0030_swing_primary_sources.py` for SW9.5's drawdown columns, two defaults and the two new skip
 reasons; `0031_swing_review_corrections.py` for SW10.5's review corrections — the watch
 funnel's `score` / `adr_pct` / `focus` / `reconfirmed_on`, the journal's `half_risk` tag, the
-session's `first_live_counted`, and the `PENDING_RANGE` line kind) in
+session's `first_live_counted`, and the `PENDING_RANGE` line kind; `0032_swing_catalyst.py`
+for SW11B's `sw_catalyst` and the `sw_watch.earnings_date` flag) in
 `services/api/alembic/versions/`, SQLAlchemy
 models in `packages/core/src/baskfy_core/models/swing.py`. Conventions inherited from
 `models/base.py`: `PRICE` (18,2) for prices and levels, `PRICE_RAW` (18,4) where an exchange
@@ -127,7 +128,8 @@ liquid universe. Written by `swing-eod`.
 | `adr_pct` | numeric(10,2), nullable — the name's ADR when the row was written, read by the plan and the monitor when no detection row exists (a live gap, a MANUAL name), so a stop can be measured against one ADR (`04` §6.1, SW9.5.2) |
 | `focus` | bool — **the daily focus** (A14): the top `watch.focus_top_n` [5] flags by score plus every EP, recomputed by `swing-eod` and by `swing-premarket` after the gap scan (`swing_watch.refresh_focus`). The desk page puts focus names on top; the notifier (SW11) pushes only these; the rest are watched, signalled and logged below the fold |
 | `reconfirmed_on` | date, nullable — when a person last re-confirmed a MANUAL row (`PATCH /swing/watch/{id}` with `reconfirm: true`); `expires_on` runs `manual_valid_bars` sessions from it |
-| `note`, `catalyst` | free text (the "news check") |
+| `note`, `catalyst` | free text (the "news check"). Since SW11B `catalyst` is **auto-filled** from the newest `sw_catalyst` headline (§11) only while empty; typed text is never overwritten |
+| `earnings_date` | date, nullable — **the earnings flag** (SW11B, STANDING-ANSWERS A3): the nearest result meeting NSE's event calendar lists on or after the morning the feed ran; refreshed every run, NULL when none |
 | `state` | `WATCHING` / `TRIGGERED` / `EXPIRED` / `DISMISSED` |
 
 The web app may add/dismiss/annotate/re-confirm rows (they move no money). Nothing else on `/swing` mutates.
@@ -237,3 +239,28 @@ recalibration that produces a different one.
 Index `(user_id, finished_at)`: the journal's one query is this user's latest **finished** run
 (`finished_at` set, `error` null) — the latest *finished*, not the latest started, so a run in
 flight or a failed re-run never displaces the last good number on `/swing/journal`.
+
+## 11. `sw_catalyst` — a headline, a stamp and a link per watched name (SW11B)
+
+`BigIntPk`; migration `0032_swing_catalyst.py`; model `SwCatalyst`; unique
+`(user_id, instrument_id, url)`; index `(user_id, instrument_id, published_at)`. Written by
+`baskfy.swing.catalyst` (Beat 09:10 IST weekdays) for the WATCHING names plus the last
+session's EP candidates, from the NSE provider's `announcements` and `results_calendar` reads
+(cookie discipline, the shared limiter, archive-then-parse, one archived request per symbol per
+day). **Never the filing's text** — STANDING-ANSWERS A3 and the Track C §7 amendment: the feed
+is single-tenant own-use, it links out, nothing is redistributed. Idempotent: the same filing
+is one row however many mornings see it. Fail soft: a provider error is a note on the step and
+zero rows, never a raise into the morning.
+
+| Column | Meaning |
+|---|---|
+| `user_id`, `instrument_id` | Track C §6; both cascade |
+| `headline` | text — NSE's subject line plus its own one-line summary, capped at 160 characters (`nse.HEADLINE_MAX_CHARS`); for a calendar row, the meeting's purpose |
+| `published_at` | timestamptz, nullable — the exchange's stamp (IST); NULL when it published none, and such a row is never "newest" |
+| `url` | text — the filing attachment **verbatim, query string and all** (it is the uniqueness key); for a calendar row, the symbol's event-calendar page on the exchange |
+| `source` | `NSE_ANNOUNCEMENT` / `NSE_EVENT_CALENDAR` |
+| `earnings_date` | date, nullable — set on an `NSE_EVENT_CALENDAR` row: the nearest result meeting on or after the run; mirrored onto `sw_watch.earnings_date` |
+
+Read by `GET /swing/setups` and `GET /swing/watch` (`catalyst_feed`: the newest announcement's
+headline / stamp / url plus the earnings date) and by the desk page's triggers and plan lines,
+all of which render a link (`target=_blank rel=noopener`) and an earnings badge.

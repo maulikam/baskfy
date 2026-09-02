@@ -20,6 +20,7 @@ from decimal import Decimal
 from sqlalchemy import Select, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.swing_catalyst import CatalystView, latest_for
 from baskfy_core.models import (
     Instrument,
     OhlcvDaily,
@@ -73,6 +74,9 @@ class SetupRow:
     locked_upper_circuit: bool
     sector_slug: str | None
     listed_within_2y: bool
+    #: SW11B (A3): the newest filing's headline / stamp / link and the earnings date, from
+    #: `sw_catalyst`; `None` when the feed has nothing for the name.
+    catalyst_feed: CatalystView | None = None
 
     @property
     def stop_distance_pct(self) -> Decimal | None:
@@ -271,6 +275,10 @@ async def setups(
     if status is not None:
         query = query.where(SwSetupDaily.status == status)
 
+    found = (await session.execute(query)).all()
+    feed = await latest_for(
+        session, user_id=user_id, instrument_ids=[row.instrument_id for row, _, _ in found]
+    )
     rows = tuple(
         SetupRow(
             instrument_id=row.instrument_id,
@@ -296,8 +304,9 @@ async def setups(
             locked_upper_circuit=row.locked_upper_circuit,
             sector_slug=row.sector_slug,
             listed_within_2y=row.listed_within_2y,
+            catalyst_feed=feed.get(row.instrument_id),
         )
-        for row, symbol, name in (await session.execute(query)).all()
+        for row, symbol, name in found
     )
 
     market = (

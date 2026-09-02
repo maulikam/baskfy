@@ -1965,6 +1965,188 @@ service can be stopped alone); staging the desk on 65.0.226.77 (MD18, superseded
 `desk.` block from the Caddyfile, the `desk` record from `dns.tf` and the ARN from `compute.tf`;
 `seed swing` without flags is unchanged.
 
+## SW11B.1 — The catalyst feed links out, per symbol, fails soft, and amends Track C §7 · Maulik, 2 Sep 2026 (STANDING-ANSWERS A3; MD4) · ⚠ UNREVIEWED on four details
+
+**Applied as decided (STANDING-ANSWERS A3):** NSE's free corporate-announcements and
+event-calendar reads, through `NSEProvider` (cookie prime, the shared 1 req/s limiter,
+archive-then-parse — one archived request per symbol per day), for the WATCHING names plus the
+last session's EP rows; `sw_catalyst` (headline, stamp, URL, source, earnings date; unique on
+the URL); `sw_watch.catalyst` auto-filled only while empty; `sw_watch.earnings_date` refreshed
+every run; the API's two GETs and the three pages **link out** (`target=_blank rel=noopener`);
+fail soft. **Track C §7 is amended under Maulik's name** in `02`: the one news source is the
+exchange's own, through the existing provider, single-tenant own-use, links not text, nothing
+redistributed.
+
+**The four details decided here (⚠ UNREVIEWED; each cheap to reverse):**
+1. *Headline* = NSE's subject line (`desc`) plus its one-line summary (`attchmntText`), capped
+   at 160 characters (`nse.HEADLINE_MAX_CHARS`). Never the attachment. Rejected: the subject
+   alone ("Updates") — unreadable on a watchlist.
+2. *An announcement with no attachment URL is dropped* (counted in the note); a row with no
+   stamp is kept and never "newest". Rejected: a synthetic URL to the filings page — two such
+   rows would collide on the uniqueness key.
+3. *The earnings flag is the nearest result meeting on or after the run*; it lives on one
+   `NSE_EVENT_CALENDAR` row per name (linking to the exchange's calendar page) and is
+   **deleted** when the calendar names none, so a stale date never shows. Rejected: keeping
+   past dates as history — a flag is a reading, not a record.
+4. *Per-symbol fetch and per-symbol fail-soft*: one refused name costs only itself; every name
+   refused is a SUCCEEDED step with zero rows and the error in the note. `ProviderError` only
+   is caught; anything else is a bug and raises. A 404 is absence (a renamed symbol), a 403 is
+   loud. Reverse by catching more, or less, in `swing_catalyst.run_swing_catalyst`.
+
+Read model: `catalyst_feed {headline, published_at, url, earnings_date}` on `SwingSetupOut` and
+`SwingWatchOut` (null when the feed has nothing); `SwingWatchOut.earnings_date` beside it. No
+new route (`test_swing_readonly` unchanged). Beat `swing-catalyst` 09:10 IST weekdays, compute
+queue, a minute after the gap scan so the live-gap watch rows are on the list.
+
+## SW11.1 — Five rules over five scrape-time gauges, evaluated by a subset evaluator, and four of them raised in-process too · Maulik, 2 Sep 2026 (STANDING-ANSWERS B8) · ⚠ UNREVIEWED on the mechanism
+
+**Context.** `06` SW11 names three alerts; B8 adds two and says "spans optional and unable to
+raise into the order path". The desk, the worker and the API are three processes; a counter in
+one of them is not "is a position naked now".
+
+**The choice.** The facts are rows, read by `baskfy_api/swing_health.py` (one indexed query
+each, all users) and set on gauges by `refresh_swing_metrics` on every `/metrics` scrape — M20's
+database-derived pattern, so the rules read the same numbers whichever process died. The
+rules are written in a deliberately small PromQL grammar (a gauge comparison, `and on()`, an
+IST window as UTC minutes-of-day, a weekday guard) so `test_swing_alerts.py` can evaluate each
+from a synthetic series without `promtool` (not on the locked stack, house rule 1). The four
+time-of-day rules are also raised in-process by `tasks/swing_ops.py` at their moment, through
+`alerts.dispatch` — the `publish_late` pattern, so a box with no Prometheus still gets an email.
+`SWING_POSITION_NAKED` is Prometheus-only: a condition held for ten minutes is a time-series
+question. The rule names are upper-case `AlertName` members, verbatim from the swing docs.
+
+**Rejected.** A worker Beat task setting gauges (prefork children each own a registry; the
+exposition would show whichever child ran last). A push gateway (not on the stack). Wider
+PromQL (`rate`, `absent`) that the test could not evaluate — a rule nobody has evaluated is
+the failure B8 exists to prevent.
+
+**Reversal.** The gauges are five `Gauge`s and one refresh; the evaluator is forty lines in one
+test file; the worker checks are four functions on one query each.
+
+## SW11.2 — The monitor process is the desk's clock; the strategy still holds no gateway · Maulik, 2 Sep 2026 (STANDING-ANSWERS A8) · ⚠ UNREVIEWED on the process boundary
+
+**Context.** SW10.5 left the 10:45 cutoff and the 15:15 sweep as a route and a hook: both are
+order-shaped (a cancel, a GTT), so a Beat entry cannot run them (law 2) and only the desk can.
+SW6.4 built the monitor "with no gateway at all".
+
+**The choice.** `app/swing_clock.py`: after `run_until_close` the same process runs the cutoff
+at once and sleeps to `gtt_sweep_at` [15:15] for the sweep, building the swing gateway only
+when each chore starts and dropping it after; the strategy object never sees one, and the
+runner's source scan (no placing verb, `gateway=None`) is unchanged. `sw_session.monitor_ran`
+is written on the **first tick the strategy handles** (pushed by the ticker or polled by the
+fallback; `signals = 0`, rewritten at 10:45) — and at once when the watchlist is empty, since
+a monitor with nothing to watch still ran and the clock still owes the day its sweep — because
+`SWING_MONITOR_DID_NOT_START` reads it at 09:20: the old write at 10:45 would have fired the
+rule on every healthy morning, and a write at launch would have silenced it for a process
+whose token died before the first tick. Each chore is a line on `sw_session.notes`; no
+column, no migration (0032 is SW11B's).
+
+**Rejected.** A cron `POST /swing/cutoff` (needs the desk password and an Origin through
+`websec`); a Beat task that re-arms (law 2); a `gtt_sweep_ran` column (a migration for a
+marker the alert does not need — a naked position after 15:20 is the alert whether or not the
+sweep ran).
+
+**Reversal.** `run_after_close` is one call at the end of `swing_monitor.main`; the notes
+marker is one method on the store.
+
+## SW11.3 — The opening range is the ticks inside the window; the candle reconciles once, a minute later · Maulik, 2 Sep 2026 (STANDING-ANSWERS A4) · ⚠ UNREVIEWED on the tick at the window's edge
+
+**The choice.** `SwingBreakout` keeps the tick high/low over `[open, open + window)` — half-open,
+the same rule `opening_range` reads off candles — and closes the range at the first tick at or
+after the window's end; `minute_candles` is asked **once**, at `range_reconcile_delay_minutes`
+[1] after, and a differing candle range replaces the tick range for the verdicts that follow
+(a signal already raised stands: it is a row and a line, and the confirm re-reads). A name that
+triggered is never asked for. Both delays are `OpeningRangeConfig` fields (B13), named in `04`
+§7.4. The fixture replay raises exactly its four signals and asks for candles once per name.
+**The one semantic change:** a tick stamped exactly 09:20:00 is outside a 5-minute window (it
+is the 09:20 candle's), where SW6's fallback counted it; one strategy test whose 09:20 tick sat
+on that edge now ticks inside the window (`tests/test_swing_monitor.py`, the comment says so).
+
+**Rejected.** Waiting for the candle before any verdict (Zerodha: the historical API "was
+never built for polling during market hours"); polling candles on every tick until they exist
+(SW6's loop, up to sixty asks a minute per name).
+
+**Reversal.** `_tick_range` / `_reconcile` are two methods; set `range_reconcile_delay_minutes`
+to 0 to reconcile at the first tick after the window.
+
+## SW11.4 — The gap scan runs at 09:16 and reads `ohlc.open`; the pace stays the quote's volume · Maulik, 2 Sep 2026 (STANDING-ANSWERS A4; MD5) · ⚠ UNREVIEWED on the pace's source
+
+**The choice.** `swing-premarket-gaps` moves to 09:16 (MD5, defensively) and `evaluate_gaps`
+measures the gap from `QuoteRecord.open` when the quote carries a positive one, else the last
+print. **The split A4 records:** the volume pace is the quote's `volume` over the minutes since
+09:00 (SW6.1's clock; sixteen minutes of 375 at 09:16) — at 09:16 that is the pre-open match
+plus a minute of trading, and the desk's ticker carries the same number as `volume_traded`
+from then on, so the monitor does not re-read it: the watch row is the decision. The S2 probe
+(`baskfy.swing.timing_probe`, Beat 09:04, `BASKFY_SWING_TIMING_PROBE`, self-disabling by a
+`.done` file in `BASKFY_SWING_TIMING_PROBE_DIR`) is what settles whether 09:09 was ever usable;
+its report says which line to move back. It holds one of the compute worker's two slots for
+~18 minutes on the one morning it runs. The catalyst Beat (SW11B, 09:10, "a minute after the
+gap scan") now precedes the scan — the driver's line to move.
+
+**Reversal.** One Beat line; `gap_price` is one function.
+
+## SW11.5 — The notifier tells and cannot act; a span cannot turn a 400 into a 500 · Maulik, 2 Sep 2026 (STANDING-ANSWERS A2, B8) · ⚠ UNREVIEWED on the SMTP knobs
+
+**The choice.** `app/swing_notify.py` is a stdlib `smtplib` sender (`DESK_SMTP_*`,
+`DESK_NOTIFY_FROM/TO` in `app/config.py`; the desk cannot import `baskfy_api.email`) and a
+Telegram `sendMessage` sender constructed only when both `BASKFY_SWING_TELEGRAM_*` are set —
+no `getUpdates`, no webhook, no command handler; the message says "this message tells; it
+cannot act". Only `sw_watch.focus` names are pushed (A14); the notice carries the line or the
+skip reason; a channel that raises is logged and the plan is still written. Telemetry: the
+desk's M20 `span` closed its scope with a `yield None` inside `except`, which turned a body's
+`HTTPException(409)` into `RuntimeError: generator didn't stop after throw()` once a tracer was
+installed — latent, since no box has a tracer; rewritten to close the scope on the body's own
+exception and re-raise it, with a test. Every metric/span call on the order path is wrapped at
+the call site and tested with a sink that raises.
+
+**Reversal.** `Notifier` is the one call site in `PgSignalStore.raise_signal`; the SMTP knobs
+are seven lines of config.
+
+## SW11.6 — Budgets measured honestly, and the journal reads REAL · Maulik, 2 Sep 2026 (STANDING-ANSWERS B9, A10)
+
+`/swing/setups` p95 is measured with 2,500 detection rows on the day (the route's worst case,
+183 ms; a real morning lines a few dozen); detect over 2,500 × 200 is the engine only (0.21 s),
+labelled like `compute_factors`; tick→verdict and the confirm path are the desk suite's,
+recorded through `benchmarks.budgets` off the path with `gate="none"` because `pytest -m
+benchmark` here cannot run them. `GET /swing/journal` `reads` is `REAL` always (A10; the
+`SIMULATED` literal stays in the wire type, nothing writes it). `write_market_row` keeps a row
+`settled_by: swing-eod` and bounds closes by date (SW8.1's three lines, now written).
+
+## SW12.1 — The swing goldens are flat, stable and self-describing; the mutation report is the harness's · Maulik, 2 Sep 2026 (STANDING-ANSWERS B11) · ⚠ UNREVIEWED on the layout
+
+**Context.** B11 asks for goldens of the six pure functions in `go/testdata/golden/L1/swing/`,
+byte-stable across two runs, and a re-run of the mutation harness with every survivor named.
+`tools/parity/golden.py`'s `dump()` stamped every file with the wall clock, the interpreter
+and the cwd, so no golden it wrote could be byte-stable; and its polars branch went through
+`to_pandas()` (absent here — no pyarrow) or `to_dicts()`, which drops the dtypes and turns a
+`Date` into a timestamp.
+
+**The choice.** (1) The lane lives in `golden.py` itself (`python golden.py swing`), not a
+`dump_L1.py`, because the six functions share one fixture set and one decode/recompute table
+that the drift test must import too. (2) Files are **flat**: `L1/swing/<function>.case_NNN.json`
+— docs/go-rewrite/03's `L<n>/<module>/<case>` with `swing` as the module — rather than one
+directory per function; one directory the Go lane globs and a shell checksums. (3) A
+`stable=True` document has no `dumped_at` / `python` / `cwd`; the meta says `stable: true`
+instead. (4) A polars frame is encoded natively — `{"columns", "dtypes": polars names, "rows"}`
+— with dates as ISO days and nulls as null; the pandas path is untouched. (5) `detect_setups`
+goldens carry the **raw adjusted bars** the worker hands the detectors plus the whole
+`SwingConfig`; the function under test is `detect_setups(with_swing_indicators(bars, config),
+as_of, config)`, and the notes on every file say so, with the price convention (house rule 6).
+(6) `build_entries`' tuple is stored as `{"lines", "skipped"}`. (7) The dumper round-trips each
+case's inputs through JSON *before* computing, so the stored output is the output of exactly
+the stored inputs. (8) `packages/core/tests/test_swing_goldens.py` re-renders every file from its
+stored inputs through the live function and compares the text; drift fails there first.
+
+**Rejected.** Nested `<function>/case_NNN.json` (what the leaf brief literally said — one level
+deeper than 03's convention, and a `shasum dir/*` sees no files); a `dumped_at` kept and
+stripped by the test (a golden that is not what the file says is not a golden); storing the
+indicated frame instead of the bars (twice the size, and the Go lane needs the indicators
+ported anyway).
+
+**Reversal.** Move the files and change `swing_case_path`; the test globs whatever is there.
+Regenerating is `uv run python ../tools/parity/golden.py swing` from `decile-blueprint` and one
+commit that says why.
+
 ## Maulik's decisions, 2 Sep 2026 (taken in conversation; not ⚠ UNREVIEWED)
 
 Recorded verbatim from the review session so the run and the report build on them.

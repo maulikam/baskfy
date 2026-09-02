@@ -229,3 +229,90 @@ groups:
         annotations:
           summary: "An execute batch took over two minutes at p95 — limit prices may be stale."
           runbook_url: docs/runbooks/rebalance-half-executed.md
+
+  # -------------------------------------------------------------------------------------------
+  # SW11: the swing book (docs/swing/06 SW11; docs/swing/STANDING-ANSWERS B8). Every metric
+  # here is a database-derived gauge `baskfy_api.metrics.refresh_swing_metrics` re-reads from
+  # `baskfy_api.swing_health` on each scrape, and `services/api/tests/test_swing_alerts.py`
+  # evaluates each rule from a synthetic series with the API's own gauges — the rule grammar is
+  # deliberately small (a gauge comparison, an IST window written in UTC minutes-of-day, a
+  # weekday guard) so that test can evaluate it exactly. `baskfy_worker.tasks.swing_ops` raises
+  # the same four time-of-day alerts in-process at the moment each is about.
+  #
+  # `hour()`/`minute()` are UTC in PromQL; the windows are IST converted: 09:20 = 230,
+  # 10:45 = 315, 10:50 = 320, 15:20 = 590, 15:30 = 600, 21:00 = 930, 21:30 = 960, 23:30 = 1080.
+  # -------------------------------------------------------------------------------------------
+  - name: baskfy-swing
+    interval: 60s
+    rules:
+      - alert: SWING_POSITION_NAKED
+        # A8 / non-negotiable 4: no filled quantity without a GTT. Any time: the confirm arms
+        # the stop in the same request, so ten minutes of a naked position means the arm was
+        # refused and nobody has pressed "Re-arm GTT" on the desk page.
+        expr: baskfy_swing_naked_positions > 0
+        for: 10m
+        labels: {severity: warning, service: swing}
+        annotations:
+          summary: "{{ $value }} swing position(s) have shares open and no resting GTT."
+          runbook_url: docs/runbooks/06-swing-morning.md
+
+      - alert: SWING_MONITOR_DID_NOT_START
+        # 09:20 IST with the flag on and no `sw_session.monitor_ran` for today. The monitor
+        # writes the row on its first tick (SW11), so this reads a fact and not the 10:45 outcome.
+        # Quiet after 10:45 — a monitor that never ran is then the evening's problem.
+        expr: |
+          baskfy_swing_monitor_enabled == 1
+          and on() baskfy_swing_monitor_ran_today == 0
+          and on() (hour() * 60 + minute()) >= 230
+          and on() (hour() * 60 + minute()) < 315
+          and on() (day_of_week() > 0 and day_of_week() < 6)
+        for: 5m
+        labels: {severity: critical, service: swing}
+        annotations:
+          summary: "BASKFY_SWING_MONITOR_ENABLED is true and the opening-range monitor has not started."
+          runbook_url: docs/runbooks/06-swing-morning.md
+
+      - alert: SWING_DETECT_STALE
+        # No `sw_market_daily` for the published date by 21:30 IST: the detect step (the
+        # chain's twelfth, and the 21:00 belt) has not run, and the 21:05 evening job will plan
+        # against a stale gate. Quiet from 23:30 IST — by then it is the morning's problem.
+        expr: |
+          baskfy_swing_detect_ran_for_published_date == 0
+          and on() (hour() * 60 + minute()) >= 960
+          and on() (hour() * 60 + minute()) < 1080
+          and on() (day_of_week() > 0 and day_of_week() < 6)
+        for: 15m
+        labels: {severity: critical, service: swing}
+        annotations:
+          summary: "The swing detect step has not run for the published trade date."
+          runbook_url: docs/runbooks/06-swing-morning.md
+
+      - alert: SWING_ORDER_OPEN_AFTER_CUTOFF
+        # A8: the 10:45 cutoff cancels every open remainder. A BUY line still SENT at 10:50 IST
+        # means the cutoff did not run or the cancel was refused (`sw_plan_line.note` says).
+        expr: |
+          baskfy_swing_open_buy_orders_today > 0
+          and on() (hour() * 60 + minute()) >= 320
+          and on() (hour() * 60 + minute()) < 600
+          and on() (day_of_week() > 0 and day_of_week() < 6)
+        for: 5m
+        labels: {severity: critical, service: swing}
+        annotations:
+          summary: "{{ $value }} swing buy order(s) still open after the 10:45 cutoff."
+          runbook_url: docs/runbooks/06-swing-morning.md
+
+      - alert: SWING_GTT_MISSING_AT_1515
+        # A8: the 15:15 sweep re-arms whatever is naked. Naked at 15:20 IST means the sweep did
+        # not run or could not arm (no last price, a refused GTT) — the book is going into the
+        # close unprotected, and this is the page, not the warning above. A GTT can be armed
+        # after hours, so the page stays up until 21:00 IST (930) while the fact holds.
+        expr: |
+          baskfy_swing_naked_positions > 0
+          and on() (hour() * 60 + minute()) >= 590
+          and on() (hour() * 60 + minute()) < 930
+          and on() (day_of_week() > 0 and day_of_week() < 6)
+        for: 2m
+        labels: {severity: critical, service: swing}
+        annotations:
+          summary: "{{ $value }} swing position(s) still without a GTT after the 15:15 sweep."
+          runbook_url: docs/runbooks/06-swing-morning.md

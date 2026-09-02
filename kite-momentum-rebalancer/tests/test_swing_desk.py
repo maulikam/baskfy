@@ -261,6 +261,20 @@ DDL = [
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (user_id, session_date),
         CHECK (mode IN ('DRY_RUN', 'LIVE')))""",
+    # 0032 (SW11B): the catalyst feed the page links out to. Read by `catalysts_for`;
+    # `test_swing_catalyst_desk.py` writes it.
+    """CREATE TABLE sw_catalyst(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        instrument_id INTEGER NOT NULL REFERENCES instrument(id),
+        headline TEXT NOT NULL,
+        published_at TEXT,
+        url TEXT NOT NULL,
+        source TEXT NOT NULL,
+        earnings_date TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (user_id, instrument_id, url),
+        CHECK (source IN ('NSE_ANNOUNCEMENT', 'NSE_EVENT_CALENDAR')))""",
 ]
 
 

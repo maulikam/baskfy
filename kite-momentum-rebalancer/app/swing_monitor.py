@@ -37,8 +37,27 @@ the same context under a row lock and answers the same way.
 
 THE NOTIFICATION
 ----------------
-The desk has no push channel. The notification is the row the desk page (SW7) polls plus a log
-line at INFO; `docs/swing/DECISIONS-SW.md` SW6.3 says why and how to add a channel later.
+THE NOTIFICATION (SW11, STANDING-ANSWERS A2)
+--------------------------------------------
+The row the desk page (SW7) polls and a log line at INFO, as SW6.3 built it — plus, for a name
+in the daily focus (`sw_watch.focus`, A14), one one-way push through `app.swing_notify`: the
+whole line (symbol, entry, stop, qty, ₹ risk, plan expiry) or the skip and its reason. The
+notifier can only tell; a failure in it is logged and the morning goes on.
+
+THE CLOCK (SW11)
+----------------
+This process is the desk's clock for the session: it watches from 09:15 to `monitor_close`,
+then `app.swing_clock` runs the 10:45 cutoff (cancel every open remainder, free every unclaimed
+slot) and, at 15:15, the GTT sweep (no filled quantity without a stop). The strategy never
+holds a gateway (SW6.4); the clock builds one only after the strategy has stopped, for those
+two order-shaped chores, and `app.swing_clock` is where that happens.
+
+QUOTE FALLBACK (B10)
+--------------------
+The ticker is the feed. When it goes quiet — no tick for any watched name for
+`quote_poll_min_seconds` — the loop asks Kite `/quote` once for the watchlist and feeds the
+answer through the same `on_tick`; `QuoteFallback` refuses a second call inside that window
+whatever the loop asks, so the cap is a property of the object, not of the loop's timing.
 """
 from __future__ import annotations
 
@@ -46,7 +65,9 @@ import asyncio
 import datetime as dt
 import logging
 import os
+import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Any
@@ -73,7 +94,9 @@ from baskfy_core.swing.plan import (
 )
 
 from . import config as C
+from . import telemetry as _tel
 from .strategies.swing_breakout import Signal, SwingBreakout, WatchedName
+from .swing_notify import Notifier, SignalNotice, notice_json
 
 log = logging.getLogger("swing_monitor")
 
@@ -130,7 +153,7 @@ def load_watchlist(
     wanted it watched. The circuit bands come from the morning's quote, keyed by symbol.
     """
     rows = conn.execute(
-        f"SELECT w.id, w.instrument_id, i.symbol, i.kite_token, w.setup, w.trigger "
+        f"SELECT w.id, w.instrument_id, i.symbol, i.kite_token, w.setup, w.trigger, w.focus "
         f"FROM {SCHEMA}.sw_watch w JOIN {SCHEMA}.instrument i ON i.id = w.instrument_id "
         "WHERE w.user_id = ? AND w.state = 'WATCHING' ORDER BY i.symbol",
         (user_id,),
@@ -157,6 +180,7 @@ def load_watchlist(
                     Decimal(str(trigger)) if setup is Setup.FLAG and trigger is not None else None
                 ),
                 upper_circuit=bands.get(str(row["symbol"])),
+                focus=bool(row["focus"]) if "focus" in row.keys() else False,
             )
         )
     return names
@@ -454,7 +478,7 @@ class PgSignalStore:
     flag on, which it is not.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - one keyword per collaborator
         self,
         conn: Any,
         *,
@@ -462,6 +486,7 @@ class PgSignalStore:
         day: dt.date,
         config: SwingConfig,
         context: SignalContext | None = None,
+        notifier: Notifier | None = None,
     ) -> None:
         self.conn = conn
         self.user_id = user_id
@@ -471,6 +496,10 @@ class PgSignalStore:
         #: the drill's report; never what a plan is sized against — `_plan_for` re-reads.
         self.context = context if context is not None else self.read_context()
         self.lines_written: list[int] = []
+        #: SW11 / A2: where a daily-focus trigger is told. ``None`` (the tests, the drill)
+        #: means the row and the log line only, as SW6.3 built it.
+        self.notifier = notifier
+        self.notices: list[SignalNotice] = []
 
     def read_context(self) -> SignalContext:
         """The book as it is *now* — A5: read per trigger, so the second SIGNAL plan of a
@@ -504,15 +533,48 @@ class PgSignalStore:
             ),
         ).fetchone()
         signal_id = int(row["id"]) if row is not None else None
+        _tel.count("swing_signals", state=verdict.state.value)
         if verdict.state is not TriggerState.TRIGGERED or verdict.entry is None or verdict.stop is None:
             return
-        line_id = self._plan_for(signal, raised_at)
-        if line_id is not None and signal_id is not None:
+        planned = self._plan_for(signal, raised_at)
+        if planned.line_id is not None and signal_id is not None:
             self.conn.execute(
                 f"UPDATE {SCHEMA}.sw_signal SET plan_line_id = ? WHERE id = ?",
-                (line_id, signal_id),
+                (planned.line_id, signal_id),
             )
-            self.lines_written.append(line_id)
+            self.lines_written.append(planned.line_id)
+        self._notify(signal, raised_at, planned)
+
+    def _notify(self, signal: Signal, raised_at: dt.datetime, planned: Planned) -> None:
+        """A2 / A14: the daily focus is pushed; everything else is the row and the log."""
+        if not signal.watch.focus:
+            return
+        line = planned.plan.lines[0] if planned.plan.lines else None
+        notice = SignalNotice(
+            symbol=signal.watch.symbol,
+            setup=signal.watch.setup.value,
+            at=raised_at,
+            entry=line.trigger if line is not None else signal.verdict.entry,
+            stop=line.stop if line is not None else signal.verdict.stop,
+            quantity=line.quantity if line is not None else None,
+            risk_inr=line.risk_inr if line is not None else None,
+            plan_expires_at=planned.expires_at if line is not None else None,
+            skipped=(
+                None if line is not None
+                else "; ".join(
+                    f"{s.reason.value} {s.detail}".strip() for s in planned.plan.skipped
+                ) or "no line"
+            ),
+            mode="LIVE" if live_execution() else "DRY_RUN",
+        )
+        self.notices.append(notice)
+        log.info("swing notice %s", notice_json(notice))
+        if self.notifier is None:
+            return
+        try:
+            self.notifier.notify(notice)
+        except Exception as exc:  # noqa: BLE001 - a channel never stops the morning (A2)
+            log.error("swing notifier failed for %s: %s", signal.watch.symbol, exc)
 
     def release_reservation(self, instrument_id: int, raised_at: dt.datetime) -> int:
         """A7: mark this name's `PENDING_RANGE` line on today's plan `SKIPPED` — the range has
@@ -535,7 +597,7 @@ class PgSignalStore:
         ).fetchall()
         return len(moved)
 
-    def _plan_for(self, signal: Signal, raised_at: dt.datetime) -> int | None:
+    def _plan_for(self, signal: Signal, raised_at: dt.datetime) -> Planned:
         """One `sw_plan(SIGNAL)`: a line if the rules allow it, a skip if they do not.
 
         Sized against the context as re-read at this moment, not the one the morning started
@@ -573,6 +635,7 @@ class PgSignalStore:
             skipped=skipped,
         )
         plan_id = uuid.uuid4()
+        expires_at = raised_at + dt.timedelta(minutes=PLAN_TTL_MINUTES)
         plan_row = self.conn.execute(
             f"INSERT INTO {SCHEMA}.sw_plan (plan_id, user_id, as_of, source, built_at, "
             "expires_at, plan_hash, gate, exposure_level, total_risk_inr, "
@@ -582,7 +645,7 @@ class PgSignalStore:
                 self.user_id,
                 self.day,
                 raised_at,
-                raised_at + dt.timedelta(minutes=PLAN_TTL_MINUTES),
+                expires_at,
                 plan.plan_hash(),
                 plan.gate.value,
                 plan.tier.level,
@@ -645,7 +708,16 @@ class PgSignalStore:
                 signal.watch.symbol,
                 "; ".join(f"{s.reason.value} {s.detail}".strip() for s in plan.skipped),
             )
-        return line_id
+        return Planned(line_id=line_id, plan=plan, expires_at=expires_at)
+
+
+@dataclass(frozen=True)
+class Planned:
+    """What `_plan_for` wrote: the line's id (or None for a skip), the plan, its expiry."""
+
+    line_id: int | None
+    plan: Any
+    expires_at: dt.datetime
 
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
@@ -710,24 +782,129 @@ def build_monitor(  # noqa: PLR0913 - one keyword per collaborator
     )
 
 
-async def run_until_close(strategy: SwingBreakout, bus: Any, *, poll_seconds: float = 1.0) -> int:
-    """Consume the bus until `monitor_close`; returns the number of signals raised."""
+class QuoteFallback:
+    """Kite ``/quote`` for the watchlist, at most once every ``min_interval`` seconds (B10).
+
+    The cap lives here, on the object, so no loop can call faster than it: `poll` answers
+    ``None`` inside the window and only counts a call it actually made. Rows come back as the
+    ticker's own shape (`instrument_token`, `last_price`, `ohlc`, `exchange_timestamp`) so the
+    strategy cannot tell a polled quote from a pushed tick. Read-only, ≤ 500 names a call.
+    """
+
+    def __init__(
+        self,
+        kite: Any,
+        symbols_by_token: dict[int, str],
+        *,
+        min_interval: float | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.kite = kite
+        self.symbols_by_token = dict(symbols_by_token)
+        self.min_interval = (
+            DEFAULT_SWING_CONFIG.opening_range.quote_poll_min_seconds
+            if min_interval is None else float(min_interval)
+        )
+        self._clock = clock
+        self._last_call: float | None = None
+        self.calls = 0
+
+    def due(self) -> bool:
+        last = self._last_call
+        return last is None or self._clock() - last >= self.min_interval
+
+    def poll(self, now: dt.datetime) -> list[dict] | None:
+        """The watchlist's quotes as ticks, or ``None`` when a call is not yet allowed."""
+        if not self.due() or not self.symbols_by_token:
+            return None
+        self._last_call = self._clock()
+        self.calls += 1
+        ticks: list[dict] = []
+        tokens = list(self.symbols_by_token)
+        for i in range(0, len(tokens), 500):
+            chunk = tokens[i : i + 500]
+            try:
+                data = self.kite.kc.quote([f"NSE:{self.symbols_by_token[t]}" for t in chunk])
+            except Exception as exc:  # noqa: BLE001 - a failed poll is a missed poll, not a halt
+                log.warning("quote fallback failed: %s", exc)
+                _tel.count("swing_quote_polls", outcome="failed")
+                continue
+            _tel.count("swing_quote_polls", outcome="ok")
+            for row in data.values():
+                token = row.get("instrument_token")
+                if token is None or row.get("last_price") is None:
+                    continue
+                stamp = row.get("timestamp") or row.get("last_trade_time") or now
+                ticks.append(
+                    {
+                        "instrument_token": int(token),
+                        "last_price": row["last_price"],
+                        "ohlc": row.get("ohlc") or {},
+                        "exchange_timestamp": stamp,
+                    }
+                )
+        return ticks
+
+
+async def run_until_close(  # noqa: PLR0913 - the loop's collaborators, named
+    strategy: SwingBreakout,
+    bus: Any,
+    *,
+    poll_seconds: float = 1.0,
+    quotes: QuoteFallback | None = None,
+    now: Callable[[], dt.datetime] | None = None,
+    clock: Callable[[], float] = time.monotonic,
+    on_first_tick: Callable[[], None] | None = None,
+) -> int:
+    """Consume the bus until `monitor_close`; returns the number of signals raised.
+
+    ``quotes`` is the B10 fallback: asked only when no tick has arrived for
+    `quote_poll_min_seconds`, and it refuses to be asked faster than that itself.
+    ``on_first_tick`` fires once, when the first tick — pushed or polled — reaches the
+    strategy: that is the moment the monitor is demonstrably watching the market, and it is
+    when `main` writes `sw_session.monitor_ran` (SW11.2). A callback that raises is logged;
+    the loop is not its concern.
+    """
+    read_now = now or (lambda: dt.datetime.now(tz=IST).replace(tzinfo=None))
     queues = {token: bus.subscribe(token) for token in strategy.tokens}
+    quiet_for = DEFAULT_SWING_CONFIG.opening_range.quote_poll_min_seconds
+    last_tick_at = clock()
+    first_tick_seen = False
     await strategy.on_start()
+    _tel.gauge("swing_monitor_up", 1)
+
+    async def handle(tick: dict) -> None:
+        nonlocal first_tick_seen
+        await strategy.on_tick(tick)
+        if not first_tick_seen:
+            first_tick_seen = True
+            if on_first_tick is not None:
+                try:
+                    on_first_tick()
+                except Exception as exc:  # noqa: BLE001 - the record, not the watching
+                    log.error("could not record the monitor's start: %s", exc)
+
     try:
         while True:
-            now = dt.datetime.now(tz=IST).replace(tzinfo=None)
-            if strategy.session_over(now):
+            moment = read_now()
+            if strategy.session_over(moment):
                 log.info("monitor close reached; %d signals raised", len(strategy.signals))
                 break
             drained = False
             for q in queues.values():
                 while not q.empty():
-                    await strategy.on_tick(q.get_nowait())
+                    await handle(q.get_nowait())
                     drained = True
-            if not drained:
-                await asyncio.sleep(poll_seconds)
+            if drained:
+                last_tick_at = clock()
+                continue
+            if quotes is not None and clock() - last_tick_at >= quiet_for:
+                polled = quotes.poll(moment)
+                for tick in polled or ():
+                    await handle(tick)
+            await asyncio.sleep(poll_seconds)
     finally:
+        _tel.gauge("swing_monitor_up", 0)
         await strategy.on_stop()
     return len(strategy.signals)
 
@@ -749,6 +926,8 @@ def main() -> int:
         return 2
     day = dt.datetime.now(tz=IST).date()
     kite = Kite()
+    # A second process beside the desk server: its own metrics port, or the desk's plus one.
+    _tel.install(metrics_port=monitor_metrics_port())
     with connect() as conn:
         config = load_config(conn, user_id=user_id)
         symbols = [
@@ -761,7 +940,14 @@ def main() -> int:
         ]
         watchlist = load_watchlist(conn, user_id=user_id, circuits=circuit_bands(kite, symbols))
         context = load_context(conn, user_id=user_id, day=day)
-        store = PgSignalStore(conn, user_id=user_id, day=day, config=config, context=context)
+        notifier = Notifier(
+            observe=lambda channel, outcome: _tel.count(
+                "swing_notifications", channel=channel, outcome=outcome
+            )
+        )
+        store = PgSignalStore(
+            conn, user_id=user_id, day=day, config=config, context=context, notifier=notifier
+        )
         # No gateway at all. `BaseStrategy` takes one because every other engine trades through
         # it; this one raises signals, and a process that holds no gateway cannot be talked into
         # using one.
@@ -775,17 +961,46 @@ def main() -> int:
             config=config,
         )
         if strategy is None or not watchlist:
+            # Nothing to watch is still a monitor that ran (`SWING_MONITOR_DID_NOT_START` must
+            # not fire on an empty watchlist), and the clock below still owes the day its
+            # cutoff and its 15:15 sweep — yesterday's positions do not care about today's list.
             log.info("nothing to watch today (%d names)", len(watchlist))
-            return 0
+            record_monitor_ran(conn, user_id=user_id, day=day, signals=0)
+        else:
+            strategy.observe_with(
+                lambda seconds: _tel.observe("swing_verdict_seconds", seconds)
+            )
+            fallback = QuoteFallback(kite, {w.token: w.symbol for w in watchlist})
 
-        async def _serve() -> int:
-            bus = TickBus()
-            start_ticker(C.KITE_API_KEY, kite.kc.access_token, strategy.tokens, bus)
-            return await run_until_close(strategy, bus)
+            async def _serve() -> int:
+                bus = TickBus()
+                start_ticker(C.KITE_API_KEY, kite.kc.access_token, strategy.tokens, bus)
+                # SW11.2: `monitor_ran` is written on the FIRST tick the strategy handles —
+                # pushed or polled — so `SWING_MONITOR_DID_NOT_START` (09:20) reads "the
+                # monitor is watching the market", not "the process was launched".
+                return await run_until_close(
+                    strategy, bus, quotes=fallback,
+                    on_first_tick=lambda: record_monitor_ran(
+                        conn, user_id=user_id, day=day, signals=0
+                    ),
+                )
 
-        raised = asyncio.run(_serve())
-        record_monitor_ran(conn, user_id=user_id, day=day, signals=raised)
-    return 0
+            raised = asyncio.run(_serve())
+            record_monitor_ran(conn, user_id=user_id, day=day, signals=raised)
+    # The strategy is done and holds nothing. What follows is the desk's clock: the 10:45
+    # cutoff now, the 15:15 GTT sweep later — `app.swing_clock` builds what those need.
+    from .swing_clock import run_after_close  # noqa: PLC0415 - after the monitor, never before
+
+    return run_after_close(day=day)
+
+
+def monitor_metrics_port() -> int | None:
+    """`DESK_MONITOR_METRICS_PORT`, else the desk's `METRICS_PORT` + 1, else None (metrics off).
+    Two processes on one box cannot share a listener."""
+    own = os.environ.get("DESK_MONITOR_METRICS_PORT", "").strip()
+    if own:
+        return int(own)
+    return int(_tel.METRICS_PORT) + 1 if _tel.METRICS_PORT else None
 
 
 def record_monitor_ran(conn: Any, *, user_id: int, day: dt.date, signals: int) -> None:

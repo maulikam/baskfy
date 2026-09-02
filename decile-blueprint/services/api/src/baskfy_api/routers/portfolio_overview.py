@@ -94,6 +94,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import AuthenticatedDep, Principal
 from baskfy_api.db import SessionDep
+from baskfy_api.live_prices import live_prices_by_instrument
 from baskfy_api.problems import Problem, ProblemType, not_found
 from baskfy_core.allocation_ledger import (
     UNALLOCATED,
@@ -1460,6 +1461,22 @@ async def _load_prices(session: AsyncSession, instrument_ids: Sequence[int]) -> 
             dated[instrument_id] = row.date
         else:
             previous[instrument_id] = row.close_raw
+    # LIVE MARKS OVER THE CLOSE, WHERE THE BROKER HAS ONE (M82).
+    #
+    # Everything above is `close_raw` — the previous session's print. Correct for a screener, wrong
+    # for the page that answers "what is my money worth": Maulik asked for the market, and on
+    # 2 Sep 2026 ATHERENERG was trading at 1692.50 while this showed the close.
+    #
+    # Only `latest` is overlaid. `previous` stays the prior close, which makes "Today" a live price
+    # against yesterday's close — the same arithmetic the broker's own app does. Overwriting
+    # `previous` too would silently zero the day's change.
+    #
+    # `dated` is left alone as well: it records which session the stored close came from, and a
+    # live mark has no session. Nothing that reads it starts meaning something else.
+    live = await live_prices_by_instrument(session, list(instrument_ids))
+    for instrument_id, price in live.items():
+        latest[instrument_id] = price
+
     unpriced = tuple(sorted(set(instrument_ids) - set(latest)))
     as_of = max(dated.values()) if dated else None
     return _Prices(as_of=as_of, latest=latest, previous=previous, dated=dated, unpriced=unpriced)

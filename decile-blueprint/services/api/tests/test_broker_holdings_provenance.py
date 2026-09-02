@@ -772,5 +772,7 @@ class TestConnectDoesNotOverClaimEither:
         state = "state-for-a-broker-we-cannot-exchange-for"
         register_oauth_state(state=state, user_id=1, broker_id="upstox")
         with pytest.raises(Problem) as caught:
-            await oauth_callback(principal_stub(), request_token="req-token-1234", state=state)
+            await oauth_callback(
+                principal_stub(), AsyncSession(), request_token="req-token-1234", state=state
+            )
         assert caught.value.status == 400

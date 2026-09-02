@@ -1,0 +1,103 @@
+"""Live marks for held instruments — M82.
+
+The portfolio valued positions at `ohlcv_daily.close_raw`, the previous session's close. Maulik
+asked for the market: on 2 Sep 2026 ATHERENERG was trading at 1692.50 and the page showed the
+close. Kite's holdings payload already carries `last_price`, and `HoldingRow` already carried it —
+it was simply being discarded.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+
+import pytest
+from baskfy_execution.broker_ports import HoldingRow
+
+from baskfy_api import live_prices
+from baskfy_api.broker_holdings import HoldingsResult
+
+
+def _row(symbol: str, last: str | None) -> HoldingRow:
+    return HoldingRow(
+        symbol=symbol,
+        exchange="NSE",
+        quantity=Decimal("10"),
+        t1_quantity=Decimal("0"),
+        collateral_quantity=Decimal("0"),
+        average_price=Decimal("100"),
+        last_price=None if last is None else Decimal(last),
+    )
+
+
+@pytest.fixture(autouse=True)
+def _clear() -> None:
+    live_prices.reset_cache()
+
+
+class TestOnlyALiveReadIsPriced:
+    """The guard that matters: an invented price behind a real rupee total is the worst outcome."""
+
+    @pytest.mark.parametrize("source", ["fixture", "empty", "unwired"])
+    def test_a_non_live_source_prices_nothing(
+        self, source: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        rows = (_row("RELIANCE", "100"),) if source == "fixture" else ()
+        monkeypatch.setattr(
+            live_prices, "holdings_for_broker", lambda _b: HoldingsResult(rows=rows, source=source)
+        )
+        assert live_prices.live_prices_by_symbol() == {}
+
+    def test_a_degraded_read_prices_nothing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        result = HoldingsResult(rows=(_row("RELIANCE", "100"),), source="fixture", degraded=True)
+        monkeypatch.setattr(live_prices, "holdings_for_broker", lambda _b: result)
+        assert live_prices.live_prices_by_symbol() == {}
+
+    def test_a_broker_that_raises_prices_nothing_rather_than_failing_the_page(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An empty map leaves the close in place — a correct number with a known meaning.
+
+        This is the one place quiet degradation is right: the alternative is an empty portfolio
+        because a quote timed out.
+        """
+
+        def _boom(_b: str) -> HoldingsResult:
+            raise RuntimeError("kite unreachable")
+
+        monkeypatch.setattr(live_prices, "holdings_for_broker", _boom)
+        assert live_prices.live_prices_by_symbol() == {}
+
+
+class TestALiveReadIsPriced:
+    def test_symbols_carry_their_last_price(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        result = HoldingsResult(
+            rows=(_row("ATHERENERG", "1692.5"), _row("CUPID", "278.15")), source="live"
+        )
+        monkeypatch.setattr(live_prices, "holdings_for_broker", lambda _b: result)
+        assert live_prices.live_prices_by_symbol() == {
+            "ATHERENERG": Decimal("1692.5"),
+            "CUPID": Decimal("278.15"),
+        }
+
+    def test_a_missing_or_zero_price_is_dropped_not_zeroed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A zero mark would value a holding at nothing. Absent is not the same as worthless."""
+        result = HoldingsResult(
+            rows=(_row("NOPRICE", None), _row("ZERO", "0"), _row("GOOD", "10")), source="live"
+        )
+        monkeypatch.setattr(live_prices, "holdings_for_broker", lambda _b: result)
+        assert live_prices.live_prices_by_symbol() == {"GOOD": Decimal("10")}
+
+    def test_the_second_call_is_served_from_the_memo(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A page render must not be a broker call, and the overview refetches on every poll."""
+        calls: list[str] = []
+
+        def _count(broker: str) -> HoldingsResult:
+            calls.append(broker)
+            return HoldingsResult(rows=(_row("GOOD", "10"),), source="live")
+
+        monkeypatch.setattr(live_prices, "holdings_for_broker", _count)
+        live_prices.live_prices_by_symbol()
+        live_prices.live_prices_by_symbol()
+        assert len(calls) == 1

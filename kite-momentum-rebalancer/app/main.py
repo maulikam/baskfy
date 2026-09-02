@@ -129,6 +129,9 @@ _log_risk_ceilings()
 from . import telemetry as _tel                                    # noqa: E402
 logging.info("observability: %s", _tel.install())
 
+from . import swing_desk                                             # noqa: E402
+app.include_router(swing_desk.router)
+
 PLANS: dict[str, dict] = {}          # plan_id -> plan (in-memory, session-scoped)
 _kite: Kite | None = None
 _gateway: OrderGateway | None = None

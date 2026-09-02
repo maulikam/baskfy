@@ -510,3 +510,378 @@ strategy keeps that signature — it is the desk's plugin shape, and the same ru
 — but `app.swing_monitor.main` hands it `gateway=None`. A process that holds no gateway cannot be
 talked into using one, which is stronger than "holds one and never calls it". The test asserts
 both: the source never names `self.gw` or a placing verb, and `main` passes `None`.
+
+## SW7.1 — A stop is armed for the quantity that filled; a live order that has not filled arms nothing · ⚠ UNREVIEWED
+
+**Context.** `06` SW7: "`BUY_ON_TRIGGER` → `OrderGateway.place(...)` then `place_gtt_stop(...)`
+in the same request." The gateway's `place` returns the moment the broker *accepts* an order
+(`PLACED`), not when it fills; a LIMIT buy at the trigger can rest unfilled for the session, fill
+in part, or fill later. Non-negotiable 4 says every buy gets its stop the same session; the desk's
+own EXCESS finding (`protection.py`) says a trigger for more shares than are held sells what you
+do not own when it fires. The two pull in opposite directions the moment an order is not filled
+in the call that placed it. C1 fixed the shape and this entry records why.
+
+**The choice.**
+
+* **Simulated (the whole of this run):** the gateway's dry-run branch is the fill. The line
+  fills whole at the trigger, now; `sw_position` + `sw_fill(simulated=true)` are written and the
+  GTT for that quantity is placed in the same call with `last_price = entry`. The paper record
+  therefore shows what the rules would have done at the price the rules named.
+* **Live (flag on, `DRY_RUN=false` — not this run):** a `PLACED` order is `SENT`. No position,
+  no fill, no GTT; the line carries the order id as `journal_ref`, the session counts a confirm
+  and no fill. The stop is armed for the *filled* quantity by whatever reconciles the fill —
+  which nothing does yet, and STATUS says so. The same holds for a market sell: `SENT`, the book
+  unchanged, the resting GTT still covering the full open quantity until the fill is known.
+* **A GTT that cannot be armed after a simulated fill** (the only way is a `DUPLICATE` id from
+  a store that reused a plan) leaves the position with `gtt_id = NULL` — the NAKED state `03`
+  §7 defines as an alert — and the outcome's reason says "re-arm". Never a phantom stop, never
+  a silent success.
+* **A simulated trigger id** (`DRY-<client_id>`, the gateway's own shape) is never handed to
+  `delete_gtt`, which would rightly refuse a non-integer id and journal a block for a trigger
+  that does not exist at any exchange. The cancel is recorded as `DRY_RUN_GTT_DELETE` locally;
+  a real integer id goes through the gateway's guarded cancel.
+* **One GTT id per (plan, symbol, kind)** — `plan:symbol:GTT` for the buy (C1's literal),
+  `plan:symbol:SELL:GTT` and `plan:symbol:RAISE:GTT` for the two exit lines — because SW5's
+  evening plan legitimately holds a partial *and* a breakeven raise for one name, and a shared
+  id made the second `DUPLICATE` after the first had already cancelled the old trigger.
+* **The swing book journals to its own file**, `swing_orders_journal.jsonl`, in the desk
+  journal's directory: the weekly execution report and the options page read
+  `orders_journal.jsonl` as the record of the weekly book, and twenty sessions of paper swing
+  fills in it would make that record answer the wrong question.
+
+**Rejected.** Arming the GTT for the *requested* quantity on `PLACED` — the EXCESS case by
+construction whenever a limit order part-fills. Polling `kc.orders()` inside `execute_line` until
+the fill arrives — a network wait inside a confirm click, against a client this module may not
+name, for a path the run never takes. Simulating a live-mode fill at the trigger — a fill that did
+not happen, written as `simulated=false`.
+
+**Reversal.** A fill reconciler (SW11's territory, or the first live session's) that reads the
+order book for lines in `SENT`, writes the position and fill, and calls `rearm_gtt` for the filled
+quantity — every piece it needs is already a public function here. `_cancel`'s simulated branch is
+four lines.
+
+## SW7.2 — The first live sessions halve the order, and the countdown is per session, in-process · ⚠ UNREVIEWED
+
+**Context.** `02` §3.5: "the first real session runs at **half** the configured risk
+(`sw_config.first_live_sessions` counts down from 5 with `risk_multiplier=0.5`)". SW5's STATUS
+noted the field had no core function and that "SW7 multiplies `risk_per_trade_pct` before
+calling `size_position`" — but the desk does not size; the plan line arrives sized by the evening
+job, and re-sizing it at confirm would need the sleeve's equity, cash and turnover at 09:31.
+
+**The choice.** Half the *risk* is half the *quantity* for a fixed stop distance, so the line's
+quantity is halved at confirm — `first_live_quantity`: round down, never below one share —
+**only for a real order** (`simulated=False`). A simulated line is never halved: a paper record
+at half size would rehearse a smaller book than the rules describe, and the twenty paper sessions
+are meant to be a rehearsal of exactly these rules. The counter comes down by one on the first
+real order of a session, not per order: `_FIRST_LIVE_COUNTED` (a set of IST session dates,
+in-process, the same shape as the desk's `PLANS` dict) stops a second live buy on the same
+morning from counting the session twice. The line's stored `quantity` is left as planned; the
+journal line and, later, the fill carry the size sent.
+
+**Rejected.** Re-sizing with `size_position` at confirm — the desk has none of the inputs and
+would be a second sizer disagreeing with the first. Decrementing per order — five orders on the
+first morning would end the half-size period in one session. Persisting the "counted today" fact
+through the store — C1 has no read for it; the store's `set_first_live_sessions_left` can be
+made idempotent per day from `sw_config_audit` (`changed_by = '/swing/execute'` dated today) by
+1.1.2 or later without changing this module.
+
+**Reversal.** `first_live_quantity` is one function and the countdown is six lines in `_buy`;
+a `risk_multiplier` column would replace the halving with a multiply and nothing else moves.
+
+
+## SW7.3 — The desk page: a sqlite twin of the schema in its tests, a monitor state it cannot observe, and the other page-level calls · ⚠ UNREVIEWED
+
+**Context.** `05` §3 specifies what the page shows; it does not say how the desk's test suite
+gets a swing book (the `sw_` tables are the screener's Postgres and the desk tests run on
+`tmp_path` sqlite), what "monitor state" means to a page that cannot see the monitor process,
+whether a `BUY_ON_TRIGGER` line that is *waiting* carries a Confirm, or where "the last five
+manage actions" are read from. Each is decided here.
+
+**1. The tests build the `sw_` tables in sqlite from their own DDL.** `tests/test_swing_desk.py`
+carries a `CREATE TABLE` per table, mirroring `0028_swing.py` column for column (NUMERIC,
+BOOLEAN and the CHECKs in sqlite's spelling), and `PgSwingStore` runs the same SQL against it
+with `schema=""`. Rejected: a fake connection that records statements (SW6's `FakeConn`) — it
+cannot prove a round-trip, and G4 is a round-trip; a Postgres test database — the desk suite is
+sqlite-only by charter (C0: "Desk leaves use sqlite (`tmp_path`)") and a suite that needs a
+server up is a suite that is skipped. The cost is honest: sqlite's NUMERIC affinity returns a
+`float`, exactly as the desk's Postgres adapter does (`analytics.pg._native`), so the store's
+`_dec` re-quantises every known column to its storage scale on the way out — `100.80` comes
+back as `100.80`, not `100.8` — and a dialect the two do not share (`INSERT … AS alias … ON
+CONFLICT`, `RETURNING id`, `true`/`false` literals) was checked on both before it was used.
+One test asserts the schema prefix on every table name the store issues, so the
+`search_path=desk` fact (`app.swing_monitor`) cannot regress silently. Reversal: point the
+fixture at a Postgres URL and drop the DDL list; the store does not change.
+
+**2. Monitor state is derived, not observed — and there is a fifth state.** The desk cannot
+see the monitor process; it has the flag, the clock, and the mark the monitor leaves in
+`sw_session.monitor_ran` at close. So: flag off → **not enabled**; `monitor_ran` → **stopped
+at 10:45**; a weekend → **idle**; before 09:15 → **idle**; inside the window → **running
+since 09:15** (assumed from the flag — the page says "since", not "alive"); after the window
+with no mark → **did not run**, which `05` §3 does not list and which is the truthful answer
+(SW11's `SWING_MONITOR_DID_NOT_START` is the same fact as an alert). Rejected: a heartbeat
+row written by the monitor each minute — a new column the schema does not have and a write per
+minute for a display; a process check — the page and the monitor need not share a box.
+Reversal: `monitor_state` is one function; a heartbeat would replace its middle branch.
+
+**3. A waiting `BUY_ON_TRIGGER` line carries a Confirm.** `05` §3 names Confirm for triggers
+and for the two exit kinds, but PACK.2 chose *both* entry modes, and the EOD mode is "a
+`BUY_ON_TRIGGER` line at the pivot, sent as a LIMIT buy the next morning on confirm" — with the
+monitor flag off, the waiting buys are the only entries there are. The page labels it so.
+Rejected: no button on waiting buys (the EOD mode would be unreachable). Reversal: one branch
+in the `confirm_form` macro.
+
+**4. A waiting buy for a name the book already holds has no button**, nor does an exit for a
+name it does not hold, a SELL beyond `quantity_open`, or a RAISE not above the resting stop —
+the page does not offer what `execute_line` would refuse (it re-checks all four). The
+morning plan is built at 09:10 and a SIGNAL fill can land at 09:31 for the same name; the
+09:10 line does not know. Reversal: `_line_view`'s `why_not` chain.
+
+**5. "The last five manage actions" are the last five exit-kind plan lines** (`SELL_AT_OPEN`,
+`RAISE_GTT_STOP`), most recently touched first, with the state each reached. Rejected: a
+`sw_manage_action` table — nothing writes one; `sw_session.manage_actions` — a counter, not a
+list. Reversal: one query in `recent_manage_actions`.
+
+**6. The swing gateway shares the weekly book's `RiskManager`.** `build_swing_gateway(kc,
+risk)` takes the risk manager from the caller; the page hands it `app.main`'s, built by
+`main.gateway()`, so the daily-loss cap, the kill switch and the order counter are one
+account's. Rejected: a second `RiskManager` — the swing book could spend an order budget the
+weekly book had exhausted, and a kill switch that halts one book and not the other is not a
+kill switch. Reversal: construct one in `swing_gateway()`.
+
+**7. The route supplies the broker's last price, for exits and re-arms only.** `execute_line`
+refuses a SELL or a RAISE without a `last_price` rather than inventing one (1.1.1). The route
+reads it through `Kite.ltp` — a read, not an order; the page module still names no placing
+verb — and passes `None` when there is no session, so the outcome says why. A BUY gets no
+lookup: its entry is its trigger. Rejected: a `last_price` form field — a typed price is a
+price nobody quoted. Reversal: `last_price()` is one function.
+
+**8. A guard's refusal is `BLOCKED` with the guard's words, not a 500.** `execute_line` marks
+the line `REJECTED` and re-raises `UntouchableInstrumentError`; the route reports it the way
+`/execute` reports one per order. Reversal: remove the `except` and the browser shows a 500.
+
+**9. The 5-second refresh reloads only on change.** `/swing/data` carries a fingerprint of the
+signals, the lines' states, the positions and the counters; the page polls it every 5 s inside
+09:15–10:45 and reloads when it moves — so an inline outcome is not wiped by an idle poll.
+Outside the window: no polling; a page opened before 09:15 reloads itself once at 09:15.
+
+
+## SW8.1 — The ladder settles in the evening job, after `manage`, from a settlement record; it reads the paper book until the flag flips · ⚠ UNREVIEWED
+
+**Context.** `06` SW8: "`swing-eod` feeds the last 5 closes into `exposure_tier`; the rung is
+written to `sw_config` and `sw_market_daily` and shown on every page." Two jobs could do the
+feeding — the detection job already computes a tier at 21:00 in `write_market_row`, and the
+evening job at 21:05 builds the plan — and `04` §8.4 leaves three things open: which book the
+closes come from, what "the current rung" is when the job that writes it is the job that reads it,
+and where the write-back sits relative to `stops.manage`.
+
+**The choice.**
+
+1. **The evening job settles the ladder, between `manage` and `build_entries`** (C2's wording,
+   kept). `manage` produces tomorrow's exit lines and closes nothing itself — the desk closes,
+   at the open, through `/swing/execute` — so by 21:05 every close of the day is on the book. The
+   plan is then built with the settled tier, which is the property the acceptance criterion
+   actually needs: `sw_plan.exposure_level == sw_config.exposure_level`. The detection job's tier
+   is left in place as a preview and overwritten on the same row; on an ordinary evening the two
+   are identical.
+2. **The closes come from the simulated book while `BASKFY_SWING_EXECUTION_ENABLED` is false,
+   the real one after** — PACK.6 restated, now with a date bound (`closed_on <= session`, house
+   rule 5) so a repair of a past evening cannot read tomorrow's results. The market row's
+   `detail.closed_trades_read` says which.
+3. **The rung the ladder climbs from is a settlement record, not `sw_config`.** The job records
+   `{from, to, settled_by: "swing-eod"}` on the day's row; the next evening starts from
+   yesterday's `to`; a re-run of the same evening starts from its own `from`; `sw_config` is the
+   fallback for the first evening ever (and a repair with no records). Idempotency (house rule 7)
+   forced this: with `sw_config` as the base, running the same evening twice climbed 0 → 1 → 2
+   with nothing else changed — the first draft did exactly that and the test caught it.
+4. **The write goes through `swing_settings.record_system_change`** — the function whose name
+   says a job is doing it — so the audit row (`changed_by = "swing-eod"`, old → new, a note with
+   the gate and the closes) is the same shape as a person's settings change, and an unchanged
+   rung leaves none.
+
+**Rejected.**
+
+* *Writing back from the detection job* (`write_market_row`). It re-runs — the Beat entry at
+  21:00 after the chain's own step, the Saturday five-session re-scan, `make swing DATE=` — and
+  every re-run would climb again from the rung it had just written. It also reads closes without
+  a date bound.
+* *Reading the previous row's `exposure_level` column as the base.* The detection job rewrites
+  that column on a re-detect from the rung the evening had just written, one rung too high; the
+  record it cannot see is the safer fact. This leaves a known gap the evening job cannot close
+  from its own file: **`swing-premarket` reads the column** for the morning plan and the Market
+  page shows it, so a Saturday re-scan after a GREEN Friday can hand Monday morning a tier one
+  rung above `sw_config` for one session. `write_market_row` should keep a row's tier and
+  record when `detail.ladder.settled_by == "swing-eod"` and bound its closes by date — three
+  lines, in a file this leaf did not own (C2); SW11 touches it and is the natural owner.
+* *Adding a "the ladder moves only on a new close" rule.* `04` §8.4 as written climbs one rung
+  on every GREEN evening while the last five closes are net positive, whether or not a trade
+  closed since the last move; the core is tested that way (SW1). Not the worker's rule to add.
+* *Counting only `mode = 'DRY_RUN'` sessions for the 20-session gate.* The EOD email counts every
+  row; two counters that could disagree are worse than one that is slightly generous after a
+  flag flip that makes the count moot anyway.
+
+**Reversal.** Each choice is one function: `rung_in_force` (the base), `closed_r_multiples`
+(the book and the date bound), `settle_ladder` (the two writes), and their call site in
+`run_swing_eod` is eleven lines between `manage_open_positions` and `watch_items`. Moving the
+settlement into the detection job means calling `settle_ladder` from `write_market_row` with the
+row it just upserted and deleting the call in the evening — the records make either job
+idempotent.
+
+## SW9.1 — The backtest sizes every trade against a constant sleeve and re-settles the ladder at every close · ⚠ UNREVIEWED
+
+**Context.** `04` §11: "size by §5 on a constant ₹10 lakh sleeve with the ladder in force". Two
+phrases need a number behind them before an engine can run: what *constant* means once the sleeve
+has made or lost money, and *when* the ladder is read inside a run that has no evening job.
+
+**The choice.**
+
+1. **Constant means constant.** `size_position` is called with `equity = params.sleeve_inr` on
+   every session of the run, whatever the curve says; realised P&L is added to the equity curve
+   and never re-risked. The backtest is therefore an **R-machine**: each trade risks the same
+   ₹5,000 (0.5% of ₹10 lakh), so a 2019 trade and a 2024 trade weigh the same in the expectancy
+   and in the by-year table, which is the number `02` §3.3 wants on the page before real money.
+   Compounding is one multiplication the reader can do with the expectancy and the trade count;
+   a compounding curve would instead make the by-year rows incomparable and let a good 2020
+   flatter 2022. `cash_available` for §5's cash cap is the sleeve less the **cost basis** of what
+   is open (`entry paid x quantity`), and the tier's exposure ceiling is tested against the same
+   cost basis — Track C's "exposure ≤ 100% of the sleeve" measured on what was spent, not on what
+   the market says today.
+2. **The ladder is re-settled at every session's close**, exactly as SW8.1 settles it every
+   evening: `exposure_tier(current_level=yesterday's rung, closed_r_multiples=every close so far,
+   gate=today's gate)`, and the rung it returns is tomorrow's. The consequence SW8's evening job
+   also has, stated here because a backtest makes it visible over years: in a GREEN tape with
+   the last five closes net positive the rung climbs **one per session** until the top; on a
+   three-loss streak it falls one per session until a non-loss close breaks the streak. `04`
+   §8.4 says "never skips a rung"; it does not say "once per trade", and the live job does not
+   read it that way either. The result carries a `ladder` trace — `(session, gate, rung)` — so
+   the page can show it and a reviewer can decide whether a rung-per-session is the ladder he
+   meant. **Additive to contract C3** (`BacktestResult.ladder`, a `ladder` key in `to_json()`);
+   the runner leaf stores the JSON as-is.
+3. **The gate inside the backtest is breadth-only.** `market_gate(breadth, None, ...)`: the bars
+   frame carries no index series and C3 fixes the signature. `04` §8.2 says a missing index is
+   ignored, so RED is breadth ≤ 2% up 25%-in-a-month, GREEN is ≥ 5%, and the index can never make
+   a backtest day worse. The live gate can; the backtest is therefore *slightly* more permissive
+   than the desk on days the NIFTY 500 sat below both MAs while breadth held. `high_1y` for the
+   new-highs count is the factor engine's window (`HIGH_1Y_BARS`, 252) with the worker's own
+   fallback (the bar's high) for the first year of a series.
+
+**Rejected.** A compounding sleeve (rejected for the reasons in 1); reading the ladder once per
+closed trade (a different rule from the one SW8 ships); an optional index argument on
+`run_backtest` (a signature the sibling leaf has already coded against — a follow-up, not a
+surprise).
+
+**Reversal.** `equity=` in `_Run._enter` is the one line for compounding; `_tier_for` is the one
+call for the ladder's cadence; an `index: pl.DataFrame | None = None` keyword on `run_backtest`
+for the gate.
+
+## SW9.2 — One entry session per candidate, the EP is bought the day after its gap, and the size is the desk's plan at the fill · ⚠ UNREVIEWED
+
+**Context.** `04` §11 gives the entry in one sentence — "enter at the next session's open if it
+is ≥ trigger, else at trigger if the next session's high ≥ trigger" — and the watchlist rules
+(§9.5) say an EP stays enterable for three sessions and a flag for ten. §5 sizes at a price; §11
+does not say which.
+
+**The choice.**
+
+1. **Exactly the next session, for both setups.** A `SETTING_UP` flag that does not trigger is
+   re-detected tomorrow if it still qualifies (the detector runs every close), so §9.5's ten
+   sessions are implied for flags. A `GAP_DAY` EP is detected once, on its gap day, so §11 gives
+   it one session and this backtest gives it one. That is **stricter than the watchlist** (three
+   sessions) and is recorded as a place where the backtest under-counts EP entries the desk would
+   have taken on day two or three.
+2. **The EP is entered the session after its gap** — that is what "next session" means when the
+   detector runs at the gap day's close — and the position is created with
+   `is_ep_gap_day=False`: `04` §6.4.2 ("EP on its gap day with `close < open`") describes a
+   position bought *on* the gap day by the live monitor, and a red close on the following day is
+   not that rule. A test asserts a red entry day does not sell the EP.
+3. **The size is `plan.build_entries` at the fill price.** The evening plan sizes at the trigger;
+   the backtest knows the fill (the open, or the trigger) at the moment it enters, so it hands
+   `build_entries` a `WatchItem` whose `trigger` *is* the fill and whose `stop_ref` is the prior
+   day's low, and takes the line's quantity and trail. Every refusal the plan can make — tier
+   full, size refused (including §5.1's `STOP_TOO_WIDE` when the open gaps more than 10% above
+   the prior low), exposure full, cash not spent twice — is the plan's own code and appears in the
+   funnel under its own key. Risk per trade is then exactly 0.5% of the sleeve on the price paid,
+   which is what §5 is for; sizing at the trigger and filling higher would risk more than the
+   budget on every gap-up entry.
+4. **"Already held" is judged at the close the plan was built**, not after the morning's exits: a
+   name sold at the open for a close below its trail is not re-bought the same morning, because
+   the evening plan would have skipped it `ALREADY_HELD`. Two candidates for one symbol on one
+   evening (a flag and an EP on the same name, or two instruments that share a symbol) enter
+   once, best score first, then symbol, setup and instrument — a total order, so two runs agree
+   byte for byte.
+5. **`BREAKOUT_TODAY` is not entered.** §11 names `SETTING_UP` and `GAP_DAY`; a breakout day's
+   trigger is its own high, and buying the day after the pivot broke is a different trade from
+   the one the method describes.
+
+**Rejected.** Three sessions for an EP (§9.5 is the watchlist's rule, §11 is the backtest's, and
+the document wins); sizing at the trigger (over-risks every gap-up); re-implementing the plan's
+skip order inside the backtest (it would drift from the desk's).
+
+**Reversal.** An EP validity window is a loop over `ep.valid_bars` sessions in `_enter`; the
+sizing price is the one `trigger=` argument in the `WatchItem`.
+
+## SW9.3 — A stop-out fills at the stop, or at the open when the day gapped through it — except on the entry day · ⚠ UNREVIEWED
+
+**Context.** `04` §6.4.1: `bar.low ≤ stop` → `STOPPED_OUT` ("the GTT fired, or should have").
+A GTT is a trigger, not a price: a stock that opens below the stop fills at the open.
+
+**The choice.** The fill is `min(stop, open)` on any day after the entry day. On the entry day
+itself the fill is the stop: the entry (at the open, or at the trigger inside the day) happened
+before the low did, so the open is not a price the position could have been sold at. When the
+entry was at the trigger and the same day's low is at or below the prior day's low, the engine
+assumes the trigger came first and the stop second — the pessimistic reading (a −1R loss is
+counted) rather than the flattering one (the trade never happened).
+
+**Rejected.** Filling every stop at the stop price (overstates every gap-down; the desk's own
+GTTs do not fill at the trigger on a gap); skipping same-day stop-outs on trigger entries (a
+backtest that quietly drops its worst fills).
+
+**Reversal.** `_apply_actions`, four lines.
+
+## SW9.4 — The journal's prices carry the costs, and two close reasons of the backtest's own · ⚠ UNREVIEWED
+
+**Context.** `04` §11: "costs 0.13% per side". §10's `ClosedTrade` has an `entry`, an
+`exit_avg` and an `initial_stop`, and no cost field; the live journal never sees a cost.
+
+**The choice.**
+
+1. **`BacktestTrade.entry` is the price paid (fill × 1.0013) and every exit fill is the price
+   received (fill × 0.9987)**, each snapped to the four-decimal grid; `initial_stop` stays the
+   prior day's low. `r_multiple` and `pnl_inr` are then §10's formulas unchanged — no forked
+   arithmetic — and a full stop-out reads a little worse than −1R, which is the truth of a round
+   trip. The rules (`manage`) read the **raw** fill, as the live book's `entry_avg` is the raw
+   fill: a breakeven stop sits at the exchange price, not at price-plus-cost. A card that shows
+   `entry 152.20` for a fill at 152.00 is showing the cost; the page copy should say so.
+2. **Two close reasons the stop rules cannot produce.** `NO_BAR`: a held name that prints no bar
+   for `baskfy_core.backtest.MISSING_BAR_TOLERANCE_DAYS` (5) sessions is sold at its last close —
+   the screener engine's own delisting rule, reused so "delisted" means one thing in both
+   backtests; `instrument.delisted_on` is the runner's to honour when it loads the bars.
+   `END_OF_RUN`: a position still open on the last session is closed at that session's close (cost
+   applied) so the trade list and the equity curve agree; the funnel counts both separately.
+   They are `BacktestCloseReason`, distinct from `ActionReason`, and not in `04` because they are
+   properties of a simulation, not rules of the method.
+
+**Rejected.** Charging costs as a separate rupee field (then R would ignore them or need a second
+formula); dropping open positions from the trade list (the curve would disagree with the list).
+
+**Reversal.** `_paid`/`_received` are the two functions; `_liquidate` is the one call site for
+both reasons.
+
+## SW9.5 — Detection windows are `bars_required` sessions of the calendar, and a single-bar name is left out · ⚠ UNREVIEWED
+
+**Context.** The worker hands the detectors 200 sessions of bars and lets `_window` take each
+instrument's last 125. Per session, the backtest slices the indicator frame (sorted by date) to
+the last `SwingConfig.bars_required` (126) calendar sessions and hands *that* to
+`detect_setups` — one contiguous slice, no per-instrument loop.
+
+**The choice.** A name with missing bars inside the window is detected on fewer bars, not on
+older ones (the worker, with 200 sessions in hand, would reach further back). The difference is
+confined to names with gaps inside a 126-session window and is the more defensible reading —
+a base is measured in sessions, not in bars that happened to print. `detect_flags` raises on an
+instrument with exactly one bar in its window (its listing day: `slice(0, n − 1)` is empty and
+`arg_max()` is null); the backtest leaves single-bar names out of the window, since one bar
+cannot be a setup, and STATUS.md records the edge for `setups.py`'s owner. The speed
+consequence is the one that matters: 300 names × 2,000 sessions run in ~25 s, and the detectors
+are linear in the universe, so 2,500 names × 2,300 sessions is about ten times that — inside
+`06` SW9's thirty minutes with room.
+
+**Reversal.** `_slices` (the window length) and `_MIN_WINDOW_BARS`.

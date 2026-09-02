@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Swing{% endblock %}
+
+{% block heading %}Swing{% endblock %}
+{% block heading_aside %}
+  <span class="pill {{ 'warn' if v.status.simulated else 'bad' }}" id="swMode">
+    {{ 'SIMULATED' if v.status.simulated else 'LIVE' }}</span>
+{% endblock %}
+
+{#- Money and prices. Decimal in, a string out; never a float on the way. -#}
+{% macro inr(x) -%}{% if x is none %}—{% else %}₹{{ '{:,.2f}'.format(x) }}{% endif %}{%- endmacro %}
+{% macro px(x) -%}{% if x is none %}—{% else %}{{ '{:,.2f}'.format(x) }}{% endif %}{%- endmacro %}
+{% macro pct(x) -%}{% if x is none %}—{% else %}{{ '{:.2f}'.format(x) }}%{% endif %}{%- endmacro %}
+
+{#- ONE form per line. It carries exactly one line_id and posts exactly one line; there is no
+    control anywhere on this page that posts more than one, and there must never be one
+    (05 §3: "There is no 'confirm all'"). -#}
+{% macro confirm_form(line) -%}
+  {% if line.confirmable %}
+  <form method="post" action="/swing/execute" class="sw-confirm" data-line-id="{{ line.id }}">
+    <input type="hidden" name="plan_id" value="{{ line.plan_id }}">
+    <input type="hidden" name="line_id" value="{{ line.id }}">
+    <input type="hidden" name="confirm" value="true">
+    <button type="submit" class="{{ 'btn-saffron' if v.status.simulated else 'btn-danger' }}"
+            title="{{ line.label }}">Confirm</button>
+  </form>
+  {% else %}
+  <span class="muted sw-why-not">{{ line.why_not }}</span>
+  {% endif %}
+  <div class="sw-outcome muted" data-outcome-for="{{ line.id }}" aria-live="polite"></div>
+{%- endmacro %}
+
+{% macro countdown(text, expires_at, expired) -%}
+  <span class="sw-countdown {{ 'bad' if expired else '' }}"
+        data-expires-at="{{ expires_at.isoformat() if expires_at else '' }}">{{ text }}</span>
+{%- endmacro %}
+
+{% block content %}
+
+{#- ============================== status bar ============================== -#}
+<div class="banner {{ 'warn' if v.status.simulated else 'bad' }}" id="swStatus">
+  <span class="tag">status</span>
+  <span>
+    <b>DRY_RUN</b>=<code>{{ 'true' if v.status.dry_run else 'false' }}</code> ·
+    <b>BASKFY_SWING_EXECUTION_ENABLED</b>=<code>{{ 'true' if v.status.execution_enabled else 'false' }}</code> ·
+    <b>monitor</b>: <span class="sw-monitor-{{ v.status.monitor.state | replace(' ', '-') }}">{{ v.status.monitor.label }}</span> ·
+    <b>Kite token</b>: <span class="{{ 'bad' if v.status.token.expired else '' }}">{{ v.status.token.label }}</span>
+    <span class="muted" style="display:block;margin-top:5px">
+      {% if v.status.mode_label %}{{ v.status.mode_label }}. {% endif %}
+      Session {{ v.today.isoformat() }}{% if v.status.session.recorded %} ({{ v.status.session.mode }}){% else %} (no <code>sw_session</code> row yet){% endif %}:
+      signals {{ v.status.session.signals }} · confirms {{ v.status.session.confirms }} ·
+      fills {{ v.status.session.fills }} · manage actions {{ v.status.session.manage_actions }} ·
+      monitor ran {{ 'yes' if v.status.session.monitor_ran else 'no' }}.
+    </span>
+  </span>
+</div>
+
+{% if not v.available %}
+<div class="banner bad"><span class="tag">unavailable</span>
+  <span>The swing book could not be read: {{ v.reason }}.
+    <span class="muted" style="display:block;margin-top:5px">The <code>sw_</code> tables live in
+      the screener's Postgres (<code>DESK_DB_BACKEND=postgres</code>); a desk on sqlite has no
+      swing book to show.</span></span></div>
+{% else %}
+
+{% if v.sleeve %}
+<p class="muted" style="margin:-6px 0 14px">Allocation {{ inr(v.sleeve.capital_inr) }} ·
+  risk per trade {{ pct(v.sleeve.risk_per_trade_pct) }} · position cap {{ pct(v.sleeve.max_position_pct) }} ·
+  rung {{ v.sleeve.exposure_level }} · up to {{ v.sleeve.max_open_positions }} positions
+  {% if v.sleeve.first_live_sessions_left > 0 %}· {{ v.sleeve.first_live_sessions_left }} half-risk
+  live session{{ '' if v.sleeve.first_live_sessions_left == 1 else 's' }} left{% endif %}
+  {% if not v.sleeve.configured %}· <span class="bad">no <code>sw_config</code> row — schema defaults shown</span>{% endif %}
+  {% if v.sleeve.capital_inr == 0 %}· <span class="bad">allocation is zero: nothing will be sized</span>{% endif %}</p>
+{% endif %}
+
+{#- ============================== triggers ============================== -#}
+<section id="triggers">
+  <h2>Triggers &mdash; today, newest first</h2>
+  <div class="card scroll">
+    <table aria-label="Today's triggers">
+      <thead><tr><th>Time</th><th>Symbol</th><th>Setup</th><th>What happened</th><th>Entry</th>
+        <th>Stop</th><th>Line</th><th>Plan</th><th>Action</th></tr></thead>
+      <tbody>
+      {% for s in v.triggers %}
+        <tr class="sw-trigger sw-trigger-{{ s.state | lower }}" data-signal-id="{{ s.id }}">
+          <td>{{ s.raised_at.strftime('%H:%M:%S') if s.raised_at else '—' }}</td>
+          <td><b>{{ s.symbol }}</b></td>
+          <td>{{ s.setup }}</td>
+          <td style="text-align:left;white-space:normal" class="{{ 'bad' if s.locked else '' }}">
+            <span class="tag">{{ s.state | lower | replace('_', ' ') }}</span> {{ s.text }}</td>
+          <td>{{ px(s.entry) }}</td>
+          <td>{{ px(s.stop) }}</td>
+          <td style="text-align:left;white-space:normal">
+            {% if s.line %}
+              <b>{{ s.line.label }}</b>
+              <span class="muted" style="display:block">risk {{ inr(s.line.risk_inr) }} ·
+                {{ inr(s.line.position_value) }} ·
+                {{ pct(s.line.pct_of_sleeve) }} of allocation · cap {{ pct(s.line.cap_pct) }}</span>
+            {% elif s.skip %}
+              <span class="bad">skipped — {{ s.skip.reason }}</span>
+              {% if s.skip.detail %}<span class="muted" style="display:block">{{ s.skip.detail }}</span>{% endif %}
+            {% elif s.locked %}
+              <span class="muted">no line — a locked name cannot be bought</span>
+            {% else %}
+              <span class="muted">no line</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if s.line %}<code>{{ s.line.plan_id[:8] }}</code> {{ countdown(s.line.countdown, s.line.plan_expires_at, s.line.expired) }}
+            {% elif s.skip %}<code>{{ s.skip.plan_id[:8] }}</code>
+            {% else %}—{% endif %}
+          </td>
+          <td>{% if s.line %}{{ confirm_form(s.line) }}{% elif s.locked %}<span class="muted">locked</span>{% else %}—{% endif %}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="muted">No signals today{% if v.status.monitor.state == 'not enabled' %}
+          &mdash; the opening-range monitor is not enabled, so the only entries are the plan's
+          waiting buys below{% endif %}.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">Each <b>Confirm</b> posts one line to
+      <code>/swing/execute</code>, which runs the guards, the risk checks, the rate limit and the
+      journal, then places the buy and arms its GTT stop in the same request. A locked-circuit
+      signal is kept for the record and has no button. Every line here is prefixed <b>SWING</b>
+      so it cannot be mistaken for the weekly plan.</p>
+  </div>
+</section>
+
+{#- ============================== the plan ============================== -#}
+{% macro plan_panel(plan, title) -%}
+  <div class="card scroll sw-plan" data-plan-id="{{ plan.plan_id }}">
+    <p style="margin:0 0 8px"><b>{{ title }}</b> &mdash; plan <code>{{ plan.plan_id }}</code> ·
+      for {{ plan.as_of.isoformat() }} · built {{ plan.built_at.strftime('%d %b %H:%M') }} ·
+      gate <b>{{ plan.gate }}</b> · rung {{ plan.exposure_level }} ·
+      risk {{ inr(plan.total_risk_inr) }} · new exposure {{ inr(plan.total_new_exposure_inr) }} ·
+      expires in {{ countdown(plan.countdown, plan.expires_at, plan.expired) }}{% if plan.expired %} <span class="bad">expired</span>{% endif %}</p>
+
+    <table aria-label="{{ title }} — exits">
+      <thead><tr><th>Exit</th><th>Symbol</th><th>Qty</th><th>Stop</th><th>Note</th><th>State</th><th>Action</th></tr></thead>
+      <tbody>
+      {% for ln in plan.exits %}
+        <tr class="sw-line sw-line-{{ ln.kind | lower }}" data-line-id="{{ ln.id }}">
+          <td><b>{{ ln.label }}</b></td>
+          <td>{{ ln.symbol }}</td>
+          <td>{{ '{:,}'.format(ln.quantity) }}</td>
+          <td>{{ px(ln.stop) }}</td>
+          <td style="text-align:left;white-space:normal" class="muted">{{ ln.note or '' }}</td>
+          <td>{{ ln.state }}</td>
+          <td>{{ confirm_form(ln) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="muted">No exits — nothing to sell or raise.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    <table aria-label="{{ title }} — buys waiting for a signal" style="margin-top:10px">
+      <thead><tr><th>Waiting buy</th><th>Symbol</th><th>Setup</th><th>Qty</th><th>Trigger</th><th>Stop</th>
+        <th>Risk</th><th>Value</th><th>State</th><th>Action</th></tr></thead>
+      <tbody>
+      {% for ln in plan.buys %}
+        <tr class="sw-line sw-line-buy_on_trigger" data-line-id="{{ ln.id }}">
+          <td><b>{{ ln.label }}</b></td>
+          <td>{{ ln.symbol }}</td>
+          <td>{{ ln.setup or '—' }}</td>
+          <td>{{ '{:,}'.format(ln.quantity) }}</td>
+          <td>{{ px(ln.trigger) }}</td>
+          <td>{{ px(ln.stop) }}</td>
+          <td>{{ inr(ln.risk_inr) }}</td>
+          <td>{{ inr(ln.position_value) }} <span class="muted">({{ pct(ln.pct_of_sleeve) }})</span></td>
+          <td>{{ ln.state }}</td>
+          <td>{{ confirm_form(ln) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="10" class="muted">No buys waiting.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    {% if plan.skips %}
+    <p class="muted" style="margin:10px 0 4px"><b>Skipped</b>, with reasons:</p>
+    <ul class="sw-skips" style="list-style:none;padding:0;display:grid;gap:4px">
+      {% for k in plan.skips %}
+      <li class="sw-skip"><b>{{ k.symbol }}</b> <span class="bad">{{ k.reason }}</span>
+        {% if k.detail %}<span class="muted">&mdash; {{ k.detail }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
+<section id="plan">
+  <h2>Plan &mdash; exits first, then the buys waiting for a signal, then the skips</h2>
+  {% if v.plans.morning %}
+    {{ plan_panel(v.plans.morning, 'Morning plan') }}
+  {% else %}
+    <div class="card"><p class="muted">No morning plan for {{ v.today.isoformat() }} yet — the
+      09:09 premarket job builds it (<code>source=MORNING</code>).</p></div>
+  {% endif %}
+  {% if v.plans.preview %}
+    <details style="margin-top:10px"{% if not v.plans.morning %} open{% endif %}>
+      <summary class="muted">EOD preview built {{ v.plans.preview.built_at.strftime('%d %b %H:%M') }}
+        for {{ v.plans.preview.as_of.isoformat() }} — {{ v.plans.preview.line_count }} line(s),
+        {{ v.plans.preview.skips | length }} skip(s){% if v.plans.preview.expired %}, expired{% endif %}</summary>
+      {{ plan_panel(v.plans.preview, 'EOD preview') }}
+    </details>
+  {% endif %}
+  <p class="muted" style="margin-top:10px">A waiting buy confirms as a LIMIT buy at its trigger
+    (the EOD entry mode, PACK.2); a live break arrives as a trigger above. Confirm on a SELL or a
+    RAISE GTT goes through the same endpoint. There is no confirm-all.</p>
+</section>
+
+{#- ============================== the book ============================== -#}
+<section id="book">
+  <h2>Book &mdash; {{ v.book.positions | length }} open{% if v.book.naked_count %},
+    <span class="bad">{{ v.book.naked_count }} without a stop</span>{% endif %}</h2>
+  <div class="card scroll">
+    <table aria-label="Open swing positions">
+      <thead><tr><th>Symbol</th><th>Setup</th><th>Entered</th><th>Avg</th><th>Open / entered</th>
+        <th>Stop</th><th>GTT</th><th>Trail</th><th>Partial</th><th>Mode</th><th>Action</th></tr></thead>
+      <tbody>
+      {% for p in v.book.positions %}
+        <tr class="sw-position {{ 'sw-naked' if p.naked else '' }}" data-position-id="{{ p.id }}">
+          <td><b>{{ p.symbol }}</b></td>
+          <td>{{ p.setup }}</td>
+          <td>{{ p.entry_date.isoformat() }}</td>
+          <td>{{ px(p.entry_avg) }}</td>
+          <td>{{ '{:,}'.format(p.quantity_open) }} / {{ '{:,}'.format(p.quantity_entered) }}</td>
+          <td>{{ px(p.stop) }} <span class="muted">(initial {{ px(p.initial_stop) }})</span></td>
+          <td>{% if p.naked %}<b class="bad">naked</b>{% else %}#{{ p.gtt_id }}
+            <span class="muted">@ {{ px(p.gtt_trigger) }}</span>{% endif %}</td>
+          <td>{{ p.trail }}</td>
+          <td>{{ 'done ' ~ p.partial_date.isoformat() if p.partial_done and p.partial_date else ('done' if p.partial_done else '—') }}</td>
+          <td>{{ 'Simulated' if p.simulated else 'Real' }}</td>
+          <td>
+            {% if p.naked %}
+            <form method="post" action="/swing/rearm" class="sw-rearm" data-position-id="{{ p.id }}">
+              <input type="hidden" name="position_id" value="{{ p.id }}">
+              <input type="hidden" name="confirm" value="true">
+              <button type="submit" class="{{ 'btn-saffron' if v.status.simulated else 'btn-danger' }}">Re-arm GTT</button>
+            </form>
+            <div class="sw-outcome muted" data-outcome-for="position-{{ p.id }}" aria-live="polite"></div>
+            {% else %}<span class="muted">armed{% if p.gtt_armed_at %} {{ p.gtt_armed_at.strftime('%d %b %H:%M') }}{% endif %}</span>{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="11" class="muted">No open swing positions.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:10px">A position without a resting GTT is the one state
+      the method forbids. <b>Re-arm GTT</b> places a stop, not a buy, for the open quantity at
+      the stop in force.</p>
+  </div>
+
+  <h3 style="margin-top:14px">Last {{ v.book.manage | length }} manage action{{ '' if v.book.manage | length == 1 else 's' }}</h3>
+  <div class="card">
+    {% if v.book.manage %}
+    <ul class="sw-manage" style="list-style:none;padding:0;display:grid;gap:6px">
+      {% for m in v.book.manage %}
+      <li><b>{{ m.label }}</b> <span class="muted">— {{ m.state }} · plan {{ m.plan_source }}
+        for {{ m.as_of.isoformat() }}{% if m.note %} · {{ m.note }}{% endif %}</span></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">Nothing managed yet — the evening job proposes exits once there is a position.</p>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  const POLL_MS = {{ v.poll_ms }};
+  const OPENS_IN_MS = {{ v.window_opens_in_ms if v.window_opens_in_ms is not none else 'null' }};
+  const FINGERPRINT = {{ v.fingerprint | tojson }};
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  // Countdowns tick on the client from the plan's own expires_at; the server renders the
+  // first value so the page is right with scripts off.
+  function tick(){
+    document.querySelectorAll('.sw-countdown[data-expires-at]').forEach(el => {
+      const left = Math.floor((new Date(el.dataset.expiresAt).getTime() - Date.now()) / 1000);
+      if (left <= 0) {
+        el.textContent = '0:00'; el.classList.add('bad');
+        const row = el.closest('tr, .sw-plan');
+        if (row) row.querySelectorAll('form.sw-confirm button').forEach(b => { b.disabled = true; b.textContent = 'expired'; });
+      } else {
+        el.textContent = Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
+      }
+    });
+  }
+  tick(); setInterval(tick, 1000);
+
+  // One form, one line. The response is the ExecOutcome, rendered where the button was.
+  async function submitOne(form, key){
+    const btn = form.querySelector('button');
+    const out = document.querySelector('[data-outcome-for="' + key + '"]');
+    btn.disabled = true; const was = btn.textContent; btn.textContent = 'sending…';
+    try {
+      const r = await fetch(form.action, {method: 'POST', body: new FormData(form)});
+      if (!r.ok) {
+        const msg = await r.text();
+        out.className = 'sw-outcome bad';
+        out.innerHTML = '<span class="tag">' + r.status + '</span> not executed — ' + esc(msg);
+        btn.disabled = r.status === 410 || r.status === 409 || r.status === 404;
+        btn.textContent = btn.disabled ? 'refused' : was;
+        return;
+      }
+      const j = await r.json();
+      const cls = (j.status === 'BLOCKED' || j.status === 'REJECTED' || j.status === 'EXPIRED') ? 'bad' : 'ok';
+      out.className = 'sw-outcome ' + cls;
+      out.innerHTML = '<span class="tag">' + esc(j.status) + '</span>' +
+        (j.reason ? ' ' + esc(j.reason) : '') +
+        (j.position_id ? ' <span class="muted">position #' + esc(j.position_id) + '</span>' : '') +
+        (j.gtt && j.gtt.status ? ' <span class="muted">GTT ' + esc(j.gtt.status) + '</span>' : '') +
+        (j.simulated ? ' <span class="muted">(simulated)</span>' : '');
+      btn.textContent = j.status === 'BLOCKED' ? was : 'done';
+      btn.disabled = j.status !== 'BLOCKED';
+    } catch (e) {
+      out.className = 'sw-outcome bad'; out.textContent = 'request failed: ' + e;
+      btn.disabled = false; btn.textContent = was;
+    }
+  }
+  document.querySelectorAll('form.sw-confirm').forEach(f =>
+    f.addEventListener('submit', e => { e.preventDefault(); submitOne(f, f.dataset.lineId); }));
+  document.querySelectorAll('form.sw-rearm').forEach(f =>
+    f.addEventListener('submit', e => { e.preventDefault(); submitOne(f, 'position-' + f.dataset.positionId); }));
+
+  // 5 s inside 09:15–10:45, on demand outside it. Reload only when something changed, so an
+  // inline result is not wiped by an idle poll.
+  let timer = null;
+  async function poll(){
+    try {
+      const r = await fetch('/swing/data', {cache: 'no-store'});
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j.fingerprint && j.fingerprint !== FINGERPRINT) { location.reload(); return; }
+      if (!j.poll_ms && timer) { clearInterval(timer); timer = null; }
+    } catch (e) { /* the next poll will say */ }
+  }
+  function start(){ if (!timer) { timer = setInterval(poll, POLL_MS || 5000); } }
+  if (POLL_MS > 0) start();
+  else if (OPENS_IN_MS !== null) setTimeout(() => location.reload(), OPENS_IN_MS + 1000);
+})();
+</script>
+{% endblock %}

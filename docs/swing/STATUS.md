@@ -3,7 +3,7 @@
 The status page for the swing run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: code complete, deploy not run.** Started 2 Sep 2026 on branch `developer`; SW12 closed 3 Sep 2026. The report is `../../SW-FINAL-REPORT.md`; what needs Maulik's hands is `../../NEEDS-MAULIK.md` § Swing.
+**Run state: code complete; `beb5ff5` deployed to the box (SW13-run, 3 Sep 2026), the desk vhost waiting on one DNS record (NEEDS-MAULIK S4); this commit not yet deployed.** Started 2 Sep 2026 on branch `developer`; SW12 closed 3 Sep 2026. The report is `../../SW-FINAL-REPORT.md`; what needs Maulik's hands is `../../NEEDS-MAULIK.md` § Swing.
 
 ## Module ledger
 
@@ -26,7 +26,7 @@ done. A fresh session resumes from the first module not marked ✅.
 | SW11 — Hardening and observability | ✅ | Five `SWING_*` rules over five DB-derived gauges the API refreshes per scrape, evaluated from synthetic series in `test_swing_alerts.py`, plus four in-process worker checks (09:20/10:50/15:20/21:30) and runbook 6; the desk is the clock (cutoff at 10:45, GTT sweep at 15:15 in `app/swing_clock.py`); the tick-built opening range with a one-shot candle reconcile (A4); the quote fallback capped at one call per 5 s (B10); the one-way email + dark Telegram notifier for the daily focus (A2); the S2 timing probe (Beat 09:04, gated, self-disabling) and the gap scan at 09:16 from `ohlc.open`; `write_market_row` keeps a settled row and bounds its closes; the journal reads REAL; four budgets measured — `/swing/setups` p95 **183 ms**, tick→verdict p95 **0.0017 ms**, detect 2,500 **0.21 s** (engine only), confirm path p95 **0.22 s**; Playwright `/swing` spec written, unrunnable since M46 (its sign-in setup). Desk **1,694 passed, 17 skipped**; worker +41, API +16 |
 | SW11B — Catalyst feed | ✅ | NSE announcements + results calendar through the existing provider, `sw_catalyst`, the 09:17 Beat, the link on every watched name; fixtures hand-written, no morning has run it |
 | SW12 — Verification, goldens, final report | ✅ | 79 goldens in `go/testdata/golden/L1/swing/` byte-stable and guarded by `test_swing_goldens.py`; the mutation report re-run (`reconciliation/MUTANTS.md`); `02` §3 rewritten under Maulik's name (A11) — one DRY_RUN drill morning + the backtest on the page + his written risk decision, the session counter demoted to information; `SW-FINAL-REPORT.md`; NEEDS-MAULIK § Swing reduced to eight hands-only items |
-| SW13 — The desk as a Baskfy service | 🟡 | Built and smoke-tested locally (`SMOKE OK`, desk 1645); **not deployed** — needs `aws sso login` (NEEDS-MAULIK SW-1); desk history unmigrated (SW-3) |
+| SW13 — The desk as a Baskfy service | 🟡 | **Deployed `beb5ff5`** (3 Sep 2026): three images, the `desk.` record and ECR grant applied, alembic `0032`, sleeve seeded ₹25,00,000 / 0.5 %, ten services up, `verify-swing.sh`'s box half green (`DRY_RUN=true`, four flags false, token read-only); `desk.staging.baskfy.com` NXDOMAIN until the GoDaddy A record (S4); desk history unmigrated (SW-3); SW12/SW14 not yet on the box |
 | SW14 — The web hub completed to `05` §2 | ✅ | Five server actions (`watchAdd` / `watchDismiss` / `watchAnnotate` / `watchReconfirm` / `settingsSave`) behind plain forms, `/me/swing` settings with the ceilings and the 422 inline, Setups with the gate's two numbers + index word, the lock-out line, Watch/Dismiss, focus marks, chips and the mini chart; Watchlist with add-by-hand, inline notes, Still watching, stop/ADR "will skip", 20/5 counts and yesterday's `sw_signal` line; Market's band, drawdown and index MAs; Positions' PENDING_RANGE, first-live header, Simulated, days held, trail distance; `GET /swing/signals` + drawdown on the market row; the read-only assertion over the action set |
 
 States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked · 🟡 partial.
@@ -1852,8 +1852,7 @@ cases — `build_entries` 16, `detect_setups` 10, `evaluate_trigger` 12, `exposu
 `manage` 16, `size_position` 11 — flat under `go/testdata/golden/L1/swing/`, `stable: true`
 (no clock, no cwd), re-rendered from their stored inputs by `packages/core/tests/test_swing_goldens.py`;
 a line in `docs/go-rewrite/REQUESTS.md`; the mutation report re-run into
-`reconciliation/MUTANTS.md` (`grep 'mutation score' reconciliation/MUTANTS.md` → **87.8 %**,
-654 mutants, 80 survivors, 13 of them in `swing/backtest.py` still `UNJUSTIFIED`); Q-SW12-1
+`reconciliation/MUTANTS.md` (the scores are in "SW12 — part 1" below); Q-SW12-1
 (size on unsnapped levels) recorded, not fixed.
 **The gate (1.4.3b, A11/B12):** `02` §3 rewritten — the twenty-session paper gate withdrawn; one
 DRY_RUN drill morning on a real session, the backtest on the page, Maulik's written risk
@@ -1867,6 +1866,37 @@ broker**, `DRILL OK`. Desk **1,694 passed, 17 skipped**; the decile suite's numb
 
 **Did NOT do:** no morning on a real session (that is §3.2, Maulik's); no 2017→ backtest run;
 Q-SW12-1 stands; `baskfy_core.swing.__init__` still does not re-export SW9.6's names.
+
+## SW12 — part 1 — the golden lane and the mutation re-run (leaf 1.4.3a) ✅
+
+**Goldens:** 79 files, `go/testdata/golden/L1/swing/<function>.case_NNN.json`, two runs
+byte-identical (`shasum` over the directory), `test_swing_goldens.py` **80 passed** — every
+file re-rendered from its stored inputs through the live function. DECISIONS-SW SW12.1.
+
+**Mutation (`make mutants` over the nine swing targets, 6 workers, 4,190 s wall):** 654
+mutants, **577 killed, 77 survived, 88.2 %** (SW1: 83.4 % over 459; SW9's backtest 76 %). Per
+target: `setups` 95.4 % (173; was 73.4 %), `indicators` 97.4 %, `journal` 92.9 %,
+`opening_range` 91.7 % (was 83.7 %), `market` 91.4 %, `stops` 91.3 %, `sizing` 89.7 %,
+`plan` 88.7 % (was 78.6 %), `backtest` 71.9 % (146; was 76.0 % over 100 — the file grew at
+SW9.5/9.6, and the SW9 survivor families are now named). What moved it: (1) the harness's
+swing selection gained `test_swing_pending_and_first_live.py` and
+`test_swing_safety_properties.py`, which SW10/SW10.5 wrote after the list and which kill every
+`first_live_multiplier` / `sizing_at` / `marketable_limit` / `PENDING_RANGE` mutant; (2) 24 new
+spec tests across `test_swing_contract_{detectors,edges,book}.py` and `test_swing_backtest.py`
+— the pole and pivot "before today" slices, the engine's own clamp, the flat-base equalities,
+the parabolic score (now written into `04` §4), the live-gap score and guards, the zero-quantity
+refusal, the lock-out's resume line, the gate cells' per-scope drawdown. **Every one of the 77
+survivors is justified by name** in `reconciliation/mutant-justifications.json` and rendered in
+`MUTANTS.md`: 37 `slots=True`/private-`frozen` flips, 4 `maintain_order`, double guards,
+unreachable branches, float-equality boundaries between two measurements, and one honest gap —
+`backtest.py:755` (`cash_available` at a full top-rung book) needs a ten-position fixture. Three
+backtest survivors were killed by tests written after the run and re-scored one at a time with
+the harness's own `_evaluate`; `mutants.json` names their killer. The first attempt at the full
+run was killed by the tool sandbox at 572/654 after 60 min; the second ran detached.
+
+**Did NOT do:** `factors` / `screener` are not in this report (the run was the swing targets;
+`make mutants` with no `--targets` restores them, ~+20 min); no `04` §2.6 wording change for the
+setup-group order (unspecified, justified as such); Q-SW12-1 untouched.
 
 ## SW14 — The web hub completed to `05` §2 ✅
 
@@ -1897,8 +1927,9 @@ API +9 (67 in the three files), web swing/me/lib **142** (`nav.test.ts` re-pinne
 
 Final state, 3 Sep 2026. Each item names who closes it.
 
-- **Nothing is deployed.** SW13 built the desk image and compose and proved them locally; the
-  box runs what it ran before this run. Needs `aws sso login` (NEEDS-MAULIK SW-1).
+- **The box runs `beb5ff5`** (SW13-run), not this commit: SW12's gate rewrite, SW14's hub
+  actions and `/me/swing` are not deployed. Same five commands, one more `aws sso login`
+  (NEEDS-MAULIK SW-1). `desk.staging.baskfy.com` is NXDOMAIN until the GoDaddy A record (S4).
 - **No live morning has run anything** — not the premarket scan, the monitor, the catalyst feed,
   the probe or the evening on real quotes. `02` §3.2 is that morning (SW-5). The catalyst
   fixtures are hand-written, not captured; re-record on the first session that reaches
@@ -1916,12 +1947,11 @@ Final state, 3 Sep 2026. Each item names who closes it.
 - **Playwright cannot sign in.** `e2e/swing.spec.ts` is written; `e2e/auth.setup.ts` still
   clicks the "Password" tab M46 removed, so every signed-in spec has been unrunnable since M46
   (Track A's, not swing's).
-- **The watchlist page is read-only**; the API's writes (`POST`/`PATCH`/`DELETE /swing/watch`,
-  `reconfirm`, the catalyst field) and `PATCH /swing/config` have no form.
 - **Q-SW12-1**: the plan sizes on the unsnapped levels and shows the snapped ones (≤ one tick ×
   quantity). Recommendation (b) in `QUESTIONS.md`, not applied.
-- **13 mutation survivors in `swing/backtest.py`** are still `UNJUSTIFIED` in
-  `reconciliation/MUTANTS.md` (the other 67 are justified by name).
+- **77 mutation survivors**, every one justified by name in `reconciliation/MUTANTS.md`
+  (88.2 %); `backtest.py:755` is the one honest gap (a ten-position fixture); `factors` /
+  `screener` were not in this run's report.
 - No push transport for order updates (the 10:45 cutoff and fill reconciliation are pulls); no
   tick journal for the replay harness; the 15:15 sweep runs inside the monitor process, so a
   monitor that never started sweeps nothing (`SWING_GTT_MISSING_AT_1515` says so; `POST

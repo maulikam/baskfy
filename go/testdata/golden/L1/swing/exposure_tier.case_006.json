@@ -1,0 +1,60 @@
+{
+ "fn": "baskfy_core.swing.market.exposure_tier",
+ "inputs": {
+  "closed_r_multiples": [
+   "3",
+   "2",
+   "-1",
+   "-1",
+   "-1"
+  ],
+  "config": {
+   "green_min_pct_up": 5.0,
+   "index_ma_fast": 10,
+   "index_ma_slow": 20,
+   "lookback_trades": 5,
+   "max_drawdown_pct": 15.0,
+   "red_max_pct_up": 2.0,
+   "resume_drawdown_pct": 10.0,
+   "step_down_loss_streak": 3,
+   "strong_move_pct": 25.0,
+   "tiers": [
+    [
+     2,
+     25.0
+    ],
+    [
+     4,
+     50.0
+    ],
+    [
+     6,
+     75.0
+    ],
+    [
+     10,
+     100.0
+    ]
+   ]
+  },
+  "current_level": 2,
+  "drawdown_pct": 0.0,
+  "gate": "GREEN",
+  "was_drawdown_locked": false
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "three straight losses step one rung down. Prices are the adjusted series (house rule 6); Decimals are strings; dates are ISO days; a naive datetime is exchange-local IST. Fixtures: packages/core/tests/swing_fixtures.py and the swing test modules. Regenerate with `python tools/parity/golden.py swing` from decile-blueprint under `uv run`; packages/core/tests/test_swing_goldens.py recomputes every case from these stored inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "drawdown_locked": false,
+  "level": 1,
+  "max_exposure_pct": 50.0,
+  "max_open_positions": 4,
+  "new_entries_allowed": true
+ }
+}

@@ -1732,7 +1732,7 @@ def test_every_live_swing_gtt_is_armed_with_the_swing_limit_fraction(live) -> No
 def test_every_dry_run_swing_gtt_journals_the_swing_limit_fraction(gw) -> None:
     """Through the REAL gateway in its dry-run branch: a buy, a partial sell, a raise and a
     re-arm are four journalled GTTs, each saying which cushion the live trigger would carry —
-    so the paper sessions of `docs/swing/02` §3.2 rehearse the number too."""
+    so a DRY_RUN session (`docs/swing/02` §3.2's drill morning) rehearses the number too."""
     store = MemoryStore()
     plan_id = store.add_plan()
     buy = store.add_line(plan_id, quantity=100, symbol="ALPHA", instrument_id=11)

@@ -118,11 +118,23 @@ def _conform(frame: pl.DataFrame) -> pl.DataFrame:
     return frame.select([pl.col(c).cast(_SCHEMA[c]) for c in CANDIDATE_COLUMNS])
 
 
-def _window(indicated: pl.DataFrame, as_of: dt.date, bars: int) -> pl.DataFrame:
-    """The last ``bars`` rows per instrument ending exactly at ``as_of``."""
+def _window(
+    indicated: pl.DataFrame, as_of: dt.date, bars: int, *, min_bars: int = 1
+) -> pl.DataFrame:
+    """The last ``bars`` rows per instrument ending exactly at ``as_of``.
+
+    ``min_bars`` drops instruments with fewer rows than a detector can reason about. A name
+    listed today has one bar: no bar before it, so no pole and no base — and the flag
+    detector's pole lookup (``arg_max`` over the bars before today) has nothing to look at.
+    On the first run over real NSE data (3 Sep 2026) that was a crash, not an empty answer.
+    """
     upto = indicated.filter(pl.col("date") <= as_of)
-    present = upto.group_by(_OVER).agg(pl.col("date").max().alias("_last"))
-    present = present.filter(pl.col("_last") == as_of).select(_OVER)
+    present = upto.group_by(_OVER).agg(
+        pl.col("date").max().alias("_last"), pl.len().alias("_rows")
+    )
+    present = present.filter(
+        (pl.col("_last") == as_of) & (pl.col("_rows") >= min_bars)
+    ).select(_OVER)
     return upto.join(present, on=_OVER, how="semi").group_by(_OVER, maintain_order=True).tail(bars)
 
 
@@ -140,7 +152,9 @@ def detect_flags(
 ) -> pl.DataFrame:
     """docs/swing/04 §2 — the flag / continuation setup, one row per qualifying instrument."""
     flag = config.flag
-    window = _window(indicated, as_of, flag.lookback_bars + flag.base_max_bars)
+    # At least one bar before today: the pole is found among the bars before ``as_of``
+    # (docs/swing/04 §2, "the instrument must have a bar on as_of" and a pole before it).
+    window = _window(indicated, as_of, flag.lookback_bars + flag.base_max_bars, min_bars=2)
     if window.is_empty():
         return empty_candidates()
 

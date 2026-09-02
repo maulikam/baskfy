@@ -40,9 +40,12 @@ from baskfy_core.swing.backtest import CAVEATS, INDEX_ABSENT_CAVEAT, GateMode
 from baskfy_core.swing.config import DEFAULT_SWING_CONFIG, SwingConfig
 from baskfy_core.swing.journal import ClosedTrade, JournalStats, summarize
 
-#: `docs/swing/02` §3.2 — the paper track record the real-money flag is gated on. Defined here,
+#: The session counter's denominator — "14 of 20 sessions logged" on `/swing/journal` and in
+#: the evening email. **Information, not a gate** since Maulik rewrote `docs/swing/02` §3
+#: (STANDING-ANSWERS A11): the real-money flag is gated on one DRY_RUN drill morning, the
+#: backtest on the page and his written risk decision, and is flipped by his hand. Defined here,
 #: in the API package, because the worker depends on the API and not the other way round; the
-#: EOD job's email and this page must count against the same number.
+#: EOD job's email and this page count against the same number.
 PAPER_SESSIONS_REQUIRED: Final = 20
 
 #: The R-distribution buckets, in the order the page draws them. The labels are the contract

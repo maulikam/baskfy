@@ -298,10 +298,11 @@ class Settings(BaseSettings):
     # The **flags** are Track B in ``docs/swing/02-scope-and-gating.md``: the code behind each is
     # written, tested and unreachable. ``swing_execution_enabled`` is the one that decides
     # whether a confirmed line may reach a broker at all; ``docs/swing/02`` §3 lists the five
-    # things that must be true before it flips, and none of them is an engineering task. With it
-    # false the desk's ``/swing/execute`` still runs the whole path and journals
-    # ``simulated=true`` **regardless of DRY_RUN**, which is what makes the twenty paper sessions
-    # a real rehearsal rather than a different code path.
+    # things that must be true before it flips (one DRY_RUN drill morning on a real session,
+    # the backtest on the page, Maulik's written risk decision), and only his hand flips it.
+    # With it false the desk's ``/swing/execute`` still runs the whole path and journals
+    # ``simulated=true`` **regardless of DRY_RUN**, which is what makes a DRY_RUN session a real
+    # rehearsal rather than a different code path.
     #
     # The **ceilings** are the M4.1 boundary (docs/03 §3f, the rule that produced
     # ``RISK_MAX_DAILY_LOSS_PCT``). The value a person actually trades with lives in ``sw_config``
@@ -324,6 +325,16 @@ class Settings(BaseSettings):
     #: The benchmark the market gate reads (``docs/swing/04`` §8.2). Falls back to ``nifty-50``
     #: when the named index has no snapshot; a missing benchmark is not a bear market.
     swing_index_slug: str = "nifty-500"
+    #: SW15 "Scan now": the least time between two requests from the one tenant, in seconds.
+    #: A scan is a few minutes of Polars over the liquid universe and, during the session, one
+    #: Kite quote call per 500 names under the shared limiter (STANDING-ANSWERS B10) — a
+    #: second press inside a minute buys nothing the first will not deliver. A threshold, so a
+    #: setting (B13), never a literal in the route.
+    swing_scan_min_interval_seconds: int = Field(default=60, ge=0)
+    #: A `QUEUED` / `RUNNING` scan older than this no longer counts as "in flight": a worker
+    #: that died mid-scan must not lock the button forever. Ten minutes is three times the
+    #: detect budget (B9: < 3 min for 2,500 names).
+    swing_scan_stale_after_seconds: int = Field(default=600, gt=0)
 
     # --- Rate limits (docs/07 §Conventions) ----------------------------------
     rate_limit_anonymous_per_minute: int = Field(default=10, gt=0)

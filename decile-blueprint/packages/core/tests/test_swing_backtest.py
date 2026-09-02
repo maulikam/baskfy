@@ -888,6 +888,22 @@ def test_drawdown_is_peak_to_trough_as_a_percentage_of_the_constant_sleeve() -> 
     }
 
 
+def test_the_gate_cells_carry_the_curves_drawdown_inside_their_own_scope() -> None:
+    """A12 / B4: the gate-on-versus-gate-off table reports the constant-sleeve curve's max
+    drawdown per scope — the whole run's in `overall`, and in `by_year` only what the curve did
+    inside that year: the losing trade's year carries the 0.61%, the year before it nothing."""
+    frame, calendar = planted_frame(tail=LOSE_TAIL)
+    result = run(frame, calendar)
+    assert result.comparison is not None
+    primary = result.comparison.primary
+    assert result.comparison.overall[primary].max_drawdown_pct == result.drawdown.max_pct > D(0)
+    trough_year = result.drawdown.trough_date.year if result.drawdown.trough_date else None
+    assert trough_year is not None
+    for year, cells in result.comparison.by_year.items():
+        expected = result.drawdown.max_pct if year == trough_year else D(0)
+        assert cells[primary].max_drawdown_pct == expected, year
+
+
 def test_drawdown_of_sixteen_percent_locks_out_new_entries_until_back_within_ten() -> None:
     """`04` §8.5 at its real numbers, on the constant-sleeve curve (A12). Two 20 % positions
     (risk 2 % a trade caps at `max_position_pct`, 1,315 shares each): FLAGCRASH gaps to 22 on
@@ -1352,6 +1368,7 @@ def test_empty_bars_run_flat() -> None:
     result = run(empty, calendar)
     assert result.trades == ()
     assert result.funnel["sessions"] == len(calendar)
+    assert result.funnel["detected"] == 0, "B4: the funnel counts detections, not sessions"
     assert {equity for _, equity in result.equity_curve} == {D("1000000.00")}
     assert result.stats == summarize([])
 

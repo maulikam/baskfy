@@ -1,0 +1,208 @@
+{
+ "fn": "baskfy_core.swing.plan.build_entries",
+ "inputs": {
+  "account": {
+   "cash_available": "1000000",
+   "equity": "1000000",
+   "open_exposure_inr": "300000",
+   "open_symbols": [
+    "P1",
+    "P2",
+    "P3"
+   ]
+  },
+  "as_of": "2026-09-02",
+  "config": {
+   "ep": {
+    "max_prior_gain_pct": 30.0,
+    "min_close_position": 0.5,
+    "min_gap_pct": 10.0,
+    "min_rvol": 3.0,
+    "prior_bars": 60,
+    "rvol_bars": 50,
+    "valid_bars": 3
+   },
+   "flag": {
+    "base_max_bars": 60,
+    "base_max_depth_pct": 30.0,
+    "base_min_bars": 10,
+    "breakout_min_rvol": 1.5,
+    "dryup_bars": 10,
+    "dryup_max_ratio": 0.85,
+    "flagpole_min_gain_pct": 30.0,
+    "lookback_bars": 65,
+    "ma_rising_bars": 5,
+    "ma_tolerance_pct": 2.0,
+    "max_extension_adr": 2.0,
+    "pivot_bars": 20,
+    "require_higher_lows": true,
+    "tight_bars": 10,
+    "tight_max_adr_multiple": 3.0
+   },
+   "liquidity": {
+    "adr_bars": 20,
+    "adr_min_pct": 4.0,
+    "price_min": 20.0,
+    "turnover_bars": 20,
+    "turnover_min_inr": 50000000.0
+   },
+   "ma_fast": 10,
+   "ma_slow": 20,
+   "ma_trend": 50,
+   "market": {
+    "green_min_pct_up": 5.0,
+    "index_ma_fast": 10,
+    "index_ma_slow": 20,
+    "lookback_trades": 5,
+    "max_drawdown_pct": 15.0,
+    "red_max_pct_up": 2.0,
+    "resume_drawdown_pct": 10.0,
+    "step_down_loss_streak": 3,
+    "strong_move_pct": 25.0,
+    "tiers": [
+     [
+      2,
+      25.0
+     ],
+     [
+      4,
+      50.0
+     ],
+     [
+      6,
+      75.0
+     ],
+     [
+      10,
+      100.0
+     ]
+    ]
+   },
+   "opening_range": {
+    "break_buffer_pct": 0.1,
+    "default_window_minutes": 5,
+    "entry_limit_buffer_pct": 0.5,
+    "entry_limit_max_adr": 0.25,
+    "fill_poll_interval_seconds": 0.5,
+    "fill_poll_seconds": 10.0,
+    "gtt_sweep_at": [
+     15,
+     15
+    ],
+    "live_min_gap_pct": 10.0,
+    "live_min_volume_pace": 3.0,
+    "monitor_close": [
+     10,
+     45
+    ],
+    "quote_poll_min_seconds": 5.0,
+    "range_reconcile_delay_minutes": 1,
+    "session_open": [
+     9,
+     15
+    ],
+    "windows_minutes": [
+     1,
+     5,
+     60
+    ]
+   },
+   "parabolic": {
+    "min_extension_adr": 4.0,
+    "min_gain_10_bars_pct": 100.0,
+    "min_gain_5_bars_pct": 50.0,
+    "min_up_streak": 3
+   },
+   "sizing": {
+    "first_live_sessions": 5,
+    "max_new_entries_per_session": 3,
+    "max_open_positions": 10,
+    "max_position_pct": 20.0,
+    "max_position_vs_turnover": 0.01,
+    "min_trade_value_inr": 10000.0,
+    "risk_multiplier_first_live": 0.5,
+    "risk_per_trade_pct": 0.5
+   },
+   "stops": {
+    "breakeven_after_r": 1.0,
+    "fast_trail_min_adr_pct": 6.0,
+    "max_stop_adr_multiple": 1.0,
+    "max_stop_distance_pct": 10.0,
+    "partial_denominator": 3,
+    "partial_earliest_bar": 3,
+    "partial_latest_bar": 5,
+    "partial_numerator": 1
+   },
+   "watch": {
+    "auto_watch_min_score": 60.0,
+    "auto_watch_top_n": 20,
+    "flag_valid_bars": 10,
+    "focus_top_n": 5,
+    "manual_valid_bars": 10
+   }
+  },
+  "entries_already_today": 0,
+  "gate": "GREEN",
+  "risk_multiplier": "1",
+  "tier": {
+   "drawdown_locked": false,
+   "level": 1,
+   "max_exposure_pct": 50.0,
+   "max_open_positions": 4,
+   "new_entries_allowed": true
+  },
+  "watch": [
+   {
+    "adr_pct": "5",
+    "avg_turnover_inr": "300000000",
+    "locked_upper_circuit": false,
+    "score": "70",
+    "setup": "FLAG",
+    "stop_ref": "96",
+    "symbol": "A",
+    "trigger": "100"
+   },
+   {
+    "adr_pct": "5",
+    "avg_turnover_inr": "300000000",
+    "locked_upper_circuit": false,
+    "score": "70",
+    "setup": "FLAG",
+    "stop_ref": "96",
+    "symbol": "B",
+    "trigger": "100"
+   }
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "three open positions count against a rung of four. Prices are the adjusted series (house rule 6); Decimals are strings; dates are ISO days; a naive datetime is exchange-local IST. Fixtures: packages/core/tests/swing_fixtures.py and the swing test modules. Regenerate with `python tools/parity/golden.py swing` from decile-blueprint under `uv run`; packages/core/tests/test_swing_goldens.py recomputes every case from these stored inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "lines": [
+   {
+    "kind": "BUY_ON_TRIGGER",
+    "note": "FLAG score 70; stop 4.00% below; size by RISK; trail MA20",
+    "position_value": "125000.00",
+    "quantity": 1250,
+    "risk_inr": "5000.00",
+    "setup": "FLAG",
+    "stop": "96.0",
+    "symbol": "A",
+    "trail": "MA20",
+    "trigger": "100"
+   }
+  ],
+  "skipped": [
+   {
+    "detail": "rung 1 allows 4 positions",
+    "reason": "TIER_FULL",
+    "symbol": "B"
+   }
+  ]
+ }
+}

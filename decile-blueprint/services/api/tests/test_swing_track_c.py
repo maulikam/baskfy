@@ -63,11 +63,21 @@ BANNED_IN_ROUTES: Final[tuple[str, ...]] = (
     "baskfy_execution",
     "confirm=true",
     'confirm: "true"',
-    'method: "post"',
     'method: "put"',
-    'method: "patch"',
-    'method: "delete"',
-    '"use server"',
+)
+
+#: `05` §2 (as amended by SW14 and STANDING-ANSWERS A14): the hub's ONLY server actions. A file
+#: marked "use server" may export exactly these names and nothing else; every other file may not
+#: be a server action at all. Each is a money-free write `02` Track A permits.
+ALLOWED_ACTIONS: Final[frozenset[str]] = frozenset(
+    {"watchAdd", "watchDismiss", "watchAnnotate", "watchReconfirm", "settingsSave"}
+)
+
+#: The one file that may send a non-GET, and the only paths it may send one to — the routes
+#: `test_swing_readonly.py` whitelists as writes that move no money.
+WRITE_HELPER: Final = "write.ts"
+WRITE_WHITELIST: Final[frozenset[str]] = frozenset(
+    {"/swing/watch", "/swing/watch/{id}", "/swing/config"}
 )
 
 #: An import specifier containing any of these reaches, or could reach, an order path.
@@ -90,6 +100,9 @@ READ_WHITELIST: Final[frozenset[str]] = frozenset(
         "/swing/watch",
         "/swing/positions",
         "/swing/journal",
+        # SW14: yesterday's verdicts under the watchlist rows. A read of what the monitor
+        # raised, never a way to raise one.
+        "/swing/signals",
     }
 )
 
@@ -259,8 +272,21 @@ class TestTheWebHubCannotReachAnOrder:
                 assert fragment not in specifier.lower(), (
                     f"{path.relative_to(REPO)} imports {specifier!r}, which reaches {fragment}"
                 )
-        assert not re.search(r"<form[\s>]", code), f"{path.relative_to(REPO)} renders a form"
-        assert 'type="submit"' not in code, f"{path.relative_to(REPO)} renders a submit control"
+        # Writes: only the named server actions, only through the one write helper, only to
+        # the money-free routes. A form is fine — a form that reaches an order is not, and the
+        # bans above plus these two allow-lists are what make that structural.
+        if path.name == WRITE_HELPER:
+            for target in re.findall(r"\"(/swing/[^\"]*)\"", code):
+                assert target in WRITE_WHITELIST, f"{WRITE_HELPER} writes to {target}"
+        else:
+            for verb in ('method: "post"', 'method: "patch"', 'method: "delete"'):
+                assert verb not in lowered, f"{path.relative_to(REPO)} sends {verb} itself"
+        if '"use server"' in code:
+            exported = set(re.findall(r"export\s+async\s+function\s+(\w+)", code))
+            assert exported and exported <= ALLOWED_ACTIONS, (
+                f"{path.relative_to(REPO)} declares server actions {sorted(exported)}; "
+                f"05 §2 allows only {sorted(ALLOWED_ACTIONS)}"
+            )
 
     @pytest.mark.parametrize(
         "path", [p for p in web_files() if is_test_file(p)], ids=lambda p: p.name
@@ -289,6 +315,14 @@ class TestTheWebHubCannotReachAnOrder:
         for path in paths:
             assert path in READ_WHITELIST, f"{path} is not a read the hub may make"
         assert not re.search(r"fetch\([^)]*method", fetcher, re.I)
+
+    def test_the_write_helper_reaches_only_the_money_free_routes(self) -> None:
+        writer = strip_ts_comments((SWING_LIB / WRITE_HELPER).read_text(encoding="utf-8"))
+        targets = set(re.findall(r"\"(/swing/[^\"]*)\"", writer))
+        assert targets, f"{WRITE_HELPER} names no route; the regex or the helper changed shape"
+        stray = sorted(targets - WRITE_WHITELIST)
+        assert not stray, f"{WRITE_HELPER} reaches {stray}"
+        assert "/swing/execute" not in writer and "/desk/" not in writer
 
     def test_the_comment_stripper_keeps_strings_and_drops_comments(self) -> None:
         """The scan is only as honest as its stripper, so the stripper has a test."""

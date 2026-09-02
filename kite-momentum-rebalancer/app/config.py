@@ -113,9 +113,9 @@ OPTIONS_ENABLED = os.getenv("OPTIONS_ENABLED", "false").lower() == "true"
 # BASKFY_SWING_EXECUTION_ENABLED is the swing book's DRY_RUN, and it is DELIBERATELY
 # INDEPENDENT of DRY_RUN itself. With it false, /swing/execute runs the entire path —
 # guards, risk, rate limits, journal — through the gateway's dry-run adapter and records
-# simulated=true whatever DRY_RUN says. That is what makes the twenty paper sessions the
-# real-money gate counts (docs/swing/02 §3.2) a rehearsal of this code rather than of a
-# different branch. Flipping it needs the five conditions in §3, by Maulik's hand.
+# simulated=true whatever DRY_RUN says. That is what makes a DRY_RUN session — the one drill
+# morning docs/swing/02 §3 asks for — a rehearsal of this code rather than of a different
+# branch. Flipping it needs the five conditions in §3, by Maulik's hand.
 SWING_EXECUTION_ENABLED = os.getenv("BASKFY_SWING_EXECUTION_ENABLED", "false").lower() == "true"
 # The 09:15-10:45 opening-range monitor. Off until SW6's replay is green and one morning has
 # been watched by a person.

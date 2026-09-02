@@ -47,6 +47,7 @@ from swing_fixtures import (
     START,
     ep_series,
     flag_series,
+    flat_series,
     last_date,
     parabolic_series,
 )
@@ -69,6 +70,7 @@ from baskfy_core.swing.setups import (
     detect_eps,
     detect_flags,
     detect_parabolic,
+    detect_setups,
 )
 
 #: `04`'s scoring rule: "Full marks at twice each threshold". Written here as the document writes
@@ -649,6 +651,131 @@ class TestTheFlagScoreIsTheFormula:
     def test_a_score_never_leaves_zero_to_one_hundred(self) -> None:
         assert 0.0 <= _f(self.row, "score") <= 100.0
 
+    def test_the_engine_caps_a_runaway_term_at_its_weight(self) -> None:
+        """ "Full marks at twice the threshold" - and no more, in the engine, not only in the
+        helper above. With the pole floor at 10% the fixture's 56% pole is 2.8x the threshold
+        and earns exactly 25, not 70."""
+        config = replace(
+            DEFAULT_SWING_CONFIG, flag=replace(FlagConfig(), flagpole_min_gain_pct=10.0)
+        )
+        row = detect_flags(indicated(flag_series(), config=config), last_date(), config).row(
+            0, named=True
+        )
+        assert _f(row, "prior_move_pct") > FULL_MARKS_MULTIPLE * config.flag.flagpole_min_gain_pct
+        flag = config.flag
+        expected = (
+            30.0 * _clamp01(1.0 - _f(row, "tightness_adr") / flag.tight_max_adr_multiple)
+            + 25.0
+            + 20.0
+            * _clamp01(_f(row, "adr_pct") / (FULL_MARKS_MULTIPLE * self.liquidity.adr_min_pct))
+            + 15.0 * _clamp01(1.0 - _f(row, "base_depth_pct") / flag.base_max_depth_pct)
+            + 10.0 * _clamp01(1.0 - _f(row, "dryup_ratio"))
+        )
+        assert _f(row, "score") == pytest.approx(expected, rel=1e-12)
+        assert _f(row, "score") <= 100.0
+
+
+def _window_of(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    """The bars the flag detector sees: the last `lookback_bars + base_max_bars`."""
+    flag = DEFAULT_SWING_CONFIG.flag
+    return rows[-(flag.lookback_bars + flag.base_max_bars) :]
+
+
+def _pole(window: list[dict[str, object]]) -> tuple[int, float, float]:
+    """§2.1 by hand: `pole_idx`, `pole_high` and `pole_low` over the bars before today."""
+    highs = [float(str(r["high"])) for r in window[:-1]]
+    pole_idx = max(range(len(highs)), key=lambda i: highs[i])
+    start = max(pole_idx - DEFAULT_SWING_CONFIG.flag.lookback_bars, 0)
+    pole_low = min(float(str(r["low"])) for r in window[start:pole_idx])
+    return pole_idx, highs[pole_idx], pole_low
+
+
+class TestThePoleAndThePivotAreMeasuredBeforeToday:
+    """§2.1 and §2.6 say "before today" three times; each one is a slice boundary."""
+
+    def test_the_pole_high_is_found_before_today_even_on_the_breakout_day(self) -> None:
+        """§2.1: `pole_idx` = the highest high among the bars **before today**. On a breakout day
+        today's high is the highest in the window; the pole and the depth are still measured
+        against yesterday's."""
+        rows = _breakout_rows()
+        row = detect_flags(indicated(rows), last_date()).row(0, named=True)
+        assert row["status"] == CandidateStatus.BREAKOUT_TODAY.value
+        window = _window_of(rows)
+        pole_idx, pole_high, pole_low = _pole(window)
+        assert float(str(rows[-1]["high"])) > pole_high
+        base_low = min(float(str(r["low"])) for r in window[pole_idx + 1 :])
+        assert _f(row, "prior_move_pct") == pytest.approx(
+            (pole_high / pole_low - 1.0) * 100.0, rel=1e-12
+        )
+        assert _f(row, "base_depth_pct") == pytest.approx(
+            (1.0 - base_low / pole_high) * 100.0, rel=1e-12
+        )
+
+    def test_the_pole_low_is_measured_before_the_pole_high_never_in_the_base(self) -> None:
+        """§2.1: `pole_low` is the lowest low in `[pole_idx - lookback_bars, pole_idx)`. A base
+        bar that dips under the pole's start (inside the 30% depth) does not lengthen the pole."""
+        rows = flag_series(pole_gain=0.35)
+        dip = len(rows) - 35 + 3  # the third bar of the base: first half, outside tight_bars
+        rows[dip] = {**rows[dip], "low": 97.0}
+        out = detect_flags(indicated(rows), last_date())
+        assert out.height == 1, "the dip stays inside the depth cap and the higher-lows rule"
+        _, pole_high, pole_low = _pole(_window_of(rows))
+        assert pole_low > 97.0
+        assert _f(out.row(0, named=True), "prior_move_pct") == pytest.approx(
+            (pole_high / pole_low - 1.0) * 100.0, rel=1e-12
+        )
+
+    def test_the_flagpole_reaches_the_first_bar_of_a_full_window(self) -> None:
+        """§2.1: the lookback is clipped at the window's first bar, and that bar counts. With a
+        60-bar base the pole high sits 64 bars into the 125-bar window."""
+        rows = flag_series(base_bars=60)
+        first = len(rows) - (
+            DEFAULT_SWING_CONFIG.flag.lookback_bars + DEFAULT_SWING_CONFIG.flag.base_max_bars
+        )
+        rows[first] = {**rows[first], "low": 60.0}
+        row = detect_flags(indicated(rows), last_date()).row(0, named=True)
+        _, pole_high, pole_low = _pole(_window_of(rows))
+        assert pole_low == 60.0
+        assert _f(row, "prior_move_pct") == pytest.approx(
+            (pole_high / 60.0 - 1.0) * 100.0, rel=1e-12
+        )
+
+    def test_yesterdays_high_belongs_to_yesterdays_pivot(self) -> None:
+        """§2.6: `pivot_prev` is the highest high of the last `pivot_bars` bars **before today**,
+        yesterday included. A close above the rest of the base but under yesterday's high is
+        not a breakout, whatever the volume."""
+        rows = flag_series()
+        yesterdays_high, todays_close = 152.0, 151.0
+        rows[-2] = {**rows[-2], "high": yesterdays_high}
+        older = max(float(str(r["high"])) for r in rows[-21:-2])
+        pole_high = max(float(str(r["high"])) for r in rows[:-2])
+        assert older < todays_close < yesterdays_high < pole_high
+        rows[-1] = {
+            **rows[-1],
+            "open": 149.0,
+            "high": 151.5,
+            "low": 148.0,
+            "close": todays_close,
+            "volume": 5e6,
+        }
+        out = detect_flags(indicated(rows), last_date())
+        assert CandidateStatus.BREAKOUT_TODAY.value not in out["status"].to_list()
+
+
+def _breakout_rows() -> list[dict[str, object]]:
+    rows = flag_series()
+    prior_pivot = max(float(str(r["high"])) for r in rows[-21:-1])
+    close = prior_pivot * 1.03
+    rows[-1] = {
+        **rows[-1],
+        "open": prior_pivot * 0.99,
+        "high": close * 1.01,
+        "low": prior_pivot * 0.98,
+        "close": close,
+        "volume": 5e6,
+    }
+    return rows
+
 
 # ---------------------------------------------------------------------------
 # §3 - the episodic pivot
@@ -865,3 +992,172 @@ class TestTheParabolicThresholdsAreBoundaries:
         """§4: "`trigger` = today's low ... `stop_ref` = today's high" — recorded, never traded."""
         assert _f(self.row, "trigger") == pytest.approx(_f(self.bar, "low"))
         assert _f(self.row, "stop_ref") == pytest.approx(_f(self.bar, "high"))
+
+    def test_the_distances_from_the_mas_are_the_documented_formula(self) -> None:
+        """§2.5's definition, carried by the same column names into §4's row:
+        `(close / ma - 1) x 100`."""
+        for column, ma in (("dist_ma_fast_pct", "ma_fast"), ("dist_ma_slow_pct", "ma_slow")):
+            assert _f(self.row, column) == pytest.approx(
+                (_f(self.bar, "close") / _f(self.bar, ma) - 1.0) * 100.0, rel=1e-12
+            )
+
+    def test_the_extension_is_measured_in_adrs_above_the_ten_day(self) -> None:
+        """§4.2: `dist_ma_fast_pct >= min_extension_adr x adr_pct`. A multiple a hair above the
+        measured one refuses the runner; a hair below keeps it."""
+        multiple = _f(self.row, "dist_ma_fast_pct") / _f(self.row, "adr_pct")
+        assert multiple > 1.0
+        above = _with_parabolic(replace(ParabolicConfig(), min_extension_adr=_above(multiple)))
+        below = _with_parabolic(replace(ParabolicConfig(), min_extension_adr=_below(multiple)))
+        assert _detects_parabolic(above) is False
+        assert _detects_parabolic(below) is True
+
+    def test_a_single_green_day_is_a_run_when_the_config_says_so(self) -> None:
+        """§4.3 with `min_up_streak` = 1: the detector needs today and yesterday, nothing more."""
+        one = _with_parabolic(replace(ParabolicConfig(), min_up_streak=1))
+        out = detect_parabolic(indicated(parabolic_series()), last_date(), one)
+        assert out["status"].to_list() == [CandidateStatus.RUNNING.value]
+
+    def test_exhaustion_needs_yesterdays_streak_at_the_floor(self) -> None:
+        """§4.3: `EXHAUSTION` when yesterday's streak >= `min_up_streak` — at its own value."""
+        ind = indicated(parabolic_series(red_last_day=True))
+        yesterday = int(_f(ind.row(-2, named=True), "up_streak"))
+        at = _with_parabolic(replace(ParabolicConfig(), min_up_streak=yesterday))
+        above = _with_parabolic(replace(ParabolicConfig(), min_up_streak=yesterday + 1))
+        assert detect_parabolic(ind, last_date(), at)["status"].to_list() == [
+            CandidateStatus.EXHAUSTION.value
+        ]
+        assert detect_parabolic(ind, last_date(), above).is_empty()
+
+    def test_the_second_red_close_is_not_the_exhaustion_print(self) -> None:
+        """§4.3: "the first red close after the run". Two red closes: yesterday's streak is 0,
+        and the name still ran and is still extended - it is simply no longer the print."""
+        rows = parabolic_series(up_days=8, daily_gain=0.2)
+        for i in (-2, -1):
+            close = float(str(rows[i - 1]["close"])) * 0.97
+            rows[i] = {
+                **rows[i],
+                "open": close / 1.04,
+                "high": close * 1.015,
+                "low": close / 1.03,
+                "close": close,
+            }
+        ind = indicated(rows)
+        bar = ind.row(-1, named=True)
+        assert _f(bar, "up_streak") == 0
+        assert _f(ind.row(-2, named=True), "up_streak") == 0
+        assert _f(bar, "ret_5") >= DEFAULT_SWING_CONFIG.parabolic.min_gain_5_bars_pct
+        extension = (_f(bar, "close") / _f(bar, "ma_fast") - 1.0) * 100.0
+        assert extension >= DEFAULT_SWING_CONFIG.parabolic.min_extension_adr * _f(bar, "adr_pct")
+        assert detect_parabolic(ind, last_date()).is_empty()
+
+
+class TestTheParabolicScoreIsTheFormula:
+    """§4's score (SW12): `40 x clamp(ret_5 / 100) + 30 x clamp(dist_ma_fast_pct / (8 x adr_pct))
+    + 30 x clamp(up_streak / 6)`, each denominator twice its threshold."""
+
+    def setup_method(self) -> None:
+        self.para = DEFAULT_SWING_CONFIG.parabolic
+
+    def _terms(self, row: dict[str, object], bar: dict[str, object]) -> list[float]:
+        return [
+            40.0
+            * _clamp01(_f(bar, "ret_5") / (FULL_MARKS_MULTIPLE * self.para.min_gain_5_bars_pct)),
+            30.0
+            * _clamp01(
+                _f(row, "dist_ma_fast_pct")
+                / (FULL_MARKS_MULTIPLE * self.para.min_extension_adr * _f(row, "adr_pct"))
+            ),
+            30.0 * _clamp01(_f(row, "up_streak") / (FULL_MARKS_MULTIPLE * self.para.min_up_streak)),
+        ]
+
+    def test_a_running_name_scores_the_three_terms(self) -> None:
+        ind = indicated(parabolic_series())
+        row = detect_parabolic(ind, last_date()).row(0, named=True)
+        terms = self._terms(row, ind.row(-1, named=True))
+        assert _f(row, "score") == pytest.approx(sum(terms), rel=1e-12)
+        assert 0.0 < _f(row, "score") <= 100.0
+
+    def test_an_exhausted_name_earns_nothing_for_a_streak_it_no_longer_has(self) -> None:
+        ind = indicated(parabolic_series(red_last_day=True))
+        row = detect_parabolic(ind, last_date()).row(0, named=True)
+        terms = self._terms(row, ind.row(-1, named=True))
+        assert terms[2] == 0.0
+        assert _f(row, "score") == pytest.approx(sum(terms), rel=1e-12)
+
+    def test_a_four_day_run_earns_two_thirds_of_the_streak_marks(self) -> None:
+        """The streak term is `up_streak / 6`, not a flag: four green days out of the six that
+        earn full marks are 20 of the 30 points."""
+        ind = indicated(parabolic_series(up_days=4, daily_gain=0.2))
+        row = detect_parabolic(ind, last_date()).row(0, named=True)
+        assert _f(row, "up_streak") == 4.0
+        terms = self._terms(row, ind.row(-1, named=True))
+        assert terms[2] == pytest.approx(20.0)
+        assert _f(row, "score") == pytest.approx(sum(terms), rel=1e-12)
+
+    def test_the_weights_are_forty_thirty_and_thirty(self) -> None:
+        assert [40.0, 30.0, 30.0] == [40.0, 30.0, 30.0]
+        assert sum([40.0, 30.0, 30.0]) == 100.0
+
+
+# ---------------------------------------------------------------------------
+# All three - the order the worker writes and the page reads
+# ---------------------------------------------------------------------------
+
+
+def test_detect_setups_ranks_best_score_first_within_a_setup_and_ties_by_instrument() -> None:
+    """`detect_setups`: "best score first within each setup". Two identical flags stay in
+    instrument order, a weaker pole ranks under a stronger one, and a setup's rows sit together."""
+    out = detect_setups(
+        indicated(
+            flag_series(7, "TWIN_B"),
+            flag_series(3, "TWIN_A"),
+            flag_series(5, "WEAKER", pole_gain=0.4),
+            ep_series(9, "EP1"),
+            parabolic_series(11, "RUNNER"),
+            flat_series(13, "FLAT"),
+        ),
+        last_date(),
+    )
+    flags = out.filter(pl.col("setup") == "FLAG")
+    assert flags["symbol"].to_list() == ["TWIN_A", "TWIN_B", "WEAKER"]
+    assert flags["score"][0] == flags["score"][1] > flags["score"][2]
+    setups = out["setup"].to_list()
+    assert len(set(setups)) == 3
+    for setup in set(setups):
+        positions = [i for i, s in enumerate(setups) if s == setup]
+        assert positions == list(range(positions[0], positions[-1] + 1))
+
+
+class TestANameListedTodayIsNotAFlag:
+    """`04` §2: a name with a bar on `as_of` and none before it has no pole — it is skipped,
+    never an error. Found on the first run over real NSE bars (3 Sep 2026): ``detect_flags``
+    raised a polars ComputeError on a single-bar instrument instead of answering nothing."""
+
+    def test_a_single_bar_instrument_is_skipped_not_raised(self) -> None:
+        import datetime as dt
+
+        import polars as pl
+
+        from baskfy_core.swing.indicators import with_swing_indicators
+        from baskfy_core.swing.setups import detect_flags, detect_setups
+
+        as_of = dt.date(2026, 9, 2)
+        one = pl.DataFrame(
+            {
+                "instrument_id": [1],
+                "symbol": ["NEWLIST"],
+                "date": [as_of],
+                "open": [100.0],
+                "high": [104.0],
+                "low": [97.0],
+                "close": [103.0],
+                "volume": [5_000_000.0],
+                "turnover": [None],
+                "upper_circuit": [None],
+                "adj_factor": [1.0],
+            },
+            schema_overrides={"turnover": pl.Float64, "upper_circuit": pl.Float64},
+        )
+        indicated = with_swing_indicators(one)
+        assert detect_flags(indicated, as_of).is_empty()
+        assert detect_setups(indicated, as_of).is_empty()

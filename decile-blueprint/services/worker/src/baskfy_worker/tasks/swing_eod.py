@@ -9,12 +9,14 @@ things in an order that matters:
 2. **Manage what is open.** `stops.manage` over every open `sw_position`, with today's bar and
    its two moving averages. The actions become tomorrow's exit lines: a `SELL_AT_OPEN` for a
    partial or a full exit, a `RAISE_GTT_STOP` for a stop that has earned its move.
-3. **Settle the ladder** (SW8). `exposure_tier` over the rung in force, the last closed trades
-   and the day's gate; the rung it answers is written back to `sw_config.exposure_level` —
-   audited, `changed_by="swing-eod"` — and into the day's `sw_market_daily`, so the plan, the
-   settings page, the morning rebuild and every hub tab read one number. `rung_in_force` says
-   why the rung it starts from is read from the previous settlement rather than from
-   `sw_config`.
+3. **Settle the ladder** (SW8, and the drawdown since SW9.5). `exposure_tier` over the rung in
+   force, the last closed trades, the day's gate and the sleeve's drawdown from its peak EOD NAV
+   (`04` §8.5; `sleeve_drawdown` in `tasks/swing.py` says how the NAV is computed, SW9.5.1); the
+   rung it answers is written back to `sw_config.exposure_level` — audited,
+   `changed_by="swing-eod"` — with the peak, the drawdown and the lock-out beside it, and into
+   the day's `sw_market_daily`, so the plan, the settings page, the morning rebuild and every hub
+   tab read one number. `rung_in_force` says why the rung it starts from is read from the
+   previous settlement rather than from `sw_config`.
 4. **Plan tomorrow.** `build_entries` over the watchlist with the settled tier, into an
    `sw_plan(source=EOD_PREVIEW)` with its lines **and its skips**. `04` §9's own words: "A
    watchlist of twelve names and a plan of two lines is only useful if the other ten explain
@@ -86,7 +88,12 @@ from baskfy_core.swing.stops import (
     manage,
 )
 from baskfy_worker.steps import StepOutcome, StepStatus
-from baskfy_worker.tasks.swing import load_swing_config, lookback_start
+from baskfy_worker.tasks.swing import (
+    SleeveDrawdown,
+    load_swing_config,
+    lookback_start,
+    sleeve_drawdown,
+)
 
 log = logging.getLogger(__name__)
 
@@ -107,6 +114,9 @@ class EodReport:
     #: The rung in force coming into the evening, and the closes the ladder read to move it.
     rung_before: int = 0
     closed_r: list[str] = field(default_factory=list)
+    #: `04` §8.5: tonight's NAV against the sleeve's peak, and whether the lock-out is in force.
+    drawdown_pct: str = "0.00"
+    drawdown_locked: bool = False
     watch_added: int = 0
     watch_expired: int = 0
     watching: int = 0
@@ -127,6 +137,8 @@ class EodReport:
                 "from": self.rung_before,
                 "to": self.exposure_level,
                 "closed_r_multiples": list(self.closed_r),
+                "drawdown_pct": self.drawdown_pct,
+                "drawdown_locked": self.drawdown_locked,
             },
             "watch": {
                 "added": self.watch_added,
@@ -324,16 +336,27 @@ async def watch_items(
 
     A row with no trigger is dropped: `build_entries` sizes from the trigger and the stop, and a
     `MANUAL` row someone added without levels is a name to look at rather than a plan line.
+
+    The ADR, the turnover, the score and the band come from the name's **latest** detection row
+    on or before ``on`` — today's when the detectors saw it today, else the last time they did —
+    the monitor's own rule (`SignalContext.detected`). Since SW9.5 the ADR decides the widest
+    stop (`04` §6), so a watched flag whose base is still forming keeps its measured ADR across
+    the sessions it is watched; a name the detectors have never seen (a `MANUAL` row with no
+    detection behind it) has no ADR, and a stop nobody can measure against the range is refused
+    `STOP_TOO_WIDE` rather than waved through (SW9.5.2).
     """
     rows = await list_watch(session, user_id=user_id)
-    latest = {
-        row.instrument_id: row
-        for row in (
-            await session.execute(
-                select(SwSetupDaily).where(SwSetupDaily.user_id == user_id, SwSetupDaily.date == on)
+    latest: dict[int, SwSetupDaily] = {}
+    for detected_row in (
+        await session.execute(
+            select(SwSetupDaily)
+            .where(SwSetupDaily.user_id == user_id, SwSetupDaily.date <= on)
+            .order_by(
+                SwSetupDaily.instrument_id, SwSetupDaily.date.desc(), SwSetupDaily.score.desc()
             )
-        ).scalars()
-    }
+        )
+    ).scalars():
+        latest.setdefault(detected_row.instrument_id, detected_row)
     items: list[WatchItem] = []
     ids: dict[str, int] = {}
     for row in rows:
@@ -488,6 +511,8 @@ class LadderSettlement:
     closed_r: tuple[Decimal, ...]
     #: Which book they came from (PACK.6): ``"simulated"`` until execution is enabled.
     reads: str
+    #: `04` §8.5: the sleeve's NAV against its peak tonight, and the lock-out it carried in.
+    drawdown: SleeveDrawdown
 
 
 async def closed_r_multiples(
@@ -581,6 +606,33 @@ async def rung_in_force(session: AsyncSession, *, user_id: int, market: SwMarket
     return int(configured or 0)
 
 
+async def _book_switched(
+    session: AsyncSession, *, user_id: int, market: SwMarketDaily, reads: str
+) -> bool:
+    """Whether tonight's ladder reads a different book from the last settled evening's.
+
+    The previous settlement records which book it read (``detail.closed_trades_read``, PACK.6).
+    A change — the execution flag flipped since — means the sleeve's peak belongs to the other
+    book and is reset (`sleeve_drawdown`). Tonight's own earlier settlement is read first, so a
+    re-run answers the same as the first run did; with no record at all nothing has switched.
+    """
+    own = market.detail.get("closed_trades_read") if isinstance(market.detail, dict) else None
+    if isinstance(own, str) and _settled_rung(market, "from") is not None:
+        return False
+    previous = (
+        await session.execute(
+            select(SwMarketDaily)
+            .where(SwMarketDaily.user_id == user_id, SwMarketDaily.date < market.date)
+            .order_by(SwMarketDaily.date.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if previous is None or not isinstance(previous.detail, dict):
+        return False
+    before = previous.detail.get("closed_trades_read")
+    return isinstance(before, str) and before != reads
+
+
 async def settle_ladder(  # noqa: PLR0913 - one keyword per input the rung depends on
     session: AsyncSession,
     *,
@@ -609,6 +661,16 @@ async def settle_ladder(  # noqa: PLR0913 - one keyword per input the rung depen
 
     `record_system_change` writes nothing when the rung has not moved, so an unchanged evening
     leaves no audit row: the audit is a history of changes, not a log of runs.
+
+    **The drawdown** (`04` §8.5, SW9.5) is settled in the same call, because it is an input to
+    the same rung. `sleeve_drawdown` reads tonight's NAV of the book the ladder reads against
+    the peak `sw_config.sleeve_peak_inr` carries (null on the first evening: the first session
+    is never locked) and the lock-out state the sleeve came in with; `exposure_tier` applies
+    the hysteresis. The peak, the drawdown and the lock-out go back to `sw_config` — the two
+    measurements unaudited (they move most evenings; the market row is their history), the
+    lock-out audited, because "why did the book stop trading on the 14th" has to have an
+    answer too — and onto the day's row beside the rung. Re-running the evening changes none
+    of it: the peak is a maximum, and the lock-out the re-run reads back is the one it wrote.
     """
     gate = MarketGate(market.gate)
     rung_in = await rung_in_force(session, user_id=user_id, market=market)
@@ -619,11 +681,25 @@ async def settle_ladder(  # noqa: PLR0913 - one keyword per input the rung depen
         on=market.date,
         count=config.market.lookback_trades,
     )
+    config_row = (
+        await session.execute(select(SwConfig).where(SwConfig.user_id == user_id))
+    ).scalar_one_or_none()
+    reads = "real" if execution_enabled else "simulated"
+    drawdown = await sleeve_drawdown(
+        session,
+        user_id=user_id,
+        on=market.date,
+        config_row=config_row,
+        simulated=not execution_enabled,
+        reset_peak=await _book_switched(session, user_id=user_id, market=market, reads=reads),
+    )
     tier = exposure_tier(
         current_level=rung_in,
         closed_r_multiples=closes,
         gate=gate,
         config=config.market,
+        drawdown_pct=float(drawdown.pct),
+        was_drawdown_locked=drawdown.was_locked,
     )
     try:
         await record_system_change(
@@ -637,6 +713,42 @@ async def settle_ladder(  # noqa: PLR0913 - one keyword per input the rung depen
                 f"{market.date.isoformat()} {gate.value}: rung {rung_in} -> {tier.level} on "
                 f"{len(closes)} {'real' if execution_enabled else 'simulated'} closes "
                 f"[{', '.join(str(r) for r in closes)}]"
+                + (
+                    f"; sleeve {drawdown.pct}% below its peak, locked out"
+                    if tier.drawdown_locked
+                    else ""
+                )
+            ),
+        )
+        await record_system_change(
+            session,
+            user_id=user_id,
+            field="sleeve_peak_inr",
+            value=drawdown.peak,
+            changed_by=LADDER_CHANGED_BY,
+            now=now,
+            audited=False,
+        )
+        await record_system_change(
+            session,
+            user_id=user_id,
+            field="drawdown_pct",
+            value=drawdown.pct,
+            changed_by=LADDER_CHANGED_BY,
+            now=now,
+            audited=False,
+        )
+        await record_system_change(
+            session,
+            user_id=user_id,
+            field="drawdown_locked",
+            value=tier.drawdown_locked,
+            changed_by=LADDER_CHANGED_BY,
+            now=now,
+            note=(
+                f"{market.date.isoformat()}: NAV {drawdown.nav} against peak {drawdown.peak}, "
+                f"{drawdown.pct}% below; lock-out at {config.market.max_drawdown_pct}%, "
+                f"release inside {config.market.resume_drawdown_pct}%"
             ),
         )
     except SwingConfigNotSeeded:
@@ -648,18 +760,28 @@ async def settle_ladder(  # noqa: PLR0913 - one keyword per input the rung depen
     market.max_open_positions = tier.max_open_positions
     market.max_exposure_pct = Decimal(str(tier.max_exposure_pct)).quantize(Decimal("0.01"))
     market.new_entries_allowed = tier.new_entries_allowed
-    reads = "real" if execution_enabled else "simulated"
+    market.drawdown_pct = drawdown.pct
+    market.drawdown_locked = tier.drawdown_locked
     detail = dict(market.detail) if isinstance(market.detail, dict) else {}
     detail.update(
         {
             "closed_r_multiples": [str(r) for r in closes],
             "closed_trades_read": reads,
             "ladder": {"from": rung_in, "to": tier.level, "settled_by": LADDER_CHANGED_BY},
+            "drawdown": {
+                "nav": str(drawdown.nav),
+                "peak": str(drawdown.peak),
+                "pct": str(drawdown.pct),
+                "was_locked": drawdown.was_locked,
+                "locked": tier.drawdown_locked,
+            },
         }
     )
     market.detail = detail
     await session.flush()
-    return LadderSettlement(rung_before=rung_in, tier=tier, closed_r=closes, reads=reads)
+    return LadderSettlement(
+        rung_before=rung_in, tier=tier, closed_r=closes, reads=reads, drawdown=drawdown
+    )
 
 
 async def run_swing_eod(  # noqa: PLR0913 - one keyword per input the evening depends on
@@ -726,6 +848,8 @@ async def run_swing_eod(  # noqa: PLR0913 - one keyword per input the evening de
     report.rung_before = settled.rung_before
     report.exposure_level = tier.level
     report.closed_r = [str(r) for r in settled.closed_r]
+    report.drawdown_pct = str(settled.drawdown.pct)
+    report.drawdown_locked = tier.drawdown_locked
 
     items, instrument_ids = await watch_items(session, user_id=user_id, on=trade_date)
     report.watching = len(items)

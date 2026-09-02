@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import datetime as dt
+from dataclasses import replace
 from decimal import Decimal
 
 import pytest
 
-from baskfy_core.swing.config import DEFAULT_SWING_CONFIG, Setup
+from baskfy_core.swing.config import DEFAULT_SWING_CONFIG, Setup, SizingConfig
 from baskfy_core.swing.journal import ClosedTrade, exit_average, summarize
 from baskfy_core.swing.market import ExposureTier, MarketGate
 from baskfy_core.swing.plan import (
@@ -64,7 +65,8 @@ def test_a_flag_becomes_a_buy_line_with_trigger_stop_size_and_risk() -> None:
     assert "trail MA20" in line.note
 
 
-def test_best_score_is_lined_up_first_and_the_tier_caps_the_count() -> None:
+def test_best_score_is_lined_up_first_and_the_session_cap_is_three() -> None:
+    """§9.1: "1, 2, 3 stocks per day, not 50" — three new entries a session, best first."""
     watch = [
         item("LOW", score="40"),
         item("HIGH", score="90"),
@@ -73,8 +75,47 @@ def test_best_score_is_lined_up_first_and_the_tier_caps_the_count() -> None:
         item("Y", score="45"),
     ]
     lines, skipped = entries(watch)
-    assert [line.symbol for line in lines] == ["HIGH", "MID", "X", "Y"]
-    assert [(s.symbol, s.reason) for s in skipped] == [("LOW", SkipReason.TIER_FULL)]
+    assert [line.symbol for line in lines] == ["HIGH", "MID", "X"]
+    assert [(s.symbol, s.reason) for s in skipped] == [
+        ("Y", SkipReason.SESSION_CAP),
+        ("LOW", SkipReason.SESSION_CAP),
+    ]
+
+
+def test_the_tier_caps_the_count_below_the_session_cap() -> None:
+    two = ExposureTier(0, 2, 25.0, new_entries_allowed=True)
+    lines, skipped = entries([item("A", score="90"), item("B", score="80"), item("C")], tier=two)
+    assert [line.symbol for line in lines] == ["A", "B"]
+    assert skipped[0].reason is SkipReason.TIER_FULL
+
+
+def test_the_traders_own_position_cap_binds_when_lower_than_the_rung() -> None:
+    capped = replace(DEFAULT_SWING_CONFIG, sizing=replace(SizingConfig(), max_open_positions=1))
+    lines, skipped = build_entries(
+        as_of=AS_OF,
+        watch=[item("A", score="90"), item("B")],
+        account=ACCOUNT,
+        gate=MarketGate.GREEN,
+        tier=TIER,
+        config=capped,
+    )
+    assert [line.symbol for line in lines] == ["A"]
+    assert skipped[0].reason is SkipReason.TIER_FULL
+
+
+def test_a_stop_wider_than_one_adr_is_skipped_not_sized_down() -> None:
+    """§6: "stop should not be wider than the ATR or ADR of the stock". ADR 5% here."""
+    _, skipped = entries([item("WIDE", stop="94")])  # 6% below on a 5% ADR name
+    assert skipped == [Skipped("WIDE", SkipReason.SIZE_REFUSED, "STOP_TOO_WIDE")]
+    lines, _ = entries([item("OK", stop="95.5")])  # 4.5% below
+    assert [line.symbol for line in lines] == ["OK"]
+
+
+def test_a_drawdown_locked_sleeve_refuses_every_entry_by_name() -> None:
+    locked = ExposureTier(0, 2, 25.0, new_entries_allowed=False, drawdown_locked=True)
+    lines, skipped = entries([item("A"), item("B")], tier=locked)
+    assert lines == []
+    assert {s.reason for s in skipped} == {SkipReason.DRAWDOWN_LOCKOUT}
 
 
 def test_open_positions_count_against_the_tier() -> None:

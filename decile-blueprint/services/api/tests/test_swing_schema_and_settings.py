@@ -37,6 +37,7 @@ from baskfy_api.seed import seed_swing_config
 from baskfy_api.settings import Settings
 from baskfy_api.swing_settings import (
     CEILING_ENV,
+    EDITABLE_FIELDS,
     SYSTEM_OWNED_FIELDS,
     SwingCeilings,
     SwingConfigNotSeeded,
@@ -47,16 +48,21 @@ from baskfy_api.swing_settings import (
     record_system_change,
 )
 from baskfy_core.models import AppUser, Base, SwConfig
+from baskfy_core.models.swing import SW_SKIP_REASONS
 from baskfy_core.swing.config import DEFAULT_SWING_CONFIG
 from baskfy_worker.settings import WorkerSettings
 
 SWING_TABLES = sorted(name for name in Base.metadata.tables if name.startswith("sw_"))
 
-#: The migration that creates them. Imported by path rather than by module name because alembic
-#: version files are not a package.
-MIGRATION = (screener_helpers.API_DIR / "alembic" / "versions" / "0028_swing.py").read_text(
-    encoding="utf-8"
-)
+#: The migrations that create them — every ``00NN_swing*.py`` under ``alembic/versions``, read by
+#: path rather than by module name because alembic version files are not a package. A glob rather
+#: than one file: `0028_swing.py` made twelve tables, `0029_swing_backtest.py` the thirteenth, and a
+#: test that read only the first would have missed the second (it did, for a module).
+MIGRATIONS = {
+    path.name: path.read_text(encoding="utf-8")
+    for path in sorted((screener_helpers.API_DIR / "alembic" / "versions").glob("00*_swing*.py"))
+}
+MIGRATION = "\n".join(MIGRATIONS.values())
 
 
 class TestEveryTableIsTenantKeyed:
@@ -81,12 +87,26 @@ class TestEveryTableIsTenantKeyed:
         assert targets == {"app_user.id"}, f"{table_name}.user_id -> {targets}"
         assert all(fk.ondelete == "CASCADE" for fk in column.foreign_keys)
 
+    def test_there_are_swing_migrations_at_all(self) -> None:
+        assert {"0028_swing.py", "0029_swing_backtest.py", "0030_swing_primary_sources.py"} <= set(
+            MIGRATIONS
+        )
+
     @pytest.mark.parametrize("table_name", SWING_TABLES)
     def test_the_migration_drops_what_it_creates(self, table_name: str) -> None:
-        """A table added to `upgrade` and forgotten in `TABLES` leaks into the next database."""
-        assert f'"{table_name}",' in MIGRATION, (
-            f"{table_name} is in the models but not in 0028_swing.py's TABLES tuple, so "
-            f"`make downgrade` would leave it behind"
+        """A table added to `upgrade` and forgotten in the downgrade leaks into the next database.
+
+        `0028_swing.py` drops its twelve from a `TABLES` tuple; `0029_swing_backtest.py` drops
+        its one by name. Either way the table's name appears quoted in a migration that also
+        drops it, and that is what is asserted."""
+        creators = [
+            name
+            for name, source in MIGRATIONS.items()
+            if f'"{table_name}"' in source and "drop_table" in source
+        ]
+        assert creators, (
+            f"{table_name} is in the models but no swing migration names it beside a "
+            f"`drop_table`, so `make downgrade` would leave it behind"
         )
 
 
@@ -175,6 +195,56 @@ class TestTheCeilings:
         assert Decimal(str(engine.risk_per_trade_pct)) <= Decimal(str(risk_max))
         assert Decimal(str(engine.max_position_pct)) <= Decimal(str(position_max))
         assert engine.max_open_positions <= positions_max
+
+    def test_the_ceilings_are_his_own_numbers(self) -> None:
+        """`docs/swing/07` (SW9.5), quoted: risk — "I rarely risk more than 1% of my account on
+        any trade" → 1.0; position — "I don't believe you should ever have more than 30% of
+        your account over night in any stock or ETF" → 30 (was 25); positions — "In a good
+        market 15-20 positions" → 20 (was 10, the old ladder's top rung plus two). The API and
+        the worker mirror the same three, and `.env.example` ships them."""
+        api = {
+            "risk": Settings.model_fields["swing_risk_per_trade_pct_max"].default,
+            "position": Settings.model_fields["swing_max_position_pct_max"].default,
+            "positions": Settings.model_fields["swing_max_open_positions_max"].default,
+        }
+        worker = {
+            "risk": WorkerSettings.model_fields["swing_risk_per_trade_pct_max"].default,
+            "position": WorkerSettings.model_fields["swing_max_position_pct_max"].default,
+            "positions": WorkerSettings.model_fields["swing_max_open_positions_max"].default,
+        }
+        assert (api["risk"], api["position"], api["positions"]) == (
+            Decimal("1.0"),
+            Decimal("30.0"),
+            20,
+        )
+        assert (worker["risk"], worker["position"], worker["positions"]) == (1.0, 30.0, 20)
+        # The ladder's top rung (his typical ten) sits under the ceiling (his fifteen to twenty),
+        # so `min(rung, sizing.max_open_positions)` can be raised by a setting up to the ceiling.
+        assert DEFAULT_SWING_CONFIG.market.tiers[-1][0] == 10 <= api["positions"]
+        env = (screener_helpers.API_DIR.parents[2] / ".env.example").read_text(encoding="utf-8")
+        assert "BASKFY_SWING_MAX_POSITION_PCT_MAX=30.0" in env
+        assert "BASKFY_SWING_MAX_OPEN_POSITIONS_MAX=20" in env
+        assert "BASKFY_SWING_RISK_PER_TRADE_PCT_MAX=1.0" in env
+
+    def test_the_skip_reason_constraint_in_the_latest_migration_is_the_engines_list(self) -> None:
+        """`0030_swing_primary_sources.py` rebuilds `ck_sw_plan_skip_reason_known` with the two
+        reasons SW9.5 added (`SESSION_CAP`, `DRAWDOWN_LOCKOUT`). The migration writes the list
+        out (a migration is frozen); this is the check that it is the engine's list, so a third
+        reason cannot be added to `SkipReason` without a migration that lets the row be written."""
+        source = MIGRATIONS["0030_swing_primary_sources.py"]
+        namespace: dict[str, object] = {}
+        block = source[source.index("NEW_SKIP_REASONS = (") : source.index("def _reason_check")]
+        exec(block, namespace)
+        assert namespace["NEW_SKIP_REASONS"] == SW_SKIP_REASONS
+        assert {"SESSION_CAP", "DRAWDOWN_LOCKOUT"} <= set(SW_SKIP_REASONS)
+
+    def test_the_drawdown_state_is_system_owned_and_written_by_the_evening(self) -> None:
+        """`03` §1 (SW9.5): `sleeve_peak_inr`, `drawdown_pct` and `drawdown_locked` are the
+        evening's measurements of the book — `swing-eod` owns them, and a form cannot touch them
+        (`test_a_system_owned_field_cannot_be_patched` covers the refusal for each)."""
+        for field in ("sleeve_peak_inr", "drawdown_pct", "drawdown_locked"):
+            assert SYSTEM_OWNED_FIELDS[field] == "swing-eod"
+            assert field not in EDITABLE_FIELDS
 
 
 class TestThePatchShape:

@@ -64,6 +64,7 @@ from baskfy_core.swing.market import (
     ExposureTier,
     MarketGate,
     breadth_snapshot,
+    drawdown_pct,
     exposure_tier,
     market_gate,
 )
@@ -324,9 +325,11 @@ class _Candidate:
 
 
 _SKIP_KEY: Final[dict[SkipReason, str]] = {
+    SkipReason.DRAWDOWN_LOCKOUT: "skipped_drawdown",
     SkipReason.GATE_RED: "skipped_gate",
     SkipReason.ALREADY_HELD: "skipped_held",
     SkipReason.LOCKED_UPPER_CIRCUIT: "skipped_locked",
+    SkipReason.SESSION_CAP: "skipped_session_cap",
     SkipReason.TIER_FULL: "skipped_tier",
     SkipReason.SIZE_REFUSED: "skipped_size",
     SkipReason.EXPOSURE_FULL: "skipped_exposure",
@@ -339,11 +342,13 @@ _FUNNEL_KEYS: Final[tuple[str, ...]] = (
     "candidates",
     "entered",
     "skipped_locked",
+    "skipped_drawdown",
     "skipped_gate",
     "skipped_held",
     "skipped_no_next_session",
     "skipped_no_bar",
     "skipped_no_trigger",
+    "skipped_session_cap",
     "skipped_tier",
     "skipped_size",
     "skipped_exposure",
@@ -385,6 +390,14 @@ class _Run:
         self.closed_r: list[Decimal] = []
         self.level = 0
         self.gate = MarketGate.RED
+        # The sleeve's drawdown, `04` §8.5: the peak is the highest close-of-session equity the
+        # run has seen, starting at the sleeve itself (a sleeve with no session behind it is at
+        # its peak, not in drawdown); `drawdown_pct` is how far below it tonight's mark sits, and
+        # `drawdown_locked` is yesterday's lock-out state, which `exposure_tier` needs for the
+        # hysteresis (locked at `max_drawdown_pct`, released inside `resume_drawdown_pct`).
+        self.peak = params.sleeve_inr
+        self.drawdown_pct = 0.0
+        self.drawdown_locked = False
         self.tier = self._tier_for(MarketGate.RED)
         self.pending_candidates: list[_Candidate] = []
         self.held_at_close: frozenset[str] = frozenset()
@@ -406,6 +419,8 @@ class _Run:
             closed_r_multiples=self.closed_r,
             gate=gate,
             config=self.config.market,
+            drawdown_pct=self.drawdown_pct,
+            was_drawdown_locked=self.drawdown_locked,
         )
 
     # -- the session ----------------------------------------------------------
@@ -418,8 +433,10 @@ class _Run:
         self._manage(col, day)
         if last:
             self._close_everything(day)
-        self._detect(col, day, last=last)
+        # The mark comes before the ladder: tomorrow's rung reads tonight's equity against the
+        # peak, the same way the evening job reads the sleeve's EOD NAV (SW9.5.1).
         self._mark(col, day)
+        self._detect(col, day, last=last)
 
     # -- morning ----------------------------------------------------------------
 
@@ -523,9 +540,11 @@ class _Run:
         return fill
 
     def _refusal_at_the_close(self, candidate: _Candidate, seen: set[str]) -> str | None:
-        """What the evening plan already knows: the band, the gate, the book."""
+        """What the evening plan already knows: the band, the drawdown, the gate, the book."""
         if candidate.locked:
             return "skipped_locked"
+        if self.tier.drawdown_locked:
+            return "skipped_drawdown"
         if self.gate is MarketGate.RED or not self.tier.new_entries_allowed:
             return "skipped_gate"
         if candidate.symbol in self.held_at_close or candidate.symbol in seen:
@@ -670,6 +689,7 @@ class _Run:
         self.gate = market_gate(breadth, None, self.config.market)
         self.tier = self._tier_for(self.gate)
         self.level = self.tier.level
+        self.drawdown_locked = self.tier.drawdown_locked
         self.ladder.append((day, self.gate.value, self.level))
 
     def _slices(self, col: int) -> tuple[pl.DataFrame, pl.DataFrame]:
@@ -690,7 +710,10 @@ class _Run:
 
     def _mark(self, col: int, day: dt.date) -> None:
         marked = sum((p.last_close * p.state.quantity for p in self.positions.values()), _ZERO)
-        self.equity_curve.append((day, _money(self.cash + marked)))
+        equity = _money(self.cash + marked)
+        self.equity_curve.append((day, equity))
+        self.peak = max(self.peak, equity)
+        self.drawdown_pct = drawdown_pct(peak=self.peak, equity=equity)
 
     # -- helpers ------------------------------------------------------------------
 

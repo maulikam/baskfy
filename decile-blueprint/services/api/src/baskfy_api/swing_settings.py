@@ -64,6 +64,12 @@ EDITABLE_FIELDS: Final[tuple[str, ...]] = (
 SYSTEM_OWNED_FIELDS: Final[Mapping[str, str]] = {
     "exposure_level": "swing-eod",
     "first_live_sessions_left": "/swing/execute",
+    # `04` §8.5 (SW9.5): the sleeve's peak NAV, its drawdown and the lock-out are the evening
+    # job's measurements of the book. A person who could reset the peak could trade through a
+    # drawdown, which is the failure the rule exists to prevent.
+    "sleeve_peak_inr": "swing-eod",
+    "drawdown_pct": "swing-eod",
+    "drawdown_locked": "swing-eod",
 }
 
 
@@ -272,17 +278,23 @@ async def record_system_change(  # noqa: PLR0913 - one keyword per input the aud
     *,
     user_id: int,
     field: str,
-    value: int,
+    value: int | bool | Decimal,
     changed_by: str,
     now: dt.datetime,
     note: str | None = None,
+    audited: bool = True,
 ) -> SwConfig:
-    """Write one of the two fields a **job** owns (:data:`SYSTEM_OWNED_FIELDS`), with its audit.
+    """Write one of the fields a **job** owns (:data:`SYSTEM_OWNED_FIELDS`), with its audit.
 
     Separate from :func:`apply_patch` rather than a flag on it, so that the only way to move the
-    exposure rung or the first-live countdown is to call a function whose name says a job is
-    doing it. A ``changed_by`` is required for the same reason: "who raised the rung" has to have
-    an answer, and ``swing-eod`` is a perfectly good one.
+    exposure rung, the first-live countdown or the drawdown state is to call a function whose
+    name says a job is doing it. A ``changed_by`` is required for the same reason: "who raised
+    the rung" has to have an answer, and ``swing-eod`` is a perfectly good one.
+
+    ``audited=False`` writes the value without an audit row. It exists for the two drawdown
+    *measurements* (`sleeve_peak_inr`, `drawdown_pct`), which move most evenings and would turn
+    the audit — a history of decisions — into a log of runs; the day's market row keeps their
+    history. The lock-out itself (`drawdown_locked`) is a decision and is always audited.
     """
     if field not in SYSTEM_OWNED_FIELDS:
         raise ValueError(
@@ -293,17 +305,18 @@ async def record_system_change(  # noqa: PLR0913 - one keyword per input the aud
     before = getattr(row, field)
     if before != value:
         setattr(row, field, value)
-        session.add(
-            SwConfigAudit(
-                user_id=user_id,
-                key=field,
-                old_value=str(before),
-                new_value=str(value),
-                changed_at=now,
-                changed_by=changed_by,
-                note=note,
+        if audited:
+            session.add(
+                SwConfigAudit(
+                    user_id=user_id,
+                    key=field,
+                    old_value=None if before is None else str(before),
+                    new_value=str(value),
+                    changed_at=now,
+                    changed_by=changed_by,
+                    note=note,
+                )
             )
-        )
         row.updated_by = changed_by
         await session.flush()
         await session.refresh(row)

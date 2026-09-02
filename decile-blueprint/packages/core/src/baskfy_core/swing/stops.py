@@ -109,6 +109,14 @@ def initial_stop(
     return stop
 
 
+def widest_stop_pct(adr_pct: Decimal, config: StopConfig) -> Decimal:
+    """How far below the entry a stop may sit for this name: one ADR, and never more than the
+    absolute cap. "Stop should not be wider than the ATR or ADR of the stock" — a wider stop
+    means the trade is skipped, not sized down."""
+    by_adr = adr_pct * Decimal(str(config.max_stop_adr_multiple))
+    return min(by_adr, Decimal(str(config.max_stop_distance_pct))).quantize(Decimal("0.01"))
+
+
 def choose_trail(adr_pct: Decimal, config: StopConfig) -> TrailMa:
     """Fast movers trail the 10-day, slower names the 20-day."""
     if adr_pct >= Decimal(str(config.fast_trail_min_adr_pct)):

@@ -40,9 +40,10 @@ TRADEABLE_SETUPS: Final[frozenset[Setup]] = frozenset({Setup.FLAG, Setup.EP})
 class LiquidityConfig:
     """The universe a setup may come from (docs/swing/04 §1)."""
 
-    #: ADR% = mean over ``adr_bars`` of ``(high / low - 1) x 100``. His floor is 3.5-4%.
+    #: ADR% = mean over ``adr_bars`` of ``(high / low - 1) x 100``. His screens use 5%+; 3.5-4%
+    #: is the floor he names on stream. 4.0 here; ``sw_config`` lets the trader raise it.
     adr_bars: int = 20
-    adr_min_pct: float = 3.5
+    adr_min_pct: float = 4.0
     #: Average rupee turnover over ``turnover_bars``. ₹5 cr matches the desk's
     #: ``MIN_MEDIAN_DAILY_VALUE`` so the two books agree on what "liquid" means.
     turnover_bars: int = 20
@@ -118,8 +119,14 @@ class SizingConfig:
     """Risk per trade decides survival (docs/swing/04 §5). Ceilings are system-only env."""
 
     risk_per_trade_pct: float = 0.5
+    #: "Most of my positions are 10-20% of account size"; the hard ceiling he states is 30%
+    #: overnight, which is the system-only env ceiling, not this default.
     max_position_pct: float = 20.0
-    max_open_positions: int = 8
+    #: "Typically 5-10 positions; 15-20 in a good market; all cash in a bad one." The ladder
+    #: (``MarketConfig.tiers``) climbs toward this; the plan takes the smaller of the two.
+    max_open_positions: int = 10
+    #: "You do not need to trade 50 things. 1, 2, 3 stocks per day." New entries per session.
+    max_new_entries_per_session: int = 3
     #: A position may not exceed this fraction of the name's average daily turnover.
     max_position_vs_turnover: float = 0.01
     #: Below this the brokerage dominates the edge (the desk's ``MIN_TRADE_VALUE``).
@@ -142,6 +149,9 @@ class StopConfig:
     fast_trail_min_adr_pct: float = 6.0
     #: An entry stop may not sit further below the entry than this, whatever the LOD says.
     max_stop_distance_pct: float = 10.0
+    #: "Stop should not be wider than the ATR or ADR of the stock" - the width that actually
+    #: binds on a normal day. The widest stop is ``min(max_stop_distance_pct, adr_pct x this)``.
+    max_stop_adr_multiple: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,14 +201,19 @@ class MarketConfig:
     strong_move_pct: float = 25.0
     green_min_pct_up: float = 5.0
     red_max_pct_up: float = 2.0
-    #: The index must be above both its 10- and 20-day MAs for GREEN; below both is RED.
+    #: His index filter for longs: the 10-day MA above the 20-day. Below it, no new longs.
     index_ma_fast: int = 10
     index_ma_slow: int = 20
     #: Progressive exposure: tiers as (max open positions, max sleeve exposure %), lowest first.
-    tiers: tuple[tuple[int, float], ...] = ((2, 25.0), (4, 50.0), (6, 75.0), (8, 100.0))
+    #: The top rung is his "typical" count; his 15-20 in a great market is the env ceiling.
+    tiers: tuple[tuple[int, float], ...] = ((2, 25.0), (4, 50.0), (6, 75.0), (10, 100.0))
     #: Step up after this many closed trades with positive net R; step down on this streak.
     lookback_trades: int = 5
     step_down_loss_streak: int = 3
+    #: "I try to contain them at 15-20%." A sleeve this far below its peak stops opening new
+    #: positions until it has recovered to within ``resume_drawdown_pct`` of the peak.
+    max_drawdown_pct: float = 15.0
+    resume_drawdown_pct: float = 10.0
 
 
 @dataclass(frozen=True, slots=True)

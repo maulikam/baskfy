@@ -313,10 +313,14 @@ class Settings(BaseSettings):
     #: ``sw_config.risk_per_trade_pct`` may not exceed this. His own range is 0.25-1%; 1.0 is the
     #: top of it, and the pack's default setting is half that.
     swing_risk_per_trade_pct_max: Decimal = Field(default=Decimal("1.0"), gt=0, le=5)
-    #: ``sw_config.max_position_pct`` may not exceed this. "Positions capped at 20-25%."
-    swing_max_position_pct_max: Decimal = Field(default=Decimal("25.0"), gt=0, le=100)
-    #: ``sw_config.max_open_positions`` may not exceed this. The ladder's top rung is 8.
-    swing_max_open_positions_max: int = Field(default=10, gt=0, le=50)
+    #: ``sw_config.max_position_pct`` may not exceed this. His own line (`07`, SW9.5): "I don't
+    #: believe you should ever have more than 30% of your account over night in any stock";
+    #: the default setting stays 20%.
+    swing_max_position_pct_max: Decimal = Field(default=Decimal("30.0"), gt=0, le=100)
+    #: ``sw_config.max_open_positions`` may not exceed this. His "15-20 positions in a good
+    #: market" (`07`, SW9.5); the ladder's top rung is his typical 10, and the plan takes the
+    #: smaller of the rung and the setting.
+    swing_max_open_positions_max: int = Field(default=20, gt=0, le=50)
     #: The benchmark the market gate reads (``docs/swing/04`` §8.2). Falls back to ``nifty-50``
     #: when the named index has no snapshot; a missing benchmark is not a bear market.
     swing_index_slug: str = "nifty-500"

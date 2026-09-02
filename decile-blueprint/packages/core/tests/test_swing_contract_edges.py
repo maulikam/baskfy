@@ -537,19 +537,22 @@ class TestApplyIgnoresAnIncompleteRaise:
 
 
 class TestTheIndexReadingEdges:
-    """§8.2. Both comparisons in each property, one at a time."""
+    """§8.2 (SW9.5). The rule is the 10-day MA against the 20-day, and equal averages are
+    neither side of it: `long_bias` is strictly above, `bearish` strictly below."""
 
-    def test_a_close_level_with_the_fast_average_is_not_above_both(self) -> None:
-        assert IndexReading(close=100.0, ma_fast=100.0, ma_slow=99.0).above_both is False
+    def test_a_fast_average_level_with_the_slow_one_is_not_long_biased(self) -> None:
+        assert IndexReading(close=101.0, ma_fast=100.0, ma_slow=100.0).long_bias is False
 
-    def test_a_close_level_with_the_slow_average_is_not_above_both(self) -> None:
-        assert IndexReading(close=100.0, ma_fast=99.0, ma_slow=100.0).above_both is False
+    def test_a_fast_average_level_with_the_slow_one_is_not_bearish(self) -> None:
+        assert IndexReading(close=99.0, ma_fast=100.0, ma_slow=100.0).bearish is False
 
-    def test_a_close_level_with_the_fast_average_is_not_below_both(self) -> None:
-        assert IndexReading(close=100.0, ma_fast=100.0, ma_slow=101.0).below_both is False
+    def test_a_fast_average_a_tick_above_the_slow_one_is_long_biased(self) -> None:
+        """Whatever the close: a pullback under both averages on a rising 10-day is long."""
+        assert IndexReading(close=90.0, ma_fast=100.01, ma_slow=100.0).long_bias is True
 
-    def test_a_close_level_with_the_slow_average_is_not_below_both(self) -> None:
-        assert IndexReading(close=100.0, ma_fast=101.0, ma_slow=100.0).below_both is False
+    def test_a_fast_average_a_tick_below_the_slow_one_is_bearish(self) -> None:
+        """Whatever the close: a bounce over both averages under a falling 10-day is bearish."""
+        assert IndexReading(close=110.0, ma_fast=99.99, ma_slow=100.0).bearish is True
 
 
 class TestBreadthEdges:

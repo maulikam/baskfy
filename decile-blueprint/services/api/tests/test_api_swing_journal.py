@@ -634,7 +634,8 @@ class TestTheBacktestCard:
         assert card["params"]["sleeve_inr"] == 1000000
         assert card["params"]["cost_pct_per_side"] == 0.13
         assert card["params"]["config"]["sizing"]["risk_per_trade_pct"] == 0.5
-        assert card["params"]["config"]["liquidity"]["adr_min_pct"] == 3.5
+        # 4.0 since SW9.5 (`04` §1): his screens use 5%+, 3.5-4 is the floor he names on stream.
+        assert card["params"]["config"]["liquidity"]["adr_min_pct"] == 4.0
 
     async def test_the_stats_are_the_headline_numbers_the_six_buckets_and_the_groupings(
         self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch

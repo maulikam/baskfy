@@ -10,7 +10,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Float, Numeric
+from sqlalchemy import DefaultClause, Float, Numeric
 
 from baskfy_core.models import Base
 
@@ -261,6 +261,36 @@ def test_swing_tables_are_recorded_in_docs() -> None:
         "sw_backtest_run",
     ):
         assert table in swing_model, f"{table} is not described in docs/swing/03"
+
+
+@pytest.mark.parametrize(
+    ("table", "column"),
+    [
+        ("sw_config", "sleeve_peak_inr"),
+        ("sw_config", "drawdown_pct"),
+        ("sw_config", "drawdown_locked"),
+        ("sw_market_daily", "drawdown_pct"),
+        ("sw_market_daily", "drawdown_locked"),
+    ],
+)
+def test_swing_drawdown_columns_are_modelled_and_recorded_in_docs(table: str, column: str) -> None:
+    """SW9.5 (docs/swing/07): the drawdown containment of `04` §8.5 needs the sleeve's peak, its
+    drawdown and the lock-out on `sw_config` (§1) and the two measurements on `sw_market_daily`
+    (§3). Migration `0030_swing_primary_sources.py` creates them; this is the check that the
+    model has each one and `docs/swing/03` names it, so the column and its meaning cannot drift
+    apart. The two `sw_config` defaults the same migration moves are asserted beside them."""
+    swing_model = (MONOREPO_ROOT / "docs" / "swing" / "03-data-model.md").read_text(
+        encoding="utf-8"
+    )
+    assert column in Base.metadata.tables[table].c, f"{table}.{column} is not modelled"
+    assert f"`{column}`" in swing_model, f"{table}.{column} is not described in docs/swing/03"
+    config = Base.metadata.tables["sw_config"].c
+    defaults = {name: config[name].server_default for name in ("max_open_positions", "adr_min_pct")}
+    assert all(isinstance(default, DefaultClause) for default in defaults.values())
+    assert {name: str(getattr(default, "arg", None)) for name, default in defaults.items()} == {
+        "max_open_positions": "10",
+        "adr_min_pct": "4.00",
+    }
 
 
 def test_billing_tables_are_recorded_in_decisions() -> None:

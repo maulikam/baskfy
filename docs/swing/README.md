@@ -22,6 +22,7 @@ cites them. The single prompt that starts the run is in [`KICKOFF-PROMPT.md`](KI
 | [`04-business-rules.md`](04-business-rules.md) | **The numerical contract.** Every threshold, formula and rule — the tests in `packages/core/tests/test_swing_*.py` assert this document |
 | [`05-ui-spec.md`](05-ui-spec.md) | The web app's `/swing` hub (read-only) and the desk console's `/swing` operator page (confirm) |
 | [`06-module-plan.md`](06-module-plan.md) | **The task list.** SW0–SW12, every module with a Goal and acceptance criteria |
+| [`07-primary-source-corrections.md`](07-primary-source-corrections.md) | **Read before SW9.5.** Five rules corrected against his own words (stop ≤ 1 ADR, 10>20 index filter, 1-3 entries a day, 5-10/15-20 positions, 15-20% drawdown containment), with the patch that lands them |
 | [`STATUS.md`](STATUS.md) | The live status page for this run — updated at the end of every module |
 | [`DECISIONS-SW.md`](DECISIONS-SW.md) | Judgement calls, numbered by module; the pack's own pre-taken ones are PACK.1–PACK.6 |
 

@@ -19,6 +19,7 @@ done. A fresh session resumes from the first module not marked ✅.
 | SW7 — Desk page + `/swing/execute` (DRY_RUN) | ✅ | ✅ execute logic: `app/swing_execute.py` turns a confirmed line into a LIMIT buy + a GTT in the same call, a market sell that re-sizes the stop, or a raised stop — through the real gateway in its dry-run branch, 70 tests, 0 orders reach a broker · ✅ page: `GET /swing` with its three panels and status bar, `PgSwingStore` over the desk's Postgres adapter (sqlite twin in tests), `POST /swing/execute` / `/swing/rearm` through `execute_line` — 73 tests, the buy → position → GTT path proven end to end over an exploding broker client |
 | SW8 — Journal + ladder closes the loop | ✅ | ✅ ladder + API: the evening settles the rung and writes it to `sw_config` (audited, `swing-eod`) and the day's market row, and the plan is built with it; `GET /swing/journal` answers C2's shape — real and simulated cards apart, the six-bucket histogram, by setup, by month, the ladder card, 14-of-20 · ✅ page: `/swing/journal` renders it — two cards that never mix, six bars that read at zero, the one sentence on what the next close does to the ladder, "14 of 20 paper sessions logged", and the backtest heading with its caveats verbatim or an honest "not run yet"; 30 rendered-DOM tests, the fifth tab in the row |
 | SW9 — EOD backtest | ✅ | ✅ core (1.3.1): `baskfy_core.swing.backtest` runs `04` §11 through the live book's own functions; a planted flag reproduces R = 0.28 to the paisa; 300 × 8y in 24 s · ✅ runner (1.3.2): `sw_backtest_run` (migration 0029, append-only), `baskfy.swing.backtest` on the compute queue loading bars as the detectors do plus the names that died inside the run, `tools/swing/backtest.py` (`--fixture` with no database, or the task body against `BASKFY_DATABASE_URL`), `GET /swing/journal.backtest` as C2's card with the caveats verbatim, and the page drawing the run's R distribution, win rate and expectancy with the journal cards' own tiles and bars — 18 + 6 + 6 tests; the 2017→ run itself is **not measurable on this machine** (ten sessions of bars, database at 0026) and extrapolates to 4–5 min against the 30 |
+| SW9.5 — Reconcile with the primary sources | ✅ | The rules are his, quoted (`07`): the stop is one ADR or tighter and a wider one is skipped, the gate's index rule is the 10-day over the 20-day, at most three new entries a session, the plan takes `min(rung, max_open_positions)` with the top rung at 10, the sleeve locks out new entries 15 % below its peak until back within 10 % (settled by the evening from the sleeve's own NAV, migration `0030`), the swing GTT rests 3 % under its trigger through an additive keyword the weekly book never sees, ceilings 30 % / 20, ADR floor 4.0 — the patch applied, 41 red tests re-pinned by re-deriving each number, 7 acceptance tests in `test_swing_primary_sources.py`, 4 backtest cases and 9 ladder cases new; core **2665 passed**, G5 **445 passed**, execution **170**, desk **1553 passed, 17 skipped** |
 | SW10 — Gating and safety proof | ✅ | Every Track-B/C claim is a test: hypothesis over random watchlists (no `PARABOLIC_SHORT` line, a stop never falls, a SELL never exceeds the book), a spy over the real gateway through `/swing/execute` (eight calls, all dry, under both `DRY_RUN` values), source scans with docstrings/comments stripped over the web hub, the API and the monitor, every `sw_` write named with its `user_id`; and `tools/swing/drill.py` runs the whole paper session against Postgres — evening → LEVELS → MORNING → replayed morning through `PgSignalStore` → two confirms through `execute_line` → EOD → next morning — **0 orders reach a broker**, `confirms=2 fills=2`, one finding recorded (SW10.2) |
 | SW11 — Hardening and observability | ⬜ | |
 | SW12 — Verification, goldens, final report | ⬜ | |
@@ -1135,6 +1136,136 @@ is an extrapolation here).
   retyping, taken so the runner's acceptance is the fixture's own trade, not a copy of it.
 
 ---
+
+## SW9.5 — Reconcile with the primary sources ✅
+
+**Goal, from `06`:** "the rules are his, quoted, not a summary's — see `07`." `07`'s "What
+changes" table is the spec; the patch it names was applied at step 1 (`git apply`, clean), the
+35 contract/backtest tests it turned red plus the six docs-parity ones were re-pinned by
+re-deriving every number from the amended `04`, and the rest of this section is what the change
+rippled into. Everything below was **measured on this machine on 2 Sep 2026**.
+
+### What changed, rule by rule
+
+| Rule (`07`) | Where it now lives | Proven by |
+|---|---|---|
+| The stop is one ADR or tighter; a wider stop is **skipped**, never sized down | `StopConfig.max_stop_adr_multiple` [1.0], `stops.widest_stop_pct = min(adr × 1.0, 10%)`, `plan.build_entries` hands it to `size_position` | `test_swing_primary_sources` (hypothesis, 500 random watchlists: no `BUY_ON_TRIGGER` line's stop is wider than its ADR; 6 % under on a 5 % name is `STOP_TOO_WIDE`, 5 % is lined), `test_swing_stops`, `test_swing_plan_and_journal` |
+| The index rule is the 10-day MA above the 20-day; the close is not consulted | `IndexReading.long_bias` / `bearish` (`above_both` / `below_both` gone); `market_gate` RED on `bearish`, GREEN needs `long_bias` | `test_swing_market`, `test_swing_contract_book::TestTheGate` (a close under both averages on a rising 10-day is long; over both under a falling one is bearish; equal averages are neither), `test_swing_contract_edges` |
+| At most three new entries a session | `SizingConfig.max_new_entries_per_session` [3]; skip `SESSION_CAP`, counted on lines in **this** plan | `test_swing_primary_sources` (ten qualifying flags → three lines, seven `SESSION_CAP`; three names held still get three new lines), `test_swing_backtest` (five flags on one day at a five-position rung: three entered, `skipped_session_cap` 2) |
+| The plan takes `min(rung, sizing.max_open_positions)`; top rung 10 | `MarketConfig.tiers` `((2, 25), (4, 50), (6, 75), (10, 100))`; `build_entries`; the worker's `load_swing_config` now hands the plan the trader's three sizing knobs (SW9.5.3) | `test_swing_primary_sources` (rung 1 vs cap 10 → 4; rung 3 vs cap 2 → 2; the `TIER_FULL` detail names the number), `test_swing_contract_book::TestTheLadder` |
+| The sleeve locks out new entries 15 % below its peak until back within 10 % | `MarketConfig.max_drawdown_pct` [15] / `resume_drawdown_pct` [10]; `market.drawdown_pct`, `market.drawdown_locked` (hysteresis); `exposure_tier(..., drawdown_pct, was_drawdown_locked)` → rung 0, no entries, `ExposureTier.drawdown_locked`; skip `DRAWDOWN_LOCKOUT` | core: `test_swing_market`, `test_swing_primary_sources` (15 % → zero lines, every skip `DRAWDOWN_LOCKOUT`; 9.9 % after a lock-out → entries at rung 0; 12 % locked stays locked, 12 % unlocked never was); backtest: `test_a_sleeve_in_drawdown_is_locked_out_of_new_entries_until_it_recovers` (two positions, a 0.61 % loss, a lock at 0.56 %, a recovery through the open position's mark, release at 0.23 % under a 0.25 % line and not under a 0.10 % one); evening: `test_swing_ladder::TestTheDrawdownContainment`, 9 cases |
+| The swing GTT rests 3 % under its trigger | `place_gtt_stop(limit_fraction: float \| None = None)` — additive, `None` is `GTT_LIMIT_FRACTION`; the desk's `_arm` passes `C.SWING_GTT_LIMIT_FRACTION` (env `BASKFY_SWING_GTT_LIMIT_FRACTION`, 0.97) on every GTT | `packages/execution/tests/test_gtt_limit_fraction.py` (9: 0.97 lands as 86.35 on an 89 trigger, 2440 on a whole-rupee tick; omitted → the weekly book's 88.55, byte for byte; the dry-run journal records the fraction; a fraction outside (0, 1] is refused before any layer runs), `tests/test_swing_execute.py` (+4: the constant, every live GTT, every dry-run GTT, the weekly book's files never name it); `git diff --stat` on `packages/execution/tests`, `test_seven_non_negotiables.py` and `test_execute_gateway.py` is empty |
+| Ceilings 30 % / 20; ADR floor 4.0 | `Settings` / `WorkerSettings` defaults; the root, decile and desk `.env.example`; `LiquidityConfig.adr_min_pct` 4.0; `sw_config` server defaults 10 / 4.00 (`0030`) | `test_swing_schema_and_settings::test_the_ceilings_are_his_own_numbers`, `test_schema_matches_docs` (the columns are in `03`, the defaults are 10 / 4.00), `test_api_swing_journal` (the card says 4.0) |
+
+### The evening, and the schema it needed
+
+`settle_ladder` now settles the drawdown beside the rung. `tasks/swing.py::sleeve_nav` computes
+the sleeve's EOD NAV from the book the ladder reads (PACK.6) — capital + closed `pnl_inr` +
+open positions marked at the latest close + the SELL fills of still-open positions (SW9.5.1;
+`03` §1 has the formula) — and `sleeve_drawdown` reads it against `sw_config.sleeve_peak_inr`
+(null until the first evening: the first session is never locked; a ₹0 peak divides nothing).
+The peak and the drawdown go back to `sw_config` unaudited (the market row is their history);
+`drawdown_locked` is audited with the NAV and the peak in the note. The night the ladder
+switches books (the execution flag flipped since the previous settlement) the peak starts over
+at that night's NAV, so a paper peak is never held against the real book. The detection job's
+`write_market_row` computes the same measurement as a preview and passes it to
+`exposure_tier` the same way; the evening's settlement is authoritative. Re-running the
+evening moves neither the peak (a maximum) nor the lock (the re-run reads the lock it wrote as
+"was locked" and answers the same). Migration **`0030_swing_primary_sources`**: `sw_config.
+sleeve_peak_inr` / `drawdown_pct` / `drawdown_locked`, `sw_market_daily.drawdown_pct` /
+`drawdown_locked`, the `sw_plan_skip.reason` constraint rebuilt with `SESSION_CAP` and
+`DRAWDOWN_LOCKOUT` (the first evening test hit the old constraint — a check the model imports
+from the engine and the database had frozen at SW2), `max_open_positions` default 8 → 10 and
+`adr_min_pct` 3.50 → 4.00 with rows at exactly the old default moved (SW9.5.4). Round-tripped
+(`upgrade` → `downgrade 0029` → `upgrade`) on `baskfy_sw_t2`. `SwingConfigPatch` forbids the
+three new fields (`SYSTEM_OWNED_FIELDS`, owner `swing-eod`; the parametrised refusal test covers
+each).
+
+The evening's `watch_items` now reads a name's **latest** detection row on or before the
+session rather than today's only (SW9.5.2): the ADR sizes the stop now, and a flag watched on
+Monday and not re-detected on Wednesday would otherwise have carried an ADR of 0 into the plan
+and been refused. A `MANUAL` row with no detection behind it still is — a stop nobody can measure
+against the range is not shown to be inside it.
+
+### The re-plant
+
+`swing_backtest_fixtures` draws every bar ±2 % around its close, an ADR of 4.08 %, and the
+planted stop (the detection day's low, 6.67 % under the entry) would be `STOP_TOO_WIDE` on such
+a name. The fixture is now a leader with a leader's range: every low **before** the detection
+bar sits 7 % under its close (`LOW_FACTOR`), the detection bar keeps its tight ±2 % — the
+contraction the method wants — so the 20-bar ADR is **9.40 %** (worked by hand:
+`(19 × 9.68 + 4.08) / 20`), the pivot (a high) and the stop (the detection day's low) are exactly
+where they were, and the hand-worked trade (492 shares, R = 0.28) is unchanged; the trail is now
+the 10-day (ADR ≥ 6). `test_planted_stop_sits_inside_one_adr_of_a_leaders_range` re-derives
+all of it and asserts the ±2 % fixture would have refused the stop. One test ends its run on the
+entry day because the stopped-out bar reads as a base again on a leader's-range name. The
+worker fixtures (`test_swing_ladder/eod/premarket`: trigger 110, stop 104, 5.45 %) carry an ADR
+of 5.60 instead of 5.00; the EP doji test widens its prior bars so nineteen bars and a flat one
+average above the 4.0 floor. A `HOLD_TAIL` was added for the drawdown case: a position that
+neither partials nor stops for nine sessions and then rallies — the only way a locked sleeve
+recovers.
+
+### Numbers
+
+| Suite | Result |
+|---|---|
+| G1 — docs parity, market, plan/journal, stops | **170 passed** |
+| G2 — contract book / edges / detectors (274) + backtest (48 + speed) | **323 passed**, 71 s |
+| G3 — `test_swing_primary_sources.py` | **7 passed** (1 hypothesis × 500 + 6 exact) |
+| G4 — `packages/core/tests` less SW10's uncommitted file | **2665 passed, 2 skipped**, 147 s |
+| G5 — ladder, eod, detect, premarket, schema docs, backtest task, journal API, swing API, schema+settings on `baskfy_sw_t2` | **445 passed**, 105 s |
+| G6 — the desk | **1553 passed, 17 skipped**, 49 s; the three named files unchanged |
+| G7 — `packages/execution/tests` | **170 passed** (161 + 9) |
+| G9 — `make lint` | clean |
+| SW10's uncommitted files under the new rules | `test_swing_safety_properties.py` **8 passed**; `services/api/tests/test_swing_track_c.py` **19 passed**; `kite-momentum-rebalancer/tests/test_swing_track_c.py` green inside the desk suite. **None went red.** |
+
+The pre-existing red that G5 surfaced and this module fixed:
+`test_swing_schema_and_settings::test_the_migration_drops_what_it_creates[sw_backtest_run]` had
+been failing since SW9 (it read `0028_swing.py` alone for the drop list; `sw_backtest_run` is
+`0029`'s). It now scans every `00NN_swing*.py`.
+
+### Decisions
+
+PACK.7 (the drawdown breaker: 15 % lock, 10 % release, why hysteresis and why the bottom of his
+range), PACK.8 (the GTT cushion: 0.97, additive, refused outside (0, 1]), PACK.9 (the 1.0 %
+ceiling kept against his small-account 1.5 %) — all ⚠ UNREVIEWED; SW9.5.1 (how the sleeve's NAV
+is computed, what is audited, the peak reset on a book switch, the capital-lowering edge),
+SW9.5.2 (an unmeasured ADR is a refused stop; the latest detection row), SW9.5.3 (the worker
+hands the plan the trader's sizing knobs — a pre-existing gap: `sw_config.risk_per_trade_pct` /
+`max_position_pct` / `max_open_positions` never reached `SizingConfig`), SW9.5.4 (two defaults
+moved in the migration for rows nobody set).
+
+### What SW9.5 did NOT do
+
+- **The morning rebuild and the monitor do not carry `drawdown_locked`.** `swing_premarket.py`
+  (SW6's) and the desk's `swing_monitor.py` (SW6's) rebuild `ExposureTier` from the market row
+  without the new column. A locked sleeve still plans **no** entries in the morning
+  (`new_entries_allowed` is false on the row), but the skip reads `GATE_RED` instead of
+  `DRAWDOWN_LOCKOUT`; one keyword each (`drawdown_locked=market.drawdown_locked`) and one more
+  column in the monitor's `SELECT` for their owners. Safe, mislabelled.
+- **The monitor still sizes with the pack's risk knobs.** `swing_monitor.load_config` applies
+  the liquidity floors only (SW9.5.3 fixed the worker; the desk copy is SW6's file, and MD6 has
+  SW10 re-deriving a SIGNAL line's size at confirm from `sw_config`).
+- **The ladder card and the EOD email do not show the lock-out.** `LadderCard` / `SwingLadderOut`
+  (`routers/swing.py`, not this module's) and `email/templates.py` are unchanged; the state is on
+  `sw_market_daily` and in `sw_config_audit`, and `05` now says where the pages should show it.
+- **A MANUAL watch row with no detection behind it is refused `STOP_TOO_WIDE`** (SW9.5.2). The
+  right answer — the ADR from the bars — is one query the evening does not run yet.
+- **Lowering `sleeve_capital_inr` reads as a drawdown** of that size (SW9.5.1). Conservative;
+  the reset is manual.
+- **The top-20 / top-5 funnel numbers are `05`'s spec, not code.** The evening still auto-watches
+  on `auto_watch_min_score` [60]; the monitor watches every `WATCHING` row. SW11's.
+- **The drill (`tools/swing/drill.py`, SW10's) was not run.** Its `baskfy_sw_t3` is not this
+  leaf's database. Read against the new rules: its stops sit 3 % under 5 %-ADR names, its rung-0
+  `TIER_FULL` still holds, its market row's new columns take their defaults, and the evening's
+  NAV on its two simulated positions starts at its peak — it should pass; that is a reading, not
+  a measurement.
+- **The 2017→ backtest has still not run over real bars** (SW9); the re-planted fixture is the
+  only book that has been through the new rules end to end.
+- `services/worker/tests/test_swing_eod.py`, `test_swing_premarket.py` and
+  `services/api/tests/test_api_swing_journal.py` are SW5/SW6/SW9's files; each took a one-line
+  re-pin (the fixture ADR, the card's 4.0) so that G5 could be green, and nothing else in them
+  moved.
 
 ## SW10 — Gating and safety proof, and the DRY_RUN morning drill ✅
 

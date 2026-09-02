@@ -13,6 +13,7 @@ from baskfy_core.swing.market import (
     IndexReading,
     MarketGate,
     breadth_snapshot,
+    drawdown_locked,
     exposure_tier,
     market_gate,
 )
@@ -25,9 +26,10 @@ def snapshot(pct_up: float) -> BreadthSnapshot:
     return BreadthSnapshot(500, pct_up, 3.0, 50.0)
 
 
-UP = IndexReading(close=100.0, ma_fast=98.0, ma_slow=97.0)
-DOWN = IndexReading(close=90.0, ma_fast=98.0, ma_slow=97.0)
-MIXED = IndexReading(close=97.5, ma_fast=98.0, ma_slow=97.0)
+#: His filter for longs is the index's 10-day MA against its 20-day; the close itself is not
+#: consulted, so a pullback to a rising 10-day is still a long tape.
+UP = IndexReading(close=96.0, ma_fast=98.0, ma_slow=97.0)
+DOWN = IndexReading(close=99.0, ma_fast=96.0, ma_slow=97.0)
 
 
 def test_breadth_counts_strong_movers_new_highs_and_ma_position() -> None:
@@ -54,15 +56,17 @@ def test_empty_universe_is_red_not_a_division_error() -> None:
     assert market_gate(b, UP, CONFIG) is MarketGate.RED
 
 
-def test_gate_green_needs_breadth_and_the_index_above_both_mas() -> None:
+def test_gate_green_needs_breadth_and_the_ten_day_above_the_twenty() -> None:
     assert market_gate(snapshot(8.0), UP, CONFIG) is MarketGate.GREEN
-    assert market_gate(snapshot(8.0), MIXED, CONFIG) is MarketGate.AMBER
     assert market_gate(snapshot(8.0), None, CONFIG) is MarketGate.GREEN
 
 
-def test_gate_red_on_thin_breadth_or_index_below_both_mas() -> None:
+def test_gate_red_on_thin_breadth_or_the_ten_day_below_the_twenty() -> None:
+    """§8.3: "long setups only when the 10-day MA of the index is above the 20-day"."""
     assert market_gate(snapshot(1.5), UP, CONFIG) is MarketGate.RED
     assert market_gate(snapshot(8.0), DOWN, CONFIG) is MarketGate.RED
+    assert UP.long_bias and not UP.bearish
+    assert DOWN.bearish and not DOWN.long_bias
 
 
 def test_gate_amber_in_between() -> None:
@@ -107,4 +111,48 @@ def test_fewer_than_five_closed_trades_cannot_climb() -> None:
 def test_tier_carries_its_limits() -> None:
     t = tier(2, [])
     assert (t.max_open_positions, t.max_exposure_pct) == CONFIG.tiers[2]
+    assert t.new_entries_allowed is True
+    assert t.drawdown_locked is False
+
+
+def test_top_rung_is_his_typical_count_not_his_maximum() -> None:
+    """§8.4: "typically 5-10 positions"; the 15-20 of a great market is the env ceiling."""
+    assert CONFIG.tiers[-1][0] == 10
+    assert CONFIG.tiers[-1][1] == 100.0
+
+
+# --- drawdown containment (§8.5) ---------------------------------------------
+
+
+def test_fifteen_percent_drawdown_locks_the_sleeve_out_of_new_entries() -> None:
+    """ "I try to contain them at 15-20%." A locked sleeve manages exits only."""
+    t = exposure_tier(
+        current_level=3,
+        closed_r_multiples=[],
+        gate=MarketGate.GREEN,
+        config=CONFIG,
+        drawdown_pct=15.0,
+    )
+    assert t.drawdown_locked is True
+    assert t.new_entries_allowed is False
+    assert t.level == 0
+
+
+def test_lockout_persists_until_the_drawdown_is_back_inside_ten_percent() -> None:
+    assert drawdown_locked(drawdown_pct=12.0, was_locked=True, config=CONFIG) is True
+    assert drawdown_locked(drawdown_pct=9.9, was_locked=True, config=CONFIG) is False
+    assert drawdown_locked(drawdown_pct=12.0, was_locked=False, config=CONFIG) is False
+    assert drawdown_locked(drawdown_pct=15.0, was_locked=False, config=CONFIG) is True
+
+
+def test_a_recovered_sleeve_resumes_at_the_bottom_rung() -> None:
+    t = exposure_tier(
+        current_level=3,
+        closed_r_multiples=[],
+        gate=MarketGate.GREEN,
+        config=CONFIG,
+        drawdown_pct=8.0,
+        was_drawdown_locked=True,
+    )
+    assert t.drawdown_locked is False
     assert t.new_entries_allowed is True

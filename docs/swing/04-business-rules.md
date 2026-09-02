@@ -8,8 +8,13 @@ and every rule is a function in `baskfy_core.swing`. The tests in
 document and the code disagreeing, the document wins and the code is fixed, unless the
 document is wrong — in which case the change is a DECISIONS-SW entry that edits both.
 
-Units: `*_pct` are percent (3.5 = 3.5%); `*_bars` are trading days; money is ₹ and `Decimal`.
+Units: `*_pct` are percent (4.0 = 4.0%); `*_bars` are trading days; money is ₹ and `Decimal`.
 Bars are the **adjusted** series (`ohlcv_daily.open/high/low/close = raw × adj_factor`).
+
+**Amended at SW9.5** from his own words (`07-primary-source-corrections.md`, which quotes them):
+the ADR floor (§1), the session cap and the trader's position cap in the plan (§5, §9.1), the
+widest stop (§6), the index rule, the ladder's top rung and the drawdown containment (§8.2–8.5),
+and the swing GTT's cushion (§9.4). Where a number changed, the old one is named in the section.
 
 ## §1 Universe and indicators (`indicators.py`, `LiquidityConfig`)
 
@@ -30,9 +35,11 @@ Computed per bar, per instrument, over the instrument (`with_swing_indicators`):
 | `up_streak` | consecutive bars with `close > prev_close`, today included; a down bar resets to 0 |
 | `close_position` | `(close − low) / (high − low)`, 0.5 when `high == low` |
 
-**Liquid** (`liquid_expr`): `adr_pct ≥ adr_min_pct` [3.5] **and** `turnover_avg ≥
+**Liquid** (`liquid_expr`): `adr_pct ≥ adr_min_pct` [4.0] **and** `turnover_avg ≥
 turnover_min_inr` [₹5 cr] **and** `close ≥ price_min` [₹20]. Evaluated on the as-of bar. An
-illiquid name never reaches a detector.
+illiquid name never reaches a detector. The ADR floor was 3.5 until SW9.5; his screens use
+5%+ and 3.5–4% is the floor he names on stream (`07`), so the default is 4.0 and
+`sw_config.adr_min_pct` lets the trader raise it.
 
 ## §2 Setup 1 — FLAG (`detect_flags`, `FlagConfig`)
 
@@ -65,8 +72,9 @@ today included; `pivot_prev` = the same over the bars before today.
 * `SETTING_UP` when 2.1–2.5 all hold and it is not a breakout. `trigger` = `pivot_high`.
 * `stop_ref` = today's low in both cases.
 * **Score** (0–100): `30 × clamp(1 − tightness_adr / 3.0) + 25 × clamp(prior_move_pct / 60) +
-  20 × clamp(adr_pct / 7) + 15 × clamp(1 − base_depth_pct / 30) + 10 × clamp(1 − dryup_ratio)`.
-  (Full marks at twice each threshold; `clamp` is to [0, 1].) SW3 adds `+5` for
+  20 × clamp(adr_pct / 8) + 15 × clamp(1 − base_depth_pct / 30) + 10 × clamp(1 − dryup_ratio)`.
+  (Full marks at twice each threshold — the ADR term's 8 is twice `adr_min_pct` [4.0], and
+  follows it; `clamp` is to [0, 1].) SW3 adds `+5` for
   `listed_within_2y` and `+5` for a sector in the top-3 breadth strip, capped at 100.
 
 ## §3 Setup 2 — EP (`detect_eps`, `EpConfig`)
@@ -96,10 +104,12 @@ plan line may carry it (SW10 asserts).
 ## §5 Sizing (`sizing.size_position`, `SizingConfig`)
 
 Inputs: sleeve `equity`, `cash_available`, `entry`, `stop`, `avg_turnover_inr`, and the widest
-stop tolerated `max_stop_distance_pct` [`StopConfig`: 10].
+stop tolerated for this name — `stops.widest_stop_pct(adr_pct)` (§6), never more than
+`max_stop_distance_pct` [`StopConfig`: 10].
 
 5.1 Refusals, in order: `NO_EQUITY` (equity ≤ 0); `STOP_NOT_BELOW_ENTRY`; `STOP_TOO_WIDE`
-(`(entry − stop) / entry × 100 > 10` — the size is **not** shrunk to fit a bad stop);
+(`(entry − stop) / entry × 100 > widest_stop_pct(adr_pct)` — the size is **not** shrunk to fit
+a bad stop; his words: "stop should not be wider than the ATR or ADR of the stock");
 `BELOW_MIN_TRADE_VALUE` (`entry × qty < min_trade_value_inr` [₹10,000]).
 
 5.2 `qty = min(by_risk, by_position, by_cash, by_turnover)` with
@@ -112,11 +122,26 @@ and `cap` names which one bound. `risk_inr = (entry − stop) × qty`; `position
 / equity × 100`. Worked example (his own): stop 4% below, risk 0.5% → position 12.5% of equity.
 `r_multiple(entry, stop, exit) = (exit − entry) / (entry − stop)`, 2 dp.
 
+5.3 **Counts** (SW9.5, his words in `07`). `max_open_positions` [10] — "typically 5-10
+positions; 15-20 in a good market; all cash in a bad one" — is the trader's own cap, a
+`sw_config` setting bounded by `BASKFY_SWING_MAX_OPEN_POSITIONS_MAX` [20]; the plan takes
+`min(tier.max_open_positions, sizing.max_open_positions)` (§9.1). `max_new_entries_per_session`
+[3] — "1, 2, 3 stocks per day… there's really no need to trade more than that" — caps the
+`BUY_ON_TRIGGER` lines in one plan; it counts lines in **this** plan, not positions held.
+`max_position_pct` [20] stays; its ceiling `BASKFY_SWING_MAX_POSITION_PCT_MAX` is **30**
+("never more than 30% of your account over night in any stock"). `risk_per_trade_pct` [0.5],
+ceiling 1.0 (PACK.9).
+
 ## §6 Stops and management (`stops.py`, `StopConfig`)
 
 6.1 **Initial stop** = low of the day (`stop_mode = LOW_OF_DAY`, the default); with
 `stop_mode = OPENING_RANGE_LOW` and a known range, `max(range_low, low_of_day)` (the tighter).
 A stop ≥ entry is an error, not a position.
+**Widest stop** (SW9.5): `widest_stop_pct(adr_pct) = min(adr_pct × max_stop_adr_multiple [1.0],
+max_stop_distance_pct [10])`, 2 dp — one ADR, and never more than the absolute cap. A stop
+further below the entry than that is **skipped** (`SIZE_REFUSED / STOP_TOO_WIDE`), never sized
+down: "stop should not be wider than the ATR or ADR of the stock". A name whose ADR is unknown
+(0) admits no stop. Until SW9.5 the only limit was the 10% cap.
 6.2 **Trail** = `MA10` when `adr_pct ≥ fast_trail_min_adr_pct` [6] else `MA20`.
 6.3 **Partial** = `qty × partial_numerator / partial_denominator` [1/3], integer division,
 never the whole position, never 0 unless `qty < 3`.
@@ -158,24 +183,45 @@ candles for the range come from `historical_data(interval="minute")` at window c
 8.1 **Breadth** over the liquid universe at the close: `pct_up_strong_1m` = share with
 `ret_20 ≥ strong_move_pct` [25]; `pct_new_52w_high` = share with `close ≥ high_1y`;
 `pct_above_ma_slow` = share with `close > ma_slow`.
-8.2 **Index reading:** NIFTY 500 close vs its `index_ma_fast` [10]- and `index_ma_slow` [20]-bar SMAs
-(fallback NIFTY 50; none → the index is ignored).
-8.3 **Gate:** empty universe → RED; index below both MAs → RED; `pct_up_strong_1m ≤
+8.2 **Index reading:** NIFTY 500's `index_ma_fast` [10]- and `index_ma_slow` [20]-bar SMAs
+(fallback NIFTY 50; none → the index is ignored). `IndexReading.long_bias = ma_fast > ma_slow`;
+`bearish = ma_fast < ma_slow`; equal averages are neither. The close itself is **not**
+consulted (SW9.5): his filter for longs is the 10-day above the 20-day — a pullback under both
+averages on a rising 10-day is still a long tape, a bounce over both under a falling one is
+not. Until SW9.5 the rule read the close against both averages.
+8.3 **Gate:** empty universe → RED; index `bearish` → RED; `pct_up_strong_1m ≤
 red_max_pct_up` [2] → RED; `pct_up_strong_1m ≥ green_min_pct_up` [5] and (no index or index
-above both) → GREEN; else AMBER. Breadth decides; the index can only make it worse.
-8.4 **Ladder** `tiers` [(2, 25%), (4, 50%), (6, 75%), (8, 100%)] as (max open positions, max
-sleeve exposure %). From rung `L`, the last `lookback_trades` [5] closed trades and the gate:
+`long_bias`) → GREEN; else AMBER. Breadth decides; the index can only make it worse.
+8.4 **Ladder** `tiers` [(2, 25%), (4, 50%), (6, 75%), (10, 100%)] as (max open positions, max
+sleeve exposure %); the top rung is his "typically 5-10 positions" (it was 8), and his 15–20
+of a great market is the env ceiling a setting may climb to, not a rung. From rung `L`, the
+last `lookback_trades` [5] closed trades and the gate:
 RED → rung 0, `new_entries_allowed = false`; a loss streak ≥ `step_down_loss_streak` [3] → `L − 1`;
 GREEN with ≥ 5 closed trades and net R > 0 → `L + 1`; AMBER holds; the ladder never skips a
 rung. AMBER **entries are allowed at the current rung** (the size is what shrinks the book,
-via the tier's exposure ceiling).
+via the tier's exposure ceiling). The drawdown lock-out (8.5) outranks all of it.
+8.5 **Drawdown containment** (SW9.5; "I try to contain them at 15-20%"). The sleeve's EOD NAV
+against the highest EOD NAV it has reached (`03` §1: `sw_config.sleeve_peak_inr`, the peak
+only rises; how the NAV is computed is SW9.5.1): `drawdown_pct = (peak − nav) / peak × 100`,
+0 at or above the peak and 0 when the peak is not positive. `market.drawdown_locked(drawdown_pct,
+was_locked)`: locked at `max_drawdown_pct` [15] or more; once locked, stays locked until the
+drawdown is back inside `resume_drawdown_pct` [10] — hysteresis, so a sleeve oscillating around
+15% does not flap. `exposure_tier(..., drawdown_pct, was_drawdown_locked)` applies it **first**:
+a locked sleeve is rung 0 with `new_entries_allowed = false` and `ExposureTier.drawdown_locked =
+true`, whatever the tape and the results say; released, it resumes at rung 0. A sleeve with no
+peak yet (its first evening) is at its peak, not in drawdown. The state is `swing-eod`'s
+(`03` §1, §3), never a form's. Exits are managed as always; only new entries stop.
 
 ## §9 The plan (`plan.py`)
 
 9.1 `build_entries`: watch items sorted by `(−score, symbol)`; for each, in order: not in
-`TRADEABLE_SETUPS` → `NOT_TRADEABLE_SETUP`; gate RED or entries disallowed → `GATE_RED`; symbol
-held → `ALREADY_HELD`; `locked_upper_circuit` → `LOCKED_UPPER_CIRCUIT`; `open + lined ≥
-tier.max_open_positions` → `TIER_FULL`; size refused → `SIZE_REFUSED(detail)`; `open exposure +
+`TRADEABLE_SETUPS` → `NOT_TRADEABLE_SETUP`; `tier.drawdown_locked` → `DRAWDOWN_LOCKOUT` (8.5);
+gate RED or entries disallowed → `GATE_RED`; symbol held → `ALREADY_HELD`;
+`locked_upper_circuit` → `LOCKED_UPPER_CIRCUIT`; `lined ≥ max_new_entries_per_session` [3] →
+`SESSION_CAP` (§5.3 — lines in this plan, not positions held); `open + lined ≥
+min(tier.max_open_positions, sizing.max_open_positions)` → `TIER_FULL` (the detail names the
+number that bound: "rung L allows N positions"); size refused → `SIZE_REFUSED(detail)`
+(a stop wider than `widest_stop_pct(adr_pct)` is `STOP_TOO_WIDE` here, §6.1); `open exposure +
 value > equity × tier.max_exposure_pct / 100` → `EXPOSURE_FULL`; else a `BUY_ON_TRIGGER` line
 with `trigger` and `stop` snapped to ₹0.05, `quantity`, `risk_inr`, `position_value`, `trail`
 and a note naming the cap. Cash spent by earlier lines is not spent twice.
@@ -187,7 +233,12 @@ canonical lines — the same plan hashes the same.
 re-post cannot double-send. A `BUY_ON_TRIGGER` line is sent as a **LIMIT buy at `trigger` (or
 market once a `TRIGGERED` signal exists for it)**, and its GTT stop is armed in the same call
 with a `StopBand(min_pct=0.005, max_pct=0.10)` (PACK.3) — the desk's 8–12% band is the weekly
-book's, not this one's.
+book's, not this one's. **The GTT's cushion** (SW9.5, PACK.8): a GTT fires a LIMIT order, and
+he uses market stops ("I always use market stops, never limit stops"); the swing route passes
+`limit_fraction = SWING_GTT_LIMIT_FRACTION` [0.97] to `place_gtt_stop`, so the resting limit
+sits 3% under its trigger and fills on the way down like a market stop would. The weekly book
+keeps the gateway's own `GTT_LIMIT_FRACTION` (0.995); the keyword is additive and defaults to
+it. Every swing GTT — a buy's, a partial's re-arm, a raised stop's, a re-arm — carries it.
 
 9.5 **The watchlist** (`WatchConfig`, SW5). A detected flag is auto-watched at
 `auto_watch_min_score` [60] or above with status `SETTING_UP`; **every** `GAP_DAY` EP is watched

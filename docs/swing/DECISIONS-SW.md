@@ -4,7 +4,7 @@ Same convention as `docs/DECISIONS-MERGE.md` and `docs/smallcase/DECISIONS-SC.md
 module; context, the choice, the rejected alternatives and why, the reversal path. Decisions
 made without Maulik's review are tagged **⚠ UNREVIEWED** until he clears them.
 
-Six decisions were pre-taken in the pack so the run does not stall on them:
+Six decisions were pre-taken in the pack so the run does not stall on them (and three more at SW9.5, below them):
 
 ## PACK.1 — The parabolic short is detected, never traded · (not reversible this run)
 
@@ -59,6 +59,84 @@ never moves — which would leave the paper period unable to exercise SW8. So `e
 reads simulated closes while `BASKFY_SWING_EXECUTION_ENABLED=false`, and real closes only once
 it is true (the paper rung is reset to 0 at the flip; the journal page keeps both cards).
 Rejected: mixing them (a paper streak would size real money). Reversal: a query filter.
+
+Three more were taken at SW9.5, when `07-primary-source-corrections.md` re-read the rules from
+his own words:
+
+## PACK.7 — The sleeve locks out new entries 15% below its peak, until it is back within 10% · ⚠ UNREVIEWED
+
+**Context.** He publishes no portfolio-level "down X% and stop" rule; what he says is "I try to
+contain them at 15-20%, which happen a few times per year" (`07`). The first draft had no
+portfolio-level throttle at all: the ladder read results and the tape, and a run of small losses
+across many names could carry on indefinitely at rung 0's two positions.
+
+**Choice.** A drawdown breaker with hysteresis, in the ladder itself: `MarketConfig.max_drawdown_pct`
+[15] locks, `resume_drawdown_pct` [10] releases; `market.drawdown_locked(drawdown_pct, was_locked)`
+is the state machine and `exposure_tier` applies it before the gate and the results (rung 0,
+`new_entries_allowed = false`, `drawdown_locked = true`); the plan answers every name
+`DRAWDOWN_LOCKOUT`. The bottom of his range (15%) is the lock, because the breaker's job is to
+contain the drawdown before it becomes the 20% he calls the top of it; the 10% release is the
+distance a locked sleeve — which can only recover through the positions it already holds — must
+climb back before it is allowed to add risk again, and the 5-point gap is what stops a sleeve
+at 14.9% from trading and stopping every other evening. Exits are managed as always; only new
+entries stop. The measurement is the sleeve's own EOD NAV against its own peak (SW9.5.1), never
+the whole account. The backtest applies the same function to its own equity curve.
+
+**Rejected.** A single threshold (flaps around it). 20% (the top of his range, and a fifth of the
+sleeve gone before anything reacts). A per-day loss cap (nothing he describes; the desk's
+`RISK_MAX_DAILY_LOSS_PCT` is the weekly book's and a different instrument). Reading the whole
+account's NAV (Track C §5: the sleeve never sizes against the whole account, and it should not
+be stopped by the weekly book's drawdown either).
+
+**Reversal.** Two numbers in `MarketConfig`; `max_drawdown_pct = 100` disables it.
+
+## PACK.8 — The swing GTT's limit rests 3% under its trigger · ⚠ UNREVIEWED
+
+**Context.** "I always use market stops, never limit stops." A Zerodha GTT fires a LIMIT order,
+and the gateway rests that limit at `GTT_LIMIT_FRACTION` (0.995) of the trigger — a half-percent
+cushion sized for the weekly book's vol-scaled 8–12% stops. A swing stop is one ADR or tighter,
+often 2–5%, on a name that moves 5%+ a day; a book falling fast can walk through half a percent
+between the trigger and the limit, and the stop rests unfilled while the position keeps falling
+— the one failure the method forbids.
+
+**Choice.** `place_gtt_stop` gains `limit_fraction: float | None = None` (additive; `None` is the
+constant, so every existing caller and test is byte-for-byte unchanged, and the weekly book's
+GTT tests still pin 88.55 on an 89 trigger). The swing route passes
+`C.SWING_GTT_LIMIT_FRACTION` — env `BASKFY_SWING_GTT_LIMIT_FRACTION`, default **0.97** — on every
+GTT it arms (a buy's, a partial's re-arm, a raised stop's, a re-arm), so the limit rests 3%
+under the trigger and fills on the way down the way a market stop would. 3% is a little over
+half a typical swing ADR: wide enough that a 5%-ADR name gapping through its stop still meets
+the limit, narrow enough that the worst fill a resting stop can take is bounded rather than
+"wherever the market is". The gateway refuses a fraction outside (0, 1] as a caller bug (a
+sell limit above its trigger cannot fill on the way down) before any layer runs; the dry-run
+journal records the fraction so the paper sessions rehearse it.
+
+**Rejected.** A market-order GTT leg (Kite's GTT API places LIMIT legs; there is no market leg
+to ask for). Changing `GTT_LIMIT_FRACTION` itself (would change the weekly book's resting
+stops — a live, order-placing system — from a swing-book decision). A cushion in ADRs per name
+(the gateway holds no ADR; a per-name number would be a second implementation of the stop,
+which is the thing the gateway exists not to be).
+
+**Reversal.** One env variable; `1.0` rests the limit on the trigger, `0.995` is the weekly
+book's.
+
+## PACK.9 — The 1.0% risk ceiling is kept, though he risked up to 1.5% with a small account · ⚠ UNREVIEWED
+
+**Context.** `07` quotes three ranges: "usually 0.25-1%. I rarely risk more than 1%", "most of
+the time 0.3-0.5%", and — when the account was small — "0.5-1.5%". The ceiling
+`BASKFY_SWING_RISK_PER_TRADE_PCT_MAX` is 1.0 and the default setting 0.5 (MD2).
+
+**Choice.** Kept at 1.0. The 1.5% is what he did with an account he could afford to blow up
+several times over (he did, and says so); this sleeve is one person's money at the end of a
+merge that exists so that it is not blown up, and `02` §3 gates the first real sessions at half
+risk. The ceiling is the top of the range he *recommends*, not the top of what he once did.
+His 30% position ceiling and 15–20 position count, which are recommendations, were adopted in
+the same pass.
+
+**Rejected.** 1.5 (his small-account number; a ceiling a setting can reach is a number the
+sleeve will one day trade at). 0.5 (would make the default the ceiling and MD2 moot).
+
+**Reversal.** One env variable, and a settings write.
 
 ---
 
@@ -1243,3 +1321,124 @@ the narrower rule a test can satisfy — no execution import, and with every str
 `fetch(` and no server action — because their job is to *name* the banned words.
 
 **Reversal.** Each admission is a named constant or a one-entry dict in the test file.
+
+## SW9.5.1 — The sleeve's EOD NAV is computed from the book, and the peak is the evening's · ⚠ UNREVIEWED
+
+**Context.** `07` says `03` §1's `sleeve_peak_inr` / `drawdown_pct` / `drawdown_locked` are
+"written by `swing-eod` from the sleeve's EOD NAV — `portfolio_nav` is the source". Nothing in
+`portfolio_nav_daily` describes this sleeve: that table values a user's portfolios from broker
+holdings, and the swing book is a sub-set of one broker account that the weekly book also
+trades in. There is no swing NAV to read.
+
+**Choice.** `tasks/swing.py::sleeve_nav` computes it from the book itself, for the book the
+ladder reads (PACK.6): `sleeve_capital_inr` + Σ `pnl_inr` of `CLOSED` positions closed on or
+before the session + Σ `(mark − entry_avg) × quantity_open` of `OPEN`/`PARTIAL` positions (the
+mark is the latest `ohlcv_daily.close` on or before the session, the entry when there is none)
++ Σ `(price − entry_avg) × quantity` over the `SELL` fills of those still-open positions (a
+partial's realised half, which no column carries until the position closes). Bounded by date
+like the closes the ladder reads (house rule 5). `sleeve_drawdown` raises the stored peak to
+tonight's NAV if higher — a null peak (the first evening) *is* tonight's NAV, so the first
+session is never locked; a peak of ₹0 or less divides nothing. Two consequences are decided
+with it: (a) the peak and the drawdown are written to `sw_config` **without** audit rows (they
+move most evenings; the day's market row is their history) while `drawdown_locked` **is**
+audited (a decision, with the NAV and the peak in the note); (b) the night the ladder switches
+books — the execution flag flipped since the previous settlement, read off
+`detail.closed_trades_read` — the peak starts over at that night's NAV, because a paper peak is
+not a level the real book has ever been at and a lock-out inherited from paper profits would
+stop the real book on its first day. The detection job's `write_market_row` computes the same
+measurement as a preview (as it does the rung) and writes nothing back; the evening's
+`settle_ladder` is authoritative.
+
+**Known edge.** Lowering `sleeve_capital_inr` reads as a drawdown of that size (the NAV falls,
+the peak does not). Conservative — it stops entries, never adds risk — and the reset is the
+same one the book switch uses. Not automated: a capital change is a person's decision, and
+whether it was a withdrawal or a correction is not something the row says.
+
+**Rejected.** Reading `portfolio_nav_daily` (not this sleeve). Storing a per-book peak (a second
+column for a case a reset handles). Auditing every evening's peak (the audit is a history of
+decisions, not a log of runs — SW8's own rule for the rung).
+
+**Reversal.** `sleeve_nav` is one function; `reset_peak` is one keyword.
+
+## SW9.5.2 — An unmeasured ADR is a refused stop, and the evening reads the latest detection row · ⚠ UNREVIEWED
+
+**Context.** `widest_stop_pct(adr_pct)` is now what sizes a stop, and the evening's
+`watch_items` took a watched name's ADR from **today's** `sw_setup_daily` row only — a flag
+detected on Monday and not re-detected on Wednesday (a tightness or volume edge) carried
+`adr_pct = 0` into the plan, which used to mean "trail the 20-day" and now means "no stop
+admitted" (`STOP_TOO_WIDE`). A `MANUAL` row with no detection behind it has no ADR at all.
+
+**Choice.** `watch_items` reads each name's **latest** detection row on or before the session
+(today's when there is one) — the rule the monitor's `SignalContext.detected` already uses — so
+a watched flag keeps its measured ADR across the sessions it is watched. A name the detectors
+have never seen stays at 0 and is refused: the rule is "not wider than the ADR", and a stop
+nobody can measure against the range is not shown to be inside it. The refusal names itself
+(`SIZE_REFUSED / STOP_TOO_WIDE`) rather than being waved through at the 10% cap.
+
+**Rejected.** Falling back to the 10% cap when the ADR is unknown (weakens the rule exactly for
+the rows a person typed by hand). Computing the ADR from bars for every watch item (the right
+long-term answer — the ADR is a property of the bars, not of the detector — and one more
+query the evening does not need tonight; noted for SW11 with the manual-row form).
+
+**Reversal.** One query in `watch_items`.
+
+## SW9.5.3 — The worker hands the plan the trader's three sizing knobs · ⚠ UNREVIEWED
+
+**Context.** `07`'s "the plan takes `min(rung, sizing.max_open_positions)`" is only true if the
+plan is given the trader's number. `load_swing_config` applied only the three liquidity floors
+from `sw_config`; `risk_per_trade_pct`, `max_position_pct` and `max_open_positions` — `03` §1's
+settings, PACK.5's "risk knobs *are* settings" — never reached `SizingConfig`, so the evening,
+the morning and the backtest runner sized every plan with the pack's defaults whatever the row
+said. Harmless so far only because MD2 chose the default (0.5%) and no one had raised the cap.
+
+**Choice.** `load_swing_config` applies the three (each already validated against its ceiling
+where it was written) to `SizingConfig` beside the floors. The desk's monitor (`swing_monitor.
+load_config`, SW6's file) still applies the floors only; MD6 has SW10 re-deriving a SIGNAL
+line's size at confirm time from `sw_config`, which is where the desk's copy belongs.
+
+**Rejected.** Leaving it (a setting the form accepts, audits and shows would size nothing).
+
+**Reversal.** Three keywords in one `replace`.
+
+## SW9.5.4 — Two defaults move in the migration, for rows nobody set · ⚠ UNREVIEWED
+
+**Context.** `sw_config.max_open_positions` defaulted to 8 (the old top rung) and `adr_min_pct`
+to 3.50; the engine's defaults are now 10 and 4.0. A row seeded at the old defaults and never
+touched would keep planning against numbers the rules no longer mean.
+
+**Choice.** `0030` moves the server defaults and updates rows sitting at **exactly** the old
+default. `apply_patch` writes no audit row for an unchanged value, so a row at 8 or 3.50 is a
+row nobody set — the seed's number — and a person who wants 3.5 back sets it, audited, in the
+form. No dev or live database has a swing row today (STATUS SW0: the dev database is at 0026),
+so in practice the UPDATE touches the test databases. The downgrade restores the defaults and
+leaves the values.
+
+**Rejected.** Leaving the rows (the evening would apply 3.5 while `04` says 4.0). Rewriting every
+row (a person's 3.0 is theirs).
+
+**Reversal.** The migration's downgrade.
+
+## Maulik's decisions, 2 Sep 2026 (taken in conversation; not ⚠ UNREVIEWED)
+
+Recorded verbatim from the review session so the run and the report build on them.
+
+| # | Decision | Where it lands |
+|---|---|---|
+| MD1 | **Sleeve capital ₹25,00,000.** `sw_config.sleeve_capital_inr` for the sole user; the seed keeps ₹0 (PACK) and the value is set through `PATCH /swing/config` in the first-morning steps | SW12 report, `RUN-AND-TEST.md` |
+| MD2 | **Risk per trade 0.5 %** (the default; ceiling 1.0 % kept, PACK.9) | unchanged code |
+| MD3 | **Notification: email through the existing mailer, one-way**, plus a **Telegram sender scaffolded dark** behind `BASKFY_SWING_TELEGRAM_BOT_TOKEN` / `BASKFY_SWING_TELEGRAM_CHAT_ID` — **never a confirm path**; a notification can only tell, never act | SW11 (`PgSignalStore.raise_signal` → notifier) |
+| MD4 | **Catalyst feed: free NSE corporate announcements**, for watchlist and EP-candidate symbols only, through the existing NSE provider and its rate limiter; store headline + timestamp + filing URL; auto-fill `sw_watch.catalyst`; link out rather than reproduce the text; add an **earnings-date flag** from the results calendar; single-tenant own-use — recorded as a **Track C §7 amendment** (news is not redistributed; it is a link on one person's watchlist) | SW11B (new module before SW12) |
+| MD5 | **S2 timing probe:** `tools/swing/kite_timing_probe.py` as a one-shot Beat task at 09:04 IST on weekdays, gated by `BASKFY_SWING_TIMING_PROBE=true`, self-disabling after one good run, writing `docs/swing/status/S2-kite-timing.md`; Maulik logs in to Kite before 09:00. Meanwhile the gap scan moves to **09:16** defensively and the opening range becomes **tick-based** (the candle source stays as the cross-check) | SW11 |
+| MD6 | **SIGNAL sizing is fixed at confirm time, in SW10:** `POST /swing/execute` re-derives the account context under a row lock on the day's `sw_session` (open exposure at cost + every line already CONFIRMED/SENT/FILLED today + cash), re-sizes the line against the rung's exposure ceiling, the position count and the per-session entry cap, and refuses with `EXPOSURE_FULL` / `TIER_FULL` / `SESSION_CAP` instead of sending; a SIGNAL plan's size is a preview, the confirm path is the gate; the monitor also re-reads context per trigger so the page shows the size that will be sent; a property test over sequences of confirms; the drill must show 25 %, not 34 % | SW10 (after SW9.5) |
+| MD7 | **SW9.5 first.** `07-primary-source-corrections.md` is executed as its own commit before SW10 is finished, because it changes numbers SW10's tests pin (stop ≤ 1 ADR, 3 new entries a session, `min(rung, cap)` positions, the 15 %/10 % drawdown lock-out, the 10-day-over-20-day index rule) | SW9.5 |
+| MD8 | **Execution flag.** Maulik's answer, verbatim: *"Okay, potato would be required. We'll go live right away."* The run reads this as intent to go live as soon as possible. **It changes nothing in this run:** `BASKFY_SWING_EXECUTION_ENABLED` stays false (kickoff constraint; charter: a Track B flag flip is never autonomous), and `docs/swing/02` §3 still gates the flip on its checklist — twenty paper sessions, the backtest reviewed, the sleeve and risk written here (MD1/MD2 — done), first sessions at half risk. Only Maulik can amend §3 and only his hand flips the flag in the desk `.env`. The word "potato" is not understood and is asked about in the next review batch | NEEDS-MAULIK, SW12 report |
+| MD9 | The ⚠ UNREVIEWED entries are reviewed **behavioural ones first, in conversation**; the rest stay tagged for asynchronous review | this file |
+| MD8′ | **Clarified:** "potato" was a typo. Maulik's decision: **no paper period is required; the book goes live as soon as the run is done.** What this changes: `docs/swing/02` §3's twenty-session gate becomes *advisory* (the counter stays on the page and in the report as information, not as a lock), amended in §3 under his name in SW12. What it does **not** change: the flag stays false for the whole run and every SW10 proof keeps asserting it; no session of this run places an order; the flip is Maulik's hand in the desk `.env` after the run, and the first five live sessions still run at half risk (MD12). The run records, in the report, that the code has never seen a live Kite morning (S2) — the risk of going live without one is his to take and is stated plainly | 02 §3 (SW12), NEEDS-MAULIK, SW12 report |
+| MD10 | **SW6.2 amended — `PENDING_RANGE` lines.** A live gap keeps no stop, but the MORNING plan shows it as a `PENDING_RANGE` line: no quantity, no stop, not confirmable, sorted by score with the others, **reserving one of the session's new-entry slots** so a lower-scored flag cannot crowd it out; an information-only preview ("≈ N shares if the stop lands 1 ADR below; locked-circuit: no fill") that is never sent. It becomes a real line only through the SIGNAL plan at range close with `stop = min(range low, LOD)`; a stop wider than 1 ADR skips it (`STOP_TOO_WIDE`) and frees the slot; a reserved slot that never triggers is freed at 10:45. Tests: a `PENDING_RANGE` line can never reach `/swing/execute`; the slot is freed by 10:45 | SW10.5 |
+| MD11 | **SW7.1 amended — the fill gap closed.** The buy is a marketable LIMIT at `min(trigger × 1.005, range_high + 0.25 × ADR)`, never MARKET; the request polls the order for up to 10 s (orders endpoint, ≤ 2 req/s): COMPLETE → GTT for the filled quantity + `sw_position` in the same request; OPEN/partial → `SENT` with the order id and the quantity filled so far, a GTT for that quantity now if > 0. Later fills are reconciled by the desk's `on_order_update` postback handler: each fill **modifies** the GTT quantity (never a second GTT); protection is never withheld because the stop distance grew past 1 ADR (the rule bounds entries, not protection). At 10:45 any open remainder is cancelled; at 15:15 an EOD sweep asserts no filled quantity is without a GTT (`SWING_POSITION_NAKED`) and re-arms. Tests: partial-then-complete ends with one GTT covering exactly the filled quantity; a cancelled remainder leaves the GTT untouched; a DRY_RUN fill follows the same path with `simulated=true` | SW10.5 (desk), SW11 (sweep + alert) |
+| MD12 | **SW7.2 amended — half risk at plan time, countdown persisted.** `risk_multiplier = 0.5` applies to `risk_per_trade_pct` before `size_position`, so the line shown is the line sent and every refusal sees the real size; SELL/RAISE quantities are never touched; `first_live_sessions_left` lives in `sw_config`, decremented once when a LIVE `sw_session` closes (never by a request; a restart changes nothing); the plan header says "first live sessions: N left · risk 0.25 %"; the journal tags those trades. Tests: the fifth session decrements to 0 and the sixth plans at full risk; a restart mid-countdown does not reset it; a SELL line's quantity is identical with and without the multiplier | SW10.5 |
+| MD13 | **SW8.1 amended — the ladder reads real closes from day one** (STANDING-ANSWERS A10): no paper book exists, PACK.6's paper clause is void, the rung starts at 0; one idempotent, date-bound settlement at 21:05 after `manage` and fill reconciliation; the 09:09 job runs it only as a catch-up when no record exists for the previous session | SW10.5 |
+| MD14 | **SW9.1 amended — constant ₹10 lakh sleeve + the index rule** (A12): NIFTY 500 from `index_snapshot_daily` (NIFTY 50 fallback), 10/20 SMAs in-frame with no look-ahead; the drawdown lock-out on the constant-sleeve curve; gate-on vs gate-off reported per year and per setup with breadth's and the index rule's contributions labelled separately | SW9.6 |
+| MD15 | **SW9.2 / SW9.3 kept** (A13) | — |
+| MD16 | **SW5.1 amended — the watch funnel** (A14): top 20 flags by score + every EP auto-watched; the monitor watches all; daily focus = top 5 + every EP → push + top of page; the rest below the fold, never pushed; MANUAL rows expire after 10 sessions unless re-confirmed | SW10.5 |
+| MD17 | **Process** (STANDING-ANSWERS header + §C): read `STANDING-ANSWERS.md` before any question; apply it and cite "(STANDING-ANSWERS §n)"; otherwise the pack default, decide-record-continue; ask only for a Kite credential, a data-losing schema change, the weekly book / R1–R4, or a Track C boundary; everything else → `docs/swing/QUESTIONS.md` with the recommendation applied, ⚠ UNREVIEWED | this run |

@@ -390,7 +390,10 @@ async def _setup(  # noqa: PLR0913 - one keyword per stored column a test may se
             trigger=Decimal(trigger),
             stop_ref=Decimal(stop_ref),
             adj_factor=Decimal(1),
-            adr_pct=Decimal("5.00"),
+            # 5.60 since SW9.5: the widest stop is one ADR (`04` §6), and a 104 stop under a 110
+            # trigger is 5.45% — inside 5.60, outside the 5.00 the fixture used to carry; under
+            # the 6% fast-trail line, so the line still trails the 20-day.
+            adr_pct=Decimal("5.60"),
             turnover_avg=100_000_000,
             locked_upper_circuit=locked,
             listed_within_2y=False,

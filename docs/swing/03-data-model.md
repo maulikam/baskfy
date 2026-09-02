@@ -1,0 +1,184 @@
+# 03 — Data model: the `sw_` schema
+
+Postgres, Alembic migration `0028_swing.py` in `services/api/alembic/versions/`, SQLAlchemy
+models in `packages/core/src/baskfy_core/models/swing.py`. Conventions inherited from
+`models/base.py`: `PRICE` (18,2) for prices and levels, `PRICE_RAW` (18,4) where an exchange
+print must survive adjustment, `INR` (12,2) for money, `BREADTH` (7,4) for breadth percentages,
+`BigIntPk`, `CreatedAt`, JSONB for `detail`. Every table carries `user_id` (P4.1) and, where a
+broker is involved, `broker_account_id`. Money and prices are `numeric`, never `float` (house
+rule 9); rounding happens at write time (rule 8).
+
+Nothing here replaces an existing table. The joins are:
+
+```
+instrument (id, symbol, kite_token, listed_on, series)      ← every sw_ row's instrument_id
+ohlcv_daily (instrument_id, date, o/h/l/c adjusted, close_raw, adj_factor, turnover, upper_circuit)
+factor_daily (instrument_id, date, ret_1m/3m/6m, ma_20/50, high_1y, vol_avg_1m)   ← Leaders tab, breadth
+market_health_daily (index_id, date, pct_above_20dma …)      ← sector strip
+index_snapshot_daily (index_id, date, close)                  ← the index reading for the gate
+desk journal (order_journal / fills, via packages/execution)  ← fills for sw_position
+```
+
+## 1. `sw_config` — one row per user
+
+| Column | Type | Meaning |
+|---|---|---|
+| `user_id` PK | bigint FK | sole user in this run |
+| `sleeve_capital_inr` | INR | the cash the swing book may deploy. **Default 0** — nothing is planned until Maulik sets it (Track A setting, user-editable, validated > 0 to plan) |
+| `risk_per_trade_pct` | numeric(5,3) | default 0.500; **must be ≤ `BASKFY_SWING_RISK_PER_TRADE_PCT_MAX`** (system-only env, default 1.0) — the M4.1 boundary |
+| `max_position_pct` | numeric(5,2) | default 20.00; ≤ `BASKFY_SWING_MAX_POSITION_PCT_MAX` (default 25.00) |
+| `max_open_positions` | smallint | default 8; ≤ `BASKFY_SWING_MAX_OPEN_POSITIONS_MAX` (default 10) |
+| `or_window_minutes` | smallint | 1 / 5 / 60; default 5 |
+| `stop_mode` | text | `LOW_OF_DAY` / `OPENING_RANGE_LOW`; default `LOW_OF_DAY` |
+| `adr_min_pct`, `turnover_min_inr`, `price_min` | numeric | the liquidity floors; defaults 3.5 / 5e7 / 20 |
+| `exposure_level` | smallint | the ladder rung in force, 0–3; written by `swing-eod`, never by a form |
+| `first_live_sessions_left` | smallint | counts down from 5 once execution is enabled; `risk_multiplier` 0.5 while > 0 (`02` §3.5) |
+| `updated_at`, `updated_by` | | who last wrote the row |
+
+### 1b. `sw_config_audit` — the history of that row (SW2.2)
+
+`updated_at`/`updated_by` say who touched the settings last; they cannot say what
+`risk_per_trade_pct` **was** on the morning a trade was sized, which is the question the desk's
+own `settings_audit` exists to answer ("You cannot reconstruct why a trade was sized the way it
+was without knowing what the parameters were at the time"). So the audit is a table, shaped like
+the desk's and written in the same transaction as the change.
+
+| Column | Meaning |
+|---|---|
+| `id` `BigIntPk`, `user_id` | |
+| `key` | the `sw_config` column that changed, e.g. `risk_per_trade_pct` |
+| `old_value`, `new_value` | rendered as text, as the desk's table does — one row **per field** |
+| `changed_at`, `changed_by` | a user id, or a job name for the fields a job owns (`swing-eod` writes `exposure_level`; `/swing/execute` writes `first_live_sessions_left`) |
+| `note` | free text, e.g. the reason a ceiling-bound value was lowered |
+
+Every threshold **not** listed here (base geometry, EP gap, ladder tiers…) is a
+`baskfy_core.swing.config` field with the pack's default and is not a setting in this run
+(PACK.5). Changing one is a code change with a DECISIONS-SW entry.
+
+## 2. `sw_setup_daily` — what the detectors found, per day
+
+PK `(user_id, date, instrument_id, setup)` — `user_id` leads because Track C §6 requires it on
+every `sw_` row and the liquidity floors that decide who is a candidate live in `sw_config`,
+which is per user (SW2.1). One row per candidate per setup per day; **snapshotted,
+never recomputed** for a past date (the same rule as `market_health_daily`), because a
+detector recalibration must not rewrite the record of what the system saw.
+
+| Column | Type | From |
+|---|---|---|
+| `date`, `instrument_id`, `setup` | | `CANDIDATE_COLUMNS` |
+| `status` | text | `SETTING_UP` / `BREAKOUT_TODAY` / `GAP_DAY` / `RUNNING` / `EXHAUSTION` |
+| `score` | numeric(5,2) | 0–100 |
+| `close`, `trigger`, `stop_ref`, `pivot_high` | PRICE | **exchange prices** — the worker divides the adjusted level by `adj_factor` at write time and records `adj_factor` alongside |
+| `adj_factor` | numeric(18,10) | the row's factor, so a later split can be recognised |
+| `adr_pct`, `prior_move_pct`, `base_depth_pct`, `tightness_adr`, `dryup_ratio`, `dist_ma_fast_pct`, `dist_ma_slow_pct`, `rvol`, `gap_pct` | numeric(10,2) | nullable per setup |
+| `turnover_avg` | bigint ₹ | |
+| `base_bars`, `up_streak` | smallint | |
+| `locked_upper_circuit` | bool | |
+| `sector_slug` | text | the instrument's sector index at `date`, from `index_member_daily`; nullable |
+| `listed_within_2y` | bool | `instrument.listed_on` ≥ date − 730 days |
+| `pipeline_run_id` | bigint FK | which nightly run produced it (provenance, as `screen_run` has) |
+
+Index: `(date, setup, score desc)`; `(instrument_id, date)`.
+
+## 3. `sw_market_daily` — breadth and the gate, per day
+
+PK `(user_id, date)` — same reason as §2 (SW2.1): breadth is measured over *this user's*
+liquid universe. Written by `swing-eod`.
+
+| Column | Type |
+|---|---|
+| `constituent_count` | int — the liquid universe that day |
+| `pct_up_strong_1m`, `pct_new_52w_high`, `pct_above_ma_slow` | BREADTH |
+| `index_slug`, `index_close`, `index_ma_fast`, `index_ma_slow` | the reading used (`nifty-500`, fallback `nifty-50`) |
+| `gate` | `GREEN` / `AMBER` / `RED` |
+| `exposure_level`, `max_open_positions`, `max_exposure_pct`, `new_entries_allowed` | the tier for the next session |
+| `parabolic_count` | int — how many `PARABOLIC_SHORT` rows today; froth gauge |
+| `detail` | JSONB — the closed-trade R list the ladder read, so the rung is explainable |
+
+## 4. `sw_watch` — the watchlist with levels
+
+`BigIntPk`; unique `(user_id, instrument_id, setup, added_on)`.
+
+| Column | Meaning |
+|---|---|
+| `instrument_id`, `setup`, `source` | `source` ∈ `DETECTOR` / `MANUAL` |
+| `added_on`, `expires_on` | flags expire after 10 sessions without a trigger, EPs after `ep.valid_bars` (3) |
+| `trigger`, `stop_ref` | exchange prices, refreshed by `swing-premarket` from the latest bar; a MANUAL row keeps what Maulik typed |
+| `setup_daily_date` | FK back to the `sw_setup_daily` row it came from (nullable for MANUAL) |
+| `note`, `catalyst` | free text (the "news check") |
+| `state` | `WATCHING` / `TRIGGERED` / `EXPIRED` / `DISMISSED` |
+
+The web app may add/dismiss/annotate rows (they move no money). Nothing else on `/swing` mutates.
+
+## 5. `sw_signal` — what the monitor raised
+
+`BigIntPk`. Append-only.
+
+| Column | Meaning |
+|---|---|
+| `watch_id` FK, `instrument_id`, `setup` | |
+| `session_date`, `raised_at` (timestamptz) | |
+| `state` | `TriggerState` value — `TRIGGERED` rows are what the desk page shows; `LOCKED_UPPER_CIRCUIT` / `BELOW_PIVOT` are kept for the record |
+| `or_window_minutes`, `range_high`, `range_low`, `low_of_day`, `last_price` | the verdict's inputs |
+| `entry`, `stop` | the verdict's outputs |
+| `plan_line_id` | FK, set when the signal became a plan line |
+
+## 6. `sw_plan` and `sw_plan_line` — a day's plan
+
+Mirrors the desk's plan lifecycle: `plan_id` (uuid), `built_at`, **`expires_at = built_at +
+30 min`**, `plan_hash` (`SwingPlan.plan_hash()`), `gate`, `exposure_level`, `total_risk_inr`,
+`total_new_exposure_inr`, `source` ∈ `EOD_PREVIEW` / `MORNING` / `SIGNAL`. A plan built by the
+EOD job is a **preview**; the morning plan is rebuilt at 09:10 from the same watchlist with
+pre-open prices, and a `SIGNAL` plan is built the moment a trigger fires (one line).
+
+`sw_plan_line`: `kind` (`BUY_ON_TRIGGER` / `SELL_AT_OPEN` / `RAISE_GTT_STOP`), `instrument_id`,
+`setup`, `quantity`, `trigger`, `stop`, `risk_inr`, `position_value`, `trail`, `note`, `state`
+(`PROPOSED` / `CONFIRMED` / `SENT` / `FILLED` / `REJECTED` / `EXPIRED` / `SKIPPED`),
+`client_id = plan_id:symbol:kind` (the gateway's idempotency key, as the desk does), `journal_ref`.
+
+`sw_plan_skip`: `(plan_id, instrument_id, reason, detail)` — the `Skipped` tuples. A plan is
+not honest without them.
+
+## 7. `sw_position` — the book
+
+`BigIntPk`; one row per entry, **never per symbol** (a second entry into a name after an exit
+is a second row).
+
+| Column | Meaning |
+|---|---|
+| `instrument_id`, `setup`, `user_id`, `broker_account_id` | |
+| `entry_date`, `entry_avg` (PRICE_RAW), `quantity_entered` | from fills |
+| `initial_stop`, `stop` | the stop in force; `stop` only ever rises (asserted) |
+| `gtt_id`, `gtt_trigger`, `gtt_armed_at` | the resting GTT; `gtt_id` null with `quantity_open > 0` is an **alert** (`SWING_POSITION_NAKED`) |
+| `trail` | `MA10` / `MA20` |
+| `partial_done`, `partial_date` | |
+| `quantity_open` | after partials; 0 when closed |
+| `state` | `OPEN` / `PARTIAL` / `CLOSED` |
+| `closed_on`, `exit_avg`, `close_reason` | `ActionReason` value or `MANUAL` |
+| `r_multiple`, `pnl_inr` | written at close from `journal.ClosedTrade` |
+| `simulated` | bool — **true for every DRY_RUN / flag-off fill**; the journal page labels them |
+
+`sw_fill`: one row per fill (`position_id`, `side`, `quantity`, `price`, `filled_at`,
+`journal_ref`, `simulated`), so `exit_avg` is derivable and auditable.
+
+## 8. `sw_session` — one row per session the system ran
+
+`session_date` PK, `mode` (`DRY_RUN` / `LIVE`), `monitor_ran`, `plan_ids`, `signals`,
+`confirms`, `fills`, `manage_actions`, `notes`. This is the paper track record `02` §3.2 counts.
+
+## 9. What the worker reads to compute a day
+
+```
+bars      = ohlcv_daily ⋈ instrument (active, series in EQ/BE) for the last 200 trading days
+                → with_swing_indicators(bars) → detect_setups(indicated, as_of)
+breadth   = the liquid rows at as_of + factor_daily.high_1y  → breadth_snapshot
+index     = index_snapshot_daily for nifty-500 (10/20-bar SMA computed in the task)
+results   = sw_position closed rows, last 5 by closed_on → exposure_tier
+positions = sw_position open rows + today's bar + ma10/ma20 → stops.manage → exit lines
+watch     = sw_watch WATCHING rows → WatchItem (exchange prices) → build_entries → plan
+```
+
+Bars enter core **adjusted**; levels leave core adjusted and are converted to exchange prices
+by the task (`level / adj_factor` of the as-of row) before they are stored or shown. A split
+between detection and the morning invalidates the level: `swing-premarket` recomputes from the
+latest bar rather than trusting last night's number.

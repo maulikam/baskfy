@@ -44,7 +44,9 @@ from baskfy_providers.ports import REFERENCE_CAPABILITIES, Capability, ProviderH
 from baskfy_providers.ratelimit import RateLimiter
 from baskfy_providers.records import (
     BHAVCOPY_SCHEMA,
+    CatalystRecord,
     CorporateAction,
+    EarningsDateRecord,
     EquityFundamental,
     IndexSnapshot,
     ListingRecord,
@@ -72,6 +74,27 @@ _GET_QUOTE_API: Final = "/api/NextApi/apiClient/GetQuoteApi"
 
 #: Rs crore. docs/13 §2 finding 7: marketcap is an integer in this unit.
 _CRORE: Final = Decimal("10000000")
+
+#: SW11B (STANDING-ANSWERS A3): the two corporate-filings reads behind the catalyst feed. Both
+#: are the JSON endpoints the filings pages call, per symbol, under the same cookie/header
+#: discipline as the quote proxy above. The archive kinds are per symbol per day, so a morning
+#: that runs twice parses the archived bytes rather than asking NSE again.
+KIND_ANNOUNCEMENTS: Final = "announcements"
+KIND_EVENT_CALENDAR: Final = "event-calendar"
+_ANNOUNCEMENTS_API: Final = "/api/corporate-announcements?index=equities&symbol="
+_EVENT_CALENDAR_API: Final = "/api/event-calendar?index=equities&symbol="
+#: Where a row links out to when the calendar entry has no attachment of its own — the
+#: symbol's filings page on the exchange, never a copy of anything.
+_EVENT_CALENDAR_PAGE: Final = "/companies-listing/corporate-filings-event-calendar?symbol="
+#: ``desc`` and NSE's one-line summary make a headline; anything longer is the filing, which
+#: the feed does not carry (A3: "link out, do not reproduce text").
+HEADLINE_MAX_CHARS: Final = 160
+#: ``sw_catalyst.source`` values, and the record's.
+CATALYST_SOURCE_ANNOUNCEMENT: Final = "NSE_ANNOUNCEMENT"
+CATALYST_SOURCE_EVENT_CALENDAR: Final = "NSE_EVENT_CALENDAR"
+#: An event-calendar ``purpose`` that names a result. NSE writes "Financial Results",
+#: "Financial Results/Dividend", "Audited Financial Results" and the like; the word is stable.
+_RESULTS_PURPOSE: Final = re.compile(r"\bresults?\b", re.IGNORECASE)
 
 #: NSE serves its public files only to something that looks like a browser that has already
 #: visited the site. These headers plus a primed cookie jar are the minimum that works.
@@ -468,6 +491,69 @@ class NSEProvider:
         if not codes:
             return None
         return "EQ" if "EQ" in codes else codes[0]
+
+    # --- SW11B: the catalyst feed (STANDING-ANSWERS A3) -------------------
+
+    def announcements(self, symbols: Sequence[str], *, on: dt.date) -> list[CatalystRecord]:
+        """Corporate announcements for ``symbols``, newest first per symbol.
+
+        One archived request per symbol, each through the cookie prime and the limiter. A
+        symbol NSE answers with 404 (renamed, delisted, never listed) yields no rows — recorded
+        by absence, exactly as :meth:`equity_fundamentals` treats a missing quote. Anything
+        else that goes wrong — a 429, a 5xx, an unparseable body — raises the provider's own
+        error type; the caller decides how soft to fail, not this layer.
+        """
+        records: list[CatalystRecord] = []
+        for symbol in symbols:
+            token = symbol.strip().upper()
+            if not token:
+                continue
+            payload = self._filings_payload(KIND_ANNOUNCEMENTS, _ANNOUNCEMENTS_API, token, on)
+            if payload is not None:
+                records.extend(
+                    parse_announcements(
+                        payload,
+                        fallback_symbol=token,
+                        archive_url=self._settings.nse_archive_url,
+                    )
+                )
+        return records
+
+    def results_calendar(self, symbols: Sequence[str], *, on: dt.date) -> list[EarningsDateRecord]:
+        """Board meetings whose purpose is a financial result, from NSE's event calendar.
+
+        Every listed meeting is returned, past and future; the caller picks the one it wants
+        (the nearest on or after the session, for the watchlist's flag). Same absence rule
+        and the same error discipline as :meth:`announcements`.
+        """
+        records: list[EarningsDateRecord] = []
+        page = f"{self._settings.nse_base_url}{_EVENT_CALENDAR_PAGE}"
+        for symbol in symbols:
+            token = symbol.strip().upper()
+            if not token:
+                continue
+            payload = self._filings_payload(KIND_EVENT_CALENDAR, _EVENT_CALENDAR_API, token, on)
+            if payload is not None:
+                records.extend(
+                    parse_results_calendar(payload, fallback_symbol=token, page_url=page)
+                )
+        return records
+
+    def _filings_payload(self, kind: str, api: str, token: str, on: dt.date) -> bytes | None:
+        try:
+            return self._archived(
+                f"{kind}/{token}",
+                on,
+                f"{self._settings.nse_base_url}{api}{quote(token)}",
+                extension="json",
+                content_type="application/json",
+            )
+        except UnexpectedPayload as exc:
+            # 404 — NSE does not know this name today. Absence, not an invented row. Every
+            # other 4xx is a real refusal and stays loud.
+            if "returned 404" in str(exc):
+                return None
+            raise
 
     # --- internals ------------------------------------------------------
 
@@ -963,3 +1049,150 @@ def _to_decimal(text: str) -> Decimal | None:
         return Decimal(text)
     except InvalidOperation:
         return None
+
+
+# ---------------------------------------------------------------------------
+# SW11B: the catalyst feed's two parsers (STANDING-ANSWERS A3)
+# ---------------------------------------------------------------------------
+
+#: The exchange stamps announcements in IST, without an offset. ``published_at`` is stored as
+#: timestamptz, so the offset is attached here, once, where the source's convention is known.
+IST: Final = dt.timezone(dt.timedelta(hours=5, minutes=30), name="Asia/Kolkata")
+
+_STAMP_FORMATS: Final[tuple[str, ...]] = (
+    "%d-%b-%Y %H:%M:%S",  # an_dt / dt: "01-Sep-2026 18:32:11"
+    "%Y-%m-%d %H:%M:%S",  # sort_date: "2026-09-01 18:32:11"
+    "%d-%b-%Y",  # a date-only stamp, seen on older rows
+)
+
+
+def _stamp(value: object) -> dt.datetime | None:
+    text = _clean(value)
+    if text is None:
+        return None
+    for fmt in _STAMP_FORMATS:
+        try:
+            return dt.datetime.strptime(text, fmt).replace(tzinfo=IST)
+        except ValueError:
+            continue
+    return None
+
+
+def _first_stamp(row: Mapping[str, object], candidates: tuple[str, ...]) -> dt.datetime | None:
+    """The first candidate that *parses* — NSE ships ``an_dt`` as ``""`` beside a filled
+    ``sort_date`` often enough that "first key present" would lose the stamp."""
+    for candidate in candidates:
+        stamp = _stamp(row.get(candidate))
+        if stamp is not None:
+            return stamp
+    return None
+
+
+def _filings_rows(payload: bytes, *, context: str) -> list[dict[str, object]]:
+    """The list NSE's filings endpoints answer with. A ``{}`` or a non-list is damage; an
+    empty list is an honest "nothing filed" and parses to no rows."""
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise UnexpectedPayload(
+            f"could not parse {context} as JSON: {exc}", provider=PROVIDER_NAME
+        ) from exc
+    if isinstance(data, dict) and isinstance(data.get("data"), list):
+        data = data["data"]
+    if not isinstance(data, list):
+        raise UnexpectedPayload(
+            f"{context}: expected a JSON list, got {type(data).__name__}", provider=PROVIDER_NAME
+        )
+    return [row for row in data if isinstance(row, dict)]
+
+
+def _headline(subject: str | None, summary: str | None) -> str | None:
+    """NSE's subject line plus its one-line summary, capped. Never the attachment body."""
+    parts: list[str] = []
+    if summary and subject and summary.lower().startswith(subject.lower()):
+        parts.append(summary)  # NSE repeats the subject at the head of its summary
+    else:
+        parts.extend(part for part in (subject, summary) if part)
+    text = " — ".join(" ".join(part.split()) for part in parts)
+    if not text:
+        return None
+    if len(text) > HEADLINE_MAX_CHARS:
+        text = text[: HEADLINE_MAX_CHARS - 1].rstrip() + "…"
+    return text
+
+
+def _absolute(url: str, base: str) -> str:
+    """NSE's attachment links are absolute; a relative one is joined, never guessed at."""
+    if url.startswith(("http://", "https://")):
+        return url
+    return f"{base}/{url.lstrip('/')}"
+
+
+def parse_announcements(
+    payload: bytes, *, fallback_symbol: str, archive_url: str
+) -> list[CatalystRecord]:
+    """Read ``/api/corporate-announcements`` into records — headline, stamp and link only.
+
+    A row without an attachment URL is dropped and not invented: the feed is links, and a
+    headline with nowhere to link is text the feed would be reproducing. A row without a stamp
+    is kept with ``published_at=None`` — it is still a link, it just cannot be "newest".
+    Newest first, undated rows last, so a caller taking the first row takes the latest.
+    """
+    rows = _filings_rows(payload, context=f"{fallback_symbol} announcements")
+    records: list[CatalystRecord] = []
+    for row in rows:
+        url = _clean(_first(row, ("attchmntFile", "attachmentFile", "attchmntfile")))
+        if url is None:
+            continue
+        headline = _headline(
+            _clean(_first(row, ("desc", "subject", "sm_desc"))),
+            _clean(_first(row, ("attchmntText", "attachmentText"))),
+        )
+        if headline is None:
+            continue
+        records.append(
+            CatalystRecord(
+                symbol=_clean(_first(row, ("symbol", "SYMBOL"))) or fallback_symbol,
+                headline=headline,
+                published_at=_first_stamp(row, ("an_dt", "sort_date", "dt", "exchdisstime")),
+                url=_absolute(url, archive_url),
+                source=CATALYST_SOURCE_ANNOUNCEMENT,
+            )
+        )
+    records.sort(key=_newest_first)
+    return records
+
+
+def _newest_first(record: CatalystRecord) -> tuple[bool, float]:
+    stamp = record.published_at
+    return (stamp is None, -stamp.timestamp() if stamp is not None else 0.0)
+
+
+def parse_results_calendar(
+    payload: bytes, *, fallback_symbol: str, page_url: str
+) -> list[EarningsDateRecord]:
+    """Read ``/api/event-calendar`` into the meetings whose purpose names a result.
+
+    AGMs, fund raising and the rest are not earnings and are dropped; a row with no readable
+    date cannot be a flag and is dropped too. Soonest first.
+    """
+    rows = _filings_rows(payload, context=f"{fallback_symbol} event calendar")
+    records: list[EarningsDateRecord] = []
+    for row in rows:
+        purpose = _clean(_first(row, ("purpose", "bm_desc", "PURPOSE")))
+        if purpose is None or _RESULTS_PURPOSE.search(purpose) is None:
+            continue
+        event_date = _date(_first(row, ("bm_date", "date", "BM_DATE")))
+        if event_date is None:
+            continue
+        symbol = _clean(_first(row, ("symbol", "SYMBOL"))) or fallback_symbol
+        records.append(
+            EarningsDateRecord(
+                symbol=symbol,
+                event_date=event_date,
+                purpose=" ".join(purpose.split()),
+                url=f"{page_url}{quote(symbol)}",
+            )
+        )
+    records.sort(key=lambda r: r.event_date)
+    return records

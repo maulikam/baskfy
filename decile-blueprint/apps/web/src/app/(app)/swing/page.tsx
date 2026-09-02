@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Answer, Mark } from "@/components/shell/answer";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
+import { CatalystLink } from "@/components/swing/catalyst-link";
 import { formatTradeDate } from "@/lib/format";
 import { fetchSectors, fetchSetups, type SwingSetup } from "@/lib/swing/fetch";
 import { PAGES } from "@/lib/vocabulary";
@@ -104,14 +105,20 @@ function SetupTable({ rows }: { rows: SwingSetup[] }) {
             <th className="py-2 pr-3 font-medium">ADR</th>
             <th className="py-2 pr-3 font-medium">Turnover</th>
             <th className="py-2 pr-3 font-medium">Sector</th>
+            <th className="py-2 pr-3 font-medium">Catalyst</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={`${row.setup}-${row.instrument_id}`} className="border-b border-border/40">
+            <tr
+              key={`${row.setup}-${row.instrument_id}`}
+              className="border-b border-border/40"
+            >
               <td className="py-2 pr-3">
                 <span className="font-medium">{row.symbol}</span>
-                <span className="ml-2 text-xs text-muted-foreground">{row.name}</span>
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {row.name}
+                </span>
                 {row.locked_upper_circuit ? (
                   <span
                     className="ml-2 text-xs text-amber-600"
@@ -131,13 +138,22 @@ function SetupTable({ rows }: { rows: SwingSetup[] }) {
               </td>
               <td className="py-2 pr-3 tabular-nums">{row.score.toFixed(0)}</td>
               <td className="py-2 pr-3 tabular-nums">{money(row.close)}</td>
-              <td className="py-2 pr-3 tabular-nums font-medium">{money(row.trigger)}</td>
+              <td className="py-2 pr-3 tabular-nums font-medium">
+                {money(row.trigger)}
+              </td>
               <td className="py-2 pr-3 tabular-nums">{money(row.stop_ref)}</td>
-              <td className="py-2 pr-3 tabular-nums">{percent(row.stop_distance_pct)}</td>
+              <td className="py-2 pr-3 tabular-nums">
+                {percent(row.stop_distance_pct)}
+              </td>
               <td className="py-2 pr-3 tabular-nums">{percent(row.adr_pct)}</td>
-              <td className="py-2 pr-3 tabular-nums">{crore(row.turnover_avg)}</td>
+              <td className="py-2 pr-3 tabular-nums">
+                {crore(row.turnover_avg)}
+              </td>
               <td className="py-2 pr-3 text-xs text-muted-foreground">
                 {row.sector_slug ?? "—"}
+              </td>
+              <td className="py-2 pr-3 text-xs text-muted-foreground">
+                <CatalystLink feed={row.catalyst_feed} />
               </td>
             </tr>
           ))}
@@ -148,7 +164,10 @@ function SetupTable({ rows }: { rows: SwingSetup[] }) {
 }
 
 export default async function SwingSetupsPage() {
-  const [setups, sectors] = await Promise.all([fetchSetups({}), fetchSectors()]);
+  const [setups, sectors] = await Promise.all([
+    fetchSetups({}),
+    fetchSectors(),
+  ]);
 
   const rows = setups?.data ?? [];
   const gate = setups?.gate ?? null;
@@ -177,10 +196,13 @@ export default async function SwingSetupsPage() {
       >
         {gate ? (
           <>
-            The tape is <Mark>{gate}</Mark> — {GATE_COPY[gate] ?? "read the market tab"}. The
-            allocation may hold up to <Mark>{setups?.max_open_positions ?? 0} positions</Mark> and{" "}
-            <Mark>{(setups?.max_exposure_pct ?? 0).toFixed(0)}% of the allocation</Mark>, which is rung{" "}
-            {(setups?.exposure_level ?? 0) + 1} of 4.
+            The tape is <Mark>{gate}</Mark> —{" "}
+            {GATE_COPY[gate] ?? "read the market tab"}. The allocation may hold
+            up to <Mark>{setups?.max_open_positions ?? 0} positions</Mark> and{" "}
+            <Mark>
+              {(setups?.max_exposure_pct ?? 0).toFixed(0)}% of the allocation
+            </Mark>
+            , which is rung {(setups?.exposure_level ?? 0) + 1} of 4.
           </>
         ) : (
           <>No scan has run yet, so there is nothing to say about today.</>
@@ -202,10 +224,15 @@ export default async function SwingSetupsPage() {
                     : "rounded-md border border-border/50 px-3 py-1.5 text-sm text-muted-foreground"
                 }
               >
-                <span className="font-medium">{sector.slug.replace(/^nifty-/, "")}</span>{" "}
-                <span className="tabular-nums">{sector.pct_above_ma_slow.toFixed(0)}%</span>
+                <span className="font-medium">
+                  {sector.slug.replace(/^nifty-/, "")}
+                </span>{" "}
+                <span className="tabular-nums">
+                  {sector.pct_above_ma_slow.toFixed(0)}%
+                </span>
                 <span className="ml-2 text-xs">
-                  {sector.candidates} {sector.candidates === 1 ? "candidate" : "candidates"}
+                  {sector.candidates}{" "}
+                  {sector.candidates === 1 ? "candidate" : "candidates"}
                 </span>
               </li>
             ))}
@@ -216,10 +243,16 @@ export default async function SwingSetupsPage() {
       {SETUP_SECTIONS.map((section) => {
         const sectionRows = rows.filter((row) => row.setup === section.key);
         return (
-          <section key={section.key} aria-label={section.heading} className="space-y-3">
+          <section
+            key={section.key}
+            aria-label={section.heading}
+            className="space-y-3"
+          >
             <div className="space-y-1">
               <h2 className="text-lg font-medium">{section.heading}</h2>
-              <p className="max-w-[70ch] text-sm text-muted-foreground">{section.blurb}</p>
+              <p className="max-w-[70ch] text-sm text-muted-foreground">
+                {section.blurb}
+              </p>
             </div>
             {sectionRows.length > 0 ? (
               <SetupTable rows={sectionRows} />

@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+from collections.abc import Awaitable, Callable, Sequence
 from decimal import Decimal
+from pathlib import Path
 from typing import Final
 
 from celery import shared_task
@@ -28,7 +30,9 @@ from baskfy_api.screener import (
 )
 from baskfy_core.models.base import JsonObject
 from baskfy_providers.errors import TransientProviderError
-from baskfy_providers.factory import build_kite_provider
+from baskfy_providers.factory import build_kite_provider, build_nse_provider
+from baskfy_providers.kite import KiteProvider
+from baskfy_providers.records import QuoteRecord
 from baskfy_providers.settings import get_provider_settings
 from baskfy_worker import kite_session_cli, ops
 from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
@@ -60,8 +64,16 @@ from baskfy_worker.tasks.swing import (
     run_detect_swing,
 )
 from baskfy_worker.tasks.swing_backtest import DEFAULT_START, SWING_BACKTEST_TASK, run_and_commit
+from baskfy_worker.tasks.swing_catalyst import run_swing_catalyst
 from baskfy_worker.tasks.swing_eod import run_swing_eod
+from baskfy_worker.tasks.swing_ops import (
+    check_detect_fresh,
+    check_gtt_at_1515,
+    check_monitor_started,
+    check_orders_after_cutoff,
+)
 from baskfy_worker.tasks.swing_premarket import STAGE_GAPS, QuoteSource, run_swing_premarket
+from baskfy_worker.tasks.swing_timing_probe import DONE_MARKER, probe_once
 from baskfy_worker.telemetry import provider_retry_hooks
 
 #: Earliest IST wall-clock at which a session's own data can exist. NSE closes at 15:30 and
@@ -636,7 +648,7 @@ def swing_backtest_task(
 
 @shared_task(name="baskfy.swing.premarket", acks_late=True)
 def swing_premarket_task(session_date: str | None = None, stage: str = STAGE_GAPS) -> JsonObject:
-    """SW6: refresh the levels (08:50), scan the pre-open for gaps and plan the morning (09:09).
+    """SW6: refresh the levels (08:50), scan the open for gaps and plan the morning (09:16).
 
     The quote source is the Kite provider, built here and only when
     ``BASKFY_SWING_EP_PREMARKET_ENABLED`` is true — with the flag off the task makes no Kite
@@ -663,6 +675,155 @@ def swing_premarket_task(session_date: str | None = None, stage: str = STAGE_GAP
             quotes=quotes,
             now=dt.datetime.now(tz=IST).replace(tzinfo=None),
             execution_enabled=settings.swing_execution_enabled,
+        )
+        return {"date": day.isoformat(), **report.as_detail()}
+
+    return run_in_session(_run)
+
+
+# --- SW11: the S2 timing probe and the four alert checks (docs/swing/STANDING-ANSWERS A4, B8) --
+
+
+#: The liquid names the probe quotes when the instrument table has them; any five with a Kite
+#: token otherwise. Large-cap, always trading, so a pre-open print exists to observe.
+PROBE_SYMBOLS: Final[tuple[str, ...]] = ("RELIANCE", "TCS", "HDFCBANK", "INFY", "SBIN")
+
+
+class KiteProbeSource:
+    """`swing_timing_probe.ProbeSource` over the Kite provider: its own `quotes` and one
+    minute-candle read through the provider's throttled call — a read, like every other."""
+
+    def __init__(self, provider: KiteProvider) -> None:
+        self._provider = provider
+
+    def quotes(self, symbols: Sequence[str]) -> list[QuoteRecord]:
+        return self._provider.quotes(symbols)
+
+    def minute_candles(
+        self, token: int, start: dt.datetime, end: dt.datetime
+    ) -> list[dict[str, object]]:
+        # The provider has no public minute-candle read (that file is another leaf's); its
+        # throttled, retried, translated call is the right seam and is reached by name here.
+        return self._provider._call(
+            lambda client: client.historical_data(token, start, end, "minute")
+        )
+
+
+async def _probe_names(session: AsyncSession) -> list[tuple[str, int]]:
+    """``(symbol, kite_token)`` for the probe's names — the well-known five when the table has
+    them, else any five instruments with a token."""
+    from sqlalchemy import select  # noqa: PLC0415 - one query, local to the probe
+
+    from baskfy_core.models import Instrument  # noqa: PLC0415
+
+    rows = (
+        await session.execute(
+            select(Instrument.symbol, Instrument.kite_token)
+            .where(Instrument.symbol.in_(PROBE_SYMBOLS), Instrument.kite_token.is_not(None))
+            .order_by(Instrument.symbol)
+        )
+    ).all()
+    if not rows:
+        rows = (
+            await session.execute(
+                select(Instrument.symbol, Instrument.kite_token)
+                .where(Instrument.kite_token.is_not(None))
+                .order_by(Instrument.id)
+                .limit(len(PROBE_SYMBOLS))
+            )
+        ).all()
+    return [(str(symbol), int(token)) for symbol, token in rows]
+
+
+@shared_task(name="baskfy.swing.timing_probe", acks_late=False, time_limit=25 * 60)
+def swing_timing_probe_task() -> JsonObject:
+    """SW11 / A4: one morning of Kite timing samples, then never again.
+
+    With ``BASKFY_SWING_TIMING_PROBE`` false — the default — this returns at once and touches
+    nothing. With it true and no ``.done`` marker in ``BASKFY_SWING_TIMING_PROBE_DIR``, it
+    samples until ~09:21, writes ``S2-kite-timing.md`` there, and writes the marker after a good
+    run. ``acks_late=False``: a probe re-delivered after the worker died would start at 09:2x
+    and sample nothing useful.
+    """
+    settings = get_worker_settings()
+    if not settings.swing_timing_probe:
+        return {"skipped": "BASKFY_SWING_TIMING_PROBE is false"}
+    out_dir = Path(settings.swing_timing_probe_dir)
+    marker = out_dir / DONE_MARKER
+    if marker.exists():
+        return {"skipped": f"{marker} exists — the probe already had its good run"}
+    names = run_in_session(_probe_names)
+    if not names:
+        return {"skipped": "no instrument with a Kite token to probe"}
+    provider = build_kite_provider(get_provider_settings(), provider_retry_hooks())
+    return probe_once(
+        KiteProbeSource(provider),
+        out_dir=out_dir,
+        symbols=[symbol for symbol, _ in names],
+        token=names[0][1],
+        now=lambda: dt.datetime.now(tz=IST),
+    )
+
+
+def _swing_check(check: Callable[[AsyncSession], Awaitable[JsonObject]]) -> JsonObject:
+    return run_in_session(check)
+
+
+@shared_task(name="baskfy.swing.check_monitor_started")
+def swing_check_monitor_started_task() -> JsonObject:
+    """09:20: SWING_MONITOR_DID_NOT_START when the flag is on and no `monitor_ran` today."""
+    settings = get_worker_settings()
+    return _swing_check(
+        lambda session: check_monitor_started(
+            session, now=dt.datetime.now(tz=IST), monitor_enabled=settings.swing_monitor_enabled
+        )
+    )
+
+
+@shared_task(name="baskfy.swing.check_orders_after_cutoff")
+def swing_check_orders_after_cutoff_task() -> JsonObject:
+    """10:50: SWING_ORDER_OPEN_AFTER_CUTOFF for a BUY line still SENT."""
+    return _swing_check(
+        lambda session: check_orders_after_cutoff(session, now=dt.datetime.now(tz=IST))
+    )
+
+
+@shared_task(name="baskfy.swing.check_gtt_at_1515")
+def swing_check_gtt_at_1515_task() -> JsonObject:
+    """15:20: SWING_GTT_MISSING_AT_1515 for shares open with no GTT after the desk's sweep."""
+    return _swing_check(lambda session: check_gtt_at_1515(session, now=dt.datetime.now(tz=IST)))
+
+
+@shared_task(name="baskfy.swing.check_detect_fresh")
+def swing_check_detect_fresh_task() -> JsonObject:
+    """21:30: SWING_DETECT_STALE when the published date has no market row."""
+    return _swing_check(lambda session: check_detect_fresh(session, now=dt.datetime.now(tz=IST)))
+
+
+@shared_task(name="baskfy.swing.catalyst", acks_late=True)
+def swing_catalyst_task(session_date: str | None = None) -> JsonObject:
+    """SW11B: the catalyst feed at 09:10 (`docs/swing/STANDING-ANSWERS.md` A3).
+
+    Announcements and result dates for the WATCHING names and the day's EP candidates, through
+    the NSE provider's cookie discipline and shared limiter; `sw_catalyst` upserted,
+    `sw_watch.catalyst` filled where empty, `sw_watch.earnings_date` refreshed. Fail soft: a
+    provider error is a note on a SUCCEEDED step, never a raise into the morning.
+    """
+    day = dt.date.fromisoformat(session_date) if session_date else dt.datetime.now(tz=IST).date()
+    deps = build_pipeline_dependencies()
+    if deps.swing_user_id is None:
+        return {"date": day.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+    provider = build_nse_provider(get_provider_settings(), retry_hooks=provider_retry_hooks())
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        outcome = StepOutcome()
+        report = await run_swing_catalyst(
+            session,
+            outcome,
+            day,
+            user_id=int(deps.swing_user_id or 0),
+            provider=provider,
+            now=dt.datetime.now(tz=IST).replace(tzinfo=None),
         )
         return {"date": day.isoformat(), **report.as_detail()}
 

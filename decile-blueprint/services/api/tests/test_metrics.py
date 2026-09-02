@@ -203,7 +203,7 @@ class TestTheAlertRules:
         missing = sorted(
             name
             for expression in _expressions(rules)
-            for name in re.findall(r"\bdecile[_:][a-z0-9_:]+", expression)
+            for name in re.findall(r"\bbaskfy[_:][a-z0-9_:]+", expression)
             if name not in published
         )
         assert missing == [], f"alerts.yml references metrics nothing publishes: {missing}"
@@ -237,7 +237,7 @@ class TestTheGrafanaDashboards:
             document = json.loads(path.read_text(encoding="utf-8"))
             for panel in document["panels"]:
                 for target in panel["targets"]:
-                    referenced.update(re.findall(r"\bdecile[_:][a-z0-9_:]+", str(target["expr"])))
+                    referenced.update(re.findall(r"\bbaskfy[_:][a-z0-9_:]+", str(target["expr"])))
         assert sorted(referenced - published) == []
 
 

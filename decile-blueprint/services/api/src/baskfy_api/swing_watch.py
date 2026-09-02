@@ -40,6 +40,7 @@ from decimal import Decimal
 from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.swing_catalyst import CatalystView, latest_for
 from baskfy_core.models import (
     Instrument,
     OhlcvDaily,
@@ -87,6 +88,11 @@ class WatchRow:
     adr_pct: Decimal | None = None
     focus: bool = False
     reconfirmed_on: dt.date | None = None
+    #: SW11B (A3): the earnings flag the feed keeps on the row, and the newest filing's
+    #: headline / stamp / link from `sw_catalyst`. `catalyst` above stays the text — typed, or
+    #: auto-filled from that headline while it was empty.
+    earnings_date: dt.date | None = None
+    catalyst_feed: CatalystView | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -360,6 +366,9 @@ async def list_watch(
     if not rows:
         return ()
     latest = await _latest_closes(session, [row[0].instrument_id for row in rows])
+    feed = await latest_for(
+        session, user_id=user_id, instrument_ids=[row[0].instrument_id for row in rows]
+    )
     return tuple(
         WatchRow(
             id=row.id,
@@ -380,6 +389,8 @@ async def list_watch(
             adr_pct=row.adr_pct,
             focus=bool(row.focus),
             reconfirmed_on=row.reconfirmed_on,
+            earnings_date=row.earnings_date,
+            catalyst_feed=feed.get(row.instrument_id),
         )
         for row, symbol, name in rows
     )

@@ -56,6 +56,13 @@ class WorkerSettings(BaseSettings):
     swing_max_open_positions_max: int = Field(default=20, gt=0, le=50)
     #: The benchmark the market gate reads (``docs/swing/04`` §8.2), ``nifty-50`` as fallback.
     swing_index_slug: str = "nifty-500"
+    #: SW11 (STANDING-ANSWERS A4, MD5): the one-shot S2 Kite timing probe at 09:04. Off by
+    #: default; on for the one morning Maulik has logged in to Kite before 09:00, and the task
+    #: disables itself with a marker file after one good run.
+    swing_timing_probe: bool = False
+    #: Where the probe writes ``S2-kite-timing.md`` and its ``.done`` marker. The repo's
+    #: ``docs/swing/status`` on a checkout; on the box a directory on the state volume.
+    swing_timing_probe_dir: str = "docs/swing/status"
 
     #: Task-level retry budget (deliverable 1).
     task_max_retries: int = Field(default=3, ge=0)

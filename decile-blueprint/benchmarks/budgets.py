@@ -158,6 +158,44 @@ BUDGETS: Final[tuple[Budget, ...]] = (
         "apps/web/scripts/bundle-budget.mjs",
         "web",
     ),
+    # --- The swing book (docs/swing/06 SW11, STANDING-ANSWERS B9) ---------------------------
+    # Two are measured in this tree's suites; two in the desk's (kite-momentum-rebalancer/tests,
+    # which records through this module off the path). ``gate="none"`` on the desk pair because
+    # `pytest -m benchmark` here cannot run them — they are measured, just not by this CI job.
+    Budget(
+        "swing_setups_p95",
+        "GET /swing/setups (2,500 instruments) — `swing_setups_p95`",
+        "p95 < 300 ms",
+        300.0,
+        "ms",
+        "services/api/tests/test_api_swing_benchmark.py",
+    ),
+    Budget(
+        "swing_tick_to_verdict",
+        "Opening-range monitor, tick → verdict (in-process) — `swing_tick_to_verdict`",
+        "p95 < 5 ms",
+        5.0,
+        "ms",
+        "kite-momentum-rebalancer/tests/test_swing_budgets.py",
+        "none",
+    ),
+    Budget(
+        "swing_detect_2500",
+        "Swing detect step (2,500 synthetic instruments) — `swing_detect_2500`",
+        "< 3 min",
+        180.0,
+        "s",
+        "services/worker/tests/test_swing_benchmarks.py",
+    ),
+    Budget(
+        "swing_confirm_path",
+        "Swing confirm path: lock + re-size + place + GTT (DRY_RUN) — `swing_confirm_path`",
+        "< 2 s",
+        2.0,
+        "s",
+        "kite-momentum-rebalancer/tests/test_swing_budgets.py",
+        "none",
+    ),
 )
 
 BUDGET_BY_KEY: Final[dict[str, Budget]] = {budget.key: budget for budget in BUDGETS}

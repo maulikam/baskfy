@@ -55,6 +55,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.swing_settings import SYSTEM_OWNED_FIELDS
 from baskfy_core.models import (
     IndexDef,
     IndexMemberDaily,
@@ -81,6 +82,7 @@ from baskfy_core.swing.indicators import liquid_expr, with_swing_indicators
 from baskfy_core.swing.journal import ClosedTrade
 from baskfy_core.swing.market import (
     BreadthSnapshot,
+    ExposureTier,
     IndexReading,
     MarketGate,
     breadth_snapshot,
@@ -91,6 +93,7 @@ from baskfy_core.swing.market import (
 from baskfy_core.swing.setups import CANDIDATE_COLUMNS, detect_setups
 from baskfy_core.universes import SECTOR_INDEX_SLUGS
 from baskfy_worker.steps import StepOutcome, StepStatus
+from baskfy_worker.telemetry import swing_span, swing_timed
 
 log = logging.getLogger(__name__)
 
@@ -539,7 +542,9 @@ async def _index_levels(session: AsyncSession, on: dt.date, slug: str, count: in
     return list(reversed(levels))
 
 
-async def load_closed_trades(session: AsyncSession, *, user_id: int) -> list[Decimal]:
+async def load_closed_trades(
+    session: AsyncSession, *, user_id: int, on: dt.date | None = None
+) -> list[Decimal]:
     """The R-multiples of the last **real** closed trades, oldest first.
 
     The ladder reads real closes from day one (STANDING-ANSWERS A10, SW10.5): there is no paper
@@ -547,15 +552,23 @@ async def load_closed_trades(session: AsyncSession, *, user_id: int) -> list[Dec
     ``DRY_RUN`` or the flag said when it was written, never moves the rung. A paper winning
     streak sizing real money was the failure PACK.6 named; reading nothing but real closes is
     the stricter answer to it.
+
+    ``on`` bounds the closes by date (SW11, the SW8.1 carry-forward): a re-detect of a past
+    session — the Saturday five-session re-scan, ``make swing DATE=`` — must not read a close
+    from after that session (house rule 5). ``None`` keeps the old, unbounded read.
     """
+    conditions = [
+        SwPosition.user_id == user_id,
+        SwPosition.state == "CLOSED",
+        SwPosition.simulated.is_(False),
+        SwPosition.r_multiple.is_not(None),
+    ]
+    if on is not None:
+        conditions.append(SwPosition.closed_on.is_not(None))
+        conditions.append(SwPosition.closed_on <= on)
     rows = await session.execute(
         select(SwPosition.r_multiple)
-        .where(
-            SwPosition.user_id == user_id,
-            SwPosition.state == "CLOSED",
-            SwPosition.simulated.is_(False),
-            SwPosition.r_multiple.is_not(None),
-        )
+        .where(*conditions)
         .order_by(SwPosition.closed_on.desc(), SwPosition.id.desc())
         .limit(CLOSED_TRADE_WINDOW)
     )
@@ -728,8 +741,32 @@ async def run_detect_swing(  # noqa: PLR0913 - one keyword per input the day dep
     """Detect the day's setups and write the day's market row. Returns the candidate count.
 
     Returns rather than raises on a date with nothing to read: a non-trading day, or a date the
-    pipeline has not published, is not a failure of this step.
+    pipeline has not published, is not a failure of this step. SW11: one span and one timing
+    (`baskfy_swing_task_duration_seconds{task="detect"}`) around the whole step, through the
+    worker's guarded helpers — neither can raise into it.
     """
+    with swing_span("swing.detect", date=trade_date.isoformat()), swing_timed("detect"):
+        return await _detect_swing(
+            session,
+            outcome,
+            trade_date,
+            user_id=user_id,
+            index_slug=index_slug,
+            execution_enabled=execution_enabled,
+            pipeline_run_id=pipeline_run_id,
+        )
+
+
+async def _detect_swing(  # noqa: PLR0913 - one keyword per input the day depends on
+    session: AsyncSession,
+    outcome: StepOutcome,
+    trade_date: dt.date,
+    *,
+    user_id: int,
+    index_slug: str,
+    execution_enabled: bool,
+    pipeline_run_id: int | None,
+) -> int:
     config = await load_swing_config(session, user_id)
     start = await lookback_start(session, trade_date, LOOKBACK_SESSIONS)
     bars = await load_swing_bars(session, start, trade_date)
@@ -826,7 +863,16 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
     index_slug: str,
     execution_enabled: bool,
 ) -> MarketGate:
-    """Breadth, the gate and tomorrow's tier — `04` §8, written to ``sw_market_daily``."""
+    """Breadth, the gate and tomorrow's tier — `04` §8, written to ``sw_market_daily``.
+
+    SW11 (the SW8.1 carry-forward): the tier this job computes is a *preview*; the evening's
+    `settle_ladder` is the fact. A row the evening has already settled — ``detail.ladder.
+    settled_by == "swing-eod"`` — keeps its tier columns and its ladder record through a
+    re-detect (the Saturday re-scan, a repair), so a re-scan after a GREEN Friday cannot hand
+    Monday morning a rung one above `sw_config` (SW8.1). Breadth, the gate, the index reading
+    and the sectors are rewritten either way — those are the detectors' own numbers. The
+    closes the preview reads are bounded by ``trade_date``, as the evening's are.
+    """
     highs = await load_year_highs(session, trade_date)
     breadth: BreadthSnapshot = (
         breadth_snapshot(breadth_frame(liquid, highs), config.market)
@@ -838,7 +884,7 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
     )
     gate = market_gate(breadth, reading, config.market)
 
-    closed = await load_closed_trades(session, user_id=user_id)
+    closed = await load_closed_trades(session, user_id=user_id, on=trade_date)
     config_row = (
         await session.execute(select(SwConfig).where(SwConfig.user_id == user_id))
     ).scalar_one_or_none()
@@ -871,6 +917,21 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
             for slug, pct, members in sectors
         ],
     }
+    settled = await settled_market_row(session, user_id=user_id, on=trade_date)
+    if settled is not None:
+        # The evening has settled this row: its rung, its record and what it read stand.
+        tier = ExposureTier(
+            level=int(settled.exposure_level),
+            max_open_positions=int(settled.max_open_positions),
+            max_exposure_pct=float(settled.max_exposure_pct),
+            new_entries_allowed=bool(settled.new_entries_allowed),
+            drawdown_locked=bool(settled.drawdown_locked),
+        )
+        kept = settled.detail if isinstance(settled.detail, dict) else {}
+        for key in ("ladder", "closed_r_multiples", "closed_trades_read", "drawdown"):
+            if key in kept:
+                detail[key] = kept[key]
+        drawdown = replace(drawdown, pct=Decimal(str(settled.drawdown_pct or 0)))
     statement = insert(SwMarketDaily).values(
         user_id=user_id,
         date=trade_date,
@@ -922,6 +983,30 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
     return gate
 
 
+async def settled_market_row(
+    session: AsyncSession, *, user_id: int, on: dt.date
+) -> SwMarketDaily | None:
+    """The market row for ``on`` if the evening job has settled it — ``detail.ladder.settled_by
+    == "swing-eod"`` (`swing_eod.LADDER_CHANGED_BY`, spelled here rather than imported: that
+    module imports this one) — else ``None``."""
+    row = (
+        await session.execute(
+            select(SwMarketDaily).where(SwMarketDaily.user_id == user_id, SwMarketDaily.date == on)
+        )
+    ).scalar_one_or_none()
+    if row is None or not isinstance(row.detail, dict):
+        return None
+    ladder = row.detail.get("ladder")
+    if isinstance(ladder, dict) and ladder.get("settled_by") == SETTLED_BY_EVENING:
+        return row
+    return None
+
+
+#: The value `swing_eod.settle_ladder` writes into ``detail.ladder.settled_by`` — the owner of
+#: ``exposure_level`` in the settings' own table, so the two cannot drift apart.
+SETTLED_BY_EVENING: Final = SYSTEM_OWNED_FIELDS["exposure_level"]
+
+
 __all__ = [
     "CANDIDATE_COLUMNS",
     "CASH_SERIES",
@@ -942,6 +1027,7 @@ __all__ = [
     "recent_trading_days",
     "run_detect_swing",
     "sector_breadth",
+    "settled_market_row",
     "sleeve_drawdown",
     "sleeve_nav",
     "to_exchange_prices",

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
+import { CatalystLink } from "@/components/swing/catalyst-link";
 import { formatTradeDate } from "@/lib/format";
 import { fetchWatchlist, type SwingWatchRow } from "@/lib/swing/fetch";
 import { PAGES } from "@/lib/vocabulary";
@@ -34,7 +35,9 @@ function money(value: number | null): string {
 function distance(row: SwingWatchRow): string {
   if (row.distance_to_trigger_pct === null) return "—";
   const value = row.distance_to_trigger_pct;
-  return value < 0 ? `${Math.abs(value).toFixed(2)}% above` : `${value.toFixed(2)}% away`;
+  return value < 0
+    ? `${Math.abs(value).toFixed(2)}% above`
+    : `${value.toFixed(2)}% away`;
 }
 
 /** Nearest to its trigger first; a row with no level or no price sorts last. */
@@ -66,10 +69,10 @@ export default async function SwingWatchlistPage() {
 
       {rows.length === 0 ? (
         <p className="max-w-[70ch] text-sm text-muted-foreground">
-          Nothing is being watched. The evening job puts every flag that scores 60 or better and
-          every episodic pivot on this list; before it has run, or on an evening when nothing
-          qualified, the list is empty and that is a fact about the market rather than about the
-          system.
+          Nothing is being watched. The evening job puts every flag that scores
+          60 or better and every episodic pivot on this list; before it has run,
+          or on an evening when nothing qualified, the list is empty and that is
+          a fact about the market rather than about the system.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -92,7 +95,9 @@ export default async function SwingWatchlistPage() {
                 <tr key={row.id} className="border-b border-border/40">
                   <td className="py-2 pr-3">
                     <span className="font-medium">{row.symbol}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">{row.name}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {row.name}
+                    </span>
                     {row.source === "MANUAL" ? (
                       <span
                         className="ml-2 text-xs text-muted-foreground"
@@ -103,16 +108,37 @@ export default async function SwingWatchlistPage() {
                     ) : null}
                   </td>
                   <td className="py-2 pr-3">{row.setup}</td>
-                  <td className="py-2 pr-3 tabular-nums">{money(row.last_close)}</td>
-                  <td className="py-2 pr-3 tabular-nums font-medium">{money(row.trigger)}</td>
+                  <td className="py-2 pr-3 tabular-nums">
+                    {money(row.last_close)}
+                  </td>
+                  <td className="py-2 pr-3 tabular-nums font-medium">
+                    {money(row.trigger)}
+                  </td>
                   <td className="py-2 pr-3 tabular-nums">{distance(row)}</td>
-                  <td className="py-2 pr-3 tabular-nums">{money(row.stop_ref)}</td>
-                  <td className="py-2 pr-3 tabular-nums">{formatTradeDate(row.added_on)}</td>
+                  <td className="py-2 pr-3 tabular-nums">
+                    {money(row.stop_ref)}
+                  </td>
+                  <td className="py-2 pr-3 tabular-nums">
+                    {formatTradeDate(row.added_on)}
+                  </td>
                   <td className="py-2 pr-3 tabular-nums">
                     {row.expires_on ? formatTradeDate(row.expires_on) : "—"}
                   </td>
                   <td className="py-2 pr-3 text-xs text-muted-foreground">
-                    {row.catalyst ?? "—"}
+                    <span className="block">{row.catalyst ?? "—"}</span>
+                    <CatalystLink
+                      feed={
+                        row.catalyst_feed ??
+                        (row.earnings_date
+                          ? {
+                              headline: null,
+                              published_at: null,
+                              url: null,
+                              earnings_date: row.earnings_date,
+                            }
+                          : null)
+                      }
+                    />
                   </td>
                 </tr>
               ))}
@@ -122,9 +148,18 @@ export default async function SwingWatchlistPage() {
       )}
 
       <p className="max-w-[70ch] text-sm text-muted-foreground">
-        A flag stays here for ten sessions, an episodic pivot for three. When one expires it is
-        marked expired rather than deleted — the record of what was watched is the record of what
-        was passed over. Nothing on this page can place an order.
+        The catalyst column is filled at 09:10 from NSE&apos;s corporate
+        announcements for the names on this list — a headline that links to the
+        exchange&apos;s own copy of the filing, and an earnings badge when a
+        result meeting is on the calendar. Anything you type there stays; the
+        feed only fills blanks. Nothing from a filing is reproduced here.
+      </p>
+
+      <p className="max-w-[70ch] text-sm text-muted-foreground">
+        A flag stays here for ten sessions, an episodic pivot for three. When
+        one expires it is marked expired rather than deleted — the record of
+        what was watched is the record of what was passed over. Nothing on this
+        page can place an order.
       </p>
     </div>
   );

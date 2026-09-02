@@ -203,10 +203,18 @@ by it until the detectors score the close): `live_gap_score = 35 × clamp(gap / 
 clamp(volume_pace / 6)`, the two terms of §3's score the pre-open knows, out of 70. The watch
 row also carries the ADR the bars measured (`sw_watch.adr_pct`), because a live gap has no
 detection row and a stop must be measured against one ADR (§6.1).
-7.4 The monitor polls the watchlist's quotes every 5 s from the `TickBus` (fallback: Kite
-`quote` for ≤ 500 instruments per call, ≤ 1 call per 5 s, inside the 3 req/s limiter); minute
-candles for the range come from `historical_data(interval="minute")` at window close. Every
-`TRIGGERED` verdict is one `sw_signal` row and one desk notification; **nothing is ordered**.
+7.4 The monitor reads the watchlist's ticks from the `TickBus` and builds the opening range
+**from the ticks inside the window** at window close (SW11, STANDING-ANSWERS A4); the minute
+candles from `historical_data(interval="minute")` are fetched once, `range_reconcile_delay_minutes`
+[1] after the window closed, only to reconcile the tick range (a reconciled range replaces the
+tick range for the verdicts that follow; a signal already raised stands). Fallback for a name
+the ticker has gone quiet on: Kite `quote` for ≤ 500 instruments per call, at most one call
+every `quote_poll_min_seconds` [5], inside the limiter — anything faster is a bug (B10). Every
+`TRIGGERED` verdict is one `sw_signal` row and one desk notification (email, one-way, for the
+daily focus; A2); **nothing is ordered**. After `monitor_close` the same process is the desk's
+clock: the 10:45 cutoff cancels every open remainder and frees every unclaimed slot (A7, A8),
+and at `gtt_sweep_at` [15:15] the sweep re-arms any filled quantity without a GTT (A8; what is
+still naked afterwards is `SWING_GTT_MISSING_AT_1515`).
 7.5 **The marketable limit and the fill poll** (SW10.5, STANDING-ANSWERS A8). A confirmed buy is
 sent as a LIMIT — never MARKET — at `plan.marketable_limit = min(trigger × (1 +
 entry_limit_buffer_pct [0.5] / 100), range_high + entry_limit_max_adr [0.25] × ADR)` snapped

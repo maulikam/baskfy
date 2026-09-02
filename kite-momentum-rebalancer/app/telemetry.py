@@ -48,13 +48,18 @@ _metrics: dict[str, Any] = {}
 _installed = False
 
 
-def install() -> dict[str, bool]:
-    """Turn on whichever views are both configured and available. Safe to call more than once."""
+def install(*, metrics_port: int | None = None) -> dict[str, bool]:
+    """Turn on whichever views are both configured and available. Safe to call more than once.
+
+    ``metrics_port`` overrides ``METRICS_PORT`` for a second process on the same box — the
+    swing monitor (SW11) runs beside the desk server and cannot bind the same port twice.
+    """
     global _installed, _tracer  # noqa: PLW0603 — one process, one provider; that is what these are
     if _installed:
         return {"traces": _tracer is not None, "metrics": bool(_metrics), "errors": False}
     _installed = True
     enabled = {"traces": False, "metrics": False, "errors": False}
+    port = metrics_port if metrics_port is not None else (int(METRICS_PORT) if METRICS_PORT else 0)
 
     if OTLP_ENDPOINT:
         try:
@@ -74,12 +79,18 @@ def install() -> dict[str, bool]:
         except Exception as exc:
             log.warning("tracing not installed: %s", exc)
 
-    if METRICS_PORT:
+    if port:
         try:
-            from prometheus_client import Counter, Histogram, start_http_server  # noqa: PLC0415
+            from prometheus_client import (  # noqa: PLC0415
+                Counter,
+                Gauge,
+                Histogram,
+                start_http_server,
+            )
 
             _metrics.update(
                 {
+                    **swing_metrics(Counter, Gauge, Histogram),
                     "plans": Counter("desk_plans_built_total", "Plans built", ["source"]),
                     "orders": Counter(
                         "desk_orders_total", "Orders leaving the gateway", ["action", "outcome"]
@@ -98,7 +109,7 @@ def install() -> dict[str, bool]:
                     ),
                 }
             )
-            start_http_server(int(METRICS_PORT))
+            start_http_server(port)
             enabled["metrics"] = True
         except Exception as exc:
             log.warning("metrics not installed: %s", exc)
@@ -115,6 +126,55 @@ def install() -> dict[str, bool]:
     return enabled
 
 
+def swing_metrics(counter: Any, gauge: Any, histogram: Any) -> dict[str, Any]:  # noqa: ANN401
+    """The swing book's metrics (SW11, docs/swing/06; STANDING-ANSWERS B8), by the names
+    ``infra/prometheus/alerts.yml`` and the desk suite read. Built from the constructors handed
+    in so the registry is only touched when metrics are on."""
+    return {
+        "swing_signals": counter(
+            "desk_swing_signals_total", "Opening-range verdicts the monitor raised", ["state"]
+        ),
+        "swing_confirms": counter(
+            "desk_swing_confirms_total", "Swing lines confirmed, by kind and outcome",
+            ["kind", "outcome"],
+        ),
+        "swing_notifications": counter(
+            "desk_swing_notifications_total", "Swing signal notices, by channel and outcome",
+            ["channel", "outcome"],
+        ),
+        "swing_sweeps": counter(
+            "desk_swing_sweeps_total", "The 10:45 cutoff and the 15:15 GTT sweep, by outcome",
+            ["sweep", "outcome"],
+        ),
+        "swing_verdict_seconds": histogram(
+            "desk_swing_verdict_seconds", "Tick to verdict, in-process (budget 5 ms)",
+            buckets=(0.0005, 0.001, 0.002, 0.005, 0.01, 0.05, 0.1),
+        ),
+        "swing_confirm_seconds": histogram(
+            "desk_swing_confirm_seconds",
+            "One swing confirm: lock, re-size, order, GTT (budget 2 s)",
+            buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 12.0),
+        ),
+        "swing_monitor_up": gauge(
+            "desk_swing_monitor_up", "1 while the opening-range monitor loop is running"
+        ),
+        "swing_quote_polls": counter(
+            "desk_swing_quote_polls_total", "Quote fallback calls the monitor made", ["outcome"]
+        ),
+    }
+
+
+def gauge(metric: str, value: float, /, **labels: str) -> None:
+    """Set a gauge if metrics are on. Never raises."""
+    handle = _metrics.get(metric)
+    if handle is None:
+        return
+    try:
+        (handle.labels(**labels) if labels else handle).set(value)
+    except Exception:
+        log.debug("metric %s failed", metric, exc_info=True)
+
+
 @contextlib.contextmanager
 def span(name: str, **attributes: Any) -> Iterator[Any]:  # noqa: ANN401 — span attrs
     """One span, or nothing at all.
@@ -127,16 +187,32 @@ def span(name: str, **attributes: Any) -> Iterator[Any]:  # noqa: ANN401 — spa
         yield None
         return
     try:
-        with _tracer.start_as_current_span(name) as current:
-            for key, value in attributes.items():
-                current.set_attribute(key, value)
-            yield current
+        scope = _tracer.start_as_current_span(name)
+        current = scope.__enter__()
+        for key, value in attributes.items():
+            current.set_attribute(key, value)
     except Exception:
-        # The span failed, not the work. Re-running the body is not an option, so this can only
-        # be reached by a tracer error *before* the body ran; letting it through would abort a
-        # rebalance for a telemetry fault.
+        # The span failed, not the work: a tracer error *before* the body ran. Letting it
+        # through would abort a rebalance for a telemetry fault, so the body runs untraced.
         log.debug("span %s failed; continuing untraced", name, exc_info=True)
         yield None
+        return
+    # The body's own exception must come back out as itself — SW11: an HTTPException(400)
+    # from the confirm path must not become a RuntimeError because a span sat around it. The
+    # span is closed with the body's exception info and its own failure to close is dropped.
+    try:
+        yield current
+    except BaseException as exc:
+        try:
+            scope.__exit__(type(exc), exc, exc.__traceback__)
+        except Exception:
+            log.debug("span %s did not close cleanly", name, exc_info=True)
+        raise
+    else:
+        try:
+            scope.__exit__(None, None, None)
+        except Exception:
+            log.debug("span %s did not close cleanly", name, exc_info=True)
 
 
 def count(metric: str, /, **labels: str) -> None:

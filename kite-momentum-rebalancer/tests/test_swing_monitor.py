@@ -288,8 +288,9 @@ class TestTheStrategy:
                                  candles=NoCandles(), day=DAY)
         _drive(strategy, [
             _tick(1, 99.0, "09:15"), _tick(1, 98.0, "09:17", low=98.0), _tick(1, 99.5, "09:19"),
-            _tick(1, 99.6, "09:20"),               # window closes; tick range is 98.0-99.6
-            _tick(1, 100.5, "09:25"),              # > 99.6 x 1.001 and > pivot: TRIGGERED
+            _tick(1, 99.4, "09:20"),               # window closes; the range is the ticks
+                                                   # INSIDE [09:15, 09:20): 98.0-99.5 (A4)
+            _tick(1, 100.5, "09:25"),              # > 99.5 x 1.001 and > pivot: TRIGGERED
             _tick(1, 101.0, "09:26"), _tick(1, 102.0, "09:30"),
         ])
         states = [s.verdict.state for s in store.signals]
@@ -652,3 +653,292 @@ class TestReservedSlotsAndHalfRisk:
         context = swing_monitor.load_context(conn, user_id=1, day=DAY)
         assert context.account.open_exposure_inr == Decimal("4000") + Decimal("6060")
         assert context.entries_today == 1 and context.pending == ()
+
+
+# --- SW11: the range is the ticks', the candle reconciles; the quote cap; telemetry ------------
+
+
+class CountingCandles:
+    """A candle source that records every ask and answers a fixed candle set."""
+
+    def __init__(self, candles=None):
+        self.candles = candles or []
+        self.asks: list[dt.datetime] = []
+
+    def minute_candles(self, token, day, until):
+        self.asks.append(until)
+        return [c for c in self.candles if c.start <= until]
+
+
+def _candle(hhmm: str, o: str, h: str, l: str, c: str):  # noqa: E741 - o/h/l/c are the bar
+    from baskfy_core.swing.opening_range import Candle
+    hour, minute = (int(x) for x in hhmm.split(":"))
+    return Candle(start=dt.datetime(2026, 8, 19, hour, minute), open=Decimal(o), high=Decimal(h),
+                  low=Decimal(l), close=Decimal(c), volume=1)
+
+
+class TestTheRangeIsTheTicks:
+    def test_the_range_is_built_from_the_ticks_inside_the_window_at_its_close(self):
+        """A4: no candle call at 09:20 — the first tick at or after window end closes the
+        range off the ticks inside [09:15, 09:20); the tick at 09:20 itself is outside it."""
+        source = CountingCandles()
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")], store=ListStore(),
+                                 candles=source, day=DAY)
+        _drive(strategy, [_tick(1, 99.0, "09:15"), _tick(1, 98.0, "09:17", low=98.0),
+                          _tick(1, 99.5, "09:19"), _tick(1, 99.9, "09:20")])
+        opening = strategy.state[1].opening
+        assert (opening.high, opening.low, opening.complete) == (Decimal("99.5"), Decimal("98.0"), True)
+        assert source.asks == [], "the candle source was asked at window close"
+
+    def test_the_minute_candle_is_fetched_once_a_minute_later_only_to_reconcile(self):
+        """The candle source is asked exactly once, at the first tick ≥ window end + 1 min,
+        and never again — Zerodha's historical API is not for polling during the session."""
+        source = CountingCandles([_candle("09:15", "99", "99.6", "97.9", "99.2"),
+                                  _candle("09:20", "99.2", "99.4", "99.0", "99.1")])
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")], store=ListStore(),
+                                 candles=source, day=DAY)
+        _drive(strategy, [_tick(1, 99.0, "09:15"), _tick(1, 99.5, "09:19"), _tick(1, 99.3, "09:20"),
+                          _tick(1, 99.2, "09:21"), _tick(1, 99.1, "09:22"), _tick(1, 99.0, "09:30")])
+        assert source.asks == [dt.datetime(2026, 8, 19, 9, 21)]
+        opening = strategy.state[1].opening
+        assert (opening.high, opening.low) == (Decimal("99.6"), Decimal("97.9"))
+        assert "reconciled to candles 97.9-99.6" in strategy.state[1].reconcile_note
+
+    def test_a_matching_candle_range_changes_nothing(self):
+        source = CountingCandles([_candle("09:15", "99", "99.5", "99.0", "99.2"),
+                                  _candle("09:20", "99.2", "99.4", "99.0", "99.1")])
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")], store=ListStore(),
+                                 candles=source, day=DAY)
+        _drive(strategy, [_tick(1, 99.0, "09:15"), _tick(1, 99.5, "09:19"), _tick(1, 99.3, "09:20"),
+                          _tick(1, 99.2, "09:21")])
+        assert len(source.asks) == 1 and strategy.state[1].reconcile_note is None
+
+    def test_a_signal_raised_on_the_tick_range_stands_after_the_reconcile(self):
+        """A break at 09:20 on the tick range is a row and a line; the candle a minute later
+        cannot un-raise it (the confirm re-reads everything) — and a name that has triggered
+        is done for the session, so its candles are never even asked for."""
+        store = ListStore()
+        source = CountingCandles([_candle("09:15", "99", "101.0", "98.0", "99.2"),
+                                  _candle("09:20", "99.2", "100.6", "99.0", "100.5")])
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")], store=store,
+                                 candles=source, day=DAY)
+        _drive(strategy, [_tick(1, 99.0, "09:15"), _tick(1, 99.5, "09:19", low=98.0),
+                          _tick(1, 100.5, "09:20"), _tick(1, 100.6, "09:21")])
+        assert [s.verdict.state for s in store.signals] == [TriggerState.TRIGGERED]
+        assert store.signals[0].verdict.entry == Decimal("100.5")
+        assert source.asks == [] and strategy.state[1].reconciled is False
+
+    def test_a_name_with_no_tick_inside_the_window_gets_its_range_from_the_candles(self):
+        source = CountingCandles([_candle("09:15", "99", "99.5", "98.0", "99.2"),
+                                  _candle("09:20", "99.2", "99.4", "99.0", "99.1")])
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")], store=ListStore(),
+                                 candles=source, day=DAY)
+        _drive(strategy, [_tick(1, 99.3, "09:20"), _tick(1, 99.2, "09:20")])
+        assert strategy.state[1].opening is None and source.asks == []
+        _drive(strategy, [_tick(1, 99.2, "09:21")])
+        assert strategy.state[1].opening.high == Decimal("99.5")
+        assert "no tick inside the window" in strategy.state[1].reconcile_note
+
+    def test_a_failing_candle_source_leaves_the_tick_range_standing(self):
+        class Exploding:
+            def minute_candles(self, token, day, until):
+                raise RuntimeError("historical API down")
+
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")], store=ListStore(),
+                                 candles=Exploding(), day=DAY)
+        _drive(strategy, [_tick(1, 99.0, "09:15"), _tick(1, 99.5, "09:19"), _tick(1, 99.3, "09:20"),
+                          _tick(1, 99.2, "09:21"), _tick(1, 99.2, "09:22")])
+        assert strategy.state[1].opening.high == Decimal("99.5")
+        assert strategy.state[1].reconciled is True
+
+    def test_the_fixture_replay_asks_for_candles_once_per_name_a_minute_after_the_window(self):
+        day, window, watchlist = replay.read_watchlist(FIXTURES / "morning-synthetic.watchlist.json")
+        candles = replay.read_candles(FIXTURES / "morning-synthetic.csv")
+        source = replay.CsvCandles(candles)
+        store = replay.ListStore()
+        strategy = SwingBreakout(None, watchlist=watchlist, store=store, candles=source, day=day,
+                                 window_minutes=window)
+        _drive(strategy, replay.ticks_from_candles(candles))
+        assert len(store.signals) == 4
+        by_token = {}
+        for token, until in source.requests:
+            by_token.setdefault(token, []).append(until)
+        assert all(len(v) == 1 for v in by_token.values()), by_token
+        assert all(v[0] >= dt.datetime(2026, 8, 19, 9, 21) for v in by_token.values())
+
+
+class FakeClock:
+    def __init__(self, start: float = 1000.0) -> None:
+        self.t = start
+
+    def __call__(self) -> float:
+        return self.t
+
+
+class FakeKite:
+    """`kite.kc.quote` counted; answers a tick-shaped quote per symbol."""
+
+    def __init__(self, price: float = 100.0) -> None:
+        self.calls: list[list[str]] = []
+        self.price = price
+
+        outer = self
+
+        class KC:
+            def quote(self_inner, keys):
+                outer.calls.append(list(keys))
+                return {
+                    k: {"instrument_token": i + 1, "last_price": outer.price,
+                        "ohlc": {"low": outer.price - 1},
+                        "timestamp": dt.datetime(2026, 8, 19, 9, 25)}
+                    for i, k in enumerate(keys)
+                }
+
+        self.kc = KC()
+
+
+class TestTheQuoteCap:
+    def test_the_quote_fallback_polls_at_most_once_per_five_seconds(self):
+        """B10: a hundred asks inside five seconds are one call; the sixth second is the next."""
+        clock = FakeClock()
+        kite = FakeKite()
+        fallback = swing_monitor.QuoteFallback(kite, {1: "AAA", 2: "BBB"}, clock=clock)
+        assert fallback.min_interval == DEFAULT_SWING_CONFIG.opening_range.quote_poll_min_seconds == 5.0
+        polled = [fallback.poll(dt.datetime(2026, 8, 19, 9, 25)) for _ in range(100)]
+        assert len(kite.calls) == 1 and polled[0] is not None and polled[1] is None
+        clock.t += 4.99
+        assert fallback.poll(dt.datetime(2026, 8, 19, 9, 25)) is None
+        clock.t += 0.01
+        assert fallback.poll(dt.datetime(2026, 8, 19, 9, 25)) is not None
+        assert len(kite.calls) == 2 and kite.calls[0] == ["NSE:AAA", "NSE:BBB"]
+
+    def test_the_quote_fallback_answers_ticks_the_strategy_can_read(self):
+        fallback = swing_monitor.QuoteFallback(FakeKite(101.5), {1: "AAA"}, clock=FakeClock())
+        ticks = fallback.poll(dt.datetime(2026, 8, 19, 9, 25))
+        assert ticks == [{"instrument_token": 1, "last_price": 101.5, "ohlc": {"low": 100.5},
+                          "exchange_timestamp": dt.datetime(2026, 8, 19, 9, 25)}]
+
+    def test_the_loop_polls_quotes_only_when_the_ticker_is_quiet_and_never_faster_than_the_cap(self):
+        """Thirty seconds of a silent bus: six quote calls at most (one per five seconds),
+        none while ticks are flowing."""
+        clock = FakeClock()
+        kite = FakeKite()
+        fallback = swing_monitor.QuoteFallback(kite, {1: "AAA"}, clock=clock)
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")], store=ListStore(),
+                                 candles=NoCandles(), day=DAY)
+        moment = {"now": dt.datetime(2026, 8, 19, 9, 25)}
+
+        class Bus:
+            def __init__(self):
+                self.q = asyncio.Queue()
+
+            def subscribe(self, token):
+                return self.q
+
+        bus = Bus()
+        ticks_flowing = {"until": 10.0}
+
+        async def go():
+            original_sleep = asyncio.sleep
+
+            async def fake_sleep(seconds):
+                clock.t += seconds
+                moment["now"] = moment["now"] + dt.timedelta(seconds=seconds)
+                if clock.t - 1000.0 < ticks_flowing["until"]:
+                    bus.q.put_nowait(_tick(1, 99.0, "09:25"))
+                if clock.t - 1000.0 >= 40.0:
+                    moment["now"] = dt.datetime(2026, 8, 19, 10, 46)
+                await original_sleep(0)
+
+            swing_monitor.asyncio.sleep = fake_sleep
+            try:
+                return await swing_monitor.run_until_close(
+                    strategy, bus, quotes=fallback, now=lambda: moment["now"], clock=clock,
+                    poll_seconds=1.0,
+                )
+            finally:
+                swing_monitor.asyncio.sleep = original_sleep
+
+        asyncio.run(go())
+        # ticks flowed for the first ten seconds → no poll; then ~30 quiet seconds → ≤ 6 polls
+        assert 1 <= len(kite.calls) <= 6, kite.calls
+        assert fallback.calls == len(kite.calls)
+
+
+class TestTelemetryNeverStopsAVerdict:
+    def test_observe_raises_in_the_verdict_sink_is_dropped_and_the_signal_still_fires(self):
+        def sink(seconds):
+            raise RuntimeError("metrics down")
+
+        store = ListStore()
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")], store=store,
+                                 candles=NoCandles(), day=DAY)
+        strategy.observe_with(sink)
+        _drive(strategy, [_tick(1, 99.0, "09:15"), _tick(1, 99.5, "09:19"), _tick(1, 99.4, "09:20"),
+                          _tick(1, 100.5, "09:25")])
+        assert [s.verdict.state for s in store.signals] == [TriggerState.TRIGGERED]
+        assert len(strategy.verdict_seconds) == 4 and strategy._observe is None
+
+    def test_telemetry_never_raises_into_the_signal_store(self, monkeypatch):
+        """`_tel.count` replaced by a sink that raises through: the row and the line are still
+        written, because `app.telemetry.count` is guarded and the store's write is not behind
+        it."""
+        from app import telemetry
+
+        monkeypatch.setattr(telemetry, "_metrics", {"swing_signals": object()})
+        conn = FakeConn()
+        store = _store(conn)
+        store.raise_signal(_signal(_name("AAA", 1), TriggerState.TRIGGERED, entry="103", stop="100"))
+        assert len(conn.inserted("sw_signal")) == 1 and len(conn.inserted("sw_plan_line")) == 1
+
+
+class TestMonitorRanIsWrittenAtStart:
+    def test_main_records_monitor_ran_on_the_first_tick_and_hands_off_to_the_clock(self):
+        """SW11.2: `SWING_MONITOR_DID_NOT_START` reads `sw_session.monitor_ran` at 09:20, so
+        the row is written when the monitor handles its first tick — not at 10:45, and not at
+        launch (a launched process with a dead token is not a monitor); an empty watchlist
+        writes it at once; and after the loop the process becomes the clock."""
+        source = inspect.getsource(swing_monitor.main)
+        assert "on_first_tick=lambda: record_monitor_ran(" in source
+        empty = source.index("nothing to watch today")
+        first_record = source.index("record_monitor_ran(conn, user_id=user_id, day=day, signals=0)")
+        clock = source.index("run_after_close(day=day)")
+        assert empty < first_record < clock
+
+    def test_the_loop_fires_on_first_tick_exactly_once_and_survives_its_failure(self):
+        fired: list[int] = []
+
+        def on_first():
+            fired.append(1)
+            raise RuntimeError("database gone")
+
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")], store=ListStore(),
+                                 candles=NoCandles(), day=DAY)
+        moment = {"now": dt.datetime(2026, 8, 19, 9, 25)}
+
+        class Bus:
+            def __init__(self):
+                self.q = asyncio.Queue()
+                for i in range(3):
+                    self.q.put_nowait(_tick(1, 99.0, "09:25"))
+
+            def subscribe(self, token):
+                return self.q
+
+        async def go():
+            original_sleep = asyncio.sleep
+
+            async def fake_sleep(seconds):
+                moment["now"] = dt.datetime(2026, 8, 19, 10, 46)
+                await original_sleep(0)
+
+            swing_monitor.asyncio.sleep = fake_sleep
+            try:
+                return await swing_monitor.run_until_close(
+                    strategy, Bus(), now=lambda: moment["now"], on_first_tick=on_first,
+                )
+            finally:
+                swing_monitor.asyncio.sleep = original_sleep
+
+        asyncio.run(go())
+        assert fired == [1] and len(strategy.verdict_seconds) == 3

@@ -488,6 +488,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             try:
                 async with factory() as session:
                     await metrics.refresh_pipeline_metrics(session)
+                    # SW11: the swing book's five facts, for the SWING_* rules.
+                    await metrics.refresh_swing_metrics(
+                        session, monitor_enabled=resolved.swing_monitor_enabled
+                    )
             except SQLAlchemyError as exc:
                 log.warning("pipeline metrics unavailable", extra={"error": str(exc)})
         cache = getattr(app.state, "cache", None)

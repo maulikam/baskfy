@@ -438,8 +438,57 @@ class SwWatch(Base):
     adr_pct: Mapped[Decimal | None] = mapped_column(MEASURE)
     focus: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     reconfirmed_on: Mapped[dt.date | None] = mapped_column(Date)
+    #: SW11B (STANDING-ANSWERS A3): the nearest result date NSE's event calendar lists on or
+    #: after the morning the feed ran — the earnings flag. Refreshed every run; NULL when the
+    #: calendar names none. ``catalyst`` above is auto-filled from the newest ``sw_catalyst``
+    #: headline only while it is empty; typed text is never overwritten.
+    earnings_date: Mapped[dt.date | None] = mapped_column(Date)
     created_at: Mapped[CreatedAt]
     updated_at: Mapped[UpdatedAt]
+
+
+#: ``sw_catalyst.source`` — which NSE read the row came from.
+SW_CATALYST_SOURCES: tuple[str, ...] = ("NSE_ANNOUNCEMENT", "NSE_EVENT_CALENDAR")
+
+
+class SwCatalyst(Base):
+    """A headline, a stamp and a link per watched name — never the filing (SW11B, A3).
+
+    Written by ``baskfy.swing.catalyst`` at 09:10 for the WATCHING names and the day's EP
+    candidates, from NSE's corporate-announcements and event-calendar reads; read by the
+    setups and watch rows and by the desk page, which **link out**. Idempotent on
+    ``(user_id, instrument_id, url)``: a morning that runs twice rewrites the same rows. An
+    ``NSE_EVENT_CALENDAR`` row carries ``earnings_date`` and links to the exchange's calendar
+    page; an ``NSE_ANNOUNCEMENT`` row carries ``published_at`` and links to the attachment.
+    Single-tenant own-use; nothing here is redistributed (Track C §7 amendment).
+    """
+
+    __tablename__ = "sw_catalyst"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "instrument_id", "url", name="uq_sw_catalyst_user_id_instrument_id_url"
+        ),
+        _in_check("source_known", "source", SW_CATALYST_SOURCES),
+        Index(
+            "ix_sw_catalyst_user_id_instrument_id_published_at",
+            "user_id",
+            "instrument_id",
+            "published_at",
+        ),
+    )
+
+    id: Mapped[BigIntPk]
+    user_id: Mapped[int] = _user_fk()
+    instrument_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("instrument.id", ondelete="CASCADE"), nullable=False
+    )
+    headline: Mapped[str] = mapped_column(Text, nullable=False)
+    #: tz-aware; NULL when the exchange did not stamp the row (it happens).
+    published_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    earnings_date: Mapped[dt.date | None] = mapped_column(Date)
+    created_at: Mapped[CreatedAt]
 
 
 class SwSignal(Base):

@@ -510,6 +510,18 @@ class PgSwingStore:
             (self.user_id, _bind(day), str(mode), int(confirms), int(fills), int(manage_actions)),
         )
 
+    def note_session(self, day: dt.date, note: str) -> None:
+        """SW11: append one line to the day's `sw_session.notes` — what the clock did (the
+        10:45 cutoff, the 15:15 sweep). The row is created if the day has none yet."""
+        self.conn.execute(
+            f"INSERT INTO {self.t('sw_session')} AS s (user_id, session_date, mode, monitor_ran, "
+            "signals, confirms, fills, manage_actions, notes) "
+            "VALUES (?, ?, ?, false, 0, 0, 0, 0, ?) "
+            "ON CONFLICT (user_id, session_date) DO UPDATE SET "
+            "notes = COALESCE(s.notes, '') || ?",
+            (self.user_id, _bind(day), "DRY_RUN", str(note), "\n" + str(note)),
+        )
+
     def session(self, day: dt.date) -> dict | None:
         row = self.conn.execute(
             f"SELECT session_date, mode, monitor_ran, signals, confirms, fills, manage_actions, "
@@ -787,6 +799,35 @@ class PgSwingStore:
             (self.user_id,),
         ).fetchall()
         return [self._position_row(r) for r in rows]
+
+    def catalysts_for(self, instrument_ids: list[int]) -> dict[int, dict]:
+        """SW11B (STANDING-ANSWERS A3): per name, the newest announcement's headline / stamp /
+        link and the earnings date from `sw_catalyst` — what a trigger or a plan line links
+        out to. Never the filing. Newest by stamp, undated last, on both sqlite and Postgres."""
+        wanted = sorted({int(i) for i in instrument_ids})
+        if not wanted:
+            return {}
+        marks = ", ".join("?" for _ in wanted)
+        rows = self.conn.execute(
+            f"SELECT instrument_id, headline, published_at, url, source, earnings_date "
+            f"FROM {self.t('sw_catalyst')} WHERE user_id = ? AND instrument_id IN ({marks}) "
+            "ORDER BY instrument_id, (published_at IS NULL), published_at DESC, id DESC",
+            (self.user_id, *wanted),
+        ).fetchall()
+        out: dict[int, dict] = {}
+        for r in rows:
+            key = int(r["instrument_id"])
+            view = out.setdefault(
+                key, {"headline": None, "published_at": None, "url": None, "earnings_date": None}
+            )
+            if str(r["source"]) == "NSE_EVENT_CALENDAR":
+                if view["earnings_date"] is None:
+                    view["earnings_date"] = _date(r["earnings_date"])
+            elif view["url"] is None:
+                view["headline"] = str(r["headline"])
+                view["published_at"] = _stamp(r["published_at"])
+                view["url"] = str(r["url"])
+        return out
 
     def recent_manage_actions(self, limit: int = MANAGE_ACTIONS_SHOWN) -> list[dict]:
         """The last `manage` actions the book saw: exit-kind plan lines, most recently touched
@@ -1106,6 +1147,23 @@ def build_view(
     morning_view = _plan_view(morning, store, now=now, config=config, held=held)
     preview_view = _plan_view(store.latest_plan("EOD_PREVIEW"), store, now=now, config=config,
                               held=held)
+
+    # --- SW11B: the catalyst link on triggers and plan lines (A3) -------------------------
+    # One read for every name on the page; each row gets `catalyst` (or None) and the template
+    # renders a link that opens the exchange's copy, never the text.
+    linked_lines = [
+        ln
+        for plan_view in (morning_view, preview_view)
+        if plan_view is not None
+        for ln in (*plan_view["exits"], *plan_view["buys"], *plan_view["pending"])
+    ]
+    catalysts = store.catalysts_for(
+        [t["instrument_id"] for t in triggers] + [ln["instrument_id"] for ln in linked_lines]
+    )
+    for t in triggers:
+        t["catalyst"] = catalysts.get(t["instrument_id"])
+    for ln in linked_lines:
+        ln["catalyst"] = catalysts.get(ln["instrument_id"])
 
     # --- the book ------------------------------------------------------------------------
     book = []
@@ -1428,8 +1486,9 @@ async def swing_reconcile(confirm: str = Form(...)):
 @router.post("/swing/cutoff")
 async def swing_cutoff(confirm: str = Form(...)):
     """The 10:45 sweep (A8, A7): cancel every open remainder through the gateway, free every
-    pending-range slot nothing claimed. Posted by the page's button or the operator's cron;
-    SW11 wires the Beat entry and the alert."""
+    pending-range slot nothing claimed. Posted by the page's button, or by hand; the monitor
+    process runs the same chore itself at 10:45 (`app.swing_clock`, SW11), and
+    `SWING_ORDER_OPEN_AFTER_CUTOFF` says when neither did."""
     from . import swing_execute  # noqa: PLC0415
 
     if confirm != "true":

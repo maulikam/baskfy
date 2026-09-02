@@ -183,6 +183,43 @@ class QuoteRecord(_Record):
     as_of: dt.datetime | None = None
 
 
+class CatalystRecord(_Record):
+    """One NSE corporate announcement, reduced to what a watchlist may carry (SW11B, A3).
+
+    A **headline, a timestamp and a link** — never the filing's text. STANDING-ANSWERS A3 and
+    the Track C §7 amendment: the feed is single-tenant own-use, it links out, and it
+    redistributes nothing. ``headline`` is NSE's own subject line (``desc``) and, where the
+    exchange publishes one, its one-line summary of the filing, capped at
+    ``baskfy_providers.nse.HEADLINE_MAX_CHARS``; the attachment body is never read into it.
+
+    ``published_at`` is tz-aware IST when the exchange stamps the announcement, ``None`` when
+    it does not (it happens — an undated row is still a link, it just cannot be "newest").
+    ``url`` is the filing attachment, verbatim, query string and all: it is the uniqueness key
+    in ``sw_catalyst``, and normalising it would be how two different filings collide.
+    """
+
+    symbol: str = Field(min_length=1)
+    headline: str = Field(min_length=1)
+    published_at: dt.datetime | None = None
+    url: str = Field(min_length=1)
+    source: str = "NSE_ANNOUNCEMENT"
+
+
+class EarningsDateRecord(_Record):
+    """One board-meeting entry from NSE's event calendar whose purpose is a financial result.
+
+    ``event_date`` is the meeting date the exchange lists; ``purpose`` its own wording
+    ("Financial Results", "Financial Results/Dividend"), kept so a page can show why the date
+    is flagged. Nothing here is a forecast — it is the exchange's calendar, read once a morning.
+    """
+
+    symbol: str = Field(min_length=1)
+    event_date: dt.date
+    purpose: str = Field(min_length=1)
+    #: The calendar page the date was read from — what a row links out to.
+    url: str = Field(min_length=1)
+
+
 class BrokerHoldingRecord(_Record):
     """One equity position as a broker reports it — the physical truth of §4.6's layer 1.
 

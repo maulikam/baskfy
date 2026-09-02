@@ -46,7 +46,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api import swing as swing_service
-from baskfy_api import swing_journal, swing_watch
+from baskfy_api import swing_catalyst, swing_journal, swing_watch
 from baskfy_api.auth import AuthenticatedDep, settings_for
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
@@ -114,6 +114,33 @@ def _one_of(value: str | None, allowed: frozenset[str], field: str) -> str | Non
 # client stops resolving. It did, on the first build.
 
 
+class SwingCatalystOut(BaseModel):
+    """SW11B (STANDING-ANSWERS A3): a link, never the filing.
+
+    ``headline`` / ``published_at`` / ``url`` are the newest NSE announcement the feed stored
+    for the name; ``earnings_date`` the nearest result meeting the event calendar lists. Any
+    of the four may be null. A page renders ``url`` as a link that opens the exchange's own
+    copy (``target=_blank rel=noopener``) and ``earnings_date`` as a badge — nothing here is
+    text to reproduce, and nothing here is redistributed (Track C §7 amendment).
+    """
+
+    headline: str | None
+    published_at: dt.datetime | None
+    url: str | None
+    earnings_date: dt.date | None
+
+
+def _catalyst_out(view: swing_catalyst.CatalystView | None) -> SwingCatalystOut | None:
+    if view is None or view.empty:
+        return None
+    return SwingCatalystOut(
+        headline=view.headline,
+        published_at=view.published_at,
+        url=view.url,
+        earnings_date=view.earnings_date,
+    )
+
+
 class SwingSetupOut(BaseModel):
     """One candidate row. Every price is an **exchange** price (SW3 divides by ``adj_factor``)."""
 
@@ -147,6 +174,8 @@ class SwingSetupOut(BaseModel):
     locked_upper_circuit: bool
     sector_slug: str | None
     listed_within_2y: bool
+    #: SW11B: the feed's link for the name, or null when it has none.
+    catalyst_feed: SwingCatalystOut | None = None
 
 
 class SwingSetupsOut(BaseModel):
@@ -241,6 +270,11 @@ class SwingWatchOut(BaseModel):
     adr_pct: Decimal | None = None
     focus: bool = False
     reconfirmed_on: dt.date | None = None
+    #: SW11B (A3): the earnings flag the 09:10 feed keeps on the row, and the newest filing's
+    #: link. ``catalyst`` above is the text — typed, or auto-filled from that headline while it
+    #: was empty; `PATCH` still owns it.
+    earnings_date: dt.date | None = None
+    catalyst_feed: SwingCatalystOut | None = None
 
 
 class SwingWatchListOut(BaseModel):
@@ -517,6 +551,7 @@ async def get_setups(
                     locked_upper_circuit=row.locked_upper_circuit,
                     sector_slug=row.sector_slug,
                     listed_within_2y=row.listed_within_2y,
+                    catalyst_feed=_catalyst_out(row.catalyst_feed),
                 )
                 for row in page.rows
             ],
@@ -681,6 +716,8 @@ def _watch_out(row: swing_watch.WatchRow) -> SwingWatchOut:
         adr_pct=row.adr_pct,
         focus=row.focus,
         reconfirmed_on=row.reconfirmed_on,
+        earnings_date=row.earnings_date,
+        catalyst_feed=_catalyst_out(row.catalyst_feed),
     )
 
 

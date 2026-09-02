@@ -77,6 +77,13 @@ class AlertName(StrEnum):
     PUBLISH_LATE = "publish_late"
     ERROR_RATE_HIGH = "api_error_rate_high"
     QUEUE_BACKLOG = "queue_backlog"
+    # SW11 (docs/swing/STANDING-ANSWERS B8): the swing book's five. Upper-case because that is
+    # the name every swing document uses; they are the `alert:` names in alerts.yml verbatim.
+    SWING_POSITION_NAKED = "SWING_POSITION_NAKED"
+    SWING_MONITOR_DID_NOT_START = "SWING_MONITOR_DID_NOT_START"
+    SWING_DETECT_STALE = "SWING_DETECT_STALE"
+    SWING_ORDER_OPEN_AFTER_CUTOFF = "SWING_ORDER_OPEN_AFTER_CUTOFF"
+    SWING_GTT_MISSING_AT_1515 = "SWING_GTT_MISSING_AT_1515"
 
 
 #: How long the webhook is given before it is abandoned. An alert that blocks the reaper for

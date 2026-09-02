@@ -196,7 +196,7 @@ class TestTheShape:
             "max_exposure_pct": 25.00,
             "new_entries_allowed": False,
             "last_r": [],
-            "reads": "SIMULATED",
+            "reads": "REAL",
         }
         assert body["backtest"] is None
 
@@ -431,6 +431,7 @@ class TestTheLadderCard:
                 symbol=f"T{index}",
                 r=r,
                 closed_on=first + dt.timedelta(days=index),
+                simulated=False,  # A10: the ladder reads the real book
             )
 
         async with running_app(settings, screener_session) as client:
@@ -443,13 +444,15 @@ class TestTheLadderCard:
             "max_exposure_pct": 50.00,
             "new_entries_allowed": True,
             "last_r": [2.00, -1.00, 1.50, -0.50, 2.50],
-            "reads": "SIMULATED",
+            "reads": "REAL",
         }
 
-    async def test_it_reads_the_paper_book_while_execution_is_off(
+    async def test_it_reads_the_real_book_while_execution_is_off(
         self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """PACK.6. A real close is in the real card and nowhere near the ladder."""
+        """A10 (SW10.5; the card caught up in SW11): the ladder reads real closes from day
+        one. A paper close is in the simulated card and nowhere near the ladder, whatever the
+        flag says — PACK.6's paper clause is void."""
         user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
         await _closed(screener_session, user_id=user_id, symbol="REAL", r="2.00", simulated=False)
         await _closed(screener_session, user_id=user_id, symbol="PAPER", r="-1.00", simulated=True)
@@ -457,9 +460,10 @@ class TestTheLadderCard:
         async with running_app(settings, screener_session) as client:
             response = await client.get(url("/swing/journal"), headers=bearer(public_id))
 
-        ladder = response.json()["ladder"]
-        assert ladder["reads"] == "SIMULATED"
-        assert ladder["last_r"] == [-1.00]
+        body = response.json()
+        assert body["ladder"]["reads"] == "REAL"
+        assert body["ladder"]["last_r"] == [2.00]
+        assert [t["symbol"] for t in body["simulated"]["trades"]] == ["PAPER"]
 
     async def test_it_reads_the_real_book_once_execution_is_on(
         self, seeded_url: str, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch

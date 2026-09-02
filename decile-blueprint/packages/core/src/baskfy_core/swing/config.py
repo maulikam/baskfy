@@ -188,6 +188,17 @@ class OpeningRangeConfig:
     #: it asks — the orders endpoint at most twice a second (Kite's own ceiling is ten).
     fill_poll_seconds: float = 10.0
     fill_poll_interval_seconds: float = 0.5
+    #: SW11 (STANDING-ANSWERS A4, B10). The range is built from the ``TickBus`` ticks inside the
+    #: window; the historical minute candles are fetched once, ``range_reconcile_delay_minutes``
+    #: after the window closed, only to reconcile the tick range (Zerodha: the historical API
+    #: "was never built for polling during market hours"). The monitor's quote fallback — for a
+    #: name the ticker has gone quiet on — asks Kite ``/quote`` at most once every
+    #: ``quote_poll_min_seconds``; anything faster is a bug, not a setting to lower.
+    range_reconcile_delay_minutes: int = 1
+    quote_poll_min_seconds: float = 5.0
+    #: A8: when the desk's clock sweeps the book for a filled quantity without a GTT and
+    #: re-arms it (`SWING_GTT_MISSING_AT_1515` reads what is still naked after this).
+    gtt_sweep_at: tuple[int, int] = (15, 15)
 
 
 @dataclass(frozen=True, slots=True)

@@ -39,7 +39,13 @@ Section tabs: **Setups | Watchlist | Market | Positions | Journal**.
 `sw_watch` rows in `WATCHING` state: symbol, setup, trigger, stop ref, distance to trigger from
 the last close, **stop distance as a share of the ADR** (a name whose stop is wider than one ADR
 is shown as one the plan will skip — `04` §6.1, SW9.5), added on, expires on, source
-(detector/manual), note and catalyst (inline editable), state history. **The funnel numbers**
+(detector/manual), note and catalyst (inline editable), state history. **The catalyst cell**
+(SW11B, STANDING-ANSWERS A3): the typed text — or, while it was empty, the newest NSE headline
+the 09:10 feed auto-filled — plus the feed's link (`catalyst_feed.url`, rendered
+`target=_blank rel=noopener`, opening the exchange's own copy; never the filing's text) and an
+**earnings badge** from `earnings_date` when the event calendar names a result meeting. The
+same link and badge appear in a Catalyst column on the Setups tab and on the desk page's
+triggers and plan lines. **The funnel numbers**
 (`07`, SW9.5; code since SW10.5 — STANDING-ANSWERS A14): the evening auto-watches the top
 **20** `SETTING_UP` flags by score plus **every** EP (his weekly focus list of 5–20) and the
 monitor watches all of them; the **daily focus** is the top **5** by score plus every EP —

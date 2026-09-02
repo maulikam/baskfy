@@ -58,7 +58,9 @@ __all__ = [
     "observe_provider_call",
     "observe_request",
     "observe_step",
+    "observe_swing_task",
     "refresh_pipeline_metrics",
+    "refresh_swing_metrics",
     "render",
     "route_label",
 ]
@@ -207,6 +209,57 @@ QUEUE_DEPTH: Final = Gauge(
     registry=REGISTRY,
 )
 
+# --- The swing book (SW11, STANDING-ANSWERS B8) ----------------------------
+#
+# Database-derived, like the pipeline gauges above, and for the same reason: the desk and the
+# worker are other processes, and the fact the rule wants ("is a position naked right now") is
+# a row, not a counter in whichever process last touched it. Refreshed by
+# :func:`refresh_swing_metrics` once per scrape from ``baskfy_api.swing_health``.
+
+SWING_NAKED_POSITIONS: Final = Gauge(
+    "baskfy_swing_naked_positions",
+    "Swing positions with shares open and no resting GTT (SWING_POSITION_NAKED, "
+    "SWING_GTT_MISSING_AT_1515).",
+    registry=REGISTRY,
+)
+
+SWING_MONITOR_ENABLED: Final = Gauge(
+    "baskfy_swing_monitor_enabled",
+    "1 when BASKFY_SWING_MONITOR_ENABLED is true in this process's settings; the alert reads "
+    "it beside monitor_ran_today. MD20: one env file feeds every service on the box.",
+    registry=REGISTRY,
+)
+
+SWING_MONITOR_RAN_TODAY: Final = Gauge(
+    "baskfy_swing_monitor_ran_today",
+    "1 when an sw_session row for today (IST) has monitor_ran, written when the monitor handles "
+    "its first tick (SWING_MONITOR_DID_NOT_START).",
+    registry=REGISTRY,
+)
+
+SWING_OPEN_BUY_ORDERS_TODAY: Final = Gauge(
+    "baskfy_swing_open_buy_orders_today",
+    "BUY lines still SENT on today's plans — live orders the 10:45 cutoff should have closed "
+    "(SWING_ORDER_OPEN_AFTER_CUTOFF).",
+    registry=REGISTRY,
+)
+
+SWING_DETECT_RAN_FOR_PUBLISHED_DATE: Final = Gauge(
+    "baskfy_swing_detect_ran_for_published_date",
+    "1 when sw_market_daily carries the most recently published trade date (or nothing is "
+    "published yet), 0 when the detect step has not run for it (SWING_DETECT_STALE).",
+    registry=REGISTRY,
+)
+
+SWING_TASK_DURATION: Final = Histogram(
+    "baskfy_swing_task_duration_seconds",
+    "Wall time of the swing jobs (detect, premarket, eod, backtest), in the worker that ran "
+    "them. The detect budget is 180 s for 2,500 names (STANDING-ANSWERS B9).",
+    labelnames=("task", "status"),
+    buckets=_STEP_BUCKETS,
+    registry=REGISTRY,
+)
+
 #: Every status ``pipeline_run.status`` may hold, so :data:`RUN_STATUS` publishes a 0 for the
 #: ones the last run is *not* in. A gauge that only ever appears for the current status makes
 #: ``baskfy_pipeline_run_status{status="failed"} == 1`` an alert that never resolves.
@@ -343,6 +396,33 @@ async def refresh_pipeline_metrics(
     else:
         started = oldest_running if oldest_running.tzinfo else oldest_running.replace(tzinfo=dt.UTC)
         RUNNING_RUN_AGE.set(max(0.0, (moment - started).total_seconds()))
+
+
+def observe_swing_task(*, task: str, status: str, duration_seconds: float) -> None:
+    """Record one swing job's wall time in the process that ran it. Never raises."""
+    try:
+        SWING_TASK_DURATION.labels(task, status).observe(duration_seconds)
+    except Exception:  # a metric is never a reason a job fails (SW11, B8)
+        log.debug("swing task metric failed", exc_info=True)
+
+
+async def refresh_swing_metrics(
+    session: AsyncSession, *, monitor_enabled: bool, now: dt.datetime | None = None
+) -> None:
+    """Re-read the swing book's five facts into gauges. Called once per scrape (SW11).
+
+    ``monitor_enabled`` is this process's reading of ``BASKFY_SWING_MONITOR_ENABLED``: the
+    desk's flag is what starts the monitor, and MD20 puts every service on one env file, so
+    the API's copy is the same value — the runbook says to keep them together.
+    """
+    from baskfy_api.swing_health import read_swing_health  # noqa: PLC0415 - avoids a cycle
+
+    health = await read_swing_health(session, now=now)
+    SWING_NAKED_POSITIONS.set(health.naked_positions)
+    SWING_MONITOR_ENABLED.set(1 if monitor_enabled else 0)
+    SWING_MONITOR_RAN_TODAY.set(1 if health.monitor_ran_today else 0)
+    SWING_OPEN_BUY_ORDERS_TODAY.set(health.open_buy_orders_today)
+    SWING_DETECT_RAN_FOR_PUBLISHED_DATE.set(1 if health.detect_ran_for_published_date else 0)
 
 
 async def refresh_queue_depth(broker: object, queues: tuple[str, ...]) -> None:

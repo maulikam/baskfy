@@ -71,6 +71,12 @@ RUNBOOKS: Final[dict[AlertName, str]] = {
     AlertName.PUBLISH_LATE: "docs/runbooks/pipeline-failed.md",
     AlertName.ERROR_RATE_HIGH: "docs/runbooks/pipeline-failed.md",
     AlertName.QUEUE_BACKLOG: "docs/runbooks/pipeline-failed.md",
+    # SW11: the swing book's five, one runbook (`baskfy_worker.tasks.swing_ops.RUNBOOK`).
+    AlertName.SWING_POSITION_NAKED: "docs/runbooks/06-swing-morning.md",
+    AlertName.SWING_MONITOR_DID_NOT_START: "docs/runbooks/06-swing-morning.md",
+    AlertName.SWING_DETECT_STALE: "docs/runbooks/06-swing-morning.md",
+    AlertName.SWING_ORDER_OPEN_AFTER_CUTOFF: "docs/runbooks/06-swing-morning.md",
+    AlertName.SWING_GTT_MISSING_AT_1515: "docs/runbooks/06-swing-morning.md",
 }
 
 

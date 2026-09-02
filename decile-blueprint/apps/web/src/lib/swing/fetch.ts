@@ -1,7 +1,10 @@
 import "server-only";
 
 import { serverApiOrigin } from "@/lib/api/config";
-import { ServerFetchTimeoutError, serverFetchJson } from "@/lib/api/server-fetch";
+import {
+  ServerFetchTimeoutError,
+  serverFetchJson,
+} from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 
 /**
@@ -21,6 +24,20 @@ export class SwingUnavailable extends Error {}
 
 /** How long an RSC render will wait. Beyond this, the page says so rather than hanging. */
 const TIMEOUT_MS = 4000;
+
+/**
+ * SW11B (`docs/swing/STANDING-ANSWERS.md` A3): the feed's link for a name — the newest NSE
+ * announcement's headline, stamp and filing URL, and the nearest result date from the event
+ * calendar. A page renders `url` as a link that opens the exchange's own copy and
+ * `earnings_date` as a badge. **Never the filing's text**: nothing here is reproduced, nothing
+ * here is redistributed (Track C §7 amendment).
+ */
+export interface SwingCatalystFeed {
+  headline: string | null;
+  published_at: string | null;
+  url: string | null;
+  earnings_date: string | null;
+}
 
 export interface SwingSetup {
   instrument_id: number;
@@ -47,6 +64,7 @@ export interface SwingSetup {
   locked_upper_circuit: boolean;
   sector_slug: string | null;
   listed_within_2y: boolean;
+  catalyst_feed?: SwingCatalystFeed | null;
 }
 
 /** The counts `05` §2's empty state is written from. */
@@ -102,7 +120,8 @@ async function readJson(
   const session = await auth();
   const token = session?.accessToken;
   const url = new URL(`${serverApiOrigin()}/api/v1${path}`);
-  for (const [key, value] of Object.entries(search)) url.searchParams.set(key, value);
+  for (const [key, value] of Object.entries(search))
+    url.searchParams.set(key, value);
   try {
     return await serverFetchJson({
       url: url.toString(),
@@ -111,7 +130,9 @@ async function readJson(
     });
   } catch (error) {
     if (error instanceof ServerFetchTimeoutError) {
-      throw new SwingUnavailable(`${path} timed out after ${error.timeoutMs}ms`);
+      throw new SwingUnavailable(
+        `${path} timed out after ${error.timeoutMs}ms`,
+      );
     }
     throw new SwingUnavailable(
       error instanceof Error ? error.message : `${path} unavailable`,
@@ -174,6 +195,9 @@ export interface SwingWatchRow {
   note: string | null;
   catalyst: string | null;
   state: string;
+  /** SW11B: the earnings flag the 09:10 feed keeps on the row, and the newest filing's link. */
+  earnings_date?: string | null;
+  catalyst_feed?: SwingCatalystFeed | null;
 }
 
 export interface SwingPlanLine {
@@ -235,14 +259,19 @@ export interface SwingPosition {
 export async function fetchWatchlist(
   state?: string,
 ): Promise<{ data: SwingWatchRow[] } | null> {
-  return readOrNull<{ data: SwingWatchRow[] }>("/swing/watch", state ? { state } : {});
+  return readOrNull<{ data: SwingWatchRow[] }>(
+    "/swing/watch",
+    state ? { state } : {},
+  );
 }
 
 export async function fetchPositions(): Promise<{
   data: SwingPosition[];
   plan: SwingPlan | null;
 } | null> {
-  return readOrNull<{ data: SwingPosition[]; plan: SwingPlan | null }>("/swing/positions");
+  return readOrNull<{ data: SwingPosition[]; plan: SwingPlan | null }>(
+    "/swing/positions",
+  );
 }
 
 export async function fetchMarket(params: {

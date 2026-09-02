@@ -29,6 +29,7 @@ from __future__ import annotations
 import datetime as dt
 from decimal import Decimal
 
+import polars as pl
 import pytest
 import sqlalchemy as sa
 from helpers import make_instrument, requires_db
@@ -49,6 +50,7 @@ from baskfy_core.models import (
 )
 from baskfy_core.swing.config import DEFAULT_SWING_CONFIG
 from baskfy_worker.steps import StepOutcome
+from baskfy_worker.tasks.swing import write_market_row
 from baskfy_worker.tasks.swing_eod import LADDER_CHANGED_BY, run_swing_eod
 
 pytestmark = [requires_db, pytest.mark.db]
@@ -876,3 +878,88 @@ class TestTheDrawdownContainment:
         drawdown = market.detail["drawdown"]
         assert isinstance(drawdown, dict)
         assert drawdown["nav"] == "1000000.00"
+
+
+# =========================================================================================
+# SW11 — the SW8.1 carry-forward: the detection job's `write_market_row` keeps a settled row
+# =========================================================================================
+
+
+async def _rewrite_market_row(session: AsyncSession, user_id: int, on: dt.date = AS_OF) -> None:
+    """`write_market_row` as the Saturday re-scan (or `make swing DATE=`) calls it: an empty
+    liquid universe (breadth zero), the defaults for everything else."""
+    await write_market_row(
+        session,
+        on,
+        user_id=user_id,
+        config=DEFAULT_SWING_CONFIG,
+        liquid=pl.DataFrame(),
+        parabolic_count=0,
+        sectors=[],
+        index_slug="nifty-500",
+        execution_enabled=False,
+    )
+    session.expire_all()
+
+
+class TestTheDetectJobKeepsASettledRow:
+    async def test_write_market_row_keeps_a_settled_rows_tier_and_ladder_record(
+        self, session: AsyncSession
+    ) -> None:
+        """Friday's evening settled the row 1 → 2 and `sw_config` says 2; the Saturday re-scan
+        rewrites the same row. Before SW11 it recomputed the tier from `sw_config` (2) plus the
+        same five closes and landed on 3 — one rung too high for Monday's premarket plan
+        (SW8.1). Now the settled tier and record stand; breadth is still the re-scan's."""
+        user_id = await _user(session, rung=2)
+        await _closes(session, user_id=user_id, rs=FIVE_GOOD)
+        await _market(session, user_id=user_id, gate="GREEN", level=2, settled=(1, 2))
+
+        await _rewrite_market_row(session, user_id)
+
+        row = await _market_row(session, user_id)
+        assert (row.exposure_level, row.max_open_positions) == (2, TIERS[2][0])
+        assert row.max_exposure_pct == Decimal(str(TIERS[2][1]))
+        assert row.detail is not None
+        assert row.detail["ladder"] == {"from": 1, "to": 2, "settled_by": LADDER_CHANGED_BY}
+        # The detectors' own numbers are rewritten: the fixture's breadth is gone.
+        assert row.constituent_count == 0
+
+    async def test_write_market_row_rewrites_a_row_nobody_settled(
+        self, session: AsyncSession
+    ) -> None:
+        """No settlement record → the row is the detection job's preview, as before."""
+        user_id = await _user(session, rung=2)
+        await _closes(session, user_id=user_id, rs=FIVE_GOOD)
+        await _market(session, user_id=user_id, gate="GREEN", level=2)
+
+        await _rewrite_market_row(session, user_id)
+
+        row = await _market_row(session, user_id)
+        # An empty universe is a RED tape (`04` §8.3): the preview lands on rung 0 with no
+        # settlement record, however good the closes — the detectors' own verdict.
+        assert row.detail is not None
+        assert (row.gate, row.exposure_level) == ("RED", 0) and "ladder" not in row.detail
+        assert row.detail["closed_r_multiples"] == list(FIVE_GOOD)
+
+    async def test_write_market_row_reads_no_close_after_the_date_settled_by_nobody(
+        self, session: AsyncSession
+    ) -> None:
+        """House rule 5 for the preview too: a repair of Monday's row must not read Tuesday's
+        close. Five good closes dated after the session leave the rung where it was."""
+        user_id = await _user(session, rung=0)
+        for index, r in enumerate(FIVE_GOOD):
+            await _closed(
+                session,
+                user_id=user_id,
+                symbol=f"LATER{index}",
+                r=r,
+                closed_on=AS_OF + dt.timedelta(days=index + 1),
+            )
+        await _closed(session, user_id=user_id, symbol="EARLY", r="0.50", closed_on=YESTERDAY)
+
+        await _rewrite_market_row(session, user_id)
+
+        row = await _market_row(session, user_id)
+        assert row.detail is not None
+        assert row.detail["closed_r_multiples"] == ["0.50"]
+        assert row.exposure_level == 0

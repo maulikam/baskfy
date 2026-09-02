@@ -63,6 +63,7 @@ Nothing here names a broker method.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime as dt
 import logging
 import os
@@ -105,11 +106,43 @@ from baskfy_execution.tenancy import TenantIds
 from fastapi import HTTPException
 
 from . import config as C
+from . import telemetry as _tel
 from .core import gateway as _gateway_module
 from .core.gateway import OrderGateway, ProductGates
 from .swing_monitor import SignalContext, entries_now
 
 log = logging.getLogger("swing.execute")
+
+
+# --- SW11: observability that cannot reach the order path -----------------------------------
+#
+# ``app.telemetry``'s helpers already swallow their own failures; these wrappers exist so that
+# even a helper that has been replaced, or a sink that raises through, cannot stop a confirm.
+# ``tests/test_swing_execute.py::test_telemetry_never_raises_into_execute_line`` hands them a
+# sink that raises on every call and asserts the line is still filled.
+
+
+def _span(name: str, **attributes: object) -> contextlib.AbstractContextManager[object]:
+    try:
+        return _tel.span(name, **attributes)
+    except Exception:  # noqa: BLE001 - a span is never a reason not to trade
+        log.debug("span %s unavailable", name, exc_info=True)
+        return contextlib.nullcontext()
+
+
+def _observe_confirm(*, kind: str, outcome: str, seconds: float) -> None:
+    try:
+        _tel.count("swing_confirms", kind=kind, outcome=outcome)
+        _tel.observe("swing_confirm_seconds", seconds)
+    except Exception:  # noqa: BLE001 - a metric is never a reason not to trade
+        log.debug("swing confirm metrics unavailable", exc_info=True)
+
+
+def _capture(exc: BaseException, **context: object) -> None:
+    try:
+        _tel.capture(exc, **context)
+    except Exception:  # noqa: BLE001 - error capture failing is not a second error
+        log.debug("swing error capture unavailable", exc_info=True)
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 
@@ -626,8 +659,10 @@ async def execute_line(  # noqa: PLR0913 - the request's parts, named
     simulated = swing_gates().dry_run
     day = _session_day(now)
     mode = "DRY_RUN" if simulated else "LIVE"
+    started = time.perf_counter()
     try:
-        with store.lock_session_for_update(day):
+        with _span("swing.execute_line", kind=kind, simulated=simulated), \
+                store.lock_session_for_update(day):
             # SW10.4: the whole confirm — the re-derivation, the gateway call, the writes —
             # runs with the day's session row locked, so a second confirm of the same
             # session (another tab, a double click) waits and then sees this one's book. The
@@ -664,14 +699,18 @@ async def execute_line(  # noqa: PLR0913 - the request's parts, named
             elif outcome.status in ("SIMULATED", "FILLED"):
                 store.bump_session(day, mode=mode, manage_actions=1)
     except HTTPException:
+        _observe_confirm(kind=kind, outcome="REFUSED", seconds=time.perf_counter() - started)
         raise
-    except Exception:
+    except Exception as exc:
         # Not swallowed: the transaction rolled back with the lock (nothing half-written),
         # then the line is marked so it cannot be re-posted, the click is counted, and the
         # error goes up to the route, which is where an untouchable-instrument refusal belongs.
         store.set_line(line_id, state="REJECTED")
         store.bump_session(day, mode=mode, confirms=1)
+        _observe_confirm(kind=kind, outcome="ERROR", seconds=time.perf_counter() - started)
+        _capture(exc, kind=kind, line_id=line_id)
         raise
+    _observe_confirm(kind=kind, outcome=outcome.status, seconds=time.perf_counter() - started)
     log.info("swing %s line %s %s: %s %s", kind, line_id, line.get("symbol"),
              outcome.status, outcome.reason)
     return outcome
@@ -1128,9 +1167,10 @@ async def cutoff_open_orders(store: SwingStore, gw, *, orders: OrderSource | Non
 
 async def eod_gtt_sweep(store: SwingStore, gw, *, now: dt.datetime,
                         prices: dict[str, Decimal] | None = None) -> list[ExecOutcome]:
-    """The 15:15 hook, as a named stub (A8; the alert and the Beat entry are SW11's): every
-    open position with shares and no resting GTT is re-armed through ``rearm_gtt`` — given a
-    last price above its stop — and the outcomes say which are still naked."""
+    """The 15:15 sweep (A8): every open position with shares and no resting GTT is re-armed
+    through ``rearm_gtt`` — given a last price above its stop — and the outcomes say which are
+    still naked. Run by the desk's clock (`app.swing_clock`, SW11); `SWING_GTT_MISSING_AT_1515`
+    reads what is left."""
     outcomes: list[ExecOutcome] = []
     for pos in _naked_positions(store):
         price = (prices or {}).get(str(pos["symbol"]))

@@ -61,6 +61,10 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # M19 §1. The desk's collection jobs: short, idempotent, and blocked on a Kite token rather
     # than on CPU. They must not queue behind a backfill chunk, so they take the default queue.
     "baskfy.desk.*": {"queue": QUEUE_DEFAULT},
+    # SW11: the swing book's four alert checks are ops-shaped — one query, a possible alert —
+    # and take the default queue for the same reason `baskfy.ops.*` does. The swing *jobs*
+    # (`baskfy.swing.detect`, `.eod`, `.premarket`, …) name their queue on their Beat entry.
+    "baskfy.swing.check_*": {"queue": QUEUE_DEFAULT},
     # SC2: curated-basket EOD metrics. Compute-bound over price history; same queue as factors.
     "baskfy.cb.*": {"queue": QUEUE_COMPUTE},
     # PORTFOLIO_REDESIGN.md §5.1. The nightly EOD NAV job values every user's holdings against
@@ -234,10 +238,13 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
     # --- SW6: the morning before the open (docs/swing/06) --------------------------
     #
     # 08:50: re-express every watched level under the latest bar's adjustment factor. No Kite
-    # call. 09:09: the pre-open has printed its indicative prices (09:00-09:08); pull quotes for
-    # the liquid universe (≤ 500 a call, inside the 3 req/s limiter) when
-    # `BASKFY_SWING_EP_PREMARKET_ENABLED` allows, watch the live gaps, and rebuild the morning
-    # plan either way. Both are idempotent; the flag gates the quote pull and nothing else.
+    # call. 09:16 (SW11, STANDING-ANSWERS A4 / MD5 — was 09:09): the open has printed, so the
+    # quote's `ohlc.open` is the exchange's opening price and its `volume` is a minute of
+    # trading on top of the pre-open match; pull quotes for the liquid universe (≤ 500 a call,
+    # inside the 3 req/s limiter) when `BASKFY_SWING_EP_PREMARKET_ENABLED` allows, watch the
+    # live gaps, and rebuild the morning plan either way. Both are idempotent; the flag gates
+    # the quote pull and nothing else. The S2 timing probe below is what settles whether the
+    # 09:09 reading was ever usable.
     "swing-premarket-levels": {
         "task": "baskfy.swing.premarket",
         "schedule": crontab(hour=8, minute=50, day_of_week="mon-fri"),
@@ -246,8 +253,57 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
     },
     "swing-premarket-gaps": {
         "task": "baskfy.swing.premarket",
-        "schedule": crontab(hour=9, minute=9, day_of_week="mon-fri"),
+        "schedule": crontab(hour=9, minute=16, day_of_week="mon-fri"),
         "kwargs": {"stage": "GAPS"},
+        "options": {"queue": QUEUE_COMPUTE},
+    },
+    # --- SW11: the S2 Kite timing probe (STANDING-ANSWERS A4, MD5) ---------------------
+    #
+    # 09:04 on weekdays, gated by `BASKFY_SWING_TIMING_PROBE` (default false) and self-disabling
+    # after one good run: samples /quote through the pre-open and the first minute of trading and
+    # asks for the 09:20 minute candle at 09:20:05, 09:20:35 and 09:21:05, then writes
+    # docs/swing/status/S2-kite-timing.md. It holds one of the compute worker's two slots for
+    # ~18 minutes on the one morning it runs; the 09:16 scan takes the other.
+    "swing-timing-probe": {
+        "task": "baskfy.swing.timing_probe",
+        "schedule": crontab(hour=9, minute=4, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
+    # --- SW11: the checks behind the swing alerts (STANDING-ANSWERS B8) ----------------
+    #
+    # The Prometheus rules in infra/prometheus/alerts.yml read gauges the API refreshes at
+    # scrape time; these four raise the same alerts in-process, with the date attached, the way
+    # `publish_late` is raised from both sides — so a Prometheus that is not deployed does not
+    # take the alert down with it. Each is one indexed query and silent when all is well.
+    "swing-check-monitor-started": {
+        "task": "baskfy.swing.check_monitor_started",
+        "schedule": crontab(hour=9, minute=20, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    "swing-check-orders-after-cutoff": {
+        "task": "baskfy.swing.check_orders_after_cutoff",
+        "schedule": crontab(hour=10, minute=50, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    "swing-check-gtt-at-1515": {
+        "task": "baskfy.swing.check_gtt_at_1515",
+        "schedule": crontab(hour=15, minute=20, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    "swing-check-detect-fresh": {
+        "task": "baskfy.swing.check_detect_fresh",
+        "schedule": crontab(hour=21, minute=30, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    # --- SW11B: the catalyst feed (docs/swing/STANDING-ANSWERS A3) ----------------------
+    #
+    # 09:17, one minute after the gap scan (09:16 since SW11) has written its live-gap watch
+    # rows, so the feed serves the day's EP candidates as well as the funnel's names. One
+    # archived NSE request per symbol per read under the shared 1 req/s limiter — twenty-odd
+    # names finish in under a minute. Fail soft: a provider error is a note, never a raise.
+    "swing-catalyst": {
+        "task": "baskfy.swing.catalyst",
+        "schedule": crontab(hour=9, minute=17, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_COMPUTE},
     },
     # --- T8.3: one email per REBALANCE_AVAILABLE (payload.notified_at) -----------

@@ -1710,6 +1710,64 @@ session exists, never a holding". Worth a look before the vhost goes public.
 **Also still open from the prep leaf:** desk history not migrated (`tools/migrate-desk`, not run
 in this leaf); `restart desk` after each morning's Kite login (Q-SW13-1).
 
+### Deploy #2 (3 Sep 2026, leaf 1.5.3) — `6884d1b` is live as `6884d1b-fix1`; the first real scan ran
+
+**What is live:** all ten services on `baskfy-{web,py,desk}:6884d1b-fix1` (built from a clean
+worktree of `6884d1b` = SW5–SW12 + SW14 + the flag-detector listing-day fix), `alembic
+0032_swing_catalyst` (= head; SW15's 0033 is not in this HEAD), seeds idempotent (`sw_config: 1`,
+`sw_config_sleeve: 1`), `tf.sh plan` → **No changes** (the `desk` record and the ECR grant exist).
+`https://staging.baskfy.com/swing` → 200 (sign-in page signed out). **The sha suffix is a
+defect in the commit, not in the deploy:** `6884d1b`'s `packages/core/src/baskfy_core/models/
+__init__.py` imports `SwScanRun` (two lines of SW15's uncommitted work that bled into the SW12
+commit — `models/swing.py` at that sha does not define it), so **every python process at
+`6884d1b` dies at import** (`ImportError: cannot import name 'SwScanRun'` from `alembic env.py`
+line 12; the `baskfy-py:6884d1b` image in ECR is unusable, and `latest` still points at it).
+The first deploy stopped at `migrate` with the box still on `beb5ff5`; `6884d1b-fix1` is
+`6884d1b` with exactly those two lines (`SwScanRun,` in the import list and `"SwScanRun",` in
+`__all__`) removed in the deploy worktree — nothing else — rebuilt for py + desk, the web image
+retagged (identical bytes). The next commit that adds `SwScanRun` to `models/swing.py` makes HEAD
+importable again; **do not push a fixed image over the `6884d1b` tag.** Decided under the
+autonomy charter (Goal over the literal "build from HEAD"; reversible; recorded here).
+
+**`verify-swing.sh` deciding lines (box half, all green):** `desk: DRY_RUN=true`, `monitor:
+DRY_RUN=true`, every `BASKFY_SWING_{EXECUTION_ENABLED,MONITOR_ENABLED,EP_PREMARKET_ENABLED,
+TIMING_PROBE}=false` in both containers, `desk mounts the token volume read-only`, `beat
+schedules swing-eod / swing-eod-plan / swing-weekend / swing-premarket-levels /
+swing-premarket-gaps`, `alembic at 0032_swing_catalyst (head 0032_swing_catalyst)`, `desk
+schema has 20 tables`, all ten services `Up`. The 7 HTTPS checks on `desk.staging.baskfy.com`
+still fail with `000` — NXDOMAIN until the GoDaddy record (NEEDS-MAULIK S4); unchanged from
+deploy #1 and not a box matter. `.env.staging.compose` carries no `BASKFY_DESK_DRY_RUN` and no
+`BASKFY_SWING_*` line (checked by key name only).
+
+**The scan (`swing_cli --date 2026-09-02`, first real run, ~4 min):** funnel
+`instruments 2317 → bars 411,083 → with_a_bar_today 2317 → liquid 402 → candidates 9`
+(`FLAG 8, EP 0, PARABOLIC_SHORT 1`), `status succeeded`, user 1, `nifty-500`. Rows: CUPID
+59.97, AARTIPHARM 57.05, APARINDS 52.95, MANAKCOAT 43.61 (`SETTING_UP`); VINDHYATEL 49.29,
+GUFICBIO 41.75, INNOVACAP 40.54, IFCI 37.24 (`BREAKOUT_TODAY`); BODALCHEM 79.10
+(`PARABOLIC_SHORT`, `RUNNING`). **Evening (`swing_eod_task('2026-09-02')`):** gate `GREEN`,
+exposure level 0, ladder 0→0, watch `added 0` (honest: `auto_watch_min_score` is 60 and the
+best `SETTING_UP` flag is 59.97), plan `35b128bf…` with 0 entries / 0 pending / 0 skips, risk
+0.500 %, `first_live: 5 left`, `sessions_logged 1`. **Morning (`--date 2026-09-03 --premarket
+LEVELS`):** `succeeded`, levels 0/0, gaps universe 0 (flag off, as designed), plan_id `null`,
+`first_live_sessions_left 0` (the evening said 5 — worth a look, not chased here).
+**Counts:** `sw_setup_daily 9`, `sw_market_daily 1`, `sw_watch 0`, `sw_plan 1`, `sw_session 1`.
+
+**Data defect found by the real run — REPORTED, not patched (the data plant's, not swing's):**
+`index_snapshot_daily` for `nifty-500` (and `nifty-50`) carries 30 rows from **2026-07-08 to
+2026-08-18 at ~1/14 scale** (e.g. `2026-08-18 = 1696.57`, `2026-08-19 = 23386`; nifty-50
+`2026-07-08 = 1004.60`), and 2026-08-24/25/26 have no row (not checked against the NSE holiday calendar). The market gate's MAs are computed over
+those rows: `index_ma_fast 19086.94`, `index_ma_slow 10378.41` against `index_close 23222.80` —
+so **`GREEN` on 2026-09-02 is an artefact** of a level compared against a contaminated mean,
+not a reading. Until the ingest that wrote that window is found and the rows re-fetched, no
+gate written by `sw_market_daily` on this box should be believed; the desk's dry-run drill
+morning (docs/swing/02 §3) must not be counted before it is fixed.
+
+**Rollback:** in `/opt/baskfy/.env.staging.compose` set the three `BASKFY_*_IMAGE` lines back
+to `…:beb5ff5`, restore `compose.prod.yml.bak-sw13-20260903T051438` +
+`Caddyfile.bak-sw13-20260903T051438` (the genuine pre-deploy-#2 copies; the `…T052022` pair is
+the second run's and already new), `up -d --force-recreate caddy && up -d`. 0032 was already at
+head, nothing to roll back in the schema. The 9 + 1 rows are idempotent re-runs of the same date.
+
 #### The prep leaf's record (SW13-prep, before the run)
 
 **MD20:** one system. The desk (weekly book + swing) runs as compose services `desk` and
@@ -1922,6 +1980,40 @@ field; linked from the user menu and a fourth Me tab. **Tests:** `read-only.test
 trees and asserts the exact five-action set, no execution import, no desk route or placing verb;
 API +9 (67 in the three files), web swing/me/lib **142** (`nav.test.ts` re-pinned for the tab).
 **Did NOT do:** no Playwright run (M46); the chart is per-row `bars` calls, not one endpoint.
+
+## SW15 — "Scan now": detection on demand, intraday from Kite quotes ✅
+
+3 Sep 2026. Maulik: "I wanted to have the scan anytime, and since we have the Kite API, we
+should have all the data." **Schema** (`0033_swing_scan_now`): `sw_setup_daily.provisional`,
+`sw_market_daily.provisional` (default false; the history backfills), `sw_scan_run` (`03` §12).
+**Worker:** `baskfy.swing.scan_now(run_id)` on the compute queue — `decide_session` picks today
+(provisional) on a trading day between 09:15 and 15:30 IST before tonight's publish, else the
+last published session; the provisional path quotes the liquid universe as of the last close
+(`KiteProvider.quotes`, ≤ 500 a call, one limiter token each), builds one bar per name in the
+adjusted space (ohlc from the quote, close = last, volume so far, turnover = close × volume, the
+day's circuit, the last bar's factor; volume 0 is still a bar; no factor → skipped and counted)
+and runs the nightly's own body over it with `provisional=True` on every row; the nightly's
+upsert flips the same keys to `False` and deletes the provisional rows it did not re-detect; a
+second scan replaces the first's; a run that sees no bar clears the day's provisional rows.
+Fail soft in a savepoint: a quote failure is `FAILED` with the reason and nothing written.
+`detail.funnel` is now written on the market row by every detection run (the page had been
+reading a key nothing wrote). `baskfy.swing.scan_sweep` (Beat, every minute) publishes queued
+rows with no `task_id` — the desk's, and the API's when the broker was down. **API:**
+`POST /swing/scan` → 202 `{run_id}` (409 `scan-in-flight` while one is queued/running and
+younger than 10 min; 429 with `Retry-After` inside 60 s — both from the table, both settings);
+`GET /swing/scan/{id}`; `GET /swing/setups` carries `as_of_provisional`, `scanned_at`,
+`last_scan`. Twelve swing paths, five writes; `EXPECTED_PATHS`, the readonly census and
+`make client` updated. **Web:** `scanNow` (the sixth action), the header line "provisional —
+scanned 13:42 IST from live quotes" / "re-scanned 18:02 IST from published bars", the last run
+beside the button ("Last scan 13:42 IST from live quotes · 41 liquid, 2 flagged" / "The last
+scan failed: …"), `router.refresh()` every 5 s while a run is in flight. **Desk:** the status
+bar's `scan:` line with the same label and run state, a Scan now button, `POST /swing/scan`
+writing the row for the sweep (no Celery client in the desk venv — SW15.1), 409/429 from
+`app.config`'s two envs. **Tests:** worker 28 (`test_swing_scan_now.py`, incl. the nightly
+replacement and the failed-run rollback), API +9 (109 across the four files), web swing 108,
+desk +11 (1706). **Did NOT do:** no live press against Kite yet (the first is the DRY_RUN
+morning); the desk button's latency is the sweep's minute; no "scan now" for the weekend
+five-session re-scan (it is the last session only).
 
 ## Not done (kept loud)
 

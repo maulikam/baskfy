@@ -23,7 +23,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import BasketSnapshot
-from baskfy_worker.steps import NIGHTLY_CHAIN, PipelineStep, StepOutcome
+from baskfy_worker.steps import NIGHTLY_CHAIN, POST_PUBLISH_STEPS, PipelineStep, StepOutcome
 from baskfy_worker.tasks.basket import latest_snapshot, run_refresh_basket
 
 AS_OF = dt.date(2026, 8, 18)
@@ -41,9 +41,18 @@ class TestWhereItSitsInTheChain:
             PipelineStep.PUBLISH
         )
 
-    def test_it_is_the_last_step(self) -> None:
-        """Because it is a cache. Nothing downstream may depend on it having succeeded."""
-        assert NIGHTLY_CHAIN[-1] == PipelineStep.REFRESH_BASKET
+    def test_nothing_the_run_depends_on_comes_after_it(self) -> None:
+        """Because it is a cache. Nothing downstream may depend on it having succeeded.
+
+        This used to say "it is the last step", which was the same property while it *was* the
+        last step. SW3 added `compute_swing` after it — another post-publish step that also
+        cannot fail the run — so the assertion is now what it always meant: everything after
+        `refresh_basket` is in `POST_PUBLISH_STEPS`, and a step added after these that the run's
+        success depends on has to fail here.
+        """
+        after = NIGHTLY_CHAIN[NIGHTLY_CHAIN.index(PipelineStep.REFRESH_BASKET) :]
+        assert set(after) <= POST_PUBLISH_STEPS
+        assert PipelineStep.REFRESH_BASKET in POST_PUBLISH_STEPS
 
 
 @requires_db

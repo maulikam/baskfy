@@ -50,6 +50,11 @@ from baskfy_worker.tasks.curated_sip import run_curated_sip_reminders
 from baskfy_worker.tasks.portfolio_nav_job import run_portfolio_nav
 from baskfy_worker.tasks.purge_accounts import run_purge_accounts
 from baskfy_worker.tasks.resync import run_resync
+from baskfy_worker.tasks.swing import (
+    WEEKEND_SCAN_SESSIONS,
+    recent_trading_days,
+    run_detect_swing,
+)
 
 #: Earliest IST wall-clock at which a session's own data can exist. NSE closes at 15:30 and
 #: publishes the bhavcopy afterwards; the schedule itself fires at 18:45 for that reason. Used to
@@ -485,3 +490,74 @@ def portfolio_eod_nav_task(as_of: str | None = None) -> JsonObject:
     """
     day = dt.date.fromisoformat(as_of) if as_of else dt.datetime.now(tz=IST).date()
     return run_in_session(lambda session: run_portfolio_nav(session, day)).as_json()
+
+
+# --- SW3: the swing book's own detection job ---------------------------------
+#
+# Callable on its own as well as from the nightly chain, because the two have different
+# audiences. The chain runs it after `publish` and cannot let it fail the night; this task is
+# what `make swing DATE=...` and the Saturday weekend scan use, and there a failure should be
+# visible rather than swallowed.
+
+
+@shared_task(name="baskfy.swing.detect", acks_late=True)
+def swing_detect_task(trade_date: str | None = None) -> JsonObject:
+    """Detect the day's setups and write the day's market row (`docs/swing/06` SW3).
+
+    Idempotent per `(user_id, date)`: re-running a date overwrites its own rows. Defaults to
+    today in IST when Beat fires without an argument.
+    """
+    day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
+    deps = build_pipeline_dependencies()
+    if deps.swing_user_id is None:
+        return {"date": day.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        outcome = StepOutcome()
+        written = await run_detect_swing(
+            session,
+            outcome,
+            day,
+            user_id=int(deps.swing_user_id or 0),
+            index_slug=deps.swing_index_slug,
+            execution_enabled=deps.swing_execution_enabled,
+        )
+        return {"date": day.isoformat(), "candidates": written, "detail": outcome.detail}
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.swing.weekend", acks_late=True)
+def swing_weekend_task(as_of: str | None = None) -> JsonObject:
+    """The Saturday scan (`docs/swing/06` SW4): re-detect the last five sessions.
+
+    Not the same thing as running the nightly job five times for fun. `04` §2's flag statuses are
+    a snapshot of one day, and a Saturday scan is how a person builds next week's watchlist —
+    "which names were setting up at any point this week" is a different question from "which were
+    setting up on Friday", and a base that tightened on Wednesday and drifted on Friday is
+    exactly the one he wants to see.
+
+    Idempotent for the same reason the nightly job is: each date overwrites its own rows.
+    """
+    day = dt.date.fromisoformat(as_of) if as_of else dt.datetime.now(tz=IST).date()
+    deps = build_pipeline_dependencies()
+    if deps.swing_user_id is None:
+        return {"as_of": day.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        sessions = await recent_trading_days(session, day, WEEKEND_SCAN_SESSIONS)
+        results: list[JsonObject] = []
+        for one in sessions:
+            outcome = StepOutcome()
+            written = await run_detect_swing(
+                session,
+                outcome,
+                one,
+                user_id=int(deps.swing_user_id or 0),
+                index_slug=deps.swing_index_slug,
+                execution_enabled=deps.swing_execution_enabled,
+            )
+            results.append({"date": one.isoformat(), "candidates": written})
+        return {"as_of": day.isoformat(), "sessions": results}
+
+    return run_in_session(_run)

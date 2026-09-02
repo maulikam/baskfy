@@ -202,6 +202,28 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=20, minute=35, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_COMPUTE},
     },
+    # --- SW3/SW4: the swing book's scans (docs/swing/06) -------------------------
+    #
+    # The nightly chain already runs `compute_swing` as its twelfth step, after `publish`. This
+    # entry is the belt to that brace: on a night the chain failed its quality gate the bars are
+    # still there and yesterday's setups are still worth having, and `docs/swing/01` §8's routine
+    # ("End of day: 15-30 minutes on positions and scans") does not care why the screener had a
+    # bad night. Idempotent, so on an ordinary evening it rewrites the rows the chain just wrote.
+    #
+    # 21:00, which is after the 20:15 publish deadline (docs/11 §Reliability) and after the four
+    # 20:2x-20:35 jobs, so it neither races the chain nor queues behind it.
+    "swing-eod": {
+        "task": "baskfy.swing.detect",
+        "schedule": crontab(hour=21, minute=0, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
+    # docs/swing/01 §8: "Weekend: a full scan, a watchlist of a few dozen forming flags, the
+    # levels that would trigger next week." Saturday morning, before anyone looks.
+    "swing-weekend": {
+        "task": "baskfy.swing.weekend",
+        "schedule": crontab(hour=7, minute=0, day_of_week="sat"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
     # --- T8.3: one email per REBALANCE_AVAILABLE (payload.notified_at) -----------
     "cb-rebalance-notify": {
         # After SIP reminders (09:00); before the cash session is busy.

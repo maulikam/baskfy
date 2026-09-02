@@ -20,7 +20,8 @@ done. A fresh session resumes from the first module not marked ✅.
 | SW8 — Journal + ladder closes the loop | ✅ | ✅ ladder + API: the evening settles the rung and writes it to `sw_config` (audited, `swing-eod`) and the day's market row, and the plan is built with it; `GET /swing/journal` answers C2's shape — real and simulated cards apart, the six-bucket histogram, by setup, by month, the ladder card, 14-of-20 · ✅ page: `/swing/journal` renders it — two cards that never mix, six bars that read at zero, the one sentence on what the next close does to the ladder, "14 of 20 paper sessions logged", and the backtest heading with its caveats verbatim or an honest "not run yet"; 30 rendered-DOM tests, the fifth tab in the row |
 | SW9 — EOD backtest | ✅ | ✅ core (1.3.1): `baskfy_core.swing.backtest` runs `04` §11 through the live book's own functions; a planted flag reproduces R = 0.28 to the paisa; 300 × 8y in 24 s · ✅ runner (1.3.2): `sw_backtest_run` (migration 0029, append-only), `baskfy.swing.backtest` on the compute queue loading bars as the detectors do plus the names that died inside the run, `tools/swing/backtest.py` (`--fixture` with no database, or the task body against `BASKFY_DATABASE_URL`), `GET /swing/journal.backtest` as C2's card with the caveats verbatim, and the page drawing the run's R distribution, win rate and expectancy with the journal cards' own tiles and bars — 18 + 6 + 6 tests; the 2017→ run itself is **not measurable on this machine** (ten sessions of bars, database at 0026) and extrapolates to 4–5 min against the 30 |
 | SW9.5 — Reconcile with the primary sources | ✅ | The rules are his, quoted (`07`): the stop is one ADR or tighter and a wider one is skipped, the gate's index rule is the 10-day over the 20-day, at most three new entries a session, the plan takes `min(rung, max_open_positions)` with the top rung at 10, the sleeve locks out new entries 15 % below its peak until back within 10 % (settled by the evening from the sleeve's own NAV, migration `0030`), the swing GTT rests 3 % under its trigger through an additive keyword the weekly book never sees, ceilings 30 % / 20, ADR floor 4.0 — the patch applied, 41 red tests re-pinned by re-deriving each number, 7 acceptance tests in `test_swing_primary_sources.py`, 4 backtest cases and 9 ladder cases new; core **2665 passed**, G5 **445 passed**, execution **170**, desk **1553 passed, 17 skipped** |
-| SW10 — Gating and safety proof | ✅ | Every Track-B/C claim is a test: hypothesis over random watchlists (no `PARABOLIC_SHORT` line, a stop never falls, a SELL never exceeds the book), a spy over the real gateway through `/swing/execute` (eight calls, all dry, under both `DRY_RUN` values), source scans with docstrings/comments stripped over the web hub, the API and the monitor, every `sw_` write named with its `user_id`; and `tools/swing/drill.py` runs the whole paper session against Postgres — evening → LEVELS → MORNING → replayed morning through `PgSignalStore` → two confirms through `execute_line` → EOD → next morning — **0 orders reach a broker**, `confirms=2 fills=2`, one finding recorded (SW10.2) |
+| SW9.6 — The index rule, the drawdown, gate-on vs gate-off in the backtest | ✅ | STANDING-ANSWERS A12 and B1–B5: `run_backtest` takes the benchmark's closes (NIFTY 500 from `index_snapshot_daily`, NIFTY 50 fallback, resolved once per run) and reads the 10/20 averages in-frame up to and including the session's own close (a look-ahead test shifts the series by one session and the gate moves by exactly one); the drawdown lock-out runs on the constant-sleeve curve, peak-to-trough as % of the sleeve, with the live 15 %/10 % hysteresis (a 16.99 % drawdown locks, 10.84 % holds, 9.52 % releases); three books over one detection pass — gate off, breadth only, full — reported per year entered and per setup with breadth's and the index rule's contributions as differences; `DELISTED` beside `NO_BAR`, B1's circuit caveat verbatim in `04` §11, the card and the page draw the drawdown and the two comparison tables; core backtest **68 passed**, speed **26.9 s** for three books, worker **24**, API **43**, web **42**, `make lint` clean |
+| SW10 — Gating and safety proof | ✅ | Every Track-B/C claim is a test: hypothesis over random watchlists (no `PARABOLIC_SHORT` line, a stop never falls, a SELL never exceeds the book), a spy over the real gateway through `/swing/execute` (eight calls, all dry, under both `DRY_RUN` values), source scans with docstrings/comments stripped over the web hub, the API and the monitor, every `sw_` write named with its `user_id`; **the confirm-time gate (STANDING-ANSWERS A5, SW10.4)**: `POST /swing/execute` re-derives the book under `SELECT … FOR UPDATE` on the day's `sw_session` and re-sizes or refuses (`EXPOSURE_FULL` / `TIER_FULL` / `SESSION_CAP`), the monitor re-reads context per trigger, 500 seeded confirm sequences never exceed the ceiling, the count or the cap; and `tools/swing/drill.py` runs the whole paper session against Postgres — evening → LEVELS → MORNING → replayed morning through `PgSignalStore` → two confirms through `execute_line` (the second re-sized 833 → 389) → EOD → next morning — **0 orders reach a broker**, `confirms=2 fills=2`, **`EXPOSURE after confirms … = 25.0%`** (was 34.3 %; SW10.2 closed). Desk **1,599 passed** |
 | SW11 — Hardening and observability | ⬜ | |
 | SW12 — Verification, goldens, final report | ⬜ | |
 
@@ -1267,6 +1268,94 @@ moved in the migration for rows nobody set).
   re-pin (the fixture ADR, the card's 4.0) so that G5 could be green, and nothing else in them
   moved.
 
+## SW9.6 — The backtest carries the index rule, the drawdown on its constant-sleeve curve, and gate-on against gate-off ✅
+
+**Goal, from STANDING-ANSWERS A12 (MD14) and B1–B5:** "Constant ₹10 lakh sleeve + the index
+rule. NIFTY 500 from `index_snapshot_daily` (NIFTY 50 fallback), 10/20 SMAs in-frame, no
+look-ahead. Drawdown lock-out on the constant-sleeve equity curve (realised + open marked at
+close). Report gate-on vs gate-off per year and per setup, with breadth's and the index rule's
+contributions labelled separately." SW9.1's third choice (breadth-only, "an `index` keyword is
+the reversal") is reversed here, and the four SW9.6.x decisions are the judgement calls.
+Everything below was **measured on this machine on 2 Sep 2026**. (Numbering note: the
+DECISIONS-SW entries `SW9.6`–`SW9.8` are leaf 1.3.2's, from SW9; this module's are
+`SW9.6.1`–`SW9.6.4`, the way SW9.5's are `SW9.5.x`.)
+
+### What changed, rule by rule
+
+| Rule | Where it now lives | Proven by |
+|---|---|---|
+| The index rule in the backtest (A12): NIFTY 500's closes, the 10/20 averages from the closes **on or before** the session, `market_gate` as the desk reads it | `run_backtest(..., index=(date, close))`; `_IndexSeries.reading_on` mirrors `load_index_reading` (the last twenty rows on or before the date; fewer → ignored); `BacktestParams.index_slug` labels the series | `test_swing_backtest`: a crash in the detection day's close turns the gate RED that evening and the flag is refused; **the look-ahead test** shifts the same series one session later and asserts the gate changes on the boundary session only, never earlier; nineteen closes are ignored and twenty are read; a bad frame or a slug with no series is refused |
+| The runner's series: NIFTY 500 with the NIFTY 50 fallback, once per run, at `params_for` time | `swing_backtest.resolve_index_slug` (the first of the two with ≥ `index_ma_slow` levels in the window; neither → `None`), `load_backtest_index`, `params.index_slug` on the row from the start | `test_swing_backtest_task::TestTheIndexRule` (4): NIFTY 500 read in-frame through the database and the stored ladder RED on the crash day; nineteen NIFTY 500 rows fall back to NIFTY 50; no index at all is breadth-only with the caveat on the row; the frame covers the window oldest first |
+| The drawdown lock-out on the constant-sleeve curve, peak-to-trough as % of the sleeve, the live 15 % / 10 % hysteresis | `_sleeve_drawdown_pct` → the same `drawdown_locked` / `exposure_tier`; `DrawdownSummary` (deepest drawdown, peak, trough, date, sessions locked) on the result and per book per year in the comparison | `test_drawdown_is_peak_to_trough_as_a_percentage_of_the_constant_sleeve` (by hand from the curve: 0.61 % on the losing tail); **`test_drawdown_of_sixteen_percent_locks_out_new_entries_until_back_within_ten`** at the real numbers — two 20 % positions, a gap to 22 on day 8, the sleeve **16.99 %** under its peak, `FLAGMID` refused `DRAWDOWN_LOCKOUT`, the lock held through 10.84 % on day 14 and lifted at 9.52 % on day 15, `FLAGLATE` entered on day 16 at rung 0, seven locked sessions counted; SW9.5's scaled case unchanged |
+| Gate-on against gate-off (A12): three books over one detection pass | `GateMode` (`gate_off` = GREEN every session, ladder and lock-out still in force; `breadth_only`; `full`), `_Book`, `GateComparison` / `GateCell` / `GateContribution`; `comparison` in `to_json()` | `test_gate_off_never_enters_fewer_than_gate_on_and_a_red_tape_shows_what_breadth_costs` (four frames; the RED tape: breadth's contribution is −1 entered, −0.28R), `test_comparison_reports_the_three_books_per_year_and_per_setup` (1/1/0 entered; the index rule's contribution −1, −0.28R, on the year and on FLAG), `test_contribution_is_with_minus_without_on_every_scope`, the wire shape, the primary book unchanged |
+| B1 costs from params; circuits from `upper_circuit` where present, no lock assumed where absent, **and the caveat says so** | `CAVEATS[3]`, verbatim in `04` §11 | `test_circuit_lock_is_read_from_upper_circuit_where_present_and_never_assumed_where_absent` (a band at the high locks; above it does not; null does not); the three existing cost tests |
+| B2 only calendar sessions; delisted names sold at the last close and counted `DELISTED` | `run_backtest(..., delisted={instrument_id: delisted_on})`, `BacktestCloseReason.DELISTED`, `closed_delisted`; the runner's `load_delisted` | `test_calendar_holiday_bar_is_not_a_session_so_a_low_through_the_stop_on_it_never_fills`; `test_delisted_name_is_sold_at_its_last_close_on_its_last_bar_and_counted_delisted` (on the delisting day with a bar, on the first session without one, and `NO_BAR` with no map); the worker's `TestDelistedNames` through `instrument.delisted_on` |
+| B3 the partial at the next open after the day-3–5 signal and the trail exit at the next open after the close below the MA, through `stops.manage` | unchanged (verified) | `test_partial_next_open_after_the_day_3_to_5_signal_is_stops_manage_own_decision` and `test_trail_next_open_after_the_close_below_the_ma_is_stops_manage_own_decision`: the same `manage` call on the same bar answers `SELL_PARTIAL` / `CLOSE_BELOW_TRAIL_MA`, and the fill is the next session's open, not the signal day's close |
+| B4/B5 the stored stats carry the histogram, the max drawdown, by setup, by year, the funnel with skips by reason, the caveats, the params; byte-identical re-runs | `to_json()` keys `params, trades, stats, by_setup, by_year, equity_curve, funnel, ladder, drawdown, comparison, caveats`; `BacktestResult.caveats` = the standing four + `INDEX_ABSENT_CAVEAT` without an index | `test_determinism_holds_with_the_index_and_the_delisting_map` (core); `TestDeterminism` (worker: the engine's bytes twice, the two rows equal under JSONB); `test_to_json_is_plain_and_its_keys_are_in_a_fixed_order` |
+| The card and the page | `swing_journal.backtest_stats` adds `max_drawdown_pct`, `drawdown`, `comparison` (numbers as `Decimal`, modes in the engine's order — JSONB keeps none); `backtest_caveats` composes the constant wording from the row's one fact; the page draws the drawdown tiles and two tables — "Entries and net R" and "Deepest drawdown of the curve" — by scope × book, with breadth's and the index rule's contributions as columns | `test_api_swing_journal` (+3: the comparison and the drawdown with numbers; no index → no index-rule contribution; a SW9 row still renders with the index-absent caveat); `page.test.tsx` (+6: the tiles, the lock-out count, the two tables' headers and rows, the absent column with its sentence, no comparison for an older run, no banned word) |
+
+### The engine, restructured without changing a number
+
+`_Run` became a shared detection pass over `_Book`s: detection, breadth and the index reading
+are read once a session and every book takes its own gate, tier, fills, curve and funnel from
+them. The primary book's numbers — the planted 492 shares, R = 0.28 to the paisa, every SW9 and
+SW9.5 case — are byte-for-byte what the single-book engine produced; the funnel identity
+`entered + Σ skipped_* == candidates` holds per book. `_liquidate` now counts its own reason
+(`closed_no_bar` / `closed_delisted` / `closed_end_of_run`).
+
+### Numbers
+
+| Suite | Result |
+|---|---|
+| `packages/core/tests/test_swing_backtest.py` | **68 passed** (49 + 19), 91 s |
+| `test_speed_300_instruments_over_8_years_runs_under_60s` | **26.9 s** with three books (27.5 s with one, measured before the change) — the detectors are the cost and they run once |
+| `packages/core/tests` less SW10's `test_swing_safety_properties.py` (G7) | see the ledger row — measured after this section was written |
+| `services/worker/tests/test_swing_backtest_task.py` on `baskfy_sw_t2` | **24 passed** (18 + 6) |
+| `services/api/tests/test_api_swing_journal.py` + `test_swing_readonly.py` | **43 passed** (27 + 16) |
+| `apps/web` `tsc --noEmit` + `vitest run "src/app/(app)/swing/journal"` | **42 passed** (36 + 6); `no-jargon`, `jargon-ban`, `no-any` green |
+| `make lint` | clean (the one pre-existing React-compiler warning in `data-table.tsx`) |
+
+### Decisions
+
+SW9.6.1 (the index read in-frame, the series resolved once at `params_for`, `index_slug` on the
+row — A12), SW9.6.2 (the drawdown's denominator is the constant sleeve, ⚠ UNREVIEWED on that
+one point — A12), SW9.6.3 (three books; what "gate-off" means; the columns; years by entry; the
+"never fewer" claim is a fixture property, not a theorem — A12, ⚠ UNREVIEWED on the
+definitions), SW9.6.4 (`DELISTED` beside `NO_BAR`; the fourth caveat; the card composes the
+caveats from the row's one fact — B1–B5). `04` §11 amended with the rule names.
+
+### What SW9.6 did NOT do
+
+- **The 2017→ run has still not run over real bars** (SW9, SW9.5); the comparison and the
+  drawdown on the page are proven on the planted year through the database, not on history.
+  The dev database holds ten sessions and no index rows.
+- **`tools/swing/backtest.py --fixture` prints the standing `CAVEATS`,** not the run's own, so
+  its fixture run (no index) does not print the index-absent sentence; the database mode stores
+  the run's own on the row and the card shows them. One line in SW12's pass (the CLI is 1.3.2's
+  file).
+- **`baskfy_core.swing.__init__` does not re-export the new names** (`GateMode`,
+  `GateComparison`, `INDEX_ABSENT_CAVEAT`, …); the API, the worker and the tests import them
+  from `baskfy_core.swing.backtest`. The package's `__init__` is 1.3.1's file; adding them is
+  additive.
+- **The runner reads one index series for the whole run** (SW9.6.1); the nightly job falls back
+  per day. A window in which NIFTY 500 has twenty levels but a gap of a month inside is read as
+  NIFTY 500 throughout, with the gap ignored the way the engine ignores any day with fewer than
+  twenty closes behind it.
+- **"Gate-off never has fewer entries than gate-on"** is asserted on the fixtures (SW9.6.3.4);
+  over real history the lock-out and the tier can invert it on a session, and the page shows
+  the numbers rather than the claim.
+- **No per-mode ladder trace or equity curve** is stored — only the primary book's; the
+  comparison stores each book's deepest drawdown per year, not its curve. A reviewer who wants
+  gate-off's curve re-runs with `index=None` and reads `comparison`.
+- **The card is still the latest finished run; there is no run picker** (SW9); a comparison
+  between two *runs* (say, `adr_min_pct` 4.0 against 5.0) is a diff of two `--json` rows.
+- `docs/swing/05-ui-spec.md` is not updated with the two new tables (the page follows `04` §11
+  and the C2 card; `05` is 1.2.2's / SW12's document).
+- `reconciliation/MUTANTS.md` is not regenerated; the backtest's own survivor list (SW9) may
+  have moved with the restructure. `tools/mutation.py`'s target is unchanged.
+
+---
+
 ## SW10 — Gating and safety proof, and the DRY_RUN morning drill ✅
 
 **Goal, from `06`:** "the Track-B and Track-C claims are theorems, not intentions." Each claim in
@@ -1295,6 +1384,33 @@ Numbers: `test_swing_safety_properties.py` **8 passed** (5 properties × 500 exa
 **37 passed**; desk suite green; `make lint` clean; `test_no_escape_hatches` green over the two
 new decile test files.
 
+### The confirm-time gate (STANDING-ANSWERS A5 → SW10.4, SW10.5)
+
+SW10.2's finding — two SIGNAL lines each inside rung 0's 25 % confirming together to 34 % —
+is closed the way Maulik decided it: **the confirm is the gate**. Measured on 2 Sep 2026.
+
+| What | Where | Proven by |
+|---|---|---|
+| **The lock.** Every confirm runs inside `PgSwingStore.lock_session_for_update(day)`: `BEGIN`; the day's `sw_session` row inserted if absent; `SELECT … FOR UPDATE` on it (sqlite twin: `BEGIN IMMEDIATE`); the line's state read again under the lock (a second tab answers 409); the `CONFIRMED` mark, the context, the re-size, **the gateway call**, the position, the fill, the GTT and the counters; `COMMIT` — an exception rolls it all back and the line is then marked `REJECTED` outside it. SELL and RAISE take it too | `app/swing_desk.py`, `app/swing_execute.py::execute_line` | desk: commits, keeps an existing row's counters, rolls back everything on an exception and stays usable, **is real across two connections** (the second's `BEGIN IMMEDIATE` fails while the first holds it, succeeds after); execute: the lock is entered before `place` and left after `place_gtt_stop` for every kind, a gateway exception leaves the line `REJECTED` and the click counted once, a line another request filled is 409 with nothing sent |
+| **The context.** One reader for the monitor and the desk — `swing_monitor.load_context(conn, user_id, day, schema)`: the latest market row strictly before the day (gate, rung, `drawdown_locked`), the sleeve's capital, open positions at cost, today's `BUY_ON_TRIGGER` lines in `CONFIRMED`/`SENT`/`FILLED` (`ENTRY_TAKEN_STATES`; the ones not yet a position held at the trigger as `PendingLine`s), `entries_today`, each name's ADR/turnover/score — read **before** the line is marked so it is never counted against itself | `app/swing_monitor.py`, `PgSwingStore.session_context` | monitor: positions at cost + a `SENT` line at its trigger + a `FILLED` line counted once; no market row → RED; desk over the twin: rung 2 → (6, 75 %), ₹93,390 held + ₹30,050 `SENT`, `entries_today` 2, the ADRs, the latest row before the day never the day's own, the drawdown lock carried, another user sees nothing |
+| **The re-size.** `resize_buy` → `swing_monitor.entries_now` → `build_entries` with the person's three sizing knobs (`sizing_config`) and `entries_already_today` (the additive `04` §5.3 argument); `min(planned, allowed)` goes — never more than the page showed; a smaller size is written back (`resize_line`: quantity, `risk_inr`, `position_value`, a note) and carried by the position, the fill and the GTT; when only the ceiling refuses, one more pass with the cash bounded by the headroom (SW10.5); no line → `BLOCKED` with the skip code leading the reason, the line `REJECTED`, nothing journalled | `app/swing_execute.py`, `app/swing_monitor.py::entries_now`, `packages/core/.../plan.py` | execute (20 new): 833 → 390 at 210 beside ₹1,67,932.80 → 24.98 %, `EXPOSURE_FULL` when ₹2,000 of headroom cannot buy ₹10,000, `TIER_FULL` by rung and by the person's cap of 1, `SESSION_CAP` on the fourth (`SENT` counts, `REJECTED` does not), a `SENT` line is exposure, 100 of an allowed 1,666 sends 100, 0.25 % risk halves 1,666 → 833, `GATE_RED` / `DRAWDOWN_LOCKOUT` / no ADR / 6 % stop on a 5 % ADR / `PARABOLIC_SHORT` refused, the partial-then-full sequence (whole, shrunk, `TIER_FULL`; ₹2,49,832.80); desk through the route: 1,666 → 1,553 against ₹93,390 held at rung 0 (₹2,49,932.40), `EXPOSURE_FULL` / `TIER_FULL` / `SESSION_CAP` as JSON with the row `REJECTED`; core: `entries_already_today` as a hypothesis property (no line added past the cap; `SESSION_CAP` for every eligible name once the session is full) and an exact case (default 0 is the same plan) |
+| **The monitor re-reads per trigger.** `PgSignalStore._plan_for` → `read_context()` before every plan; `load_config` carries the person's sizing knobs; the `context=` handed in is the log's starting reading, never what a plan is sized from | `app/swing_monitor.py` | monitor (7 new): the 09:45 trigger after the 09:31 confirm is lined 390, not 833 (book ₹2,49,832.80 ≤ ₹2,50,000); the fourth trigger of a session is `SESSION_CAP`; ₹2,000 of headroom is `EXPOSURE_FULL` with the arithmetic in the detail; a stale GREEN context over a RED database is `GATE_RED`; the knobs reach `SizingConfig` |
+| **The property.** 500 seeded sequences of 1–8 confirms on random sleeves (₹2–50 lakh), rungs, caps (1–10), risk knobs, 0–3 positions already held and lines sized by nobody in particular, through `execute_line` and the real dry-run gateway (unthrottled) | `tests/test_swing_track_c.py` | after every confirm that went: book ≤ ceiling, count ≤ `min(rung, cap)`, ≤ 3 entries, sent ≤ planned, the position/fill/GTT carry the size sent; after every refusal: the book exactly what it was, the reason a skip code, the line `REJECTED`; every case took the lock once per line; the journal is `dry_run, gtt_dry_run` per entry (band warnings aside) and nothing broker-shaped; the distribution asserted non-empty for every code — one run: 338 sized, 416 re-sized, 1,075 `TIER_FULL`, 317 `SESSION_CAP`, 25 `EXPOSURE_FULL`, 18 `SIZE_REFUSED` |
+
+The drill's step 5 now confirms the same two lines and prints
+`re-sized at confirm 833 → 389 (A5)` and `EXPOSURE after confirms ₹249,817.30 = 25.0% of the
+sleeve (rung ceiling 25% = ₹250,000.00); 2 entries today, 2 of 2 positions at rung 0` — and
+exits 1 if the book is over the ceiling, the session does not count exactly two entries, the
+count is over the rung's, or the number of re-sized lines is not exactly one.
+
+**Numbers, re-measured:** `tests/test_swing_execute.py` **94 passed** (74 + 20),
+`tests/test_swing_desk.py` **90 passed** (73 + 17), `tests/test_swing_monitor.py` **27 passed**
+(20 + 7), `tests/test_swing_track_c.py` **39 passed** (37 + 2); desk suite **1,599 passed, 17
+skipped**; `packages/core/tests/test_swing_safety_properties.py` **10 passed** (8 + 2);
+`test_swing_docs_parity` green; `make lint` clean over this leaf's files (the one mypy red in
+the tree at the time of measurement was `services/worker/tests/test_swing_backtest_task.py`,
+leaf 1.3.4's file, mid-edit).
+
 ### The DRY_RUN morning drill — `tools/swing/drill.py`
 
 `RUN-AND-TEST.md` §"The swing book's DRY_RUN morning drill (SW10)" has the command, the
@@ -1304,22 +1420,26 @@ printed run and what "0 orders" is proven by. In one line: the evening before (`
 `SwingBreakout` + **`PgSignalStore` over the desk's Postgres adapter into the same database**
 (four signals, exactly the fixture's; two `SIGNAL` lines; `monitor_ran` marked) → the two
 `TRIGGERED` lines confirmed through **`execute_line` + `PgSwingStore` + the real gateway** over
-an exploding broker client (two `SIMULATED` positions with `DRY-…` stops, two simulated fills,
-the swing journal exactly `dry_run, gtt_dry_run` twice, broker touched 0 times) → the close
-prints → 21:05 `run_swing_eod` (two positions managed; ALPHAFLAG up 1.23R, so `BREAKEVEN_AT_R`
+an exploding broker client, each under the session's row lock (two `SIMULATED` positions with
+`DRY-…` stops, the second re-sized 833 → 389 to the rung's ceiling, two simulated fills, the
+swing journal exactly `dry_run, gtt_dry_run` twice, broker touched 0 times, the book 25.0 % of
+the sleeve) → the close prints → 21:05 `run_swing_eod` (two positions managed; ALPHAFLAG up 1.23R, so `BREAKEVEN_AT_R`
 raises its stop to the entry; the ladder settles; the preview is built; the second session is
 counted) → the next morning's `LEVELS` and `MORNING` plan (the `RAISE_GTT_STOP` line, the two
 held names `ALREADY_HELD`, `DELTAWAIT` `TIER_FULL` at rung 0, `GAMMALOCK` locked). Then every
 `sw_` row is checked to be the sole user's (51 rows), and the counters print:
 
 ```
+EXPOSURE after confirms ₹249,817.30 = 25.0% of the sleeve (rung ceiling 25% = ₹250,000.00); 2 entries today, 2 of 2 positions at rung 0
+…
 sw_session 2026-08-18: mode=DRY_RUN monitor_ran=False signals=0 confirms=0 fills=0 manage_actions=0 plans=1
 sw_session 2026-08-19: mode=DRY_RUN monitor_ran=True  signals=4 confirms=2 fills=2 manage_actions=0 plans=1
 orders that reached a broker: 0   (journal: dry_run, gtt_dry_run, dry_run, gtt_dry_run)
 DRILL OK
 ```
 
-It exits 0 in about 20 s against `baskfy_sw_t3` (most of it `alembic upgrade head`). It refuses
+It exits 0 in a few seconds against `baskfy_sw_t3` once the database is at head (about 20 s
+the first time, most of it `alembic upgrade head`). It refuses
 to start with `DRY_RUN=false` or the execution flag on, refuses to reset a database whose name
 does not say it is disposable, and exits 1 with the reason on any step that does not do what
 the rules say. **This is the first time the desk's `PgSwingStore` and `PgSignalStore` have
@@ -1328,14 +1448,12 @@ for the store (the page itself is still rendered over sqlite only).
 
 ### What the drill found
 
-- **A morning's SIGNAL plans do not see each other's confirms** (SW10.2). The monitor reads
-  its context — the rung, the open symbols, the cash — once at 09:15 (SW6's design), so the
-  09:45 `BETAEP` line was sized against a book that did not yet hold `ALPHAFLAG`: the two
-  confirmed lines together are ₹3.43 lakh, 34 % of the sleeve, over rung 0's 25 % ceiling. Each
-  line alone respected every rule; the two together did not. The drill prints it as a `WARNING`
-  and does not fail on it: it is a ladder-fidelity gap, not a Track C breach (the cash was
-  there; nothing was sold; nothing was leveraged). The fix is the runner's (SW11's file) and
-  SW10.2 names it.
+- **A morning's SIGNAL plans did not see each other's confirms** (SW10.2) — the 09:45 `BETAEP`
+  line was sized against a book that did not yet hold `ALPHAFLAG`, and the two confirmed lines
+  together were ₹3.43 lakh, 34 % of the sleeve, over rung 0's 25 % ceiling. **Closed by
+  SW10.4** (STANDING-ANSWERS A5): the confirm re-derives the book under the session's row
+  lock and re-sizes, the monitor re-reads its context per trigger, and the drill now fails —
+  not warns — on a book over the ceiling. The same run prints 25.0 %.
 - `sw_session.plan_ids` records only the evening's plan (`plans=1` on a day that built a
   `MORNING` plan and two `SIGNAL` plans besides) — the premarket job and the monitor do not
   append theirs. Recorded, not fixed: the fields belong to SW5/SW6's files.
@@ -1343,15 +1461,34 @@ for the store (the page itself is still rendered over sqlite only).
 ### Decisions
 
 SW10.1 (how the drill fakes the broker and the clock, and why the monitor flag stays false),
-SW10.2 (the SIGNAL plans sized against the 09:15 context — a finding, and the one-call
-reversal), SW10.3 (what the source scans admit and why: the API's three pure imports from
-`baskfy_execution`, the runner's Kite reads, the one `UPDATE … WHERE id = ?`).
+SW10.2 (the SIGNAL plans sized against the 09:15 context — the finding, now closed),
+SW10.3 (what the source scans admit and why: the API's three pure imports from
+`baskfy_execution`, the runner's Kite reads, the one `UPDATE … WHERE id = ?`),
+**SW10.4** (the confirm is the gate — the lock, the context, the re-size, the per-trigger
+re-read, the proofs; Maulik's, STANDING-ANSWERS A5), **SW10.5** (a live trigger that does not
+fit whole is taken at the size that fits; the evening and the morning plans still skip —
+⚠ UNREVIEWED), **SW10.6** (what the sqlite twin, the census and three SW7 tests had to learn —
+⚠ UNREVIEWED).
 
 ### What SW10 did NOT do
 
-- **Nothing was fixed.** SW10 owns tests, the drill and the docs; the two findings above are
-  recorded for their files' owners (the monitor's per-trigger context is SW11's file; the
-  session's `plan_ids` are SW5/SW6's).
+- **The page does not say a line was re-sized until it has been.** The desk's trigger row
+  shows the SIGNAL plan's own size (which, since the monitor re-reads per trigger, is what the
+  confirm will send unless the book moves between the trigger and the click); after a confirm
+  the row shows the re-sized quantity and the `note` column carries the arithmetic on the
+  plan panel. A "would be re-sized to N" preview on a stale line would need the view to run
+  `entries_now` per line; not done — the confirm's outcome renders inline and says it.
+- **`first_live_sessions_left` still halves the *sent* quantity, not the line** (SW7.2) — the
+  re-size writes the row, the halving does not; MD12 moves the halving to plan time and is
+  SW10.5's-module work (the ledger's next), not this gate's.
+- **The lock is per user, per day, and the desk is one process.** Postgres serialises two
+  confirms with `FOR UPDATE`; the sqlite twin with `BEGIN IMMEDIATE`; nothing here serialises
+  the desk against the evening job's writes to the same tables (they run at 21:05, outside
+  any confirm) or against the monitor's `INSERT`s (it writes plans, never positions).
+- **The re-size's second `build_entries` pass computes the ceiling once more** (`equity ×
+  max_exposure_pct / 100`) to bound the cash — the one place outside `build_entries` that
+  knows the ceiling's formula. SW10.5 says why and how to remove it.
+- **`sw_session.plan_ids`** (above) is still SW5/SW6's.
 - **The drill does not run the detectors.** They need 125 sessions of history per name; the
   drill writes the two tables they would have produced (`sw_setup_daily`, `sw_market_daily`)
   by hand for four synthetic names and says so. The detectors have their own suite (SW3) and

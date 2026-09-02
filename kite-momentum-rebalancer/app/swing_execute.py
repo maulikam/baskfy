@@ -24,6 +24,15 @@ THE RULES IT ENFORCES, AND WHERE THEY COME FROM
   runs through the gateway's dry-run branch and journals ``simulated=true`` whatever ``DRY_RUN``
   says (:func:`swing_gates`). There is no second branch for paper trading: the twenty paper
   sessions the real-money gate counts are a rehearsal of this code.
+* ``docs/swing/04`` §5.3, §8.4, §9.1 at the moment of the confirm (STANDING-ANSWERS A5, SW10.4)
+  — a plan line's size is a **preview**; the confirm is the gate. Under a row lock on the day's
+  ``sw_session`` the book is re-derived (open positions at cost + every BUY line confirmed today
+  that is not a position yet + cash) and the BUY is re-sized through the same ``build_entries``
+  the plan used, against the rung's exposure ceiling, the position count (``min(rung,
+  max_open_positions)``) and the per-session entry cap. A line that no longer fits is shrunk to
+  the ceiling and written back with a note; one that cannot be lined at all is ``BLOCKED`` with
+  ``EXPOSURE_FULL`` / ``TIER_FULL`` / ``SESSION_CAP`` / ``SIZE_REFUSED`` and never sent. The
+  lock spans the gateway call, so two browser tabs cannot confirm past the ceiling together.
 
 Every order — the buy, the market sell, the stop and its cancellation — goes through the
 :class:`OrderGateway` this module is handed. Nothing here names a broker method.
@@ -34,11 +43,20 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import os
-from dataclasses import dataclass
+from contextlib import AbstractContextManager
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Protocol
 
+from baskfy_core.swing.config import (
+    DEFAULT_SWING_CONFIG,
+    TRADEABLE_SETUPS,
+    Setup,
+    SizingConfig,
+    SwingConfig,
+)
 from baskfy_core.swing.journal import ClosedTrade, exit_average
+from baskfy_core.swing.plan import SkipReason, WatchItem
 from baskfy_core.swing.sizing import r_multiple
 from baskfy_execution.gtt import (
     DRY_RUN_GTT_DELETE,
@@ -53,6 +71,7 @@ from fastapi import HTTPException
 from . import config as C
 from .core import gateway as _gateway_module
 from .core.gateway import OrderGateway, ProductGates
+from .swing_monitor import SignalContext, entries_now
 
 log = logging.getLogger("swing.execute")
 
@@ -102,6 +121,7 @@ _ORDER_STATUS = {
 }
 
 _TWO_DP = Decimal("0.01")
+_ZERO = Decimal(0)
 
 #: SW7.2 — the sessions on which this process has already counted down
 #: ``first_live_sessions_left``. In-process, like the desk's ``PLANS`` dict: the counter is
@@ -172,11 +192,39 @@ class SwingStore(Protocol):
         ...
 
     def config(self) -> dict:
-        """keys: sleeve_capital_inr, risk_per_trade_pct, first_live_sessions_left,
-        exposure_level"""
+        """keys: sleeve_capital_inr, risk_per_trade_pct, max_position_pct, max_open_positions,
+        first_live_sessions_left, exposure_level"""
         ...
 
     def set_first_live_sessions_left(self, value: int) -> None: ...
+
+    # -- SW10.4 (STANDING-ANSWERS A5): the confirm-time gate --
+
+    def lock_session_for_update(self, day: dt.date) -> AbstractContextManager[None]:
+        """A transaction holding the day's ``sw_session`` row locked (``SELECT … FOR UPDATE``
+        on Postgres, ``BEGIN IMMEDIATE`` on sqlite; the row is inserted first if absent) for
+        the whole of a confirm — the re-derivation, the gateway call and the writes — so two
+        confirms of one session run one after the other. Committed on exit, rolled back on an
+        exception."""
+        ...
+
+    def session_context(self, day: dt.date) -> SignalContext:
+        """The book as it is now (``app.swing_monitor.load_context``): the last close's gate
+        and rung, the sleeve's capital, open positions at cost + today's CONFIRMED/SENT lines,
+        each name's ADR/turnover/score, and how many entries the session has taken."""
+        ...
+
+    def resize_line(
+        self,
+        line_id: int,
+        *,
+        quantity: int,
+        risk_inr: Decimal,
+        position_value: Decimal,
+        note: str,
+    ) -> None:
+        """Write a re-sized BUY back to its row, so the record shows the size that was sent."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -188,7 +236,10 @@ class ExecOutcome:
     filled; nothing was written to the book (SW7.1). ``FILLED`` — a real action is complete
     at the broker; for a ``RAISE_GTT_STOP`` line or a re-arm it means the trigger is resting.
     ``BLOCKED`` — refused here or by the gateway, with its words in ``reason``; nothing was
-    sent. ``REJECTED`` — the broker refused or the call failed; ``order`` says which.
+    sent. A refusal by the confirm-time gate (SW10.4) starts its ``reason`` with the skip
+    code — ``EXPOSURE_FULL``, ``TIER_FULL``, ``SESSION_CAP``, ``SIZE_REFUSED``, ``GATE_RED``,
+    ``DRAWDOWN_LOCKOUT``, ``ALREADY_HELD`` — the same vocabulary as ``sw_plan_skip.reason``.
+    ``REJECTED`` — the broker refused or the call failed; ``order`` says which.
     """
 
     status: str  # "SIMULATED" | "SENT" | "FILLED" | "BLOCKED" | "EXPIRED" | "REJECTED"
@@ -293,6 +344,95 @@ def is_simulated_gtt(gtt_id) -> bool:
     return isinstance(gtt_id, str) and gtt_id.startswith(_SIMULATED_GTT_PREFIX)
 
 
+# --- SW10.4: the confirm-time gate (STANDING-ANSWERS A5) ------------------------------------
+
+def sizing_config(config: dict) -> SwingConfig:
+    """The gate's config: the pack's defaults with the person's three sizing knobs (`03` §1)
+    from `SwingStore.config()` — the same three the worker (SW9.5.3) and the monitor hand
+    `build_entries`, so the confirm sizes with the numbers the plan was sized with."""
+    sizing = DEFAULT_SWING_CONFIG.sizing
+    return replace(
+        DEFAULT_SWING_CONFIG,
+        sizing=replace(
+            SizingConfig(),
+            risk_per_trade_pct=float(config.get("risk_per_trade_pct", sizing.risk_per_trade_pct)),
+            max_position_pct=float(config.get("max_position_pct", sizing.max_position_pct)),
+            max_open_positions=int(config.get("max_open_positions", sizing.max_open_positions)),
+        ),
+    )
+
+
+@dataclass(frozen=True)
+class Resized:
+    """What the gate answers for one BUY line: the size to send, or the refusal."""
+
+    quantity: int
+    risk_inr: Decimal
+    position_value: Decimal
+    refusal: str  # "" when sized; else the skip code (`SkipReason`), e.g. "EXPOSURE_FULL"
+    detail: str  # the skip's detail, or how the size was changed
+    #: True when the line was shrunk (never grown) to fit — the row is rewritten with `detail`.
+    changed: bool = False
+
+
+def _pct(value: Decimal, equity: Decimal) -> str:
+    if equity <= 0:
+        return "n/a"
+    return f"{(value / equity * 100).quantize(_TWO_DP)}%"
+
+
+def resize_buy(line: dict, context: SignalContext, config: SwingConfig, *, day: dt.date) -> Resized:
+    """Re-size one BUY line against the book as it is now (`app.swing_monitor.entries_now`).
+
+    The line's trigger and stop are what the person saw and confirmed; the *quantity* is what
+    the rules allow now — the same function that sized the SIGNAL preview, so the page and the
+    confirm agree: the gate, the drawdown lock, `ALREADY_HELD`, the per-session cap counting
+    today's entries, the position count (`min(rung, max_open_positions)`), the size and the
+    rung's exposure ceiling with A5's re-size to the headroom. The quantity is never raised
+    above the line's: the page said N, and N is the most that goes.
+    """
+    symbol = str(line["symbol"])
+    setup_name = line.get("setup")
+    try:
+        setup = Setup(str(setup_name))
+    except ValueError:
+        return Resized(0, _ZERO, _ZERO, SkipReason.NOT_TRADEABLE_SETUP.value,
+                       f"setup {setup_name!r} is not one this book trades")
+    if setup not in TRADEABLE_SETUPS:
+        return Resized(0, _ZERO, _ZERO, SkipReason.NOT_TRADEABLE_SETUP.value, setup.value)
+    stats = context.detected.get(symbol)
+    if stats is None:
+        # SW9.5.2's rule at the desk: the widest stop is one ADR, and an ADR nobody measured
+        # is a stop nobody can check. The evening refuses such a line; so does the confirm.
+        return Resized(0, _ZERO, _ZERO, SkipReason.SIZE_REFUSED.value,
+                       f"no detection row for {symbol} before {day} — its ADR is unknown")
+    adr, turnover, score = stats
+    trigger, stop = _price(line["trigger"]), _price(line["stop"])
+    item = WatchItem(symbol=symbol, setup=setup, trigger=trigger, stop_ref=stop, adr_pct=adr,
+                     avg_turnover_inr=turnover, score=score, locked_upper_circuit=False)
+    lines, skipped = entries_now(item, context, config, day=day)
+    if not lines:
+        skip = skipped[0]
+        return Resized(0, _ZERO, _ZERO, skip.reason.value, skip.detail)
+    allowed = int(lines[0].quantity)
+    planned = int(line.get("quantity") or 0)
+    quantity = min(planned, allowed)
+    risk = ((trigger - stop) * quantity).quantize(_TWO_DP)
+    value = (trigger * quantity).quantize(_TWO_DP)
+    if quantity == planned:
+        return Resized(quantity, risk, value, "", f"{quantity} as planned")
+    account = context.account
+    return Resized(
+        quantity, risk, value, "",
+        f"re-sized at confirm {planned} → {quantity} ({lines[0].note.split('; ')[2]}): book "
+        f"₹{account.open_exposure_inr:,.2f} + ₹{value:,.2f} = "
+        f"{_pct(account.open_exposure_inr + value, account.equity)} of the sleeve, ceiling "
+        f"{context.tier.max_exposure_pct:g}% at rung {context.tier.level}, "
+        f"{context.entries_today} entr{'y' if context.entries_today == 1 else 'ies'} today",
+        changed=True,
+    )
+
+
 def _broker_gtt_id(gtt_id) -> int | None:
     """The integer trigger id the exchange knows, or None for a simulated / absent one."""
     if gtt_id is None or is_simulated_gtt(gtt_id):
@@ -358,31 +498,49 @@ async def execute_line(  # noqa: PLR0913 - the request's parts, named
     simulated = swing_gates().dry_run
     day = _session_day(now)
     mode = "DRY_RUN" if simulated else "LIVE"
-    store.set_line(line_id, state="CONFIRMED")
-    store.bump_session(day, mode=mode, confirms=1)
     try:
-        if kind == BUY_ON_TRIGGER:
-            outcome = await _buy(store, gw, line=line, plan_id=plan_id, now=now,
-                                 simulated=simulated)
-        elif kind == SELL_AT_OPEN:
-            outcome = await _sell(store, gw, line=line, plan_id=plan_id, now=now,
-                                  simulated=simulated, last_price=last_price)
-        elif kind == RAISE_GTT_STOP:
-            outcome = await _raise_stop(store, gw, line=line, plan_id=plan_id, now=now,
-                                        simulated=simulated, last_price=last_price)
-        else:
-            outcome = ExecOutcome("BLOCKED", f"{kind!r} is not a kind this desk executes",
-                                  None, None, None, simulated)
-    except Exception:
-        # Not swallowed: the line is marked so it cannot be re-posted, then the error goes up
-        # to the route, which is where an untouchable-instrument refusal belongs.
-        store.set_line(line_id, state="REJECTED")
+        with store.lock_session_for_update(day):
+            # SW10.4: the whole confirm — the re-derivation, the gateway call, the writes —
+            # runs with the day's session row locked, so a second confirm of the same
+            # session (another tab, a double click) waits and then sees this one's book. The
+            # line's state is read again under the lock: two requests that both passed
+            # `_validate` on a PROPOSED line must not both send it.
+            current = store.line(line_id)
+            if current is None or current.get("state") != "PROPOSED":
+                raise HTTPException(409, f"Line is {current.get('state') if current else '?'}, "
+                                         f"not PROPOSED — it cannot be confirmed twice.")
+            line = current
+            # The book is read BEFORE this line is marked, so the line being confirmed is not
+            # counted against itself; everything confirmed earlier today is.
+            context = store.session_context(day) if kind == BUY_ON_TRIGGER else None
+            store.set_line(line_id, state="CONFIRMED")
+            store.bump_session(day, mode=mode, confirms=1)
+            if kind == BUY_ON_TRIGGER:
+                outcome = await _buy(store, gw, line=line, plan_id=plan_id, now=now,
+                                     simulated=simulated, context=context)
+            elif kind == SELL_AT_OPEN:
+                outcome = await _sell(store, gw, line=line, plan_id=plan_id, now=now,
+                                      simulated=simulated, last_price=last_price)
+            elif kind == RAISE_GTT_STOP:
+                outcome = await _raise_stop(store, gw, line=line, plan_id=plan_id, now=now,
+                                            simulated=simulated, last_price=last_price)
+            else:
+                outcome = ExecOutcome("BLOCKED", f"{kind!r} is not a kind this desk executes",
+                                      None, None, None, simulated)
+            _record_line(store, line_id, outcome)
+            if outcome.status in ("SIMULATED", "FILLED") and kind in (BUY_ON_TRIGGER, SELL_AT_OPEN):
+                store.bump_session(day, mode=mode, fills=1)
+            elif outcome.status in ("SIMULATED", "FILLED"):
+                store.bump_session(day, mode=mode, manage_actions=1)
+    except HTTPException:
         raise
-    _record_line(store, line_id, outcome)
-    if outcome.status in ("SIMULATED", "FILLED") and kind in (BUY_ON_TRIGGER, SELL_AT_OPEN):
-        store.bump_session(day, mode=mode, fills=1)
-    elif outcome.status in ("SIMULATED", "FILLED"):
-        store.bump_session(day, mode=mode, manage_actions=1)
+    except Exception:
+        # Not swallowed: the transaction rolled back with the lock (nothing half-written),
+        # then the line is marked so it cannot be re-posted, the click is counted, and the
+        # error goes up to the route, which is where an untouchable-instrument refusal belongs.
+        store.set_line(line_id, state="REJECTED")
+        store.bump_session(day, mode=mode, confirms=1)
+        raise
     log.info("swing %s line %s %s: %s %s", kind, line_id, line.get("symbol"),
              outcome.status, outcome.reason)
     return outcome
@@ -435,8 +593,8 @@ async def rearm_gtt(
 # --- the three kinds ---------------------------------------------------------------------
 
 
-async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,
-               simulated: bool) -> ExecOutcome:
+async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa: PLR0913
+               simulated: bool, context: SignalContext | None = None) -> ExecOutcome:
     symbol = line["symbol"]
     quantity = int(line.get("quantity") or 0)
     trigger = line.get("trigger")
@@ -459,7 +617,24 @@ async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,
         # line built before this morning's fill would not know.
         return ExecOutcome("BLOCKED", f"{symbol}: already held by the swing book",
                            None, None, None, simulated)
-    sessions_left = int(store.config().get("first_live_sessions_left") or 0)
+    config = store.config()
+    if context is None:
+        context = store.session_context(_session_day(now))
+    sized = resize_buy(line, context, sizing_config(config), day=_session_day(now))
+    if sized.refusal:
+        # A5: the book as it is now does not have room for this line. Nothing is sent; the
+        # reason leads with the skip code so the row and the page say exactly why.
+        return ExecOutcome("BLOCKED", f"{sized.refusal}: {symbol} — {sized.detail}",
+                           None, None, None, simulated)
+    if sized.changed:
+        # Fewer shares than the plan said: the row is rewritten with the risk and the value
+        # re-derived for the size actually sent, and the note says what was done and why, so
+        # the journal and the fill agree with the line.
+        store.resize_line(line["id"], quantity=sized.quantity, risk_inr=sized.risk_inr,
+                          position_value=sized.position_value, note=sized.detail)
+        log.info("swing BUY %s %s", symbol, sized.detail)
+    quantity = sized.quantity
+    sessions_left = int(config.get("first_live_sessions_left") or 0)
     qty = first_live_quantity(quantity, sessions_left=sessions_left, simulated=simulated)
     order = await gw.place(
         symbol=symbol, qty=qty, side="BUY", product="CNC", order_type="LIMIT",

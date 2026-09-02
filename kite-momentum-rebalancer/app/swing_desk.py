@@ -32,6 +32,17 @@ THE VIEW
 `build_view` is pure over the store and the clock: it takes ``now`` rather than reading it, so
 a test can render 09:31 on a Tuesday. It never raises on an empty book — a desk with nothing to
 confirm still needs to say so, and say why.
+
+THE LOCK (SW10.4, STANDING-ANSWERS A5)
+--------------------------------------
+`lock_session_for_update` is the store's half of the confirm-time gate: one transaction per
+confirm, holding the day's ``sw_session`` row (``SELECT … FOR UPDATE``; ``BEGIN IMMEDIATE`` on
+the sqlite twin, which has no row locks) from before the book is re-derived until after the
+gateway has answered and the rows are written. The desk's connections are autocommit, so the
+transaction is opened and closed here explicitly; an exception rolls it back, and
+`execute_line` then records the refusal outside it. `session_context` is
+`app.swing_monitor.load_context` over this store's schema — the same reading the monitor sizes
+a SIGNAL line against, so the page's preview and the confirm's re-size agree.
 """
 from __future__ import annotations
 
@@ -42,6 +53,7 @@ import decimal
 import enum
 import hashlib
 import logging
+import sqlite3
 import uuid
 from collections.abc import Iterator, Mapping
 from decimal import Decimal
@@ -57,7 +69,7 @@ from baskfy_core.swing.plan import LineKind
 
 from . import config as C
 from .core.guards import UntouchableInstrumentError
-from .swing_monitor import IST, SCHEMA
+from .swing_monitor import IST, SCHEMA, SignalContext, load_context
 
 log = logging.getLogger("swing_desk")
 
@@ -546,6 +558,69 @@ class PgSwingStore:
             f"UPDATE {self.t('sw_config')} SET first_live_sessions_left = ?, "
             "updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
             (max(int(value), 0), self.user_id),
+        )
+
+    # -- SwingStore: the confirm-time gate (SW10.4) ----------------------------------------
+
+    @property
+    def _sqlite(self) -> bool:
+        return isinstance(self.conn, sqlite3.Connection)
+
+    @contextlib.contextmanager
+    def lock_session_for_update(self, day: dt.date) -> Iterator[None]:
+        """One confirm, one transaction, the day's session row locked throughout.
+
+        The row is inserted first if the day has none (the monitor and the evening upsert it
+        too; `ON CONFLICT DO NOTHING` keeps theirs), then selected `FOR UPDATE`: a second
+        confirm of the same session blocks here until this one commits, and then re-reads a
+        book that includes it. sqlite has no row lock — `BEGIN IMMEDIATE` takes the database's
+        write lock, which serialises the same way for a one-file desk. The connections are
+        autocommit (`analytics.db.connect`, `analytics.pg.Connection`), so `BEGIN` / `COMMIT`
+        / `ROLLBACK` are issued as statements; nothing else in this module opens a transaction.
+        """
+        self.conn.execute("BEGIN IMMEDIATE" if self._sqlite else "BEGIN")
+        try:
+            self.conn.execute(
+                f"INSERT INTO {self.t('sw_session')} (user_id, session_date, mode, monitor_ran, "
+                "signals, confirms, fills, manage_actions, notes) "
+                "VALUES (?, ?, ?, false, 0, 0, 0, 0, 'swing-desk') "
+                "ON CONFLICT (user_id, session_date) DO NOTHING",
+                (self.user_id, _bind(day), "DRY_RUN" if C.DRY_RUN or not C.SWING_EXECUTION_ENABLED
+                 else "LIVE"),
+            )
+            if not self._sqlite:
+                self.conn.execute(
+                    f"SELECT session_date FROM {self.t('sw_session')} "
+                    "WHERE user_id = ? AND session_date = ? FOR UPDATE",
+                    (self.user_id, _bind(day)),
+                )
+            yield
+        except BaseException:
+            self.conn.execute("ROLLBACK")
+            raise
+        else:
+            self.conn.execute("COMMIT")
+
+    def session_context(self, day: dt.date) -> SignalContext:
+        """`load_context` over this store's schema: what the confirm is re-sized against."""
+        return load_context(self.conn, user_id=self.user_id, day=day, schema=self.schema)
+
+    def resize_line(
+        self,
+        line_id: int,
+        *,
+        quantity: int,
+        risk_inr: Decimal,
+        position_value: Decimal,
+        note: str,
+    ) -> None:
+        """A BUY line shrunk at confirm (SW10.4): the three numbers the size decides, and the
+        note saying what was done, so the row is the record of what went out."""
+        self.conn.execute(
+            f"UPDATE {self.t('sw_plan_line')} SET quantity = ?, risk_inr = ?, position_value = ?, "
+            "note = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND id = ?",
+            (int(quantity), _bind(risk_inr, "risk_inr"), _bind(position_value, "position_value"),
+             str(note), self.user_id, int(line_id)),
         )
 
     # -- the page's reads (this module's, not the contract's) ------------------------------

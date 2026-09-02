@@ -127,7 +127,13 @@ positions; 15-20 in a good market; all cash in a bad one" — is the trader's ow
 `sw_config` setting bounded by `BASKFY_SWING_MAX_OPEN_POSITIONS_MAX` [20]; the plan takes
 `min(tier.max_open_positions, sizing.max_open_positions)` (§9.1). `max_new_entries_per_session`
 [3] — "1, 2, 3 stocks per day… there's really no need to trade more than that" — caps the
-`BUY_ON_TRIGGER` lines in one plan; it counts lines in **this** plan, not positions held.
+`BUY_ON_TRIGGER` lines in one plan; it counts lines in **this** plan, not positions held —
+**plus the entries the session has already taken** (SW10.4, STANDING-ANSWERS A5):
+`build_entries(..., entries_already_today=n)` refuses `SESSION_CAP` once `n + lines ≥ 3`, where
+`n` is the number of `BUY_ON_TRIGGER` lines of the day already `CONFIRMED`, `SENT` or `FILLED`,
+whatever plan they came from. The evening and the morning plans pass nothing (a plan is the
+session's first set of lines); the monitor's SIGNAL plan and the desk's confirm pass today's
+count, so a fourth trigger of a morning is a skip and a fourth confirm is a refusal.
 `max_position_pct` [20] stays; its ceiling `BASKFY_SWING_MAX_POSITION_PCT_MAX` is **30**
 ("never more than 30% of your account over night in any stock"). `risk_per_trade_pct` [0.5],
 ceiling 1.0 (PACK.9).
@@ -230,7 +236,23 @@ and a note naming the cap. Cash spent by earlier lines is not spent twice.
 canonical lines — the same plan hashes the same.
 9.4 The desk gives a plan a `plan_id` and a 30-minute expiry; `POST /swing/execute` needs
 `confirm=true`, an unexpired `plan_id` and a `line_id`; `client_id = plan_id:symbol:kind` so a
-re-post cannot double-send. A `BUY_ON_TRIGGER` line is sent as a **LIMIT buy at `trigger` (or
+re-post cannot double-send. **A line's size is a preview; the confirm is the gate** (SW10.4,
+STANDING-ANSWERS A5): under a row lock on the day's `sw_session` (`SELECT … FOR UPDATE`, held
+from before the book is re-derived until the gateway has answered and the rows are written) the
+desk re-reads the book — open positions at cost + every `BUY_ON_TRIGGER` line of the day
+already `CONFIRMED`/`SENT` and not yet a position, at its trigger + cash — and re-sizes a
+`BUY_ON_TRIGGER` through this section's own `build_entries` (the same `entries_now` the monitor
+sizes a SIGNAL line with) against the rung's ceiling, `min(rung, max_open_positions)` and the
+session cap counting today's entries. A line that fits goes as planned; one that only the
+exposure ceiling refuses is **shrunk to the ceiling's headroom** (never grown past what the page
+showed) and the row rewritten with `quantity`, `risk_inr`, `position_value` and a note; one the
+rules cannot line at all is `BLOCKED` with the skip's code leading the reason
+(`EXPOSURE_FULL` / `TIER_FULL` / `SESSION_CAP` / `SIZE_REFUSED` / `GATE_RED` /
+`DRAWDOWN_LOCKOUT` / `ALREADY_HELD`) and the line marked `REJECTED` — never sent, never left
+`CONFIRMED`. The market row read is the latest strictly before the session (the close the plan
+was built on). The evening and the morning plans do not shrink a name to fit (§9.1's
+`EXPOSURE_FULL` stands for a plan of many names); the re-size is the rule for one name at the
+moment of its trigger and its confirm (DECISIONS-SW SW10.5). A `BUY_ON_TRIGGER` line is sent as a **LIMIT buy at `trigger` (or
 market once a `TRIGGERED` signal exists for it)**, and its GTT stop is armed in the same call
 with a `StopBand(min_pct=0.005, max_pct=0.10)` (PACK.3) — the desk's 8–12% band is the weekly
 book's, not this one's. **The GTT's cushion** (SW9.5, PACK.8): a GTT fires a LIMIT order, and
@@ -265,4 +287,35 @@ at `trigger` if the next session's high ≥ trigger (fill at trigger); stop = th
 apply `manage` daily with fills at the next open; size by §5 on a constant ₹10 lakh sleeve with
 the ladder in force; costs 0.13% per side. Report the §10 statistics, by setup and by year, and
 the equity curve. State on the page: no intraday data (so no ORH filter — real entries are
-more selective), no circuit history before 2020, survivorship handled by `instrument.delisted_on`.
+more selective), no circuit history before 2020, survivorship handled by `instrument.delisted_on`,
+and that where `upper_circuit` is absent no lock is assumed, so a name that was locked may have
+been entered here.
+
+**Amended at SW9.6** (STANDING-ANSWERS A12, B1–B5; his words in `07`: the index filter, the
+drawdown containment). The frame is a **constant ₹10 lakh sleeve and the index rule**:
+
+* **The index.** The runner hands the engine NIFTY 500's close series from `index_snapshot_daily`
+  (NIFTY 50 when NIFTY 500 has fewer than `index_ma_slow` rows in the window; neither → no
+  index, and the caveats say so); `params.index_slug` names which. The `index_ma_fast` / `index_ma_slow`
+  averages of §8.2 are computed in-frame from the closes on or before the session — **including**
+  the session's own close, never a later one — and `market_gate` reads them as the desk does.
+* **The drawdown lock-out** (§8.5) runs on the sleeve's own equity curve — cash plus open
+  positions marked at the close — measured peak-to-trough as a percentage of the **constant
+  sleeve** (the live rule measures the compounding sleeve against its peak; this sleeve never
+  compounds, so 15% is thirty trades' risk whatever the curve has made), with the same
+  `max_drawdown_pct` / `resume_drawdown_pct` hysteresis through `drawdown_locked`. The result
+  carries the deepest drawdown, its dates, and how many sessions the lock-out held.
+* **Gate-on against gate-off.** Every run keeps three books over one detection pass — `gate_off`
+  (`market_gate` replaced by GREEN every session; the ladder and the lock-out still apply),
+  `breadth_only` (`market_gate(breadth, None)`) and `full` (`market_gate(breadth, index)`) — and
+  reports entries, net R, expectancy, win rate and the curve's max drawdown for each, overall,
+  by the year **entered** (the gate decides entries) and by setup. **Breadth's contribution** is
+  `breadth_only − gate_off`; **the index rule's** is `full − breadth_only`. The primary book is
+  `full` when an index was supplied and `breadth_only` otherwise.
+* **Delisted names** (B2): a held name whose `instrument.delisted_on` the runner knows is sold at
+  its last close on its last bar and counted `DELISTED`; a name that merely stops printing with
+  no delisting known is sold after the screener engine's five-session tolerance as `NO_BAR`.
+* Costs are read from `params.cost_pct_per_side`; circuits from `upper_circuit` where present, no
+  lock assumed where absent; only sessions the calendar names trade; the partial sells at the
+  next open after the day-3–5 signal and the trail exit at the next open after the close below
+  the MA, both decided by `stops.manage` — the backtest adds no exit rule of its own.

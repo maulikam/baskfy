@@ -104,6 +104,27 @@ Fire it for one date and watch it. What "published" looks like:
 * the API's screen endpoints return the new date;
 * `/ops` on the desk shows the run.
 
+### The swing book's own scan
+
+The nightly chain's twelfth step (`compute_swing`, SW3) writes `sw_setup_daily` and
+`sw_market_daily` from the bars it has just published, and Beat runs the same job again at 21:00
+IST in case the chain failed its quality gate. Neither can fail the night.
+
+To run it by hand for a date the chain already published:
+
+```bash
+cd decile-blueprint
+make swing DATE=2026-09-01              # one date
+make swing DATE=2026-09-01 SESSIONS=5   # the Saturday scan: the last five sessions
+```
+
+It prints the funnel — universe → with a bar today → liquid → candidates per setup — because
+"0 flags" and "0 flags out of 41 liquid names" are different answers. It reads bars and writes
+two tables; **it places nothing and makes no Kite call.**
+
+**It needs 125 sessions of history per name.** A database with a few weeks of bars produces no
+candidates and says so in the funnel rather than failing.
+
 ### Filling market cap and P/E for a date the pipeline already published
 
 Step 6 fetches NSE fundamentals as part of a night. For a **past** date — a table that was never

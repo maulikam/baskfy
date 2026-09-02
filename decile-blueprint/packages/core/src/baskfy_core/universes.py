@@ -141,6 +141,41 @@ UNION_IDENTITIES: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
 #: rather than fetched as a constituent file, and why it sits in no `UNION_IDENTITIES` row.
 SME_SERIES: Final[frozenset[str]] = frozenset({"SM", "ST", "SZ"})
 
+#: NSE's **sectoral** indices, as slugs (SW3).
+#:
+#: The swing method tracks themes because leaders cluster (`docs/swing/01` §5), and a candidate's
+#: sector is one of the two `+5` adjustments `docs/swing/04` §2.6 applies to its score. That needs
+#: an answer to "which of the indices this instrument belongs to is a *sector*", and nothing in
+#: the schema carries one: `index_def` grows to whatever NSE publishes, so a NIFTY 500 row, a
+#: NIFTY BANK row and a `nifty50-pr-1x-inverse` row are indistinguishable by shape.
+#:
+#: An explicit list rather than a pattern, for the reason a pattern would fail: `nifty-midcap-150`
+#: and `nifty-bank` are both "nifty-<word>", and one of them is a size bucket. These are the
+#: sectoral and thematic-sectoral indices NSE publishes daily; adding one is a one-line change
+#: with a `git blame` on it, which is what a curated list is for.
+#:
+#: Slugs are what :func:`slugify_index` produces from NSE's published names, so
+#: ``NIFTY OIL & GAS`` is ``nifty-oil-gas`` and ``NIFTY HEALTHCARE INDEX`` keeps its trailing
+#: word. An entry that never matches costs nothing; a name spelled wrongly simply never marks a
+#: sector, which is why SW3 reports how many candidates got one.
+SECTOR_INDEX_SLUGS: Final[tuple[str, ...]] = (
+    "nifty-auto",
+    "nifty-bank",
+    "nifty-chemicals",
+    "nifty-consumer-durables",
+    "nifty-financial-services",
+    "nifty-fmcg",
+    "nifty-healthcare-index",
+    "nifty-it",
+    "nifty-media",
+    "nifty-metal",
+    "nifty-oil-gas",
+    "nifty-pharma",
+    "nifty-private-bank",
+    "nifty-psu-bank",
+    "nifty-realty",
+)
+
 #: Each pair is (subset, superset).
 CONTAINMENT_IDENTITIES: Final[tuple[tuple[str, str], ...]] = (
     ("nifty-50", "nifty-100"),

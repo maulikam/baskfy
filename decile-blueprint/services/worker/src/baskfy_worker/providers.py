@@ -8,6 +8,9 @@ which is what docs/02 means by "adding a paid vendor later is a new adapter, not
 
 from __future__ import annotations
 
+import logging
+import os
+
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
@@ -16,6 +19,8 @@ from baskfy_providers.settings import get_provider_settings
 from baskfy_worker.deps import PipelineDependencies
 from baskfy_worker.settings import get_worker_settings
 from baskfy_worker.telemetry import provider_retry_hooks
+
+log = logging.getLogger(__name__)
 
 
 def build_cache() -> Redis | None:
@@ -47,4 +52,26 @@ def build_pipeline_dependencies() -> PipelineDependencies:
         # docs/05's engine is Prompt 5. Until then compute_factors runs its skeleton and says so
         # in the step payload; see baskfy_worker.tasks.factors.
         factor_engine=None,
+        # SW3. Read once, here, rather than inside the step: `docs/swing/02` requires a flag to be
+        # "read once per process at startup ... and never from a form", and the sole tenant is the
+        # only user the `sw_` schema has in this run.
+        swing_user_id=_sole_user_id(),
+        swing_index_slug=get_worker_settings().swing_index_slug,
+        swing_execution_enabled=get_worker_settings().swing_execution_enabled,
     )
+
+
+def _sole_user_id() -> int | None:
+    """``BASKFY_SOLE_USER_ID``, or ``None`` on a deployment that has not set one.
+
+    ``None`` rather than a default of 1: the swing step is keyed by user, and inventing a tenant
+    for a deployment that never declared one would write another account's book.
+    """
+    raw = os.environ.get("BASKFY_SOLE_USER_ID", "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        log.warning("BASKFY_SOLE_USER_ID is not a number (%r); the swing step will skip", raw)
+        return None

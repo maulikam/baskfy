@@ -66,6 +66,30 @@ COLUMN_PRECISION: Final[dict[str, int]] = {
     "beta_12m": RATIO_DP,
     # P/E keeps NSE's own 4 dp (docs/04 numeric(14,4)).
     "pe": RSI_DP,
+    # --- SW3: `sw_setup_daily` (docs/swing/03 §2) --------------------------------------
+    #
+    # The same rule for the same reason: the detector's numbers are written once, rounded, and
+    # every surface then reads the stored value. Without this the API would round a level to two
+    # places for display, the CSV would round it again from full precision, and a trigger shown
+    # as 149.60 would be sent to the broker as 149.6025.
+    #
+    # Levels and the measurements are 2 dp (`PRICE` and `numeric(10,2)` in `03` §2); `adj_factor`
+    # keeps ten, because it is a divisor -- the level stored is `adjusted / adj_factor`, and a
+    # factor rounded to two places would move the exchange price it produces.
+    "trigger": PRICE_DP,
+    "stop_ref": PRICE_DP,
+    "pivot_high": PRICE_DP,
+    "score": PERCENT_DP,
+    "adr_pct": PERCENT_DP,
+    "prior_move_pct": PERCENT_DP,
+    "base_depth_pct": PERCENT_DP,
+    "tightness_adr": PERCENT_DP,
+    "dryup_ratio": PERCENT_DP,
+    "dist_ma_fast_pct": PERCENT_DP,
+    "dist_ma_slow_pct": PERCENT_DP,
+    "rvol": PERCENT_DP,
+    "gap_pct": PERCENT_DP,
+    "adj_factor": RATIO_DP,
 }
 
 #: Columns stored as whole numbers: marketcap in ₹ crore, turnover and volumes in ₹.
@@ -85,6 +109,8 @@ INTEGER_COLUMNS: Final[frozenset[str]] = frozenset(
         "circuits_6m",
         "circuits_9m",
         "circuits_12m",
+        # SW3: `sw_setup_daily.turnover_avg` is bigint rupees, like every other volume column.
+        "turnover_avg",
     }
 )
 

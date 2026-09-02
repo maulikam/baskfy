@@ -77,6 +77,7 @@ from baskfy_worker.tasks import (
 )
 from baskfy_worker.tasks import fundamentals as fundamentals_task
 from baskfy_worker.tasks import instruments as instruments_task
+from baskfy_worker.tasks import swing as swing_task
 from baskfy_worker.tasks.quality import GateReport
 from baskfy_worker.window import DateWindow
 
@@ -311,3 +312,46 @@ async def _run_chain(  # noqa: PLR0915 - one block per pipeline step, and docs/0
         if names == 0:
             step.status = StepStatus.SKIPPED
     outcome.steps_completed.append(PipelineStep.REFRESH_BASKET)
+
+    # --- 12. compute_swing -------------------------------------------------
+    await run_compute_swing_step(session, run.id, trade_date, deps)
+    outcome.steps_completed.append(PipelineStep.COMPUTE_SWING)
+
+
+async def run_compute_swing_step(
+    session: AsyncSession, run_id: int, trade_date: dt.date, deps: PipelineDependencies
+) -> None:
+    """Step 12 (SW3): the swing book's detectors, over the bars this chain has just published.
+
+    **This coroutine cannot raise, and that is its whole job.** `docs/swing/06-module-plan.md`
+    requires the step to be "unable to fail the run", for the reason `refresh_basket` before it
+    is: a `sw_setup_daily` row nobody wrote is a swing page saying "no candidates today", while a
+    nightly run that failed is a screener serving yesterday to everybody. The trade is not close.
+
+    A step of its own rather than a block inside :func:`_run_chain`, so the guarantee can be
+    tested for what it is — "this raises nothing, whatever the detector does" — rather than only
+    through a full pipeline run, where the answer would depend on eleven earlier steps.
+
+    ``deps.swing_user_id`` is ``None`` on a deployment with no sole tenant configured, and then
+    the step says so and does nothing: the `sw_` schema is keyed by user, and a nightly job may
+    not invent one.
+    """
+    async with record_step(session, run_id, PipelineStep.COMPUTE_SWING, trade_date) as step:
+        if deps.swing_user_id is None:
+            step.status = StepStatus.SKIPPED
+            step.note(skipped_reason="no BASKFY_SOLE_USER_ID configured")
+            return
+        try:
+            await swing_task.run_detect_swing(
+                session,
+                step,
+                trade_date,
+                user_id=deps.swing_user_id,
+                index_slug=deps.swing_index_slug,
+                execution_enabled=deps.swing_execution_enabled,
+                pipeline_run_id=run_id,
+            )
+        except Exception as exc:
+            step.status = StepStatus.SKIPPED
+            step.note(skipped_reason=f"{type(exc).__name__}: {exc}")
+            log.warning("compute_swing failed for %s: %s", trade_date, exc)

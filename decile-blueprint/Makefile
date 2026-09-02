@@ -3,7 +3,7 @@ COMPOSE := docker compose -f infra/docker/compose.yml
 UV      := uv run
 
 .DEFAULT_GOAL := help
-.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants fundamentals refactors token-sync shadow backend-parity friday-drill cb-metrics
+.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants fundamentals refactors token-sync shadow backend-parity friday-drill cb-metrics swing
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -152,6 +152,9 @@ refactors:     ## Rebuild factor_daily for one date from data on disk: make refa
 
 bhavcopy:      ## Bar backfill from the NSE bhavcopy (no Kite needed): make bhavcopy FROM=2024-01-01 TO=2026-08-18
 	$(UV) python -m baskfy_worker.bhavcopy_backfill --from $(FROM) --to $(TO)
+
+swing:         ## Detect swing setups for one date: make swing DATE=2026-09-01 [SESSIONS=5]
+	$(UV) python -m baskfy_worker.swing_cli $(if $(DATE),--date $(DATE),) $(if $(SESSIONS),--sessions $(SESSIONS),)
 
 explain:       ## Audit one factor: make explain SYMBOL=CUPID DATE=2026-08-18 FACTOR=sharpe_12m
 	$(UV) python -m baskfy_worker.factors_cli explain --symbol $(SYMBOL) --date $(DATE) --factor $(FACTOR)

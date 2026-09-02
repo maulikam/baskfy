@@ -94,6 +94,16 @@ def _f(row: dict[str, object], key: str) -> float:
     return float(value)
 
 
+def _assign(target: object, name: str, value: object) -> None:
+    """``target.name = value``, spelled so mypy does not have to be silenced.
+
+    A frozen dataclass raises `FrozenInstanceError` here exactly as it would on a plain
+    assignment; writing it as an assignment would need a `type: ignore[misc]`, which house rule 3
+    forbids — including in tests.
+    """
+    setattr(target, name, value)
+
+
 def _column(rows: list[dict[str, object]], key: str) -> list[float]:
     values: list[float] = []
     for row in rows:
@@ -148,12 +158,16 @@ class TestNothingTheEngineHandsOutCanBeMutated:
 
     @pytest.mark.parametrize("kind", _dataclasses(), ids=lambda k: k.__name__)
     def test_the_dataclass_is_frozen(self, kind: type) -> None:
-        params = kind.__dataclass_params__  # type: ignore[attr-defined]
+        # `__dataclass_params__` is not in the type stubs, so it is reached by name. House rule 3
+        # forbids the `type: ignore` the attribute access would otherwise need, and `getattr`
+        # says the same thing without one.
+        params = getattr(kind, "__dataclass_params__", None)
+        assert params is not None, f"{kind.__name__} is not a dataclass"
         assert params.frozen is True, f"{kind.__name__} is mutable"
 
     def test_the_default_config_refuses_assignment_at_runtime(self) -> None:
         with pytest.raises(dataclasses.FrozenInstanceError):
-            DEFAULT_SWING_CONFIG.ma_fast = 5  # type: ignore[misc]
+            _assign(DEFAULT_SWING_CONFIG, "ma_fast", 5)
 
     def test_a_position_refuses_to_have_its_stop_moved(self) -> None:
         position = OpenPosition(
@@ -167,7 +181,7 @@ class TestNothingTheEngineHandsOutCanBeMutated:
             trail=TrailMa.MA20,
         )
         with pytest.raises(dataclasses.FrozenInstanceError):
-            position.stop = Decimal("90")  # type: ignore[misc]
+            _assign(position, "stop", Decimal("90"))
 
 
 # ---------------------------------------------------------------------------

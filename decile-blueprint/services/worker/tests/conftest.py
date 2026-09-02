@@ -42,6 +42,11 @@ PIPELINE_TABLES = (
     "basket_snapshot, "
     "ohlcv_daily, factor_daily, index_member_daily, index_snapshot_daily, market_health_daily, "
     "corporate_action, ingest_cursor, pipeline_run_step, pipeline_run, instrument, trading_day, "
+    # SW3's tables. Most would cascade from `instrument` anyway; `sw_config`, `sw_market_daily`
+    # and `sw_session` are keyed by user and would not, so a market row written by one test would
+    # still be there for the next and "the gate was RED" would depend on execution order.
+    "sw_setup_daily, sw_market_daily, sw_config_audit, sw_config, sw_watch, sw_signal, "
+    "sw_plan_line, sw_plan_skip, sw_plan, sw_fill, sw_position, sw_session, "
     # Prompt 12's account purge is a worker task too, and it writes `app_user` — which nothing
     # else here truncates, so without these a second test run finds the first one's accounts.
     "index_def"

@@ -302,10 +302,16 @@ services:
       # flags are the swing book's, each independent, each false. `environment:` beats
       # `env_file:`, so a value in `.env.staging` cannot flip any of them for this container —
       # the process that can reach an order. The only override is a line in
-      # `.env.staging.compose` (compose interpolation, the same file that carries BASKFY_DRY_RUN
-      # for the api), written by Maulik's hand; api/worker/beat read their copies of the swing
-      # flags from `.env.staging`, so a live flip is two deliberate lines, not one.
-      DRY_RUN: "${BASKFY_DRY_RUN:-true}"
+      # `.env.staging.compose` (compose interpolation), written by Maulik's hand; api/worker/beat
+      # read their copies of the swing flags from `.env.staging`, so a live flip is two
+      # deliberate lines, not one.
+      #
+      # ITS OWN VARIABLE, NOT THE API'S (SW13-run). The api's `BASKFY_DRY_RUN` is `false` on the
+      # box since M81/M82 — it unlocks one read-only holdings pull and nothing else (see the
+      # api block above). The desk's DRY_RUN gates real order placement, so it must not ride the
+      # same line: sharing `${BASKFY_DRY_RUN}` would have started the desk live the first time
+      # it was deployed. `BASKFY_DESK_DRY_RUN` is unset on the box; the default is the rail.
+      DRY_RUN: "${BASKFY_DESK_DRY_RUN:-true}"
       BASKFY_SWING_EXECUTION_ENABLED: "${BASKFY_SWING_EXECUTION_ENABLED:-false}"
       BASKFY_SWING_MONITOR_ENABLED: "${BASKFY_SWING_MONITOR_ENABLED:-false}"
       BASKFY_SWING_EP_PREMARKET_ENABLED: "${BASKFY_SWING_EP_PREMARKET_ENABLED:-false}"

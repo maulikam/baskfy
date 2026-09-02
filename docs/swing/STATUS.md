@@ -3,7 +3,7 @@
 The status page for the swing run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: in progress.** Started 2 Sep 2026 on branch `developer`.
+**Run state: code complete, deploy not run.** Started 2 Sep 2026 on branch `developer`; SW12 closed 3 Sep 2026. The report is `../../SW-FINAL-REPORT.md`; what needs Maulik's hands is `../../NEEDS-MAULIK.md` § Swing.
 
 ## Module ledger
 
@@ -24,7 +24,9 @@ done. A fresh session resumes from the first module not marked ✅.
 | SW10 — Gating and safety proof | ✅ | Every Track-B/C claim is a test: hypothesis over random watchlists (no `PARABOLIC_SHORT` line, a stop never falls, a SELL never exceeds the book), a spy over the real gateway through `/swing/execute` (eight calls, all dry, under both `DRY_RUN` values), source scans with docstrings/comments stripped over the web hub, the API and the monitor, every `sw_` write named with its `user_id`; **the confirm-time gate (STANDING-ANSWERS A5, SW10.4)**: `POST /swing/execute` re-derives the book under `SELECT … FOR UPDATE` on the day's `sw_session` and re-sizes or refuses (`EXPOSURE_FULL` / `TIER_FULL` / `SESSION_CAP`), the monitor re-reads context per trigger, 500 seeded confirm sequences never exceed the ceiling, the count or the cap; and `tools/swing/drill.py` runs the whole paper session against Postgres — evening → LEVELS → MORNING → replayed morning through `PgSignalStore` → two confirms through `execute_line` (the second re-sized 833 → 389) → EOD → next morning — **0 orders reach a broker**, `confirms=2 fills=2`, **`EXPOSURE after confirms … = 25.0%`** (was 34.3 %; SW10.2 closed). Desk **1,599 passed** |
 | SW10.5 — Maulik's review corrections (A7, A8, A9, A10, A14, B7) | ✅ | STANDING-ANSWERS applied across core, worker, API, gateway and desk: a live gap is a `PENDING_RANGE` line holding a session slot, released once at its trigger or freed at 10:45, never executable (route + module + source set); the live buy is a marketable LIMIT (`min(trigger × 1.005, range high + 0.25 ADR)`) polled ≤ 10 s at ≤ 2 req/s, a partial is `SENT` with a GTT for exactly what filled, later fills grow the position and **modify** the GTT through a new guarded `modify_gtt_quantity`, the 10:45 sweep cancels remainders through a new guarded `cancel_order`; half risk at plan time via `risk_multiplier` while the countdown runs and a confirm would be real, the countdown moved once per LIVE session by the evening; the ladder reads real closes from day one with a 09:09 catch-up; top-20 auto-watch, top-5 + every-EP focus, MANUAL rows on a ten-session clock with `PATCH … {"reconfirm": true}`; migration `0031`; the drill replays five signals and a late partial fill — **0 orders reach a broker**. Core +26, execution +18, worker +23, API +3, desk **1,644 passed** |
 | SW11 — Hardening and observability | ✅ | Five `SWING_*` rules over five DB-derived gauges the API refreshes per scrape, evaluated from synthetic series in `test_swing_alerts.py`, plus four in-process worker checks (09:20/10:50/15:20/21:30) and runbook 6; the desk is the clock (cutoff at 10:45, GTT sweep at 15:15 in `app/swing_clock.py`); the tick-built opening range with a one-shot candle reconcile (A4); the quote fallback capped at one call per 5 s (B10); the one-way email + dark Telegram notifier for the daily focus (A2); the S2 timing probe (Beat 09:04, gated, self-disabling) and the gap scan at 09:16 from `ohlc.open`; `write_market_row` keeps a settled row and bounds its closes; the journal reads REAL; four budgets measured — `/swing/setups` p95 **183 ms**, tick→verdict p95 **0.0017 ms**, detect 2,500 **0.21 s** (engine only), confirm path p95 **0.22 s**; Playwright `/swing` spec written, unrunnable since M46 (its sign-in setup). Desk **1,694 passed, 17 skipped**; worker +41, API +16 |
-| SW12 — Verification, goldens, final report | ⬜ | |
+| SW11B — Catalyst feed | ✅ | NSE announcements + results calendar through the existing provider, `sw_catalyst`, the 09:17 Beat, the link on every watched name; fixtures hand-written, no morning has run it |
+| SW12 — Verification, goldens, final report | ✅ | 79 goldens in `go/testdata/golden/L1/swing/` byte-stable and guarded by `test_swing_goldens.py`; the mutation report re-run (`reconciliation/MUTANTS.md`); `02` §3 rewritten under Maulik's name (A11) — one DRY_RUN drill morning + the backtest on the page + his written risk decision, the session counter demoted to information; `SW-FINAL-REPORT.md`; NEEDS-MAULIK § Swing reduced to eight hands-only items |
+| SW13 — The desk as a Baskfy service | 🟡 | Built and smoke-tested locally (`SMOKE OK`, desk 1645); **not deployed** — needs `aws sso login` (NEEDS-MAULIK SW-1); desk history unmigrated (SW-3) |
 
 States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked · 🟡 partial.
 
@@ -1647,7 +1649,67 @@ go out); the test store's context carries the countdown; and
 
 ---
 
-## SW13 — The merged desk is a Baskfy service; deploy prepared, not run (no AWS session) ⏸
+## SW13 — The merged desk is a Baskfy service; deployed to the box 3 Sep 2026, desk vhost waits on DNS 🟡
+
+### SW13-run (3 Sep 2026, leaf 1.5.2) — deployed `beb5ff5`
+
+Built from a clean worktree of `beb5ff5` (SW5–SW11B + SW13-prep), never the working tree.
+`push-images.sh` → `baskfy-web`, `baskfy-py`, `baskfy-desk` `:beb5ff5` in ECR (arm64).
+`tf.sh plan` was exactly the expected two changes (`+ aws_route53_record.desk`, `~ ecr_pull`
+policy, 0 destroy) → applied. `deploy-swing.sh`: compose + Caddyfile shipped, tags pinned,
+`BASKFY_DESK_PASSWORD` generated on the box, alembic **`0032_swing_catalyst`** (= head), seed
+reference + `seed swing` (`sw_config: 1`, `sw_config_sleeve: 1` — ₹25,00,000 / 0.5 %), all ten
+services `Up`. **Live:** `https://staging.baskfy.com/swing` → 307 to sign-in, 200 signed out
+of the redirect; `/api/v1/swing/setups` 401 without a token.
+
+**`verify-swing.sh` deciding lines (box half, all green):** `desk: DRY_RUN=true`,
+`monitor: DRY_RUN=true`, every `BASKFY_SWING_{EXECUTION_ENABLED,MONITOR_ENABLED,
+EP_PREMARKET_ENABLED,TIMING_PROBE}=false` in both containers, `desk mounts the token volume
+read-only`, `beat schedules swing-eod / swing-eod-plan / swing-weekend / swing-premarket-levels /
+swing-premarket-gaps`, `alembic at 0032_swing_catalyst (head 0032_swing_catalyst)`, `desk schema
+has 20 tables`; inside the box `GET /status` → `{"dry_run":true,...,"authed":true}` (the desk
+reads the box's Kite token, read-only, as designed). `swing-monitor`: `flag off; next run Thu
+2026-09-03 09:14 IST`.
+
+**Not live — needs Maulik's hands (registrar):** the 7 HTTPS checks on
+`https://desk.staging.baskfy.com` fail with `000`. `baskfy.com`'s nameservers are still
+GoDaddy's (`ns01/ns02.domaincontrol.com`); `staging.baskfy.com` resolves because its A record
+was added there by hand, so the Route 53 record Terraform just created (`desk.staging.baskfy.com
+→ 3.108.148.38`, verified by `dig @ns-1364.awsdns-42.org`) is not authoritative and the name is
+NXDOMAIN publicly. Caddy therefore cannot pass ACME for the desk vhost (its log: `DNS problem:
+NXDOMAIN`; it backs off and retries on its own, the main host's certificate is unaffected).
+**Fix, one of:** add an A record `desk.staging → 3.108.148.38` at GoDaddy (cheapest), or
+delegate `baskfy.com` to the Route 53 zone (NEEDS-MAULIK §21). Then re-run
+`bash tools/deploy/verify-swing.sh` — nothing on the box needs touching. Rollback while the
+vhost is dark is unnecessary; the desk's only external face is behind the missing name.
+
+**Two deploy-mechanical fixes made in the deploy worktree — port to the main tree:**
+1. `decile-blueprint/infra/docker/compose.prod.yml`, desk service: `DRY_RUN:
+   "${BASKFY_DESK_DRY_RUN:-true}"` (was `${BASKFY_DRY_RUN:-true}`). The box's
+   `.env.staging.compose` carries `BASKFY_DRY_RUN=false` since M81/M82 (the api's read-only
+   holdings pull); sharing that line would have started the desk — the process that can reach
+   an order — with `DRY_RUN=false` on its first deploy. Caught before `up`; the shipped compose
+   has the split, `BASKFY_DESK_DRY_RUN` is unset on the box, and the running desk shows
+   `DRY_RUN=true`. (Safety rail, precedence 1; `verify-safety.sh`'s grep still passes.)
+2. `tools/deploy/deploy-swing.sh` step 3: an on-box `aws ecr get-login-password | docker login`
+   before `pull` — the box's ECR token is 12-hour and the first run failed with "authorization
+   token has expired". Minted on the box from the instance role; nothing crosses SSM.
+
+**Rollback:** in `/opt/baskfy/.env.staging.compose` set `BASKFY_WEB_IMAGE` / `BASKFY_PY_IMAGE`
+back to `…:6395682` and drop `BASKFY_DESK_IMAGE`; restore
+`compose.prod.yml.bak-sw13-20260903T024909` + `Caddyfile.bak-sw13-20260903T024909` (the genuine
+pre-deploy copies; the `…T025007` pair is the second run's and already new); `docker compose
+--env-file .env.staging.compose -f compose.prod.yml up -d --force-recreate caddy && … up -d`;
+`stop desk swing-monitor`. Migration 0032 does not roll back with the image (runbook §6).
+
+**Observation, not patched (code, not deploy):** the desk's unauthenticated `/status` returns
+`cash` alongside `dry_run`/`authed`; `websec.py`'s stated contract is "dry_run and whether a
+session exists, never a holding". Worth a look before the vhost goes public.
+
+**Also still open from the prep leaf:** desk history not migrated (`tools/migrate-desk`, not run
+in this leaf); `restart desk` after each morning's Kite login (Q-SW13-1).
+
+#### The prep leaf's record (SW13-prep, before the run)
 
 **MD20:** one system. The desk (weekly book + swing) runs as compose services `desk` and
 `swing-monitor` on the Phase A box beside api/web/worker/beat — same Postgres (schema `desk`,
@@ -1782,27 +1844,61 @@ Short, per MD19. Decisions in DECISIONS-SW SW11.1–SW11.6.
   its live-gap rows arrive after it — one line in `celery_app.py` (09:17) for the driver to move.
 - `write_market_row` still takes `execution_enabled` (unused since A10) for its callers.
 
+## SW12 — Verification, goldens, final report ✅
+
+3 Sep 2026. Two leaves. **Goldens (1.4.3a, B11):** `tools/parity/golden.py swing` dumps 79
+cases — `build_entries` 16, `detect_setups` 10, `evaluate_trigger` 12, `exposure_tier` 14,
+`manage` 16, `size_position` 11 — flat under `go/testdata/golden/L1/swing/`, `stable: true`
+(no clock, no cwd), re-rendered from their stored inputs by `packages/core/tests/test_swing_goldens.py`;
+a line in `docs/go-rewrite/REQUESTS.md`; the mutation report re-run into
+`reconciliation/MUTANTS.md` (`grep 'mutation score' reconciliation/MUTANTS.md` → **84.3 %**,
+649 mutants, 102 survivors listed); Q-SW12-1 (size on unsnapped levels) recorded, not fixed.
+**The gate (1.4.3b, A11/B12):** `02` §3 rewritten — the twenty-session paper gate withdrawn; one
+DRY_RUN drill morning on a real session, the backtest on the page, Maulik's written risk
+decision, the flag by his hand; `PAPER_SESSIONS_REQUIRED` stays 20 as the counter's denominator
+(information — wording re-pinned in `swing_journal.py`, `settings.py`, the desk's `config.py`,
+`test_api_swing_journal.py`, `03`, `05`; `make client` regenerated `openapi.json` + `schema.ts` for the one
+changed description); `baskfy_core.models` re-exports `SwBacktestRun`;
+`SW-FINAL-REPORT.md`; NEEDS-MAULIK § Swing rewritten (S1 resolved, S2 superseded, S3 kept, five
+new). Drill re-run on `baskfy_sw_test`: `confirms=2 fills=2`, 25.0 %, **0 orders reach a
+broker**, `DRILL OK`. Desk **1,694 passed, 17 skipped**; the decile suite's number is in the report.
+
+**Did NOT do:** no morning on a real session (that is §3.2, Maulik's); no 2017→ backtest run;
+Q-SW12-1 stands; `baskfy_core.swing.__init__` still does not re-export SW9.6's names.
+
 ## Not done (kept loud)
 
-- **SW10 onward.** The desk page and `/swing/execute` are in (SW7, both halves) and write
-  `sw_position` / `sw_fill` on confirm; the ladder write-back, `GET /swing/journal` and the
-  journal page are in (SW8, both halves); the backtest engine, its runner, table, CLI and card
-  are in (SW9, both halves) — but **no run over real bars has been stored**: the journal's
-  backtest card says "not run yet" until `tools/swing/backtest.py` is run against a backfilled
-  database. No goldens, no safety proof beyond each module's own tests.
-- **`sw_position` has been written only by tests** (SW7). No confirm has run against a real
-  database; the book is empty there, and every position test still builds its rows directly.
-- **The dev database is at `0026`.** Nothing swing-shaped has run against real NSE bars; the ten
-  sessions of 180 instruments it holds cannot feed the detectors' 200-session lookback anyway
-  (SW3.3).
-- No live morning has run the premarket scan or the monitor (SW6, above).
-- ~~`sw_config.first_live_sessions_left` / `risk_multiplier` (`02` §3.5) has no core function
-  yet~~ — closed by SW10.5 (A9): `plan.first_live_multiplier` / `build_entries(risk_multiplier=)`
-  size at plan time; the evening counts the sessions down.
-- ~~`sw_config.exposure_level` is written back by the evening job (SW8), but the detection job's
-  Saturday re-scan can still overwrite a settled market row one rung too high~~ — closed by SW11:
-  `write_market_row` keeps a row the evening settled and bounds its closes by date.
-- The watchlist page is read-only; the API's three writes have no form yet.
-- ~~Deferred to SW11: the Playwright check and p95 for `/swing/setups`~~ — both in SW11 (the
-  browser check without the lock-icon fixture); a tick journal for the replay harness is still
-  not written. Deferred to SW12: mutation survivors not individually justified.
+Final state, 3 Sep 2026. Each item names who closes it.
+
+- **Nothing is deployed.** SW13 built the desk image and compose and proved them locally; the
+  box runs what it ran before this run. Needs `aws sso login` (NEEDS-MAULIK SW-1).
+- **No live morning has run anything** — not the premarket scan, the monitor, the catalyst feed,
+  the probe or the evening on real quotes. `02` §3.2 is that morning (SW-5). The catalyst
+  fixtures are hand-written, not captured; re-record on the first session that reaches
+  `nseindia.com`.
+- **S2 is unrun.** The two Kite timing facts are answered by the 09:04 probe on one flagged
+  morning (SW-4); until then the gap scan is at 09:16 and the range is tick-built.
+- **The 2017→ backtest has not been run on real bars.** The journal's card says "not run yet"
+  until `tools/swing/backtest.py` runs against the box's backfilled database (~5 min extrapolated;
+  the laptop's dev DB is at `0026` with ten sessions of bars and cannot feed it). `02` §3.3.
+- **The desk's history is unmigrated.** Store A (43,411 rows) stays on 65.0.226.77 until
+  `tools/migrate-desk` runs with SSH to that box (SW-3); the new desk service starts on an empty
+  `desk` schema.
+- **`sw_position` has been written only by tests and the drill.** No confirm has run against
+  the box's database.
+- **Playwright cannot sign in.** `e2e/swing.spec.ts` is written; `e2e/auth.setup.ts` still
+  clicks the "Password" tab M46 removed, so every signed-in spec has been unrunnable since M46
+  (Track A's, not swing's).
+- **The watchlist page is read-only**; the API's writes (`POST`/`PATCH`/`DELETE /swing/watch`,
+  `reconfirm`, the catalyst field) and `PATCH /swing/config` have no form.
+- **Q-SW12-1**: the plan sizes on the unsnapped levels and shows the snapped ones (≤ one tick ×
+  quantity). Recommendation (b) in `QUESTIONS.md`, not applied.
+- **102 mutation survivors** are listed in `reconciliation/MUTANTS.md`; not every one is
+  individually justified.
+- No push transport for order updates (the 10:45 cutoff and fill reconciliation are pulls); no
+  tick journal for the replay harness; the 15:15 sweep runs inside the monitor process, so a
+  monitor that never started sweeps nothing (`SWING_GTT_MISSING_AT_1515` says so; `POST
+  /swing/cutoff` and the page's re-arm are the by-hand path); the monitor has no holiday
+  calendar; `write_market_row` still takes an unused `execution_enabled`;
+  `baskfy_core.swing.__init__` does not re-export SW9.6's `GateMode` / `GateComparison`.
+- **The flag is false.** It stays false until Maulik's hand (SW-7), after §3.1–3.4.

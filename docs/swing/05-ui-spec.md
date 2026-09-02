@@ -19,8 +19,10 @@ Section tabs: **Setups | Watchlist | Market | Positions | Journal**.
 ### `/swing` (Setups)
 
 * Header: as-of date (from `/meta/status`, with the freshness pill), the gate badge
-  (GREEN/AMBER/RED with the two breadth numbers that made it), the tier ("Rung 2 of 4 · up to 6
-  positions · 75% of sleeve").
+  (GREEN/AMBER/RED with the two breadth numbers that made it, and the index rule as a word:
+  "10-day above 20-day" / "10-day below 20-day" / "no index" — SW9.5, `04` §8.2), the tier
+  ("Rung 2 of 4 · up to 6 positions · 75% of sleeve"; when `sw_market_daily.drawdown_locked`,
+  "Locked out · sleeve 15.3% below its peak · resumes inside 10%" in place of the rung).
 * A **sector strip**: the top-5 sectors by `pct_above_20dma` from `market_health_daily`, with
   the count of today's candidates in each.
 * Three lists, one per setup, each a table: symbol, name, sector, status pill, score, close,
@@ -35,17 +37,25 @@ Section tabs: **Setups | Watchlist | Market | Positions | Journal**.
 ### `/swing/watchlist`
 
 `sw_watch` rows in `WATCHING` state: symbol, setup, trigger, stop ref, distance to trigger from
-the last close, added on, expires on, source (detector/manual), note and catalyst (inline
-editable), state history. **Add manual** form: symbol search (existing `/search`), setup, trigger,
+the last close, **stop distance as a share of the ADR** (a name whose stop is wider than one ADR
+is shown as one the plan will skip — `04` §6.1, SW9.5), added on, expires on, source
+(detector/manual), note and catalyst (inline editable), state history. **The funnel numbers**
+(`07`, SW9.5): the list auto-watches the top **20** flags by score plus **every** EP (his weekly
+focus list of 5–20); the monitor's daily focus is the top **5** by score (his daily focus list of
+under 5); the page shows the count against each. Today the evening applies
+`WatchConfig.auto_watch_min_score` [60] as the floor (`04` §9.5) and the monitor watches every
+`WATCHING` row; the top-20 cap and the top-5 focus are SW11's to land in `swing_watch` and the
+monitor — this section is their spec. **Add manual** form: symbol search (existing `/search`), setup, trigger,
 stop reference. Yesterday's `sw_signal` rows for these names are shown as "fired 09:23, 5-min
 range 412.30–418.90" under the row.
 
 ### `/swing/market`
 
 `sw_market_daily` history: the three breadth series and the gate as a colour band over time
-(dataviz conventions of `market/mood`), the ladder rung over time, the parabolic count, and the
-index with its 10/20 MAs. A **"what would change the gate"** line: "GREEN needs ≥ 5.0% of names up
-25% in a month; today 3.8%".
+(dataviz conventions of `market/mood`), the ladder rung over time, the sleeve's drawdown from
+its peak with the lock-out shaded (SW9.5, `04` §8.5), the parabolic count, and the index with
+its 10/20 MAs. A **"what would change the gate"** line: "GREEN needs ≥ 5.0% of names up 25% in
+a month and the 10-day above the 20-day; today 3.8%, 10-day above".
 
 ### `/swing/positions`
 
@@ -88,7 +98,8 @@ button. Lines a second person could confuse for the weekly book are prefixed **S
 
 **Plan (middle).** The morning plan (`source=MORNING`, built 09:10) and the EOD preview: exit
 lines first (SELL at open, RAISE GTT), then the buy-on-trigger lines that are *waiting* for a
-signal, then the skips with reasons. **Confirm** on a `SELL_AT_OPEN` or `RAISE_GTT_STOP` line
+signal (at most three a session — `SESSION_CAP` skips say so), then the skips with reasons; a
+`DRAWDOWN_LOCKOUT` day is headed with the sleeve's drawdown. **Confirm** on a `SELL_AT_OPEN` or `RAISE_GTT_STOP` line
 goes through the same endpoint. There is no "confirm all".
 
 **Book (bottom).** Open positions with GTT ids; a **Re-arm GTT** button for a naked position

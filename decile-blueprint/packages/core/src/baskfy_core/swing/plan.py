@@ -23,7 +23,7 @@ from enum import StrEnum
 from baskfy_core.swing.config import TRADEABLE_SETUPS, Setup, SwingConfig
 from baskfy_core.swing.market import ExposureTier, MarketGate
 from baskfy_core.swing.sizing import SizedPosition, size_position
-from baskfy_core.swing.stops import Action, ActionKind, TrailMa, choose_trail
+from baskfy_core.swing.stops import Action, ActionKind, TrailMa, choose_trail, widest_stop_pct
 
 _ZERO = Decimal(0)
 _PCT = Decimal(100)
@@ -39,7 +39,9 @@ class LineKind(StrEnum):
 class SkipReason(StrEnum):
     NOT_TRADEABLE_SETUP = "NOT_TRADEABLE_SETUP"
     GATE_RED = "GATE_RED"
+    DRAWDOWN_LOCKOUT = "DRAWDOWN_LOCKOUT"
     TIER_FULL = "TIER_FULL"
+    SESSION_CAP = "SESSION_CAP"
     EXPOSURE_FULL = "EXPOSURE_FULL"
     ALREADY_HELD = "ALREADY_HELD"
     LOCKED_UPPER_CIRCUIT = "LOCKED_UPPER_CIRCUIT"
@@ -151,16 +153,25 @@ def build_entries(  # noqa: PLR0913 - one keyword per input the plan depends on
     tier: ExposureTier,
     config: SwingConfig,
 ) -> tuple[list[PlanLine], list[Skipped]]:
-    """BUY lines for the watchlist, best score first, until the tier is full."""
+    """BUY lines for the watchlist, best score first, until the tier or the session is full.
+
+    The position count is the smaller of the ladder's rung and the trader's own cap; new
+    entries per session are capped at ``max_new_entries_per_session`` ("1, 2, 3 stocks per
+    day"); each name's widest stop is one ADR (:func:`widest_stop_pct`).
+    """
     lines: list[PlanLine] = []
     skipped: list[Skipped] = []
     open_count = len(account.open_symbols)
     exposure = account.open_exposure_inr
     max_exposure = account.equity * Decimal(str(tier.max_exposure_pct)) / _PCT
+    max_positions = min(tier.max_open_positions, config.sizing.max_open_positions)
     ordered = sorted(watch, key=lambda w: (-w.score, w.symbol))
     for item in ordered:
         if item.setup not in TRADEABLE_SETUPS:
             skipped.append(Skipped(item.symbol, SkipReason.NOT_TRADEABLE_SETUP, item.setup.value))
+            continue
+        if tier.drawdown_locked:
+            skipped.append(Skipped(item.symbol, SkipReason.DRAWDOWN_LOCKOUT, "sleeve in drawdown"))
             continue
         if gate is MarketGate.RED or not tier.new_entries_allowed:
             skipped.append(Skipped(item.symbol, SkipReason.GATE_RED, gate.value))
@@ -171,12 +182,21 @@ def build_entries(  # noqa: PLR0913 - one keyword per input the plan depends on
         if item.locked_upper_circuit:
             skipped.append(Skipped(item.symbol, SkipReason.LOCKED_UPPER_CIRCUIT, "no fill at band"))
             continue
-        if open_count + len(lines) >= tier.max_open_positions:
+        if len(lines) >= config.sizing.max_new_entries_per_session:
+            skipped.append(
+                Skipped(
+                    item.symbol,
+                    SkipReason.SESSION_CAP,
+                    f"{config.sizing.max_new_entries_per_session} new entries per session",
+                )
+            )
+            continue
+        if open_count + len(lines) >= max_positions:
             skipped.append(
                 Skipped(
                     item.symbol,
                     SkipReason.TIER_FULL,
-                    f"tier {tier.level} allows {tier.max_open_positions} positions",
+                    f"rung {tier.level} allows {max_positions} positions",
                 )
             )
             continue
@@ -188,7 +208,7 @@ def build_entries(  # noqa: PLR0913 - one keyword per input the plan depends on
             stop=item.stop_ref,
             avg_turnover_inr=item.avg_turnover_inr,
             config=config.sizing,
-            max_stop_distance_pct=Decimal(str(config.stops.max_stop_distance_pct)),
+            max_stop_distance_pct=widest_stop_pct(item.adr_pct, config.stops),
         )
         if sized.refusal is not None:
             skipped.append(Skipped(item.symbol, SkipReason.SIZE_REFUSED, sized.refusal.value))

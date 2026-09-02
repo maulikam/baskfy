@@ -190,8 +190,10 @@ class SwConfig(Base):
     max_position_pct: Mapped[Decimal] = mapped_column(
         POSITION_PCT, nullable=False, server_default="20.00"
     )
+    #: His "typically 5-10 positions" (SW9.5): the ladder's top rung is ten, and the plan takes
+    #: the smaller of the rung and this. The env ceiling (twenty) is his 15-20 of a great market.
     max_open_positions: Mapped[int] = mapped_column(
-        SmallInteger, nullable=False, server_default="8"
+        SmallInteger, nullable=False, server_default="10"
     )
     or_window_minutes: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="5")
     stop_mode: Mapped[str] = mapped_column(
@@ -200,7 +202,9 @@ class SwConfig(Base):
     #: The liquidity floors of ``docs/swing/04`` §1, as settings rather than code, because they
     #: are the one part of the universe definition a person legitimately re-decides (a ₹5 cr
     #: floor is a different market from a ₹50 cr floor, and neither is wrong).
-    adr_min_pct: Mapped[Decimal] = mapped_column(MEASURE, nullable=False, server_default="3.50")
+    #: 4.0 since SW9.5 (his screens use 5%+; 3.5-4 is the floor he names on stream) — the
+    #: engine's ``LiquidityConfig.adr_min_pct``; a person may raise it here.
+    adr_min_pct: Mapped[Decimal] = mapped_column(MEASURE, nullable=False, server_default="4.00")
     turnover_min_inr: Mapped[Decimal] = mapped_column(
         MONEY, nullable=False, server_default="50000000"
     )
@@ -212,6 +216,14 @@ class SwConfig(Base):
     first_live_sessions_left: Mapped[int] = mapped_column(
         SmallInteger, nullable=False, server_default="5"
     )
+    #: `04` §8.5, the drawdown containment (SW9.5): the highest EOD NAV the sleeve has reached,
+    #: how far below it tonight's NAV sits, and whether the lock-out is in force. All three are
+    #: written by ``swing-eod`` from the sleeve's NAV (SW9.5.1) and never by a form: a person
+    #: who could reset the peak could trade through a drawdown. ``sleeve_peak_inr`` is null until
+    #: the first evening has run — a sleeve with no session behind it is not in drawdown.
+    sleeve_peak_inr: Mapped[Decimal | None] = mapped_column(MONEY)
+    drawdown_pct: Mapped[Decimal] = mapped_column(MEASURE, nullable=False, server_default="0")
+    drawdown_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     updated_at: Mapped[UpdatedAt]
     #: Who wrote the row last — a user id, or a job name for the fields a job owns.
     updated_by: Mapped[str | None] = mapped_column(String)
@@ -358,6 +370,11 @@ class SwMarketDaily(Base):
     max_open_positions: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     max_exposure_pct: Mapped[Decimal] = mapped_column(POSITION_PCT, nullable=False)
     new_entries_allowed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    #: `04` §8.5 (SW9.5): the sleeve's drawdown from its peak at this close, and whether the
+    #: lock-out is in force for the next session — the tier's ``drawdown_locked``, kept beside
+    #: the rung it produced so the row explains a rung of 0 on a GREEN day.
+    drawdown_pct: Mapped[Decimal] = mapped_column(MEASURE, nullable=False, server_default="0")
+    drawdown_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     #: How many ``PARABOLIC_SHORT`` rows today — a froth gauge, not a trade list.
     parabolic_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     detail: Mapped[JsonObject | None] = mapped_column(JSONB)

@@ -62,6 +62,7 @@ from baskfy_core.models import (
     Instrument,
     OhlcvDaily,
     SwConfig,
+    SwFill,
     SwMarketDaily,
     SwPosition,
     SwSetupDaily,
@@ -69,7 +70,13 @@ from baskfy_core.models import (
 )
 from baskfy_core.precision import apply_storage_precision
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
-from baskfy_core.swing.config import DEFAULT_SWING_CONFIG, LiquidityConfig, Setup, SwingConfig
+from baskfy_core.swing.config import (
+    DEFAULT_SWING_CONFIG,
+    LiquidityConfig,
+    Setup,
+    SizingConfig,
+    SwingConfig,
+)
 from baskfy_core.swing.indicators import liquid_expr, with_swing_indicators
 from baskfy_core.swing.journal import ClosedTrade
 from baskfy_core.swing.market import (
@@ -77,6 +84,7 @@ from baskfy_core.swing.market import (
     IndexReading,
     MarketGate,
     breadth_snapshot,
+    drawdown_pct,
     exposure_tier,
     market_gate,
 )
@@ -151,12 +159,17 @@ class SwingFunnel:
 
 
 async def load_swing_config(session: AsyncSession, user_id: int) -> SwingConfig:
-    """`DEFAULT_SWING_CONFIG` with this user's liquidity floors applied (PACK.5).
+    """`DEFAULT_SWING_CONFIG` with this user's settings applied (PACK.5).
 
-    Only the three floors are settings. Everything else — base geometry, the EP gap, the ladder —
-    is a code default, because a threshold that can be changed in a form gets changed after a bad
-    week. A user with no ``sw_config`` row gets the defaults rather than an error: the detectors
-    are read-only and a missing settings row is a seeding problem, not a reason to skip a night.
+    Only the liquidity floors and the risk knobs are settings — the three floors of `04` §1 and,
+    since SW9.5, the three sizing numbers `03` §1 lists as the person's own (`risk_per_trade_pct`,
+    `max_position_pct`, `max_open_positions`; each already validated against its server ceiling
+    where it was written). Everything else — base geometry, the EP gap, the ladder — is a code
+    default, because a threshold that can be changed in a form gets changed after a bad week.
+    The plan takes the smaller of the ladder's rung and `max_open_positions` (`04` §9.1), which
+    is only true if the plan is handed the person's number rather than the pack's (SW9.5.3). A
+    user with no ``sw_config`` row gets the defaults rather than an error: the detectors are
+    read-only and a missing settings row is a seeding problem, not a reason to skip a night.
     """
     row = (
         await session.execute(select(SwConfig).where(SwConfig.user_id == user_id))
@@ -170,6 +183,12 @@ async def load_swing_config(session: AsyncSession, user_id: int) -> SwingConfig:
             adr_min_pct=float(row.adr_min_pct),
             turnover_min_inr=float(row.turnover_min_inr),
             price_min=float(row.price_min),
+        ),
+        sizing=replace(
+            SizingConfig(),
+            risk_per_trade_pct=float(row.risk_per_trade_pct),
+            max_position_pct=float(row.max_position_pct),
+            max_open_positions=int(row.max_open_positions),
         ),
     )
 
@@ -544,6 +563,128 @@ async def load_closed_trades(
     return list(reversed(values))
 
 
+@dataclass(frozen=True, slots=True)
+class SleeveDrawdown:
+    """The sleeve's EOD NAV against its peak — `04` §8.5's one measurement (SW9.5.1).
+
+    ``nav`` is the sleeve's capital plus the realised P&L of every closed position of the book
+    the ladder reads, plus the unrealised P&L of every open one at the day's close (and the
+    realised part of a partial that is still open). ``peak`` is the higher of the stored peak
+    and tonight's NAV — so it only ever rises; ``pct`` is how far below it the NAV sits (zero at
+    the peak, zero when the peak is not a positive number — nothing divides by it); ``was_locked``
+    is the lock-out state the sleeve carried into the evening, which the hysteresis needs.
+    """
+
+    nav: Decimal
+    peak: Decimal
+    pct: Decimal
+    was_locked: bool
+
+
+_TWO_DP: Final = Decimal("0.01")
+
+
+async def _mark_of(
+    session: AsyncSession, *, instrument_id: int, on: dt.date, fallback: Decimal
+) -> Decimal:
+    """The latest close on or before ``on`` — the mark for an open position; ``fallback`` (the
+    entry) when the name has printed no bar yet, so an unmarked position is neither a gain nor
+    a loss."""
+    close = (
+        await session.execute(
+            select(OhlcvDaily.close)
+            .where(OhlcvDaily.instrument_id == instrument_id, OhlcvDaily.date <= on)
+            .order_by(OhlcvDaily.date.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return fallback if close is None else Decimal(close)
+
+
+async def sleeve_nav(
+    session: AsyncSession, *, user_id: int, on: dt.date, capital: Decimal, simulated: bool
+) -> Decimal:
+    """`03` §1: the sleeve's EOD NAV (SW9.5.1) — nothing in `portfolio_nav_daily` describes this
+    sleeve, so it is computed here from the book itself, for the book the ladder reads.
+
+    ``capital + Σ pnl_inr (CLOSED, closed on or before ``on``) + Σ (mark - entry_avg) x
+    quantity_open (OPEN / PARTIAL) + Σ (fill - entry_avg) x quantity over the SELL fills of those
+    open positions`` — the last term is a partial's realised half, which no column carries until
+    the position closes. Bounded by date like the closes the ladder reads (house rule 5): a
+    re-run for a past session must not mark today's book.
+    """
+    realised = (
+        await session.execute(
+            select(func.sum(SwPosition.pnl_inr)).where(
+                SwPosition.user_id == user_id,
+                SwPosition.state == "CLOSED",
+                SwPosition.simulated.is_(simulated),
+                SwPosition.pnl_inr.is_not(None),
+                SwPosition.closed_on.is_not(None),
+                SwPosition.closed_on <= on,
+            )
+        )
+    ).scalar_one_or_none()
+    nav = capital + (Decimal(0) if realised is None else Decimal(realised))
+    open_rows = (
+        await session.execute(
+            select(SwPosition).where(
+                SwPosition.user_id == user_id,
+                SwPosition.state.in_(("OPEN", "PARTIAL")),
+                SwPosition.quantity_open > 0,
+                SwPosition.simulated.is_(simulated),
+                SwPosition.entry_date <= on,
+            )
+        )
+    ).scalars()
+    for position in open_rows:
+        mark = await _mark_of(
+            session, instrument_id=position.instrument_id, on=on, fallback=position.entry_avg
+        )
+        nav += (mark - position.entry_avg) * position.quantity_open
+        sold = (
+            await session.execute(
+                select(SwFill.price, SwFill.quantity).where(
+                    SwFill.position_id == position.id, SwFill.side == "SELL"
+                )
+            )
+        ).all()
+        nav += sum(
+            ((price - position.entry_avg) * quantity for price, quantity in sold), Decimal(0)
+        )
+    return nav.quantize(_TWO_DP)
+
+
+async def sleeve_drawdown(  # noqa: PLR0913 - one keyword per input the measurement depends on
+    session: AsyncSession,
+    *,
+    user_id: int,
+    on: dt.date,
+    config_row: SwConfig | None,
+    simulated: bool,
+    reset_peak: bool = False,
+) -> SleeveDrawdown:
+    """Tonight's :class:`SleeveDrawdown`, read without writing anything.
+
+    A deployment with no ``sw_config`` row has no sleeve, no peak and no drawdown. Otherwise the
+    peak the sleeve carries (``sleeve_peak_inr``) is raised to tonight's NAV if that is higher;
+    a null peak — the first evening — is tonight's NAV, so the first session is never locked.
+    ``reset_peak`` starts the peak over at tonight's NAV: the evening passes it on the night the
+    ladder switches books (PACK.6 — paper closes until the execution flag is on, real ones
+    after), because the paper book's peak is not a level the real book has ever been at, and a
+    lock-out inherited from paper profits would stop the real book on its first day.
+    """
+    if config_row is None:
+        return SleeveDrawdown(nav=Decimal(0), peak=Decimal(0), pct=Decimal(0), was_locked=False)
+    nav = await sleeve_nav(
+        session, user_id=user_id, on=on, capital=config_row.sleeve_capital_inr, simulated=simulated
+    )
+    stored = config_row.sleeve_peak_inr
+    peak = nav if stored is None or reset_peak else max(Decimal(stored), nav)
+    pct = Decimal(str(drawdown_pct(peak=peak, equity=nav))).quantize(_TWO_DP)
+    return SleeveDrawdown(nav=nav, peak=peak, pct=pct, was_locked=bool(config_row.drawdown_locked))
+
+
 def breadth_frame(liquid: pl.DataFrame, highs: dict[int, float]) -> pl.DataFrame:
     """The frame ``breadth_snapshot`` reads: ``ret_20``, ``close``, ``ma_slow``, ``high_1y``.
 
@@ -696,19 +837,38 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
     gate = market_gate(breadth, reading, config.market)
 
     closed = await load_closed_trades(session, user_id=user_id, simulated=not execution_enabled)
-    current = (
-        await session.execute(select(SwConfig.exposure_level).where(SwConfig.user_id == user_id))
+    config_row = (
+        await session.execute(select(SwConfig).where(SwConfig.user_id == user_id))
     ).scalar_one_or_none()
+    current = 0 if config_row is None else int(config_row.exposure_level)
+    # `04` §8.5: the sleeve's drawdown, read the way the evening reads it (the evening's
+    # `settle_ladder` is the one that writes the peak back; this is the preview, as the rung is).
+    drawdown = await sleeve_drawdown(
+        session,
+        user_id=user_id,
+        on=trade_date,
+        config_row=config_row,
+        simulated=not execution_enabled,
+    )
     tier = exposure_tier(
-        current_level=int(current or 0),
+        current_level=current,
         closed_r_multiples=closed,
         gate=gate,
         config=config.market,
+        drawdown_pct=float(drawdown.pct),
+        was_drawdown_locked=drawdown.was_locked,
     )
 
     detail: dict[str, object] = {
         "closed_r_multiples": [str(value) for value in closed],
         "closed_trades_read": "simulated" if not execution_enabled else "real",
+        "drawdown": {
+            "nav": str(drawdown.nav),
+            "peak": str(drawdown.peak),
+            "pct": str(drawdown.pct),
+            "was_locked": drawdown.was_locked,
+            "locked": tier.drawdown_locked,
+        },
         "sectors": [
             {"slug": slug, "pct_above_ma_slow": pct, "members": members}
             for slug, pct, members in sectors
@@ -730,6 +890,8 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
         max_open_positions=tier.max_open_positions,
         max_exposure_pct=tier.max_exposure_pct,
         new_entries_allowed=tier.new_entries_allowed,
+        drawdown_pct=drawdown.pct,
+        drawdown_locked=tier.drawdown_locked,
         parabolic_count=parabolic_count,
         detail=detail,
     )
@@ -752,6 +914,8 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
                     "max_open_positions",
                     "max_exposure_pct",
                     "new_entries_allowed",
+                    "drawdown_pct",
+                    "drawdown_locked",
                     "parabolic_count",
                     "detail",
                 )
@@ -767,6 +931,7 @@ __all__ = [
     "LOOKBACK_SESSIONS",
     "WEEKEND_SCAN_SESSIONS",
     "ClosedTrade",
+    "SleeveDrawdown",
     "SwingFunnel",
     "apply_score_adjustments",
     "breadth_frame",
@@ -780,6 +945,8 @@ __all__ = [
     "recent_trading_days",
     "run_detect_swing",
     "sector_breadth",
+    "sleeve_drawdown",
+    "sleeve_nav",
     "to_exchange_prices",
     "write_market_row",
 ]

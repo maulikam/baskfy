@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from typing import Final
 
@@ -25,6 +25,7 @@ import polars as pl
 from baskfy_core.swing.config import MarketConfig
 
 _PCT: Final = 100.0
+_PCT_D: Final = Decimal(100)
 _ZERO = Decimal(0)
 
 
@@ -55,12 +56,13 @@ class IndexReading:
     ma_slow: float
 
     @property
-    def above_both(self) -> bool:
-        return self.close > self.ma_fast and self.close > self.ma_slow
+    def long_bias(self) -> bool:
+        """His filter: the 10-day MA above the 20-day. Longs only on this side of it."""
+        return self.ma_fast > self.ma_slow
 
     @property
-    def below_both(self) -> bool:
-        return self.close < self.ma_fast and self.close < self.ma_slow
+    def bearish(self) -> bool:
+        return self.ma_fast < self.ma_slow
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +73,8 @@ class ExposureTier:
     max_open_positions: int
     max_exposure_pct: float
     new_entries_allowed: bool
+    #: True while the sleeve's drawdown lock-out is in force (``max_drawdown_pct``).
+    drawdown_locked: bool = False
 
 
 def breadth_snapshot(at_as_of: pl.DataFrame, config: MarketConfig) -> BreadthSnapshot:
@@ -99,18 +103,19 @@ def market_gate(
 ) -> MarketGate:
     """The gate. Breadth decides; the index can only make it worse, never better.
 
-    * GREEN needs breadth at or above ``green_min_pct_up`` and the index above both MAs (or no
-      index reading at all — a missing benchmark is not a bear market).
-    * RED is breadth at or below ``red_max_pct_up``, or the index below both MAs.
+    * GREEN needs breadth at or above ``green_min_pct_up`` and the index's 10-day MA above its
+      20-day (or no index reading at all — a missing benchmark is not a bear market).
+    * RED is breadth at or below ``red_max_pct_up``, or the index's 10-day below its 20-day —
+      his own filter for longs.
     * Everything else is AMBER.
     """
     if breadth.constituent_count == 0:
         return MarketGate.RED
-    if index is not None and index.below_both:
+    if index is not None and index.bearish:
         return MarketGate.RED
     if breadth.pct_up_strong_1m <= config.red_max_pct_up:
         return MarketGate.RED
-    if breadth.pct_up_strong_1m >= config.green_min_pct_up and (index is None or index.above_both):
+    if breadth.pct_up_strong_1m >= config.green_min_pct_up and (index is None or index.long_bias):
         return MarketGate.GREEN
     return MarketGate.AMBER
 
@@ -125,31 +130,66 @@ def _loss_streak(recent_r: Sequence[Decimal]) -> int:
     return streak
 
 
-def exposure_tier(
+def drawdown_pct(*, peak: Decimal, equity: Decimal) -> float:
+    """How far below its peak the sleeve sits, in percent — `04` §8.5's one measurement.
+
+    Zero at or above the peak, and zero when the peak is not a positive number: a sleeve that
+    has never been worth anything is not "down", and nothing divides by it. Two decimals, the
+    precision ``sw_market_daily.drawdown_pct`` stores (house rule 8).
+    """
+    if peak <= _ZERO or equity >= peak:
+        return 0.0
+    return float(
+        ((peak - equity) / peak * _PCT_D).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    )
+
+
+def drawdown_locked(*, drawdown_pct: float, was_locked: bool, config: MarketConfig) -> bool:
+    """The lock-out state for today from the sleeve's drawdown and yesterday's state.
+
+    Locks at ``max_drawdown_pct`` below the peak; stays locked until the drawdown is back
+    inside ``resume_drawdown_pct``. Hysteresis, so a sleeve oscillating around 15% does not
+    flap between trading and not.
+    """
+    if drawdown_pct >= config.max_drawdown_pct:
+        return True
+    return was_locked and drawdown_pct > config.resume_drawdown_pct
+
+
+def exposure_tier(  # noqa: PLR0913 - one keyword per input the rung depends on
     *,
     current_level: int,
     closed_r_multiples: Sequence[Decimal],
     gate: MarketGate,
     config: MarketConfig,
+    drawdown_pct: float = 0.0,
+    was_drawdown_locked: bool = False,
 ) -> ExposureTier:
-    """The rung for tomorrow, from today's rung, the last closed trades and the gate.
+    """The rung for tomorrow, from today's rung, the last closed trades, the gate and the
+    sleeve's drawdown.
 
     Rules, in precedence order:
 
-    1. RED: drop to rung 0 and allow no new entries, whatever the results say.
-    2. A loss streak of ``step_down_loss_streak`` closed trades: one rung down.
-    3. The last ``lookback_trades`` closed trades net positive R, and the gate GREEN: one rung
+    1. Drawdown lock-out (:func:`drawdown_locked`): rung 0, no new entries, until recovered.
+    2. RED: drop to rung 0 and allow no new entries, whatever the results say.
+    3. A loss streak of ``step_down_loss_streak`` closed trades: one rung down.
+    4. The last ``lookback_trades`` closed trades net positive R, and the gate GREEN: one rung
        up. AMBER holds the rung.
-    4. Otherwise hold.
+    5. Otherwise hold.
 
     The ladder never skips a rung upward. Progressive exposure is a description of what a
     disciplined trader does with a winning streak; it is not a leverage schedule.
     """
     top = len(config.tiers) - 1
     level = min(max(current_level, 0), top)
-    if gate is MarketGate.RED:
+    locked = drawdown_locked(
+        drawdown_pct=drawdown_pct, was_locked=was_drawdown_locked, config=config
+    )
+    if locked or gate is MarketGate.RED:
         positions, exposure = config.tiers[0]
-        return ExposureTier(0, positions, exposure, new_entries_allowed=False)
+        return ExposureTier(
+            0, positions, exposure, new_entries_allowed=False, drawdown_locked=locked
+        )
 
     recent = list(closed_r_multiples)[-config.lookback_trades :]
     if _loss_streak(recent) >= config.step_down_loss_streak:

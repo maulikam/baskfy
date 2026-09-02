@@ -702,8 +702,18 @@ class TestTheEpThresholdsAreBoundaries:
         )
 
     def test_a_close_exactly_at_the_open_still_qualifies(self) -> None:
-        """§3.3: "`close >= open`". A doji at the top of its range is a gap that held."""
+        """§3.3: "`close >= open`". A doji at the top of its range is a gap that held.
+
+        The bars before the gap are widened to ±2.5% (a 5.13% range) first: a doji has no range,
+        and nineteen of ``ep_series``' ±2% bars plus one flat bar average 3.88% — under §1's
+        4.0% ADR floor (SW9.5), which would make the name illiquid before §3 is ever asked.
+        The range is the fixture's; the floor is the rule's.
+        """
         rows = ep_series()
+        for row in rows[:-1]:
+            close = row["close"]
+            assert isinstance(close, float)
+            row["high"], row["low"] = close * 1.025, close * 0.975
         last = dict(rows[-1])
         rows[-1] = {**last, "close": last["open"], "high": last["open"], "low": last["open"]}
         # `close_position` is 0.5 for a bar with no range, which clears the 0.5 floor exactly.

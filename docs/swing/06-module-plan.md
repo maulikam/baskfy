@@ -6,7 +6,7 @@ and a browser/E2E check covers it), `make lint` is clean in the touched trees, b
 suites still pass, and `STATUS.md` + (if judgement was exercised) `DECISIONS-SW.md` are updated.
 Criteria are proxies for Goals — the charter's precedence order applies.
 
-Dependencies: SW1 → SW2 → SW3 → SW4 → SW5 → {SW6, SW7} → SW8 → SW9 → SW10 → SW11 → SW12.
+Dependencies: SW1 → SW2 → SW3 → SW4 → SW5 → {SW6, SW7} → SW8 → SW9 → SW9.5 → SW10 → SW11 → SW12.
 SW6 and SW7 are independent of each other. SW9 (backtest) may run in parallel with SW6–SW8 if
 a second terminal is available; it needs only SW1–SW3.
 
@@ -178,6 +178,20 @@ published bars, and the numbers on them are exchange prices.
 - **AC:** the run over the full history completes on the dev box in < 30 minutes; a fixture year
   with a known planted flag reproduces the planted trade's R to 2 dp; the page shows the caveats
   verbatim from `04` §11; the run's parameters are on the card.
+
+### SW9.5 — Reconcile with the primary sources
+
+**Goal:** the rules are his, quoted, not a summary's — see `07-primary-source-corrections.md`.
+
+- Apply `patches/2026-09-02-primary-source-corrections.patch` (it applies cleanly to SW8's
+  `53f21c8`; if SW9 moved the files, re-apply by hand from the table in `07`), re-pin the 35
+  contract/backtest tests it turns red, and make the doc edits `07` §"SW9.5" lists — **one
+  commit**, `SW9.5: green — …`.
+- The stop is one ADR or tighter (skip, never size down); the gate's index rule is the 10-day
+  above the 20-day; at most three new entries a session; the plan takes the smaller of the
+  rung and the trader's cap; the sleeve locks out new entries 15% below its peak until it is
+  back within 10%; the swing GTT rests 3% under its trigger; ceilings 30% / 20 positions.
+- **AC:** as `07` §"SW9.5" step 5.
 
 ### SW10 — Gating and safety proof
 

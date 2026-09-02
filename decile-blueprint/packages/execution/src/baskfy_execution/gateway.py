@@ -223,7 +223,8 @@ class OrderGateway:
     async def place_gtt_stop(self, *, symbol: str, qty: int, trigger: float,
                              last_price: float, exchange: str = "NSE",
                              series: str | None = None, client_id: str | None = None,
-                             tenant: TenantIds, plan_tenant: TenantIds) -> dict:
+                             tenant: TenantIds, plan_tenant: TenantIds,
+                             limit_fraction: float | None = None) -> dict:
         """Rest a vol-scaled stop-loss at the exchange. The ONLY way to create a GTT.
 
         `trigger` is `stop_from_vol(price, vol, cfg)` — computed at plan time by
@@ -233,7 +234,22 @@ class OrderGateway:
         thing that could make two parts of the system disagree about where a stop belongs.
         What the gateway does instead is refuse a trigger that is not a stop at all, and
         journal one that sits outside the band.
+
+        `limit_fraction` is where the GTT's own LIMIT leg rests, as a fraction of the snapped
+        trigger. `None` — every existing caller — is `GTT_LIMIT_FRACTION` (0.995), the weekly
+        book's half-percent. The swing book passes 0.97 (docs/swing/04 §9.4, PACK.8): its stops
+        are tight, and a limit a half-percent under a fast-falling trigger rests unfilled while
+        the position keeps falling; a 3% cushion makes the resting LIMIT behave like the market
+        stop the method uses. Additive: the default keeps every existing expectation byte for
+        byte. A fraction outside (0, 1] is a caller bug — a limit *above* a sell trigger cannot
+        fill on the way down — and is refused before anything is journalled or sent.
         """
+        if limit_fraction is not None and not 0.0 < limit_fraction <= 1.0:
+            raise ValueError(
+                f"limit_fraction must be in (0, 1], got {limit_fraction!r}: a GTT sell limit "
+                f"rests at or under its trigger, never above it"
+            )
+        fraction = GTT_LIMIT_FRACTION if limit_fraction is None else limit_fraction
         mismatch = refuse_cross_tenant(tenant, plan_tenant)
         if mismatch:
             return {"symbol": symbol, "status": "BLOCKED", "error": mismatch}
@@ -301,7 +317,7 @@ class OrderGateway:
             # a dry run must not make.
             self._journal({"event": "gtt_dry_run", "symbol": symbol, "qty": int(qty),
                            "trigger": trigger, "last_price": last_price,
-                           "exchange": exchange}, client_id=cid)
+                           "exchange": exchange, "limit_fraction": fraction}, client_id=cid)
             self._gtt_sent[cid] = f"DRY-{cid}"
             return {"symbol": symbol, "status": DRY_RUN_GTT, "trigger": trigger,
                     "qty": int(qty)}
@@ -310,7 +326,7 @@ class OrderGateway:
             trig = to_tick(trigger, tick)
             # The GTT's own limit sits just under the trigger so it fills on the way down; it
             # needs snapping to the same tick or the whole trigger is rejected.
-            limit = to_tick(trig * GTT_LIMIT_FRACTION, tick)
+            limit = to_tick(trig * fraction, tick)
         except Exception as exc:
             self._journal({"event": "gtt_error", "symbol": symbol, "stage": "tick_size",
                            "error": str(exc), "exception": type(exc).__name__},
@@ -355,6 +371,7 @@ class OrderGateway:
         self._gtt_sent[cid] = trigger_id
         self._journal({"event": "gtt_placed", "symbol": symbol, "gtt_id": trigger_id,
                        "qty": int(qty), "trigger": trig, "limit": limit,
+                       "limit_fraction": fraction,
                        "last_price": last_price, "exchange": exchange,
                        "drop_pct": drop_pct(trigger=trig, last_price=last_price),
                        **({} if trigger_id is not None

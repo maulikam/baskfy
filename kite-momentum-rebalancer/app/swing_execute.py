@@ -712,11 +712,15 @@ async def _arm(gw, *, symbol: str, qty: int, stop: Decimal, last_price: Decimal,
     """One GTT through the gateway. Decimal in, float across the boundary.
 
     The gateway's dry-run result names no id (it minted ``DRY-<client_id>`` in its own map);
-    the client id is added to the result so the position row can carry the same handle."""
+    the client id is added to the result so the position row can carry the same handle.
+    ``limit_fraction`` is the swing book's own (``C.SWING_GTT_LIMIT_FRACTION``, 0.97 — `04`
+    §9.4): the resting LIMIT sits 3% under the trigger so it fills on the way down like the
+    market stop he uses; the weekly book's GTTs keep the gateway's default."""
     result = await gw.place_gtt_stop(
         symbol=symbol, qty=int(qty), trigger=float(stop), last_price=float(last_price),
         exchange="NSE", client_id=client_id,
         tenant=_sole_tenant(), plan_tenant=_sole_tenant(),
+        limit_fraction=C.SWING_GTT_LIMIT_FRACTION,
     )
     result.setdefault("client_id", client_id)
     return result

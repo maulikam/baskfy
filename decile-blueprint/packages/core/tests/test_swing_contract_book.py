@@ -651,11 +651,19 @@ def _breadth(pct_up: float) -> BreadthSnapshot:
 
 
 class TestTheGate:
-    """§8.3. "Breadth decides; the index can only make it worse"."""
+    """§8.3. "Breadth decides; the index can only make it worse".
 
-    ABOVE = IndexReading(close=110.0, ma_fast=100.0, ma_slow=100.0)
-    BELOW = IndexReading(close=90.0, ma_fast=100.0, ma_slow=100.0)
-    BETWEEN = IndexReading(close=100.5, ma_fast=100.0, ma_slow=101.0)
+    The index rule is his own (`07`, SW9.5): long setups only while the index's 10-day MA is
+    above its 20-day. The close itself is not consulted — a pullback to a rising 10-day is
+    still a long tape, and a bounce under a falling one is not.
+    """
+
+    #: 10-day over 20-day, with the close *under* both: the reading is still long-biased.
+    LONG = IndexReading(close=96.0, ma_fast=100.0, ma_slow=99.0)
+    #: 10-day under 20-day, with the close *over* both: bearish all the same.
+    BEARISH = IndexReading(close=104.0, ma_fast=99.0, ma_slow=100.0)
+    #: Equal averages: neither long-biased nor bearish.
+    LEVEL = IndexReading(close=100.5, ma_fast=100.0, ma_slow=100.0)
 
     def test_breadth_exactly_at_the_red_ceiling_is_red(self) -> None:
         """ "`pct_up_strong_1m` <= `red_max_pct_up` [2] -> RED"."""
@@ -664,26 +672,32 @@ class TestTheGate:
 
     def test_breadth_exactly_at_the_green_floor_is_green(self) -> None:
         """ "`pct_up_strong_1m` >= `green_min_pct_up` [5] ... -> GREEN"."""
-        assert market_gate(_breadth(5.0), self.ABOVE, MARKET) is MarketGate.GREEN
-        assert market_gate(_breadth(4.99), self.ABOVE, MARKET) is MarketGate.AMBER
+        assert market_gate(_breadth(5.0), self.LONG, MARKET) is MarketGate.GREEN
+        assert market_gate(_breadth(4.99), self.LONG, MARKET) is MarketGate.AMBER
 
     def test_an_empty_universe_is_red(self) -> None:
         assert market_gate(BreadthSnapshot(0, 99.0, 0.0, 0.0), None, MARKET) is MarketGate.RED
 
-    def test_an_index_below_both_averages_is_red_whatever_breadth_says(self) -> None:
-        assert market_gate(_breadth(50.0), self.BELOW, MARKET) is MarketGate.RED
+    def test_a_ten_day_below_the_twenty_is_red_whatever_breadth_says(self) -> None:
+        """§8.3: "`bearish` (10-day below 20-day) -> RED" — the filter he says would have cut
+        his 2022 loss by ~90%."""
+        assert market_gate(_breadth(50.0), self.BEARISH, MARKET) is MarketGate.RED
 
-    def test_an_index_between_its_averages_cannot_make_the_gate_green(self) -> None:
-        assert market_gate(_breadth(50.0), self.BETWEEN, MARKET) is MarketGate.AMBER
+    def test_level_averages_cannot_make_the_gate_green(self) -> None:
+        """GREEN needs `long_bias`, which equal averages are not; RED needs `bearish`, which
+        they are not either. AMBER."""
+        assert market_gate(_breadth(50.0), self.LEVEL, MARKET) is MarketGate.AMBER
 
     def test_a_missing_index_is_not_a_bear_market(self) -> None:
         """§8.2: "none -> the index is ignored"."""
         assert market_gate(_breadth(50.0), None, MARKET) is MarketGate.GREEN
 
-    def test_a_close_exactly_on_an_average_is_neither_above_nor_below_both(self) -> None:
-        on_it = IndexReading(close=100.0, ma_fast=100.0, ma_slow=99.0)
-        assert on_it.above_both is False
-        assert on_it.below_both is False
+    def test_the_close_is_not_consulted(self) -> None:
+        """A close under both averages with the 10-day over the 20-day is `long_bias`; a close
+        over both with the 10-day under is `bearish`."""
+        assert self.LONG.long_bias is True and self.LONG.bearish is False
+        assert self.BEARISH.bearish is True and self.BEARISH.long_bias is False
+        assert self.LEVEL.long_bias is False and self.LEVEL.bearish is False
 
 
 class TestTheLadder:
@@ -762,8 +776,10 @@ class TestTheLadder:
         assert self._tier(level=0, results=["-1"] * 5, gate=MarketGate.AMBER).level == 0
 
     def test_the_four_tiers_are_the_documented_ladder(self) -> None:
-        """§8.4: "(2, 25%), (4, 50%), (6, 75%), (8, 100%)"."""
-        assert MARKET.tiers == ((2, 25.0), (4, 50.0), (6, 75.0), (8, 100.0))
+        """§8.4 (SW9.5): "(2, 25%), (4, 50%), (6, 75%), (10, 100%)". The top rung is his
+        "typically 5-10 positions"; his 15-20 of a great market is the env ceiling, not a rung."""
+        assert MARKET.tiers == ((2, 25.0), (4, 50.0), (6, 75.0), (10, 100.0))
+        assert MARKET.tiers[-1][0] == DEFAULT_SWING_CONFIG.sizing.max_open_positions == 10
 
 
 # ---------------------------------------------------------------------------

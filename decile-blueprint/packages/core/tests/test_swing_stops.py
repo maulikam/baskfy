@@ -22,6 +22,7 @@ from baskfy_core.swing.stops import (
     initial_stop,
     manage,
     partial_quantity,
+    widest_stop_pct,
 )
 
 CONFIG = StopConfig()
@@ -98,6 +99,12 @@ def test_a_stop_above_entry_is_an_error_not_a_position() -> None:
         initial_stop(
             entry=D("100"), low_of_day=D("101"), opening_range_low=None, mode=StopMode.LOW_OF_DAY
         )
+
+
+def test_widest_stop_is_one_adr_capped_at_the_absolute_limit() -> None:
+    """§6: one ADR is the widest stop; a 14%-ADR name is still capped at 10%."""
+    assert widest_stop_pct(D("4.5"), CONFIG) == D("4.50")
+    assert widest_stop_pct(D("14"), CONFIG) == D("10.00")
 
 
 def test_fast_movers_trail_the_ten_day_slower_names_the_twenty() -> None:

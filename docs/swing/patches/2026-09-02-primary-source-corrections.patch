@@ -1,0 +1,473 @@
+diff --git a/decile-blueprint/packages/core/src/baskfy_core/swing/config.py b/decile-blueprint/packages/core/src/baskfy_core/swing/config.py
+index 0715b53..fd3844d 100644
+--- a/decile-blueprint/packages/core/src/baskfy_core/swing/config.py
++++ b/decile-blueprint/packages/core/src/baskfy_core/swing/config.py
+@@ -40,9 +40,10 @@ TRADEABLE_SETUPS: Final[frozenset[Setup]] = frozenset({Setup.FLAG, Setup.EP})
+ class LiquidityConfig:
+     """The universe a setup may come from (docs/swing/04 §1)."""
+ 
+-    #: ADR% = mean over ``adr_bars`` of ``(high / low - 1) x 100``. His floor is 3.5-4%.
++    #: ADR% = mean over ``adr_bars`` of ``(high / low - 1) x 100``. His screens use 5%+; 3.5-4%
++    #: is the floor he names on stream. 4.0 here; ``sw_config`` lets the trader raise it.
+     adr_bars: int = 20
+-    adr_min_pct: float = 3.5
++    adr_min_pct: float = 4.0
+     #: Average rupee turnover over ``turnover_bars``. ₹5 cr matches the desk's
+     #: ``MIN_MEDIAN_DAILY_VALUE`` so the two books agree on what "liquid" means.
+     turnover_bars: int = 20
+@@ -118,8 +119,14 @@ class SizingConfig:
+     """Risk per trade decides survival (docs/swing/04 §5). Ceilings are system-only env."""
+ 
+     risk_per_trade_pct: float = 0.5
++    #: "Most of my positions are 10-20% of account size"; the hard ceiling he states is 30%
++    #: overnight, which is the system-only env ceiling, not this default.
+     max_position_pct: float = 20.0
+-    max_open_positions: int = 8
++    #: "Typically 5-10 positions; 15-20 in a good market; all cash in a bad one." The ladder
++    #: (``MarketConfig.tiers``) climbs toward this; the plan takes the smaller of the two.
++    max_open_positions: int = 10
++    #: "You do not need to trade 50 things. 1, 2, 3 stocks per day." New entries per session.
++    max_new_entries_per_session: int = 3
+     #: A position may not exceed this fraction of the name's average daily turnover.
+     max_position_vs_turnover: float = 0.01
+     #: Below this the brokerage dominates the edge (the desk's ``MIN_TRADE_VALUE``).
+@@ -142,6 +149,9 @@ class StopConfig:
+     fast_trail_min_adr_pct: float = 6.0
+     #: An entry stop may not sit further below the entry than this, whatever the LOD says.
+     max_stop_distance_pct: float = 10.0
++    #: "Stop should not be wider than the ATR or ADR of the stock" - the width that actually
++    #: binds on a normal day. The widest stop is ``min(max_stop_distance_pct, adr_pct x this)``.
++    max_stop_adr_multiple: float = 1.0
+ 
+ 
+ @dataclass(frozen=True, slots=True)
+@@ -191,14 +201,19 @@ class MarketConfig:
+     strong_move_pct: float = 25.0
+     green_min_pct_up: float = 5.0
+     red_max_pct_up: float = 2.0
+-    #: The index must be above both its 10- and 20-day MAs for GREEN; below both is RED.
++    #: His index filter for longs: the 10-day MA above the 20-day. Below it, no new longs.
+     index_ma_fast: int = 10
+     index_ma_slow: int = 20
+     #: Progressive exposure: tiers as (max open positions, max sleeve exposure %), lowest first.
+-    tiers: tuple[tuple[int, float], ...] = ((2, 25.0), (4, 50.0), (6, 75.0), (8, 100.0))
++    #: The top rung is his "typical" count; his 15-20 in a great market is the env ceiling.
++    tiers: tuple[tuple[int, float], ...] = ((2, 25.0), (4, 50.0), (6, 75.0), (10, 100.0))
+     #: Step up after this many closed trades with positive net R; step down on this streak.
+     lookback_trades: int = 5
+     step_down_loss_streak: int = 3
++    #: "I try to contain them at 15-20%." A sleeve this far below its peak stops opening new
++    #: positions until it has recovered to within ``resume_drawdown_pct`` of the peak.
++    max_drawdown_pct: float = 15.0
++    resume_drawdown_pct: float = 10.0
+ 
+ 
+ @dataclass(frozen=True, slots=True)
+diff --git a/decile-blueprint/packages/core/src/baskfy_core/swing/market.py b/decile-blueprint/packages/core/src/baskfy_core/swing/market.py
+index 2dd129b..787a2b9 100644
+--- a/decile-blueprint/packages/core/src/baskfy_core/swing/market.py
++++ b/decile-blueprint/packages/core/src/baskfy_core/swing/market.py
+@@ -55,12 +55,13 @@ class IndexReading:
+     ma_slow: float
+ 
+     @property
+-    def above_both(self) -> bool:
+-        return self.close > self.ma_fast and self.close > self.ma_slow
++    def long_bias(self) -> bool:
++        """His filter: the 10-day MA above the 20-day. Longs only on this side of it."""
++        return self.ma_fast > self.ma_slow
+ 
+     @property
+-    def below_both(self) -> bool:
+-        return self.close < self.ma_fast and self.close < self.ma_slow
++    def bearish(self) -> bool:
++        return self.ma_fast < self.ma_slow
+ 
+ 
+ @dataclass(frozen=True, slots=True)
+@@ -71,6 +72,8 @@ class ExposureTier:
+     max_open_positions: int
+     max_exposure_pct: float
+     new_entries_allowed: bool
++    #: True while the sleeve's drawdown lock-out is in force (``max_drawdown_pct``).
++    drawdown_locked: bool = False
+ 
+ 
+ def breadth_snapshot(at_as_of: pl.DataFrame, config: MarketConfig) -> BreadthSnapshot:
+@@ -99,18 +102,19 @@ def market_gate(
+ ) -> MarketGate:
+     """The gate. Breadth decides; the index can only make it worse, never better.
+ 
+-    * GREEN needs breadth at or above ``green_min_pct_up`` and the index above both MAs (or no
+-      index reading at all — a missing benchmark is not a bear market).
+-    * RED is breadth at or below ``red_max_pct_up``, or the index below both MAs.
++    * GREEN needs breadth at or above ``green_min_pct_up`` and the index's 10-day MA above its
++      20-day (or no index reading at all — a missing benchmark is not a bear market).
++    * RED is breadth at or below ``red_max_pct_up``, or the index's 10-day below its 20-day —
++      his own filter for longs.
+     * Everything else is AMBER.
+     """
+     if breadth.constituent_count == 0:
+         return MarketGate.RED
+-    if index is not None and index.below_both:
++    if index is not None and index.bearish:
+         return MarketGate.RED
+     if breadth.pct_up_strong_1m <= config.red_max_pct_up:
+         return MarketGate.RED
+-    if breadth.pct_up_strong_1m >= config.green_min_pct_up and (index is None or index.above_both):
++    if breadth.pct_up_strong_1m >= config.green_min_pct_up and (index is None or index.long_bias):
+         return MarketGate.GREEN
+     return MarketGate.AMBER
+ 
+@@ -125,31 +129,52 @@ def _loss_streak(recent_r: Sequence[Decimal]) -> int:
+     return streak
+ 
+ 
+-def exposure_tier(
++def drawdown_locked(*, drawdown_pct: float, was_locked: bool, config: MarketConfig) -> bool:
++    """The lock-out state for today from the sleeve's drawdown and yesterday's state.
++
++    Locks at ``max_drawdown_pct`` below the peak; stays locked until the drawdown is back
++    inside ``resume_drawdown_pct``. Hysteresis, so a sleeve oscillating around 15% does not
++    flap between trading and not.
++    """
++    if drawdown_pct >= config.max_drawdown_pct:
++        return True
++    return was_locked and drawdown_pct > config.resume_drawdown_pct
++
++
++def exposure_tier(  # noqa: PLR0913 - one keyword per input the rung depends on
+     *,
+     current_level: int,
+     closed_r_multiples: Sequence[Decimal],
+     gate: MarketGate,
+     config: MarketConfig,
++    drawdown_pct: float = 0.0,
++    was_drawdown_locked: bool = False,
+ ) -> ExposureTier:
+-    """The rung for tomorrow, from today's rung, the last closed trades and the gate.
++    """The rung for tomorrow, from today's rung, the last closed trades, the gate and the
++    sleeve's drawdown.
+ 
+     Rules, in precedence order:
+ 
+-    1. RED: drop to rung 0 and allow no new entries, whatever the results say.
+-    2. A loss streak of ``step_down_loss_streak`` closed trades: one rung down.
+-    3. The last ``lookback_trades`` closed trades net positive R, and the gate GREEN: one rung
++    1. Drawdown lock-out (:func:`drawdown_locked`): rung 0, no new entries, until recovered.
++    2. RED: drop to rung 0 and allow no new entries, whatever the results say.
++    3. A loss streak of ``step_down_loss_streak`` closed trades: one rung down.
++    4. The last ``lookback_trades`` closed trades net positive R, and the gate GREEN: one rung
+        up. AMBER holds the rung.
+-    4. Otherwise hold.
++    5. Otherwise hold.
+ 
+     The ladder never skips a rung upward. Progressive exposure is a description of what a
+     disciplined trader does with a winning streak; it is not a leverage schedule.
+     """
+     top = len(config.tiers) - 1
+     level = min(max(current_level, 0), top)
+-    if gate is MarketGate.RED:
++    locked = drawdown_locked(
++        drawdown_pct=drawdown_pct, was_locked=was_drawdown_locked, config=config
++    )
++    if locked or gate is MarketGate.RED:
+         positions, exposure = config.tiers[0]
+-        return ExposureTier(0, positions, exposure, new_entries_allowed=False)
++        return ExposureTier(
++            0, positions, exposure, new_entries_allowed=False, drawdown_locked=locked
++        )
+ 
+     recent = list(closed_r_multiples)[-config.lookback_trades :]
+     if _loss_streak(recent) >= config.step_down_loss_streak:
+diff --git a/decile-blueprint/packages/core/src/baskfy_core/swing/plan.py b/decile-blueprint/packages/core/src/baskfy_core/swing/plan.py
+index 93aed25..cff6c2a 100644
+--- a/decile-blueprint/packages/core/src/baskfy_core/swing/plan.py
++++ b/decile-blueprint/packages/core/src/baskfy_core/swing/plan.py
+@@ -23,7 +23,7 @@ from enum import StrEnum
+ from baskfy_core.swing.config import TRADEABLE_SETUPS, Setup, SwingConfig
+ from baskfy_core.swing.market import ExposureTier, MarketGate
+ from baskfy_core.swing.sizing import SizedPosition, size_position
+-from baskfy_core.swing.stops import Action, ActionKind, TrailMa, choose_trail
++from baskfy_core.swing.stops import Action, ActionKind, TrailMa, choose_trail, widest_stop_pct
+ 
+ _ZERO = Decimal(0)
+ _PCT = Decimal(100)
+@@ -39,7 +39,9 @@ class LineKind(StrEnum):
+ class SkipReason(StrEnum):
+     NOT_TRADEABLE_SETUP = "NOT_TRADEABLE_SETUP"
+     GATE_RED = "GATE_RED"
++    DRAWDOWN_LOCKOUT = "DRAWDOWN_LOCKOUT"
+     TIER_FULL = "TIER_FULL"
++    SESSION_CAP = "SESSION_CAP"
+     EXPOSURE_FULL = "EXPOSURE_FULL"
+     ALREADY_HELD = "ALREADY_HELD"
+     LOCKED_UPPER_CIRCUIT = "LOCKED_UPPER_CIRCUIT"
+@@ -151,17 +153,26 @@ def build_entries(  # noqa: PLR0913 - one keyword per input the plan depends on
+     tier: ExposureTier,
+     config: SwingConfig,
+ ) -> tuple[list[PlanLine], list[Skipped]]:
+-    """BUY lines for the watchlist, best score first, until the tier is full."""
++    """BUY lines for the watchlist, best score first, until the tier or the session is full.
++
++    The position count is the smaller of the ladder's rung and the trader's own cap; new
++    entries per session are capped at ``max_new_entries_per_session`` ("1, 2, 3 stocks per
++    day"); each name's widest stop is one ADR (:func:`widest_stop_pct`).
++    """
+     lines: list[PlanLine] = []
+     skipped: list[Skipped] = []
+     open_count = len(account.open_symbols)
+     exposure = account.open_exposure_inr
+     max_exposure = account.equity * Decimal(str(tier.max_exposure_pct)) / _PCT
++    max_positions = min(tier.max_open_positions, config.sizing.max_open_positions)
+     ordered = sorted(watch, key=lambda w: (-w.score, w.symbol))
+     for item in ordered:
+         if item.setup not in TRADEABLE_SETUPS:
+             skipped.append(Skipped(item.symbol, SkipReason.NOT_TRADEABLE_SETUP, item.setup.value))
+             continue
++        if tier.drawdown_locked:
++            skipped.append(Skipped(item.symbol, SkipReason.DRAWDOWN_LOCKOUT, "sleeve in drawdown"))
++            continue
+         if gate is MarketGate.RED or not tier.new_entries_allowed:
+             skipped.append(Skipped(item.symbol, SkipReason.GATE_RED, gate.value))
+             continue
+@@ -171,12 +182,21 @@ def build_entries(  # noqa: PLR0913 - one keyword per input the plan depends on
+         if item.locked_upper_circuit:
+             skipped.append(Skipped(item.symbol, SkipReason.LOCKED_UPPER_CIRCUIT, "no fill at band"))
+             continue
+-        if open_count + len(lines) >= tier.max_open_positions:
++        if len(lines) >= config.sizing.max_new_entries_per_session:
++            skipped.append(
++                Skipped(
++                    item.symbol,
++                    SkipReason.SESSION_CAP,
++                    f"{config.sizing.max_new_entries_per_session} new entries per session",
++                )
++            )
++            continue
++        if open_count + len(lines) >= max_positions:
+             skipped.append(
+                 Skipped(
+                     item.symbol,
+                     SkipReason.TIER_FULL,
+-                    f"tier {tier.level} allows {tier.max_open_positions} positions",
++                    f"rung {tier.level} allows {max_positions} positions",
+                 )
+             )
+             continue
+@@ -188,7 +208,7 @@ def build_entries(  # noqa: PLR0913 - one keyword per input the plan depends on
+             stop=item.stop_ref,
+             avg_turnover_inr=item.avg_turnover_inr,
+             config=config.sizing,
+-            max_stop_distance_pct=Decimal(str(config.stops.max_stop_distance_pct)),
++            max_stop_distance_pct=widest_stop_pct(item.adr_pct, config.stops),
+         )
+         if sized.refusal is not None:
+             skipped.append(Skipped(item.symbol, SkipReason.SIZE_REFUSED, sized.refusal.value))
+diff --git a/decile-blueprint/packages/core/src/baskfy_core/swing/stops.py b/decile-blueprint/packages/core/src/baskfy_core/swing/stops.py
+index 41f5f80..e719814 100644
+--- a/decile-blueprint/packages/core/src/baskfy_core/swing/stops.py
++++ b/decile-blueprint/packages/core/src/baskfy_core/swing/stops.py
+@@ -109,6 +109,14 @@ def initial_stop(
+     return stop
+ 
+ 
++def widest_stop_pct(adr_pct: Decimal, config: StopConfig) -> Decimal:
++    """How far below the entry a stop may sit for this name: one ADR, and never more than the
++    absolute cap. "Stop should not be wider than the ATR or ADR of the stock" — a wider stop
++    means the trade is skipped, not sized down."""
++    by_adr = adr_pct * Decimal(str(config.max_stop_adr_multiple))
++    return min(by_adr, Decimal(str(config.max_stop_distance_pct))).quantize(Decimal("0.01"))
++
++
+ def choose_trail(adr_pct: Decimal, config: StopConfig) -> TrailMa:
+     """Fast movers trail the 10-day, slower names the 20-day."""
+     if adr_pct >= Decimal(str(config.fast_trail_min_adr_pct)):
+diff --git a/decile-blueprint/packages/core/tests/test_swing_market.py b/decile-blueprint/packages/core/tests/test_swing_market.py
+index 31f7b99..52853bc 100644
+--- a/decile-blueprint/packages/core/tests/test_swing_market.py
++++ b/decile-blueprint/packages/core/tests/test_swing_market.py
+@@ -13,6 +13,7 @@ from baskfy_core.swing.market import (
+     IndexReading,
+     MarketGate,
+     breadth_snapshot,
++    drawdown_locked,
+     exposure_tier,
+     market_gate,
+ )
+@@ -25,9 +26,10 @@ def snapshot(pct_up: float) -> BreadthSnapshot:
+     return BreadthSnapshot(500, pct_up, 3.0, 50.0)
+ 
+ 
+-UP = IndexReading(close=100.0, ma_fast=98.0, ma_slow=97.0)
+-DOWN = IndexReading(close=90.0, ma_fast=98.0, ma_slow=97.0)
+-MIXED = IndexReading(close=97.5, ma_fast=98.0, ma_slow=97.0)
++#: His filter for longs is the index's 10-day MA against its 20-day; the close itself is not
++#: consulted, so a pullback to a rising 10-day is still a long tape.
++UP = IndexReading(close=96.0, ma_fast=98.0, ma_slow=97.0)
++DOWN = IndexReading(close=99.0, ma_fast=96.0, ma_slow=97.0)
+ 
+ 
+ def test_breadth_counts_strong_movers_new_highs_and_ma_position() -> None:
+@@ -54,15 +56,17 @@ def test_empty_universe_is_red_not_a_division_error() -> None:
+     assert market_gate(b, UP, CONFIG) is MarketGate.RED
+ 
+ 
+-def test_gate_green_needs_breadth_and_the_index_above_both_mas() -> None:
++def test_gate_green_needs_breadth_and_the_ten_day_above_the_twenty() -> None:
+     assert market_gate(snapshot(8.0), UP, CONFIG) is MarketGate.GREEN
+-    assert market_gate(snapshot(8.0), MIXED, CONFIG) is MarketGate.AMBER
+     assert market_gate(snapshot(8.0), None, CONFIG) is MarketGate.GREEN
+ 
+ 
+-def test_gate_red_on_thin_breadth_or_index_below_both_mas() -> None:
++def test_gate_red_on_thin_breadth_or_the_ten_day_below_the_twenty() -> None:
++    """§8.3: "long setups only when the 10-day MA of the index is above the 20-day"."""
+     assert market_gate(snapshot(1.5), UP, CONFIG) is MarketGate.RED
+     assert market_gate(snapshot(8.0), DOWN, CONFIG) is MarketGate.RED
++    assert UP.long_bias and not UP.bearish
++    assert DOWN.bearish and not DOWN.long_bias
+ 
+ 
+ def test_gate_amber_in_between() -> None:
+@@ -108,3 +112,47 @@ def test_tier_carries_its_limits() -> None:
+     t = tier(2, [])
+     assert (t.max_open_positions, t.max_exposure_pct) == CONFIG.tiers[2]
+     assert t.new_entries_allowed is True
++    assert t.drawdown_locked is False
++
++
++def test_top_rung_is_his_typical_count_not_his_maximum() -> None:
++    """§8.4: "typically 5-10 positions"; the 15-20 of a great market is the env ceiling."""
++    assert CONFIG.tiers[-1][0] == 10
++    assert CONFIG.tiers[-1][1] == 100.0
++
++
++# --- drawdown containment (§8.5) ---------------------------------------------
++
++
++def test_fifteen_percent_drawdown_locks_the_sleeve_out_of_new_entries() -> None:
++    """ "I try to contain them at 15-20%." A locked sleeve manages exits only."""
++    t = exposure_tier(
++        current_level=3,
++        closed_r_multiples=[],
++        gate=MarketGate.GREEN,
++        config=CONFIG,
++        drawdown_pct=15.0,
++    )
++    assert t.drawdown_locked is True
++    assert t.new_entries_allowed is False
++    assert t.level == 0
++
++
++def test_lockout_persists_until_the_drawdown_is_back_inside_ten_percent() -> None:
++    assert drawdown_locked(drawdown_pct=12.0, was_locked=True, config=CONFIG) is True
++    assert drawdown_locked(drawdown_pct=9.9, was_locked=True, config=CONFIG) is False
++    assert drawdown_locked(drawdown_pct=12.0, was_locked=False, config=CONFIG) is False
++    assert drawdown_locked(drawdown_pct=15.0, was_locked=False, config=CONFIG) is True
++
++
++def test_a_recovered_sleeve_resumes_at_the_bottom_rung() -> None:
++    t = exposure_tier(
++        current_level=3,
++        closed_r_multiples=[],
++        gate=MarketGate.GREEN,
++        config=CONFIG,
++        drawdown_pct=8.0,
++        was_drawdown_locked=True,
++    )
++    assert t.drawdown_locked is False
++    assert t.new_entries_allowed is True
+diff --git a/decile-blueprint/packages/core/tests/test_swing_plan_and_journal.py b/decile-blueprint/packages/core/tests/test_swing_plan_and_journal.py
+index 8ad4147..f80cb04 100644
+--- a/decile-blueprint/packages/core/tests/test_swing_plan_and_journal.py
++++ b/decile-blueprint/packages/core/tests/test_swing_plan_and_journal.py
+@@ -64,7 +64,8 @@ def test_a_flag_becomes_a_buy_line_with_trigger_stop_size_and_risk() -> None:
+     assert "trail MA20" in line.note
+ 
+ 
+-def test_best_score_is_lined_up_first_and_the_tier_caps_the_count() -> None:
++def test_best_score_is_lined_up_first_and_the_session_cap_is_three() -> None:
++    """§9.1: "1, 2, 3 stocks per day, not 50" — three new entries a session, best first."""
+     watch = [
+         item("LOW", score="40"),
+         item("HIGH", score="90"),
+@@ -73,8 +74,51 @@ def test_best_score_is_lined_up_first_and_the_tier_caps_the_count() -> None:
+         item("Y", score="45"),
+     ]
+     lines, skipped = entries(watch)
+-    assert [line.symbol for line in lines] == ["HIGH", "MID", "X", "Y"]
+-    assert [(s.symbol, s.reason) for s in skipped] == [("LOW", SkipReason.TIER_FULL)]
++    assert [line.symbol for line in lines] == ["HIGH", "MID", "X"]
++    assert [(s.symbol, s.reason) for s in skipped] == [
++        ("Y", SkipReason.SESSION_CAP),
++        ("LOW", SkipReason.SESSION_CAP),
++    ]
++
++
++def test_the_tier_caps_the_count_below_the_session_cap() -> None:
++    two = ExposureTier(0, 2, 25.0, new_entries_allowed=True)
++    lines, skipped = entries([item("A", score="90"), item("B", score="80"), item("C")], tier=two)
++    assert [line.symbol for line in lines] == ["A", "B"]
++    assert skipped[0].reason is SkipReason.TIER_FULL
++
++
++def test_the_traders_own_position_cap_binds_when_lower_than_the_rung() -> None:
++    from dataclasses import replace
++
++    from baskfy_core.swing.config import SizingConfig
++
++    capped = replace(DEFAULT_SWING_CONFIG, sizing=replace(SizingConfig(), max_open_positions=1))
++    lines, skipped = build_entries(
++        as_of=AS_OF,
++        watch=[item("A", score="90"), item("B")],
++        account=ACCOUNT,
++        gate=MarketGate.GREEN,
++        tier=TIER,
++        config=capped,
++    )
++    assert [line.symbol for line in lines] == ["A"]
++    assert skipped[0].reason is SkipReason.TIER_FULL
++
++
++def test_a_stop_wider_than_one_adr_is_skipped_not_sized_down() -> None:
++    """§6: "stop should not be wider than the ATR or ADR of the stock". ADR 5% here."""
++    _, skipped = entries([item("WIDE", stop="94")])  # 6% below on a 5% ADR name
++    assert skipped == [Skipped("WIDE", SkipReason.SIZE_REFUSED, "STOP_TOO_WIDE")]
++    lines, _ = entries([item("OK", stop="95.5")])  # 4.5% below
++    assert [line.symbol for line in lines] == ["OK"]
++
++
++def test_a_drawdown_locked_sleeve_refuses_every_entry_by_name() -> None:
++    locked = ExposureTier(0, 2, 25.0, new_entries_allowed=False, drawdown_locked=True)
++    lines, skipped = entries([item("A"), item("B")], tier=locked)
++    assert lines == []
++    assert {s.reason for s in skipped} == {SkipReason.DRAWDOWN_LOCKOUT}
+ 
+ 
+ def test_open_positions_count_against_the_tier() -> None:
+diff --git a/decile-blueprint/packages/core/tests/test_swing_stops.py b/decile-blueprint/packages/core/tests/test_swing_stops.py
+index 7464298..52f05ba 100644
+--- a/decile-blueprint/packages/core/tests/test_swing_stops.py
++++ b/decile-blueprint/packages/core/tests/test_swing_stops.py
+@@ -22,6 +22,7 @@ from baskfy_core.swing.stops import (
+     initial_stop,
+     manage,
+     partial_quantity,
++    widest_stop_pct,
+ )
+ 
+ CONFIG = StopConfig()
+@@ -100,6 +101,12 @@ def test_a_stop_above_entry_is_an_error_not_a_position() -> None:
+         )
+ 
+ 
++def test_widest_stop_is_one_adr_capped_at_the_absolute_limit() -> None:
++    """§6: one ADR is the widest stop; a 14%-ADR name is still capped at 10%."""
++    assert widest_stop_pct(D("4.5"), CONFIG) == D("4.50")
++    assert widest_stop_pct(D("14"), CONFIG) == D("10.00")
++
++
+ def test_fast_movers_trail_the_ten_day_slower_names_the_twenty() -> None:
+     assert choose_trail(D("7"), CONFIG) is TrailMa.MA10
+     assert choose_trail(D("4"), CONFIG) is TrailMa.MA20

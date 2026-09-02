@@ -83,14 +83,19 @@ stop above the high of the day, covers a third to a half into the first flush, t
 ## 5. Universe and scanning
 
 US listed stocks and ADRs from ~$1 up, dollar volume of at least a few million a day, ADR
-above ~3.5–4%. Daily scans rank by performance: top gainers 1M (30%+), 3M (60%+), 6M (100%+),
-filtered by ADR and liquidity; flags are found by eyeballing charts from that list. A
-premarket gap scan (10%+ on abnormal premarket volume) finds EPs. Themes are tracked because
-leaders cluster.
+above ~3.5–4% (his screens use 5%+ — `07`). Daily scans rank by performance: top gainers 1M
+(30%+), 3M (60%+), 6M (100%+), filtered by ADR and liquidity; flags are found by eyeballing
+charts from that list. A premarket gap scan (10%+ on abnormal premarket volume) finds EPs.
+Themes are tracked because leaders cluster. His watchlist is a funnel (`07`): a universe of
+300–600 → a weekly wide list of 50–100 → a weekly focus list of 5–20 → a daily focus list of
+under 5, rebuilt at least weekly. "You should not be trading over 1% of daily volume on a
+stock."
 
 | Piece | Baskfy | Where |
 |---|---|---|
-| Price floor, turnover floor, ADR floor | **Adapt:** ₹20, ₹5 cr/day average turnover (the desk's `MIN_MEDIAN_DAILY_VALUE`), ADR ≥ 3.5% | `LiquidityConfig` |
+| Price floor, turnover floor, ADR floor | **Adapt:** ₹20, ₹5 cr/day average turnover (the desk's `MIN_MEDIAN_DAILY_VALUE`), ADR ≥ **4.0%** (SW9.5; was 3.5), user-raisable in `sw_config` | `LiquidityConfig`, `04` §1 |
+| 1% of daily volume | **Adopt:** `max_position_vs_turnover` [0.01] caps a position at 1% of average turnover | `04` §5.2 |
+| The funnel | **Adapt:** the detectors are the wide list; the watchlist auto-watches the top 20 flags by score plus every EP (the focus list); the monitor's daily focus is the top 5 by score | `05` §2, SW11 |
 | 1/3/6M leaders | **Adopt:** `factor_daily.ret_1m/ret_3m/ret_6m` (price return — M27) sort the **Leaders** tab; the flag detector runs on the full liquid universe, not only leaders, because a base can start before the 1M list notices | SW4, `05` §2 |
 | "Eyeballing charts" | **Adapt:** the score in `04` §2.6 ranks; the web page shows the last 130 bars as a small chart per candidate so the eye still decides | `05` §2 |
 | Themes | **Adapt:** sector index breadth (`market_health_daily` per index) → a "hot sectors" strip; candidates carry their sector | SW4 |
@@ -98,42 +103,59 @@ leaders cluster.
 ## 6. Market environment and exposure
 
 He does not fight the tape. Breadth (how many stocks are up 25%+ in a month; 52-week highs),
-whether the indices sit above their 10- and 20-day MAs, and — above all — his own results: if
-breakouts work he presses, if they fail he shrinks and sits out. **Progressive exposure.** In a
-strong market, full 2x margin with many positions; in a chop, cash for weeks.
+whether the index's 10-day MA sits above its 20-day (the filter he has said would have cut his
+2022 loss by ~90% — `07`), and — above all — his own results: if breakouts work he presses, if
+they fail he shrinks and sits out. **Progressive exposure.** In a strong market, full 2x margin
+with many positions ("in a good market 15-20 positions… typically 5-10"); in a chop, cash for
+weeks ("or if in a bad market in all cash"). And he contains his drawdowns: "I try to contain
+them at 15-20%, which happen a few times per year."
 
 | Piece | Baskfy | Where |
 |---|---|---|
 | Breadth gauge | **Adopt:** `% up ≥ 25% over 20 bars`, `% at 52-week highs`, `% above 20-DMA` over the liquid universe, written to `sw_market_daily` | `market.breadth_snapshot`, SW4 |
-| Index vs 10/20 MA | **Adopt:** NIFTY 500 from `index_snapshot_daily` (NIFTY 50 as fallback) | `market.market_gate` |
-| Own results → exposure | **Adopt** as a 4-rung ladder (2/25% → 4/50% → 6/75% → 8/100% of the sleeve), up one rung after 5 closed trades net positive R in a GREEN tape, down one on 3 straight losses, to the bottom on RED | `market.exposure_tier`, `04` §8 |
+| Index 10-day MA vs 20-day | **Adopt** (SW9.5): NIFTY 500 from `index_snapshot_daily` (NIFTY 50 as fallback); `long_bias = ma_fast > ma_slow` is what GREEN needs, `bearish = ma_fast < ma_slow` is RED; the close is not consulted | `market.IndexReading`, `04` §8.2 |
+| Own results → exposure | **Adopt** as a 4-rung ladder (2/25% → 4/50% → 6/75% → **10**/100% of the sleeve — SW9.5, the top rung is his typical count), up one rung after 5 closed trades net positive R in a GREEN tape, down one on 3 straight losses, to the bottom on RED; the plan takes the smaller of the rung and the trader's own `max_open_positions` [10, ceiling 20] | `market.exposure_tier`, `04` §8.4, §9.1 |
+| Drawdown containment | **Adopt** (SW9.5, PACK.7): the sleeve locks out new entries 15% below its peak EOD NAV until it is back within 10% (hysteresis); exits are managed as always | `market.drawdown_locked`, `04` §8.5 |
+| 1–3 new names a day | **Adopt** (SW9.5): `max_new_entries_per_session` [3] — "You do not need to trade 50 things. 1, 2, 3 stocks per day" | `04` §5.3, §9.1 |
 | 2x margin | **Do nothing.** 100% of the sleeve's cash is the ceiling. No MTF | `02` Track C |
 | The desk's R1–R4 overlay | **Separate.** The desk's weekly book keeps its overlay; the swing sleeve has its own ladder. Neither reads the other (`test_regime_names_do_not_collide.py` precedent) | PACK.4 |
 
 ## 7. Risk and sizing
 
-Risk per trade 0.25–1% of the account, most often 0.3–0.5%. Size derives from the stop: a stop
-4% below with 0.5% risk is a 12.5% position. Positions capped at 20–25% even for the best
-setups. Never average down. Never widen a stop. Trade like a robot.
+Risk per trade 0.25–1% of the account, most often 0.3–0.5% ("rarely more than 1%"; 0.5–1.5%
+when the account was small). Size derives from the stop: a stop 4% below with 0.5% risk is a
+12.5% position. "Most of my positions are 10-20% of account size"; "never more than 30% of your
+account over night in any stock". The stop is the low of the day and "should not be wider than
+the ATR or ADR of the stock" — it is hit often, by design (a 25–35% win rate), and survivable
+because it is a fraction of one normal day's range. He uses market stops, never limit stops.
+Never average down. Never widen a stop. Trade like a robot.
 
 | Piece | Baskfy | Where |
 |---|---|---|
 | Risk-derived size with named caps | **Adopt** | `sizing.size_position`, `04` §5 |
-| The ceilings | **Adapt** into the M4.1 boundary: `BASKFY_SWING_RISK_PER_TRADE_PCT_MAX`, `BASKFY_SWING_MAX_POSITION_PCT_MAX` are **system-only**; the chosen values live in `sw_config` and are validated ≤ ceiling | `03` §1, `.env.example` |
+| The stop is one ADR or tighter | **Adopt** (SW9.5): `widest_stop_pct(adr) = min(adr × 1.0, 10%)`; a wider stop is **skipped**, never sized down | `stops.widest_stop_pct`, `04` §6.1 |
+| The ceilings | **Adapt** into the M4.1 boundary: `BASKFY_SWING_RISK_PER_TRADE_PCT_MAX` [1.0], `BASKFY_SWING_MAX_POSITION_PCT_MAX` [**30**, SW9.5], `BASKFY_SWING_MAX_OPEN_POSITIONS_MAX` [**20**, SW9.5] are **system-only**; the chosen values live in `sw_config` and are validated ≤ ceiling. His small-account 1.5% is noted, not adopted (PACK.9) | `03` §1, `.env.example` |
+| Market stops | **Adapt** (SW9.5, PACK.8): a GTT fires a LIMIT; the swing GTT's limit rests 3% under its trigger (`SWING_GTT_LIMIT_FRACTION` 0.97) so it fills on the way down; the weekly book's 0.995 is untouched | `04` §9.4 |
 | Never average down / never widen | **Adopt** structurally: `ALREADY_HELD` skip; `apply` takes `max(stop, new_stop)`; the desk's `/swing/execute` refuses a stop below the current one | SW7, SW10 |
+| Re-entry after a stop-out | **Adopt:** no cooldown — the plan skips only *open* names ("as long as he gets a good execution, that big win will cover all of his small starter positions") | `04` §9.1 |
 
 ## 8. Routine
 
-Premarket: gap scan, news, EP candidates. First hour: entries. End of day: 15–30 minutes on
-positions and scans. Weekend: a full scan, a watchlist of a few dozen forming flags, the
-levels that would trigger next week. Most of the work is boring scanning and waiting; it took
-him about four years of losses before it clicked.
+Premarket: gap scan, news, EP candidates. First hour: entries — one, two, three names a day,
+not fifty. End of day: 15–30 minutes on positions and scans. Weekend: a full scan, a watchlist
+of a few dozen forming flags, the levels that would trigger next week. Exits are staged
+(`07`): sell a third to a half after 3–5 days and move the stop to breakeven; trail with the
+10- or 20-day and sell on the first close below it — the streams add a staged version (a
+quarter to a third at the first close below the 10-day, another at the 20-day, the rest at the
+50-day, at the end of the day). Most of the work is boring scanning and waiting; it took him
+about four years of losses before it clicked.
 
 | Piece | Baskfy | Where |
 |---|---|---|
 | Premarket | `swing-premarket` Beat 08:50 IST: pulls pre-open quotes, refreshes the watch levels to exchange prices, writes `sw_watch` for the day | SW6 |
-| First hour | the monitor, 09:15–10:45 IST, a desk process on the `TickBus` | SW6 |
-| EOD | `swing-eod` after the nightly `publish` step: detectors, market gate, `stops.manage` on every open position, tomorrow's plan preview, alert email | SW4, SW5 |
+| First hour | the monitor, 09:15–10:45 IST, a desk process on the `TickBus`; at most `max_new_entries_per_session` [3] new lines a session (SW9.5) | SW6, `04` §9.1 |
+| EOD | `swing-eod` after the nightly `publish` step: detectors, market gate, `stops.manage` on every open position, the ladder and the drawdown settled (SW9.5), tomorrow's plan preview, alert email | SW4, SW5, SW8 |
+| Staged exits | **Adapt:** the partial and the 10/20 trail are in (`04` §6); the streams' three-stage 10/20/50 exit is recorded, not adopted — one trail, chosen by ADR, is what the desk can execute at the open | `04` §6.2–6.4 |
 | Weekend | `swing-weekend` Saturday 07:00 IST: the full scan over the last 5 sessions, watchlist candidates with levels, the weekly breadth note | SW4 |
 | "Four years of losses" | The shadow gate in `02` §3: no real-money flag flip before 20 DRY_RUN sessions and a journal Maulik has read | `02` §3 |
 

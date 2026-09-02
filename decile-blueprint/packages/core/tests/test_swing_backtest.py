@@ -21,7 +21,9 @@ from swing_backtest_fixtures import (
     BELOW_TRIGGER_DAY,
     DETECTION_BAR,
     ENTRY_BAR,
+    HOLD_TAIL,
     LOSE_TAIL,
+    LOW_FACTOR,
     PLANTED,
     THROUGH_TRIGGER_DAY,
     WIN_TAIL,
@@ -53,9 +55,9 @@ from baskfy_core.swing.config import (
 )
 from baskfy_core.swing.indicators import with_swing_indicators
 from baskfy_core.swing.journal import summarize
-from baskfy_core.swing.market import MarketGate
+from baskfy_core.swing.market import MarketGate, drawdown_pct
 from baskfy_core.swing.setups import detect_flags
-from baskfy_core.swing.stops import ActionReason
+from baskfy_core.swing.stops import ActionReason, widest_stop_pct
 
 D = Decimal
 FOUR_DP = D("0.0001")
@@ -141,6 +143,28 @@ def test_planted_flag_reproduces_its_r_to_2dp() -> None:
     assert trade.entry_date == calendar[ENTRY_BAR]
     assert trade.exit_date == calendar[ENTRY_BAR + PLANTED.exit_day]
     assert trade.close_reason == ActionReason.HARD_STOP_HIT.value
+
+
+def test_planted_stop_sits_inside_one_adr_of_a_leaders_range() -> None:
+    """`04` §6 (SW9.5): the widest stop is one ADR. The re-planted fixture is a name with a
+    leader's range — nineteen bars 9.68% wide and a tight 4.08% detection bar — whose 20-bar
+    ADR is 9.40%; the planted stop is 6.67% under the entry, inside it, so the trade is lined
+    rather than refused ``STOP_TOO_WIDE``. On the ±2% bars ``swing_fixtures`` draws (ADR 4.08%)
+    the same stop would be refused, which is why the fixture had to change and the rule did not.
+    """
+    frame, calendar = planted_frame()
+    detection = with_swing_indicators(frame).filter(
+        (pl.col("symbol") == PLANTED.symbol) & (pl.col("date") == calendar[DETECTION_BAR])
+    )
+    adr = D(repr(detection["adr_pct"].item())).quantize(TWO_DP)
+    wide = D(repr(1.02 / LOW_FACTOR - 1)) * 100
+    tight = D(repr(1.02 / 0.98 - 1)) * 100
+    assert adr == ((19 * wide + tight) / 20).quantize(TWO_DP) == PLANTED.adr_pct
+    distance = ((PLANTED.entry_open - PLANTED.stop) / PLANTED.entry_open * 100).quantize(TWO_DP)
+    assert distance == PLANTED.stop_distance_pct
+    assert distance <= widest_stop_pct(adr, DEFAULT_SWING_CONFIG.stops) == adr
+    assert D(repr(1.02 / 0.98 - 1)) * 100 < distance, "the ±2% fixture would have refused it"
+    assert only_trade(run(frame, calendar)).r_multiple == PLANTED.r_multiple
 
 
 def test_planted_r_agrees_with_the_documents_formulas() -> None:
@@ -441,11 +465,16 @@ def test_a_gap_through_the_stop_fills_at_the_open_not_at_the_stop() -> None:
 
 
 def test_a_stop_hit_on_the_entry_day_fills_at_the_stop_even_below_the_open() -> None:
-    """The entry (at the trigger) happened before the low did, so the open is not the fill."""
+    """The entry (at the trigger) happened before the low did, so the open is not the fill.
+
+    The run ends on the entry day: on a leader's-range name (SW9.5's re-plant) the stopped-out
+    bar still reads as a base at its close, and the next session would open a second trade
+    that is not the one this test is about.
+    """
     frame, calendar = planted_frame()
     trigger = float(planted_trigger(frame, calendar))
     frame, calendar = planted_frame(tail=entry_variant(Bar(140.0, trigger + 1.0, 139.0, 141.0)))
-    trade = only_trade(run(frame, calendar, cost_pct_per_side=D(0)))
+    trade = only_trade(run(frame, calendar, cost_pct_per_side=D(0), end=calendar[ENTRY_BAR]))
     assert trade.entry == D(repr(trigger)).quantize(FOUR_DP)
     assert trade.exit_avg == PLANTED.stop.quantize(TWO_DP)
     assert trade.exit_date == trade.entry_date
@@ -575,6 +604,104 @@ def test_a_calendar_with_a_repeated_day_is_refused() -> None:
         run_backtest(frame, params_for(calendar), calendar=[calendar[0], *calendar])
 
 
+# --- SW9.5: the session cap and the drawdown lock-out ------------------------------------
+
+
+def test_at_most_three_new_entries_a_session_and_the_rest_are_session_cap_skips() -> None:
+    """`04` §5 / §9.1 (SW9.5): "1, 2, 3 stocks per day" — `max_new_entries_per_session` [3].
+
+    Five identical flags set up on the same day. At a rung that allows five positions (the
+    ladder's own rung 0 allows two, and `TIER_FULL` would bind first), the plan lines exactly
+    three — best score first, then symbol — and answers the other two `SESSION_CAP`, which the
+    funnel counts as ``skipped_session_cap``. Nothing else refused them: the sleeve had the
+    cash (five 7.5% positions), the exposure ceiling was 100%, and every stop was inside its
+    ADR.
+    """
+    calendar = planted_frame()[1]
+    extra: list[dict[str, object]] = []
+    for index, symbol in enumerate(("FLAGB", "FLAGC", "FLAGD", "FLAGE")):
+        extra += second_flag(symbol, WIN_TAIL, calendar, instrument_id=10 + index)
+    frame, calendar = planted_frame(extra=extra)
+    roomy = SwingConfig(market=MarketConfig(tiers=((5, 100.0), (10, 100.0))))
+    result = run(frame, calendar, config=roomy, end=calendar[ENTRY_BAR])
+    entered = {t.symbol for t in result.trades}
+    assert len(entered) == DEFAULT_SWING_CONFIG.sizing.max_new_entries_per_session == 3
+    assert entered == {"FLAGB", "FLAGC", "FLAGD"}, "same score, so the symbol order decides"
+    assert result.funnel["entered"] == 3
+    assert result.funnel["skipped_session_cap"] == 2
+    assert result.funnel["skipped_tier"] == 0
+    assert result.funnel["skipped_exposure"] == 0
+    assert result.funnel["skipped_size"] == 0
+
+
+def test_a_sleeve_in_drawdown_is_locked_out_of_new_entries_until_it_recovers() -> None:
+    """`04` §8.5 (SW9.5): a sleeve `max_drawdown_pct` below its peak plans no entries, every
+    refusal says so (``skipped_drawdown``), and it stays locked until the drawdown is back
+    inside `resume_drawdown_pct` — `market.drawdown_locked`'s hysteresis, which the backtest
+    reads off its own equity curve exactly as the evening reads the sleeve's NAV.
+
+    Two positions open on the entry day: FLAGLOSE (LOSE_TAIL) and FLAGHOLD (HOLD_TAIL). The
+    peak is the untouched sleeve (₹10,00,000: both marks sit under cost until the loss). On
+    day 8 FLAGLOSE gaps through its stop — 492 shares bought at 152.1976, sold at 140 less
+    costs, 0.61% of the sleeve — and the sleeve closes 0.56% under its peak (FLAGHOLD carries
+    a small unrealised gain). With the lock-out at 0.5% the ladder locks that evening; FLAGMID,
+    which sets up on days 8 and 9, is refused on days 9 and 10. FLAGHOLD then rallies: day 10
+    closes the sleeve 0.23% under the peak, day 11 above it. A release line of 0.25% lifts the
+    lock on day 10's evening and FLAGLATE, set up that close, enters on day 11 at rung 0; a
+    release line of 0.10% keeps the lock through day 10 (0.23% is still outside it), FLAGLATE is
+    refused on day 11 and enters on day 12 once the sleeve is back at its peak.
+    """
+    calendar = planted_frame()[1]
+    extra = (
+        second_flag("FLAGLOSE", LOSE_TAIL, calendar)
+        + second_flag("FLAGMID", WIN_TAIL, calendar, offset=9, instrument_id=6)
+        + second_flag("FLAGLATE", WIN_TAIL, calendar, offset=11, instrument_id=7)
+    )
+    frame, calendar = planted_frame(tail=HOLD_TAIL, symbol="FLAGHOLD", extra=extra)
+    loss = (received(D(repr(LOSE_TAIL[8].open))) - paid(PLANTED.entry_open)) * PLANTED.quantity
+    assert (loss / D(1_000_000) * 100).quantize(TWO_DP) == D("-0.61")
+    e = ENTRY_BAR
+
+    def drawdown_on(result: BacktestResult, day: dt.date) -> Decimal:
+        curve = dict(result.equity_curve)
+        peak = max(equity for on, equity in result.equity_curve if on <= day)
+        return ((peak - curve[day]) / peak * 100).quantize(TWO_DP)
+
+    releasing = SwingConfig(market=MarketConfig(max_drawdown_pct=0.5, resume_drawdown_pct=0.25))
+    result = run(frame, calendar, config=releasing)
+    assert drawdown_on(result, calendar[e + 8]) == D("0.56") >= D("0.5")
+    assert drawdown_on(result, calendar[e + 9]) == D("0.54")
+    assert drawdown_on(result, calendar[e + 10]) == D("0.23") <= D("0.25")
+    assert drawdown_on(result, calendar[e + 11]) == D("0.00")
+    entries = {t.symbol: t.entry_date for t in result.trades}
+    assert entries == {
+        "FLAGLOSE": calendar[e],
+        "FLAGHOLD": calendar[e],
+        "FLAGLATE": calendar[e + 11],
+    }, "FLAGMID never entered; FLAGLATE entered the morning after the release"
+    assert result.funnel["skipped_drawdown"] >= 2, "FLAGMID on days 9 and 10, at least"
+    assert result.funnel["skipped_gate"] == 0, "the tape stayed GREEN; the drawdown did it"
+    assert {level for day, _, level in result.ladder if day >= calendar[e + 8]} == {0}
+
+    holding = SwingConfig(market=MarketConfig(max_drawdown_pct=0.5, resume_drawdown_pct=0.10))
+    result = run(frame, calendar, config=holding)
+    entries = {t.symbol: t.entry_date for t in result.trades}
+    assert entries["FLAGLATE"] == calendar[e + 12], "0.23% is outside a 0.10% release line"
+    assert result.funnel["skipped_drawdown"] >= 3, "FLAGMID twice, FLAGLATE once, at least"
+
+
+def test_a_sleeve_with_no_session_behind_it_is_not_in_drawdown() -> None:
+    """The peak starts at the sleeve: on the first session nothing is locked, and the planted
+    flag is entered on day one as before."""
+    frame, calendar = planted_frame()
+    result = run(frame, calendar)
+    assert result.funnel["skipped_drawdown"] == 0
+    assert only_trade(result).entry_date == calendar[ENTRY_BAR]
+    assert drawdown_pct(peak=D(0), equity=D(-5)) == 0.0, "a ₹0 peak divides nothing"
+    assert drawdown_pct(peak=D(100), equity=D(120)) == 0.0
+    assert drawdown_pct(peak=D(100), equity=D(85)) == 15.0
+
+
 # --- determinism, purity, the wire shape (G4) -------------------------------------------
 
 
@@ -614,7 +741,8 @@ def test_to_json_is_plain_and_its_keys_are_in_a_fixed_order() -> None:
     assert isinstance(config, dict)
     market = config["market"]
     assert isinstance(market, dict)
-    assert market["tiers"] == [[2, 25.0], [4, 50.0], [6, 75.0], [8, 100.0]]
+    # `04` §8.4 as amended by `07`: the top rung is his "typical" ten, not eight.
+    assert market["tiers"] == [[2, 25.0], [4, 50.0], [6, 75.0], [10, 100.0]]
     assert payload["caveats"] == list(CAVEATS)
     by_year = payload["by_year"]
     assert isinstance(by_year, dict)

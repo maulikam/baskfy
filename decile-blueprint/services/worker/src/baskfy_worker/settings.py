@@ -52,8 +52,8 @@ class WorkerSettings(BaseSettings):
     #: first-live-session countdown, the exposure rung) validates against the same numbers the
     #: form does. Mirrored rather than imported: the worker does not depend on ``baskfy_api``.
     swing_risk_per_trade_pct_max: float = Field(default=1.0, gt=0, le=5)
-    swing_max_position_pct_max: float = Field(default=25.0, gt=0, le=100)
-    swing_max_open_positions_max: int = Field(default=10, gt=0, le=50)
+    swing_max_position_pct_max: float = Field(default=30.0, gt=0, le=100)
+    swing_max_open_positions_max: int = Field(default=20, gt=0, le=50)
     #: The benchmark the market gate reads (``docs/swing/04`` §8.2), ``nifty-50`` as fallback.
     swing_index_slug: str = "nifty-500"
 

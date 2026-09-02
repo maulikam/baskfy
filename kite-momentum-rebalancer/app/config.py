@@ -129,6 +129,12 @@ SWING_EP_PREMARKET_ENABLED = _EP_PREMARKET.lower() == "true"
 # because widening the default would silently change the weekly book's findings.
 SWING_STOP_BAND_MIN = float(os.getenv("BASKFY_SWING_STOP_BAND_MIN", "0.005"))
 SWING_STOP_BAND_MAX = float(os.getenv("BASKFY_SWING_STOP_BAND_MAX", "0.10"))
+# Where the swing GTT's LIMIT leg rests, as a fraction of its trigger (docs/swing/04 §9.4,
+# PACK.8). He uses market stops; a GTT fires a LIMIT, and the gateway's own half-percent
+# cushion (GTT_LIMIT_FRACTION, 0.995 — the weekly book's, unchanged) can be walked through by
+# a fast-falling book, leaving a tight swing stop resting unfilled. 0.97 rests it 3% under.
+# Passed per call to place_gtt_stop, so the weekly book's GTTs are byte-for-byte as before.
+SWING_GTT_LIMIT_FRACTION = float(os.getenv("BASKFY_SWING_GTT_LIMIT_FRACTION", "0.97"))
 
 # ---- Options research engines (PAPER-ONLY; the product gates above remain OFF) --------
 # Return figures are evaluation benchmarks, never an instruction to trade until hit.

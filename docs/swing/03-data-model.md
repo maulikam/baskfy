@@ -1,6 +1,8 @@
 # 03 — Data model: the `sw_` schema
 
-Postgres, Alembic migration `0028_swing.py` (and `0029_swing_backtest.py` for §10) in `services/api/alembic/versions/`, SQLAlchemy
+Postgres, Alembic migration `0028_swing.py` (`0029_swing_backtest.py` for §10;
+`0030_swing_primary_sources.py` for SW9.5's drawdown columns, two defaults and the two new skip
+reasons) in `services/api/alembic/versions/`, SQLAlchemy
 models in `packages/core/src/baskfy_core/models/swing.py`. Conventions inherited from
 `models/base.py`: `PRICE` (18,2) for prices and levels, `PRICE_RAW` (18,4) where an exchange
 print must survive adjustment, `INR` (12,2) for money, `BREADTH` (7,4) for breadth percentages,
@@ -26,14 +28,26 @@ desk journal (order_journal / fills, via packages/execution)  ← fills for sw_p
 | `user_id` PK | bigint FK | sole user in this run |
 | `sleeve_capital_inr` | INR | the cash the swing book may deploy. **Default 0** — nothing is planned until Maulik sets it (Track A setting, user-editable, validated > 0 to plan) |
 | `risk_per_trade_pct` | numeric(5,3) | default 0.500; **must be ≤ `BASKFY_SWING_RISK_PER_TRADE_PCT_MAX`** (system-only env, default 1.0) — the M4.1 boundary |
-| `max_position_pct` | numeric(5,2) | default 20.00; ≤ `BASKFY_SWING_MAX_POSITION_PCT_MAX` (default 25.00) |
-| `max_open_positions` | smallint | default 8; ≤ `BASKFY_SWING_MAX_OPEN_POSITIONS_MAX` (default 10) |
+| `max_position_pct` | numeric(5,2) | default 20.00; ≤ `BASKFY_SWING_MAX_POSITION_PCT_MAX` (default **30.00** since SW9.5 — "never more than 30% of your account over night in any stock"; was 25.00) |
+| `max_open_positions` | smallint | default **10** since SW9.5 (was 8; his "typically 5-10 positions"); ≤ `BASKFY_SWING_MAX_OPEN_POSITIONS_MAX` (default **20**, was 10; his "15-20 in a good market"). The plan takes `min(rung, this)` (`04` §9.1) — the worker's `load_swing_config` hands the plan this row's three sizing knobs (SW9.5.3) |
 | `or_window_minutes` | smallint | 1 / 5 / 60; default 5 |
 | `stop_mode` | text | `LOW_OF_DAY` / `OPENING_RANGE_LOW`; default `LOW_OF_DAY` |
-| `adr_min_pct`, `turnover_min_inr`, `price_min` | numeric | the liquidity floors; defaults 3.5 / 5e7 / 20 |
+| `adr_min_pct`, `turnover_min_inr`, `price_min` | numeric | the liquidity floors; defaults **4.0** (since SW9.5, was 3.5; user-raisable) / 5e7 / 20 |
 | `exposure_level` | smallint | the ladder rung in force, 0–3; written by `swing-eod`, never by a form |
 | `first_live_sessions_left` | smallint | counts down from 5 once execution is enabled; `risk_multiplier` 0.5 while > 0 (`02` §3.5) |
+| `sleeve_peak_inr` | INR, nullable | the highest EOD NAV the sleeve has reached (`04` §8.5); **null until the first evening has run** — a sleeve with no session behind it is at its peak, not in drawdown. Written by `swing-eod`, only ever raised — except the night the ladder switches books (PACK.6), when it starts over at that night's NAV (SW9.5.1) |
+| `drawdown_pct` | numeric(10,2) | how far below `sleeve_peak_inr` tonight's NAV sits, `(peak − nav) / peak × 100`; 0 at or above the peak, 0 when the peak is not positive. Written by `swing-eod` |
+| `drawdown_locked` | bool | the lock-out in force for the next session (`04` §8.5, hysteresis: on at 15%, off inside 10%). Written by `swing-eod`, **audited** on every change (`swing-eod` in `sw_config_audit`, the NAV and the peak in the note); `sleeve_peak_inr` and `drawdown_pct` are measurements and are not audited — the day's `sw_market_daily` row is their history |
 | `updated_at`, `updated_by` | | who last wrote the row |
+
+**The sleeve's EOD NAV** (SW9.5.1) — nothing in `portfolio_nav_daily` describes this sleeve, so
+`swing-eod` computes it from the book the ladder reads (PACK.6: the simulated positions until
+execution is enabled, the real ones after): `sleeve_capital_inr` + Σ `pnl_inr` of `CLOSED`
+positions closed on or before the session + Σ `(mark − entry_avg) × quantity_open` of `OPEN` /
+`PARTIAL` positions (the mark is the latest `ohlcv_daily.close` on or before the session; the
+entry when there is none yet) + Σ `(price − entry_avg) × quantity` over the `SELL` fills of those
+still-open positions (a partial's realised half, which no column carries until the position
+closes). `tasks/swing.py::sleeve_nav`.
 
 ### 1b. `sw_config_audit` — the history of that row (SW2.2)
 
@@ -92,8 +106,9 @@ liquid universe. Written by `swing-eod`.
 | `index_slug`, `index_close`, `index_ma_fast`, `index_ma_slow` | the reading used (`nifty-500`, fallback `nifty-50`) |
 | `gate` | `GREEN` / `AMBER` / `RED` |
 | `exposure_level`, `max_open_positions`, `max_exposure_pct`, `new_entries_allowed` | the tier for the next session |
+| `drawdown_pct`, `drawdown_locked` | `04` §8.5 (SW9.5): the sleeve's drawdown from its peak at this close, and whether the lock-out is in force for the next session — kept beside the rung so a rung of 0 on a GREEN day explains itself. The detection job writes its preview from `sw_config`'s stored peak; `swing-eod`'s settlement is authoritative and overwrites it |
 | `parabolic_count` | int — how many `PARABOLIC_SHORT` rows today; froth gauge |
-| `detail` | JSONB — the closed-trade R list the ladder read, so the rung is explainable |
+| `detail` | JSONB — the closed-trade R list the ladder read, so the rung is explainable; since SW9.5 also `drawdown: {nav, peak, pct, was_locked, locked}`, the settlement's inputs |
 
 ## 4. `sw_watch` — the watchlist with levels
 
@@ -137,7 +152,8 @@ pre-open prices, and a `SIGNAL` plan is built the moment a trigger fires (one li
 `client_id = plan_id:symbol:kind` (the gateway's idempotency key, as the desk does), `journal_ref`.
 
 `sw_plan_skip`: `(plan_id, instrument_id, reason, detail)` — the `Skipped` tuples. A plan is
-not honest without them.
+not honest without them. `reason` is check-constrained to `SkipReason`; `0030` rebuilt the
+constraint with SW9.5's `SESSION_CAP` and `DRAWDOWN_LOCKOUT`.
 
 ## 7. `sw_position` — the book
 

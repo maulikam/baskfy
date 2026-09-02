@@ -6,6 +6,18 @@ is ``SETTING_UP`` on its last bar — re-dated onto a weekday calendar and follo
 tail whose every open, high, low and close is a constant of this module, so the expected trade
 can be worked out by hand from `04` §5, §6, §10 and §11 (it is, in :data:`PLANTED`).
 
+**Re-planted at SW9.5** for `04` §6's widest stop — one ADR, never more. ``flag_series`` draws
+every bar ±2% around its close, an ADR of 4.08%, and the planted stop (the detection day's low,
+6.67% under the entry) would be refused ``STOP_TOO_WIDE`` on such a name. The method's stop is
+tight *relative to the stock's own range*, so the fixture is a leader with a leader's range:
+:func:`_leaders_range` sets every low **before** the detection bar at ``LOW_FACTOR`` (7%)
+under its close, and leaves the detection bar itself the ±2% bar it was — the tight last bar of
+a contracting base, which is what makes its low a usable stop. The 20-bar ADR on the detection
+day is then ``(19 x (1.02 / 0.93 - 1) + (1.02 / 0.98 - 1)) / 20 x 100`` = **9.40%**
+(:data:`PLANTED_ADR_PCT`), the stop is inside it, and — because 9.40% is above the 6% fast-trail
+line — the position trails the **10-day** MA. The pivot (a high) and the stop (the detection
+day's low) are exactly where they were, so the hand-worked trade in :data:`PLANTED` is unchanged.
+
 Two other names sit beside the flag so the tape is not empty: a steadily rising *tape* name that
 keeps breadth above the GREEN threshold (a universe of one flat name reads RED and no entry is
 ever allowed) and ``FLATCO``, which never sets up. Neither triggers anything.
@@ -23,6 +35,12 @@ from swing_fixtures import ep_series, flag_series, flat_series
 
 START = dt.date(2025, 10, 1)
 FLAG_BARS = 140
+#: Every low before a planted name's detection bar sits this far under its close (see the module
+#: docstring). ``0.93`` with ``swing_fixtures``' ±2% highs is a 9.68% daily range.
+LOW_FACTOR = 0.93
+#: The planted flag's 20-bar ADR on its detection day: nineteen leader's-range bars and the one
+#: tight bar, worked by hand in the module docstring.
+PLANTED_ADR_PCT = 9.40
 #: ``flag_series`` is SETTING_UP on its last bar; the day after it is the entry day.
 DETECTION_BAR = FLAG_BARS - 1
 ENTRY_BAR = FLAG_BARS
@@ -88,6 +106,27 @@ LOSE_TAIL: tuple[Bar, ...] = (
     Bar(139.0, 141.0, 137.0, 138.0),
 )
 
+#: A holding tail for the drawdown cases (SW9.5): entered at the same open, it closes at or
+#: under the entry through day 5 (so no partial fires — `04` §6.4.4 needs a close above the
+#: entry), creeps up 0.40 a day above a 10-day average that lags it (so the trail never sells
+#: it), never nears the stop, and then rallies on days 10-12. Its mark is what lets a sleeve in
+#: drawdown recover without a new entry — the only way a locked sleeve can.
+HOLD_TAIL: tuple[Bar, ...] = (
+    Bar(152.0, 153.0, 148.5, 150.0),
+    Bar(150.0, 152.0, 148.5, 150.4),
+    Bar(150.4, 152.5, 149.0, 150.8),
+    Bar(150.8, 153.0, 149.5, 151.2),
+    Bar(151.2, 153.0, 149.5, 151.6),
+    Bar(151.6, 153.5, 150.0, 152.0),
+    Bar(152.0, 154.0, 150.5, 152.4),
+    Bar(152.4, 154.5, 151.0, 152.8),
+    Bar(152.8, 155.0, 151.0, 153.2),
+    Bar(153.2, 155.5, 151.5, 153.6),
+    Bar(154.0, 161.0, 153.0, 160.0),
+    Bar(161.0, 169.0, 160.0, 168.0),
+    Bar(169.0, 176.0, 168.0, 175.0),
+)
+
 #: The entry-day bar variants for the entry rule (`04` §11): open below the pivot but the high
 #: through it (fill at the trigger), and a day that never reaches it (no trade).
 THROUGH_TRIGGER_DAY = Bar(147.0, 152.0, 146.0, 151.0)
@@ -110,6 +149,12 @@ class Planted:
     symbol: str = "FLAGWIN"
     entry_open: Decimal = Decimal("152.0000")
     stop: Decimal = Decimal("141.8550")
+    #: `04` §6: the stop may sit no further below the entry than one ADR. 10.145 / 152 = 6.67%,
+    #: inside the 9.40% ADR — so the plan lines it rather than refusing it ``STOP_TOO_WIDE``.
+    stop_distance_pct: Decimal = Decimal("6.67")
+    adr_pct: Decimal = Decimal("9.40")
+    #: §6.2: ADR at or above 6% trails the fast (10-day) average.
+    trail: str = "MA10"
     quantity: int = 492
     partial_quantity: int = 164
     partial_fill: Decimal = Decimal("162.0000")
@@ -125,10 +170,23 @@ class Planted:
 PLANTED = Planted()
 
 
+def _leaders_range(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    """A leader's daily range on every bar but the last (the detection bar keeps its own).
+
+    Only the lows move: the highs — and so the pivot, which is a high — stay exactly where
+    ``swing_fixtures`` drew them, and so does the last bar, whose low is the planted stop.
+    """
+    for row in rows[:-1]:
+        close = row["close"]
+        assert isinstance(close, float)
+        row["low"] = close * LOW_FACTOR
+    return rows
+
+
 def _flag_rows(
     instrument_id: int, symbol: str, calendar: list[dt.date], tail: tuple[Bar, ...]
 ) -> list[dict[str, object]]:
-    rows = flag_series(instrument_id, symbol, n=FLAG_BARS)
+    rows = _leaders_range(flag_series(instrument_id, symbol, n=FLAG_BARS))
     for bar in tail:
         rows.append(
             {
@@ -227,8 +285,13 @@ def ep_rows(
     """``swing_fixtures.ep_series`` (GAP_DAY on its last bar) re-dated, then a tail that opens
     above the gap day's high, closes red every session and never nears the stop — so the only
     rule that could close it is one the backtest must *not* apply to a next-day entry
-    (`04` §6.4.2 is for the gap day itself)."""
-    rows = ep_series(instrument_id, symbol, n=EP_BARS, locked=locked)
+    (`04` §6.4.2 is for the gap day itself).
+
+    The bars before the gap carry :func:`_leaders_range` for the same reason the flag does: the
+    entry is 2% over the gap day's high and the stop is that day's low, 8.5% under the entry,
+    which one ADR of ±2% bars (4.2%) would refuse and one ADR of a leader's bars (9.5%) admits.
+    """
+    rows = _leaders_range(ep_series(instrument_id, symbol, n=EP_BARS, locked=locked))
     gap_high = rows[-1]["high"]  # the trigger
     assert isinstance(gap_high, float)
     for _ in range(len(calendar) - EP_BARS):

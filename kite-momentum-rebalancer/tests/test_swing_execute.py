@@ -1140,3 +1140,71 @@ def test_two_partials_keep_a_running_share_weighted_exit_avg(gw) -> None:
     pos = store.positions[pid]
     assert pos["exit_avg"] == D("115.00") and pos["quantity_open"] == 100
     assert pos["state"] == "PARTIAL" and pos["r_multiple"] is None
+
+
+# --- SW9.5: the swing GTT rests 3 % under its trigger (docs/swing/04 §9.4, PACK.8) -----------
+
+
+def test_the_swing_gtt_limit_fraction_is_a_config_constant_read_from_env(monkeypatch) -> None:
+    """`BASKFY_SWING_GTT_LIMIT_FRACTION`, default 0.97: he uses market stops, a GTT fires a
+    LIMIT, and a half-percent cushion (the gateway's own 0.995, the weekly book's) can be walked
+    through by a fast-falling book. Read at import like the other swing knobs, never a form."""
+    assert C.SWING_GTT_LIMIT_FRACTION == 0.97
+    assert 0.0 < C.SWING_GTT_LIMIT_FRACTION < 0.995, "tighter than the weekly book's cushion"
+    src = inspect.getsource(C)
+    assert 'os.getenv("BASKFY_SWING_GTT_LIMIT_FRACTION", "0.97")' in src
+
+
+def test_every_live_swing_gtt_is_armed_with_the_swing_limit_fraction(live) -> None:
+    """Every `place_gtt_stop` the swing route makes carries `limit_fraction=0.97`, and no call
+    leaves it to the gateway's default — the one way the weekly book's cushion could leak into
+    a swing stop. Under LIVE gates a buy and a sell are SENT and arm nothing yet (SW7.1), so
+    the recording gateway sees the raise and the re-arm."""
+    store = MemoryStore(first_live_sessions_left=0)
+    pid = store.add_position(gtt_id="123", stop=D("96.00"))
+    plan_id = store.add_plan()
+    raise_ = store.add_line(plan_id, kind="RAISE_GTT_STOP", quantity=0, trigger=None,
+                            stop=D("100.00"))
+    assert execute(store, live, plan_id, raise_, last_price=D("104")).status == "FILLED"
+    store.update_position(pid, {"gtt_id": None})
+    assert run(X.rearm_gtt(store, live, position_id=pid, confirm="true", now=NOW,
+                           last_price=D("104"))).status == "FILLED"
+    assert len(live.gtts) == 2, "the raise and the re-arm"
+    assert [g["limit_fraction"] for g in live.gtts] == [0.97, 0.97]
+    assert {g["limit_fraction"] for g in live.gtts} == {C.SWING_GTT_LIMIT_FRACTION}
+
+
+def test_every_dry_run_swing_gtt_journals_the_swing_limit_fraction(gw) -> None:
+    """Through the REAL gateway in its dry-run branch: a buy, a partial sell, a raise and a
+    re-arm are four journalled GTTs, each saying which cushion the live trigger would carry —
+    so the paper sessions of `docs/swing/02` §3.2 rehearse the number too."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    buy = store.add_line(plan_id, quantity=100, symbol="ALPHA", instrument_id=11)
+    assert execute(store, gw, plan_id, buy).status == "SIMULATED"
+    pid = store.add_position(gtt_id="DRY-old", quantity_entered=300, quantity_open=300,
+                             symbol="BETA", instrument_id=12)
+    sell = store.add_line(plan_id, kind="SELL_AT_OPEN", quantity=100, trigger=None, stop=None,
+                          note="PARTIAL_INTO_STRENGTH", symbol="BETA", instrument_id=12)
+    assert execute(store, gw, plan_id, sell, last_price=D("110")).status == "SIMULATED"
+    raise_ = store.add_line(plan_id, kind="RAISE_GTT_STOP", quantity=0, trigger=None,
+                            stop=D("100.00"), symbol="BETA", instrument_id=12)
+    assert execute(store, gw, plan_id, raise_, last_price=D("110")).status == "SIMULATED"
+    store.update_position(pid, {"gtt_id": None})
+    assert run(X.rearm_gtt(store, gw, position_id=pid, confirm="true", now=NOW,
+                           last_price=D("110"))).status == "SIMULATED"
+    rows = [json.loads(row) for row in pathlib.Path(gw._journal_path).read_text().splitlines()]
+    armed = [row for row in rows if row["event"] == "gtt_dry_run"]
+    assert len(armed) == 4, "buy, partial re-arm, raise, re-arm"
+    assert {row["limit_fraction"] for row in armed} == {0.97}
+
+
+def test_the_weekly_books_gtt_path_does_not_name_the_swing_cushion() -> None:
+    """The constant is passed per call by the swing route only. Nothing in the weekly book's
+    order path (`app/main.py`, `app/kite_client.py`, `app/protection.py`) names it, so the
+    weekly book's GTTs are byte-for-byte what they were."""
+    for name in ("app/main.py", "app/kite_client.py", "app/protection.py"):
+        path = pathlib.Path(__file__).resolve().parents[1] / name
+        if path.exists():
+            assert "SWING_GTT_LIMIT_FRACTION" not in path.read_text(), name
+            assert "limit_fraction" not in path.read_text(), name

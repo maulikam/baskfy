@@ -254,3 +254,115 @@ export async function fetchMarket(params: {
   if (params.to) search.to = params.to;
   return readOrNull<{ data: SwingMarketDay[] }>("/swing/market", search);
 }
+
+/*
+  `GET /swing/journal` — SW8, contract C2. The shape is `SwingJournalOut` in
+  `services/api/src/baskfy_api/routers/swing.py`; `Decimal` fields arrive as JSON numbers with
+  their stored digits (`2.50`), which `JSON.parse` reads as a `number` — the pages restore the two
+  places with `toFixed(2)`, as the positions page does for the same fields.
+*/
+
+/** `04` §10's statistics, in R. An empty record is a row of zeros, not an error. */
+export interface SwingJournalStats {
+  trades: number;
+  win_rate_pct: number;
+  avg_win_r: number;
+  avg_loss_r: number;
+  expectancy_r: number;
+  /** Gross win R over gross loss R; `null` when there is no loss to divide by. */
+  profit_factor: number | null;
+  net_r: number;
+  largest_win_r: number;
+  largest_loss_r: number;
+  current_loss_streak: number;
+}
+
+/** One of the six R buckets, always all six, in the API's order: `<-1` … `>3`. */
+export interface SwingHistogramBar {
+  bucket: string;
+  count: number;
+}
+
+export interface SwingSetupStats {
+  setup: string;
+  trades: number;
+  net_r: number;
+  expectancy_r: number;
+}
+
+export interface SwingMonthStats {
+  /** `YYYY-MM` of the exit date. */
+  month: string;
+  trades: number;
+  net_r: number;
+}
+
+/** One closed trade, with the numbers that were written at its close. */
+export interface SwingJournalTrade {
+  symbol: string;
+  setup: string;
+  entry_date: string;
+  exit_date: string;
+  entry: number;
+  initial_stop: number;
+  exit_avg: number;
+  quantity: number;
+  r_multiple: number;
+  pnl_inr: number;
+  close_reason: string | null;
+}
+
+/** One record — real or simulated, never both (`04` §10). */
+export interface SwingJournalCard {
+  stats: SwingJournalStats;
+  histogram: SwingHistogramBar[];
+  by_setup: SwingSetupStats[];
+  by_month: SwingMonthStats[];
+  /** Newest first, at most 200. */
+  trades: SwingJournalTrade[];
+}
+
+/** `02` §3.2: "14 of 20 paper sessions logged". */
+export interface SwingSessions {
+  logged: number;
+  required: number;
+}
+
+/** The rung in force, what it allows, and the closes it was computed from. */
+export interface SwingLadder {
+  level: number;
+  gate: string;
+  max_open_positions: number;
+  max_exposure_pct: number;
+  new_entries_allowed: boolean;
+  /** The last `lookback_trades` R values of the record the ladder reads, oldest first. */
+  last_r: number[];
+  /** `SIMULATED` while execution is disabled on the server, `REAL` after (PACK.6). */
+  reads: "SIMULATED" | "REAL";
+}
+
+/**
+ * SW9's card. `stats` and `params` are SW9's to shape (contract C3); the page renders them
+ * generically and shows `caveats` verbatim.
+ */
+export interface SwingBacktestCard {
+  run_id: number;
+  params: Record<string, unknown>;
+  started_at: string;
+  finished_at: string | null;
+  stats: Record<string, unknown>;
+  caveats: string[];
+}
+
+export interface SwingJournal {
+  real: SwingJournalCard;
+  simulated: SwingJournalCard;
+  sessions: SwingSessions;
+  ladder: SwingLadder;
+  /** `null` until SW9 has stored a run. */
+  backtest: SwingBacktestCard | null;
+}
+
+export async function fetchJournal(): Promise<SwingJournal | null> {
+  return readOrNull<SwingJournal>("/swing/journal");
+}

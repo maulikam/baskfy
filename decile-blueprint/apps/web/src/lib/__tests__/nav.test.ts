@@ -101,7 +101,9 @@ describe("the primary consumer IA", () => {
       "Watchlist",
       "Market",
       "Positions",
+      "Journal",
     ]);
+    expect(SECTION_TABS.swing.map((t) => t.href)).toContain("/swing/journal");
     expect(SECTION_TABS.build.map((t) => t.href)).toContain("/create");
     /*
       §2: `Me → Investments | Portfolios | Watchlist` becomes

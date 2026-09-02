@@ -6,6 +6,7 @@
     GET   /swing/sectors?date                    the strip: sector breadth, and today's counts
     GET   /swing/config                          the settings, the ceilings, and the rung
     PATCH /swing/config                          change a setting, audited, bounded
+    GET   /swing/journal                         the book's results in R, and the ladder (SW8)
 
 READ-ONLY EXCEPT FOR ONE ROUTE, AND THAT ROUTE MOVES NO MONEY
 -------------------------------------------------------------
@@ -45,7 +46,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api import swing as swing_service
-from baskfy_api import swing_watch
+from baskfy_api import swing_journal, swing_watch
 from baskfy_api.auth import AuthenticatedDep, settings_for
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
@@ -335,6 +336,115 @@ class SwingPositionsOut(BaseModel):
     data: list[SwingPositionOut]
     #: The plan preview `05` §2 shows beside the book. `None` before the first EOD run.
     plan: SwingPlanOut | None
+
+
+class SwingJournalStatsOut(BaseModel):
+    """`04` §10's statistics, in R. An empty book is a row of zeros, not an error."""
+
+    trades: int
+    win_rate_pct: Decimal
+    avg_win_r: Decimal
+    avg_loss_r: Decimal
+    expectancy_r: Decimal
+    #: Gross win R over gross loss R; ``None`` when there is no loss to divide by.
+    profit_factor: Decimal | None
+    net_r: Decimal
+    largest_win_r: Decimal
+    largest_loss_r: Decimal
+    current_loss_streak: int
+
+
+class SwingHistogramBarOut(BaseModel):
+    #: One of `swing_journal.HISTOGRAM_BUCKETS`, always all six, in order.
+    bucket: str
+    count: int
+
+
+class SwingSetupStatsOut(BaseModel):
+    setup: str
+    trades: int
+    net_r: Decimal
+    expectancy_r: Decimal
+
+
+class SwingMonthStatsOut(BaseModel):
+    #: ``YYYY-MM`` of the exit date.
+    month: str
+    trades: int
+    net_r: Decimal
+
+
+class SwingJournalTradeOut(BaseModel):
+    """One closed trade, with the numbers that were written at its close."""
+
+    symbol: str
+    setup: str
+    entry_date: dt.date
+    exit_date: dt.date
+    entry: Decimal
+    initial_stop: Decimal
+    exit_avg: Decimal
+    quantity: int
+    r_multiple: Decimal
+    pnl_inr: Decimal
+    close_reason: str | None
+
+
+class SwingJournalCardOut(BaseModel):
+    """One book — real or simulated, never both (`04` §10)."""
+
+    stats: SwingJournalStatsOut
+    histogram: list[SwingHistogramBarOut]
+    by_setup: list[SwingSetupStatsOut]
+    by_month: list[SwingMonthStatsOut]
+    #: Newest first, at most `swing_journal.MAX_TRADES`.
+    trades: list[SwingJournalTradeOut]
+
+
+class SwingSessionsOut(BaseModel):
+    """`02` §3.2: "14 of 20 paper sessions logged"."""
+
+    logged: int
+    required: int
+
+
+class SwingLadderOut(BaseModel):
+    """The rung in force, what it allows, and the closes it was computed from."""
+
+    level: int
+    gate: str
+    max_open_positions: int
+    max_exposure_pct: Decimal
+    new_entries_allowed: bool
+    #: The last `lookback_trades` R values of the book the ladder reads, oldest first.
+    last_r: list[Decimal]
+    #: ``SIMULATED`` while `BASKFY_SWING_EXECUTION_ENABLED` is false, ``REAL`` after (PACK.6).
+    reads: Literal["SIMULATED", "REAL"]
+
+
+class SwingBacktestCardOut(BaseModel):
+    """SW9's card. The shape is C3's; SW9 fills it and owns its ``stats``.
+
+    Declared now so the TypeScript client carries the type before the run exists, and the page
+    can render "not run yet" against ``None`` rather than against an absent key.
+    """
+
+    run_id: int
+    params: dict[str, object]
+    started_at: str
+    finished_at: str | None
+    stats: dict[str, object]
+    #: `04` §11's sentences, verbatim, so the page cannot paraphrase a caveat away.
+    caveats: list[str]
+
+
+class SwingJournalOut(BaseModel):
+    real: SwingJournalCardOut
+    simulated: SwingJournalCardOut
+    sessions: SwingSessionsOut
+    ladder: SwingLadderOut
+    #: ``None`` until SW9 has stored a run.
+    backtest: SwingBacktestCardOut | None
 
 
 # --- routes ------------------------------------------------------------------
@@ -795,6 +905,86 @@ async def patch_config(
             ceilings=SwingCeilings.from_settings(settings),
             execution_enabled=settings.swing_execution_enabled,
         )
+    )
+
+
+@router.get("/journal", response_model=SwingJournalOut, summary="The journal, in R")
+async def get_journal(
+    session: SessionDep, principal: AuthenticatedDep, settings: SettingsDep
+) -> Response:
+    """`05` §2's Journal tab: two cards, the ladder, the session count, and SW9's card.
+
+    Real and simulated closes come back in **separate** cards and are never summed together
+    (`04` §10). The ladder card's ``level`` is `sw_config.exposure_level` — the number the EOD
+    job wrote back tonight — and ``reads`` says which book it read, so a paper rung is never
+    mistaken for a real one. An empty book is a page of zeros, not a 404: the surface exists
+    before the first trade does.
+    """
+    user_id = await scoped_sole_user_id(session, principal.user_id)
+    view = await swing_journal.journal(
+        session, user_id=user_id, execution_enabled=settings.swing_execution_enabled
+    )
+    return _json(
+        SwingJournalOut(
+            real=_journal_card(view.real),
+            simulated=_journal_card(view.simulated),
+            sessions=SwingSessionsOut(logged=view.sessions.logged, required=view.sessions.required),
+            ladder=SwingLadderOut(
+                level=view.ladder.level,
+                gate=view.ladder.gate,
+                max_open_positions=view.ladder.max_open_positions,
+                max_exposure_pct=view.ladder.max_exposure_pct,
+                new_entries_allowed=view.ladder.new_entries_allowed,
+                last_r=list(view.ladder.last_r),
+                reads=view.ladder.reads,
+            ),
+            backtest=view.backtest,
+        )
+    )
+
+
+def _journal_card(card: swing_journal.JournalCard) -> SwingJournalCardOut:
+    stats = card.stats
+    return SwingJournalCardOut(
+        stats=SwingJournalStatsOut(
+            trades=stats.trades,
+            win_rate_pct=stats.win_rate_pct,
+            avg_win_r=stats.avg_win_r,
+            avg_loss_r=stats.avg_loss_r,
+            expectancy_r=stats.expectancy_r,
+            profit_factor=stats.profit_factor,
+            net_r=stats.net_r,
+            largest_win_r=stats.largest_win_r,
+            largest_loss_r=stats.largest_loss_r,
+            current_loss_streak=stats.current_loss_streak,
+        ),
+        histogram=[SwingHistogramBarOut(bucket=b.bucket, count=b.count) for b in card.histogram],
+        by_setup=[
+            SwingSetupStatsOut(
+                setup=row.setup, trades=row.trades, net_r=row.net_r, expectancy_r=row.expectancy_r
+            )
+            for row in card.by_setup
+        ],
+        by_month=[
+            SwingMonthStatsOut(month=row.month, trades=row.trades, net_r=row.net_r)
+            for row in card.by_month
+        ],
+        trades=[
+            SwingJournalTradeOut(
+                symbol=row.symbol,
+                setup=row.setup,
+                entry_date=row.entry_date,
+                exit_date=row.exit_date,
+                entry=row.entry,
+                initial_stop=row.initial_stop,
+                exit_avg=row.exit_avg,
+                quantity=row.quantity,
+                r_multiple=row.r_multiple,
+                pnl_inr=row.pnl_inr,
+                close_reason=row.close_reason,
+            )
+            for row in card.trades
+        ],
     )
 
 

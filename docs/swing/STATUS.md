@@ -17,7 +17,7 @@ done. A fresh session resumes from the first module not marked ✅.
 | SW5 — Watchlist, plan preview, EOD, alert | ✅ | The evening job manages the book, plans tomorrow with its skips, fills and prunes the watchlist, emails the summary and counts the session; two more pages and four more routes |
 | SW6 — Premarket EP scan + opening-range monitor | ✅ | The morning job refreshes levels, scans the pre-open for gaps behind its flag (≤ 500 a call, inside the limiter) and rebuilds the plan as `MORNING`; the desk's opening-range monitor raises `sw_signal` rows and one-line `SIGNAL` plans behind its flag, holds no gateway, and replays a fixture morning exactly |
 | SW7 — Desk page + `/swing/execute` (DRY_RUN) | ✅ | ✅ execute logic: `app/swing_execute.py` turns a confirmed line into a LIMIT buy + a GTT in the same call, a market sell that re-sizes the stop, or a raised stop — through the real gateway in its dry-run branch, 70 tests, 0 orders reach a broker · ✅ page: `GET /swing` with its three panels and status bar, `PgSwingStore` over the desk's Postgres adapter (sqlite twin in tests), `POST /swing/execute` / `/swing/rearm` through `execute_line` — 73 tests, the buy → position → GTT path proven end to end over an exploding broker client |
-| SW8 — Journal + ladder closes the loop | 🔄 | ✅ ladder + API: the evening settles the rung and writes it to `sw_config` (audited, `swing-eod`) and the day's market row, and the plan is built with it; `GET /swing/journal` answers C2's shape — real and simulated cards apart, the six-bucket histogram, by setup, by month, the ladder card, 14-of-20 · (page: see 1.2.2) |
+| SW8 — Journal + ladder closes the loop | ✅ | ✅ ladder + API: the evening settles the rung and writes it to `sw_config` (audited, `swing-eod`) and the day's market row, and the plan is built with it; `GET /swing/journal` answers C2's shape — real and simulated cards apart, the six-bucket histogram, by setup, by month, the ladder card, 14-of-20 · ✅ page: `/swing/journal` renders it — two cards that never mix, six bars that read at zero, the one sentence on what the next close does to the ladder, "14 of 20 paper sessions logged", and the backtest heading with its caveats verbatim or an honest "not run yet"; 30 rendered-DOM tests, the fifth tab in the row |
 | SW9 — EOD backtest | 🔄 | Core half (1.3.1): `baskfy_core.swing.backtest` runs `04` §11 through the live book's own functions; a planted flag reproduces R = 0.28 to the paisa; 300 × 8y in 24 s; runner and card are 1.3.2's |
 | SW10 — Gating and safety proof | ⬜ | |
 | SW11 — Hardening and observability | ⬜ | |
@@ -766,10 +766,10 @@ exits only, a guard refusal as `BLOCKED`, and reload-on-change polling.
 
 ---
 
-## SW8 — The journal page and the ladder closing the loop 🔄
+## SW8 — The journal page and the ladder closing the loop ✅
 
-**This section covers the ladder write-back and `GET /swing/journal` (leaf 1.2.1). The page is
-leaf 1.2.2's and is appended below it — (page: see 1.2.2).**
+**The first half of this section covers the ladder write-back and `GET /swing/journal` (leaf
+1.2.1); the page (leaf 1.2.2) follows under "The page".**
 
 ### The loop, closed
 
@@ -865,7 +865,74 @@ the starting rung is a settlement record rather than `sw_config`).
   the whole book regardless.
 - `03` §3's description of `detail` gains a `ladder` key in practice; the doc line ("the
   closed-trade R list the ladder read") still describes it truthfully and was not edited.
-- The page — (page: see 1.2.2).
+- The page — below.
+
+### The page (1.2.2) — `/swing/journal`
+
+Server-rendered, `force-dynamic`, one bearer read through `lib/swing/fetch.ts`'s `readOrNull`
+(`fetchJournal`, the seventh whitelisted path). Top to bottom, in the order `05` §2 lists them:
+
+| | |
+|---|---|
+| the sentence | the record **the ladder reads** (`ladder.reads`), in one line: "The simulated record stands at +4.50R over 5 trades, +0.90R a trade, with 1 loss in a row behind it." — or, with nothing closed, "No simulated trade has closed yet — 3 of 20 paper sessions logged, and the ladder is reading an empty record." The footnote says the two records are never added and that nothing on the page can place an order |
+| the paper record | "N of 20 paper sessions logged" from `sessions`, as a line and as a `progressbar` capped at the gate, with what the gate still needs beyond the count |
+| the ladder | rung (`level + 1` of 4, the convention the Market and Setups pages already use), gate (`UNKNOWN` shown as "not measured"), what the tier allows, whether entries are allowed, and **the sentence**: `copy.ts::ladderSentence`, `04` §8.4's four rules in precedence order reduced to the one that applies tonight, said as what the next close does (DECISIONS-SW SW8.2). Under it, which record the ladder reads and the closes it read, oldest first |
+| two cards | `Real` and `Simulated`, one component fed two objects; each card is its own `section` with its ten statistics (profit factor `—` with a line saying why when it is null), the six-bucket histogram as count bars (loss buckets in the negative colour, the rest in the positive; at zero trades the bars are empty and a caption says so), by setup, by month (`2026-08` read as "Aug 2026"), and the trade list newest first with the stored numbers — a header note when the list is the latest 200 of more |
+| the backtest | under the heading `02` §3.3 names, **"Backtest, EOD approximation"**: with `backtest: null`, "Not run yet…" and that the gate stays shut on this count; with a run, the run id and its IST timestamps, the `caveats` **verbatim** as a list, then `stats` and `params` rendered generically (nested records opened two levels as `group · key`, series shown as a count, `sleeve_inr` read as "allocation inr" — the schema keeps its word, the reader sees the product's, SW4.2) |
+| empty state | the API answering `null` (unreachable, or the routes not deployed) renders the header, the tabs and one paragraph — no cards, no backtest section, no crash |
+
+`lib/nav.ts` carries the fifth tab (`Journal`), `lib/vocabulary.ts` the `PAGES["/swing/journal"]`
+entry, `lib/swing/__tests__/read-only.test.ts` whitelists the path and scans `journal/copy.ts`
+along with the page. Copy says "allocation" and "record", never "sleeve" or "book"
+(`no-jargon.test.ts` is in the suite that ran).
+
+### Tests (1.2.2) — `apps/web/src/app/(app)/swing/journal/__tests__/page.test.tsx`, 30 passed
+
+Rendered with `@testing-library/react` over a mocked `fetchJournal`, the fixture being the
+five-close record `test_api_swing_journal.py` works by hand. The spec, not the tree: real and
+simulated are two separate cards and a `PAPERCO` close never appears in the real card (nor
+`REALCO` in the simulated one); each card shows its own count and nothing is summed; the six
+buckets render in the API's order with their counts and their `aria-label`s; the six buckets
+still render at zero trades with a caption; the groupings, with the month named and R signed;
+profit factor `null` explained; an empty `by_month` and a `close_reason: null` render; a
+200-row trade list renders 200 rows and says the statistics cover 240; the stored numbers keep
+two places and a sign (`+4.50R`, `-0.75R`, `-₹380`); "14 of 20 paper sessions logged" as text
+and as the progress bar's value, capped at 20 when 27 are logged; the ladder sentence at rung 1
+under RED, at `UNKNOWN`, at two losses (rung 3 → 2, and at the bottom), at three losses (rung 4
+→ 3 each evening), at five losses at the bottom, at five net-positive closes in GREEN (rung 2 →
+3), at the top rung (never "to 5"), with fewer than five closes, with none, in AMBER, and in
+GREEN net negative; the closes the ladder read, listed oldest first; "not run yet" under the
+`02` §3.3 heading, and the three caveats **verbatim** with the generic rendering of `stats` and
+`params`; the top sentence in both states; the `null` empty state; and that the page says
+nothing here can place an order. Whole web suite 2,070 passed; `tsc`, `eslint` (0 errors),
+`make lint` clean.
+
+### Decisions (1.2.2)
+
+SW8.2 (what the ladder sentence says at each rung and gate, why the streak is counted from
+`last_r`, the three `MarketConfig` numbers mirrored in the page, and how the empty journal
+reads).
+
+### What SW8 (1.2.2) did NOT do
+
+- **No Playwright check**, as for every swing page so far (SW4.3): the page is covered by
+  rendered-DOM tests over a mocked fetch and by the API contract, not by a browser.
+- **The backtest card is generic until SW9 fills it.** `02` §3.3 wants "its R-distribution, win
+  rate and expectancy" on the page; the page shows whatever `stats` carries, as label/value
+  pairs, and the caveats as sent. A drawn R histogram for the backtest needs SW9 to put a
+  `histogram` in `stats` in the journal card's shape (`[{bucket, count}]` in the six-bucket
+  order) — then the page can reuse `Histogram`. Leaf 1.3.2 owns the card's content from here.
+- **Three `MarketConfig` numbers are mirrored in `journal/copy.ts`** (four rungs, a five-close
+  lookback, a three-loss step-down) because the API ships the rung and the closes but not the
+  rule. If `GET /swing/journal` grew a `rule {rungs, lookback_trades, step_down_loss_streak}`
+  field the mirror could go; not this leaf's file (C2). Same shape of debt as the market page's
+  two breadth thresholds.
+- The trade list is not paginated or exportable: 200 rows in one table inside an
+  `overflow-x-auto`, and the header says when the statistics cover more.
+- The `Answer` sentence reads one card — the one the ladder reads. The other card's numbers are
+  on the page but not in the sentence; two sentences would be two verdicts.
+
+---
 
 ## SW9 — The EOD backtest 🔄
 
@@ -905,7 +972,7 @@ trace `(session, gate, rung)` that C3 did not name and the runner stores as-is (
 `to_json()` is plain JSON with a fixed key order: `params, trades, stats, by_setup, by_year,
 equity_curve, funnel, ladder, caveats`. `CAVEATS` is §11's three sentences.
 
-### Tests — `packages/core/tests/test_swing_backtest.py`, 37 passed
+### Tests — `packages/core/tests/test_swing_backtest.py`, 36 passed
 
 `swing_backtest_fixtures.py` plants **one flag** — `swing_fixtures.flag_series`, the base the
 detector suite already proves is `SETTING_UP` on its last bar, re-dated onto weekdays and
@@ -972,10 +1039,11 @@ module is scored against). MUTATION_SCORE_PLACEHOLDER
 
 ## Not done (kept loud)
 
-- **SW8 onward.** The desk page and `/swing/execute` are in (SW7, both halves) and write
-  `sw_position` / `sw_fill` on confirm; no journal page, no backtest, no goldens, no safety
-  proof beyond each module's own tests. The ladder write-back and `GET /swing/journal` are in
-  (SW8, 1.2.1).
+- **SW9 onward.** The desk page and `/swing/execute` are in (SW7, both halves) and write
+  `sw_position` / `sw_fill` on confirm; the ladder write-back, `GET /swing/journal` and the
+  journal page are in (SW8, both halves); no backtest run stored, no goldens, no safety proof
+  beyond each module's own tests. The journal's backtest card says "not run yet" until SW9
+  stores one.
 - **`sw_position` has been written only by tests** (SW7). No confirm has run against a real
   database; the book is empty there, and every position test still builds its rows directly.
 - **The dev database is at `0026`.** Nothing swing-shaped has run against real NSE bars; the ten

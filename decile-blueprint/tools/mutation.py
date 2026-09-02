@@ -69,7 +69,30 @@ PACKAGE_ROOT: Final = REPO_ROOT / "packages" / "core" / "src"
 PACKAGE: Final = "baskfy_core"
 
 #: Prompt 19 §6 names exactly these two.
-TARGETS: Final[tuple[str, ...]] = ("factors.py", "screener.py")
+FACTOR_TARGETS: Final[tuple[str, ...]] = ("factors.py", "screener.py")
+
+#: SW1 (docs/swing/06-module-plan.md): ``baskfy_core.swing`` joins the harness "at the same
+#: threshold as ``factors``". The swing package decides what is bought, at what size and with
+#: what stop, so an off-by-one in a window boundary or an inverted guard there is the same class
+#: of bug the factor engine is mutated for — and its detectors are almost entirely comparisons
+#: against thresholds, which is exactly what these six operators perturb.
+#:
+#: ``config.py`` is deliberately absent. It is a table of defaults with no logic; shifting
+#: ``adr_min_pct`` from 3.5 to 4.5 changes what a *calibration* means, not whether the code
+#: implements the calibration correctly, and every such mutant would "survive" against tests
+#: that (correctly) build their own config. ``__init__.py`` is re-exports only.
+SWING_TARGETS: Final[tuple[str, ...]] = (
+    "swing/indicators.py",
+    "swing/setups.py",
+    "swing/sizing.py",
+    "swing/stops.py",
+    "swing/market.py",
+    "swing/opening_range.py",
+    "swing/plan.py",
+    "swing/journal.py",
+)
+
+TARGETS: Final[tuple[str, ...]] = FACTOR_TARGETS + SWING_TARGETS
 
 #: Cheapest first: a mutant that breaks the screener usually dies in ``test_screener.py`` in a
 #: couple of seconds, and never reaches the slower property and cross-validation suites.
@@ -82,6 +105,54 @@ TEST_SELECTION: Final[tuple[str, ...]] = (
     "packages/core/tests/test_reference_export.py",
     "packages/core/tests/test_reference_parity.py",
 )
+
+#: The swing suite, in the order a mutant is scored against it — see :func:`selection_for`.
+#:
+#: ``test_swing_purity.py`` and ``test_swing_docs_parity.py`` are **deliberately absent**. Neither
+#: imports the modules: purity is a line scan over the source and the docs-parity check reads the
+#: config dataclasses against the specification. Neither can fail because a comparison flipped, so
+#: including them would add two pytest start-ups to every one of the several hundred mutants and
+#: kill exactly none of them.
+SWING_TEST_SELECTION: Final[tuple[str, ...]] = (
+    "packages/core/tests/test_swing_contract_detectors.py",
+    "packages/core/tests/test_swing_contract_book.py",
+    "packages/core/tests/test_swing_contract_edges.py",
+    "packages/core/tests/test_swing_setups.py",
+    "packages/core/tests/test_swing_sizing.py",
+    "packages/core/tests/test_swing_stops.py",
+    "packages/core/tests/test_swing_market.py",
+    "packages/core/tests/test_swing_opening_range.py",
+    "packages/core/tests/test_swing_plan_and_journal.py",
+)
+
+#: The one file most likely to kill a mutant of each module, tried first. ``pytest`` runs with
+#: ``-x`` and the runner stops at the first failing file, so putting the module's own tests at the
+#: head is the difference between one start-up per killed mutant and six.
+SWING_PRIMARY_TEST: Final[dict[str, str]] = {
+    "swing/indicators.py": "packages/core/tests/test_swing_contract_detectors.py",
+    "swing/setups.py": "packages/core/tests/test_swing_contract_detectors.py",
+    "swing/sizing.py": "packages/core/tests/test_swing_contract_book.py",
+    "swing/stops.py": "packages/core/tests/test_swing_contract_book.py",
+    "swing/market.py": "packages/core/tests/test_swing_contract_book.py",
+    "swing/opening_range.py": "packages/core/tests/test_swing_contract_book.py",
+    "swing/plan.py": "packages/core/tests/test_swing_contract_book.py",
+    "swing/journal.py": "packages/core/tests/test_swing_contract_book.py",
+}
+
+
+def selection_for(target: str) -> tuple[str, ...]:
+    """Which test files a mutant of ``target`` is scored against, in which order.
+
+    A per-target selection, not one list for everything: running the factor suites against a
+    swing mutant would score every one of them "survived" (they never import the package), and
+    running the swing suites against a factor mutant would do the same in reverse. A mutation
+    score is only evidence when the tests in the selection are the tests that *could* fail.
+    """
+    if not target.startswith("swing/"):
+        return TEST_SELECTION
+    primary = SWING_PRIMARY_TEST[target]
+    return (primary, *(path for path in SWING_TEST_SELECTION if path != primary))
+
 
 #: Where the mutated copies live. **Inside the repository, deliberately.**
 #: ``baskfy_core.reference_export.default_fixture_path`` finds the committed CSV by walking
@@ -274,8 +345,22 @@ def generate(path: Path) -> list[Mutant]:
             continue
         operator, before, after, line, column = mutator.applied
         source = ast.unparse(ast.fix_missing_locations(mutated))
-        mutants.append(Mutant(path.name, line, column, operator, before, after, source))
+        mutants.append(Mutant(_relative(path), line, column, operator, before, after, source))
     return mutants
+
+
+def _relative(path: Path) -> str:
+    """The target's path *inside the package*, e.g. ``swing/setups.py``.
+
+    It used to be ``path.name``. That was indistinguishable from the relative path while every
+    target sat at the top of ``baskfy_core``; the moment SW1 added ``swing/setups.py`` it would
+    have written the mutated file to ``baskfy_core/setups.py`` — a module nothing imports — and
+    every swing mutant would have been scored "survived" against an unmutated package.
+    """
+    try:
+        return path.resolve().relative_to(PACKAGE_ROOT / PACKAGE).as_posix()
+    except ValueError:
+        return path.name
 
 
 # ---------------------------------------------------------------------------
@@ -358,7 +443,7 @@ def control(target: str, workspace: Path, selection: tuple[str, ...]) -> str | N
 
 
 def run(
-    mutants: list[Mutant], selection: tuple[str, ...] = TEST_SELECTION, workers: int = 4
+    mutants: list[Mutant], selection: tuple[str, ...] | None = None, workers: int = 4
 ) -> list[Outcome]:
     """Evaluate every mutant. Each worker gets its own pristine copy of the package."""
     outcomes: list[Outcome] = []
@@ -375,7 +460,7 @@ def run(
 
         # Pre-flight: see `control`. Without it a 100% score is not evidence of anything.
         for target in sorted({mutant.file for mutant in mutants}):
-            broken_by = control(target, workspaces[0], selection)
+            broken_by = control(target, workspaces[0], selection or selection_for(target))
             if broken_by is not None:
                 raise RuntimeError(
                     f"the unparsed-but-unmutated {target} fails {broken_by}. Every mutant would "
@@ -396,7 +481,7 @@ def run(
         def task(mutant: Mutant) -> Outcome:
             workspace = available.get()
             try:
-                outcome = _evaluate(mutant, workspace, selection)
+                outcome = _evaluate(mutant, workspace, selection or selection_for(mutant.file))
             finally:
                 # Restore the pristine file before the workspace goes back in the pool.
                 shutil.copy2(
@@ -426,15 +511,33 @@ def render(outcomes: list[Outcome], justifications: dict[str, str]) -> str:
     survivors = [o for o in outcomes if not o.killed]
     score = 100.0 * len(killed) / len(outcomes) if outcomes else 100.0
 
+    modules = sorted(
+        {f"`baskfy_core.{o.file.removesuffix('.py').replace('/', '.')}`" for o in outcomes}
+    )
     lines = [
-        "# Mutation testing — `baskfy_core.factors` and `baskfy_core.screener`",
+        "# Mutation testing — " + ", ".join(modules),
         "",
         'Generated by `make mutants`. Prompt 19 §6: "fix or justify every surviving mutant."',
+        "SW1 added the `baskfy_core.swing` modules at the same threshold as `factors`.",
         "",
         f"- mutants generated: **{len(outcomes)}**",
         f"- killed: **{len(killed)}**",
         f"- survived: **{len(survivors)}**",
         f"- mutation score: **{score:.1f}%**",
+        "",
+        "## By file",
+        "",
+        "| file | mutants | killed | score |",
+        "|---|---|---|---|",
+    ]
+    by_file: dict[str, list[Outcome]] = {}
+    for outcome in outcomes:
+        by_file.setdefault(outcome.file, []).append(outcome)
+    for name in sorted(by_file):
+        group = by_file[name]
+        dead = sum(1 for o in group if o.killed)
+        lines.append(f"| `{name}` | {len(group)} | {dead} | {100.0 * dead / len(group):.1f}% |")
+    lines += [
         "",
         "## Survivors",
         "",

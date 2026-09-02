@@ -44,7 +44,7 @@ coverage:      ## Per-package coverage gate (docs: core >= 90%, api >= 80%). Nee
 reconcile:     ## Reconcile our formulas against the reference export; rewrites reconciliation/REPORT.md
 	$(UV) python -m baskfy_worker.reconcile_cli --write reconciliation/REPORT.md
 
-mutants:       ## Mutation-test baskfy_core.factors and .screener (Prompt 19 §6)
+mutants:       ## Mutation-test baskfy_core.factors, .screener and .swing (Prompt 19 §6, SW1)
 	$(UV) python -m tools.mutation --workers $(or $(WORKERS),4)
 
 lint:          ## ruff check + format check + mypy strict + TS lint/typecheck (every package)

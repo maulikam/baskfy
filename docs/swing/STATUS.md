@@ -10,8 +10,8 @@ done. A fresh session resumes from the first module not marked ✅.
 | Module | State | One line |
 |---|---|---|
 | SW0 — Baseline and read-in | ✅ | Both suites green at baseline; the numbers, the data date, the Alembic head, the Beat inventory and every `DRY_RUN` are recorded below |
-| SW1 — The pure core, re-verified | ⬜ | |
-| SW2 — Schema and settings | ⬜ | |
+| SW1 — The pure core, re-verified | ✅ | Green in the repo's own `uv` environment; in the mutation harness for the first time, and three new contract modules took it from **41.0% to 83.4%** — above `factors`' 77.5% |
+| SW2 — Schema and settings | ✅ | Twelve `sw_` tables migrated and round-tripped, `sw_config` seeded at zero capital, the three flags and three ceilings wired into API, worker and desk, and a ceiling can never become a form field |
 | SW3 — Daily detection job | ⬜ | |
 | SW4 — API + Setups/Market pages | ⬜ | |
 | SW5 — Watchlist, plan preview, EOD, alert | ⬜ | |
@@ -122,6 +122,147 @@ publish) and `swing-weekend` (Sat 07:00) land in gaps rather than on top of anyt
 
 Nothing executable. The `docs/swing/` pack is committed so the run has a specification in the
 repository rather than in a session's context.
+
+---
+
+## SW1 — The pure core, re-verified and adopted ✅
+
+### What was re-verified
+
+Run under the repository's own `uv` environment on macOS, not the pack author's Linux venv:
+
+| | |
+|---|---|
+| `pytest packages/core/tests/test_swing_*.py` | **103 passed** — the pack's number, reproduced |
+| `pytest packages/core/tests/test_no_escape_hatches.py` | **8 passed** |
+| `ruff check` + `ruff format --check` over the 18 pack files | clean |
+| `mypy --strict` over the same 18 | clean |
+
+Nothing in `baskfy_core.swing` was changed. SW1's instruction is "fix nothing in the module
+unless a test fails here", and none did.
+
+### `test_swing_docs_parity.py` (new, 109 tests)
+
+Every field of `baskfy_core.swing.config` — all 69 of them — must be named in
+`docs/swing/04-business-rules.md`, and so must every enum value the engine can write to a `sw_`
+row or show on a page (`Setup`, `CandidateStatus`, `MarketGate`, `LineKind`, `SkipReason`,
+`ActionKind`, `ActionReason`, `TrailMa`, `StopMode`). Direction matters and is deliberate: code →
+document, not the reverse, because `04` legitimately names quantities that are columns rather
+than config fields.
+
+It found one real gap on its first run: `04` §6.1 described the default stop without naming
+`LOW_OF_DAY`. The document now names both modes (DECISIONS-SW SW0.1).
+
+### The mutation harness, and what it found
+
+`tools/mutation.py` learned the eight `baskfy_core.swing` modules. Two changes were needed
+before the number meant anything, and both are recorded in DECISIONS-SW SW1.1: a **per-target
+test selection** (a swing mutant scored against the factor suites survives every time, because
+those suites never import the package) and a **path fix** in `generate()` (it recorded a
+target's basename, so `swing/setups.py` would have been written to `baskfy_core/setups.py` and
+every swing mutant would have been scored against an unmutated package).
+
+**The first honest run scored 41.0%**, against `factors`' 77.5% — and `setups.py` scored 19.1%,
+with 140 of its 173 mutants surviving. The survivors were two families: comparison boundaries
+(`>=` read as `>`) and terms of the scoring formulas. Neither is visible to a test that asks
+"was this shape detected?".
+
+Three modules were added — **273 tests**, none of them touching the seven the pack shipped:
+
+| Module | Tests | What it pins |
+|---|---|---|
+| `test_swing_contract_detectors.py` | 64 | `04` §1–§4. Every threshold tested *at* its own value by setting the threshold to the measurement the engine produced; every score recomputed from the document's formula |
+| `test_swing_contract_book.py` | 131 | `04` §5–§10. Sizing's four caps and four refusals, the stop rules' precedence and their day-3/day-5 boundaries, the gate, the ladder, the opening range, the plan's skip order, the journal's statistics |
+| `test_swing_contract_edges.py` | 78 | The measurements themselves, recomputed from the **raw fixture bars** by a second implementation; the defaults and guards (`fill_null(1.0)`, `turnover > 0`, the first bar's up-streak); and `frozen=True` on every dataclass the engine hands out |
+
+**Recorded score: 41.0% → 67.8% → 83.4%** over three runs of the same 459 mutants (383 killed,
+76 survived), which is above `factors`' 77.5%. Per module: `indicators` 97.4%, `market` 94.8%,
+`journal` 92.9%, `stops` 88.9%, `sizing` 87.2%, `opening_range` 83.7%, `plan` 78.6%,
+`setups` 73.4%.
+
+Of the 76 survivors, **27 are `slots=True` on a `@dataclass` decorator** — the same equivalent
+mutant `reconciliation/MUTANTS.md` already justifies for `factors`: `slots` changes an instance's
+layout, not any value. The `frozen=True` half of every one of those decorators is now killed, by
+`TestNothingTheEngineHandsOutCanBeMutated`.
+
+`reconciliation/MUTANTS.md` is regenerated by `make mutants`, which now covers `factors`,
+`screener` and the eight swing modules.
+
+### What SW1 did NOT do
+
+- It did not change `baskfy_core.swing`. Every number the engine computes is the pack's.
+- It did not add the `+5/+5` score adjustments of `04` §2.6 — those need `instrument.listed_on`
+  and `index_member_daily`, which core must not read. SW3 owns them.
+- The surviving mutants are **not** individually justified in `reconciliation/MUTANTS.md` the way
+  `factors`' are; the report lists them and the run continued. SW12 is where that list should be
+  read again.
+
+---
+
+## SW2 — Schema and settings ✅
+
+### The schema
+
+Migration `0028_swing`, **twelve tables** (`03` describes eleven; the twelfth is the settings
+audit — DECISIONS-SW SW2.2):
+
+`sw_config` · `sw_config_audit` · `sw_setup_daily` · `sw_market_daily` · `sw_watch` ·
+`sw_signal` · `sw_plan` · `sw_plan_line` · `sw_plan_skip` · `sw_position` · `sw_fill` ·
+`sw_session`
+
+Models in `packages/core/src/baskfy_core/models/swing.py`. Every status, kind, reason and gate
+string in a check constraint is **imported from `baskfy_core.swing`** rather than retyped, so a
+detector cannot emit a value the database rejects.
+
+Verified on a scratch database (`baskfy_sw_mig`): `upgrade → downgrade → upgrade` leaves exactly
+twelve `sw_` tables and no residue, and every modelled column exists with the modelled
+nullability.
+
+Two decisions:
+
+- **SW2.1** — `sw_setup_daily` is keyed `(user_id, date, instrument_id, setup)` and
+  `sw_market_daily` `(user_id, date)`, against `03`'s sketch, because `02` Track C §6 requires
+  `user_id` on every row and both tables are computed through per-user liquidity floors.
+- **SW2.2** — the settings audit is a table, not two columns.
+
+### The settings, and the boundary
+
+| Where | What |
+|---|---|
+| root `.env.example` | the three flags and three ceilings, all marked `# system-only` (the pack wrote this block; SW2 commits it) |
+| `baskfy_api.settings` | `swing_execution_enabled`, `swing_monitor_enabled`, `swing_ep_premarket_enabled` (all `False`), the three `*_max` ceilings, `swing_index_slug` |
+| `baskfy_worker.settings` | the same six, mirrored rather than imported (the worker does not depend on `baskfy_api`) |
+| desk `app/config.py` | `SWING_EXECUTION_ENABLED`, `SWING_MONITOR_ENABLED`, `SWING_EP_PREMARKET_ENABLED`, and the swing GTT band (0.005–0.10, PACK.3) beside the weekly book's 0.08–0.12 |
+| desk `app/analytics/settings.py` | all six `BASKFY_SWING_*` keys added to `LOCKED_KEYS` |
+| `baskfy_api.swing_settings` | `SwingConfigPatch` (`extra="forbid"`), `SwingCeilings`, `apply_patch`, `record_system_change`, `audit_trail` |
+
+`exposure_level` and `first_live_sessions_left` are **not fields of the patch model**. A person
+who could set the exposure rung has deleted the ladder; they are written only through
+`record_system_change`, which requires the job's name.
+
+A value above a ceiling answers **422 `setting-above-ceiling`** carrying `field`, `requested`,
+`ceiling` and `env_var` — a new problem type, argued in DECISIONS-SW SW2.3, because this API
+reserves 400 for schema violations and a well-formed number over a limit is not one.
+
+### Seeding
+
+`baskfy_api.seed` gained `seed_swing_config` and a `swing` command. It writes one `sw_config` row
+for the sole tenant with **`sleeve_capital_inr = 0`**, and `ON CONFLICT DO NOTHING` — so
+re-running `make seed` never resets a capital or a risk setting a person has chosen. Zero capital
+is the safety property: `baskfy_core.swing.sizing` refuses every entry with `NO_EQUITY` until
+Maulik decides what the book may risk (`02` §3.4).
+
+### Tests
+
+| Suite | Result |
+|---|---|
+| `services/api/tests/test_swing_schema_and_settings.py` | **69 passed** with `BASKFY_TEST_DATABASE_URL` set (62 + 7 skipped without a database) |
+| `kite-momentum-rebalancer/tests/test_settings_boundary.py` | **23 passed** — extended with `TestTheSwingBoundary` |
+| `packages/core/tests/test_schema_matches_docs.py` | extended: the twelve tables, their primary keys, and a `docs/swing/03` documentation check |
+
+Among them: a patch that crosses a ceiling on its second field changes **neither** field; an
+accepted patch writes one audit row per field that actually moved (a no-op change writes none);
+and `ck_sw_position_stop_never_below_initial` refuses an `UPDATE` that lowers a stop.
 
 ---
 

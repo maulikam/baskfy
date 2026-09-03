@@ -207,7 +207,12 @@ async def _fetch_from_bhavcopy(  # noqa: PLR0913 - a source, a window, and how t
         outcome.note(reason=reason, fallback="unavailable: no provider offers bhavcopy")
         return 0
 
-    report = await backfill_bars_from_bhavcopy(provider, window, progress_every=0)
+    # `session=` is load-bearing: this runs inside the chain's open transaction, and a
+    # second connection here waits on the instrument rows step 1 has not committed while
+    # the chain waits for this call. `_working_session` carries the incident.
+    report = await backfill_bars_from_bhavcopy(
+        provider, window, progress_every=0, session=session
+    )
     if top_up is None:
         outcome.rows_out = report.bars_written
     else:

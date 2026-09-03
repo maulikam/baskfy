@@ -50,7 +50,8 @@ import argparse
 import asyncio
 import datetime as dt
 import sys
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from decimal import Decimal
 
@@ -192,19 +193,56 @@ async def upsert_day(session: AsyncSession, values: list[dict[str, object]]) -> 
     return written
 
 
-async def backfill_bars_from_bhavcopy(
+@asynccontextmanager
+async def _working_session(
+    session: AsyncSession | None, database_url: str | None
+) -> AsyncIterator[AsyncSession]:
+    """The caller's transaction when there is one, otherwise a short-lived one of our own.
+
+    THE DEADLOCK THIS EXISTS TO PREVENT (M84, found on the box at 02:07 IST on 4 Sep 2026)
+    ---------------------------------------------------------------------------------------
+    `run_fetch_daily_bars` calls this module from **inside** the nightly chain's single open
+    transaction. Opening a second connection there is a wait-for cycle waiting to happen: step 1
+    (`refresh_instruments`) has upserted `instrument` rows the chain has not committed, and a bar
+    insert on another connection needs a KEY SHARE lock on those parent rows. So the second
+    connection waits for the chain's transaction, and the chain waits for this function to
+    return.
+
+    Postgres cannot call that a deadlock — one side is waiting on a lock, the other is
+    `ClientRead`, and its detector only sees the lock graph. There is no error and no timeout.
+    The 3 Sep re-run sat in exactly that state for **1 hour 58 minutes** until it was killed:
+
+        207399 | Lock/transactionid | blocked_by = 207394
+        207394 | Client/ClientRead  | blocked_by = (nothing)
+
+    Joining the caller's transaction removes the second connection, and with it the cycle. It is
+    also what the chain's own contract asks for — `baskfy_worker.orchestrator` promises that
+    "either the trade date lands whole or it does not land", and a fallback that committed its
+    bars on a session of its own broke that quietly every time it fired.
+    """
+    if session is not None:
+        # Deliberately no commit and no close: the transaction is the caller's, and the chain
+        # commits it when the whole night is good.
+        yield session
+    else:
+        async with session_scope(database_url) as owned:
+            yield owned
+
+
+async def backfill_bars_from_bhavcopy(  # noqa: PLR0913 - a source, a window, and where to write
     provider: object,
     window: DateWindow,
     *,
     database_url: str | None = None,
     series: Sequence[str] = EQUITY_SERIES,
     progress_every: int = 25,
+    session: AsyncSession | None = None,
 ) -> BhavcopyBackfillReport:
     report = BhavcopyBackfillReport()
 
-    async with session_scope(database_url) as session:
-        days = await trading_days_in(session, window)
-        ids = await instrument_ids_by_key(session)
+    async with _working_session(session, database_url) as reading:
+        days = await trading_days_in(reading, window)
+        ids = await instrument_ids_by_key(reading)
     report.trading_days = len(days)
     if not ids:
         report.failures["setup"] = (
@@ -235,8 +273,8 @@ async def backfill_bars_from_bhavcopy(
             values, unmatched = _rows_for_day(frame, ids, series)
             report.unmatched_symbols |= unmatched
             if values:
-                async with session_scope(database_url) as session:
-                    report.bars_written += await upsert_day(session, values)
+                async with _working_session(session, database_url) as writing:
+                    report.bars_written += await upsert_day(writing, values)
                 report.days_written += 1
         except Exception as exc:
             report.failures[day.isoformat()] = f"{type(exc).__name__}: {exc}"

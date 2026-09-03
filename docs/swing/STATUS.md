@@ -2433,6 +2433,30 @@ only in its constructor, so a token written at 09:10 is invisible to the running
 `swing_monitor` does **not** need one: `main()` builds its own `Kite()` at 09:14, after the login.
 (d) Never run on a real morning.
 
+### Deploy #8 — `0b34f00` (SW20, the read limits), 3 Sep 19:5x IST
+
+Driver-run, not delegated: two deploy leaves in a row died to upstream 529s, so the images were
+built from a clean worktree of `0b34f00` here (`desk imports ok 1.0 3.0 9.0`, decile imports ok),
+`tf.sh plan` → **No changes**, and `deploy-swing.sh` shipped the compose pair, pinned the tags and
+migrated (alembic stays `0033_swing_scan_now` = head). The script then stopped in step 4: a
+`compose run --rm seed` under SSM produced no output and no exit inside its window — the seeds
+were already applied and are idempotent (`sw_config` reads ₹25,00,000 / 0.500 % / ₹50,00,000
+turnover / 5 first-live sessions), so steps 5 onward were run by hand.
+
+Live: `2 desk:0b34f00`, `4 py:0b34f00`, `1 web:0b34f00`. The limiter probe inside the running desk
+image: `1.0 3.0 9.0 0.0` — quote 1/s, historical 3/s, general 9/s, and the first slot free.
+`verify-swing.sh` → **SWING OK**; `/swing` 200, `desk /status` 200.
+`swing-monitor: flag ON; next run Fri 2026-09-04 09:14 IST`.
+
+Readiness for the first live morning: 2 names WATCHING · `2026-09-02 | nifty-mid-small-400 |
+GREEN | entries allowed | rung 0` · plans present: MORNING, EOD_PREVIEW · sleeve ₹25,00,000 at
+0.5 % with 5 first-live sessions in hand · execution flag **false**, so a Confirm reads SIMULATED.
+
+Known, not fixed: `deploy-swing.sh` step 4 needs a longer window or a captured log for the seed
+step under SSM (it is idempotent, so re-running the script is safe).
+
+---
+
 ## SW20 — every Kite read inside a limit ✅
 
 The order path has been limited since the gateway existed (9/s, 380/min, 2,900/day). The reads

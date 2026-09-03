@@ -22,6 +22,9 @@ D="${BASKFY_DESK_URL:-https://desk.${B#https://}}"
 FAILS=0
 ok()   { printf '  ok   %s\n' "$*"; }
 bad()  { printf '  FAIL %s\n' "$*"; FAILS=$((FAILS+1)); }
+# An operating choice the operator made: shown, never asserted. A flag the run must never see
+# true has `bad` behind it instead; this one exists so a verify reads like a state of the world.
+note() { printf '  --   %s\n' "$*"; }
 RESOLVE="${BASKFY_CURL_RESOLVE:-}"
 crl()  { curl -s --max-time 40 ${RESOLVE:+--resolve "$RESOLVE"} "$@"; }
 code() { crl -o /dev/null -w '%{http_code}' "$@"; }
@@ -74,9 +77,17 @@ $OUT"
   for svc in desk monitor; do
     ENV="$(section "$svc-env")"
     grep -qx 'DRY_RUN=true' <<<"$ENV" && ok "$svc: DRY_RUN=true" || bad "$svc: DRY_RUN is not true"
-    for flag in EXECUTION_ENABLED MONITOR_ENABLED EP_PREMARKET_ENABLED TIMING_PROBE; do
+    # Two of the four are RAILS and are asserted: EXECUTION_ENABLED is the line between a
+    # SIMULATED confirm and money, and TIMING_PROBE spends a Kite call on a morning nobody asked
+    # about. The other two are OPERATING CHOICES — Maulik turned the monitor and the pre-open
+    # scan on for 4 Sep — so they are reported, not asserted; a deploy must not quietly turn off
+    # what the operator turned on, and a verify must not fail because he did.
+    for flag in EXECUTION_ENABLED TIMING_PROBE; do
       grep -qx "BASKFY_SWING_$flag=false" <<<"$ENV" && ok "$svc: BASKFY_SWING_$flag=false" \
         || bad "$svc: BASKFY_SWING_$flag is not false"
+    done
+    for flag in MONITOR_ENABLED EP_PREMARKET_ENABLED; do
+      note "$svc: $(grep -m1 "BASKFY_SWING_$flag=" <<<"$ENV" || echo "BASKFY_SWING_$flag unset")"
     done
   done
   section desk-mounts | grep -q '^/var/lib/baskfy/state rw=false' \
@@ -89,5 +100,5 @@ $OUT"
 fi
 
 echo
-[ "$FAILS" -eq 0 ] && echo "SWING OK — $B, $D: auth-gated API, desk up behind basic auth, DRY_RUN true, every swing flag false" \
+[ "$FAILS" -eq 0 ] && echo "SWING OK — $B, $D: auth-gated API, desk up behind basic auth, DRY_RUN true, execution and probe flags false (the monitor and pre-open flags read above as the operator set them)" \
   || { echo "SWING FAIL — $FAILS check(s) failed"; exit 1; }

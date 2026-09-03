@@ -942,3 +942,76 @@ class TestMonitorRanIsWrittenAtStart:
 
         asyncio.run(go())
         assert fired == [1] and len(strategy.verdict_seconds) == 3
+
+
+class TestTheDeskRereadsAFreshToken:
+    """SW18: the desk holds one `Kite` for the life of the process, so a token written at 09:10
+    by the morning login used to be invisible until somebody restarted an order-capable
+    container. `refresh_token_if_changed` re-reads the blob when its mtime moves — no restart,
+    and no request served with a stale session."""
+
+    @staticmethod
+    def _client(tmp_path, monkeypatch, token="first-token"):
+        from app import config as C
+        from app import kite_client as K
+        from app.token_store import store_for
+
+        path = tmp_path / "kite-token.enc"
+        monkeypatch.setattr(C, "TOKEN_FILE", str(path))
+        monkeypatch.setattr(C, "KITE_TOKEN_ENCRYPTION_KEY", "", raising=False)
+        monkeypatch.setattr(C, "KITE_API_KEY", "key", raising=False)
+        monkeypatch.setattr(C, "FORCE_IPV4", False, raising=False)
+        store_for(str(path), "").save(token)
+
+        seen: list[str] = []
+
+        class FakeKC:
+            def __init__(self, api_key=None):
+                self.api_key = api_key
+
+            def set_access_token(self, value):
+                seen.append(value)
+
+            def profile(self):
+                return {"user_id": "AB1234"}
+
+        monkeypatch.setattr(K, "KiteConnect", FakeKC)
+        return K.Kite(), path, seen
+
+    def test_a_token_written_after_start_is_picked_up_without_a_restart(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        import os
+
+        from app.token_store import store_for
+
+        client, path, seen = self._client(tmp_path, monkeypatch)
+        assert seen == ["first-token"]
+
+        store_for(str(path), "").save("second-token")
+        os.utime(path, (path.stat().st_atime, path.stat().st_mtime + 10))
+
+        assert client.refresh_token_if_changed() is True
+        assert seen[-1] == "second-token"
+
+    def test_an_unchanged_blob_costs_one_stat_and_no_reload(self, tmp_path, monkeypatch) -> None:
+        client, _path, seen = self._client(tmp_path, monkeypatch)
+        assert client.refresh_token_if_changed() is False
+        assert client.refresh_token_if_changed() is False
+        assert seen == ["first-token"]
+
+    def test_is_authed_refreshes_first(self, tmp_path, monkeypatch) -> None:
+        import os
+
+        from app.token_store import store_for
+
+        client, path, seen = self._client(tmp_path, monkeypatch)
+        store_for(str(path), "").save("third-token")
+        os.utime(path, (path.stat().st_atime, path.stat().st_mtime + 10))
+        assert client.is_authed() is True
+        assert seen[-1] == "third-token"
+
+    def test_a_missing_blob_is_not_an_error(self, tmp_path, monkeypatch) -> None:
+        client, path, _seen = self._client(tmp_path, monkeypatch)
+        path.unlink()
+        assert client.refresh_token_if_changed() is False

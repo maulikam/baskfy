@@ -1768,6 +1768,62 @@ to `…:beb5ff5`, restore `compose.prod.yml.bak-sw13-20260903T051438` +
 the second run's and already new), `up -d --force-recreate caddy && up -d`. 0032 was already at
 head, nothing to roll back in the schema. The 9 + 1 rows are idempotent re-runs of the same date.
 
+### Deploy #3 (3 Sep 2026, leaf 1.5.4) — `151ce21` is live, unsuffixed; Scan now proven on the box
+
+**What is live:** all ten services on `baskfy-{web,py,desk}:151ce21` (built 05:40 IST from a
+clean worktree of `151ce21` = everything through SW15; ECR digests `d502ea82…` web /
+`2e4b3c06…` py / `74da37c1…` desk match the local builds), **alembic `0033_swing_scan_now`
+(= head)** — `sw_setup_daily.provisional`, `sw_market_daily.provisional`, `sw_scan_run` are on
+the box; seeds idempotent (`sw_config: 1`, `sw_config_sleeve: 1`); `tf.sh plan` → **No
+changes**. HEAD is importable again (SW15 added `SwScanRun` to `models/swing.py`), so no
+`-fix1` this time. `https://staging.baskfy.com/swing` → 307 to sign-in, 200 followed;
+`/healthz` → `ok`. Deploy-mechanical, not a code fix: a clean worktree has no `terraform.tfstate`
+/ `terraform.tfvars` (both gitignored), so `box.sh` cannot derive the instance id and
+`deploy-swing.sh` cannot read the bucket — they are exported as `BASKFY_INSTANCE_ID` /
+`BASKFY_ARCHIVE_BUCKET`, which the scripts already accept; `tf.sh plan` ran from the main tree
+(where the state is; `infra/` is byte-identical to `151ce21`). The first `deploy-swing.sh`
+attempt stopped before any box step for that reason — nothing was half-applied.
+
+**`verify-swing.sh` deciding lines (box half, all green):** all ten services `Up`, `beat
+schedules swing-eod / swing-eod-plan / swing-weekend / swing-premarket-levels /
+swing-premarket-gaps`, `desk: DRY_RUN=true`, `monitor: DRY_RUN=true`, every
+`BASKFY_SWING_{EXECUTION_ENABLED,MONITOR_ENABLED,EP_PREMARKET_ENABLED,TIMING_PROBE}=false` in
+both containers, `desk mounts the token volume read-only`, **`alembic at 0033_swing_scan_now
+(head 0033_swing_scan_now)`**, `desk schema has 20 tables`. `.env.staging.compose` carries no
+`DRY_RUN`, `BASKFY_DESK_DRY_RUN` or `BASKFY_SWING_*` key. The 7 HTTPS checks on
+`desk.staging.baskfy.com` still `000` — NXDOMAIN until NEEDS-MAULIK S4; unchanged. Inside the
+box `GET /status` → `{"dry_run":true,...,"authed":false}` — **the desk sees no Kite session
+this morning** (deploy #1 saw `authed:true`); it is the day's login + `restart desk`
+(Q-SW13-1), not the deploy. `swing-monitor`: `flag off; next run Thu 2026-09-03 09:14 IST`.
+
+**Scan now, end to end on the box (05:48 IST, outside 09:15–15:30, so the last published
+session, not provisional):**
+1. `sw_scan_run` id 1 inserted by SQL as `QUEUED` with a placeholder `task_id` (so the sweep
+   would leave it alone), then `run --rm -T worker python -c "swing_scan_now_task.apply(args=[1])"`
+   → **`DONE`, `session_date 2026-09-02`, `provisional false`, 15 s**, `detail.reason
+   "outside market hours: the last published session, from published bars"`, funnel
+   `instruments 2317 → bars 411,083 → with_a_bar_today 2317 → liquid 402 → candidates 9`
+   (`FLAG 8, EP 0, PARABOLIC_SHORT 1`) — the same funnel as deploy #2's nightly, now written
+   on the market row as SW15 promised.
+2. id 2 inserted as `QUEUED` with `task_id` null: **the Beat sweep published it unaided at
+   05:49:05 IST** (`scan_sweep … {'published': [2]}`, `task_id bc684c06…`), the compute worker
+   ran it in 13.3 s → `DONE`, same session, same funnel.
+**Rows after both:** `sw_scan_run` 2 × `DONE|f|2026-09-02`; `sw_setup_daily 9` (all
+`provisional=false`), `sw_market_daily 1` (`provisional=false`) — the re-run replaced the
+same keys, no duplicates. No Kite call was made (no provisional path); the first live press
+against Kite quotes is still the DRY_RUN morning.
+
+**Rollback:** in `/opt/baskfy/.env.staging.compose` set the three `BASKFY_*_IMAGE` lines back
+to `…:6884d1b-fix1`, restore `compose.prod.yml.bak-sw13-20260903T054555` +
+`Caddyfile.bak-sw13-20260903T054555` (the genuine pre-deploy-#3 copies — the first attempt
+never reached the box), `up -d --force-recreate caddy && up -d`. **0033 does not roll back with
+the image** (runbook §6): `6884d1b-fix1` ignores the two `provisional` columns and the
+`sw_scan_run` table, so the schema is safe to leave ahead.
+
+**Still open, unchanged:** the `index_snapshot_daily` 1/14-scale window (deploy #2; SW16 is
+repairing it on this box in parallel — this deploy touched neither postgres nor its `run`
+containers); desk history not migrated (`tools/migrate-desk` not run); the desk vhost DNS.
+
 #### The prep leaf's record (SW13-prep, before the run)
 
 **MD20:** one system. The desk (weekly book + swing) runs as compose services `desk` and
@@ -2014,6 +2070,49 @@ replacement and the failed-run rollback), API +9 (109 across the four files), we
 desk +11 (1706). **Did NOT do:** no live press against Kite yet (the first is the DRY_RUN
 morning); the desk button's latency is the sweep's minute; no "scan now" for the weekend
 five-session re-scan (it is the last session only).
+
+## SW16 — The index snapshot repair: the 1/14-scale rows were the fixture, and the writer now refuses them ✅
+
+3 Sep 2026 (leaf 1.7.1). **Cause, proven from the recorded fixture:** the `index_snapshot_daily`
+rows for 2026-07-08..2026-08-18 were `baskfy_providers.fixture_builder._index_snapshots`'s
+synthetic random walk (`level = 1000 + position * 137.5`, thirty trading days ending
+`FIXTURE_AS_OF` = 2026-08-18) — `FixtureProvider().index_snapshots(2026-07-08)` gives
+`nifty-50 = 1004.6026`, `nifty-500 = 1576.9012`, `pe` 20.0 / 20.4, the exact rows the box held
+(`services/worker/tests/test_snapshots.py`). They were written by `baskfy_api.seed` into the
+development database and copied to staging with the market tables (DECISIONS-MERGE, "Staging had
+no market data"); M31's Kite backfill was `DO NOTHING` when it ran (22 Aug) so it never
+overwrote them (M32.5 changed that but was not re-run on the box); the NSE ingest first wrote on
+27 Aug, once its archive path was writable (M56). **24–26 Aug** were the gap between Kite's last
+backfilled day (21 Aug) and the first NSE day — not holidays (`trading_day` says trading). **The
+NSE parser was not the cause**: the box's own archived `2026-08-27.csv` row parses to 24,090.85
+(`test_nse.py`). **Fixes:** (1) `store_snapshots` refuses a level > 40 % away from the last stored
+level within 14 days, names the row, still writes the sane rows; the step notes every refusal.
+(2) `nse.index_snapshots` refuses a file whose `Index Date` is not the requested day. (3)
+`python -m baskfy_worker.index_repair --from --to [--slugs] [--dry-run]` / `make index-repair
+FROM= TO=`: NSE **directly** (never the composite — its fallback for this capability is the
+FixtureProvider), archive-then-parse, ascending, one commit per day, per-day per-slug
+before/after. Tests: worker +16 (`test_snapshots.py` 9, `test_index_repair.py` 8), providers +2.
+**Run on the box** (files bind-mounted over the `6884d1b-fix1` image for one `run --rm`, nothing
+deployed): 2026-07-01..2026-09-02, **46 trading days, 7,403 rows, 0 failed, 42 refused**.
+`nifty-50` 2026-07-08 **1004.6026 → 23882.05**, 2026-08-18 **1128.5972 → 24154.90**; `nifty-500`
+2026-07-08 **1576.9012 → 22908.05**, 2026-08-18 **1696.5690 → 23472.40**; 24/25/26 Aug now
+24219.05 / 24334.55 / 24207.75 and 23511.75 / 23611.60 / 23559.20; 07-01..07-07 and 08-19..08-21
+(Kite) and 08-27..09-02 (NSE archive) rewrote to identical values (`=`); nifty-500's largest
+day-on-day move over the window is 1.97 %. **`swing_cli --date 2026-09-02` re-run:** the market
+row went from `index_ma_fast 19086.94 / index_ma_slow 10378.41 / gate GREEN` to **`23474.94 /
+23548.19 / RED`** against close 23222.80 (−1.1 % / −1.4 %) — the GREEN was the artefact.
+**The 42 refusals are all one index:** `nifty-consumer-services` — NSE says 3,500–3,700, the
+stored Kite history (2017→21 Aug) says ~31,000, because M31's abbreviation table maps
+`SERVSECTOR` → `CONSUMERSERVICES` (Kite's *Nifty Services Sector*, 30,525 on 2 Sep). The guard
+caught it; the fix is M31's table + a re-run for that index (`docs/OPEN-ITEMS.md`).
+**Not done:** (a) 360 synthetic rows remain for 12 slugs NSE never publishes under those names
+(`etf`, `nifty-allcap`, `nifty-fno` are derived universes; eight bond indices; `nifty-consumption`,
+a duplicate of `nifty-india-consumption`), 07-08..08-18 — the parking-and-delete step was
+written and not run because the AWS SSO token expired mid-leaf; the predicate is
+`slug in (those 12) and date between 2026-07-08 and 2026-08-18`. (b) The guard and the CLI are in
+the tree, not in the box's image (`151ce21` now, SW15's deploy) — the nightly ingest gains the
+guard at the next deploy. (c) `/opt/baskfy/sw16/` holds the three bind-mounted files and
+`repair.log`; delete after the deploy.
 
 ## Not done (kept loud)
 

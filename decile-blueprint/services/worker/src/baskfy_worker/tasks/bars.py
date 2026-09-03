@@ -210,9 +210,7 @@ async def _fetch_from_bhavcopy(  # noqa: PLR0913 - a source, a window, and how t
     # `session=` is load-bearing: this runs inside the chain's open transaction, and a
     # second connection here waits on the instrument rows step 1 has not committed while
     # the chain waits for this call. `_working_session` carries the incident.
-    report = await backfill_bars_from_bhavcopy(
-        provider, window, progress_every=0, session=session
-    )
+    report = await backfill_bars_from_bhavcopy(provider, window, progress_every=0, session=session)
     if top_up is None:
         outcome.rows_out = report.bars_written
     else:
@@ -227,6 +225,11 @@ async def _fetch_from_bhavcopy(  # noqa: PLR0913 - a source, a window, and how t
         days_written=report.days_written,
         missing_days=[d.isoformat() for d in report.missing_days] or None,
         unmatched_symbol_count=len(report.unmatched_symbols) or None,
-        failures=report.failures or None,
+        # NOT `failures=` (M84.2). The Kite pass has already written its own per-symbol failures
+        # under that key, and reusing it overwrites the only record of why Kite produced nothing.
+        # That is not hypothetical: the 3 Sep re-run's step note was 289 KB of one bhavcopy
+        # DBAPIError keyed by date, and the ~2,265 Kite reasons underneath it were gone — so
+        # "why did Kite return zero rows" had to be reconstructed by probing the box afterwards.
+        bhavcopy_failures=report.failures or None,
     )
     return report.bars_written

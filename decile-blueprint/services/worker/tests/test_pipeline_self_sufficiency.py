@@ -322,6 +322,9 @@ class TestAPartialKitePassIsCompletedFromTheBhavcopy:
         assert written == 1, "the step still returns what Kite itself wrote"
         assert [str(w) for w in calls] == [str(WINDOW)], "the day was left half-landed"
         assert outcome.detail["top_up"] == "bhavcopy"
+        assert outcome.detail["failures"] == {
+            "BBB": "[kite] Kite rejected the request as malformed: invalid token"
+        }, "the bhavcopy's report overwrote the only record of why Kite failed"
         assert outcome.detail["kite_rows"] == 1
         assert outcome.detail["bhavcopy_rows"] == 3635
         assert outcome.rows_out == 1, "a top-up must not overwrite Kite's count with an overlap"

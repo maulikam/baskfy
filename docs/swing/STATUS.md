@@ -1947,6 +1947,91 @@ are now the MidSmallcap 400's — a roll back should re-run the detection to res
 re-run; desk history not migrated (`tools/migrate-desk` not run); `restart desk` after each
 morning's Kite login (Q-SW13-1). **Closed by this deploy:** the desk vhost DNS.
 
+### Deploy #6 (3 Sep 2026, 17:59 IST, leaf 7.5.1) — `6c218f0` is live; the 08:45 login nudge is armed on the box
+
+**What is live:** all ten services on `baskfy-{web,py,desk}:6c218f0` (SW18; built from a clean
+worktree of `6c218f0`, never the working tree). HEAD proven importable from the worktree's own
+sources before the build (`PYTHONPATH` at the worktree — deploy #4's note). ECR digests
+`16596e90…` web / `3f9262c6…` py / `f3756ccb…` desk. `tf.sh plan` from the main tree → **No
+changes** (`infra/` byte-identical to `6c218f0`; SW18 touches no infra). `deploy-swing.sh` with
+`BASKFY_INSTANCE_ID=i-086986250704e4392` / `BASKFY_ARCHIVE_BUCKET=baskfy-archive` exported: ECR
+login on the box, pull, **alembic stays `0033_swing_scan_now` (= head; SW18 adds no migration)**,
+seeds idempotent (`sw_config: 1`, `sw_config_sleeve: 1`), `up`, caddy recreated. From the laptop:
+`https://staging.baskfy.com/swing` → **200**, `https://desk.staging.baskfy.com/status` → **200**.
+
+**`verify-swing.sh`: 12/12 HTTPS checks green, and exactly four box-half FAILs — all four
+expected, none of them a defect.** Green: all ten services `Up`, `beat schedules swing-eod /
+swing-eod-plan / swing-weekend / swing-premarket-levels / swing-premarket-gaps`, `desk:
+DRY_RUN=true`, `monitor: DRY_RUN=true`, `desk/monitor: BASKFY_SWING_EXECUTION_ENABLED=false`
+and `…TIMING_PROBE=false`, `desk mounts the token volume read-only`, `alembic at
+0033_swing_scan_now (head 0033_swing_scan_now)`, `desk schema has 20 tables`; the desk vhost's
+seven checks all pass (`GET desk /status → 200` `dry_run true`, `/swing`, `/` and
+`/static/app.css` → 401, noindex + HSTS). **The four FAILs are `desk:
+BASKFY_SWING_MONITOR_ENABLED is not false`, `desk: …EP_PREMARKET_ENABLED is not false` and the
+same two for `monitor`** — Maulik turned both flags **on** by hand in
+`/opt/baskfy/.env.staging.compose`, deliberately, and this deploy left them exactly as found.
+Read back from both containers after the deploy: `DRY_RUN=true`,
+`BASKFY_SWING_EXECUTION_ENABLED=false`, `BASKFY_SWING_MONITOR_ENABLED=true`,
+`BASKFY_SWING_EP_PREMARKET_ENABLED=true`, `BASKFY_SWING_TIMING_PROBE=false`. **The assertion
+that needs updating is `verify-swing.sh` lines 77–80** — the `for flag in EXECUTION_ENABLED
+MONITOR_ENABLED EP_PREMARKET_ENABLED TIMING_PROBE` loop that demands `=false` for all four. Only
+`EXECUTION_ENABLED` (and `TIMING_PROBE`) is a rail; `MONITOR_ENABLED` / `EP_PREMARKET_ENABLED`
+are operating choices and should be reported, not asserted false. **Not changed in this leaf** —
+neither the flags nor the script; the deploy reports the delta and stops there.
+
+**The nudge, end to end on the box (`run --rm -T worker`, both windows of the machinery):**
+1. `kite_login_nudge_task('first')` →
+   `{'window': 'first', 'date': '2026-09-03', 'sent': False, 'notes': ['a Kite session issued
+   today is already stored; no message sent']}` — **a pass**: it got past every `skipped` gate
+   (`BASKFY_KITE_LOGIN_NUDGE_ENABLED` true, `BASKFY_SOLE_USER_ID` set,
+   `BASKFY_BROKER_OAUTH_STATE_PATH` set and readable in the container,
+   `BASKFY_KITE_LOGIN_NUDGE_TO` set), past the weekday and the NSE-calendar checks, and then
+   found today's login already done (deploy #5's afternoon `authed:true`). No mail, by design.
+2. A second immediate call returned the same payload — nothing sent twice.
+3. **No `kite-login-nudge-2026-09-03.first` marker exists, and that is correct:** `_claim` runs
+   *after* the token check, so the fresh-token branch writes no marker. The marker machinery was
+   therefore proven directly on the real state volume with a sentinel date: `_claim(…,
+   1970-01-01, FIRST)` → `True`, the file `kite-login-nudge-1970-01-01.first` appeared beside the
+   token blob, the second `_claim` → `False` (the `O_EXCL` idempotency), sentinel removed.
+4. **The hand-off the whole feature rests on was exercised for real:** `_login_url_for(user_id)`
+   minted a live link — `kite.zerodha.com/connect/login`, query keys `api_key`,
+   `redirect_params`, `v`, `valid_for_minutes 30` — and the pending state it wrote landed in
+   `/var/lib/baskfy/state/broker-oauth-state.json` (155 bytes, 1 entry, keys `broker_id`,
+   `created_at`, `state`, `user_id`), which the **api** container can read
+   (`test -r` → yes). That is the worker→API seam that `brokers.py` refuses a login without.
+   `render_nudge` produced subject `Kite login needed before 09:15` with exactly one link. The
+   entry expires in 30 minutes on its own; nothing was cleaned up by hand.
+5. Beat carries both entries on the box: `kite-login-nudge` `45 8 * * mon-fri` and
+   `kite-login-nudge-second` `5 9 * * mon-fri`, task `baskfy.kite.login_nudge`, `queue: compute`
+   — and `beat timezone: Asia/Kolkata`, with the `worker` service consuming
+   `-Q compute,backtest,default`. So the first real fire is **Fri 04 Sep 08:45 IST**.
+   No address was printed, logged or written anywhere in this leaf.
+
+**`swing-monitor` after the deploy:** `swing-monitor: flag ON; next run Fri 2026-09-04 09:14 IST`
+— the first deploy at which that line reads **ON** rather than `flag off`.
+
+**Observation, not changed (pre-existing, for Maulik):** `/opt/baskfy/.env.staging` carries
+`DRY_RUN` **twice** — `DRY_RUN=true` at line 89 and `DRY_RUN=false` at line 146 — and compose's
+`env_file` takes the last, so `api`/`worker`/`beat` run with `DRY_RUN=false` (this is M81/M82's
+read-only holdings pull, and it long predates this leaf). The order path is unaffected: the desk
+reads its own `${BASKFY_DESK_DRY_RUN:-true}`, which is unset on the box, so `desk` and
+`swing-monitor` both read `DRY_RUN=true`. Worth collapsing to one line so the file says what it
+means.
+
+**Rollback:** in `/opt/baskfy/.env.staging.compose` set the three `BASKFY_*_IMAGE` lines back to
+`…:67df9b4`, restore `compose.prod.yml.bak-sw13-20260903T175938` +
+`Caddyfile.bak-sw13-20260903T175938` (the genuine pre-deploy-#6 copies; compose and Caddyfile are
+byte-identical between `67df9b4` and `6c218f0`, so the restore is a no-op in content), then
+`up -d --force-recreate caddy && up -d`. Nothing to roll back in the schema (0033 was already
+head). Rolling back drops the login nudge and nothing else. **`docker compose restart` does not
+re-read `env_file`** — any env change needs `up -d --force-recreate` (deploy #5's note).
+
+**Still open, unchanged:** SW16 (a) the 360 synthetic rows for the 12 slugs NSE never publishes
+(07-08..08-18); `nifty-consumer-services`' mapping and its re-run; desk history not migrated
+(`tools/migrate-desk` not run); `restart desk` after each morning's Kite login (Q-SW13-1) — SW18
+does **not** close it, the desk still caches one `Kite()`; and the nudge has still never run on a
+morning where the token was actually missing.
+
 #### The prep leaf's record (SW13-prep, before the run)
 
 **MD20:** one system. The desk (weekly book + swing) runs as compose services `desk` and

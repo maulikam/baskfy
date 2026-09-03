@@ -15,16 +15,21 @@ weekend did the same, which is how an alert becomes noise.
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import NoReturn
 
 import polars as pl
 import pytest
+from helpers import make_instrument, requires_db
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_providers.errors import ProviderError
 from baskfy_worker import ops
+from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.steps import StepOutcome
 from baskfy_worker.tasks.bars import run_fetch_daily_bars
 from baskfy_worker.window import DateWindow
@@ -374,3 +379,115 @@ class TestAPartialKitePassIsCompletedFromTheBhavcopy:
         )
 
         assert calls == [], "a partial multi-year Kite pass triggered a day-by-day archive walk"
+
+
+# =====================================================================================
+# M84 — the fourth fault, found by the fix for the third.
+#
+# `_fetch_from_bhavcopy` runs INSIDE the chain's single open transaction. Until this was fixed
+# it called `backfill_bars_from_bhavcopy`, which opened a connection of its own — and step 1 has
+# upserted `instrument` rows the chain has not committed, so the bar insert on that second
+# connection needs a KEY SHARE lock the chain still holds, while the chain waits for the call to
+# return. Postgres sees a lock wait on one side and `ClientRead` on the other, which is not a
+# cycle it can detect: no error, no timeout, forever.
+#
+# Observed on the box at 02:07 IST on 4 Sep 2026, one hour fifty-eight minutes into a re-run:
+#
+#     207399 | Lock/transactionid | blocked_by = 207394
+#     207394 | Client/ClientRead  | blocked_by = (nothing)
+#
+# Both tests below are written to FAIL rather than hang if it comes back.
+# =====================================================================================
+
+
+class TestTheFallbackJoinsTheChainsTransaction:
+    async def test_it_opens_no_second_connection_when_given_a_session(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The seam itself: a caller with a transaction must never get a second one."""
+
+        def explode(*args: object, **kwargs: object) -> NoReturn:
+            raise AssertionError(
+                "opened a second connection inside the chain's transaction — this is the "
+                "1h58m hang of 4 Sep 2026"
+            )
+
+        monkeypatch.setattr("baskfy_worker.bhavcopy_backfill.session_scope", explode)
+        report = await backfill_bars_from_bhavcopy(
+            _NoBhavcopy(), WINDOW, session=_SessionWithNoInstruments()
+        )
+        # No bhavcopy port, so it stops at the setup check — having done its reads on our session.
+        assert "setup" in report.failures
+
+    @pytest.mark.db
+    @requires_db
+    async def test_it_writes_through_an_uncommitted_transaction_without_blocking(
+        self, session: AsyncSession
+    ) -> None:
+        """The incident, in miniature, against a real database.
+
+        An `instrument` row is written and **not committed** — exactly the state step 1 leaves the
+        chain in — and then the bhavcopy path is asked to write a bar for it. On the same session
+        that is ordinary. On a second connection it waits for a lock that will never be released,
+        so this is wrapped in a timeout: a regression fails here in ten seconds instead of hanging
+        the suite.
+        """
+        instrument = await make_instrument(session, "TATAMOTORS", token=884737)
+        day = dt.date(2026, 9, 3)
+
+        def fake_bhavcopy(on: dt.date) -> pl.DataFrame:
+            return pl.DataFrame(
+                {
+                    "symbol": ["TATAMOTORS"],
+                    "series": ["EQ"],
+                    "date": [on],
+                    "open": [Decimal("100")],
+                    "high": [Decimal("101")],
+                    "low": [Decimal("99")],
+                    "close": [Decimal("100.5")],
+                    "prev_close": [Decimal("99.5")],
+                    "volume": [1000],
+                    "turnover": [Decimal("100500")],
+                    "upper_circuit": [Decimal("110")],
+                    "lower_circuit": [Decimal("90")],
+                }
+            )
+
+        provider = SimpleNamespace(bhavcopy=fake_bhavcopy)
+        report = await asyncio.wait_for(
+            backfill_bars_from_bhavcopy(
+                provider, DateWindow.single(day), progress_every=0, session=session
+            ),
+            timeout=10,
+        )
+
+        assert report.failures == {}, report.failures
+        assert report.bars_written >= 1
+        # Visible inside the caller's transaction, which is the point: the chain publishes the
+        # day or nothing, and a fallback that committed on its own broke that quietly.
+        count = await session.scalar(
+            text("select count(*) from ohlcv_daily where instrument_id = :i and date = :d"),
+            {"i": instrument, "d": day},
+        )
+        assert count == 1
+
+
+class _SessionWithNoInstruments:
+    """Enough of an `AsyncSession` for the setup path: it answers both reads with nothing."""
+
+    async def execute(self, *args: object, **kwargs: object) -> object:
+        return _EmptyResult()
+
+    async def scalars(self, *args: object, **kwargs: object) -> object:
+        return _EmptyResult()
+
+
+class _EmptyResult:
+    def scalars(self) -> _EmptyResult:
+        return self
+
+    def all(self) -> list[object]:
+        return []
+
+    def __iter__(self):  # noqa: ANN204 - a test double for SQLAlchemy's result iteration
+        return iter(())

@@ -6467,3 +6467,51 @@ the trigger recursive); a shorter deploy window (the chain has run to 20:38).
 is then exactly what it was, a single 18:45 attempt with a fallback that only fires at zero. The
 `window.days == 1` top-up in `bars.py` reverts on its own line. `DEPLOY_DURING_NIGHTLY=1` disables
 the guard without editing it.
+
+
+## M84.1 — the bhavcopy fallback must join the chain's transaction, not open its own ⚠ UNREVIEWED
+
+**Found while fixing M84, on the box, at 02:07 IST on 4 Sep 2026.** The 3 Sep re-run had been
+"running" for one hour fifty-eight minutes. It was not running; it was hung:
+
+```
+207399 | Lock/transactionid | blocked_by = 207394     the bhavcopy's own connection
+207394 | Client/ClientRead  | blocked_by = (nothing)  the chain, waiting for the application
+```
+
+`run_fetch_daily_bars` calls `backfill_bars_from_bhavcopy` from **inside** the nightly chain's
+single open transaction, and that function opened a connection of its own. Step 1
+(`refresh_instruments`) has already upserted `instrument` rows the chain has not committed, so the
+bar insert on the second connection needs a KEY SHARE lock on those parent rows — and the chain is
+waiting for the call to return. A wait-for cycle **through the application**: one side waits on a
+lock, the other on `ClientRead`, and Postgres's detector only sees the lock graph. No error, no
+timeout, no end. The step's own note recorded the shape of it: `rows_out: 0`,
+`fallback_reason: "daily_bars produced no rows"`, `days_written: 0`, `duration_ms: 7,082,786`.
+
+**Why it had never bitten before.** The fallback only fired when Kite wrote *nothing at all*, and
+on the nights that happened (18-29 Aug) `refresh_instruments` had evidently left no contended
+rows. M84's top-up fires whenever Kite leaves *any* gap — which is most nights — so shipping M84
+without this would have hung the nightly regularly instead of rarely. It was found because the
+re-run was watched, not because a test caught it.
+
+**The choice.** `backfill_bars_from_bhavcopy` takes an optional `session`. Given one it uses it
+for every read and write and neither commits nor closes it; given none it opens its own, exactly
+as before, which is what the CLI and the new 18:15 job want. `_fetch_from_bhavcopy` passes the
+chain's session.
+
+This is also what the chain's own contract asked for all along. `baskfy_worker.orchestrator`
+promises "either the trade date lands whole or it does not land", and a fallback committing its
+bars on a separate session broke that quietly every time it fired: a chain that failed at the
+quality gate two steps later left those bars behind.
+
+**Tests, and they were verified to fail without the fix.** `test_it_opens_no_second_connection_
+when_given_a_session` explodes if `session_scope` is reached. `test_it_writes_through_an_
+uncommitted_transaction_without_blocking` is the incident in miniature against a real database —
+an uncommitted `instrument` row, then a bar written for it through the same session — wrapped in
+`asyncio.wait_for(..., timeout=10)` so a regression **fails in ten seconds instead of hanging the
+suite**, which is the only responsible way to test a deadlock.
+
+**Rejected.** A `lock_timeout` on the second connection (turns a hang into a failed night, which
+is not better); committing the chain before the fallback (destroys the all-or-nothing property
+the orchestrator is built on); leaving the fallback out of the chain and running it only as the
+18:15 job (the chain would then still be Kite-only when it runs on a day the job missed).

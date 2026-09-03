@@ -25,12 +25,30 @@ NULL, not zero
 An index with no fundamentals stores NULL. Zero would render as "0.00" on the dashboard and read
 as a P/E of zero — a claim about the index, rather than the absence of one. docs/01 §7 says the
 reference product renders these as `-`, which is what NULL becomes in the UI.
+
+The sanity guard (SW16)
+-----------------------
+The first real swing scan read NIFTY 500 at 1,696.57 on 2026-08-18 and 23,386 on 2026-08-19, and
+its 50-day index average came out at 10,378 against a 23,222 close. The 1/14-scale rows were the
+fixture builder's synthetic random walk (``fixture_builder._index_snapshots``: ``1000 + position
+* 137.5``, thirty trading days ending ``FIXTURE_AS_OF``), seeded by ``baskfy_api.seed`` into the
+development database and copied to the box with the market tables (DECISIONS-MERGE, the staging
+seed). Nothing in the writer noticed a level falling by 96 % overnight.
+
+So the writer now refuses any level that moves more than :data:`MAX_DAY_ON_DAY_CHANGE` against the
+last stored level for the same index within :data:`GUARD_LOOKBACK_DAYS`. The refused row is named
+in :attr:`SnapshotResult.refused`; the sane rows of the same file are still written. A first-ever
+row has nothing to compare against and is accepted. The guard compares against what is *stored*,
+so a repair over a corrupt window must run ascending from a sane anchor — which is what
+``baskfy_worker.index_repair`` does.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass, field
+from decimal import Decimal
+from typing import Final
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -45,12 +63,20 @@ from baskfy_worker.steps import StepOutcome
 #: smallint tops out here; docs/01 §7's ~145 indices sit comfortably inside it.
 MAX_INDEX_ID: int = 32767
 
+#: SW16: a level that moves more than this fraction against the last stored level is refused.
+#: No NSE index has moved 40 % in a session; the fixture rows moved 96 %.
+MAX_DAY_ON_DAY_CHANGE: Final = Decimal("0.40")
+#: How far back the guard looks for the last stored level: a long weekend plus a holiday run.
+GUARD_LOOKBACK_DAYS: Final = 14
+
 
 @dataclass(slots=True)
 class SnapshotResult:
     rows_written: int = 0
     registered: list[str] = field(default_factory=list)
     unnamed: int = 0
+    #: SW16: rows the sanity guard refused, each named with both levels and both dates.
+    refused: list[str] = field(default_factory=list)
 
 
 async def run_refresh_index_snapshots(
@@ -75,6 +101,8 @@ async def run_refresh_index_snapshots(
         # New indices are an event worth seeing: the dashboard grew, and nobody asked it to.
         newly_registered=result.registered or None,
         unnamed_rows=result.unnamed or None,
+        # A refusal is loud on purpose: it is either a corrupt neighbour or a wrong file.
+        refused=result.refused or None,
     )
     return result.rows_written
 
@@ -91,6 +119,7 @@ async def store_snapshots(
     next_id = await _next_dashboard_id(session)
 
     values = []
+    slugs: list[str] = []
     for snapshot in snapshots:
         slug = (
             snapshot.index_slug
@@ -107,6 +136,7 @@ async def store_snapshots(
             await _register_dashboard_index(session, index_id, slug, snapshot.index_slug)
             known[slug] = index_id
             result.registered.append(slug)
+        slugs.append(slug)
         values.append(
             {
                 "index_id": index_id,
@@ -121,6 +151,10 @@ async def store_snapshots(
             }
         )
 
+    if not values:
+        return result
+
+    values = await _refuse_implausible_levels(session, on, values, slugs, result)
     if not values:
         return result
 
@@ -140,6 +174,59 @@ async def store_snapshots(
     )
     result.rows_written = len(values)
     return result
+
+
+async def _refuse_implausible_levels(
+    session: AsyncSession,
+    on: dt.date,
+    values: list[dict[str, object]],
+    slugs: list[str],
+    result: SnapshotResult,
+) -> list[dict[str, object]]:
+    """SW16: drop, and name, every row whose level is > 40 % away from the last stored one."""
+    previous = await _previous_levels(session, [int(str(v["index_id"])) for v in values], on)
+    kept: list[dict[str, object]] = []
+    for slug, value in zip(slugs, values, strict=True):
+        level = value["level"]
+        anchor = previous.get(int(str(value["index_id"])))
+        if not isinstance(level, Decimal) or anchor is None or anchor[1] <= 0:
+            kept.append(value)
+            continue
+        anchor_date, anchor_level = anchor
+        move = level / anchor_level - 1
+        if abs(move) > MAX_DAY_ON_DAY_CHANGE:
+            result.refused.append(
+                f"{slug} {on.isoformat()}: level {level} is {move * 100:+.1f}% against "
+                f"{anchor_level} on {anchor_date.isoformat()}; refused, not written"
+            )
+            continue
+        kept.append(value)
+    return kept
+
+
+async def _previous_levels(
+    session: AsyncSession, index_ids: list[int], on: dt.date
+) -> dict[int, tuple[dt.date, Decimal]]:
+    """The last stored (date, level) per index strictly before ``on``, within the lookback."""
+    if not index_ids:
+        return {}
+    rows = await session.execute(
+        select(IndexSnapshotDaily.index_id, IndexSnapshotDaily.date, IndexSnapshotDaily.level)
+        .where(
+            IndexSnapshotDaily.index_id.in_(index_ids),
+            IndexSnapshotDaily.date < on,
+            IndexSnapshotDaily.date >= on - dt.timedelta(days=GUARD_LOOKBACK_DAYS),
+            IndexSnapshotDaily.level.is_not(None),
+        )
+        .order_by(IndexSnapshotDaily.index_id, IndexSnapshotDaily.date)
+    )
+    latest: dict[int, tuple[dt.date, Decimal]] = {}
+    for index_id, day, level in rows.tuples():
+        # Ordered by date ascending, so the last write per index is the latest row. The query
+        # excludes NULL levels; the narrowing is for the type-checker.
+        if level is not None:
+            latest[int(index_id)] = (day, Decimal(level))
+    return latest
 
 
 async def _next_dashboard_id(session: AsyncSession) -> int:

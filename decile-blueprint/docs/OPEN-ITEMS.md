@@ -440,6 +440,7 @@ this is the same list, in full, and it remains the honest record of what has nev
   had never written a row. It now calls `GetQuoteApi`, scoped to the day's traded names with the
   series `instrument.series` already holds, and `baskfy_worker.fundamentals_cli` back-fills a past
   date (`docs/05` §14, `DECISIONS-MERGE.md` §T3F.1–T3F.5).
+- **Synthetic index levels reached a real table twice, and one Kite index is filed under another's name.** `baskfy_api.seed market|all|e2e` writes the fixture builder's random-walk `index_snapshots` (thirty days ending `FIXTURE_AS_OF`) into `index_snapshot_daily` on real dates; the development database's copy of those rows was seeded onto staging and read by the first swing scan as a 10,378 fifty-day average against a 23,222 close (SW16). The writer now refuses a > 40 % day-on-day level and `baskfy_worker.index_repair` rewrites a window from NSE, but the seeder still writes them locally, and M31's `("SERVSECTOR", "CONSUMERSERVICES")` puts *Nifty Services Sector* (~30,500) under `nifty-consumer-services` (NSE: ~3,650) — the guard refuses NSE's value for that slug on every day until the table is fixed and the index re-backfilled.
 - **The NSE fetch stalls roughly every 600 requests, and step 6 is now long enough to hit it.**
   One ESTABLISHED idle socket, `provider retry` repeating, no recovery — while `curl` against the
   same URL answers in 0.3s. `call_with_retry` is bounded correctly, so the hang is inside a single

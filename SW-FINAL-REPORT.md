@@ -1,8 +1,8 @@
 # Baskfy — the swing book, code complete
 
-**3 September 2026.** SW0 through SW14, one commit per module, branch `developer`. `beb5ff5`
-(SW11) is on the box with `DRY_RUN=true` and every swing flag false; this commit is not yet. No
-order was placed. Three documents matter more than this one:
+**3 September 2026.** SW0 through SW16, one commit per module, branch `developer`. **`bf4168b`
+(SW16) is live on `staging.baskfy.com`** — ten services, `DRY_RUN=true`, every swing flag false,
+migrations at `0033`. No order was placed. Three documents matter more than this one:
 
 * **[`NEEDS-MAULIK.md`](NEEDS-MAULIK.md) § Swing** — the nine things only you can do, in order.
 * **[`docs/swing/STATUS.md`](docs/swing/STATUS.md)** — every module's numbers and its "did NOT do".
@@ -15,15 +15,16 @@ Every number below was measured on 3 Sep 2026 by the command beside it, from `RO
 
 | | | measured by |
 |---|---|---|
-| Modules | **SW0 → SW14**, 19 ledger rows, 18 ✅ · SW13 🟡 (`beb5ff5` deployed; the desk vhost waits on DNS, S4) | `sed -n '/^## Module ledger/,/^States/p' docs/swing/STATUS.md \| grep -c '^| SW'` |
-| Desk suite | **1,694 passed, 17 skipped**, 64 s | `cd kite-momentum-rebalancer && .venv/bin/python -m pytest tests -q -p no:cacheprovider` |
-| Decile suite (core + providers + execution + api + worker, `test_load` deselected) | **5,678 passed, 3 skipped, 3 deselected**, 23 min 30 s (the mutation harness was sharing the machine) | `cd decile-blueprint && uv run pytest packages/core/tests packages/providers/tests packages/execution/tests services/api/tests services/worker/tests -p no:cacheprovider --deselect services/api/tests/test_load.py` on `baskfy_sw_test` |
+| Modules | **SW0 → SW16**, 20 ledger rows · SW13 🟡 (`bf4168b` deployed; the desk vhost waits on DNS, S4) | `sed -n '/^## Module ledger/,/^States/p' docs/swing/STATUS.md \| grep -c '^| SW'` |
+| Desk suite | **1,706 passed, 17 skipped**, 59 s | `cd kite-momentum-rebalancer && .venv/bin/python -m pytest tests -q -p no:cacheprovider` |
+| Decile suite (core + providers + execution + api + worker, `test_load` deselected) | **5,694 passed, 3 skipped, 3 deselected**, 21 min (measured before SW15/SW16 added their tests) | `cd decile-blueprint && uv run pytest packages/core/tests packages/providers/tests packages/execution/tests services/api/tests services/worker/tests -p no:cacheprovider --deselect services/api/tests/test_load.py` on `baskfy_sw_test` |
 | The re-pinned gate tests | **59 passed** | `uv run pytest services/api/tests/test_api_swing_journal.py services/worker/tests/test_swing_eod.py` |
 | Lint | **clean** (ruff, ruff format, mypy strict, TS lint/typecheck), 26 s | `cd decile-blueprint && make lint` |
 | The DRY_RUN drill | `confirms=2 fills=2`, exposure **25.0 %** of the sleeve, **0 orders reached a broker**, `DRILL OK`, 4.5 s | `cd decile-blueprint && BASKFY_DATABASE_URL=<baskfy_sw_test> BASKFY_SOLE_USER_ID=1 DRY_RUN=true uv run python ../tools/swing/drill.py` |
 | Goldens for the Go lane | **79 cases**, byte-stable | `ls go/testdata/golden/L1/swing \| wc -l` |
 | Mutation score, the nine swing targets | **88.2 %** (654 mutants, 77 survivors, every one justified by name) | `grep 'mutation score' decile-blueprint/reconciliation/MUTANTS.md` |
-| Unreviewed decisions | **62** headings (the grep says 63; one is the MD table's own heading, "not ⚠ UNREVIEWED") | `grep -cE '^#+ .*⚠ UNREVIEWED' docs/swing/DECISIONS-SW.md` |
+| Unreviewed decisions | **65** headings (the grep says 66; one is the MD table's own heading, "not ⚠ UNREVIEWED") | `grep -cE '^#+ .*⚠ UNREVIEWED' docs/swing/DECISIONS-SW.md` |
+| Live on the box | `bf4168b`, ten services, alembic `0033`, sleeve ₹25,00,000 at 0.5 %, the 2 Sep gate **RED** | `bash tools/deploy/verify-swing.sh` |
 | Orders placed during any of this | **zero** | every drill line ends `broker client touched: 0` |
 
 ## Built
@@ -48,7 +49,12 @@ Every number below was measured on 3 Sep 2026 by the command beside it, from `RO
 | SW11 + SW11B | `beb5ff5` | Five alerts + runbook 6, the desk as its own clock (10:45 / 15:15), tick-built range, the notifier, the S2 probe, the catalyst feed |
 | SW13-run | `2431066` | **Deployed `beb5ff5`**: images, the `desk.` record, alembic `0032`, the sleeve seeded, ten services up, box-side verify green; `desk.staging.baskfy.com` NXDOMAIN until S4 |
 | SW14 | `b38de36` | The web hub does everything `05` §2 says and only that: five money-free server actions, `/me/swing` settings form, the gate and lock-out on Setups, add-by-hand on Watchlist |
-| SW12 | *this commit* | 79 goldens (`1.4.3a`, in `b38de36`'s tree); `02` §3 rewritten under your name; this report; NEEDS-MAULIK § Swing |
+| SW12 | `6884d1b` | 79 goldens byte-stable, 654 mutants 88.2 % with every survivor named, `02` §3 rewritten under your name, this report |
+| SW13-run #2 | `715eda5` | **Deployed `6884d1b-fix1`** and ran the first real scan on the box: 2,317 names → 402 liquid → **9 candidates** (8 flags, 1 parabolic) |
+| SW15 | `151ce21` | **Scan now**: `POST /swing/scan`, provisional intraday bars from Kite quotes during market hours, replaced by the close; a button on the hub and the desk |
+| SW13-run #3 | `b552e24` | **Deployed `151ce21`**; a queued scan ran through the sweep unaided in 13 s |
+| SW16 | `bf4168b` | The box's index snapshots were the fixture builder's random walk — repaired (7,403 rows, 24–26 Aug filled), a > 40 % guard on the writer, `make index-repair`; the 2 Sep gate corrected **GREEN → RED** |
+| SW13-run #4 | `e7853e3` | **Deployed `bf4168b`** — what is live now |
 
 ## Decided
 
@@ -146,7 +152,7 @@ AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker c
    `DRY-…`), and the five `SWING_*` alerts in runbook 6. On the web hub, `/swing/journal`'s
    real card starts filling; the simulated card stays apart.
 
-## Deploy — in order, from the laptop (run once for `beb5ff5`; run again for this commit)
+## Deploy — in order, from the laptop (run four times so far; `bf4168b` is live)
 
 ```bash
 aws sso login --profile baskfy-poc
@@ -158,23 +164,23 @@ AWS_PROFILE=baskfy-poc bash tools/deploy/verify-swing.sh     # 401s where expect
 ```
 
 Rollback: the three `BASKFY_*_IMAGE` lines in `/opt/baskfy/.env.staging.compose` back to the
-previous tag (`beb5ff5` now), the `.bak-sw13-<stamp>` files back, `up -d --force-recreate caddy`,
+previous tag (`151ce21` now), the `.bak-sw13-<stamp>` files back, `up -d --force-recreate caddy`,
 `up -d` (`deploy-swing.sh` prints the exact lines). Before the drill morning: the GoDaddy A
 record `desk.staging → 3.108.148.38` (S4), `tools/swing/backtest.py` on the box for §3.3, and
 the `tools/migrate-desk` decision (SW-3).
 
 ## Not done
 
-The full list is `STATUS.md` § "Not done (kept loud)". The short form: the box runs `beb5ff5`,
-not this commit; the desk vhost is NXDOMAIN until S4; no morning on a real session; S2 unrun;
+The full list is `STATUS.md` § "Not done (kept loud)". The short form: the desk vhost is
+NXDOMAIN until S4; the box's index still carries 360 synthetic rows for twelve slugs NSE never
+publishes and `nifty-consumer-services` holds Kite's *Services Sector* (SW16, 42 refusals); no morning on a real session; S2 unrun;
 the 2017→ backtest unrun on real bars; the desk's 43,411 rows of history unmigrated;
 `sw_position` written only by tests and the drill; Playwright cannot sign in since M46;
 Q-SW12-1; `backtest.py:755` (`cash_available` at a full top-rung book) has no killing test.
 
 ## Needs you
 
-`NEEDS-MAULIK.md` § Swing, SW-1 → SW-8 and S4: one more SSO login and deploy for this commit;
-the sleeve confirmed; the desk-history migration yes/no; the S2 probe morning; the DRY_RUN
+`NEEDS-MAULIK.md` § Swing, SW-1 → SW-8 and S4: the sleeve confirmed; the desk-history migration yes/no; the S2 probe morning; the DRY_RUN
 drill morning; the Telegram token (optional); the flag flip; the S3 rotation call; **S4, the
 GoDaddy A record for `desk.staging`** — without it the desk page has no public name. S1 is
 resolved (MD3), S2 superseded by the probe.

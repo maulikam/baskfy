@@ -2237,6 +2237,37 @@ the tree, not in the box's image (`151ce21` now, SW15's deploy) — the nightly 
 guard at the next deploy. (c) `/opt/baskfy/sw16/` holds the three bind-mounted files and
 `repair.log`; delete after the deploy.
 
+## SW18 — The one-tap morning Kite login ✅
+
+3 Sep 2026 (Maulik's decision, recorded in DECISIONS-SW SW18.1). At 08:45 and again at 09:05 IST
+on weekdays `baskfy.kite.login_nudge` (`services/worker/.../tasks/kite_login_nudge.py`, compute
+queue) checks `AccessTokenStore.require_fresh` for the session date and, finding no usable token,
+emails **one** Kite login link built by the same `broker_oauth.kite_login_url` that
+`POST /brokers/{id}/connect` now uses — so the `state` it mints is one `GET /brokers/callback`
+accepts. **No password and no TOTP seed anywhere on the server.** Idempotent by an `O_EXCL` marker
+beside the token blob (`kite-login-nudge-<date>.<window>`), so two workers on one tick send once;
+the 09:05 message says "second and last". Silent on an NSE holiday (the calendar, not `mon-fri`),
+with `BASKFY_KITE_LOGIN_NUDGE_ENABLED` false, with `_TO` unset, or when
+`BASKFY_BROKER_OAUTH_STATE_PATH` is unset (a state the API could not read back would fail at the
+end of a login already committed to — refused, per `brokers.py` leaf 1.1.4). Fail soft throughout:
+a mailer that raises is a note. 32 tests (`services/worker/tests/test_kite_login_nudge.py`);
+`make lint` clean.
+
+**Maulik sets on the box:** `BASKFY_KITE_LOGIN_NUDGE_ENABLED=true` and
+`BASKFY_KITE_LOGIN_NUDGE_TO=<his address>` (NEEDS-MAULIK § Swing). Also needed and already on the
+box: `BASKFY_SOLE_USER_ID`, `BASKFY_KITE_API_KEY`, and `BASKFY_BROKER_OAUTH_STATE_PATH` pointing
+at a file on the `baskfy-state` volume that **both** the api and worker containers mount.
+
+**Not done / known:** (a) the callback is `AuthenticatedDep` — the phone must have a signed-in
+Baskfy session for the last hop, and the message says so rather than the code changing an auth
+boundary. (b) The state's TTL is the shared 30 minutes, so an 08:45 link tapped after 09:15 is
+refused; the 09:05 link is the answer and the body says it. (c) **The `desk` web service still
+needs a restart after a fresh login** — `app/main.py` caches one `Kite()` and `_load_token()` runs
+only in its constructor, so a token written at 09:10 is invisible to the running process
+(Q-SW13-1, unchanged; no restart hook was added, the desk tree is out of this module's scope).
+`swing_monitor` does **not** need one: `main()` builds its own `Kite()` at 09:14, after the login.
+(d) Never run on a real morning.
+
 ## Not done (kept loud)
 
 Final state, 3 Sep 2026. Each item names who closes it.

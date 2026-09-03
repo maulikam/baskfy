@@ -61,6 +61,17 @@ def build_pipeline_dependencies() -> PipelineDependencies:
     )
 
 
+def sole_user_id() -> int | None:
+    """The public name for :func:`_sole_user_id`.
+
+    SW18's login nudge needs exactly the same tenant — the ``state`` it mints is bound to a
+    user id and the callback refuses one that does not match the signed-in account — and it has
+    no reason to build the whole provider stack to learn it. One reader of
+    ``BASKFY_SOLE_USER_ID`` in this process, two callers.
+    """
+    return _sole_user_id()
+
+
 def _sole_user_id() -> int | None:
     """``BASKFY_SOLE_USER_ID``, or ``None`` on a deployment that has not set one.
 

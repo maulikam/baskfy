@@ -34,16 +34,21 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
 import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
+from urllib.parse import urlencode
 
 from baskfy_providers.tokens import AccessToken, AccessTokenStore
 
 __all__ = [
+    "KITE_AUTHORIZE_URL",
     "SIMULATED_TOKEN_PREFIX",
+    "STATE_TTL_SECONDS",
+    "KiteLoginUrl",
     "OauthPending",
     "SimulatedTokenRefused",
     "TokenExchange",
@@ -53,6 +58,7 @@ __all__ = [
     "exchange_request_token",
     "exchange_request_token_stub",
     "is_simulated_token",
+    "kite_login_url",
     "register_oauth_state",
     "simulated_exchange_reasons",
     "simulated_token_storage_enabled",
@@ -69,8 +75,15 @@ __all__ = [
 #: blob written by an older build.
 SIMULATED_TOKEN_PREFIX: Final = "sim_"
 
-#: Default TTL for pending OAuth ``state`` values (seconds).
-_STATE_TTL_SECONDS = 30 * 60
+#: Default TTL for pending OAuth ``state`` values (seconds). Public because anything that
+#: hands a login link to a human has to be able to tell them how long it is good for — the
+#: 08:45 nudge (`baskfy_worker.tasks.kite_login_nudge`) says so in the message.
+STATE_TTL_SECONDS: Final = 30 * 60
+_STATE_TTL_SECONDS = STATE_TTL_SECONDS
+
+#: Zerodha's authorize endpoint — the one entry of ``routers.brokers._WIRED_AUTHORIZE`` that
+#: can actually finish a login here, named once so the router and the worker cannot drift.
+KITE_AUTHORIZE_URL: Final = "https://kite.zerodha.com/connect/login"
 
 _lock = threading.Lock()
 
@@ -269,6 +282,62 @@ def clear_oauth_states() -> None:
         path = _state_file()
         if path is not None and path.is_file():
             path.unlink()
+
+
+@dataclass(frozen=True, slots=True)
+class KiteLoginUrl:
+    """One authorize URL and the one-time ``state`` that was minted with it."""
+
+    url: str
+    state: str
+    broker_id: str
+    #: How long :func:`consume_oauth_state` will still accept ``state``, in whole minutes. On
+    #: the URL rather than left for the caller to recompute: two readings of the same TTL are
+    #: two chances to promise a human something the callback will not honour.
+    valid_for_minutes: int
+
+
+def kite_login_url(
+    *,
+    api_key: str,
+    user_id: int,
+    broker_id: str = "zerodha",
+    authorize_base: str = KITE_AUTHORIZE_URL,
+) -> KiteLoginUrl:
+    """Mint a one-time ``state`` and build the Kite login URL that carries it.
+
+    **The single builder.** ``POST /brokers/{id}/connect`` calls it, and so does the 08:45
+    login nudge (SW18) — a second builder somewhere else is a second chance to drop the state
+    the way `redirect_params` was dropped before M-whichever, and the failure only shows up at
+    the end of a login the person has already committed to.
+
+    Two things about the query string that are not obvious and must not be "tidied":
+
+    * ``state`` travels inside ``redirect_params``, **not** as a top-level parameter. Kite
+      drops query keys it does not know and echoes back only what ``redirect_params`` carries.
+    * no ``redirect_uri`` is sent. Kite Connect uses the redirect registered against the app
+      and ignores one supplied at login time.
+
+    ``user_id`` is what :func:`consume_oauth_state` checks the finishing session against, so a
+    link minted for one account cannot be completed by another. It also means an offline
+    minter (the nudge) has to know whose morning it is; ``None`` is not a sensible default and
+    there is deliberately no overload that omits it.
+    """
+    state = secrets.token_urlsafe(24)
+    register_oauth_state(state=state, user_id=user_id, broker_id=broker_id)
+    query = urlencode(
+        {
+            "api_key": api_key,
+            "v": "3",
+            "redirect_params": urlencode({"state": state}),
+        }
+    )
+    return KiteLoginUrl(
+        url=f"{authorize_base}?{query}",
+        state=state,
+        broker_id=broker_id,
+        valid_for_minutes=STATE_TTL_SECONDS // 60,
+    )
 
 
 def exchange_request_token_stub(

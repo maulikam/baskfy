@@ -64,6 +64,17 @@ class WorkerSettings(BaseSettings):
     #: ``docs/swing/status`` on a checkout; on the box a directory on the state volume.
     swing_timing_probe_dir: str = "docs/swing/status"
 
+    # --- SW18: the 08:45 Kite login nudge (docs/swing/DECISIONS-SW SW18.1) ------
+    #
+    # Kite kills the access token every morning and nothing on this box may hold a Zerodha
+    # password or a TOTP seed, so the only automatable part is the reminder: at 08:45 and again
+    # at 09:05 the worker checks for a usable token and, finding none, emails one login link.
+    # Off by default, and with no recipient it logs and does nothing — a box that has not been
+    # told where to send the link must not start guessing.
+    kite_login_nudge_enabled: bool = False
+    #: One email address. Never logged, not even its domain.
+    kite_login_nudge_to: str = ""
+
     #: Task-level retry budget (deliverable 1).
     task_max_retries: int = Field(default=3, ge=0)
     task_retry_backoff_seconds: int = Field(default=60, gt=0)

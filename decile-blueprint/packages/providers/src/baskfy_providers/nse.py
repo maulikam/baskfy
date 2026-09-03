@@ -279,6 +279,7 @@ class NSEProvider:
         by_name = {name: slug for slug, name in INDEX_SLUG_TO_NSE_NAME.items()}
         for row in frame.iter_rows(named=True):
             published = str(row[name_column]).strip()
+            _require_index_date(row, on, published)
             snapshots.append(
                 IndexSnapshot(
                     index_slug=by_name.get(published.upper(), published),
@@ -667,6 +668,28 @@ def _maybe_unzip(payload: bytes) -> bytes:
         raise UnexpectedPayload(
             f"archived file is not a readable zip: {exc}", provider=PROVIDER_NAME
         ) from exc
+
+
+def _require_index_date(row: Mapping[str, object], on: dt.date, published: str) -> None:
+    """SW16: the file for ``on`` must say ``on`` in its own ``Index Date`` column.
+
+    ``ind_close_all_DDMMYYYY.csv`` is fetched by the date in its name, and the archive is keyed by
+    the date it was asked for. A file that carries another session's date under this key is the
+    wrong file — an edge cache, a redirect to the latest, a mistyped key in a repair — and every
+    level in it would land on the wrong day and look plausible. That is structural damage, which
+    docs/09 gives the parser, not the QA gate, the job of refusing. A file with no date column
+    (older layouts) is left to the columns that are there.
+    """
+    raw = _first(row, ("Index Date", "INDEX DATE"))
+    if raw is None:
+        return
+    stamped = _date(raw)
+    if stamped is not None and stamped != on:
+        raise UnexpectedPayload(
+            f"index snapshots for {on.isoformat()}: row {published!r} is dated "
+            f"{stamped.isoformat()}; wrong file for this date",
+            provider=PROVIDER_NAME,
+        )
 
 
 def _read_csv(payload: bytes, *, context: str) -> pl.DataFrame:

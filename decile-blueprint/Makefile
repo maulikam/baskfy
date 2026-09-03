@@ -3,7 +3,7 @@ COMPOSE := docker compose -f infra/docker/compose.yml
 UV      := uv run
 
 .DEFAULT_GOAL := help
-.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants fundamentals refactors token-sync shadow backend-parity friday-drill cb-metrics swing
+.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants fundamentals refactors index-repair token-sync shadow backend-parity friday-drill cb-metrics swing
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -146,6 +146,9 @@ refdata:       ## Reference-data backfill: make refdata FROM=2018-01-01 TO=2026-
 
 fundamentals:  ## Resumable NSE marketcap/PE fill for one date: make fundamentals DATE=2026-08-18
 	$(UV) python -m baskfy_worker.fundamentals_cli fill --date $(DATE) --resume
+
+index-repair:  ## Re-fetch index levels from NSE and rewrite a window (SW16): make index-repair FROM=2026-07-01 TO=2026-09-02 [SLUGS=nifty-50,nifty-500]
+	$(UV) python -m baskfy_worker.index_repair --from $(FROM) --to $(TO) $(if $(SLUGS),--slugs $(SLUGS),)
 
 refactors:     ## Rebuild factor_daily for one date from data on disk: make refactors DATE=2026-08-18
 	$(UV) python -m baskfy_worker.factors_cli recompute --date $(DATE)

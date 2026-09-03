@@ -262,6 +262,38 @@ class TestIndexSnapshots:
         assert vix.pe is None
         assert vix.pb is None
 
+    def test_the_archived_file_from_the_box_parses_to_the_published_close(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        """SW16: the NSE path was not the cause of the 1/14-scale rows.
+
+        This is the first row of ``nse/index-snapshot/2026-08-27.csv`` as archived on the box —
+        mixed-case name, ``-.48`` with no leading zero — and it parses to the level the box holds
+        for that day (24,090.85), on the ``nifty-50`` slug. The 1,128.60 the box held for
+        2026-08-18 was the fixture builder's random walk, which the writer's guard now refuses
+        (``services/worker/tests/test_snapshots.py``).
+        """
+        on = dt.date(2026, 8, 27)
+        client = FakeHttpClient({"ind_close_all_27082026": _archived_index_row_from_the_box()})
+        snapshots = build(settings, archive, client).index_snapshots(on)
+        nifty = next(s for s in snapshots if s.index_slug == "nifty-50")
+        assert nifty.level == Decimal("24090.85")
+        assert nifty.change_abs == Decimal("-116.9")
+        assert nifty.change_pct == Decimal("-0.48")
+        assert nifty.pe == Decimal("20.37")
+
+    def test_a_file_dated_for_another_session_is_refused(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        """SW16: the file fetched for a date must say that date in its own ``Index Date``.
+
+        A file carrying another session under this archive key would land every level on the
+        wrong day and look plausible — structural damage, which docs/09 makes the parser refuse.
+        """
+        client = FakeHttpClient({"ind_close_all": _index_snapshot_csv()})  # dated 18-08-2026
+        with pytest.raises(UnexpectedPayload, match=r"2026-08-19.*2026-08-18"):
+            build(settings, archive, client).index_snapshots(dt.date(2026, 8, 19))
+
 
 class TestIndexConstituents:
     def test_symbols_are_returned(
@@ -485,6 +517,16 @@ def _index_snapshot_csv() -> bytes:
         b"Closing Index Value,Points Change,Change(%),Volume,Turnover (Rs. Cr.),P/E,P/B,Div Yield\n"
         b"NIFTY 50,18-08-2026,24400,24550,24380,24500.35,100.35,0.41,100,5000,22.4,3.9,1.2\n"
         b"INDIA VIX,18-08-2026,12,13,11,12.5,0.5,4.0,0,0,-,-,-\n"
+    )
+
+
+def _archived_index_row_from_the_box() -> bytes:
+    """Header and first row of the box's ``nse/index-snapshot/2026-08-27.csv``, verbatim."""
+    return (
+        b"Index Name,Index Date,Open Index Value,High Index Value,Low Index Value,"
+        b"Closing Index Value,Points Change,Change(%),Volume,Turnover (Rs. Cr.),P/E,P/B,Div Yield\n"
+        b"Nifty 50,27-08-2026,24277.6,24297.45,24090.85,24090.85,-116.9,-.48,323419647,"
+        b"24757.82,20.37,2.92,1.17\n"
     )
 
 

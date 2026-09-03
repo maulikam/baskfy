@@ -2251,3 +2251,35 @@ had been reading a key nothing wrote.
 (0033's downgrade removes the provisional rows with the flag) and the nightly is exactly what
 it was. The sweep is one Beat entry.
 
+## SW16.1 — The writer refuses a 40 % day-on-day move; the repair runs NSE directly and ascending; one `run --rm` with bind-mounted files is not a deploy · 3 Sep 2026 (leaf 1.7.1) · ⚠ UNREVIEWED
+
+**Context.** The 1/14-scale index rows were the fixture builder's random walk seeded into the
+development database and copied to staging (STATUS SW16). Nothing in `store_snapshots` noticed
+NIFTY 50 falling 96 % overnight.
+
+**Choices.** (1) **The guard lives in the writer, not the parser.** The parser was innocent, and
+a guard on the shared upsert catches every path — nightly, reference backfill, repair. The bound
+is 40 % against the last stored level within 14 days: no NSE index has moved that in a session,
+the fixture moved 96 %, and India VIX's worst day is inside it. A refused row is named in the step
+notes and dropped; the file's other rows still land; a first-ever row is accepted. The guard
+compares against what is *stored*, so it also refuses a correct value next to a wrong anchor —
+which is what it did for `nifty-consumer-services`, whose stored history is another index's
+(M31). That is the intended failure: loud, named, unwritten. (2) **The repair uses the NSE
+provider directly**, not `build_provider_stack()`: the composite's fallback for
+`index_snapshots` is the FixtureProvider, which is how these rows came to exist. Ascending, one
+commit per day, so each repaired day anchors the next; the report prints the anchor before the
+window so an operator sees a window that starts inside the corruption. A dry run therefore proves
+day one and the guard, not the whole window (recorded in the test). (3) **Run on the box by
+bind-mounting the three changed files over the image for one `run --rm`.** The image is built
+from a committed sha and the leaf must not commit; waiting for a deploy would have left the swing
+gate reading an artefact for another cycle. The services were not touched; the files sit in
+`/opt/baskfy/sw16/` with checksums matching the tree.
+
+**Rejected.** A guard in the NSE parser (does not cover the seeder or a copy); comparing against
+the file's own `Points Change` (the fixture is self-consistent too); deleting the corrupt window
+before re-fetching (the guard then has no anchor and would accept a second bad file).
+
+**Reverse.** Delete `_refuse_implausible_levels` and its call; `index_repair.py` and the Makefile
+target stand alone. The 12-slug fixture rows still on the box are listed in STATUS SW16 (a) with
+their predicate.
+

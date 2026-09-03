@@ -2351,3 +2351,30 @@ desk (a new surface for the same fact the filesystem already carries).
 
 **Reversal.** Drop `refresh_token_if_changed` and its four call sites — the desk then needs
 `docker compose restart desk` after every login, which is what Q-SW13-1 says today.
+
+
+## SW20.1 — A second, synchronous limiter rather than one shared with the order path · ⚠ UNREVIEWED
+
+**Context.** The desk's reads were unthrottled. `baskfy_execution.ratelimit.KiteLimits` already
+exists and is correct, but it is `async` — awaited inside the gateway's event loop — while the
+desk's client is blocking and is called from synchronous request handlers and from the monitor's
+own thread.
+
+**The choice.** `app/core/kite_limits.py`: the same semantics (remember the last departure, sleep
+out the remainder, record the new one) on a threading lock, with one spacer **per endpoint family**
+because Kite's caps are per endpoint and a historical backfill must not be able to starve the
+quote the monitor needs. The order path is untouched: its caps and its limiter are the same
+objects they were, and the scan in `tests/test_kite_limits.py` names the order calls it is
+deliberately not checking.
+
+**Per process, and said out loud.** Two desk containers hold two limiters. The shared Redis
+bucket (`baskfy:ratelimit:kite`) is what would make it global and the box runs that Redis; the
+realistic overlap today is one `quote` slot a window, so the bound is stated in STATUS rather
+than a distributed limiter built on a guess about which process asks first.
+
+**Rejected.** Making `KiteLimits` sync as well (it would change the order path's behaviour to
+serve the reads); one global spacer (a backfill would then throttle a quote); a limiter inside
+`kiteconnect` (vendored code, and it would not see the analytics call sites).
+
+**Reversal.** Delete `app/core/kite_limits.py` and the `self.limits.slot(...)` lines; the reads
+then go out as fast as the loop asks, which is what they did before 4 Sep.

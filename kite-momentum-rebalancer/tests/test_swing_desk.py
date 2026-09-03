@@ -2033,3 +2033,26 @@ class TestScanNowRoute:
         for word in ("gateway", "execute_line", "place", "gtt", "kc."):
             assert word not in src.lower().replace("swing_gateway", ""), word
         assert "request_scan" in src
+
+
+class TestThePollCostsNoKiteCall:
+    """SW20: `/swing/data` refreshes every five seconds through the session. Kite's quote
+    endpoint allows one request a second, so a page that spent a call per poll would eat the
+    monitor's budget watching itself. The view is built from the database and the tick bus;
+    the only Kite reads on this router are on the confirm and reconcile paths."""
+
+    def test_twelve_polls_touch_no_broker(self, scenario, monkeypatch):
+        from . import test_swing_desk as _self  # noqa: F401 - keeps the module import explicit
+
+        from app import main as _main
+
+        def explode():
+            raise AssertionError("build_view reached the broker")
+
+        monkeypatch.setattr(_main, "kite", explode)
+        scenario.config()
+        store = scenario.store()
+        token = {"present": False, "label": "", "expired": True, "age_minutes": None}
+        for _ in range(12):
+            view = build_view(store, now=NOW, token=token)
+            assert view["poll_ms"] == 5000

@@ -776,7 +776,13 @@ class FakeClock:
 
 
 class FakeKite:
-    """`kite.kc.quote` counted; answers a tick-shaped quote per symbol."""
+    """`kite.quote_raw` counted; answers a tick-shaped quote per symbol.
+
+    SW20 moved the fallback onto the client's limited wrapper — `quote_raw` takes Kite's 1 req/s
+    quote slot, where the old `kc.quote` took nothing. The double keeps `kc` too, so a caller
+    that regresses to the raw handle fails the scan in `tests/test_kite_limits.py` rather than
+    passing here by accident.
+    """
 
     def __init__(self, price: float = 100.0) -> None:
         self.calls: list[list[str]] = []
@@ -795,6 +801,9 @@ class FakeKite:
                 }
 
         self.kc = KC()
+
+    def quote_raw(self, keys):
+        return self.kc.quote(keys)
 
 
 class TestTheQuoteCap:

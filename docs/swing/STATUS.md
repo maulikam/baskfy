@@ -2433,6 +2433,51 @@ only in its constructor, so a token written at 09:10 is invisible to the running
 `swing_monitor` does **not** need one: `main()` builds its own `Kite()` at 09:14, after the login.
 (d) Never run on a real morning.
 
+## SW20 — every Kite read inside a limit ✅
+
+The order path has been limited since the gateway existed (9/s, 380/min, 2,900/day). The reads
+never were: 26 calls on the broker client in `app/kite_client.py` and 25 more made directly on
+the same handle from `app/analytics/`, none of them waiting. Survivable while the desk was one
+person clicking Analyze; not survivable from 4 Sep, when the monitor polls through the session
+while the page refreshes every five seconds beside it.
+
+`app/core/kite_limits.py` — one spacer **per Kite endpoint family**, because Kite's caps are
+per endpoint:
+
+| family | cap | calls |
+|---|---|---|
+| `quote` | **1 req/s** | `ltp`, `quote`, `ohlc` — the tightest endpoint in the API |
+| `historical` | 3 req/s | `historical_data` |
+| `general` | 9 req/s (Kite allows 10) | `holdings`, `positions`, `orders`, `order_history`, `trades`, `margins`, `instruments`, `profile`, `get_gtts` |
+| orders | 9/s, 380/min, 2,900/day | unchanged, on `baskfy_execution.ratelimit.KiteLimits` inside the gateway |
+
+Synchronous (threading lock, monotonic clock, injectable for the tests) because the desk's client
+is blocking and is called from request handlers; the order path keeps its async limiter. Every
+method of `kite_client.py` takes its family's slot before touching `self.kc`; `ltp` now serves
+from a 5-second cache, so the page's poll costs no quote call at all; the analytics modules call
+new limited wrappers (`instruments`, `historical`, `margins`, `orders`, `order_history`,
+`get_gtts`, `quote_raw`) instead of the raw handle, and the monitor's quote fallback goes through
+`quote_raw` too. `start_ticker` refuses more than 3,000 instruments on one connection rather than
+letting Kite truncate a subscription silently.
+
+`tests/test_kite_limits.py` (40): the caps table; burst floors (30 quotes = 29 s, 30 historical =
+9.67 s, 30 general = 3.22 s) on a fake clock; one family never starves another; two threads get
+two slots on a real clock; an unknown method is throttled rather than free; an AST scan asserting
+every `self.kc.<attr>` request in the client sits in a method that took a slot, and that no
+`app/analytics/*.py` reaches `.kc` at all (the allow-list is empty); the websocket cap; 100
+fallback polls inside one window cost one call. Desk suite 1,752 passed.
+
+**What is still unlimited, and why.** The limiter is **per process**: the web container and
+`swing-monitor` each hold their own, so together they can exceed a family's cap. The realistic
+overlap is one `quote` slot (the page reads the database and the tick bus; the monitor reads
+ticks and rarely one quote batch), and the honest fix is the shared Redis bucket the Baskfy side
+already uses — the box runs that Redis. Stated rather than built: a wrong shared-state design
+would be worse than a named bound. `login_url`, `generate_session` and `set_access_token` take no
+slot (the login itself, once a morning), and the Kite constants (`VARIETY_REGULAR` and friends)
+are local attribute reads.
+
+---
+
 ## Not done (kept loud)
 
 Final state, 3 Sep 2026. Each item names who closes it.

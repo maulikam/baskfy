@@ -39,6 +39,18 @@ DESK_DOCS = os.getenv("DESK_DOCS", "false").lower() == "true"
 PORT = int(os.getenv("PORT", "8420"))
 TOKEN_FILE = os.getenv("TOKEN_FILE", "data/.kite_token.json")
 
+# ---- The shared read limiter (SW21, app/core/kite_limits.py) ----
+# The desk runs as two processes on the box — the web container and `swing-monitor` — and Kite's
+# read caps are per API key, not per container. With a Redis URL here the two share one departure
+# clock per endpoint family; without one each holds its own, which is what they did before SW21
+# and is still what a laptop does. The URL is the box's own Redis, the same variable the api and
+# the worker read (compose.prod.yml), so there is one Redis and one namespace on the box.
+SHARED_READ_LIMITS_REDIS_URL = os.getenv("BASKFY_REDIS_URL", "")
+# The reversal, in one variable: false puts every process back on its own spacers. Default on,
+# because sharing is the stricter limit and an unreachable Redis already degrades to per-process
+# on its own — this switch is for turning it off deliberately, not for surviving an outage.
+SHARED_READ_LIMITS = os.getenv("DESK_SHARED_READ_LIMITS", "true").lower() != "false"
+
 # ---- Universe hygiene ----
 EXCLUDED_SYMBOLS = {"SGBDE31III"}          # untouchable long-term instruments (SGBs etc.)
 REJECT_SERIES = {"BE", "BZ"}

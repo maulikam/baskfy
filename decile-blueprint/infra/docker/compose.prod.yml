@@ -282,6 +282,18 @@ services:
       DESK_DB_BACKEND: postgres
       DESK_DB_SCHEMA: desk
       DESK_DATABASE_URL: postgresql://baskfy:${BASKFY_DB_PASSWORD:?set BASKFY_DB_PASSWORD}@postgres:5432/baskfy
+      # SW21: the box's read limiter. This service and `swing-monitor` below are two processes
+      # with two `Kite` objects, and Kite's read caps are per API key — so without this each held
+      # its own spacers and the two could together exceed the 1 req/s quote cap. With it, both
+      # queue behind one departure clock per endpoint family under `baskfy:ratelimit:kite:*`, in
+      # the same Redis the api and the worker already use (the `*python-image` anchor above).
+      #
+      # DELIBERATELY NOT A `depends_on`. The desk degrades to per-process spacers when Redis does
+      # not answer, logs it, and retries once a minute — whereas a `service_healthy` condition
+      # would mean an unhappy Redis could stop the desk from starting at all, and the desk must be
+      # able to rebalance on any Friday (root CLAUDE.md). `GET /status` reports which mode it is
+      # in, so a deploy verifies the wiring rather than assuming it.
+      BASKFY_REDIS_URL: redis://redis:6379/0
       TOKEN_FILE: /var/lib/baskfy/state/kite-token.enc
       # The desk's Host check (websec.py) refuses any name not listed here: Caddy's vhost, plus
       # loopback for the healthcheck. `desk` is the compose-network name, for `curl` from a

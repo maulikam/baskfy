@@ -14,6 +14,11 @@ pandas==3.0.5
 numpy==2.5.2
 kiteconnect==5.2.1
 python-dotenv==1.2.2
+# SW21: app/core/kite_limits.py imports redis directly for the shared read limiter. It has been
+# arriving transitively (baskfy_providers depends on it, and the desk image pins it in the
+# Dockerfile's constraints) — the same shape as the pyyaml note above, and the day that changed
+# the desk would have dropped to per-process limits silently. Named here so it cannot.
+redis==8.1.0
 orjson==3.11.9
 uvloop==0.22.1; sys_platform != 'win32'
 pytest==9.1.1

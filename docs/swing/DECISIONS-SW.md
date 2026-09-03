@@ -2378,3 +2378,58 @@ serve the reads); one global spacer (a backfill would then throttle a quote); a 
 
 **Reversal.** Delete `app/core/kite_limits.py` and the `self.limits.slot(...)` lines; the reads
 then go out as fast as the loop asks, which is what they did before 4 Sep.
+
+
+## SW21.1 — The shared limit is a spacer in Redis, not the providers' token bucket · ⚠ UNREVIEWED
+
+**Context.** SW20.1 left the read limiter per process and said so: the web container and
+`swing-monitor` hold one `DeskLimits` each, so together they can exceed a Kite endpoint's cap.
+The stated fix was "the shared Redis bucket the Baskfy side already uses
+(`baskfy_providers.factory.build_rate_limiter`, key `baskfy:ratelimit:kite`)", and the box runs
+that Redis. This is that fix, and it is not that bucket.
+
+**The choice.** `app/core/kite_limits.SharedSpacer`: the distributed form of `Spacer.take` — a
+four-line Lua script that reads the family's next departure, claims it, and writes the one after
+— keyed `baskfy:ratelimit:kite:{quote,historical,general}`, one key per family because Kite's
+caps are per endpoint. Redis's own clock (`TIME`) is the reference, so two containers cannot
+disagree about "now". `DeskLimits.slot` takes the shared claim **and** this process's own spacer,
+always: the first bounds what the box sends, the second bounds what this process sends, and when
+the desk is alone the second costs nothing because the first already spent the interval.
+
+**Why not `RedisTokenBucket`.** It is a token bucket, and a bucket of capacity C refilling C/s
+grants up to 2C inside the first second. On this desk that arithmetic is not theoretical:
+`baskfy_execution/ratelimit.py` carries 18 Aug 2026, when eleven of twenty-one orders came back
+"Maximum allowed order requests per second exceeded", and its per-second cap has been spacing
+rather than a bucket ever since. The tightest family here is `quote` at **1 req/s**, where a
+burst of two is a 100 % overshoot — precisely the endpoint a polling page and a polling monitor
+would both hit. Two algorithms is the cost; the providers' bucket keeps its key and its callers.
+
+**Degrading, deliberately.** No `BASKFY_REDIS_URL`, an unreachable server, a dropped connection,
+or a queue longer than `MAX_SHARED_WAIT_SECONDS` (10 s) all fall back to this process's own
+spacers — never to an unthrottled call — and are logged and counted (`DeskLimits.local_only`). A
+failed connection is retried once a minute rather than given up on for the life of the process,
+so a Redis restarted by a deploy does not leave the desk silently unshared. Redis is deliberately
+**not** a `depends_on` in `compose.prod.yml`: the desk must be able to rebalance on any Friday
+(root CLAUDE.md), and a limiter that can stop it starting is a worse failure than the one it
+prevents. `GET /status` reports `read_limiter: "shared" | "per-process"` — the one route that
+answers without the password — and `verify-swing.sh` asserts it plus `BASKFY_REDIS_URL` in both
+containers' environments.
+
+**The residual, and it is smaller than SW20.1's.** The pipeline's Kite provider still takes its
+own bucket at `baskfy:ratelimit:kite` for the worker's calls, so the desk and a nightly backfill
+can between them still exceed an endpoint's cap. The overlap is small in practice — the backfill
+runs at night, the desk reads in session — and closing it means giving the ingest path these
+three families and this algorithm, which is a change to the pipeline (and to a red-gate-adjacent
+area) rather than to the desk. Closing it later is one edit: point `build_kite_provider` at
+`SharedSpacer` and the family keys.
+
+**Rejected.** `RedisTokenBucket` as-is (the burst above); one shared key for all families (a
+backfill would then throttle the monitor's quote — SW20.1 rejected the same thing locally);
+replacing the local spacers with the shared one (a Redis outage would then mean *no* limit);
+raising `RateLimited` into the request handler the way the pipeline does (a limiter must not turn
+a page into a 500 or a hang); qualifying the keys by API key (single account today; a second
+broker account would over-throttle, which is the safe direction — noted for P4.x).
+
+**Reversal.** `DESK_SHARED_READ_LIMITS=false` in the desk's environment, or unset
+`BASKFY_REDIS_URL`: every process is back on its own spacers, which is exactly SW20's behaviour.
+No data migrates, and the keys expire on their own once a family goes idle.

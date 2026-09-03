@@ -2491,14 +2491,69 @@ every `self.kc.<attr>` request in the client sits in a method that took a slot, 
 `app/analytics/*.py` reaches `.kc` at all (the allow-list is empty); the websocket cap; 100
 fallback polls inside one window cost one call. Desk suite 1,752 passed.
 
-**What is still unlimited, and why.** The limiter is **per process**: the web container and
-`swing-monitor` each hold their own, so together they can exceed a family's cap. The realistic
-overlap is one `quote` slot (the page reads the database and the tick bus; the monitor reads
-ticks and rarely one quote batch), and the honest fix is the shared Redis bucket the Baskfy side
-already uses — the box runs that Redis. Stated rather than built: a wrong shared-state design
-would be worse than a named bound. `login_url`, `generate_session` and `set_access_token` take no
+**What is still unlimited, and why.** ~~The limiter is **per process**~~ — **closed by SW21
+below, 3 Sep 2026.** As shipped here it was: the web container and `swing-monitor` each held
+their own, so together they could exceed a family's cap. The realistic overlap was one `quote`
+slot (the page reads the database and the tick bus; the monitor reads ticks and rarely one quote
+batch), and the honest fix was the shared Redis the Baskfy side already uses — the box runs it. `login_url`, `generate_session` and `set_access_token` take no
 slot (the login itself, once a morning), and the Kite constants (`VARIETY_REGULAR` and friends)
 are local attribute reads.
+
+---
+
+## SW21 — the read limit is the box's, not each container's ✅
+
+SW20 shipped the read limiter per process and wrote the bound down: two desk containers, two
+`DeskLimits`, so the pair could send 2 req/s at an endpoint capped at 1. Measured on this
+machine, two processes taking five `quote` slots each:
+
+| | ten quote reads | rate at the broker |
+|---|---|---|
+| per process (SW20, and `DESK_SHARED_READ_LIMITS=false` today) | **4.08 s** | 2 req/s — twice Kite's cap |
+| shared (SW21) | **9.16 s** | 1 req/s, departures 1.000 s apart and perfectly interleaved between the two processes |
+
+`app/core/kite_limits.SharedSpacer` — the distributed form of `Spacer.take`, four lines of Lua
+that read the family's next departure, claim it and write the one after, keyed
+`baskfy:ratelimit:kite:{quote,historical,general}` in the box's Redis (the same server and
+namespace the api and the worker already use). Redis's own `TIME` is the clock, so two containers
+cannot disagree about "now", and the claim is atomic, so they cannot take the same slot.
+
+**Spacing, not the providers' token bucket** — `RedisTokenBucket` grants up to 2C in the first
+second, and at `quote`'s 1 req/s a burst of two is a 100 % overshoot. `baskfy_execution` learned
+that on 18 Aug (eleven of twenty-one orders refused) and its per-second cap has been spacing ever
+since. `docs/swing/DECISIONS-SW.md` SW21.1 records the choice, the rejected alternatives and the
+one-variable reversal.
+
+**Redis is a nicety, never a dependency.** Every failure — no URL, an unreachable server, a
+dropped connection, a queue past 10 s — falls back to this process's own spacers, which are taken
+on every call anyway, and is logged and counted (`DeskLimits.local_only`). Measured with the URL
+pointed at a closed port: `mode: per-process`, three general reads in 0.223 s (the local 9 req/s
+floor), no exception. A failed connection is retried once a minute, so a Redis restarted by a
+deploy does not leave the desk silently unshared. It is deliberately **not** a `depends_on` in
+`compose.prod.yml`: the desk must be able to rebalance on any Friday.
+
+`GET /status` now reports `"read_limiter": "shared" | "per-process"` — the one route that answers
+without the password — and `verify-swing.sh` asserts it, plus `BASKFY_REDIS_URL` inside both the
+`desk` and `swing-monitor` containers. Wired: `BASKFY_REDIS_URL: redis://redis:6379/0` on the
+compose `desk` anchor (so `swing-monitor` inherits it), `DESK_SHARED_READ_LIMITS` as the reversal,
+both documented in `.env.example`.
+
+`tests/test_kite_limits.py` grows from 40 to 58: the wiring against stubs (a dead Redis still
+spaces locally and is not re-asked on every read; a queue past the budget falls back rather than
+hanging the page; a refusal does not spend the slot; a malformed reply is refused; the shared
+clock can tighten the local floor and cannot loosen it; `DeskLimits()` takes the box's spacers
+with no call site changed), and the sharing itself against a **real Redis** — two spacers on one
+key queue behind one clock, a cold key does not wait, an impatient caller does not push the clock
+out for a patient one, an idle family's key expires. They skip where there is no Redis, for the
+reason `packages/providers/tests/test_ratelimit.py` gives about its own bucket: a fake would only
+prove the fake agrees with itself. `tests/conftest.py` gains a third autouse isolation fixture, so
+no test reaches a real Redis by omission. Desk suite **1,770 passed, 17 skipped**.
+
+**The residual, smaller than SW20's.** The pipeline's Kite provider still holds its own bucket at
+`baskfy:ratelimit:kite` for the worker's calls, so the desk and a nightly backfill can between
+them still exceed an endpoint's cap. The backfill runs at night and the desk reads in session, so
+the practical overlap is near zero; closing it means giving the ingest path these three families
+and this algorithm, which is a change to the pipeline. SW21.1 says how.
 
 ---
 
@@ -2506,6 +2561,11 @@ are local attribute reads.
 
 Final state, 3 Sep 2026. Each item names who closes it.
 
+- **SW21 is not on the box.** The box runs `0b34f00` (deploy #8), which has SW20's per-process
+  limiter and no `BASKFY_REDIS_URL` in the desk containers, so `verify-swing.sh` reports its two
+  new checks as **FAIL** — "desk read limiter is not shared" and "BASKFY_REDIS_URL is unset" —
+  until deploy #9 ships this commit. Nothing else in the verify changes, and the desk trades
+  exactly as it did meanwhile.
 - **The box runs `beb5ff5`** (SW13-run), not this commit: SW12's gate rewrite, SW14's hub
   actions and `/me/swing` are not deployed. Same five commands, one more `aws sso login`
   (NEEDS-MAULIK SW-1). `desk.staging.baskfy.com` is NXDOMAIN until the GoDaddy A record (S4).

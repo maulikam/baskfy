@@ -265,3 +265,15 @@ def google_token(
 ) -> str:
     """The string :class:`StubGoogle` reads an identity out of. Never leaves the test suite."""
     return f"{StubGoogle.PREFIX}:{subject}:{email}:{name}"
+
+
+def request_stub(task_queue: object | None = None) -> mock.MagicMock:
+    """A stand-in for `fastapi.Request` for routes called directly rather than over HTTP.
+
+    The OAuth callback reads one thing off it — ``app.state.task_queue`` — to publish M84's
+    session catch-up when a real broker session is stored. Tests that are not about that pass
+    nothing and get a mock queue whose ``send_task`` records the call and does nothing else.
+    """
+    request = mock.MagicMock()
+    request.app.state.task_queue = task_queue if task_queue is not None else mock.MagicMock()
+    return request

@@ -1447,3 +1447,59 @@ parameter; stub methods typed `NoReturn`, which is exact because they always rai
   within reach of the screener path.
 - One eslint warning survives: TanStack Table's `useReactTable` cannot be memoized by React
   Compiler. That lives in the library, not here.
+
+## M84 — the session lands from either source, and a missed one heals itself (4 Sep 2026)
+
+**What Maulik saw.** The product serving the **2 Sep** session on the morning of 4 Sep. His
+instruction: stop having to ask. Two things by name — a verified Kite token should start that
+session's data work, and a scheduled job should take the day's bhavcopy so the system leans on
+Kite *and* NSE.
+
+**What had happened.** `pipeline_run` 25 (3 Sep) opened at 18:45 and carried **zero step rows**.
+The chain runs in one transaction, so a worker killed mid-chain rolls the whole audit trail back
+and leaves only the run row `begin_run` commits first. `reap_abandoned_runs` swept it at 20:30,
+failed it and alerted — correctly — and then nothing re-ran it, because the nightly is a
+once-a-day Beat entry and a failed run has never had a retry. **Deploy #8 at ~19:55 is what killed
+it.** Nothing for 3 Sep existed anywhere: no bars, no factors, no index snapshot, no market health,
+no swing setups. The date simply never landed.
+
+Third time in three weeks: 18–29 Aug (the bar step could only speak to Kite), 31 Aug (three
+deploys redelivering the nightly past midnight), 3 Sep (this).
+
+**Shipped.**
+
+| | |
+|---|---|
+| `baskfy.pipeline.bhavcopy_ingest` | Beat **18:15** Mon–Fri. NSE's own end-of-day file, no credential, half an hour before the chain |
+| `fetch_daily_bars` top-up | Any gap Kite leaves on a **single session** is completed from the bhavcopy. It used to ask only when Kite wrote *nothing*, so a half-dead Kite pass was judged by the gate as a whole day |
+| `baskfy.pipeline.session_catch_up` | Trading days with no published `data_version`, oldest first, bounded to two per run |
+| The token trigger | A **real** broker session stored by `/brokers/callback` publishes the sweep — the earliest moment the deployment knows it can reach Kite, and before the open |
+| Beat **06:45** Mon–Sat | The same sweep, for a morning nobody logs in |
+| `deploy-swing.sh` | **Refuses** to recreate the worker between 18:40 and 21:15 IST on a weekday. `DEPLOY_DURING_NIGHTLY=1` overrides |
+
+**"Landed" means one thing:** a `pipeline_run` row for that date carrying a `data_version`. Only
+`publish` sets it and only a run past the quality gate reaches `publish`. Status is not consulted —
+3 Sep's row said `failed`, and a `running` row nobody is running would lie the other way.
+
+**Not a retry loop around a failed gate.** The nightly stays un-retried: a day the gate refused is
+a day whose data is wrong. The sweep re-runs a session that produced **no verdict at all**.
+
+**A two-week-old wrong belief, corrected.** `DECISIONS-MERGE` M75 and
+`kite_session_cli.refresh_quietly` both said NSE answers 403 to the Phase-A box, so the bhavcopy
+"does not exist there" and a missing Kite session costs the whole night. Measured from the box on
+4 Sep: `nsearchives.nseindia.com` answers **200, 203,909 bytes** for the 3 Sep file and the
+provider parses **3,635 rows**. Only `www.nseindia.com` 403s — the cookie host, whose status
+`_prime_cookies` never checks. The 403 was real; the conclusion was not.
+
+**Tests.** `test_session_catch_up.py` (17): what counts as landed, against a real database —
+including the exact 3 Sep shape, a `running` row, a holiday, a date past the calendar's end, and
+today before 18:00 IST; then ordering, bounding and the two task guards. `test_pipeline_self_
+sufficiency.py` gains 4: a partial Kite pass reaches the bhavcopy, an instrument with no Kite
+token counts as a gap, a clean pass costs no second fetch, and a multi-year window is left to the
+backfill. `test_broker_oauth.py` gains 3: a verified token publishes the sweep, a simulated one
+never does, and a dead queue still connects.
+
+**Open.** The 06:45 sweep and the 18:15 job have not yet run on the box — the first real proof is
+tomorrow morning. Nothing re-runs the *swing* EOD plan after a caught-up session; the catch-up
+lands the screener chain (whose twelfth step is swing detection) but `baskfy.swing.eod` is still
+only a 21:05 Beat entry.

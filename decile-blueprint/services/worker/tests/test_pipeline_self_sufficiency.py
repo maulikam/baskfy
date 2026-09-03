@@ -16,11 +16,14 @@ weekend did the same, which is how an alert becomes noise.
 from __future__ import annotations
 
 import datetime as dt
+from decimal import Decimal
 from typing import NoReturn
 
+import polars as pl
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_providers.errors import ProviderError
 from baskfy_worker import ops
 from baskfy_worker.steps import StepOutcome
 from baskfy_worker.tasks.bars import run_fetch_daily_bars
@@ -237,3 +240,137 @@ class TestItDoesNotAskTenThousandTimes:
             window=WINDOW,
         )
         assert len(attempts) == 20, "a per-symbol failure must not abandon the sweep"
+
+
+# =====================================================================================
+# M84 — the third fault, and the one the two above could not see.
+#
+# The fallback in this file asks for the bhavcopy when Kite wrote **nothing**. A Kite pass that
+# dies halfway writes something, so it never reaches the fallback: the day lands partial and the
+# gate judges a half session as if it were a whole one. For a single session the bhavcopy is not
+# a fallback at all — it is the exchange's own end-of-day record, it needs no credential, and it
+# is one 200 KB file — so any gap Kite leaves is now completed from it.
+#
+# On 3 Sep 2026 this mattered a second way: the chain never finished, and nothing re-ran it.
+# `test_session_catch_up.py` is that half.
+# =====================================================================================
+
+
+class _KiteWithGaps:
+    """Serves some names and refuses others — what a dying Kite session actually looks like."""
+
+    def __init__(self, *, refuse: set[int] | None = None) -> None:
+        self.refuse = refuse or set()
+        self.asked: list[int] = []
+
+    def daily_bars(self, token: int, start: dt.date, end: dt.date) -> pl.DataFrame:
+        self.asked.append(token)
+        if token in self.refuse:
+            raise ProviderError("[kite] Kite rejected the request as malformed: invalid token")
+        return pl.DataFrame(
+            {
+                "date": [end],
+                "open": [Decimal("100")],
+                "high": [Decimal("101")],
+                "low": [Decimal("99")],
+                "close": [Decimal("100.5")],
+                "volume": [1000],
+                "source": ["kite"],
+            }
+        )
+
+    def bhavcopy(self, on: dt.date) -> object:  # pragma: no cover - shape only
+        raise AssertionError("the real fetch goes through backfill_bars_from_bhavcopy")
+
+
+class TestAPartialKitePassIsCompletedFromTheBhavcopy:
+    @staticmethod
+    def _patch(monkeypatch: pytest.MonkeyPatch, calls: list[DateWindow]) -> None:
+        async def fake_backfill(provider: object, window: DateWindow, **kwargs: object) -> _Report:
+            calls.append(window)
+            return _Report(bars_written=3635, days_written=1)
+
+        async def fake_upsert(session: object, instrument_id: int, frame: pl.DataFrame) -> int:
+            return int(frame.height)
+
+        monkeypatch.setattr(
+            "baskfy_worker.bhavcopy_backfill.backfill_bars_from_bhavcopy", fake_backfill
+        )
+        monkeypatch.setattr("baskfy_worker.tasks.bars.upsert_bars", fake_upsert)
+
+    async def test_a_gap_reaches_the_bhavcopy_even_though_kite_wrote_rows(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Some rows is not all rows, and the gate downstream cannot tell the difference."""
+        calls: list[DateWindow] = []
+        self._patch(monkeypatch, calls)
+        outcome = StepOutcome()
+
+        written = await run_fetch_daily_bars(
+            session=AsyncSession(),
+            provider=_KiteWithGaps(refuse={222}),
+            outcome=outcome,
+            instruments=[(1, "AAA", 111), (2, "BBB", 222)],
+            window=WINDOW,
+        )
+
+        assert written == 1, "the step still returns what Kite itself wrote"
+        assert [str(w) for w in calls] == [str(WINDOW)], "the day was left half-landed"
+        assert outcome.detail["top_up"] == "bhavcopy"
+        assert outcome.detail["kite_rows"] == 1
+        assert outcome.detail["bhavcopy_rows"] == 3635
+        assert outcome.rows_out == 1, "a top-up must not overwrite Kite's count with an overlap"
+
+    async def test_an_instrument_without_a_token_is_a_gap_too(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Kite does not carry every NSE listing (docs/02). The bhavcopy does."""
+        calls: list[DateWindow] = []
+        self._patch(monkeypatch, calls)
+
+        written = await run_fetch_daily_bars(
+            session=AsyncSession(),
+            provider=_KiteWithGaps(),
+            outcome=StepOutcome(),
+            instruments=[(1, "AAA", 111), (2, "SME", None)],
+            window=WINDOW,
+        )
+
+        assert written == 1
+        assert len(calls) == 1
+
+    async def test_a_clean_kite_pass_costs_no_second_fetch(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An ordinary night must not pay for a file it does not need."""
+        calls: list[DateWindow] = []
+        self._patch(monkeypatch, calls)
+        outcome = StepOutcome()
+
+        await run_fetch_daily_bars(
+            session=AsyncSession(),
+            provider=_KiteWithGaps(),
+            outcome=outcome,
+            instruments=[(1, "AAA", 111)],
+            window=WINDOW,
+        )
+
+        assert calls == []
+        assert "top_up" not in outcome.detail
+
+    async def test_a_backfill_window_is_left_to_the_backfill(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A multi-year window walks the archive day by day: hours, not a top-up."""
+        calls: list[DateWindow] = []
+        self._patch(monkeypatch, calls)
+
+        await run_fetch_daily_bars(
+            session=AsyncSession(),
+            provider=_KiteWithGaps(refuse={222}),
+            outcome=StepOutcome(),
+            instruments=[(1, "AAA", 111), (2, "BBB", 222)],
+            window=DateWindow(dt.date(2024, 1, 1), dt.date(2026, 8, 27)),
+        )
+
+        assert calls == [], "a partial multi-year Kite pass triggered a day-by-day archive walk"

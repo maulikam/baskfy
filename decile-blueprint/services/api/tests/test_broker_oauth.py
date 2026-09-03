@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from api_helpers import request_stub
 from cryptography.fernet import Fernet
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -102,6 +103,7 @@ class TestOauthStateAndStub:
         result = await oauth_callback(
             principal,
             AsyncSession(),
+            request_stub(),
             request_token="request-token-xyz789",
             state="good-state-token-abc12345",
         )
@@ -132,6 +134,7 @@ class TestOauthStateAndStub:
             await oauth_callback(
                 principal,
                 AsyncSession(),
+                request_stub(),
                 request_token="request-token-xyz789",
                 state="bogus-state-xxxxxxxx",
             )
@@ -292,6 +295,7 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
             await oauth_callback(
                 self._principal(),
                 AsyncSession(),
+                request_stub(),
                 request_token="kite-request-token-1",
                 state="live-state-token-000111",
             )
@@ -316,6 +320,7 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
         result = await oauth_callback(
             self._principal(),
             AsyncSession(),
+            request_stub(),
             request_token="kite-request-token-2",
             state="live-state-token-000222",
         )
@@ -337,6 +342,7 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
             await oauth_callback(
                 self._principal(),
                 AsyncSession(),
+                request_stub(),
                 request_token="kite-request-token-3",
                 state="live-state-token-000333",
             )
@@ -347,6 +353,80 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
         assert caught.value.extra["reasons"] == list(
             simulated_exchange_reasons(api_key="", api_secret="")
         )
+
+    async def test_a_verified_token_starts_the_session_catch_up(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """M84, ask 1: logging in is what tells this deployment to go and get its data.
+
+        3 Sep 2026: a deploy killed the nightly chain, the reaper failed the run fifteen minutes
+        later, and nothing re-ran it — so the product served the previous session until a person
+        noticed the next night. The morning login is the earliest moment the system knows it can
+        talk to Kite, and it happens before the open; publishing the sweep here is what makes a
+        missed session heal itself.
+        """
+        monkeypatch.setattr(
+            brokers_router,
+            "exchange_request_token",
+            lambda **_: TokenExchange(access_token="real-kite-token", simulated=False, reasons=()),
+        )
+        register_oauth_state(state="live-state-token-000555", user_id=42, broker_id="zerodha")
+        queue = MagicMock()
+
+        result = await oauth_callback(
+            self._principal(),
+            AsyncSession(),
+            request_stub(queue),
+            request_token="kite-request-token-5",
+            state="live-state-token-000555",
+        )
+
+        assert result.connected is True
+        queue.send_task.assert_called_once_with(brokers_router.SESSION_CATCH_UP_TASK, [])
+        assert brokers_router.SESSION_CATCH_UP_TASK == "baskfy.pipeline.session_catch_up"
+        assert "caught up" in result.note
+
+    async def test_a_simulated_login_never_starts_it(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """No real session, nothing to fetch with: the sweep would only fail slower."""
+        monkeypatch.setenv("BASKFY_BROKER_OAUTH_ALLOW_SIMULATED", "true")
+        register_oauth_state(state="live-state-token-000666", user_id=42, broker_id="zerodha")
+        queue = MagicMock()
+
+        result = await oauth_callback(
+            self._principal(),
+            AsyncSession(),
+            request_stub(queue),
+            request_token="kite-request-token-6",
+            state="live-state-token-000666",
+        )
+
+        assert result.simulated is True
+        queue.send_task.assert_not_called()
+
+    async def test_a_broker_that_cannot_be_queued_still_connects(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The login has already succeeded. A dead queue must not turn that into a failure."""
+        monkeypatch.setattr(
+            brokers_router,
+            "exchange_request_token",
+            lambda **_: TokenExchange(access_token="real-kite-token", simulated=False, reasons=()),
+        )
+        register_oauth_state(state="live-state-token-000777", user_id=42, broker_id="zerodha")
+        queue = MagicMock()
+        queue.send_task.side_effect = OSError("redis is not listening")
+
+        result = await oauth_callback(
+            self._principal(),
+            AsyncSession(),
+            request_stub(queue),
+            request_token="kite-request-token-7",
+            state="live-state-token-000777",
+        )
+
+        assert result.connected is True
+        assert result.token_stored is True
+        assert "could not be queued" in result.note
 
     async def test_a_real_exchange_is_stored_in_the_real_store(
         self, monkeypatch: pytest.MonkeyPatch
@@ -365,6 +445,7 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
         result = await oauth_callback(
             self._principal(),
             AsyncSession(),
+            request_stub(),
             request_token="kite-request-token-4",
             state="live-state-token-000444",
         )

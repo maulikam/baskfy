@@ -267,12 +267,18 @@ def refresh_quietly() -> bool:
     the pipeline reads. So the first question is whether we already have one; the desk is now the
     fallback, not the source.
 
-    **This is no longer as best-effort as its old docstring claimed.** That text said a missing
-    session "does not cost the day's bars, which come from the bhavcopy". On the Phase-A box NSE
-    answers 403 to every request — the bhavcopy fallback does not exist there — so Kite is the
-    only path to a bar and a missing session costs the entire night. It still returns rather than
-    raises, because the failure belongs to the step that needs the session, with the instrument it
-    was fetching; but a `False` here means the night is in trouble, not merely thinner.
+    **How much a missing session costs — corrected at M84.** This text used to say that NSE
+    answers 403 to every request from the Phase-A box, so the bhavcopy "does not exist there" and
+    Kite is the only path to a bar. Measured from the box on 4 Sep 2026, that is false and had
+    cost two weeks of nights: `nsearchives.nseindia.com` answers **200 with 203,909 bytes** for the
+    3 Sep bhavcopy and the provider parses it to **3,635 rows**. Only `www.nseindia.com` returns
+    403, and that is the cookie host — `_prime_cookies` never checks the status it gets, so the
+    archive path is untouched by it.
+
+    So a missing Kite session costs history before 2024, holdings sync and instrument metadata —
+    not the day's bars, which `baskfy.pipeline.bhavcopy_ingest` lands at 18:15 regardless. It
+    still returns rather than raises, because the failure belongs to the step that needs the
+    session, with the instrument it was fetching.
     """
     if local_session_is_live():
         return True

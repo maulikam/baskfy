@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import logging
 import os
 from collections.abc import Awaitable, Callable, Sequence
 from decimal import Decimal
@@ -42,8 +43,9 @@ from baskfy_providers.kite import KiteProvider
 from baskfy_providers.records import QuoteRecord
 from baskfy_providers.settings import get_provider_settings
 from baskfy_providers.tokens import AccessTokenStore
-from baskfy_worker import kite_session_cli, ops
+from baskfy_worker import catch_up, kite_session_cli, ops
 from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
+from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
 from baskfy_worker.db import run_checkpointed, run_in_session
 from baskfy_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
@@ -85,12 +87,19 @@ from baskfy_worker.tasks.swing_premarket import STAGE_GAPS, QuoteSource, run_swi
 from baskfy_worker.tasks.swing_scan_now import ScanNotRunnable, run_scan_now, sweep_queued
 from baskfy_worker.tasks.swing_timing_probe import DONE_MARKER, probe_once
 from baskfy_worker.telemetry import provider_retry_hooks
+from baskfy_worker.window import DateWindow
+
+log = logging.getLogger("baskfy_worker.tasks")
 
 #: Earliest IST wall-clock at which a session's own data can exist. NSE closes at 15:30 and
 #: publishes the bhavcopy afterwards; the schedule itself fires at 18:45 for that reason. Used to
 #: tell "today, already closed" from "today, still ahead of us" — a distinction `is_trading_day`
 #: cannot make and which redelivered tasks waking after midnight get wrong.
-SESSION_DATA_READY_IST: Final = dt.time(18, 0)
+#:
+#: Defined in `baskfy_worker.catch_up` since M84, because the sweep needs the same hour and a
+#: constant with two definitions is a constant with two values. Re-exported here, where it has
+#: always been imported from.
+SESSION_DATA_READY_IST = catch_up.SESSION_DATA_READY_IST
 
 #: docs/09 §"Kite specifics" — a rate-limited or flaky upstream is worth retrying; a malformed
 #: payload or a missing credential is not. Only transient provider failures auto-retry.
@@ -218,6 +227,120 @@ def _raise_alert(alert: Alert) -> JsonObject:
     ``asyncio.run`` boundary as ``baskfy_worker.db.run_in_session``, and for the same reason.
     """
     return asyncio.run(dispatch(alert))
+
+
+@shared_task(name="baskfy.pipeline.bhavcopy_ingest", acks_late=True)
+def bhavcopy_ingest(trade_date: str | None = None) -> JsonObject:
+    """The day's bars from NSE's own file, on a schedule, owing nothing to Kite (M84).
+
+    WHY THIS IS ITS OWN JOB AND NOT ONLY A FALLBACK
+    -----------------------------------------------
+    `run_fetch_daily_bars` reaches for the bhavcopy when Kite produced *nothing*. That is a
+    fallback, and a fallback is only as good as the failure that triggers it: a Kite session that
+    dies halfway leaves a partial day, which is not zero, so the bhavcopy is never asked and the
+    gate judges a half-day. Meanwhile the bhavcopy is the exchange's own end-of-day record, it
+    needs no credential, it carries `turnover` and both circuit bands natively (docs/05 §12, §13),
+    and it is one 200 KB file.
+
+    So it runs on its own schedule at 18:15 — after NSE publishes, before the 18:45 chain — and
+    the chain's Kite pass becomes a top-up over a day that has already landed rather than the only
+    thing standing between the product and a stale session. Two independent sources, either
+    sufficient, which is what "the desk must not depend on one login" means in practice.
+
+    **Verified on the box, 4 Sep 2026.** `nsearchives.nseindia.com` answers the Phase-A host: 200
+    and 203,909 bytes for 3 Sep, parsed to 3,635 rows. Only `www.nseindia.com` returns 403 there,
+    and cookie priming ignores the status it gets, so the archive path is unaffected. An older
+    note in `kite_session_cli.refresh_quietly` says the bhavcopy "does not exist" on this box; it
+    is out of date, and this task is the standing evidence.
+
+    Idempotent (house rule 7): the upsert rewrites the same rows to the same values.
+    """
+    day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
+
+    # The same two guards the nightly carries, and for the same reasons: never ingest a day the
+    # exchange was shut, and never call a session missing before it has had time to publish.
+    if trade_date is None:
+        if not run_in_session(lambda session: ops.is_trading_day(session, day)):
+            return {
+                "trade_date": day.isoformat(),
+                "status": "skipped",
+                "reason": "not a trading day",
+            }
+        now_ist = dt.datetime.now(tz=IST)
+        if now_ist.date() == day and now_ist.time() < SESSION_DATA_READY_IST:
+            return {
+                "trade_date": day.isoformat(),
+                "status": "skipped",
+                "reason": f"the {day.isoformat()} bhavcopy is not published yet",
+            }
+
+    provider = build_nse_provider(get_provider_settings(), retry_hooks=provider_retry_hooks())
+    report = asyncio.run(
+        backfill_bars_from_bhavcopy(provider, DateWindow.single(day), progress_every=0)
+    )
+    return {
+        "trade_date": day.isoformat(),
+        "status": "succeeded" if report.succeeded else "failed",
+        "bars_written": report.bars_written,
+        "days_written": report.days_written,
+        "missing_days": [d.isoformat() for d in report.missing_days] or None,
+        "unmatched_symbol_count": len(report.unmatched_symbols) or None,
+        "failures": report.failures or None,
+    }
+
+
+@shared_task(name="baskfy.pipeline.session_catch_up", acks_late=True)
+def session_catch_up(
+    lookback_days: int = catch_up.DEFAULT_LOOKBACK_DAYS,
+    max_sessions: int = catch_up.DEFAULT_MAX_SESSIONS,
+) -> JsonObject:
+    """Run the chain for any session that never landed. Fired by a verified Kite token (M84).
+
+    `baskfy_worker.catch_up` carries the reasoning and the definition of "landed". This is the
+    hand that acts on it: oldest session first, in this process, one after another, bounded by
+    ``max_sessions`` so a worker slot is never taken for an unbounded stretch. What it cannot
+    reach is reported in ``remaining`` and picked up by the next trigger.
+
+    **Two triggers, deliberately.** The morning Kite login publishes this the moment a real token
+    is stored (`routers/brokers.py`), because that is when the system knows it can talk to the
+    broker and it is before the market opens; and Beat publishes it at 06:45 so a missed session
+    still heals on a morning nobody logs in. Both are idempotent — a published day is not in the
+    list — so firing it twice costs one query.
+
+    It runs the nightly **in process** rather than publishing one message per day: the chain takes
+    about two hours, and two of them arriving on a worker with `--concurrency=2` would run the
+    same instrument refresh and the same index membership concurrently. Sequential is the only
+    ordering that is obviously correct, and this task's whole job is to be obviously correct at
+    06:45 with nobody watching.
+    """
+    now_ist = dt.datetime.now(tz=IST)
+    missing = run_in_session(
+        lambda session: catch_up.unlanded_sessions(
+            session, through=now_ist.date(), lookback_days=lookback_days, now=now_ist
+        )
+    )
+    if not missing:
+        return {
+            "status": "nothing to do",
+            "checked_through": now_ist.date().isoformat(),
+            "lookback_days": lookback_days,
+            "sessions": [],
+        }
+
+    ran: list[JsonObject] = []
+    for day in missing[:max_sessions]:
+        log.warning("catch-up: %s never landed; running the chain for it", day.isoformat())
+        # The nightly's own body, with an explicit date — which also bypasses its "is today
+        # finished" guard, correctly: this list only ever holds sessions that are already over.
+        ran.append(nightly_pipeline(day.isoformat()))
+    return {
+        "status": "ran",
+        "checked_through": now_ist.date().isoformat(),
+        "lookback_days": lookback_days,
+        "sessions": [day.isoformat() for day in missing],
+        "ran": ran,
+        "remaining": [day.isoformat() for day in missing[max_sessions:]],
+    }
 
 
 @shared_task(name="baskfy.ops.reap_abandoned_runs")

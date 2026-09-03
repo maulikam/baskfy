@@ -27,6 +27,8 @@ import pytest
 from baskfy_execution.broker_ports import HoldingRow, normalize_holding
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api_helpers import request_stub
+
 from baskfy_api import broker_holdings
 from baskfy_api.broker_holdings import (
     HOLDINGS_SOURCES,
@@ -773,6 +775,6 @@ class TestConnectDoesNotOverClaimEither:
         register_oauth_state(state=state, user_id=1, broker_id="upstox")
         with pytest.raises(Problem) as caught:
             await oauth_callback(
-                principal_stub(), AsyncSession(), request_token="req-token-1234", state=state
+                principal_stub(), AsyncSession(), request_stub(), request_token="req-token-1234", state=state
             )
         assert caught.value.status == 400

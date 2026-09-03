@@ -6401,3 +6401,69 @@ a DRY_RUN fixture created a `broker_account` row on the way to being refused.
 
 **To reverse:** revert the four source files. The `visibility_timeout` is the one change that
 matters operationally and is a single config line.
+
+
+## M84 — a missed session heals itself, and the day lands from either source ⚠ UNREVIEWED
+
+**Context.** On 4 Sep 2026 Maulik reported the product serving the **2 Sep** session, and asked
+for two things: that a verified Kite token start the session's data work, and that a scheduled job
+take the day's bhavcopy so the system relies on Kite *and* NSE rather than on either alone.
+
+The 3 Sep run tells the whole story. Run 25 opened at 18:45 and wrote **zero step rows** — the
+chain runs in one transaction, so a worker killed mid-chain rolls the audit trail back and leaves
+only the `pipeline_run` row that `begin_run` committed first. `reap_abandoned_runs` swept it at
+20:30, marked it failed and alerted, exactly as designed. **Then nothing happened at all**, because
+the nightly is a once-a-day Beat entry and a failed run has never had a retry. What killed it was
+our own deploy #8 at ~19:55. The same shape has now cost sessions three times: 18-29 Aug (the bar
+step could only speak to Kite), 31 Aug (three deploys redelivered the nightly into the small
+hours), 3 Sep (this one).
+
+**The choice — four parts, and the first two are the asks.**
+
+1. **A verified token is a trigger.** `routers/brokers.py` publishes
+   `baskfy.pipeline.session_catch_up` the moment a *real* broker session is stored — the same
+   place and the same best-effort spirit as M81's holdings pull. That is the earliest moment the
+   deployment knows it can talk to Kite, and it is before the open. A simulated login publishes
+   nothing.
+2. **The bhavcopy is a scheduled job, not only a fallback.** `baskfy.pipeline.bhavcopy_ingest` at
+   **18:15** weekdays lands the day's bars from NSE's own end-of-day file, needing no credential,
+   half an hour before the chain. And `fetch_daily_bars` now tops up from the bhavcopy whenever
+   Kite left *any* gap on a single-session window — previously it asked only when Kite wrote
+   nothing, so a session that died halfway was judged by the gate as though it were whole.
+3. **The sweep also runs on a clock.** `session-catch-up` at 06:45 Mon-Sat, so a missed session
+   heals on a morning nobody logs in. It runs the chain for trading days with no published
+   `data_version`, oldest first, bounded to two per invocation.
+4. **The deploy that caused it is refused.** `deploy-swing.sh` exits rather than recreating the
+   worker between 18:40 and 21:15 IST on a weekday. `DEPLOY_DURING_NIGHTLY=1` overrides.
+
+**"Landed" is one thing:** a `pipeline_run` row for that date carrying a `data_version`. Only
+`publish` sets it, only a run past the quality gate reaches `publish`, and it is what the site
+serves. Status is not consulted: the 3 Sep row said `failed`, and a `running` row that nobody is
+running any more would lie the other way.
+
+**This is not a retry loop around a failed gate,** and that distinction is the whole design.
+`baskfy.pipeline.nightly` stays un-retried: a day the gate refused is a day whose data is wrong,
+and re-running it on a timer would either publish it later or bury the alert. The sweep re-runs a
+session that produced **no verdict at all** — killed, abandoned, never attempted. A day the gate
+has refused is refused again, once, loudly.
+
+**M75's note about NSE is wrong, and this corrects it.** That entry states "NSE answers 403 to the
+Phase-A box in 0.09s, so that fallback does not exist there and a missing session costs the whole
+night", and `kite_session_cli.refresh_quietly` repeats it. Measured from the box on 4 Sep 2026:
+`nsearchives.nseindia.com` answers **200 with 203,909 bytes** for the 3 Sep bhavcopy, and the NSE
+provider parses it to **3,635 rows**. Only `www.nseindia.com` returns 403 — that is the cookie
+host, and `_prime_cookies` never checks the status it gets, so the archive path is unaffected. The
+403 was real; the conclusion drawn from it was not, and it has cost two weeks of nights.
+
+**Rejected.** Publishing one nightly message per missing session (two chains on a worker with
+`--concurrency=2` would run the same instrument refresh concurrently — sequential in-process is
+the only obviously correct ordering); making the bhavcopy the primary source outright (Kite
+reaches back before 2024, where the UDiFF archive begins, so it stays first inside the chain);
+hooking the trigger into `store_access_token` itself (it is the guarded write path, deliberately
+free of a queue, and the desk's own CLI writes through it during the nightly — which would make
+the trigger recursive); a shorter deploy window (the chain has run to 20:38).
+
+**Reversal.** Delete the two Beat entries and the `queue.send_task` in the callback; the pipeline
+is then exactly what it was, a single 18:45 attempt with a fallback that only fires at zero. The
+`window.days == 1` top-up in `bars.py` reverts on its own line. `DEPLOY_DURING_NIGHTLY=1` disables
+the guard without editing it.

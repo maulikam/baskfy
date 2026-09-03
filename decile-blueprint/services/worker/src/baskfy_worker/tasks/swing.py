@@ -803,7 +803,7 @@ async def run_detect_swing(  # noqa: PLR0913 - one keyword per input the day dep
     trade_date: dt.date,
     *,
     user_id: int,
-    index_slug: str = "nifty-500",
+    index_slug: str = "nifty-mid-small-400",
     execution_enabled: bool = False,
     pipeline_run_id: int | None = None,
     extra_bars: pl.DataFrame | None = None,
@@ -1004,7 +1004,7 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
         else BreadthSnapshot(0, 0.0, 0.0, 0.0)
     )
     reading, used_slug = await load_index_reading(
-        session, lookup, slug=index_slug, fallback="nifty-50", config=config
+        session, lookup, slug=index_slug, fallback="nifty-500", config=config
     )
     gate = market_gate(breadth, reading, config.market)
 

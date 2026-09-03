@@ -55,7 +55,7 @@ class WorkerSettings(BaseSettings):
     swing_max_position_pct_max: float = Field(default=30.0, gt=0, le=100)
     swing_max_open_positions_max: int = Field(default=20, gt=0, le=50)
     #: The benchmark the market gate reads (``docs/swing/04`` §8.2), ``nifty-50`` as fallback.
-    swing_index_slug: str = "nifty-500"
+    swing_index_slug: str = "nifty-mid-small-400"
     #: SW11 (STANDING-ANSWERS A4, MD5): the one-shot S2 Kite timing probe at 09:04. Off by
     #: default; on for the one morning Maulik has logged in to Kite before 09:00, and the task
     #: disables itself with a marker file after one good run.

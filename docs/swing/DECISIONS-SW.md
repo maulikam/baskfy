@@ -2283,3 +2283,4 @@ before re-fetching (the guard then has no anchor and would accept a second bad f
 target stand alone. The 12-slug fixture rows still on the box are listed in STATUS SW16 (a) with
 their predicate.
 
+| MD21 | **The gate's index is the NIFTY MidSmallcap 400, and the liquidity floor is ₹50 lakh.** (Maulik, 3 Sep.) `swing_index_slug` defaults to `nifty-mid-small-400` in both settings modules and in `run_detect_swing` (fallback `nifty-500`, then the reading is absent rather than wrong); his book trades mid- and small-caps, and a large-cap index says nothing about that tape. `sw_config.turnover_min_inr` on the box is ₹50,00,000 (audited change, 3 Sep) — the pack's ₹5 cr stays the code default because the floor is a per-book setting, not a rule. Effect measured the same evening: 402 → **605** liquid names, 9 → **13** candidates, and the 2 Sep gate RED (Nifty 500, close below both MAs) → **GREEN** (MidSmallcap 400, 10-day above 20-day, breadth 14.7 %) | SW17 |

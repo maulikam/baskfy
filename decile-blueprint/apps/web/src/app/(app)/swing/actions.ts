@@ -5,14 +5,15 @@ import { revalidatePath } from "next/cache";
 import { swingWrite, type SwingFormResult } from "@/lib/swing/write";
 
 /**
- * The watchlist's four server actions — SW14, `docs/swing/05` §2 and `02` Track A.
+ * The hub's five server actions — SW14's four for the watchlist and SW15's "Scan now";
+ * `docs/swing/05` §2 and `02` Track A.
  *
  * Each one is a non-money write: a name added to `sw_watch`, its note or catalyst edited, a
- * MANUAL row's ten-session clock restarted (STANDING-ANSWERS A14), a row marked DISMISSED.
- * Each makes exactly one API call with the bearer from the server session, revalidates the hub
- * and answers the form with `{ ok, error? }` rather than throwing. None of them can reach an
- * order: `__tests__/read-only.test.tsx` enumerates every export of this file and asserts the
- * set is exactly these four plus `settingsSave` under `/me/swing`.
+ * MANUAL row's ten-session clock restarted (STANDING-ANSWERS A14), a row marked DISMISSED, a
+ * detection run queued. Each makes exactly one API call with the bearer from the server
+ * session, revalidates the hub and answers the form with `{ ok, error? }` rather than throwing.
+ * None of them can reach an order: `__tests__/read-only.test.tsx` enumerates every export of
+ * this file and asserts the set is exactly these five plus `settingsSave` under `/me/swing`.
  *
  * Levels are posted as the strings the person typed. A trigger of `149.60` is a number somebody
  * types into a broker, and `Number("149.60")` would send `149.6` (house rule 8).
@@ -120,4 +121,20 @@ export async function watchReconfirm(
   if (!result.ok) return result;
   revalidatePath(HUB, "layout");
   return { ok: true, message: "Still watching — ten more sessions." };
+}
+
+/**
+ * "Scan now" — `POST /swing/scan` (SW15). Queues a detection run; during the session the worker
+ * detects on a bar built from live Kite quotes and labels every row provisional. A 409 (one
+ * already in flight) and a 429 (one a minute) come back as the server's own sentence, so the
+ * button says why not rather than failing silently.
+ */
+export async function scanNow(
+  _previous: SwingFormResult | null,
+  _formData: FormData,
+): Promise<SwingFormResult> {
+  const result = await swingWrite("POST", "/swing/scan");
+  if (!result.ok) return result;
+  revalidatePath(HUB, "layout");
+  return { ok: true, message: "Scan queued — the page refreshes as it runs." };
 }

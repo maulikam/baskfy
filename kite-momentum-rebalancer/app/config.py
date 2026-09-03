@@ -120,6 +120,11 @@ SWING_EXECUTION_ENABLED = os.getenv("BASKFY_SWING_EXECUTION_ENABLED", "false").l
 # The 09:15-10:45 opening-range monitor. Off until SW6's replay is green and one morning has
 # been watched by a person.
 SWING_MONITOR_ENABLED = os.getenv("BASKFY_SWING_MONITOR_ENABLED", "false").lower() == "true"
+# SW15 "Scan now" from the desk page: the same two rules the API applies, read from the same
+# environment names so the two buttons cannot disagree — at least this many seconds between
+# two requests, and a QUEUED/RUNNING run older than this no longer counts as in flight.
+SWING_SCAN_MIN_INTERVAL_SECONDS = int(os.getenv("BASKFY_SWING_SCAN_MIN_INTERVAL_SECONDS", "60"))
+SWING_SCAN_STALE_AFTER_SECONDS = int(os.getenv("BASKFY_SWING_SCAN_STALE_AFTER_SECONDS", "600"))
 # The 08:50/09:09 pre-open gap scan. Independent of the monitor: either can run alone.
 _EP_PREMARKET = os.getenv("BASKFY_SWING_EP_PREMARKET_ENABLED", "false")
 SWING_EP_PREMARKET_ENABLED = _EP_PREMARKET.lower() == "true"

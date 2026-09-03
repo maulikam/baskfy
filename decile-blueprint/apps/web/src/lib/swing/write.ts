@@ -7,7 +7,9 @@ import { auth } from "@/lib/auth";
  * The swing hub's writes — SW14, `docs/swing/05` §2 and `02` Track A.
  *
  * Track A allows this surface exactly the writes that "change no money": a watchlist row added,
- * annotated, re-confirmed or dismissed, and the settings form. Each server action under
+ * annotated, re-confirmed or dismissed, the settings form, and — SW15 — "Scan now", which asks
+ * the worker to run the detectors (a scan reads quotes and writes detection rows; it is never
+ * an order). Each server action under
  * `(app)/swing` and `(app)/me/swing` makes **one** call through here, with the bearer token from
  * the server session — the token never reaches the browser — and hands the form a typed result
  * rather than throwing at it.
@@ -20,7 +22,11 @@ import { auth } from "@/lib/auth";
  * call it.
  */
 
-export type SwingWritePath = "/swing/watch" | `/swing/watch/${number}` | "/swing/config";
+export type SwingWritePath =
+  | "/swing/watch"
+  | `/swing/watch/${number}`
+  | "/swing/config"
+  | "/swing/scan";
 
 /** What a form gets back. `ok: false` carries the server's own sentence, and the ceiling if one was crossed. */
 export type SwingFormResult =

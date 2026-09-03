@@ -19,7 +19,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Final
 
-from celery import shared_task
+from celery import Task, shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.screener import (
@@ -73,6 +73,7 @@ from baskfy_worker.tasks.swing_ops import (
     check_orders_after_cutoff,
 )
 from baskfy_worker.tasks.swing_premarket import STAGE_GAPS, QuoteSource, run_swing_premarket
+from baskfy_worker.tasks.swing_scan_now import ScanNotRunnable, run_scan_now, sweep_queued
 from baskfy_worker.tasks.swing_timing_probe import DONE_MARKER, probe_once
 from baskfy_worker.telemetry import provider_retry_hooks
 
@@ -677,6 +678,80 @@ def swing_premarket_task(session_date: str | None = None, stage: str = STAGE_GAP
             execution_enabled=settings.swing_execution_enabled,
         )
         return {"date": day.isoformat(), **report.as_detail()}
+
+    return run_in_session(_run)
+
+
+# --- SW15: "Scan now" (docs/swing/DECISIONS-SW SW15.1) -----------------------------------------
+
+
+#: The two names the API and the sweep publish. `test_celery_config.py` holds the producer's
+#: routing table and this worker's equal for both.
+SWING_SCAN_NOW_TASK: Final = "baskfy.swing.scan_now"
+SWING_SCAN_SWEEP_TASK: Final = "baskfy.swing.scan_sweep"
+
+
+#: The API publishes the task inside the request whose transaction inserts the row, so the
+#: worker can be handed the id a moment before the row is visible. A row that is not there yet
+#: is retried a few seconds later; five tries covers a slow commit, not a row that never was.
+SCAN_ROW_RETRY_SECONDS: Final = 2
+SCAN_ROW_RETRIES: Final = 5
+
+
+@shared_task(name=SWING_SCAN_NOW_TASK, acks_late=True, queue=QUEUE_COMPUTE, bind=True)
+def swing_scan_now_task(self: Task, run_id: int) -> JsonObject:
+    """SW15: one press of "Scan now" — `run_scan_now` over the `sw_scan_run` row ``run_id``.
+
+    The Kite provider is built **lazily**, and only on the provisional path: outside market
+    hours the task re-detects the last published session and opens no Kite session at all. A
+    Kite session that cannot be built (no token) is a `FAILED` row with the reason, not a
+    crash — the body owns that (fail soft), so the task never retries a press. The one retry
+    is for a row the publisher has not committed yet (`SCAN_ROW_RETRY_SECONDS`).
+    """
+    deps = build_pipeline_dependencies()
+    if deps.swing_user_id is None:
+        return {"run_id": run_id, "skipped": "no BASKFY_SOLE_USER_ID configured"}
+
+    def quote_source() -> QuoteSource:
+        return build_kite_provider(get_provider_settings(), provider_retry_hooks())
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        report = await run_scan_now(
+            session,
+            run_id=int(run_id),
+            user_id=int(deps.swing_user_id or 0),
+            index_slug=deps.swing_index_slug,
+            execution_enabled=deps.swing_execution_enabled,
+            quote_source=quote_source,
+            now=dt.datetime.now(tz=IST).replace(tzinfo=None),
+        )
+        return report.as_detail()
+
+    try:
+        return run_in_session(_run)
+    except ScanNotRunnable as exc:
+        raise self.retry(
+            exc=exc, countdown=SCAN_ROW_RETRY_SECONDS, max_retries=SCAN_ROW_RETRIES
+        ) from exc
+
+
+@shared_task(name=SWING_SCAN_SWEEP_TASK)
+def swing_scan_sweep_task() -> JsonObject:
+    """SW15: publish every queued `sw_scan_run` row nobody has published (the desk's rows, and
+    the API's when it had no broker). Beat, every minute; one indexed SELECT when idle."""
+    deps = build_pipeline_dependencies()
+    if deps.swing_user_id is None:
+        return {"published": [], "skipped": "no BASKFY_SOLE_USER_ID configured"}
+
+    def publish(run_id: int) -> str:
+        result = swing_scan_now_task.apply_async(args=[run_id], queue=QUEUE_COMPUTE)
+        return str(result.id)
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        published = await sweep_queued(
+            session, user_id=int(deps.swing_user_id or 0), publish=publish
+        )
+        return {"published": published}
 
     return run_in_session(_run)
 

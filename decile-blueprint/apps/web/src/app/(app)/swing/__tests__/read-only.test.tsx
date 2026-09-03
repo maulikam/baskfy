@@ -6,12 +6,14 @@ import { describe, expect, it } from "vitest";
 /**
  * `docs/swing/05` §2's read-only assertion, SW14: the only server actions under `/swing` (and
  * `/me/swing`, where the settings form lives) are `watchAdd`, `watchDismiss`, `watchAnnotate`,
- * `watchReconfirm` and `settingsSave`; none imports anything from the execution package; nothing
- * under these trees names the desk console's routes or a verb that places.
+ * `watchReconfirm`, `settingsSave` and — SW15 — `scanNow`; none imports anything from the
+ * execution package; nothing under these trees names the desk console's routes or a verb that
+ * places.
  *
  * `watchReconfirm` is STANDING-ANSWERS A14's addition to the four `05` §2 first named — a MANUAL
- * row's "Still watching" control (DECISIONS-SW SW14.1). Every one of the five is a Track A write
- * that "changes no money".
+ * row's "Still watching" control (DECISIONS-SW SW14.1). `scanNow` is Maulik's 3 Sep ask — "the
+ * scan anytime" — and queues the detectors, nothing else. Every one of the six is a Track A
+ * write that "changes no money".
  *
  * Structural, like `services/api/tests/test_swing_readonly.py` on the other side of the wire:
  * it walks the files, so an action added in a new file fails here the moment it exists, not the
@@ -29,6 +31,10 @@ const ALLOWED_ACTIONS = [
   "watchAnnotate",
   "watchReconfirm",
   "settingsSave",
+  // SW15: "Scan now" — `POST /swing/scan` queues a detection run. Quotes in, detection rows
+  // out, every row labelled provisional during the session; it can no more place an order
+  // than the nightly job can (DECISIONS-SW SW15.1).
+  "scanNow",
 ].sort();
 
 /** The routes and the verbs that reach an order, in either codebase's spelling. */
@@ -77,7 +83,7 @@ function exportsOf(source: string): string[] {
   );
 }
 
-describe("the swing hub's server actions are exactly the five non-money writes", () => {
+describe("the swing hub's server actions are exactly the six non-money writes", () => {
   it("finds the action files", () => {
     expect(SERVER_FILES.map((path) => path.slice(APP.length)).sort()).toEqual([
       "/me/swing/actions.ts",
@@ -85,7 +91,7 @@ describe("the swing hub's server actions are exactly the five non-money writes",
     ]);
   });
 
-  it("exports the five, and nothing else, from files marked use server", () => {
+  it("exports the six, and nothing else, from files marked use server", () => {
     const found = SERVER_FILES.flatMap((path) => exportsOf(readFileSync(path, "utf8"))).sort();
     expect(found).toEqual(ALLOWED_ACTIONS);
   });

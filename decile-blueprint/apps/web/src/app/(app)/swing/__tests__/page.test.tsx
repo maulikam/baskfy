@@ -32,10 +32,13 @@ vi.mock("@/lib/swing/fetch", () => ({
 vi.mock("../actions", () => ({
   watchAdd: vi.fn(),
   watchDismiss: vi.fn(),
+  scanNow: vi.fn(),
 }));
 
+const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
   usePathname: () => "/swing",
+  useRouter: () => ({ refresh }),
 }));
 
 const { fetchSetups, fetchSectors, fetchWatchlist, fetchMarket, fetchBars } =
@@ -275,10 +278,112 @@ describe("the row actions are Watch and Dismiss, and nothing else", () => {
     expect(row).toHaveTextContent("watching");
   });
 
-  it("renders no other button on the page", async () => {
+  it("renders no other button on the page but Scan now", async () => {
     await renderWith([setup()], { watch: [watchRow()] });
     const names = screen.getAllByRole("button").map((button) => button.textContent?.trim());
-    expect(new Set(names)).toEqual(new Set(["Dismiss"]));
+    expect(new Set(names)).toEqual(new Set(["Dismiss", "Scan now"]));
+  });
+});
+
+describe("Scan now, and the header that says the rows are provisional (SW15)", () => {
+  const scanned = "2026-09-02T08:12:00+00:00"; // 13:42 IST
+
+  it("says provisional — scanned 13:42 IST from live quotes when the rows are from live quotes", async () => {
+    await renderWith([setup()], {
+      setups: { as_of_provisional: true, scanned_at: scanned },
+    });
+    expect(screen.getByTestId("scan-label")).toHaveTextContent(
+      "provisional — scanned 13:42 IST from live quotes",
+    );
+    expect(screen.getByText(/built from live quotes — provisional until the nightly/)).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind for a day the nightly wrote", async () => {
+    await renderWith([setup()]);
+    expect(screen.queryByTestId("scan-label")).toBeNull();
+    expect(screen.getByText(/Detected from published end-of-day bars/)).toBeInTheDocument();
+  });
+
+  it("labels an on-demand re-scan of a published day as such, not as provisional", async () => {
+    await renderWith([setup()], {
+      setups: { as_of_provisional: false, scanned_at: "2026-09-02T12:32:00+00:00" },
+    });
+    expect(screen.getByTestId("scan-label")).toHaveTextContent(
+      "re-scanned 18:02 IST from published bars",
+    );
+  });
+
+  it("offers Scan now bound to the action, with the last run's result beside it", async () => {
+    await renderWith([setup()], {
+      setups: {
+        last_scan: {
+          run_id: 9,
+          status: "DONE",
+          requested_at: "2026-09-02T08:11:00+00:00",
+          started_at: "2026-09-02T08:11:30+00:00",
+          finished_at: scanned,
+          session_date: "2026-09-02",
+          provisional: true,
+          funnel: { instruments: 1812, liquid: 41, candidates: { FLAG: 2, EP: 0 } },
+          detail: null,
+          error: null,
+        },
+      },
+    });
+    const control = screen.getByTestId("scan-now");
+    const button = within(control).getByRole("button", { name: "Scan now" });
+    expect(button).toBeEnabled();
+    expect(control.tagName).toBe("FORM");
+    expect(control).not.toHaveAttribute("method");
+    expect(within(control).getByRole("status")).toHaveTextContent(
+      "Last scan 13:42 IST from live quotes · 41 liquid, 2 flagged",
+    );
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("disables the button and says scanning while a run is in flight", async () => {
+    await renderWith([setup()], {
+      setups: {
+        last_scan: {
+          run_id: 10,
+          status: "RUNNING",
+          requested_at: "2026-09-02T08:11:00+00:00",
+          started_at: "2026-09-02T08:11:30+00:00",
+          finished_at: null,
+          session_date: null,
+          provisional: false,
+          funnel: null,
+          detail: null,
+          error: null,
+        },
+      },
+    });
+    const control = screen.getByTestId("scan-now");
+    expect(within(control).getByRole("button", { name: "Scanning…" })).toBeDisabled();
+    expect(within(control).getByRole("status")).toHaveTextContent("Scanning…");
+  });
+
+  it("shows the reason when the last scan failed", async () => {
+    await renderWith([setup()], {
+      setups: {
+        last_scan: {
+          run_id: 11,
+          status: "FAILED",
+          requested_at: "2026-09-02T08:11:00+00:00",
+          started_at: "2026-09-02T08:11:30+00:00",
+          finished_at: "2026-09-02T08:11:31+00:00",
+          session_date: "2026-09-02",
+          provisional: true,
+          funnel: null,
+          detail: null,
+          error: "ScanNotRunnable: the market is open and there is no Kite quote source",
+        },
+      },
+    });
+    expect(within(screen.getByTestId("scan-now")).getByRole("status")).toHaveTextContent(
+      "The last scan failed: ScanNotRunnable: the market is open and there is no Kite quote source",
+    );
+    expect(screen.getByRole("button", { name: "Scan now" })).toBeEnabled();
   });
 });
 

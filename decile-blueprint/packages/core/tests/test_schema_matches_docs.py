@@ -150,6 +150,8 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "sw_backtest_run": ("id",),
     # SW11B (docs/swing/03 §11, migration 0032): a headline, a stamp and a link per watched name.
     "sw_catalyst": ("id",),
+    # SW15 (docs/swing/03 §12, migration 0033): one row per press of "Scan now".
+    "sw_scan_run": ("id",),
 }
 
 #: docs/04 opening paragraph: "Money in numeric, never float."
@@ -262,6 +264,7 @@ def test_swing_tables_are_recorded_in_docs() -> None:
         "sw_session",
         "sw_backtest_run",
         "sw_catalyst",
+        "sw_scan_run",
     ):
         assert table in swing_model, f"{table} is not described in docs/swing/03"
 
@@ -312,6 +315,16 @@ def test_swing_drawdown_columns_are_modelled_and_recorded_in_docs(table: str, co
         ("sw_catalyst", "url"),
         ("sw_catalyst", "source"),
         ("sw_catalyst", "earnings_date"),
+        # SW15 (migration 0033): the provisional flag on both detection tables and the run log.
+        ("sw_setup_daily", "provisional"),
+        ("sw_market_daily", "provisional"),
+        ("sw_scan_run", "requested_at"),
+        ("sw_scan_run", "session_date"),
+        ("sw_scan_run", "provisional"),
+        ("sw_scan_run", "status"),
+        ("sw_scan_run", "detail"),
+        ("sw_scan_run", "error"),
+        ("sw_scan_run", "task_id"),
     ],
 )
 def test_swing_review_columns_are_modelled_and_recorded_in_docs(table: str, column: str) -> None:

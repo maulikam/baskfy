@@ -64,7 +64,13 @@ const ALLOWED_PATHS = [
 ];
 
 /** The paths the write helper may be asked for — `02` Track A's non-money writes, by name. */
-const ALLOWED_WRITE_PATHS = ["/swing/watch", "/swing/watch/${number}", "/swing/config"];
+const ALLOWED_WRITE_PATHS = [
+  "/swing/watch",
+  "/swing/watch/${number}",
+  "/swing/config",
+  // SW15: "Scan now" queues a detection run — quotes in, detection rows out, never an order.
+  "/swing/scan",
+];
 
 describe("the swing hub is read-only and cannot reach an order", () => {
   it("covers the pages that exist", () => {

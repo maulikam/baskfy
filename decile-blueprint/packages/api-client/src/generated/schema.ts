@@ -3123,6 +3123,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/swing/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan now: queue a detection run
+         * @description SW15. One row in ``sw_scan_run`` and one task name published; the worker does the rest.
+         *
+         *     During the session (09:15-15:30 IST on a trading day) the worker builds a provisional bar
+         *     per liquid name from live Kite quotes and detects on it; at any other time it re-detects the
+         *     last published session. A scan moves no money (`02` Track A) and this route reaches no
+         *     broker — `baskfy_api.swing_scan` names none. At most one in flight per user (409) and one
+         *     request a minute (429, ``Retry-After``); both answered from the table.
+         */
+        post: operations["postScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/swing/scan/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One scan's state */
+        get: operations["getScan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/swing/sectors": {
         parameters: {
             query?: never;
@@ -9170,6 +9213,59 @@ export interface components {
             data: components["schemas"]["SwingPositionOut"][];
             plan: components["schemas"]["SwingPlanOut"] | null;
         };
+        /**
+         * SwingScanQueuedOut
+         * @description What `POST /swing/scan` answers, with a 202: the run to poll.
+         */
+        SwingScanQueuedOut: {
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Run Id */
+            run_id: number;
+            /** Status */
+            status: string;
+        };
+        /**
+         * SwingScanRunOut
+         * @description One "Scan now" run (SW15). ``status`` walks QUEUED -> RUNNING -> DONE | FAILED.
+         *
+         *     ``session_date`` and ``provisional`` are null / false until the worker has decided which
+         *     session it is scanning; ``funnel`` is the same shape as the setups page's and is filled on
+         *     DONE; ``error`` is the reason on FAILED. ``detail`` carries the rest — the quote count and
+         *     the skips — for a page that wants to say "1,812 of 1,830 names answered".
+         */
+        SwingScanRunOut: {
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Funnel */
+            funnel: {
+                [key: string]: unknown;
+            } | null;
+            /** Provisional */
+            provisional: boolean;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Run Id */
+            run_id: number;
+            /** Session Date */
+            session_date: string | null;
+            /** Started At */
+            started_at: string | null;
+            /** Status */
+            status: string;
+        };
         /** SwingSectorOut */
         SwingSectorOut: {
             /** Candidates */
@@ -9270,6 +9366,11 @@ export interface components {
         SwingSetupsOut: {
             /** As Of */
             as_of: string | null;
+            /**
+             * As Of Provisional
+             * @default false
+             */
+            as_of_provisional: boolean;
             /** Data */
             data: components["schemas"]["SwingSetupOut"][];
             /** Exposure Level */
@@ -9280,12 +9381,15 @@ export interface components {
             } | null;
             /** Gate */
             gate: string | null;
+            last_scan?: components["schemas"]["SwingScanRunOut"] | null;
             /** Max Exposure Pct */
             max_exposure_pct: string | null;
             /** Max Open Positions */
             max_open_positions: number | null;
             /** New Entries Allowed */
             new_entries_allowed: boolean | null;
+            /** Scanned At */
+            scanned_at?: string | null;
         };
         /**
          * SwingSignalOut
@@ -10243,7 +10347,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10346,7 +10450,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10449,7 +10553,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10552,7 +10656,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10655,7 +10759,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10758,7 +10862,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10859,7 +10963,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10960,7 +11064,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11063,7 +11167,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11166,7 +11270,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11271,7 +11375,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11374,7 +11478,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11481,7 +11585,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11583,7 +11687,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11684,7 +11788,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11789,7 +11893,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11894,7 +11998,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11995,7 +12099,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -12102,7 +12206,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -12205,7 +12309,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -12310,7 +12414,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -12409,7 +12513,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -12510,7 +12614,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -12613,7 +12717,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -12720,7 +12824,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -12823,7 +12927,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -12924,7 +13028,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -13029,7 +13133,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -13132,7 +13236,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -13237,7 +13341,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -13344,7 +13448,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -13450,7 +13554,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -13554,7 +13658,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -13655,7 +13759,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -13756,7 +13860,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -13857,7 +13961,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -13961,7 +14065,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -14064,7 +14168,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -14167,7 +14271,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -14270,7 +14374,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -14375,7 +14479,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -14480,7 +14584,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -14581,7 +14685,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -14682,7 +14786,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -14788,7 +14892,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -14893,7 +14997,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -14996,7 +15100,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15099,7 +15203,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15206,7 +15310,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15313,7 +15417,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15420,7 +15524,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15527,7 +15631,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15630,7 +15734,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15733,7 +15837,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15840,7 +15944,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15941,7 +16045,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16042,7 +16146,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16143,7 +16247,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16246,7 +16350,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16349,7 +16453,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16454,7 +16558,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16559,7 +16663,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16664,7 +16768,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16765,7 +16869,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16866,7 +16970,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16969,7 +17073,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17070,7 +17174,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17171,7 +17275,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17276,7 +17380,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17377,7 +17481,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17478,7 +17582,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17579,7 +17683,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17680,7 +17784,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17783,7 +17887,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17897,7 +18001,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17998,7 +18102,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -18101,7 +18205,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -18202,7 +18306,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -18305,7 +18409,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -18408,7 +18512,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -18514,7 +18618,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -18617,7 +18721,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -18722,7 +18826,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -18827,7 +18931,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -18930,7 +19034,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -19037,7 +19141,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -19144,7 +19248,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -19248,7 +19352,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -19351,7 +19455,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -19452,7 +19556,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -19557,7 +19661,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -19658,7 +19762,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -19765,7 +19869,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -19868,7 +19972,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -19973,7 +20077,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20081,7 +20185,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20182,7 +20286,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20287,7 +20391,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20390,7 +20494,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20493,7 +20597,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20594,7 +20698,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20701,7 +20805,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20805,7 +20909,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20910,7 +21014,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21011,7 +21115,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21116,7 +21220,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21221,7 +21325,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21322,7 +21426,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21427,7 +21531,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21528,7 +21632,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21629,7 +21733,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21730,7 +21834,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21836,7 +21940,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21937,7 +22041,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22038,7 +22142,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22143,7 +22247,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22248,7 +22352,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22349,7 +22453,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22453,7 +22557,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22557,7 +22661,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22664,7 +22768,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22765,7 +22869,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22868,7 +22972,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22974,7 +23078,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -23075,7 +23179,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -23182,7 +23286,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -23292,7 +23396,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -23391,7 +23495,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -23494,7 +23598,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -23595,7 +23699,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -23702,7 +23806,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -23808,7 +23912,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -23911,7 +24015,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24018,7 +24122,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24125,7 +24229,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24231,7 +24335,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24335,7 +24439,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24438,7 +24542,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24545,7 +24649,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24646,7 +24750,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24753,7 +24857,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24858,7 +24962,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -24961,7 +25065,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25062,7 +25166,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25169,7 +25273,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25272,7 +25376,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25381,7 +25485,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25488,7 +25592,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25594,7 +25698,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25700,7 +25804,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25805,7 +25909,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -25906,7 +26010,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -26013,7 +26117,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -26114,7 +26218,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -26218,7 +26322,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -26319,7 +26423,211 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    postScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwingScanQueuedOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwingScanRunOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -26422,7 +26730,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -26527,7 +26835,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -26633,7 +26941,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -26737,7 +27045,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -26840,7 +27148,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -26945,7 +27253,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -27048,7 +27356,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -27155,7 +27463,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -27256,7 +27564,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -27361,7 +27669,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -27462,7 +27770,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -27563,7 +27871,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -27668,7 +27976,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -27769,7 +28077,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -27876,7 +28184,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -27979,7 +28287,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -28082,7 +28390,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -28186,7 +28494,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
-            /** @description Data version is no longer current */
+            /** @description A scan is already in flight */
             409: {
                 headers: {
                     [name: string]: unknown;

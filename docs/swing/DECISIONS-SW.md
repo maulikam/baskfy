@@ -2219,3 +2219,35 @@ Recorded verbatim from the review session so the run and the report build on the
 | MD18 | **Deployment (Maulik, 2 Sep, 23:00).** No local run. When the code is complete: migrate, commit, deploy to AWS. Baskfy side (api/web/worker/beat) to staging.baskfy.com via the existing ECR + SSM path — after Maulik's `aws sso login` (asked only once the code is done). **Desk half to the desk box (65.0.226.77) now, before Friday's rebalance** — his call over the standing rail, taken with: a verified `python -m scripts.backup` + dated copy first, the desk suite green on the box before the restart, `DRY_RUN=true` and every swing flag false in the box's `.env`, and a rollback (`git checkout <previous sha>` + restart) written into the deploy leaf | SW13 (deploy) |
 | MD19 | **Documentation minimised** from here: STATUS/DECISIONS entries a few lines each; the final report short; tokens go to code | this run |
 | MD20 | **One system: Baskfy.** (Maulik, 2 Sep, 23:10.) The desk box at 65.0.226.77 is not a deploy target and will not rebalance; the merged desk — weekly book and swing — runs as a service on the Baskfy box beside api/web/worker/beat, on the same Postgres and the same Kite token store, `DRY_RUN=true` and every swing flag false until his hand flips them. Supersedes MD18's desk-box clause | SW13 (deploy) |
+
+## SW15.1 — A provisional bar is a reading of `04` §1 for a day in progress; one in flight, one a minute; the desk writes the row and the sweep publishes it · Maulik, 3 Sep 2026 ("the scan anytime") · ⚠ UNREVIEWED on the three rules
+
+**Context.** `04` §1–§4 define the universe and the detectors over daily bars; `06` SW3 runs
+them at 21:00 on published closes. Maulik asked for the scan on demand, intraday, from Kite.
+
+**Choices.** (1) **A provisional bar.** Between 09:15 and 15:30 IST on a trading day, today's
+bar is built per liquid name from the live quote — `ohlc` for open/high/low, `last_price` for
+the close, the session's volume so far, turnover = close × volume, the day's circuit band, the
+last published bar's `adj_factor` — and the detectors run unchanged over it. Every row written
+carries `provisional=true`, the page says "provisional — scanned 13:42 IST from live quotes",
+and the nightly replaces the rows (same keys flip to false, the rest are deleted). A half-day's
+volume and a base that can still widen are labelled, not hidden. The universe is `04` §1 **as
+of the last close** (`liquid_universe`), so a name that became liquid today is not quoted —
+cheap to reverse (quote the register instead) and the honest reading. Outside those hours the
+scan is the last published session re-run, plain. (2) **One in flight per user (409) and one a
+minute (429)**, answered from `sw_scan_run` rather than the API's Redis limiter, so the rules
+hold with no cache and are testable against the database; a `RUNNING` row older than ten
+minutes no longer blocks (a dead worker must not lock the button). Both numbers are settings
+(`swing_scan_min_interval_seconds`, `swing_scan_stale_after_seconds`; the desk reads the same
+env names). (3) **The desk writes the row, the worker sweeps.** The desk venv has no Celery
+client and reaches Baskfy through Postgres alone, so its button inserts a `QUEUED` row and
+`baskfy.swing.scan_sweep` (Beat, every minute, one indexed SELECT) publishes it — the same
+fallback the API takes when its broker is down. Rejected: hand-rolling Celery's wire format
+over `redis-py` (brittle), and a bearer from the desk to the API (the desk has none). (4) The
+funnel is now written to `sw_market_daily.detail.funnel` on every run — `GET /swing/setups`
+had been reading a key nothing wrote.
+
+**Reversal.** `provisional` defaults false; delete the two columns and the run table
+(0033's downgrade removes the provisional rows with the flag) and the nightly is exactly what
+it was. The sweep is one Beat entry.
+

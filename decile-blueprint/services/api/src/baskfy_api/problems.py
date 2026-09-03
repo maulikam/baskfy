@@ -43,6 +43,11 @@ class ProblemType(StrEnum):
     #: ceiling itself back so the form can say "max 1.0% — set by the server" rather than
     #: "invalid". docs/swing/DECISIONS-SW.md SW2.3.
     SETTING_ABOVE_CEILING = "setting-above-ceiling"
+    #: SW15, not in docs/07's table. A second "Scan now" while one is queued or running is not
+    #: a rate-limit (the person is not being greedy, the answer is on its way) and not a
+    #: conflict over data: it is "already doing that". 409 with the run in flight named, so
+    #: the page can poll it instead of asking again. docs/swing/DECISIONS-SW.md SW15.1.
+    SCAN_IN_FLIGHT = "scan-in-flight"
 
 
 #: The status docs/07 pairs with each type. Kept beside the enum so a handler cannot pick a
@@ -58,6 +63,7 @@ STATUS_FOR: Final[Mapping[ProblemType, int]] = {
     ProblemType.PIPELINE_DEGRADED: 503,
     ProblemType.INTERNAL_ERROR: 500,
     ProblemType.SETTING_ABOVE_CEILING: 422,
+    ProblemType.SCAN_IN_FLIGHT: 409,
 }
 
 TITLE_FOR: Final[Mapping[ProblemType, str]] = {
@@ -71,6 +77,7 @@ TITLE_FOR: Final[Mapping[ProblemType, str]] = {
     ProblemType.PIPELINE_DEGRADED: "Data pipeline is degraded",
     ProblemType.INTERNAL_ERROR: "Internal server error",
     ProblemType.SETTING_ABOVE_CEILING: "Setting exceeds the server's ceiling",
+    ProblemType.SCAN_IN_FLIGHT: "A scan is already in flight",
 }
 
 #: docs/07 §Entitlements: 'A 402 `payment_required` problem response carries

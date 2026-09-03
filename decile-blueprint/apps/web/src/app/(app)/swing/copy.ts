@@ -1,4 +1,4 @@
-import type { SwingMarketDay } from "@/lib/swing/fetch";
+import type { SwingMarketDay, SwingScanRun } from "@/lib/swing/fetch";
 
 /**
  * The sentences the Setups and Market headers share — `docs/swing/05` §2 and `04` §8.
@@ -57,4 +57,49 @@ export function tierLine(
     return `Locked out · allocation ${day.drawdown_pct.toFixed(1)}% below its peak · resumes inside ${RESUME_DRAWDOWN_PCT}%`;
   }
   return `Rung ${day.exposure_level + 1} of ${RUNGS} · up to ${day.max_open_positions} positions · ${day.max_exposure_pct.toFixed(0)}% of the allocation`;
+}
+
+/** "13:42 IST" — the wall clock a person compares a scan against; never the browser's zone. */
+export function timeIST(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const rendered = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Kolkata",
+  }).format(parsed);
+  return `${rendered} IST`;
+}
+
+/**
+ * SW15's header line. Provisional rows say so first, and say from what: "provisional — scanned
+ * 13:42 IST from live quotes". A day re-scanned on demand outside the session says
+ * "re-scanned 18:02 IST from published bars"; a day the nightly wrote says nothing.
+ */
+export function scanLine(provisional: boolean, scannedAt: string | null | undefined): string {
+  const when = timeIST(scannedAt);
+  if (provisional) {
+    return when ? `provisional — scanned ${when} from live quotes` : "provisional — from live quotes";
+  }
+  return when ? `re-scanned ${when} from published bars` : "";
+}
+
+/** The last run beside the button: "scanning…", "scanned 13:42 IST · 41 liquid, 2 flags", "failed: …". */
+export function scanRunLine(run: SwingScanRun | null | undefined): string {
+  if (!run) return "";
+  if (run.status === "QUEUED") return "Scan queued…";
+  if (run.status === "RUNNING") return "Scanning…";
+  if (run.status === "FAILED") {
+    return `The last scan failed${run.error ? `: ${run.error}` : "."}`;
+  }
+  const when = timeIST(run.finished_at) ?? timeIST(run.requested_at);
+  const liquid = run.funnel?.liquid;
+  const candidates = run.funnel?.candidates ?? {};
+  const found = Object.values(candidates).reduce((sum, count) => sum + count, 0);
+  const counts =
+    liquid === undefined ? "" : ` · ${liquid.toLocaleString("en-IN")} liquid, ${found} flagged`;
+  const what = run.provisional ? " from live quotes" : " from published bars";
+  return `Last scan ${when ?? "done"}${what}${counts}`;
 }

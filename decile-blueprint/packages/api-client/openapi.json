@@ -15011,6 +15011,138 @@
         "title": "SwingPositionsOut",
         "type": "object"
       },
+      "SwingScanQueuedOut": {
+        "description": "What `POST /swing/scan` answers, with a 202: the run to poll.",
+        "properties": {
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "status",
+          "requested_at"
+        ],
+        "title": "SwingScanQueuedOut",
+        "type": "object"
+      },
+      "SwingScanRunOut": {
+        "description": "One \"Scan now\" run (SW15). ``status`` walks QUEUED -> RUNNING -> DONE | FAILED.\n\n``session_date`` and ``provisional`` are null / false until the worker has decided which\nsession it is scanning; ``funnel`` is the same shape as the setups page's and is filled on\nDONE; ``error`` is the reason on FAILED. ``detail`` carries the rest — the quote count and\nthe skips — for a page that wants to say \"1,812 of 1,830 names answered\".",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "funnel": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Funnel"
+          },
+          "provisional": {
+            "title": "Provisional",
+            "type": "boolean"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "integer"
+          },
+          "session_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Date"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "status",
+          "requested_at",
+          "started_at",
+          "finished_at",
+          "session_date",
+          "provisional",
+          "funnel",
+          "detail",
+          "error"
+        ],
+        "title": "SwingScanRunOut",
+        "type": "object"
+      },
       "SwingSectorOut": {
         "properties": {
           "candidates": {
@@ -15400,6 +15532,11 @@
             ],
             "title": "As Of"
           },
+          "as_of_provisional": {
+            "default": false,
+            "title": "As Of Provisional",
+            "type": "boolean"
+          },
           "data": {
             "items": {
               "$ref": "#/components/schemas/SwingSetupOut"
@@ -15441,6 +15578,16 @@
             ],
             "title": "Gate"
           },
+          "last_scan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SwingScanRunOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "max_exposure_pct": {
             "anyOf": [
               {
@@ -15474,6 +15621,18 @@
               }
             ],
             "title": "New Entries Allowed"
+          },
+          "scanned_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scanned At"
           }
         },
         "required": [
@@ -17984,7 +18143,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -18110,7 +18269,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -18235,7 +18394,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -18361,7 +18520,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -18484,7 +18643,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -18608,7 +18767,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -18720,7 +18879,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -18832,7 +18991,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -18958,7 +19117,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -19082,7 +19241,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -19220,7 +19379,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -19342,7 +19501,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -19475,7 +19634,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -19599,7 +19758,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -19710,7 +19869,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -19830,7 +19989,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -19952,7 +20111,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -20067,7 +20226,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -20197,7 +20356,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -20320,7 +20479,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -20442,7 +20601,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -20547,7 +20706,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -20659,7 +20818,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -20784,7 +20943,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -20922,7 +21081,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -21038,7 +21197,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -21159,7 +21318,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -21303,7 +21462,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -21426,7 +21585,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -21560,7 +21719,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -21728,7 +21887,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -21879,7 +22038,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -22012,7 +22171,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -22124,7 +22283,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -22236,7 +22395,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -22348,7 +22507,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -22484,7 +22643,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -22608,7 +22767,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -22733,7 +22892,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -22858,7 +23017,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -22980,7 +23139,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -23102,7 +23261,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -23213,7 +23372,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -23324,7 +23483,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -23469,7 +23628,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -23591,7 +23750,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -23713,7 +23872,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -23836,7 +23995,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -23967,7 +24126,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -24100,7 +24259,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -24233,7 +24392,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -24356,7 +24515,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -24487,7 +24646,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -24609,7 +24768,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -24740,7 +24899,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -24851,7 +25010,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -24962,7 +25121,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -25074,7 +25233,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -25196,7 +25355,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -25318,7 +25477,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -25437,7 +25596,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -25556,7 +25715,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -25675,7 +25834,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -25786,7 +25945,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -25898,7 +26057,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -26022,7 +26181,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -26134,7 +26293,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -26246,7 +26405,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -26368,7 +26527,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -26479,7 +26638,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -26590,7 +26749,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -26701,7 +26860,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -26812,7 +26971,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -26937,7 +27096,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -27220,7 +27379,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -27331,7 +27490,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -27455,7 +27614,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -27566,7 +27725,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -27690,7 +27849,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -27814,7 +27973,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -27957,7 +28116,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -28088,7 +28247,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -28227,7 +28386,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -28367,7 +28526,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -28490,7 +28649,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -28657,7 +28816,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -28803,7 +28962,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -28945,7 +29104,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -29064,7 +29223,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -29176,7 +29335,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -29296,7 +29455,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -29412,7 +29571,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -29545,7 +29704,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -29668,7 +29827,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -29801,7 +29960,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -30011,7 +30170,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -30122,7 +30281,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -30242,7 +30401,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -30367,7 +30526,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -30489,7 +30648,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -30601,7 +30760,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -30736,7 +30895,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -30877,7 +31036,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -31035,7 +31194,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -31157,7 +31316,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -31267,7 +31426,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -31387,7 +31546,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -31499,7 +31658,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -31621,7 +31780,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -31737,7 +31896,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -31853,7 +32012,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -31965,7 +32124,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -32103,7 +32262,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -32219,7 +32378,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -32331,7 +32490,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -32453,7 +32612,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -32598,7 +32757,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -32710,7 +32869,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -32835,7 +32994,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -32967,7 +33126,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -33101,7 +33260,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -33213,7 +33372,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -33337,7 +33496,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -33472,7 +33631,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -33584,7 +33743,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -33722,7 +33881,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -33895,7 +34054,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -34000,7 +34159,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -34116,7 +34275,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -34236,7 +34395,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -34367,7 +34526,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -34502,7 +34661,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -34625,7 +34784,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -34756,7 +34915,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -34889,7 +35048,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -35040,7 +35199,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -35172,7 +35331,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -35294,7 +35453,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -35425,7 +35584,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -35537,7 +35696,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -35674,7 +35833,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -35796,7 +35955,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -35911,7 +36070,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -36031,7 +36190,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -36161,7 +36320,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -36294,7 +36453,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -36450,7 +36609,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -36590,7 +36749,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -36741,7 +36900,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -36882,7 +37041,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -37004,7 +37163,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -37116,7 +37275,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -37255,7 +37414,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -37367,7 +37526,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -37515,7 +37674,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -37627,7 +37786,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -37671,6 +37830,240 @@
           }
         },
         "summary": "The book, and tomorrow's plan",
+        "tags": [
+          "swing"
+        ]
+      }
+    },
+    "/api/v1/swing/scan": {
+      "post": {
+        "description": "SW15. One row in ``sw_scan_run`` and one task name published; the worker does the rest.\n\nDuring the session (09:15-15:30 IST on a trading day) the worker builds a provisional bar\nper liquid name from live Kite quotes and detects on it; at any other time it re-detects the\nlast published session. A scan moves no money (`02` Track A) and this route reaches no\nbroker — `baskfy_api.swing_scan` names none. At most one in flight per user (409) and one\nrequest a minute (429, ``Retry-After``); both answered from the table.",
+        "operationId": "postScan",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwingScanQueuedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Scan now: queue a detection run",
+        "tags": [
+          "swing"
+        ]
+      }
+    },
+    "/api/v1/swing/scan/{run_id}": {
+      "get": {
+        "operationId": "getScan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwingScanRunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "One scan's state",
         "tags": [
           "swing"
         ]
@@ -37758,7 +38151,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -37921,7 +38314,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -38073,7 +38466,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -38220,7 +38613,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -38351,7 +38744,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -38471,7 +38864,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -38594,7 +38987,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -38725,7 +39118,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -38836,7 +39229,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -38955,7 +39348,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -39072,7 +39465,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -39183,7 +39576,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -39302,7 +39695,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -39417,7 +39810,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -39547,7 +39940,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -39669,7 +40062,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -39792,7 +40185,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {
@@ -39938,7 +40331,7 @@
                 }
               }
             },
-            "description": "Data version is no longer current"
+            "description": "A scan is already in flight"
           },
           "422": {
             "content": {

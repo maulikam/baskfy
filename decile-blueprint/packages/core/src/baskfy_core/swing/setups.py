@@ -129,12 +129,10 @@ def _window(
     On the first run over real NSE data (3 Sep 2026) that was a crash, not an empty answer.
     """
     upto = indicated.filter(pl.col("date") <= as_of)
-    present = upto.group_by(_OVER).agg(
-        pl.col("date").max().alias("_last"), pl.len().alias("_rows")
+    present = upto.group_by(_OVER).agg(pl.col("date").max().alias("_last"), pl.len().alias("_rows"))
+    present = present.filter((pl.col("_last") == as_of) & (pl.col("_rows") >= min_bars)).select(
+        _OVER
     )
-    present = present.filter(
-        (pl.col("_last") == as_of) & (pl.col("_rows") >= min_bars)
-    ).select(_OVER)
     return upto.join(present, on=_OVER, how="semi").group_by(_OVER, maintain_order=True).tail(bars)
 
 

@@ -51,7 +51,7 @@ from decimal import Decimal
 from typing import Final
 
 import polars as pl
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, delete, func, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -287,6 +287,26 @@ def _bar_query(start: dt.date, as_of: dt.date) -> Select[BarRow]:
     )
 
 
+#: The frame `load_swing_bars` returns and `with_swing_indicators` reads — typed even when a
+#: column is all null (a month with no circuit band), so a frame built elsewhere in the same
+#: shape (SW15's provisional bar) concatenates without a cast failing on a `Null` column.
+BAR_SCHEMA: Final = pl.Schema(
+    {
+        "instrument_id": pl.Int64,
+        "symbol": pl.String,
+        "date": pl.Date,
+        "open": pl.Float64,
+        "high": pl.Float64,
+        "low": pl.Float64,
+        "close": pl.Float64,
+        "volume": pl.Float64,
+        "turnover": pl.Float64,
+        "upper_circuit": pl.Float64,
+        "adj_factor": pl.Float64,
+    }
+)
+
+
 async def load_swing_bars(session: AsyncSession, start: dt.date, as_of: dt.date) -> pl.DataFrame:
     """The frame ``with_swing_indicators`` expects, in the adjusted space.
 
@@ -297,21 +317,7 @@ async def load_swing_bars(session: AsyncSession, start: dt.date, as_of: dt.date)
     """
     records = (await session.execute(_bar_query(start, as_of))).all()
     if not records:
-        return pl.DataFrame(
-            schema={
-                "instrument_id": pl.Int64,
-                "symbol": pl.String,
-                "date": pl.Date,
-                "open": pl.Float64,
-                "high": pl.Float64,
-                "low": pl.Float64,
-                "close": pl.Float64,
-                "volume": pl.Float64,
-                "turnover": pl.Float64,
-                "upper_circuit": pl.Float64,
-                "adj_factor": pl.Float64,
-            }
-        )
+        return pl.DataFrame(schema=BAR_SCHEMA)
     rows: list[dict[str, object]] = []
     for record in records:
         factor = float(record.adj_factor) if record.adj_factor is not None else 1.0
@@ -331,7 +337,7 @@ async def load_swing_bars(session: AsyncSession, start: dt.date, as_of: dt.date)
                 "adj_factor": factor,
             }
         )
-    return pl.DataFrame(rows)
+    return pl.DataFrame(rows, schema=BAR_SCHEMA)
 
 
 async def load_sector_membership(session: AsyncSession, on: dt.date) -> dict[int, str]:
@@ -443,14 +449,76 @@ def apply_score_adjustments(
     )
 
 
-async def _upsert_setups(
-    session: AsyncSession, frame: pl.DataFrame, *, user_id: int, pipeline_run_id: int | None
+async def _upsert_setups(  # noqa: PLR0913 - one keyword per fact the write depends on
+    session: AsyncSession,
+    frame: pl.DataFrame,
+    *,
+    user_id: int,
+    pipeline_run_id: int | None,
+    trade_date: dt.date,
+    provisional: bool = False,
 ) -> int:
     """Idempotent by ``(user_id, date, instrument_id, setup)`` — house rule 7.
 
     Re-running a date overwrites its own rows rather than adding to them, so a night that was
     interrupted and restarted leaves the same table as one that ran once.
+
+    SW15: every row carries ``provisional`` — ``True`` from a daytime "Scan now" over a bar built
+    from live quotes, ``False`` from a published close — and after the upsert, the provisional
+    rows of ``trade_date`` that this run did **not** re-detect are deleted. So the nightly
+    replaces a 13:42 scan's rows (the same keys flip to ``False``; the rest go), and a second
+    scan replaces the first's: a flag that only existed at one moment never lingers.
     """
+    written = await _write_setups(
+        session, frame, user_id=user_id, pipeline_run_id=pipeline_run_id, provisional=provisional
+    )
+    await _drop_stale_provisional(session, frame, user_id=user_id, trade_date=trade_date)
+    return written
+
+
+async def _drop_stale_provisional(
+    session: AsyncSession, frame: pl.DataFrame, *, user_id: int, trade_date: dt.date
+) -> None:
+    """Delete ``trade_date``'s provisional rows whose key this run did not write."""
+    statement = delete(SwSetupDaily).where(
+        SwSetupDaily.user_id == user_id,
+        SwSetupDaily.date == trade_date,
+        SwSetupDaily.provisional.is_(True),
+    )
+    if not frame.is_empty():
+        keys = [
+            (int(row["instrument_id"]), str(row["setup"]))
+            for row in frame.select("instrument_id", "setup").iter_rows(named=True)
+        ]
+        statement = statement.where(
+            tuple_(SwSetupDaily.instrument_id, SwSetupDaily.setup).not_in(keys)
+        )
+    await session.execute(statement)
+
+
+async def _drop_provisional_day(
+    session: AsyncSession, *, user_id: int, trade_date: dt.date
+) -> None:
+    """A run that found no bar for ``trade_date`` supersedes an earlier scan's provisional rows
+    for it — setups and the market row both — rather than leaving them to be read as today."""
+    await _drop_stale_provisional(session, pl.DataFrame(), user_id=user_id, trade_date=trade_date)
+    await session.execute(
+        delete(SwMarketDaily).where(
+            SwMarketDaily.user_id == user_id,
+            SwMarketDaily.date == trade_date,
+            SwMarketDaily.provisional.is_(True),
+        )
+    )
+
+
+async def _write_setups(
+    session: AsyncSession,
+    frame: pl.DataFrame,
+    *,
+    user_id: int,
+    pipeline_run_id: int | None,
+    provisional: bool,
+) -> int:
     if frame.is_empty():
         return 0
     payload = [
@@ -482,6 +550,7 @@ async def _upsert_setups(
             "sector_slug": row["sector_slug"],
             "listed_within_2y": bool(row["listed_within_2y"]),
             "pipeline_run_id": pipeline_run_id,
+            "provisional": provisional,
         }
         for row in frame.iter_rows(named=True)
     ]
@@ -737,6 +806,10 @@ async def run_detect_swing(  # noqa: PLR0913 - one keyword per input the day dep
     index_slug: str = "nifty-500",
     execution_enabled: bool = False,
     pipeline_run_id: int | None = None,
+    extra_bars: pl.DataFrame | None = None,
+    provisional: bool = False,
+    reference_date: dt.date | None = None,
+    scan: dict[str, object] | None = None,
 ) -> int:
     """Detect the day's setups and write the day's market row. Returns the candidate count.
 
@@ -744,6 +817,14 @@ async def run_detect_swing(  # noqa: PLR0913 - one keyword per input the day dep
     pipeline has not published, is not a failure of this step. SW11: one span and one timing
     (`baskfy_swing_task_duration_seconds{task="detect"}`) around the whole step, through the
     worker's guarded helpers — neither can raise into it.
+
+    SW15 ("Scan now"): ``extra_bars`` is a frame in `load_swing_bars`'s shape appended to the
+    published bars — the one provisional bar per name a daytime scan builds from live quotes —
+    and ``provisional`` is stamped on every row written. ``reference_date`` is the last
+    *published* session, where the point-in-time reads that have no row for an unpublished
+    ``trade_date`` (sector membership, the year highs, the index reading) look instead; the
+    nightly leaves it ``None`` and reads ``trade_date``. ``scan`` is stamped into the market
+    row's ``detail.scan`` so the page can say when the rows were scanned and from what.
     """
     with swing_span("swing.detect", date=trade_date.isoformat()), swing_timed("detect"):
         return await _detect_swing(
@@ -754,7 +835,22 @@ async def run_detect_swing(  # noqa: PLR0913 - one keyword per input the day dep
             index_slug=index_slug,
             execution_enabled=execution_enabled,
             pipeline_run_id=pipeline_run_id,
+            extra_bars=extra_bars,
+            provisional=provisional,
+            reference_date=reference_date,
+            scan=scan,
         )
+
+
+def append_bars(bars: pl.DataFrame, extra: pl.DataFrame | None) -> pl.DataFrame:
+    """The published bars plus a scan's provisional ones, in the order the indicators expect."""
+    if extra is None or extra.is_empty():
+        return bars
+    columns = BAR_SCHEMA.names()
+    return pl.concat(
+        [bars.select(columns).cast(BAR_SCHEMA), extra.select(columns).cast(BAR_SCHEMA)],
+        how="vertical",
+    ).sort("instrument_id", "date")
 
 
 async def _detect_swing(  # noqa: PLR0913 - one keyword per input the day depends on
@@ -766,10 +862,15 @@ async def _detect_swing(  # noqa: PLR0913 - one keyword per input the day depend
     index_slug: str,
     execution_enabled: bool,
     pipeline_run_id: int | None,
+    extra_bars: pl.DataFrame | None = None,
+    provisional: bool = False,
+    reference_date: dt.date | None = None,
+    scan: dict[str, object] | None = None,
 ) -> int:
     config = await load_swing_config(session, user_id)
     start = await lookback_start(session, trade_date, LOOKBACK_SESSIONS)
-    bars = await load_swing_bars(session, start, trade_date)
+    bars = append_bars(await load_swing_bars(session, start, trade_date), extra_bars)
+    lookup = reference_date or trade_date
     if bars.is_empty():
         outcome.status = StepStatus.SKIPPED
         outcome.note(
@@ -777,6 +878,7 @@ async def _detect_swing(  # noqa: PLR0913 - one keyword per input the day depend
             skipped_reason="no published bars in the lookback window",
             window=[start.isoformat(), trade_date.isoformat()],
         )
+        await _drop_provisional_day(session, user_id=user_id, trade_date=trade_date)
         return 0
 
     indicated = with_swing_indicators(bars, config)
@@ -788,10 +890,11 @@ async def _detect_swing(  # noqa: PLR0913 - one keyword per input the day depend
             skipped_reason="no instrument has a bar on this date",
             bars=bars.height,
         )
+        await _drop_provisional_day(session, user_id=user_id, trade_date=trade_date)
         return 0
 
     liquid = today.filter(liquid_expr(config))
-    sectors = await load_sector_membership(session, trade_date)
+    sectors = await load_sector_membership(session, lookup)
     strip = sector_breadth(liquid, sectors)
     hot = {slug for slug, _, _ in strip[:HOT_SECTOR_COUNT]}
 
@@ -816,7 +919,12 @@ async def _detect_swing(  # noqa: PLR0913 - one keyword per input the day depend
         )
 
     written = await _upsert_setups(
-        session, candidates, user_id=user_id, pipeline_run_id=pipeline_run_id
+        session,
+        candidates,
+        user_id=user_id,
+        pipeline_run_id=pipeline_run_id,
+        trade_date=trade_date,
+        provisional=provisional,
     )
 
     per_setup = {
@@ -843,6 +951,10 @@ async def _detect_swing(  # noqa: PLR0913 - one keyword per input the day depend
         sectors=strip,
         index_slug=index_slug,
         execution_enabled=execution_enabled,
+        funnel=funnel.as_detail(),
+        provisional=provisional,
+        reference_date=reference_date,
+        scan=scan,
     )
 
     outcome.rows_in = bars.height
@@ -862,8 +974,19 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
     sectors: list[tuple[str, float, int]],
     index_slug: str,
     execution_enabled: bool,
+    funnel: dict[str, object] | None = None,
+    provisional: bool = False,
+    reference_date: dt.date | None = None,
+    scan: dict[str, object] | None = None,
 ) -> MarketGate:
     """Breadth, the gate and tomorrow's tier — `04` §8, written to ``sw_market_daily``.
+
+    SW15: ``funnel`` lands in ``detail.funnel`` (`GET /swing/setups` reads it there — the empty
+    state's "41 names were liquid, 0 met the rules"); ``provisional`` says the breadth was
+    measured over live-quote bars and ``scan`` (``detail.scan``) says when; ``reference_date``
+    is where the year highs and the index reading are read when ``trade_date`` has no
+    published row yet (a daytime scan), the same reading the evening will make of the last
+    close. A settled row keeps its ladder either way.
 
     SW11 (the SW8.1 carry-forward): the tier this job computes is a *preview*; the evening's
     `settle_ladder` is the fact. A row the evening has already settled — ``detail.ladder.
@@ -873,14 +996,15 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
     and the sectors are rewritten either way — those are the detectors' own numbers. The
     closes the preview reads are bounded by ``trade_date``, as the evening's are.
     """
-    highs = await load_year_highs(session, trade_date)
+    lookup = reference_date or trade_date
+    highs = await load_year_highs(session, lookup)
     breadth: BreadthSnapshot = (
         breadth_snapshot(breadth_frame(liquid, highs), config.market)
         if not liquid.is_empty()
         else BreadthSnapshot(0, 0.0, 0.0, 0.0)
     )
     reading, used_slug = await load_index_reading(
-        session, trade_date, slug=index_slug, fallback="nifty-50", config=config
+        session, lookup, slug=index_slug, fallback="nifty-50", config=config
     )
     gate = market_gate(breadth, reading, config.market)
 
@@ -917,6 +1041,10 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
             for slug, pct, members in sectors
         ],
     }
+    if funnel is not None:
+        detail["funnel"] = funnel
+    if scan is not None:
+        detail["scan"] = scan
     settled = await settled_market_row(session, user_id=user_id, on=trade_date)
     if settled is not None:
         # The evening has settled this row: its rung, its record and what it read stand.
@@ -952,6 +1080,7 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
         drawdown_locked=tier.drawdown_locked,
         parabolic_count=parabolic_count,
         detail=detail,
+        provisional=provisional,
     )
     await session.execute(
         statement.on_conflict_do_update(
@@ -959,6 +1088,7 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
             set_={
                 name: getattr(statement.excluded, name)
                 for name in (
+                    "provisional",
                     "constituent_count",
                     "pct_up_strong_1m",
                     "pct_new_52w_high",
@@ -1008,6 +1138,7 @@ SETTLED_BY_EVENING: Final = SYSTEM_OWNED_FIELDS["exposure_level"]
 
 
 __all__ = [
+    "BAR_SCHEMA",
     "CANDIDATE_COLUMNS",
     "CASH_SERIES",
     "LOOKBACK_SESSIONS",
@@ -1015,6 +1146,7 @@ __all__ = [
     "ClosedTrade",
     "SleeveDrawdown",
     "SwingFunnel",
+    "append_bars",
     "apply_score_adjustments",
     "breadth_frame",
     "load_closed_trades",

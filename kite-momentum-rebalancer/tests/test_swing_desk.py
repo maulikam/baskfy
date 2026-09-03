@@ -100,6 +100,7 @@ DDL = [
         detail TEXT,
         drawdown_pct NUMERIC NOT NULL DEFAULT 0,
         drawdown_locked BOOLEAN NOT NULL DEFAULT false,
+        provisional BOOLEAN NOT NULL DEFAULT false,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (user_id, date),
         CHECK (gate IN ('GREEN', 'AMBER', 'RED')),
@@ -119,6 +120,7 @@ DDL = [
         sector_slug TEXT,
         listed_within_2y BOOLEAN NOT NULL DEFAULT false,
         pipeline_run_id INTEGER,
+        provisional BOOLEAN NOT NULL DEFAULT false,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (user_id, date, instrument_id, setup),
         CHECK (setup IN ('FLAG', 'EP', 'PARABOLIC_SHORT')))""",
@@ -275,6 +277,21 @@ DDL = [
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (user_id, instrument_id, url),
         CHECK (source IN ('NSE_ANNOUNCEMENT', 'NSE_EVENT_CALENDAR')))""",
+    # 0033 (SW15): one row per press of "Scan now". The desk's button inserts it; the worker's
+    # sweep publishes it. `provisional` on the two detection tables above is 0033's too.
+    """CREATE TABLE sw_scan_run(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        requested_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        started_at TEXT,
+        finished_at TEXT,
+        session_date TEXT,
+        provisional BOOLEAN NOT NULL DEFAULT false,
+        status TEXT NOT NULL DEFAULT 'QUEUED',
+        detail TEXT,
+        error TEXT,
+        task_id TEXT,
+        CHECK (status IN ('QUEUED', 'RUNNING', 'DONE', 'FAILED')))""",
 ]
 
 
@@ -810,8 +827,11 @@ class TestNoConfirmAll:
         assert "confirm all" not in lowered and "confirm-all" not in lowered.replace("no confirm-all", "")
         assert 'name="line_ids' not in html and 'name="line_id[]' not in html
         assert "select all" not in lowered
-        # the only buttons on the page are one per form
-        assert html.count("<button") == len(_forms(html, "/swing/execute")) + len(_forms(html, "/swing/rearm"))
+        # the only buttons on the page are one per form (SW15's Scan now is one form too)
+        assert html.count("<button") == (
+            len(_forms(html, "/swing/execute")) + len(_forms(html, "/swing/rearm"))
+            + len(_forms(html, "/swing/scan"))
+        )
 
     def test_no_confirm_all_in_the_template_source_either(self):
         import pathlib
@@ -1852,3 +1872,164 @@ class TestFirstLiveHeaderAndFocus:
                                      "label": "-", "age_minutes": None, "expired": True})
         assert [(t["symbol"], t["focus"]) for t in view["triggers"]] == [
             ("GAMMALOCK", True), ("EPSILON", False)]
+
+
+# =======================================================================================
+# SW15 — "Scan now" from the desk: the status-bar line, the button, the route, the two
+# refusals. The desk has no Celery client, so the route writes one `sw_scan_run` row and the
+# worker's sweep publishes it; nothing here is an order or a confirm.
+# =======================================================================================
+def _market_scan_row(scenario, *, provisional: bool, scanned_at: str | None,
+                     on: dt.date = TODAY) -> None:
+    import json
+    detail = {"funnel": {"liquid": 41, "candidates": {"FLAG": 2, "EP": 0}}}
+    if scanned_at:
+        detail["scan"] = {"run_id": 1, "scanned_at": scanned_at, "provisional": provisional}
+    scenario.conn.execute(
+        "INSERT INTO sw_market_daily(user_id, date, constituent_count, gate, exposure_level, "
+        "max_open_positions, max_exposure_pct, new_entries_allowed, provisional, detail) "
+        "VALUES (?, ?, 41, 'GREEN', 2, 6, '75.00', 1, ?, ?)",
+        (USER, on.isoformat(), provisional, json.dumps(detail)),
+    )
+
+
+def _scan_run_row(scenario, *, status: str, requested_at: dt.datetime, finished_at=None,
+                  provisional: bool = False, error: str | None = None,
+                  funnel: dict | None = None, user: int = USER) -> int:
+    import json
+    detail = {"source": "desk"}
+    if funnel is not None:
+        detail["funnel"] = funnel
+    row = scenario.conn.execute(
+        "INSERT INTO sw_scan_run(user_id, requested_at, finished_at, session_date, provisional, "
+        "status, detail, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+        (user, requested_at.isoformat(), finished_at.isoformat() if finished_at else None,
+         TODAY.isoformat(), provisional, status, json.dumps(detail), error),
+    ).fetchone()
+    return int(row["id"])
+
+
+class TestScanNowStatusBar:
+    def test_a_provisional_day_says_so_and_from_what(self, client, scenario):
+        scenario.config(market=False)
+        _market_scan_row(scenario, provisional=True, scanned_at="2026-09-02T13:42:00+05:30")
+        html = client.get("/swing").text
+        bar = html[html.index('id="swStatus"'):html.index('<section id="triggers">')]
+        assert "provisional — scanned 13:42 IST from live quotes" in bar
+        assert 'id="swScanLabel"' in bar
+
+    def test_a_nightly_day_says_nightly_and_a_re_scan_says_re_scanned(self, client, scenario):
+        scenario.config(market=False)
+        _market_scan_row(scenario, provisional=False, scanned_at=None)
+        bar = client.get("/swing").text
+        assert "nightly (2026-09-02)" in bar
+        scenario.conn.execute("DELETE FROM sw_market_daily")
+        _market_scan_row(scenario, provisional=False, scanned_at="2026-09-02T18:02:00+05:30")
+        assert "re-scanned 18:02 IST from published bars" in client.get("/swing").text
+
+    def test_the_last_run_is_beside_the_button_done_failed_or_in_flight(self, client, scenario):
+        scenario.config()
+        done = NOW - dt.timedelta(minutes=30)
+        _scan_run_row(scenario, status="DONE", requested_at=done - dt.timedelta(minutes=1),
+                      finished_at=done, provisional=True,
+                      funnel={"liquid": 41, "candidates": {"FLAG": 2, "EP": 1}})
+        html = client.get("/swing").text
+        assert "last scan 09:10 IST from live quotes · 41 liquid, 3 flagged" in html
+        assert ">Scan now</button>" in html
+        assert "Scanning…</button>" not in html
+
+        _scan_run_row(scenario, status="FAILED", requested_at=NOW - dt.timedelta(minutes=5),
+                      finished_at=NOW - dt.timedelta(minutes=5),
+                      error="ScanNotRunnable: no Kite quote source")
+        assert "last scan failed: ScanNotRunnable: no Kite quote source" in client.get("/swing").text
+
+        _scan_run_row(scenario, status="RUNNING", requested_at=NOW - dt.timedelta(minutes=2))
+        html = client.get("/swing").text
+        assert "scanning…" in html and "Scanning…</button>" in html
+        form = _forms(html, "/swing/scan")[0]
+        assert "disabled" in form and 'data-in-flight="true"' in form
+
+    def test_scan_status_is_pure_over_the_two_rows(self):
+        assert swing_desk.scan_status(None, None) == {
+            "date": None, "provisional": False, "scanned_at": None, "label": "",
+            "run": None, "run_label": "", "in_flight": False,
+        }
+        queued = {"id": 3, "status": "QUEUED", "requested_at": NOW, "finished_at": None,
+                  "provisional": False, "funnel": None, "error": None}
+        view = swing_desk.scan_status(
+            {"date": TODAY, "provisional": True, "scanned_at": None}, queued)
+        assert view["label"] == "provisional — from live quotes"
+        assert view["run_label"] == "scan queued" and view["in_flight"] is True
+
+    def test_the_view_json_carries_the_scan_and_the_fingerprint_moves_with_it(self, client, scenario):
+        scenario.config()
+        before = client.get("/swing/data").json()
+        assert before["status"]["scan"]["in_flight"] is False
+        _scan_run_row(scenario, status="RUNNING", requested_at=NOW - dt.timedelta(minutes=1))
+        during = client.get("/swing/data").json()
+        assert during["status"]["scan"]["in_flight"] is True
+        assert during["fingerprint"] != before["fingerprint"]
+        scenario.conn.execute("UPDATE sw_scan_run SET status = 'DONE'")
+        after = client.get("/swing/data").json()
+        assert after["status"]["scan"]["in_flight"] is False
+        assert after["fingerprint"] != during["fingerprint"]
+
+
+class TestScanNowRoute:
+    def test_a_press_writes_one_queued_row_for_the_sweep_and_answers_its_id(self, client, scenario):
+        scenario.config()
+        r = client.post("/swing/scan")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        rows = scenario.conn.execute("SELECT * FROM sw_scan_run").fetchall()
+        assert len(rows) == 1
+        row = rows[0]
+        assert body == {"run_id": row["id"], "status": "QUEUED", "requested_at": NOW.isoformat()}
+        assert row["user_id"] == USER
+        assert row["status"] == "QUEUED" and row["task_id"] is None
+        assert '"source": "desk"' in row["detail"]
+        assert swing_desk._stamp(row["requested_at"]) == NOW
+
+    def test_a_second_press_while_one_is_in_flight_is_a_409(self, client, scenario):
+        scenario.config()
+        first = client.post("/swing/scan").json()["run_id"]
+        second = client.post("/swing/scan")
+        assert second.status_code == 409
+        assert f"Scan {first} is queued" in second.json()["detail"]
+        assert scenario.conn.execute("SELECT count(*) AS n FROM sw_scan_run").fetchone()["n"] == 1
+
+    def test_a_press_inside_a_minute_of_the_last_is_a_429_with_retry_after(self, client, scenario):
+        scenario.config()
+        _scan_run_row(scenario, status="DONE", requested_at=NOW - dt.timedelta(seconds=20),
+                      finished_at=NOW - dt.timedelta(seconds=10))
+        r = client.post("/swing/scan")
+        assert r.status_code == 429
+        assert r.headers["Retry-After"] == "40"
+        assert "one a minute is the limit" in r.json()["detail"]
+
+    def test_a_stale_run_no_longer_blocks_and_an_old_one_no_longer_throttles(self, client, scenario):
+        scenario.config()
+        _scan_run_row(scenario, status="RUNNING", requested_at=NOW - dt.timedelta(minutes=20))
+        assert client.post("/swing/scan").status_code == 200
+
+    def test_the_thresholds_are_config_not_literals(self, client, scenario, monkeypatch):
+        scenario.config()
+        _scan_run_row(scenario, status="DONE", requested_at=NOW - dt.timedelta(seconds=90),
+                      finished_at=NOW - dt.timedelta(seconds=80))
+        monkeypatch.setattr(C, "SWING_SCAN_MIN_INTERVAL_SECONDS", 120)
+        assert client.post("/swing/scan").status_code == 429
+        monkeypatch.setattr(C, "SWING_SCAN_MIN_INTERVAL_SECONDS", 60)
+        assert client.post("/swing/scan").status_code == 200
+
+    def test_the_scan_route_is_covered_by_websec(self, scenario, monkeypatch):
+        scenario.config()
+        monkeypatch.setattr(swing_desk, "open_store",
+                            lambda: contextlib.nullcontext(scenario.store()))
+        c = TestClient(M.app, headers={"Origin": "http://evil.example"})
+        assert c.post("/swing/scan").status_code == 403
+
+    def test_the_scan_route_names_no_order_path(self):
+        src = inspect.getsource(swing_desk.swing_scan_now)
+        for word in ("gateway", "execute_line", "place", "gtt", "kc."):
+            assert word not in src.lower().replace("swing_gateway", ""), word
+        assert "request_scan" in src

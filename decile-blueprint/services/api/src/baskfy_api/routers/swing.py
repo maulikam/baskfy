@@ -8,6 +8,8 @@
     PATCH /swing/config                          change a setting, audited, bounded
     GET   /swing/journal                         the book's results in R, and the ladder (SW8)
     GET   /swing/signals?date&instrument_id      what the monitor raised in a session (SW14)
+    POST  /swing/scan                            "Scan now": queue a detection run (SW15)
+    GET   /swing/scan/{run_id}                   that run's state, session and funnel
 
 READ-ONLY EXCEPT FOR ONE ROUTE, AND THAT ROUTE MOVES NO MONEY
 -------------------------------------------------------------
@@ -15,6 +17,10 @@ READ-ONLY EXCEPT FOR ONE ROUTE, AND THAT ROUTE MOVES NO MONEY
 same rule as `/baskets`: every mutation on it is a 405 except watchlist edits, notes and the
 catalyst field (they change no money)". Track C §4 is blunter: "`apps/web` gets no route under
 `/swing` that can reach the gateway."
+
+``POST /swing/scan`` (SW15) is the fifth money-free write: it inserts one ``sw_scan_run`` row and
+publishes a task name. The worker then reads quotes and writes detection rows — a scan is never
+an order, and the module behind the route (`baskfy_api.swing_scan`) names no broker.
 
 ``PATCH /swing/config`` is the exception the first sentence allows, and it is worth naming why it
 is safe. It writes seven numbers into ``sw_config``. It cannot place, cancel or size an order; the
@@ -47,7 +53,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api import swing as swing_service
-from baskfy_api import swing_catalyst, swing_journal, swing_watch
+from baskfy_api import swing_catalyst, swing_journal, swing_scan, swing_watch
 from baskfy_api.auth import AuthenticatedDep, settings_for
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
@@ -179,8 +185,46 @@ class SwingSetupOut(BaseModel):
     catalyst_feed: SwingCatalystOut | None = None
 
 
+class SwingScanRunOut(BaseModel):
+    """One "Scan now" run (SW15). ``status`` walks QUEUED -> RUNNING -> DONE | FAILED.
+
+    ``session_date`` and ``provisional`` are null / false until the worker has decided which
+    session it is scanning; ``funnel`` is the same shape as the setups page's and is filled on
+    DONE; ``error`` is the reason on FAILED. ``detail`` carries the rest — the quote count and
+    the skips — for a page that wants to say "1,812 of 1,830 names answered".
+    """
+
+    run_id: int
+    status: str
+    requested_at: dt.datetime
+    started_at: dt.datetime | None
+    finished_at: dt.datetime | None
+    session_date: dt.date | None
+    provisional: bool
+    funnel: dict[str, object] | None
+    detail: dict[str, object] | None
+    error: str | None
+
+
+class SwingScanQueuedOut(BaseModel):
+    """What `POST /swing/scan` answers, with a 202: the run to poll."""
+
+    run_id: int
+    status: str
+    requested_at: dt.datetime
+
+
 class SwingSetupsOut(BaseModel):
     as_of: dt.date | None
+    #: SW15: the rows are from a bar built out of live quotes during the session, not from a
+    #: published close — the header must say so ("provisional — scanned 13:42 IST from live
+    #: quotes"), because a base that is tight at 13:42 can be wide by 15:30.
+    as_of_provisional: bool = False
+    #: When the day was last scanned on demand; null for a day the nightly wrote.
+    scanned_at: dt.datetime | None = None
+    #: This user's newest "Scan now" run, whatever its state, so the page can show "scanning…"
+    #: or "the last scan failed: …" beside the button without a second call.
+    last_scan: SwingScanRunOut | None = None
     #: The gate and the tier for the same day, so a page never has to make a second call to find
     #: out whether the candidates it is showing may be acted on at all.
     gate: str | None
@@ -568,6 +612,9 @@ async def get_setups(
     return _json(
         SwingSetupsOut(
             as_of=page.as_of,
+            as_of_provisional=page.as_of_provisional,
+            scanned_at=page.scanned_at,
+            last_scan=_scan_run_out(page.last_scan),
             gate=page.gate,
             exposure_level=page.exposure_level,
             max_open_positions=page.max_open_positions,
@@ -606,6 +653,72 @@ async def get_setups(
             ],
         )
     )
+
+
+def _scan_run_out(view: swing_service.ScanRunView | None) -> SwingScanRunOut | None:
+    if view is None:
+        return None
+    return SwingScanRunOut(
+        run_id=view.run_id,
+        status=view.status,
+        requested_at=view.requested_at,
+        started_at=view.started_at,
+        finished_at=view.finished_at,
+        session_date=view.session_date,
+        provisional=view.provisional,
+        funnel=view.funnel,
+        detail=view.detail,
+        error=view.error,
+    )
+
+
+@router.post(
+    "/scan",
+    response_model=SwingScanQueuedOut,
+    status_code=202,
+    summary="Scan now: queue a detection run",
+)
+async def post_scan(
+    request: Request, session: SessionDep, principal: AuthenticatedDep, settings: SettingsDep
+) -> Response:
+    """SW15. One row in ``sw_scan_run`` and one task name published; the worker does the rest.
+
+    During the session (09:15-15:30 IST on a trading day) the worker builds a provisional bar
+    per liquid name from live Kite quotes and detects on it; at any other time it re-detects the
+    last published session. A scan moves no money (`02` Track A) and this route reaches no
+    broker — `baskfy_api.swing_scan` names none. At most one in flight per user (409) and one
+    request a minute (429, ``Retry-After``); both answered from the table.
+    """
+    user_id = await scoped_sole_user_id(session, principal.user_id)
+    queue = getattr(request.app.state, "task_queue", None)
+    row = await swing_scan.request_scan(
+        session,
+        user_id=user_id,
+        now=dt.datetime.now(tz=dt.UTC),
+        min_interval=dt.timedelta(seconds=settings.swing_scan_min_interval_seconds),
+        stale_after=dt.timedelta(seconds=settings.swing_scan_stale_after_seconds),
+        source="web",
+        queue=queue,
+    )
+    return Response(
+        content=canonical_json(
+            SwingScanQueuedOut(
+                run_id=int(row.id), status=str(row.status), requested_at=row.requested_at
+            ).model_dump(mode="python")
+        ),
+        media_type=JSON_MEDIA_TYPE,
+        status_code=202,
+    )
+
+
+@router.get("/scan/{run_id}", response_model=SwingScanRunOut, summary="One scan's state")
+async def get_scan(session: SessionDep, principal: AuthenticatedDep, run_id: int) -> Response:
+    user_id = await scoped_sole_user_id(session, principal.user_id)
+    view = await swing_service.scan_run(session, user_id=user_id, run_id=run_id)
+    out = _scan_run_out(view)
+    if out is None:
+        raise not_found("scan", str(run_id))
+    return _json(out)
 
 
 @router.get(

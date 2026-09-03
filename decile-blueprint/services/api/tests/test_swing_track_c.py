@@ -66,18 +66,19 @@ BANNED_IN_ROUTES: Final[tuple[str, ...]] = (
     'method: "put"',
 )
 
-#: `05` §2 (as amended by SW14 and STANDING-ANSWERS A14): the hub's ONLY server actions. A file
-#: marked "use server" may export exactly these names and nothing else; every other file may not
-#: be a server action at all. Each is a money-free write `02` Track A permits.
+#: `05` §2 (as amended by SW14, STANDING-ANSWERS A14 and SW15): the hub's ONLY server actions. A
+#: file marked "use server" may export exactly these names and nothing else; every other file
+#: may not be a server action at all. Each is a money-free write `02` Track A permits —
+#: `scanNow` (SW15) queues the detectors, which read quotes and write detection rows.
 ALLOWED_ACTIONS: Final[frozenset[str]] = frozenset(
-    {"watchAdd", "watchDismiss", "watchAnnotate", "watchReconfirm", "settingsSave"}
+    {"watchAdd", "watchDismiss", "watchAnnotate", "watchReconfirm", "settingsSave", "scanNow"}
 )
 
 #: The one file that may send a non-GET, and the only paths it may send one to — the routes
 #: `test_swing_readonly.py` whitelists as writes that move no money.
 WRITE_HELPER: Final = "write.ts"
 WRITE_WHITELIST: Final[frozenset[str]] = frozenset(
-    {"/swing/watch", "/swing/watch/{id}", "/swing/config"}
+    {"/swing/watch", "/swing/watch/{id}", "/swing/config", "/swing/scan"}
 )
 
 #: An import specifier containing any of these reaches, or could reach, an order path.

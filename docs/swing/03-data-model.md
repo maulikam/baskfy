@@ -95,6 +95,7 @@ detector recalibration must not rewrite the record of what the system saw.
 | `sector_slug` | text | the instrument's sector index at `date`, from `index_member_daily`; nullable |
 | `listed_within_2y` | bool | `instrument.listed_on` ≥ date − 730 days |
 | `pipeline_run_id` | bigint FK | which nightly run produced it (provenance, as `screen_run` has) |
+| `provisional` | bool | SW15: `true` when the row was detected on a bar built from **live quotes** during the session ("Scan now", §12), not from a published close. The nightly's upsert for the same key sets it back to `false` and deletes the provisional rows it did not re-detect, so an intraday flag never lingers into the evening. Default `false` backfills the history |
 
 Index: `(date, setup, score desc)`; `(instrument_id, date)`.
 
@@ -113,6 +114,7 @@ liquid universe. Written by `swing-eod`.
 | `drawdown_pct`, `drawdown_locked` | `04` §8.5 (SW9.5): the sleeve's drawdown from its peak at this close, and whether the lock-out is in force for the next session — kept beside the rung so a rung of 0 on a GREEN day explains itself. The detection job writes its preview from `sw_config`'s stored peak; `swing-eod`'s settlement is authoritative and overwrites it |
 | `parabolic_count` | int — how many `PARABOLIC_SHORT` rows today; froth gauge |
 | `detail` | JSONB — the closed-trade R list the ladder read, so the rung is explainable; since SW9.5 also `drawdown: {nav, peak, pct, was_locked, locked}`, the settlement's inputs |
+| `provisional` | bool — SW15: breadth and the gate were measured over provisional bars (a daytime scan, §12); `detail.scan = {run_id, scanned_at, provisional, quotes}` says when and from what. The nightly rewrites the row with `false` and no `scan` key. `detail.funnel` (universe → with a bar → liquid → candidates per setup) is written by every detection run since SW15, provisional or not — `GET /swing/setups` reads it there |
 
 ## 4. `sw_watch` — the watchlist with levels
 
@@ -201,8 +203,8 @@ is a second row).
 `session_date` PK, `mode` (`DRY_RUN` / `LIVE`), `monitor_ran`, `plan_ids`, `signals`,
 `confirms`, `fills`, `manage_actions`, `notes`, and `first_live_counted` (SW10.5, A9: the
 evening decremented `sw_config.first_live_sessions_left` for this LIVE session — set once, read
-back on a re-run so the countdown moves once per session). This is the paper track record `02`
-§3.2 counts.
+back on a re-run so the countdown moves once per session). This is the session record the
+journal's counter reads — information since `02` §3 was rewritten (A11), not a gate.
 
 ## 9. What the worker reads to compute a day
 
@@ -264,3 +266,35 @@ zero rows, never a raise into the morning.
 Read by `GET /swing/setups` and `GET /swing/watch` (`catalyst_feed`: the newest announcement's
 headline / stamp / url plus the earnings date) and by the desk page's triggers and plan lines,
 all of which render a link (`target=_blank rel=noopener`) and an earnings badge.
+
+## 12. `sw_scan_run` — one row per press of "Scan now" (SW15)
+
+`BigIntPk`; migration `0033_swing_scan_now.py`; model `SwScanRun`; index
+`(user_id, requested_at)`. Maulik, 3 Sep 2026: "I wanted to have the scan anytime, and since we
+have the Kite API, we should have all the data." `POST /swing/scan` (a money-free write under
+`02` Track A — it detects, it never orders) inserts the row `QUEUED` and publishes
+`baskfy.swing.scan_now(run_id)` on the compute queue; the desk console's button inserts the same
+row straight into the table and the worker's sweep (`baskfy.swing.scan_sweep`, every minute)
+publishes it. The task decides the session: on a trading day between 09:15 and 15:30 IST it is
+**today, provisional** — one bar per liquid name built from `KiteProvider.quotes`
+(open/high/low from the quote's `ohlc`, close = `last_price`, volume = the session's volume so
+far, turnover = close × volume, the day's `upper_circuit`, the last bar's `adj_factor`) appended
+to the detectors' frame; otherwise it is the last published session, re-detected from published
+bars, not provisional. Fail soft: a quote failure is `FAILED` with the reason and nothing
+written — the detection and the market row land in one transaction or not at all.
+
+| Column | Meaning |
+|---|---|
+| `user_id` | Track C §6; cascades |
+| `requested_at`, `started_at`, `finished_at` | timestamptz — asked for (the API's 60-second rule reads this), picked up, done |
+| `session_date` | date, null until the task has decided which session it scanned |
+| `provisional` | bool — the bar was built from live quotes (market hours) rather than a published close |
+| `status` | `QUEUED` / `RUNNING` / `DONE` / `FAILED`; a `QUEUED` or `RUNNING` row is "one in flight" and the API answers a second request 409 |
+| `detail` | JSONB — `source` (`web` / `desk`), `funnel` (the same shape as `sw_market_daily.detail.funnel`), `quotes` (how many names answered), `skipped` (`no_quote`, `no_factor`, `bad_price`) |
+| `error` | text — `"{ExceptionType}: {message}"` when the run failed |
+| `task_id` | text — the broker's message id once published; null for a row the worker's sweep still has to pick up |
+
+Read by `GET /swing/scan/{id}` (the run itself) and by `GET /swing/setups` (`last_scan`: this
+user's newest row, so the page can say "scanning…" or "failed: …" without a second call). The
+page's header carries `as_of_provisional` and `scanned_at` from the market row's `provisional`
+and `detail.scan.scanned_at`.

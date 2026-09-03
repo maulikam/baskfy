@@ -76,8 +76,28 @@ export interface SwingFunnel {
   candidates?: Record<string, number>;
 }
 
+/** One "Scan now" run (SW15): QUEUED -> RUNNING -> DONE | FAILED, with the funnel on DONE. */
+export interface SwingScanRun {
+  run_id: number;
+  status: string;
+  requested_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  session_date: string | null;
+  provisional: boolean;
+  funnel: SwingFunnel | null;
+  detail: Record<string, unknown> | null;
+  error: string | null;
+}
+
 export interface SwingSetups {
   as_of: string | null;
+  /** SW15: the rows are from a bar built out of live quotes during the session, not a close. */
+  as_of_provisional?: boolean;
+  /** When the day was last scanned on demand; null for a day the nightly wrote. */
+  scanned_at?: string | null;
+  /** This user's newest "Scan now" run, whatever its state. */
+  last_scan?: SwingScanRun | null;
   gate: string | null;
   exposure_level: number | null;
   max_open_positions: number | null;

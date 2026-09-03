@@ -52,6 +52,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -131,6 +132,8 @@ SW_CLOSE_REASONS: tuple[str, ...] = (*(r.value for r in ActionReason), "MANUAL")
 #: ``sw_session.mode``. ``DRY_RUN`` is what the 20-session paper gate in
 #: ``docs/swing/02-scope-and-gating.md`` §3.2 counts.
 SW_SESSION_MODES: tuple[str, ...] = ("DRY_RUN", "LIVE")
+#: SW15: the life of a "Scan now" request. ``QUEUED`` until the worker picks it up.
+SW_SCAN_STATUSES: tuple[str, ...] = ("QUEUED", "RUNNING", "DONE", "FAILED")
 
 #: ``docs/swing/03`` §6: "a 30-minute expiry", the desk's own plan lifetime restated for this
 #: surface. Named here because both the writer (the EOD job) and the reader (the desk's
@@ -336,6 +339,10 @@ class SwSetupDaily(Base):
     pipeline_run_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("pipeline_run.id", ondelete="SET NULL")
     )
+    #: SW15: ``true`` when the row was detected on a bar built from live quotes during the
+    #: session ("Scan now"), not from a published close. The nightly's upsert for the same key
+    #: sets it back to ``false`` and deletes the provisional rows it did not re-detect.
+    provisional: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     created_at: Mapped[CreatedAt]
 
 
@@ -382,6 +389,9 @@ class SwMarketDaily(Base):
     #: How many ``PARABOLIC_SHORT`` rows today — a froth gauge, not a trade list.
     parabolic_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     detail: Mapped[JsonObject | None] = mapped_column(JSONB)
+    #: SW15: the breadth and the gate were measured over provisional bars (a daytime scan);
+    #: ``detail.scan`` says when. The nightly rewrites the row with ``false``.
+    provisional: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     created_at: Mapped[CreatedAt]
 
 
@@ -806,3 +816,46 @@ class SwBacktestRun(Base):
     stats: Mapped[JsonObject | None] = mapped_column(JSONB)
     #: ``"{ExceptionType}: {message}"`` and the traceback, when the run raised.
     error: Mapped[str | None] = mapped_column(Text)
+
+
+class SwScanRun(Base):
+    """One press of "Scan now" (SW15; `docs/swing/03` §12, DECISIONS-SW SW15.1).
+
+    The API inserts the row ``QUEUED`` and publishes ``baskfy.swing.scan_now`` with its id; the
+    worker marks it ``RUNNING``, decides the session (today from live quotes while the market is
+    open, else the last published one), runs the detectors and writes ``DONE`` with the funnel in
+    ``detail`` — or ``FAILED`` with the reason in ``error`` and nothing else written. The API's
+    two refusals are answered from this table: a ``QUEUED``/``RUNNING`` row is "one in flight"
+    (409) and a ``requested_at`` inside the last minute is "too soon" (429).
+
+    ``task_id`` is the broker's message id once published. A row without one — the API had no
+    broker, or the desk console wrote the row straight into the table — is picked up by the
+    worker's sweep, so the desk's button needs no Celery client of its own.
+    """
+
+    __tablename__ = "sw_scan_run"
+    __table_args__ = (
+        _in_check("status_known", "status", SW_SCAN_STATUSES),
+        CheckConstraint(
+            "finished_at IS NULL OR started_at IS NULL OR finished_at >= started_at",
+            name="finished_after_started",
+        ),
+        Index("ix_sw_scan_run_user_id_requested_at", "user_id", "requested_at"),
+    )
+
+    id: Mapped[BigIntPk]
+    user_id: Mapped[int] = _user_fk()
+    requested_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Which session the task decided to scan; null until it has decided.
+    session_date: Mapped[dt.date | None] = mapped_column(Date)
+    #: Whether that session's bar was built from live quotes rather than a published close.
+    provisional: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    status: Mapped[str] = mapped_column(String, nullable=False, server_default="QUEUED")
+    #: ``{"source": "web" | "desk", "funnel": {...}, "quotes": n, "skipped": {...}}``.
+    detail: Mapped[JsonObject | None] = mapped_column(JSONB)
+    error: Mapped[str | None] = mapped_column(Text)
+    task_id: Mapped[str | None] = mapped_column(String)

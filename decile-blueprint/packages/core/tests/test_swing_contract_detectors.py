@@ -1134,13 +1134,6 @@ class TestANameListedTodayIsNotAFlag:
     raised a polars ComputeError on a single-bar instrument instead of answering nothing."""
 
     def test_a_single_bar_instrument_is_skipped_not_raised(self) -> None:
-        import datetime as dt
-
-        import polars as pl
-
-        from baskfy_core.swing.indicators import with_swing_indicators
-        from baskfy_core.swing.setups import detect_flags, detect_setups
-
         as_of = dt.date(2026, 9, 2)
         one = pl.DataFrame(
             {

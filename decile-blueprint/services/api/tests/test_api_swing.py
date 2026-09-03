@@ -19,6 +19,7 @@ a reader of `docs/swing/05` §2 would be surprised to find false:
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Sequence
 from decimal import Decimal
 
 import api_helpers
@@ -39,6 +40,7 @@ from baskfy_core.models import (
     SwConfig,
     SwMarketDaily,
     SwPosition,
+    SwScanRun,
     SwSetupDaily,
     SwSignal,
     SwWatch,
@@ -250,6 +252,9 @@ class TestTheSetupsRoute:
         assert response.status_code == 200
         assert response.json() == {
             "as_of": None,
+            "as_of_provisional": False,
+            "scanned_at": None,
+            "last_scan": None,
             "gate": None,
             "exposure_level": None,
             "max_open_positions": None,
@@ -1049,6 +1054,238 @@ class TestWatchingBySymbol:
         assert unknown.status_code == 404
         assert both.status_code == 400
         assert neither.status_code == 400
+
+
+class RecordingQueue:
+    """The Celery producer, recording. A contract test asserts *that the name was published*."""
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, list[object]]] = []
+
+    def send_task(self, name: str, args: Sequence[object]) -> object:
+        self.sent.append((name, list(args)))
+        return f"task-{len(self.sent)}"
+
+
+class TestScanNow:
+    """SW15: `POST /swing/scan` queues a run, `GET /swing/scan/{id}` reads it, and the setups
+    page says whether its rows are provisional and when they were scanned."""
+
+    async def test_a_request_is_a_202_with_the_run_to_poll_and_the_task_published(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        queue = RecordingQueue()
+
+        async with running_app(settings, screener_session, task_queue=queue) as client:
+            response = await client.post(url("/swing/scan"), headers=bearer(public_id))
+            assert response.status_code == 202
+            run_id = response.json()["run_id"]
+            read = await client.get(url(f"/swing/scan/{run_id}"), headers=bearer(public_id))
+
+        assert response.json()["status"] == "QUEUED"
+        assert queue.sent == [("baskfy.swing.scan_now", [run_id])]
+        row = (
+            await screener_session.execute(sa.select(SwScanRun).where(SwScanRun.id == run_id))
+        ).scalar_one()
+        assert row.user_id == user_id
+        assert row.task_id == "task-1"
+        assert row.detail == {"source": "web"}
+        assert read.status_code == 200
+        body = read.json()
+        assert body["run_id"] == run_id
+        assert body["status"] == "QUEUED"
+        assert body["session_date"] is None
+        assert body["provisional"] is False
+        assert body["funnel"] is None
+        assert body["error"] is None
+
+    async def test_a_second_request_while_one_is_in_flight_is_a_409_naming_it(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _, public_id = await _sole_tenant(screener_session, monkeypatch)
+        queue = RecordingQueue()
+
+        async with running_app(settings, screener_session, task_queue=queue) as client:
+            first = await client.post(url("/swing/scan"), headers=bearer(public_id))
+            second = await client.post(url("/swing/scan"), headers=bearer(public_id))
+
+        assert first.status_code == 202
+        assert second.status_code == 409
+        body = second.json()
+        assert body["type"] == "scan-in-flight"
+        assert body["run_id"] == first.json()["run_id"]
+        assert body["status_of_run"] == "QUEUED"
+        assert len(queue.sent) == 1, "the second press published nothing"
+
+    async def test_a_request_inside_a_minute_of_a_finished_one_is_a_429_with_retry_after(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        screener_session.add(
+            SwScanRun(
+                user_id=user_id,
+                requested_at=dt.datetime.now(tz=dt.UTC) - dt.timedelta(seconds=20),
+                status="DONE",
+                detail={"source": "web"},
+            )
+        )
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session, task_queue=RecordingQueue()) as client:
+            response = await client.post(url("/swing/scan"), headers=bearer(public_id))
+
+        assert response.status_code == 429
+        assert response.json()["type"] == "rate-limited"
+        assert 30 <= response.json()["retry_after"] <= 41
+        assert response.headers["Retry-After"] == str(response.json()["retry_after"])
+        assert "one a minute" in response.json()["detail"]
+
+    async def test_a_stale_run_no_longer_blocks_and_an_old_one_no_longer_throttles(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A worker that died mid-scan must not lock the button forever: a RUNNING row older
+        than `swing_scan_stale_after_seconds` is history, and a minute later a new press is
+        allowed."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        screener_session.add(
+            SwScanRun(
+                user_id=user_id,
+                requested_at=dt.datetime.now(tz=dt.UTC) - dt.timedelta(minutes=20),
+                status="RUNNING",
+                detail={"source": "desk"},
+            )
+        )
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session, task_queue=RecordingQueue()) as client:
+            response = await client.post(url("/swing/scan"), headers=bearer(public_id))
+
+        assert response.status_code == 202
+
+    async def test_a_broker_that_is_down_leaves_the_row_queued_for_the_sweep(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The row is the request; publishing is the fast path. A broker that refuses is a 202
+        all the same, with no `task_id`, and the worker's minute sweep publishes it."""
+        _, public_id = await _sole_tenant(screener_session, monkeypatch)
+
+        class BrokerDown:
+            def send_task(self, name: str, args: Sequence[object]) -> object:
+                raise ConnectionError("redis: connection refused")
+
+        async with running_app(settings, screener_session, task_queue=BrokerDown()) as client:
+            response = await client.post(url("/swing/scan"), headers=bearer(public_id))
+
+        assert response.status_code == 202
+        row = (
+            await screener_session.execute(
+                sa.select(SwScanRun).where(SwScanRun.id == response.json()["run_id"])
+            )
+        ).scalar_one()
+        assert row.status == "QUEUED" and row.task_id is None
+
+    async def test_the_setups_page_says_its_rows_are_provisional_and_when_they_were_scanned(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+        await _setup_row(screener_session, user_id=user_id, instrument_id=instrument_id)
+        await _market_row(screener_session, user_id=user_id)
+        scanned = "2026-08-18T08:12:00+00:00"
+        await screener_session.execute(
+            sa.update(SwSetupDaily)
+            .where(SwSetupDaily.user_id == user_id, SwSetupDaily.date == AS_OF)
+            .values(provisional=True)
+        )
+        market = (
+            await screener_session.execute(
+                sa.select(SwMarketDaily).where(
+                    SwMarketDaily.user_id == user_id, SwMarketDaily.date == AS_OF
+                )
+            )
+        ).scalar_one()
+        market.provisional = True
+        market.detail = {
+            **(market.detail or {}),
+            "scan": {"run_id": 7, "scanned_at": scanned, "provisional": True, "quotes": 1812},
+        }
+        run = SwScanRun(
+            user_id=user_id,
+            requested_at=dt.datetime(2026, 8, 18, 8, 11, tzinfo=dt.UTC),
+            started_at=dt.datetime(2026, 8, 18, 8, 11, 30, tzinfo=dt.UTC),
+            finished_at=dt.datetime(2026, 8, 18, 8, 12, tzinfo=dt.UTC),
+            session_date=AS_OF,
+            provisional=True,
+            status="DONE",
+            detail={
+                "source": "web",
+                "quotes": 1812,
+                "funnel": {"instruments": 1812, "liquid": 41, "candidates": {"FLAG": 1}},
+            },
+        )
+        screener_session.add(run)
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/setups"), headers=bearer(public_id))
+
+        body = response.json()
+        assert body["as_of"] == AS_OF.isoformat()
+        assert body["as_of_provisional"] is True
+        assert body["scanned_at"] == scanned
+        assert body["last_scan"]["run_id"] == run.id
+        assert body["last_scan"]["status"] == "DONE"
+        assert body["last_scan"]["provisional"] is True
+        assert body["last_scan"]["session_date"] == AS_OF.isoformat()
+        assert body["last_scan"]["funnel"]["liquid"] == 41
+
+    async def test_a_nightly_day_is_not_provisional_and_a_failed_scan_still_shows(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        instrument_id = await _instrument(screener_session, "FLAGCO")
+        await _setup_row(screener_session, user_id=user_id, instrument_id=instrument_id)
+        await _market_row(screener_session, user_id=user_id)
+        screener_session.add(
+            SwScanRun(
+                user_id=user_id,
+                requested_at=dt.datetime(2026, 8, 18, 8, 11, tzinfo=dt.UTC),
+                finished_at=dt.datetime(2026, 8, 18, 8, 11, 2, tzinfo=dt.UTC),
+                status="FAILED",
+                error="RuntimeError: Kite: TokenException",
+                detail={"source": "web"},
+            )
+        )
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/swing/setups"), headers=bearer(public_id))
+
+        body = response.json()
+        assert body["as_of_provisional"] is False
+        assert body["scanned_at"] is None
+        assert body["last_scan"]["status"] == "FAILED"
+        assert body["last_scan"]["error"] == "RuntimeError: Kite: TokenException"
+
+    async def test_the_scan_belongs_to_one_person(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        _, other = await make_user(screener_session, "swing-other@example.com")
+        screener_session.add(SwScanRun(user_id=user_id, status="DONE", detail={}))
+        await screener_session.flush()
+        run_id = (await screener_session.execute(sa.select(sa.func.max(SwScanRun.id)))).scalar_one()
+
+        async with running_app(settings, screener_session, task_queue=RecordingQueue()) as client:
+            refused_post = await client.post(url("/swing/scan"), headers=bearer(other))
+            refused_get = await client.get(url(f"/swing/scan/{run_id}"), headers=bearer(other))
+            missing = await client.get(url("/swing/scan/999999"), headers=bearer(public_id))
+
+        # `scoped_sole_user_id` turns a stranger away as a 404, the way every swing read does.
+        assert refused_post.status_code == 404
+        assert refused_get.status_code == 404
+        assert missing.status_code == 404
 
 
 def test_the_helpers_are_the_ones_this_module_thinks() -> None:

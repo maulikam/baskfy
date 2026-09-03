@@ -6,7 +6,16 @@ it became and a **Confirm** per line. The plan in the middle — the morning pla
 preview, exits first, then the buys waiting for a signal, then the skips with their reasons.
 The book at the bottom — open positions with their GTT ids, **Re-arm GTT** for a naked one, the
 last five manage actions. A status bar: `DRY_RUN`, `BASKFY_SWING_EXECUTION_ENABLED`, the
-monitor's state, the Kite token's age, the session's counters.
+monitor's state, the Kite token's age, the session's counters — and, since SW15, the last
+detection scan ("provisional — scanned 13:42 IST from live quotes") with a **Scan now** button.
+
+SCAN NOW (SW15)
+---------------
+The desk has no Celery client — its venv carries none and it reaches Baskfy through Postgres
+alone — so `POST /swing/scan` writes one `sw_scan_run` row (`QUEUED`, `source=desk`) and the
+worker's minute sweep publishes it (`baskfy.swing.scan_sweep`). The two rules the API applies
+are applied here from the same table: one in flight per user (409) and one a minute (429).
+A scan reads quotes and writes detection rows; it is not an order and it is not a confirm.
 
 WHAT THIS MODULE IS, AND IS NOT
 --------------------------------
@@ -52,6 +61,7 @@ import datetime as dt
 import decimal
 import enum
 import hashlib
+import json
 import logging
 import sqlite3
 import uuid
@@ -205,6 +215,27 @@ def _bind(value: Any, column: str = "") -> Any:  # noqa: ANN401 - a driver param
     if isinstance(value, uuid.UUID):
         return str(value)
     return value
+
+
+def _json_column(value: Any) -> Any:  # noqa: ANN401 - JSONB comes back as dict or text
+    """A JSONB column as Python: psycopg hands back a dict, sqlite the text it stored."""
+    if value is None or isinstance(value, (dict, list)):
+        return value
+    try:
+        return json.loads(str(value))
+    except ValueError:
+        return None
+
+
+class ScanRefused(Exception):
+    """`request_scan`'s two refusals, carrying the HTTP status the API answers with."""
+
+    def __init__(self, status: int, reason: str, *, run_id: int, retry_after: int | None = None):
+        super().__init__(reason)
+        self.status = status
+        self.reason = reason
+        self.run_id = run_id
+        self.retry_after = retry_after
 
 
 def _jsonable(value: Any) -> Any:  # noqa: ANN401 - the whole point is "any value"
@@ -800,6 +831,81 @@ class PgSwingStore:
         ).fetchall()
         return [self._position_row(r) for r in rows]
 
+    # --- SW15: "Scan now" ------------------------------------------------------------------
+
+    def latest_scan_run(self) -> dict | None:
+        """This user's newest `sw_scan_run` row, whatever its state — the status bar's line."""
+        row = self.conn.execute(
+            f"SELECT id, requested_at, started_at, finished_at, session_date, provisional, "
+            f"status, detail, error, task_id FROM {self.t('sw_scan_run')} "
+            f"WHERE user_id = ? ORDER BY requested_at DESC, id DESC LIMIT 1",
+            (self.user_id,),
+        ).fetchone()
+        return self._scan_run_row(row) if row is not None else None
+
+    def latest_market_scan(self) -> dict | None:
+        """The newest `sw_market_daily` row's provenance: its date, whether its rows are
+        provisional (a daytime scan over live-quote bars) and when they were scanned."""
+        row = self.conn.execute(
+            f"SELECT date, provisional, detail FROM {self.t('sw_market_daily')} "
+            f"WHERE user_id = ? ORDER BY date DESC LIMIT 1",
+            (self.user_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        detail = _json_column(row["detail"])
+        scan = detail.get("scan") if isinstance(detail, dict) else None
+        scanned_at = _stamp(scan.get("scanned_at")) if isinstance(scan, dict) else None
+        return {
+            "date": _date(row["date"]),
+            "provisional": bool(row["provisional"]),
+            "scanned_at": scanned_at,
+        }
+
+    def request_scan(self, *, now: dt.datetime, min_interval: dt.timedelta,
+                     stale_after: dt.timedelta, source: str = "desk") -> int:
+        """Insert one `QUEUED` run for the worker's sweep to publish. Raises `ScanRefused`
+        with the API's two statuses: 409 while one is in flight, 429 inside `min_interval`."""
+        newest = self.latest_scan_run()
+        if newest is not None:
+            in_flight = newest["status"] in ("QUEUED", "RUNNING")
+            if in_flight and newest["requested_at"] > now - stale_after:
+                raise ScanRefused(
+                    409, f"Scan {newest['id']} is {newest['status'].lower()}; its result is on "
+                         f"its way.", run_id=newest["id"],
+                )
+            if newest["requested_at"] > now - min_interval:
+                wait = min_interval - (now - newest["requested_at"])
+                seconds = max(1, int(wait.total_seconds() + 0.999))
+                raise ScanRefused(
+                    429, f"A scan was requested {int((now - newest['requested_at']).total_seconds())} s "
+                         f"ago; one a minute is the limit. Try again in {seconds} s.",
+                    run_id=newest["id"], retry_after=seconds,
+                )
+        row = self.conn.execute(
+            f"INSERT INTO {self.t('sw_scan_run')} (user_id, requested_at, status, detail) "
+            f"VALUES (?, ?, 'QUEUED', ?) RETURNING id",
+            (self.user_id, _bind(now), json.dumps({"source": source})),
+        ).fetchone()
+        return int(row["id"])
+
+    def _scan_run_row(self, row: Any) -> dict:  # noqa: ANN401 - a driver row
+        detail = _json_column(row["detail"])
+        funnel = detail.get("funnel") if isinstance(detail, dict) else None
+        return {
+            "id": int(row["id"]),
+            "requested_at": _stamp(row["requested_at"]),
+            "started_at": _stamp(row["started_at"]),
+            "finished_at": _stamp(row["finished_at"]),
+            "session_date": _date(row["session_date"]),
+            "provisional": bool(row["provisional"]),
+            "status": str(row["status"]),
+            "funnel": funnel if isinstance(funnel, dict) else None,
+            "detail": detail if isinstance(detail, dict) else None,
+            "error": str(row["error"]) if row["error"] is not None else None,
+            "task_id": str(row["task_id"]) if row["task_id"] is not None else None,
+        }
+
     def catalysts_for(self, instrument_ids: list[int]) -> dict[int, dict]:
         """SW11B (STANDING-ANSWERS A3): per name, the newest announcement's headline / stamp /
         link and the earnings date from `sw_catalyst` — what a trigger or a plan line links
@@ -1046,6 +1152,53 @@ def token_age(now: dt.datetime, token_file: str | Path | None = None) -> dict:
     return {"present": True, "label": text, "age_minutes": minutes, "expired": expired}
 
 
+def scan_status(market: dict | None, run: dict | None) -> dict:
+    """SW15's status-bar line, from the newest market row and the newest run.
+
+    `label` is the header's sentence — "provisional — scanned 13:42 IST from live quotes" for
+    rows a daytime scan wrote, "re-scanned 18:02 IST from published bars" for an on-demand
+    re-run, "" for a day the nightly wrote; `run_label` is the last run's state beside the
+    button; `in_flight` disables it while a run is on its way.
+    """
+    label = ""
+    provisional = bool(market and market["provisional"])
+    stamp = market["scanned_at"] if market else None
+    when = stamp.astimezone(IST).strftime("%H:%M IST") if stamp else None
+    if provisional:
+        label = f"provisional — scanned {when} from live quotes" if when else "provisional — from live quotes"
+    elif when:
+        label = f"re-scanned {when} from published bars"
+    run_label = ""
+    in_flight = False
+    if run is not None:
+        status = run["status"]
+        in_flight = status in ("QUEUED", "RUNNING")
+        if status == "QUEUED":
+            run_label = "scan queued"
+        elif status == "RUNNING":
+            run_label = "scanning…"
+        elif status == "FAILED":
+            run_label = "last scan failed" + (f": {run['error']}" if run["error"] else "")
+        else:
+            done = run["finished_at"] or run["requested_at"]
+            done_at = done.astimezone(IST).strftime("%H:%M IST") if done else "done"
+            funnel = run["funnel"] or {}
+            liquid = funnel.get("liquid")
+            found = sum(int(n) for n in (funnel.get("candidates") or {}).values())
+            counts = f" · {liquid} liquid, {found} flagged" if liquid is not None else ""
+            what = "from live quotes" if run["provisional"] else "from published bars"
+            run_label = f"last scan {done_at} {what}{counts}"
+    return {
+        "date": market["date"] if market else None,
+        "provisional": provisional,
+        "scanned_at": stamp,
+        "label": label,
+        "run": run,
+        "run_label": run_label,
+        "in_flight": in_flight,
+    }
+
+
 def _refresh(now: dt.datetime) -> tuple[int, int | None]:
     """(poll interval in ms, ms until the window opens today) — 5 s inside 09:15–10:45, nothing
     outside it, and a one-shot timer if the page was opened before the window."""
@@ -1063,11 +1216,13 @@ def _refresh(now: dt.datetime) -> tuple[int, int | None]:
 
 
 def _fingerprint(signals: list[dict], plans: list[dict | None], positions: list[dict],
-                 session: dict | None) -> str:
+                 session: dict | None, scan: dict | None = None) -> str:
     """Changes when something a person would want to see changed: a new signal, a line that
-    moved state, a position armed or closed, a counter. The page reloads on a change and only
-    on a change, so an inline result survives an idle poll."""
+    moved state, a position armed or closed, a counter, a scan that finished (SW15). The page
+    reloads on a change and only on a change, so an inline result survives an idle poll."""
     parts: list[str] = []
+    if scan and scan.get("run"):
+        parts.append(f"c{scan['run']['id']}:{scan['run']['status']}")
     for s in signals:
         line_state = s["line"]["state"] if s.get("line") else None
         parts.append(f"s{s['id']}:{s['state']}:{s['plan_line_id']}:{line_state}")
@@ -1201,6 +1356,7 @@ def build_view(
     sent_lines = store.sent_buy_lines(today)
     poll_ms, window_opens_in_ms = _refresh(now)
     plans_for_print = [morning_view, preview_view]
+    scan = scan_status(store.latest_market_scan(), store.latest_scan_run())
     return {
         "available": True,
         "reason": "",
@@ -1222,6 +1378,7 @@ def build_view(
             ),
             "token": token if token is not None else token_age(now),
             "session": {**counters, "recorded": session is not None},
+            "scan": scan,
         },
         "sleeve": {
             "capital_inr": config["sleeve_capital_inr"],
@@ -1248,7 +1405,7 @@ def build_view(
         },
         "poll_ms": poll_ms,
         "window_opens_in_ms": window_opens_in_ms,
-        "fingerprint": _fingerprint(triggers, plans_for_print, positions, session),
+        "fingerprint": _fingerprint(triggers, plans_for_print, positions, session, scan),
     }
 
 
@@ -1270,6 +1427,7 @@ def unavailable_view(reason: str, *, now: dt.datetime) -> dict:
             "token": token_age(now),
             "session": {"recorded": False, "signals": 0, "confirms": 0, "fills": 0,
                         "manage_actions": 0, "monitor_ran": False, "mode": None},
+            "scan": scan_status(None, None),
         },
         "sleeve": None,
         "triggers": [],
@@ -1453,6 +1611,25 @@ def order_source() -> Any:  # noqa: ANN401 - an OrderSource, or None without a s
     except Exception as exc:  # noqa: BLE001 - reported, not fatal: the poll is a convenience
         log.warning("no order source: %s", exc)
         return None
+
+
+@router.post("/swing/scan")
+def swing_scan_now():
+    """SW15: queue a detection scan — one `sw_scan_run` row the worker's sweep publishes. Not an
+    order and not a confirm: the worker reads quotes and writes detection rows, labelled
+    provisional during the session. 409 while one is in flight, 429 inside a minute."""
+    now = _now()
+    with open_store() as store:
+        try:
+            run_id = store.request_scan(
+                now=now,
+                min_interval=dt.timedelta(seconds=C.SWING_SCAN_MIN_INTERVAL_SECONDS),
+                stale_after=dt.timedelta(seconds=C.SWING_SCAN_STALE_AFTER_SECONDS),
+            )
+        except ScanRefused as exc:
+            headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after else None
+            raise HTTPException(exc.status, exc.reason, headers=headers) from exc
+    return _jsonable({"run_id": run_id, "status": "QUEUED", "requested_at": now})
 
 
 @router.post("/swing/reconcile")

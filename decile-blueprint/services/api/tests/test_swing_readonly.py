@@ -13,7 +13,8 @@ Track A permits the surface's non-money mutations ("watchlist edits, notes and t
 field — they change no money"), and the settings form is the same kind of thing: it writes seven
 numbers into `sw_config`. Three claims make that defensible, and each is asserted below:
 
-1. it is the **only** non-GET route on the surface;
+1. it is one of the five documented non-GET routes on the surface, and the only one that
+   writes a setting;
 2. its request model cannot name `exposure_level` or `first_live_sessions_left` — the two fields
    that decide how much the system lets the book carry — so a caller cannot climb the ladder by
    asking, and `extra="forbid"` means they are *told* rather than silently ignored;
@@ -29,7 +30,7 @@ import typing
 import pytest
 
 from baskfy_api import swing as swing_service
-from baskfy_api import swing_journal, swing_watch
+from baskfy_api import swing_journal, swing_scan, swing_watch
 from baskfy_api.app import create_app
 from baskfy_api.routers import swing as swing_router
 from baskfy_api.swing_settings import SYSTEM_OWNED_FIELDS, SwingConfigPatch
@@ -47,10 +48,17 @@ MUTATING = ("post", "put", "patch", "delete")
 #: catalyst — and nothing else, because a level a person can revise after the fact is a level
 #: that can be revised to match a price they already paid. `DELETE /swing/watch/{id}` is a state
 #: change to DISMISSED, not a delete.
+#:
+#: `POST /swing/scan` (SW15) is the fifth: it inserts one `sw_scan_run` row and publishes a task
+#: name, and the worker behind that name reads quotes and writes detection rows — the same rows
+#: the nightly writes, labelled provisional. A scan is never an order; the module behind the
+#: route (`baskfy_api.swing_scan`) writes to that one table and names no broker
+#: (`test_the_scan_writer_touches_only_the_run_table`).
 DELIBERATE_MUTATING_ROUTES: dict[str, set[str]] = {
     "/api/v1/swing/config": {"patch"},
     "/api/v1/swing/watch": {"post"},
     "/api/v1/swing/watch/{watch_id}": {"patch", "delete"},
+    "/api/v1/swing/scan": {"post"},
 }
 
 #: What `app.openapi()` returns, to the depth these tests read it.
@@ -70,7 +78,7 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
     def test_the_swing_routes_exist(self, spec: OpenApiSpec) -> None:
         paths = _swing_paths(spec)
         assert paths, "the swing routes are not registered at all"
-        assert len(paths) == 10, f"expected ten swing paths, found {paths}"
+        assert len(paths) == 12, f"expected twelve swing paths, found {paths}"
 
     def test_every_route_is_a_get_except_the_documented_writes(self, spec: OpenApiSpec) -> None:
         for path in _swing_paths(spec):
@@ -91,7 +99,7 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
         """Over the source, so a route added and not yet registered is still caught."""
         source = inspect.getsource(swing_router)
         assert source.count("@router.patch(") == 2, "settings and the watchlist annotation"
-        assert source.count("@router.post(") == 1, "watching a name"
+        assert source.count("@router.post(") == 2, "watching a name, and Scan now"
         assert source.count("@router.delete(") == 1, "dismissing one"
         assert "@router.put(" not in source, "routers/swing.py declares a PUT"
 
@@ -120,10 +128,29 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
             assert forbidden not in source, f"swing_watch names {forbidden}"
         assert "SwWatch(" in source, "swing_watch does not construct an sw_watch row at all"
 
+    def test_the_scan_writer_touches_only_the_run_table(self) -> None:
+        """SW15: `swing_scan` may write, and only to `sw_scan_run` — one row saying "a person
+        asked" — and publish one task name. A module that could write a plan line or a
+        position under the word "scan" would be the hole this file exists to close."""
+        source = inspect.getsource(swing_scan)
+        for forbidden in (
+            "SwPlan",
+            "SwPosition",
+            "SwFill",
+            "SwSignal",
+            "SwConfig",
+            "SwSetupDaily",
+            "SwMarketDaily",
+            "SwWatch",
+        ):
+            assert forbidden not in source, f"swing_scan names {forbidden}"
+        assert "SwScanRun(" in source, "swing_scan does not construct an sw_scan_run row at all"
+        assert 'SCAN_TASK_NAME: Final = "baskfy.swing.scan_now"' in source
+
 
 class TestItCannotReachAnOrder:
     def test_no_module_names_the_execution_package(self) -> None:
-        for module in (swing_router, swing_service, swing_journal):
+        for module in (swing_router, swing_service, swing_journal, swing_scan):
             source = inspect.getsource(module)
             for forbidden in (
                 "baskfy_execution",

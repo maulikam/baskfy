@@ -2032,6 +2032,86 @@ re-read `env_file`** — any env change needs `up -d --force-recreate` (deploy #
 does **not** close it, the desk still caches one `Kite()`; and the nudge has still never run on a
 morning where the token was actually missing.
 
+### Deploy #7 (3 Sep 2026, 18:19 IST, leaf SW19) — `80d8bb5` is live; the desk re-reads a changed token, and verify reports the operator's flags
+
+**What is live:** all ten services on `baskfy-{web,py,desk}:80d8bb5` (SW19; built from a clean
+worktree of `80d8bb5`, never the working tree). HEAD proven importable from the worktree's own
+sources before the build (`PYTHONPATH` at the worktree — deploy #4's note): the py tree
+(`baskfy_core`, `baskfy_core.swing`, `baskfy_api.app`, `baskfy_worker.tasks/celery_app`) and the
+desk tree (`app.kite_client`, `app.main`, `app.swing_monitor`, with
+`Kite.refresh_token_if_changed` present). ECR digests `0ab0c272…` web / `f50b1ef7…` py /
+`e97795b2…` desk. `tf.sh plan` from the main tree → **No changes** (`infra/` byte-identical to
+`80d8bb5`; SW19 touches no infra). `deploy-swing.sh` with
+`BASKFY_INSTANCE_ID=i-086986250704e4392` / `BASKFY_ARCHIVE_BUCKET=baskfy-archive` exported: ECR
+login on the box, pull, **alembic stays `0033_swing_scan_now` (= head; SW19 adds no migration)**,
+seeds idempotent (`sw_config: 1`, `sw_config_sleeve: 1`), `up`, caddy recreated. From the laptop:
+`https://staging.baskfy.com/swing` → **307 → `/login?next=%2Fswing` → 200**,
+`https://desk.staging.baskfy.com/status` → **200**, body
+`{"dry_run":true,"force_ipv4":true,"authed":true,"cash":10758766.7}`.
+
+**`verify-swing.sh`: SWING OK — 12/12 HTTPS checks green and zero box-half FAILs, the first
+deploy at which the run is clean end to end.** This is SW19's change: the two operating flags are
+now *reported*, not asserted. The deciding lines: all ten services `Up`; `beat schedules
+swing-eod / swing-eod-plan / swing-weekend / swing-premarket-levels / swing-premarket-gaps`;
+`ok desk: DRY_RUN=true`, `ok monitor: DRY_RUN=true`; `ok {desk,monitor}:
+BASKFY_SWING_EXECUTION_ENABLED=false` and `…TIMING_PROBE=false` (the two rails, still asserted);
+`-- desk: BASKFY_SWING_MONITOR_ENABLED=true`, `-- desk: BASKFY_SWING_EP_PREMARKET_ENABLED=true`
+and the same two `--` lines for `monitor` (deploy #6's four FAILs, now notes); `ok desk mounts
+the token volume read-only`; `ok alembic at 0033_swing_scan_now (head 0033_swing_scan_now)`;
+`ok desk schema has 20 tables`. Closing line: *"SWING OK … execution and probe flags false (the
+monitor and pre-open flags read above as the operator set them)"*.
+
+**The token re-read, proven on the running desk without touching the real token:**
+`docker compose exec -T desk desk-entrypoint /venv/bin/python -c "from app.kite_client import
+Kite; k=Kite(); print('refresh:', k.refresh_token_if_changed())"` → **`refresh: False`**, no
+traceback — nothing had changed on disk, which is the correct answer. `grep -c
+refresh_token_if_changed /desk/app/kite_client.py` inside the container → **5**, so the method is
+genuinely on the deployed image. The token blob was not written, deleted or rotated:
+`kite-token.enc` still 248 bytes, mtime `Sep 3 15:00` — hours before this deploy.
+
+**Two container facts worth writing down, because the prompt's command needed adapting:** the
+desk image's interpreter is **`/venv/bin/python`** and its workdir is **`/desk`** — there is no
+`/repo` and no `/repo/.venv`. And a bare `exec -T desk /venv/bin/python …` **fails**: it skips
+`desk-entrypoint`, so `BASKFY_KITE_TOKEN_ENCRYPTION_KEY` is never mapped to
+`KITE_TOKEN_ENCRYPTION_KEY`, `token_store._bootstrap_key` tries to create
+`/var/lib/baskfy/state/kite-token.enc.key`, and the read-only mount refuses it
+(`OSError: [Errno 30] Read-only file system`). That is the read-only rail working exactly as
+designed; the fix is to prefix `desk-entrypoint`, which any future one-off must do.
+
+**`swing-monitor` after the deploy:** `swing-monitor: flag ON; next run Fri 2026-09-04 09:14 IST`
+— still ON, still armed for tomorrow morning.
+
+**Beat still carries both nudge entries:** `kite-login-nudge | baskfy.kite.login_nudge |
+<crontab: 45 8 * * mon-fri> | {'queue': 'compute'}` and `kite-login-nudge-second |
+baskfy.kite.login_nudge | <crontab: 5 9 * * mon-fri> | {'queue': 'compute'}`, `beat timezone:
+Asia/Kolkata`. First real fire is unchanged: **Fri 04 Sep 08:45 IST**.
+
+**Nothing on the box was changed by this deploy but the three image tags.** Read back after it:
+`api`/`worker`/`beat` `DRY_RUN=false` (M81/M82's read-only holdings pull, and what lets
+`/brokers/callback` redeem a real request token), `desk`/`swing-monitor` `DRY_RUN=true`,
+`BASKFY_SWING_EXECUTION_ENABLED=false`, `BASKFY_SWING_TIMING_PROBE=false`,
+`BASKFY_SWING_MONITOR_ENABLED=true`, `BASKFY_SWING_EP_PREMARKET_ENABLED=true`,
+`BASKFY_KITE_LOGIN_NUDGE_ENABLED=true`, `BASKFY_KITE_LOGIN_NUDGE_TO` set (never echoed),
+`BASKFY_BROKER_OAUTH_STATE_PATH=/var/lib/baskfy/state/broker-oauth-state.json`. No flag flipped,
+no order placed, no secret printed, 65.0.226.77 untouched.
+
+**Rollback:** in `/opt/baskfy/.env.staging.compose` set the three `BASKFY_*_IMAGE` lines back to
+`…:6c218f0`, restore `compose.prod.yml.bak-sw13-20260903T181922` +
+`Caddyfile.bak-sw13-20260903T181922`, then `up -d --force-recreate caddy && up -d`. Nothing to
+roll back in the schema (0033 was already head). Rolling back drops the desk's token re-read and
+restores verify's four false FAILs. **`docker compose restart` does not re-read `env_file`** —
+any env change needs `up -d --force-recreate` (deploy #5's note).
+
+**Still open, unchanged:** SW16 (a) the 360 synthetic rows for the 12 slugs NSE never publishes
+(07-08..08-18) and `nifty-consumer-services`' mapping and re-run; desk history not migrated
+(`tools/migrate-desk` not run); `/opt/baskfy/.env.staging` still carries `DRY_RUN` twice (line 89
+`true`, line 146 `false`) and should be collapsed to one line that says what it means; and the
+nudge has still never run on a morning where the token was actually missing. **Q-SW13-1 is the
+one this deploy moves:** the desk no longer needs `restart desk` after each morning's Kite
+login — `refresh_token_if_changed()` is on the image and answered correctly — but it has not yet
+been observed returning `True` on a morning where the token really did change. That proof is
+Fri 04 Sep.
+
 #### The prep leaf's record (SW13-prep, before the run)
 
 **MD20:** one system. The desk (weekly book + swing) runs as compose services `desk` and

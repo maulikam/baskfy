@@ -315,3 +315,271 @@ class TestTheWebsocketIsTheQuoteSource:
         source = inspect.getsource(swing_monitor.QuoteFallback)
         assert "quote_raw(" in source
         assert "kc.quote(" not in source
+
+
+# =====================================================================================
+# SW21 — the same limit, held by the box rather than by each container.
+#
+# The tests below split in two on purpose. The wiring (what happens when Redis is absent,
+# refusing, or slow) is proved against stubs, because those are states a real server will not
+# enter on demand. The sharing itself is proved against a REAL Redis, for the reason
+# `packages/providers/tests/test_ratelimit.py` gives about its own bucket: the atomicity that
+# makes two processes agree lives in Redis's execution of the script, not in our Python, and a
+# hand-written fake would only prove the fake agrees with itself. It skips where there is none.
+# =====================================================================================
+import os
+import time
+
+from app.core import kite_limits as KL
+from app.core.kite_limits import (
+    MAX_SHARED_WAIT_SECONDS,
+    RATE_FOR_FAMILY,
+    SHARED_KEY_PREFIX,
+    SharedSpacer,
+)
+
+#: `tests/conftest.py` replaces `kite_limits.shared_spacers` for every test, so no test builds the
+#: box's limiter by omission. This is the real one, captured at import — before the fixture runs —
+#: for the three tests whose subject IS the builder.
+BUILD_SHARED = KL.shared_spacers
+
+
+class StubScript:
+    """Stands in for the registered Lua script: records the calls, answers as told."""
+
+    def __init__(self, replies=None, raises: Exception | None = None) -> None:
+        self.replies = replies
+        self.raises = raises
+        self.calls: list[tuple[list[str], list[object]]] = []
+
+    def __call__(self, keys, args):
+        self.calls.append((list(keys), list(args)))
+        if self.raises is not None:
+            raise self.raises
+        return self.replies
+
+
+class TestTheFamiliesAreTheSameOnBothSides:
+    def test_every_family_has_a_rate_and_a_spacer(self) -> None:
+        limits = DeskLimits(shared={})
+        assert set(RATE_FOR_FAMILY) == {"quote", "historical", "general"}
+        for family, rate in RATE_FOR_FAMILY.items():
+            assert limits.spacer(family).interval == pytest.approx(1.0 / rate)
+
+    def test_the_keys_live_under_the_namespace_baskfy_already_owns(self) -> None:
+        """One key per family, beside the pipeline's own bucket at `baskfy:ratelimit:kite`."""
+        assert SHARED_KEY_PREFIX == "baskfy:ratelimit:kite"
+
+    def test_a_limiter_takes_the_processes_shared_spacers_by_default(self, monkeypatch) -> None:
+        """No call site passes them: `Kite()` gets the box's limit because `DeskLimits()` does."""
+        spacers = {"quote": object()}
+        monkeypatch.setattr(KL, "shared_spacers", lambda: spacers)
+        limits = DeskLimits()
+        assert limits.shared == spacers
+        assert limits.is_shared is True
+        assert DeskLimits(shared={}).is_shared is False
+
+
+class TestTheBuilderReadsTheEnvironment:
+    def test_no_redis_url_is_per_process_and_says_so(self, monkeypatch) -> None:
+        monkeypatch.setattr(KL.C, "SHARED_READ_LIMITS_REDIS_URL", "")
+        monkeypatch.setattr(KL.C, "SHARED_READ_LIMITS", True)
+        KL.reset_shared_spacers()
+        assert BUILD_SHARED() == {}
+        monkeypatch.setattr(KL, "shared_spacers", BUILD_SHARED)
+        assert KL.shared_mode() == "per-process"
+
+    def test_the_switch_turns_it_off_with_a_url_present(self, monkeypatch) -> None:
+        """The reversal in one variable — DESK_SHARED_READ_LIMITS=false."""
+        monkeypatch.setattr(KL.C, "SHARED_READ_LIMITS_REDIS_URL", "redis://localhost:6379/0")
+        monkeypatch.setattr(KL.C, "SHARED_READ_LIMITS", False)
+        KL.reset_shared_spacers()
+        assert BUILD_SHARED() == {}
+
+    def test_an_unreachable_redis_is_per_process_not_an_exception(self, monkeypatch) -> None:
+        """The desk must start, and trade, with no Redis at all (root CLAUDE.md's Friday rule)."""
+        monkeypatch.setattr(KL.C, "SHARED_READ_LIMITS", True)
+        # Port 1 is reserved and nothing listens on it; the connect fails inside the timeout.
+        monkeypatch.setattr(KL.C, "SHARED_READ_LIMITS_REDIS_URL", "redis://127.0.0.1:1/0")
+        KL.reset_shared_spacers()
+        assert BUILD_SHARED() == {}
+
+    def test_a_failed_connection_is_retried_rather_than_given_up_on(self, monkeypatch) -> None:
+        """A Redis restarted by a deploy must not leave this process unshared until somebody
+        notices."""
+        monkeypatch.setattr(KL.C, "SHARED_READ_LIMITS", True)
+        monkeypatch.setattr(KL.C, "SHARED_READ_LIMITS_REDIS_URL", "redis://127.0.0.1:1/0")
+        KL.reset_shared_spacers()
+        builds: list[int] = []
+
+        def build() -> dict:
+            builds.append(1)
+            return {}
+
+        monkeypatch.setattr(KL, "_build_shared_spacers", build)
+        BUILD_SHARED()
+        BUILD_SHARED()
+        assert len(builds) == 1, "it rebuilt on every call, paying the connect timeout each time"
+        # The minute, brought forward. Reaching into the retry stamp rather than patching
+        # `time.monotonic` — which this process's own spacers also read — or sleeping for it.
+        monkeypatch.setattr(KL, "_shared_retry_at", 0.0)
+        BUILD_SHARED()
+        assert len(builds) == 2, "it never looked at Redis again"
+
+
+class TestRedisIsANicetyAndNeverADependency:
+    def test_a_dead_redis_still_spaces_the_call_locally(self) -> None:
+        script = StubScript(raises=ConnectionError("connection refused"))
+        clock = FakeClock()
+        limits = DeskLimits(clock=clock.time, sleep=clock.sleep, shared={
+            "quote": SharedSpacer(script, "k:quote", QUOTE_PER_SECOND,
+                                  clock=clock.time, sleep=clock.sleep),
+        })
+        for _ in range(5):
+            limits.slot("quote")
+        assert clock.slept == pytest.approx(4.0), "the local 1 req/s floor did not hold"
+        assert limits.local_only["quote"] == 5, "the degradation was not counted"
+
+    def test_a_dead_redis_is_not_asked_again_on_every_read(self) -> None:
+        """Otherwise every page refresh pays the connect timeout while Redis is down."""
+        script = StubScript(raises=ConnectionError("connection refused"))
+        clock = FakeClock()
+        spacer = SharedSpacer(script, "k:general", GENERAL_PER_SECOND,
+                              clock=clock.time, sleep=clock.sleep, retry_after=30.0)
+        for _ in range(20):
+            assert spacer.take() is None
+        assert len(script.calls) == 1, f"it asked a dead Redis {len(script.calls)} times"
+        clock.now += 31
+        assert spacer.take() is None
+        assert len(script.calls) == 2, "it never tried Redis again"
+
+    def test_a_queue_past_the_budget_falls_back_rather_than_hanging_the_page(self) -> None:
+        """`claimed == 0` — some other process holds the next ten seconds of this family."""
+        script = StubScript(replies=[0, str(MAX_SHARED_WAIT_SECONDS + 5)])
+        clock = FakeClock()
+        limits = DeskLimits(clock=clock.time, sleep=clock.sleep, shared={
+            "quote": SharedSpacer(script, "k:quote", QUOTE_PER_SECOND,
+                                  clock=clock.time, sleep=clock.sleep),
+        })
+        limits.slot("quote")
+        assert clock.slept == 0.0, "it waited out a slot it was told it could not have"
+        assert limits.local_only["quote"] == 1
+
+    def test_a_reply_the_script_could_not_have_sent_is_refused(self) -> None:
+        """A wrong shape is a bug in the script, not a slot: it must not read as permission."""
+        for junk in ("ok", [1], [1, 2, 3], None):
+            with pytest.raises(ValueError, match="Kite limiter"):
+                KL._claim(junk)
+
+
+class TestTheTwoLimitsCompose:
+    """Both are always taken: the box's clock bounds the box, this process's bounds this process."""
+
+    def test_the_shared_clock_cannot_loosen_the_local_floor(self) -> None:
+        """A shared limiter that grants freely must not turn thirty quotes into a burst."""
+        script = StubScript(replies=[1, "0"])
+        clock = FakeClock()
+        limits = DeskLimits(clock=clock.time, sleep=clock.sleep, shared={
+            "quote": SharedSpacer(script, "k:quote", QUOTE_PER_SECOND,
+                                  clock=clock.time, sleep=clock.sleep),
+        })
+        for _ in range(30):
+            limits.slot("quote")
+        assert clock.slept == pytest.approx(29.0, rel=1e-6)
+        assert len(script.calls) == 30, "a read went out without asking the box"
+
+    def test_the_shared_clock_can_tighten_it(self) -> None:
+        """When another container holds the family, this one waits for it — that is the point."""
+        script = StubScript(replies=[1, "2.0"])
+        clock = FakeClock()
+        limits = DeskLimits(clock=clock.time, sleep=clock.sleep, shared={
+            "general": SharedSpacer(script, "k:general", GENERAL_PER_SECOND,
+                                    clock=clock.time, sleep=clock.sleep),
+        })
+        waits = [limits.slot("general") for _ in range(3)]
+        assert waits == pytest.approx([2.0, 2.0, 2.0])
+        assert clock.slept == pytest.approx(6.0), "the local spacer double-charged the wait"
+        assert limits.waits["general"] == pytest.approx(6.0)
+
+    def test_the_interval_and_the_budget_are_what_the_script_is_told(self) -> None:
+        script = StubScript(replies=[1, "0"])
+        clock = FakeClock()
+        spacer = SharedSpacer(script, "baskfy:ratelimit:kite:historical", HISTORICAL_PER_SECOND,
+                              clock=clock.time, sleep=clock.sleep)
+        spacer.take()
+        keys, args = script.calls[0]
+        assert keys == ["baskfy:ratelimit:kite:historical"]
+        assert args[0] == pytest.approx(1.0 / HISTORICAL_PER_SECOND)
+        assert args[1] == MAX_SHARED_WAIT_SECONDS
+
+
+#: The dev stack's Redis (`make up`), or whatever the box points the desk at.
+REDIS_URL = os.getenv("BASKFY_REDIS_URL", "redis://localhost:6380/0")
+
+
+def _redis_or_skip():
+    redis = pytest.importorskip("redis")
+    try:
+        client = redis.Redis.from_url(REDIS_URL, socket_timeout=1.5, socket_connect_timeout=1.5)
+        client.ping()
+    except Exception as exc:                                              # pragma: no cover
+        pytest.skip(f"no Redis at {REDIS_URL}: {type(exc).__name__}: {exc}")
+    return client
+
+
+class TestTheBoxHoldsOneLimit:
+    """Two `SharedSpacer`s on one key are two containers on one box. Against a real Redis.
+
+    The rate is deliberately not Kite's: proving the sharing at 1 req/s would cost the suite a
+    minute of real sleeping, and what is under test is that two independent limiters queue behind
+    one clock — which is as true at 20/s as at 1/s. The caps themselves are asserted above,
+    without spending the seconds, by the burst tests.
+    """
+
+    RATE = 20.0
+    INTERVAL = 1.0 / RATE
+
+    @pytest.fixture
+    def key(self, request: pytest.FixtureRequest):
+        client = _redis_or_skip()
+        name = f"baskfy:test:ratelimit:kite:{request.node.name}"
+        client.delete(name)
+        yield client, name
+        client.delete(name)
+
+    def _spacer(self, client, name: str, **kwargs) -> SharedSpacer:
+        return SharedSpacer(client.register_script(KL.TAKE_SCRIPT), name, self.RATE, **kwargs)
+
+    def test_two_processes_queue_behind_one_clock(self, key) -> None:
+        client, name = key
+        web = self._spacer(client, name)
+        monitor = self._spacer(client, name)
+        started = time.monotonic()
+        for spacer in (web, monitor, web, monitor, web, monitor):
+            assert spacer.take() is not None
+        elapsed = time.monotonic() - started
+        assert elapsed >= 5 * self.INTERVAL, (
+            f"six calls from two processes took {elapsed:.3f}s; one limiter each would have "
+            f"allowed {3 * self.INTERVAL:.3f}s"
+        )
+
+    def test_the_first_call_against_a_cold_key_does_not_wait(self, key) -> None:
+        client, name = key
+        assert self._spacer(client, name).take() == pytest.approx(0.0, abs=0.01)
+
+    def test_a_caller_that_will_not_wait_does_not_spend_the_slot(self, key) -> None:
+        """A refusal must not push the clock out for the process that WOULD have waited."""
+        client, name = key
+        patient = self._spacer(client, name)
+        impatient = self._spacer(client, name, max_wait=0.0)
+        patient.take()
+        assert impatient.take() is None, "it waited past a budget of zero"
+        assert patient.take() is not None
+        # Two claims, one refusal: the third call departs one interval after the first, not two.
+        assert float(client.get(name)) <= time.time() + 2 * self.INTERVAL + 0.5
+
+    def test_the_key_expires_so_an_idle_family_costs_nothing(self, key) -> None:
+        client, name = key
+        self._spacer(client, name).take()
+        ttl = client.pttl(name)
+        assert 0 < ttl <= (self.INTERVAL + 1.0) * 1000 + 1, f"pttl={ttl}"

@@ -22,6 +22,7 @@ from . import config as C
 from .core.gateway import OrderGateway
 from .core.gateway import FAILED_STATUSES as _FAILED_STATUSES
 from .core.guards import UntouchableInstrumentError
+from .core import kite_limits
 from .core.risk import RiskManager
 from .scoring import load_scan, score, audit
 from .rebalance import build_plan
@@ -1256,7 +1257,12 @@ def status(ip: str = ""):
     disallowed IP names an address you have to go and look up. Behind a flag because it
     costs an outbound call, and /status is polled.
     """
-    out = {"dry_run": C.DRY_RUN, "force_ipv4": C.FORCE_IPV4}
+    # SW21: "shared" means this container's Kite reads queue behind the box's one departure clock
+    # per endpoint family; "per-process" means it holds its own, which is correct on a laptop and
+    # is a regression on the box. Reported here because /status is the one route that answers
+    # without the password, so a deploy can verify the wiring without a token.
+    out = {"dry_run": C.DRY_RUN, "force_ipv4": C.FORCE_IPV4,
+           "read_limiter": kite_limits.shared_mode()}
     if ip:
         from .core.net import outbound_ip
         out["outbound_ip"] = outbound_ip()

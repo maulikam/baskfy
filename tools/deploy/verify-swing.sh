@@ -43,6 +43,12 @@ want "GET desk /status (no password by design)"   200     "$D/status"
 STATUS="$(crl "$D/status")"
 grep -q '"dry_run": *true' <<<"$STATUS" && ok "desk /status reports dry_run true" \
   || bad "desk /status does not report dry_run true: ${STATUS:0:120}"
+# SW21: the desk's Kite reads take a slot from the box's Redis clock, not from a per-container
+# spacer. "per-process" here is not an outage — the desk degrades to its own spacers and keeps
+# trading — but it means the web container and swing-monitor are two limits again, which is the
+# state SW20.1 wrote down and SW21 closed. Asserted, because it is wiring, not an operating choice.
+grep -q '"read_limiter": *"shared"' <<<"$STATUS" && ok "desk /status reports read_limiter shared" \
+  || bad "desk read limiter is not shared: $(grep -o '"read_limiter":[^,}]*' <<<"$STATUS" || echo "no read_limiter in /status")"
 want "GET desk /swing (basic auth, not 421/5xx)"  401     "$D/swing"
 want "GET desk / (basic auth)"                    401     "$D/"
 want "GET desk /static/app.css through Caddy"     401     "$D/static/app.css"
@@ -59,8 +65,8 @@ if [ "${SKIP_BOX:-0}" != "1" ]; then
   OUT="$(bash "$HERE/box.sh" \
     "echo '## ps'; $C ps --format '{{.Service}} {{.Status}}'" \
     "echo '## beat'; $C exec -T beat python -c 'from baskfy_worker.celery_app import app; print(chr(10).join(sorted(k for k in app.conf.beat_schedule if k.startswith(\"swing\"))))'" \
-    "echo '## desk-env'; $C exec -T desk env | grep -E '^(DRY_RUN|BASKFY_SWING_[A-Z_]+)=' | sort" \
-    "echo '## monitor-env'; $C exec -T swing-monitor env | grep -E '^(DRY_RUN|BASKFY_SWING_[A-Z_]+)=' | sort" \
+    "echo '## desk-env'; $C exec -T desk env | grep -E '^(DRY_RUN|BASKFY_REDIS_URL|BASKFY_SWING_[A-Z_]+)=' | sort" \
+    "echo '## monitor-env'; $C exec -T swing-monitor env | grep -E '^(DRY_RUN|BASKFY_REDIS_URL|BASKFY_SWING_[A-Z_]+)=' | sort" \
     "echo '## desk-mounts'; docker inspect --format '{{range .Mounts}}{{.Destination}} rw={{.RW}}{{\"\\n\"}}{{end}}' \$($C ps -q desk)" \
     "echo '## alembic'; $C exec -T postgres psql -U baskfy -d baskfy -tAc 'select version_num from alembic_version'; $C run --rm --no-deps migrate alembic heads 2>/dev/null | tail -1" \
     "echo '## desk-schema'; $C exec -T postgres psql -U baskfy -d baskfy -tAc \"select count(*) from information_schema.tables where table_schema='desk'\"" \
@@ -89,6 +95,10 @@ $OUT"
     for flag in MONITOR_ENABLED EP_PREMARKET_ENABLED; do
       note "$svc: $(grep -m1 "BASKFY_SWING_$flag=" <<<"$ENV" || echo "BASKFY_SWING_$flag unset")"
     done
+    # SW21: both processes must point at the same Redis, or "shared" above is one container's
+    # word for a limit the other one is not taking. The monitor has no HTTP surface to ask.
+    grep -q '^BASKFY_REDIS_URL=redis://' <<<"$ENV" && ok "$svc: BASKFY_REDIS_URL is set" \
+      || bad "$svc: BASKFY_REDIS_URL is unset — its Kite reads are limited per process"
   done
   section desk-mounts | grep -q '^/var/lib/baskfy/state rw=false' \
     && ok "desk mounts the token volume read-only" || bad "the desk can write the token volume"

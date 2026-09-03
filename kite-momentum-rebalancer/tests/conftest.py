@@ -46,6 +46,26 @@ def isolate_database(tmp_path, monkeypatch):
     monkeypatch.setattr(db.C, "DB_PATH", str(tmp_path / "portfolio.db"))
 
 
+@pytest.fixture(autouse=True)
+def isolate_shared_read_limits(monkeypatch):
+    """The same rule again, for SW21's shared Kite read limiter.
+
+    `DeskLimits()` with no argument takes the process's shared spacers, which on any machine
+    where `BASKFY_REDIS_URL` is set means a real Redis and a departure clock shared with whatever
+    else is using that server — so a suite run could make the desk on the next desk wait, and a
+    burst test could measure a queue it did not create.
+
+    Autouse and unconditional, like the two above. A test that wants the shared path builds its
+    spacers explicitly and passes them in; `tests/test_kite_limits.py` is the one that does.
+    """
+    from app.core import kite_limits
+
+    kite_limits.reset_shared_spacers()
+    monkeypatch.setattr(kite_limits, "shared_spacers", dict)
+    yield
+    kite_limits.reset_shared_spacers()
+
+
 # =====================================================================================
 # Browsers send Origin on every POST, including same-origin ones, and core/websec.py
 # requires it — that is what stops a form on another site posting to the desk while the

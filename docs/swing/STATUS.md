@@ -1824,6 +1824,51 @@ the image** (runbook §6): `6884d1b-fix1` ignores the two `provisional` columns 
 repairing it on this box in parallel — this deploy touched neither postgres nor its `run`
 containers); desk history not migrated (`tools/migrate-desk` not run); the desk vhost DNS.
 
+### Deploy #4 (3 Sep 2026, 14:23 IST, leaf 1.5.5) — `bf4168b` is live; the nightly ingest now carries SW16's guard
+
+**What is live:** all ten services on `baskfy-{web,py,desk}:bf4168b` (built from a clean
+worktree of `bf4168b` = everything through SW16; the running containers' digests `10d5ea9f…`
+web / `905f5119…` py / `a20992e2…` desk equal the ECR push digests). HEAD proven importable
+from the worktree's own sources before the build (`PYTHONPATH` at the worktree — the editable
+`.venv` resolves to the main tree otherwise, so the bare `uv run` line proves the wrong tree).
+`tf.sh plan` from the main tree → **No changes** (`infra/` byte-identical to `bf4168b`).
+`deploy-swing.sh` with `BASKFY_INSTANCE_ID` / `BASKFY_ARCHIVE_BUCKET` exported (deploy #3's
+note): ECR login on the box, pull, **alembic stays `0033_swing_scan_now` (= head; SW16 adds no
+migration)**, seeds idempotent (`sw_config: 1`, `sw_config_sleeve: 1`), `up`, caddy recreated.
+`https://staging.baskfy.com/swing` → 307 to sign-in, 200 followed; `/healthz` → `ok`.
+
+**`verify-swing.sh` deciding lines (box half, all green):** all ten services `Up`, `beat
+schedules swing-eod / swing-eod-plan / swing-weekend / swing-premarket-levels /
+swing-premarket-gaps`, `desk: DRY_RUN=true`, `monitor: DRY_RUN=true`, every
+`BASKFY_SWING_{EXECUTION_ENABLED,MONITOR_ENABLED,EP_PREMARKET_ENABLED,TIMING_PROBE}=false` in
+both containers, `desk mounts the token volume read-only`, `alembic at 0033_swing_scan_now
+(head 0033_swing_scan_now)`, `desk schema has 20 tables`. `.env.staging.compose` carries no
+`DRY_RUN`, `BASKFY_DESK_DRY_RUN` or `BASKFY_SWING_*` key (checked by key name only). The 7
+HTTPS checks on `desk.staging.baskfy.com` still `000` — NXDOMAIN until NEEDS-MAULIK S4;
+unchanged, not a box matter. Inside the box `GET /status` → `dry_run true, authed true` (the
+day's Kite session is there this afternoon, unlike deploy #3's morning).
+
+**SW16 on the box after the deploy (G8):** the market row for 2026-09-02 still reads the
+repaired index — `index_close 23222.80 | index_ma_fast 23474.94 | index_ma_slow 23548.19 |
+RED | provisional f` (MAs within 1.4 % of the close; SW16's repair was **not** re-run — no row
+touched); the running worker image has the guard (`grep -c refused tasks/snapshots.py` → 8)
+and `baskfy_worker/index_repair.py`, so tonight's `index_snapshots` step refuses a 1/14-scale
+row instead of writing it. **`/opt/baskfy/sw16/` removed** (the three bind-mounted files +
+`repair.log` SW16 left; `rm -rf` of that directory only). Counts unchanged by this deploy:
+`sw_setup_daily 9`, `sw_market_daily 1`, `sw_scan_run 2`, `sw_watch 0`, `sw_plan 2`.
+
+**Rollback:** in `/opt/baskfy/.env.staging.compose` set the three `BASKFY_*_IMAGE` lines back
+to `…:151ce21`, restore `compose.prod.yml.bak-sw13-20260903T142307` +
+`Caddyfile.bak-sw13-20260903T142307` (the genuine pre-deploy-#4 copies; compose and Caddyfile
+are byte-identical between `151ce21` and `bf4168b`, so the restore is a no-op in content),
+`up -d --force-recreate caddy && up -d`. Nothing to roll back in the schema. Rolling the image
+back also drops the guard from the nightly ingest — the reason not to.
+
+**Still open, unchanged:** SW16 (a) the 360 synthetic rows for the 12 slugs NSE never publishes
+(07-08..08-18) — parking-and-delete written, not run; `nifty-consumer-services`' mapping (M31's
+table) and its re-run; desk history not migrated (`tools/migrate-desk` not run); the desk
+vhost DNS (NEEDS-MAULIK S4); `restart desk` after each morning's Kite login (Q-SW13-1).
+
 #### The prep leaf's record (SW13-prep, before the run)
 
 **MD20:** one system. The desk (weekly book + swing) runs as compose services `desk` and

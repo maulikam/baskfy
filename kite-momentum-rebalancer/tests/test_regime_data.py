@@ -51,8 +51,22 @@ class FakeKC:
 
 
 class FakeKite:
+    """The desk client's read surface, as `index_cache` now uses it.
+
+    SW20 routed every analytics read through `Kite`'s own limited wrappers, so a double that
+    only carried `kc` would let an unlimited call back in through the test suite. These two
+    forward to the fake `kc` and take no slot — the limiter's own behaviour is proven in
+    `tests/test_kite_limits.py`, not here.
+    """
+
     def __init__(self, kc):
         self.kc = kc
+
+    def instruments(self, exchange="NSE"):
+        return self.kc.instruments(exchange)
+
+    def historical(self, token, start, end, interval="day"):
+        return self.kc.historical_data(token, start, end, interval)
 
 
 def inst(sym, token, segment="INDICES", exchange="NSE"):

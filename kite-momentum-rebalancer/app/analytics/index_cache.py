@@ -121,7 +121,7 @@ async def load_instruments(kite, limits: KiteLimits | None = None, *,
             pass
     lim = limits or KiteLimits()
     await lim.api_slot()
-    dump = await asyncio.to_thread(kite.kc.instruments)
+    dump = await asyncio.to_thread(kite.instruments)
     rows = [{"tradingsymbol": r["tradingsymbol"], "instrument_token": r["instrument_token"],
              "segment": r.get("segment", ""), "exchange": r.get("exchange", ""),
              "name": r.get("name", "")} for r in dump]
@@ -272,7 +272,7 @@ async def fetch_candles(kite, token: int, start: dt.date, end: dt.date, *,
     while cursor <= end:
         chunk_end = min(cursor + dt.timedelta(days=CHUNK_DAYS), end)
         await limits.api_slot()
-        rows = await _with_retry(kite.kc.historical_data, token, cursor, chunk_end, "day",
+        rows = await _with_retry(kite.historical, token, cursor, chunk_end, "day",
                                  attempts=attempts)
         for r in rows:
             d = normalise_session_date(r["date"])

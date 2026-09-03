@@ -824,7 +824,7 @@ class QuoteFallback:
         for i in range(0, len(tokens), 500):
             chunk = tokens[i : i + 500]
             try:
-                data = self.kite.kc.quote([f"NSE:{self.symbols_by_token[t]}" for t in chunk])
+                data = self.kite.quote_raw([f"NSE:{self.symbols_by_token[t]}" for t in chunk])
             except Exception as exc:  # noqa: BLE001 - a failed poll is a missed poll, not a halt
                 log.warning("quote fallback failed: %s", exc)
                 _tel.count("swing_quote_polls", outcome="failed")

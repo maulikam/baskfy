@@ -78,7 +78,7 @@ async def _index_dump(kite: Kite, limits: KiteLimits, *, refresh: bool = False) 
             pass
 
     await limits.api_slot()
-    dump = await asyncio.to_thread(kite.kc.instruments)
+    dump = await asyncio.to_thread(kite.instruments)
     rows = [{"tradingsymbol": r["tradingsymbol"],
              "instrument_token": r["instrument_token"],
              "segment": r.get("segment", ""),
@@ -167,7 +167,7 @@ async def kite_index_series(index_name: str, start: str, end: str | None = None,
         chunk_end = min(cursor + step, to)
         await limits.api_slot()
         candles = await asyncio.to_thread(
-            k.kc.historical_data, inst["instrument_token"], cursor, chunk_end, "day")
+            k.historical, inst["instrument_token"], cursor, chunk_end, "day")
         for c in candles:
             out[pd.Timestamp(c["date"]).tz_localize(None).normalize()] = float(c["close"])
         cursor = chunk_end + dt.timedelta(days=1)

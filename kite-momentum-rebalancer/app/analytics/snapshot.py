@@ -75,7 +75,7 @@ class SnapshotJob:
             except Exception:
                 rows = None
         if rows is None:
-            dump = await self._call(self.kite.kc.instruments, exchange)
+            dump = await self._call(self.kite.instruments, exchange)
             rows = [{"tradingsymbol": r["tradingsymbol"],
                      "instrument_token": r["instrument_token"],
                      "segment": r.get("segment", ""),
@@ -97,7 +97,7 @@ class SnapshotJob:
             keys = [f"{h['exchange']}:{h['symbol']}" for h in holdings]
             out: dict[str, float] = {}
             for i in range(0, len(keys), 200):          # Kite caps instruments per quote call
-                chunk = await self._call(self.kite.kc.quote, keys[i:i + 200])
+                chunk = await self._call(self.kite.quote_raw, keys[i:i + 200])
                 for k, v in chunk.items():
                     close = (v.get("ohlc") or {}).get("close")
                     out[k.split(":", 1)[1]] = float(close if close else v["last_price"])
@@ -112,7 +112,7 @@ class SnapshotJob:
                 if not tok:
                     missing.append(sym)
                     continue
-                candles = await self._call(self.kite.kc.historical_data, tok, day, day, "day")
+                candles = await self._call(self.kite.historical, tok, day, day, "day")
                 if candles:
                     out[sym] = float(candles[-1]["close"])
                 else:

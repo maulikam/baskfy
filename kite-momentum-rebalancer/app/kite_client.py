@@ -3,11 +3,18 @@ Order placement is gated by the caller (main.py) — this module never self-init
 from __future__ import annotations
 import json
 import os
+import time
 import logging
 from kiteconnect import KiteConnect
 from . import config as C
 from .core.guards import assert_not_overnight_option, assert_tradeable
+from .core.kite_limits import DeskLimits
 from .core.net import force_ipv4
+
+#: How long a last price answered by `ltp` is reused. Five seconds is the desk page's own
+#: refresh interval and `OpeningRangeConfig.quote_poll_min_seconds`, so a page poll costs no
+#: Kite call at all and the monitor's fallback stays inside its own bound.
+LTP_CACHE_SECONDS = 5.0
 
 log = logging.getLogger("kite")
 
@@ -21,7 +28,31 @@ class Kite:
         if C.FORCE_IPV4:
             force_ipv4()
         self.kc = KiteConnect(api_key=C.KITE_API_KEY)
+        # SW20: every READ below takes a slot from this before it touches `self.kc`. Orders keep
+        # the gateway's own async limiter — see app/core/kite_limits.py for the caps and for why
+        # there are two.
+        self._limits = DeskLimits()
+        #: `ltp` answers for a few seconds, so a page that refreshes every five does not need a
+        #: fresh call each time. Quote is Kite's 1 req/s endpoint; this is what keeps a polling
+        #: page off it entirely.
+        self._ltp_cache: dict[str, tuple[float, float]] = {}
+        self._ltp_ttl = LTP_CACHE_SECONDS
         self._load_token()
+
+    @property
+    def limits(self) -> DeskLimits:
+        """The read limiter, created on first use.
+
+        A property rather than a plain attribute because the desk's tests build a `Kite` without
+        running `__init__` (they set `kc` on a bare object to keep the broker out of a unit test),
+        and a read path that raised `AttributeError` in that shape would push everyone back to
+        calling `kc` directly — which is the thing SW20 exists to stop.
+        """
+        limiter = getattr(self, "_limits", None)
+        if limiter is None:
+            limiter = DeskLimits()
+            self._limits = limiter
+        return limiter
 
     # ---------- auth ----------
     def login_url(self) -> str:
@@ -91,6 +122,7 @@ class Kite:
     def is_authed(self) -> bool:
         self.refresh_token_if_changed()
         try:
+            self.limits.slot("general")
             self.kc.profile()
             return True
         except Exception:
@@ -119,6 +151,7 @@ class Kite:
         """
         self.refresh_token_if_changed()
         out: dict[str, dict] = {}
+        self.limits.slot("general")
         for h in self.kc.holdings():
             total = h["quantity"] + h.get("t1_quantity", 0) + h.get("collateral_quantity", 0)
             if total <= 0:
@@ -129,6 +162,7 @@ class Kite:
                 average_price=h["average_price"], last_price=h["last_price"])
 
         try:
+            self.limits.slot("general")
             positions = self.kc.positions().get("net", []) or []
         except Exception as exc:                                   # noqa: BLE001
             # Refuse rather than under-report. A holdings figure that silently omits
@@ -171,17 +205,49 @@ class Kite:
         only chance to record a fill through the API — miss the session and it is gone.
         Historical fills exist solely in a Console export.
         """
+        self.limits.slot("general")
         return list(self.kc.trades() or [])
 
     def available_cash(self) -> float:
+        self.limits.slot("general")
         m = self.kc.margins()
         return float(m["equity"]["available"]["live_balance"])
 
     def ltp(self, symbols: list[str], exchange: str = "NSE") -> dict[str, float]:
+        """Last prices, served from a `LTP_CACHE_SECONDS` cache before Kite is asked.
+
+        `quote`/`ltp`/`ohlc` share Kite's tightest limit — **1 req/s** — and the desk page
+        refreshes every five seconds during the session while the monitor runs beside it. So a
+        price this process fetched within the TTL is reused, and only the names it has no fresh
+        answer for cost a call. `refresh_token_if_changed` still runs first: a cached price must
+        not keep a stale session alive (SW19).
+        """
         self.refresh_token_if_changed()
-        keys = [f"{exchange}:{s}" for s in symbols]
+        cache = getattr(self, "_ltp_cache", None)
+        if cache is None:
+            cache = self._ltp_cache = {}
+        ttl = getattr(self, "_ltp_ttl", LTP_CACHE_SECONDS)
+        wanted = [s for s in dict.fromkeys(symbols) if s]
+        now = time.monotonic()
+        out = {}
+        missing = []
+        for symbol in wanted:
+            hit = cache.get(f"{exchange}:{symbol}")
+            if hit is not None and now - hit[0] < ttl:
+                out[symbol] = hit[1]
+            else:
+                missing.append(symbol)
+        if not missing:
+            return out
+        keys = [f"{exchange}:{s}" for s in missing]
+        self.limits.slot("quote")
         data = self.kc.ltp(keys)
-        return {k.split(":", 1)[1]: v["last_price"] for k, v in data.items()}
+        fetched = time.monotonic()
+        for key, value in data.items():
+            price = float(value["last_price"])
+            cache[key] = (fetched, price)
+            out[key.split(":", 1)[1]] = price
+        return out
 
     def quotes(self, symbols: list[str], exchange: str = "NSE") -> dict[str, dict]:
         """Full quote — last price, the day's OHLC, previous close and volume.
@@ -200,6 +266,7 @@ class Kite:
         for i in range(0, len(clean), 400):
             keys = [f"{exchange}:{s}" for s in clean[i:i + 400]]
             try:
+                self.limits.slot("quote")
                 data = self.kc.quote(keys)
             except Exception as e:                              # noqa: BLE001
                 log.warning("quote batch failed (%d symbols): %s", len(keys), e)
@@ -216,6 +283,59 @@ class Kite:
                     "volume": v.get("volume") or v.get("volume_traded"),
                 }
         return out
+
+    # ---------- limited wrappers for everything outside this file ----------
+    #
+    # SW20: `app/analytics/` used to call `k.kc.<anything>` directly, which meant twenty-five
+    # reads a second was as legal as one. These exist so nothing outside this module has to hold
+    # the raw handle, and `tests/test_kite_limits.py` fails if a new direct call appears.
+
+    def _instruments(self, exchange: str = "NSE") -> list[dict]:
+        self.limits.slot("general")
+        return list(self.kc.instruments(exchange) or [])
+
+    def instruments(self, exchange: str = "NSE") -> list[dict]:
+        """The exchange's instrument dump. One general slot; a big response, not a fast one."""
+        return self._instruments(exchange)
+
+    def historical(self, token: int, start, end, interval: str = "day") -> list[dict]:
+        """Daily (or finer) candles for one instrument — Kite's 3 req/s family."""
+        self.refresh_token_if_changed()
+        self.limits.slot("historical")
+        return list(self.kc.historical_data(token, start, end, interval) or [])
+
+    def margins(self, segment: str | None = None) -> dict:
+        """The raw margins payload. `available_cash` is the number most callers want."""
+        self.refresh_token_if_changed()
+        self.limits.slot("general")
+        return dict(self.kc.margins(segment) if segment else self.kc.margins())
+
+    def orders(self) -> list[dict]:
+        self.refresh_token_if_changed()
+        self.limits.slot("general")
+        return list(self.kc.orders() or [])
+
+    def order_history(self, order_id: str) -> list[dict]:
+        self.refresh_token_if_changed()
+        self.limits.slot("general")
+        return list(self.kc.order_history(order_id) or [])
+
+    def quote_raw(self, keys: list[str]) -> dict:
+        """Kite's own `quote` shape for pre-keyed instruments (`NSE:INFY`), one quote slot.
+
+        `quotes()` above is the desk's shape — chunked, symbol-keyed, tolerant of a missing
+        name. `analytics/snapshot.py` wants the raw payload and does its own chunking, so it
+        gets this rather than the client handle it used to reach through.
+        """
+        self.refresh_token_if_changed()
+        self.limits.slot("quote")
+        return dict(self.kc.quote(keys) or {})
+
+    def get_gtts(self) -> list[dict]:
+        """Every resting GTT. A read: creating one is `place_gtt_stop`, deleting `delete_gtt`."""
+        self.refresh_token_if_changed()
+        self.limits.slot("general")
+        return list(self.kc.get_gtts() or [])
 
     # ---------- writes (caller must gate with user confirmation) ----------
     def place_cnc_order(self, symbol: str, qty: int, side: str, limit_price: float | None,
@@ -252,7 +372,7 @@ class Kite:
         if cache is None or exchange not in cache:
             cache = cache or {}
             cache[exchange] = {i["tradingsymbol"]: float(i.get("tick_size") or 0.05)
-                               for i in self.kc.instruments(exchange)}
+                               for i in self._instruments(exchange)}
             self._ticks = cache
         return cache[exchange].get(symbol, 0.05)
 

@@ -265,7 +265,7 @@ def build_stop_plan(holdings: Iterable[Mapping], gtts: Iterable[Mapping], *,
 
 def from_kite(kite) -> dict:
     """Live review. Two API reads, no writes."""
-    return review(kite.holdings(), kite.kc.get_gtts() or [])
+    return review(kite.holdings(), kite.get_gtts())
 
 
 def summary_line(rev: Mapping) -> str:

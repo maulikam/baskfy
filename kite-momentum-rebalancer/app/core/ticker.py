@@ -36,9 +36,21 @@ class TickBus:
                 self.loop.call_soon_threadsafe(q.put_nowait, t)
 
 
+#: One websocket connection carries at most this many instruments (Kite: 3 connections per API
+#: key, 3,000 each). SW20 refuses a longer list here rather than discovering the truncation as a
+#: name that silently never ticks — a watched name with no ticks is a break nobody sees.
+MAX_INSTRUMENTS_PER_CONNECTION = 3000
+
+
 def start_ticker(api_key: str, access_token: str, tokens: list[int], bus: TickBus):
     """Call from an asyncio context. Returns the KiteTicker (runs in its own thread)."""
     from kiteconnect import KiteTicker
+    if len(tokens) > MAX_INSTRUMENTS_PER_CONNECTION:
+        raise ValueError(
+            f"{len(tokens)} instruments asked for on one websocket; Kite carries "
+            f"{MAX_INSTRUMENTS_PER_CONNECTION}. Split the list across connections, or watch "
+            f"fewer names — a silently truncated subscription is a break nobody sees."
+        )
     bus.loop = asyncio.get_running_loop()
     kws = KiteTicker(api_key, access_token)
 

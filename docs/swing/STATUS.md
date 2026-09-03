@@ -1869,6 +1869,84 @@ back also drops the guard from the nightly ingest — the reason not to.
 table) and its re-run; desk history not migrated (`tools/migrate-desk` not run); the desk
 vhost DNS (NEEDS-MAULIK S4); `restart desk` after each morning's Kite login (Q-SW13-1).
 
+### Deploy #5 (3 Sep 2026, 16:51 IST, leaf 1.5.6) — `67df9b4` is live; the gate reads the MidSmallcap 400 from the image
+
+**What is live:** all ten services on `baskfy-{web,py,desk}:67df9b4` (SW17; built from a clean
+worktree of `67df9b4`, never the working tree). HEAD proven importable from the worktree's own
+sources before the build (`PYTHONPATH` at the worktree — deploy #4's note; the bare `uv run`
+line resolves the editable install to the main tree and so proves the wrong tree).
+`tf.sh plan` from the main tree → **No changes** (`infra/` byte-identical to `67df9b4`).
+`deploy-swing.sh` with `BASKFY_INSTANCE_ID=i-086986250704e4392` /
+`BASKFY_ARCHIVE_BUCKET=baskfy-archive` exported: ECR login on the box, pull, **alembic stays
+`0033_swing_scan_now` (= head; SW17 adds no migration)**, seeds idempotent (`sw_config: 1`,
+`sw_config_sleeve: 1`), `up`, caddy recreated.
+
+**`verify-swing.sh` — SWING OK, and for the first time every HTTPS check passes.** The desk
+vhost is no longer `000`: `desk.staging.baskfy.com` resolves to `3.108.148.38` publicly and
+Caddy holds its certificate, so `GET desk /status → 200` with `dry_run true`, `desk /swing`,
+`desk /` and `desk /static/app.css` → 401 (basic auth, not 421/5xx), noindex + HSTS on the desk
+vhost. **NEEDS-MAULIK S4 (the GoDaddy record) is closed by observation.** Box half, all green:
+all ten services `Up`, `beat schedules swing-eod / swing-eod-plan / swing-weekend /
+swing-premarket-levels / swing-premarket-gaps`, `desk: DRY_RUN=true`, `monitor: DRY_RUN=true`,
+every `BASKFY_SWING_{EXECUTION_ENABLED,MONITOR_ENABLED,EP_PREMARKET_ENABLED,TIMING_PROBE}=false`
+in both containers, `desk mounts the token volume read-only`, `alembic at 0033_swing_scan_now
+(head 0033_swing_scan_now)`, `desk schema has 20 tables`. From the laptop:
+`https://staging.baskfy.com/swing` → **200** followed, `https://desk.staging.baskfy.com/status`
+→ **200** `{"dry_run":true,"force_ipv4":true,"authed":true,"cash":…}`.
+
+**The env override is gone; the image carries the default.** `BASKFY_SWING_INDEX_SLUG=
+nifty-mid-small-400` (added by hand at 15:27 today, before SW17 was committed) was deleted from
+`/opt/baskfy/.env.staging` — backup `.env.staging.pre-sw17-20260903T165317`. Note for the next
+leaf: **`docker compose restart` does not re-read `env_file`** — after `restart worker beat` the
+worker still showed the variable; `up -d --force-recreate worker beat` was needed. After that
+`exec -T worker env | grep BASKFY_SWING_INDEX_SLUG` prints **nothing**, and
+`WorkerSettings().swing_index_slug` inside the running worker prints **`nifty-mid-small-400`** —
+the image default is what is in force. The `api` container was not recreated and still carries
+the (identical) value in its environment; it clears itself on the next `up`.
+
+**The detection re-run by the deployed image (`swing_cli --date 2026-09-02`, ~4 min):**
+`index_slug nifty-mid-small-400`, `execution_enabled false`, `status succeeded`, user 1, funnel
+`instruments 2317 → bars 411,083 → with_a_bar_today 2317 → liquid 605 → candidates 13`
+(`FLAG 10, EP 0, PARABOLIC_SHORT 3`) — the ₹50 lakh turnover floor takes the liquid universe
+from 402 to 605 and the candidates from 9 to 13, exactly as SW17's commit message predicted.
+**The market row, written by the deployed image:**
+
+```
+    date    |     index_slug      | close    | ma_fast  | ma_slow  | gate  | new_entries | exposure
+ 2026-09-02 | nifty-mid-small-400 | 21355.35 | 21592.34 | 21581.78 | GREEN | t           | 0
+```
+
+`GREEN` — the 10-day (21,592.34) is above the 20-day (21,581.78) — where deploy #4's `nifty-500`
+row read `RED`. This row is on repaired index history (SW16), not the 1/14-scale window.
+**Counts after the re-run:** `sw_setup_daily 13`, `sw_market_daily 1`, `sw_watch 5`, `sw_plan 2`,
+`sw_scan_run 6`.
+
+**Reverted by this deploy, and it was uncommitted — for Maulik:** the box's `compose.prod.yml`
+and `Caddyfile` had been hand-edited at 15:31 today to add a **second desk console on
+`staging.baskfy.com:8443`** (`BASKFY_DESK_PORT_ADDRESS`, a duplicate Caddy site block; the
+comment reads *"why do we need a separate subdomain?"*). It is in neither `67df9b4` nor any
+commit, so shipping the committed compose + Caddyfile removed it — `https://staging.baskfy.com:
+8443/status` now answers `000`. That alias existed only because `desk.staging.baskfy.com` had no
+DNS record, and it now does (verify's seven desk checks all pass over 443), so nothing is lost
+in function. **If it should survive future deploys it must be committed to
+`decile-blueprint/infra/docker/{compose.prod.yml,Caddyfile}`;** the pre-deploy copies are
+`compose.prod.yml.bak-sw13-20260903T165123` + `Caddyfile.bak-sw13-20260903T165123` on the box.
+
+**Rollback:** in `/opt/baskfy/.env.staging.compose` set the three `BASKFY_*_IMAGE` lines back to
+`…:bf4168b`, restore `compose.prod.yml.bak-sw13-20260903T165123` +
+`Caddyfile.bak-sw13-20260903T165123` (these are the 15:31 hand-edited copies — restoring them
+brings the `:8443` alias back too), re-add `BASKFY_SWING_INDEX_SLUG=nifty-mid-small-400` to
+`.env.staging` (or restore `.env.staging.pre-sw17-20260903T165317`) because `bf4168b` defaults
+to `nifty-500`, then `up -d --force-recreate caddy && up -d`. Nothing to roll back in the schema
+(0033 was already head). The 2026-09-02 rows are idempotent re-runs of the same date, but they
+are now the MidSmallcap 400's — a roll back should re-run the detection to restore the
+`nifty-500` row.
+
+**Still open, unchanged:** SW16 (a) the 360 synthetic rows for the 12 slugs NSE never publishes
+(07-08..08-18) — parking-and-delete written, not run; `nifty-consumer-services`' mapping and its
+re-run; desk history not migrated (`tools/migrate-desk` not run); `restart desk` after each
+morning's Kite login (Q-SW13-1). **Closed by this deploy:** the desk vhost DNS.
+
 #### The prep leaf's record (SW13-prep, before the run)
 
 **MD20:** one system. The desk (weekly book + swing) runs as compose services `desk` and

@@ -1423,7 +1423,9 @@ Only what needs your hands (SW12, 3 Sep 2026). Everything else the run decided a
 Resolved: **S1** (notification channel) → MD3 / SW11: email now, Telegram dark behind SW-6.
 **S2** (the two Kite timing questions) → superseded by the 09:04 probe (MD5 / SW11), which is SW-4.
 
-### S4 — One DNS record at GoDaddy for the desk vhost (3 Sep 2026, deploy of beb5ff5)
+### S4 — ✅ RESOLVED 3 Sep 2026 — the GoDaddy record landed; desk.staging.baskfy.com serves with its own certificate
+
+### S4 (as raised) — One DNS record at GoDaddy for the desk vhost (3 Sep 2026, deploy of beb5ff5)
 
 `baskfy.com`'s nameservers are still GoDaddy's, so the Route 53 record Terraform created for
 `desk.staging.baskfy.com` is not authoritative and the name is NXDOMAIN publicly. Add at GoDaddy:

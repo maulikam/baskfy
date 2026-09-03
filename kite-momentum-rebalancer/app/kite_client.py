@@ -45,6 +45,7 @@ class Kite:
 
         store = store_for(C.TOKEN_FILE, getattr(C, "KITE_TOKEN_ENCRYPTION_KEY", ""))
         if not store.exists():
+            self._token_mtime = None
             return
         try:
             self.kc.set_access_token(store.load().value)
@@ -52,8 +53,43 @@ class Kite:
             # A token that cannot be read is the same situation as no token: the operator
             # logs in again. Failing to start the desk over it would be worse.
             log.warning("could not read the stored access token (%s); log in again", exc)
+            self._token_mtime = None
+        else:
+            self._token_mtime = self._blob_mtime(store)
+
+    @staticmethod
+    def _blob_mtime(store) -> float | None:                               # noqa: ANN001
+        """The token blob's mtime, or None when it is gone or unreadable."""
+        try:
+            return store.path.stat().st_mtime
+        except OSError:
+            return None
+
+    def refresh_token_if_changed(self) -> bool:
+        """Re-read the blob when somebody else has written a newer token. Returns True if it did.
+
+        The desk holds ONE `Kite` for the life of the process (`app.main.kite()`), and
+        `__init__` loads the token once. So a token written at 09:10 — by the morning login
+        the nudge asks for (SW18), by `/callback`, or by the desk bridge — was invisible to the
+        already-running web process until somebody restarted the container. That is a restart
+        of an order-capable process, every morning, for a file that changed underneath us.
+
+        Cheap: one `stat` per call, and `set_access_token` only when the mtime moved. Called at
+        the top of every read and before the order path's own checks, so the first request after
+        a login carries the new session and no request carries a stale one.
+        """
+        from .token_store import store_for
+
+        store = store_for(C.TOKEN_FILE, getattr(C, "KITE_TOKEN_ENCRYPTION_KEY", ""))
+        seen = self._blob_mtime(store)
+        if seen is None or seen == getattr(self, "_token_mtime", None):
+            return False
+        log.info("the stored Kite token changed on disk; re-reading it")
+        self._load_token()
+        return True
 
     def is_authed(self) -> bool:
+        self.refresh_token_if_changed()
         try:
             self.kc.profile()
             return True
@@ -81,6 +117,7 @@ class Kite:
 
         The asymmetry is Kite's, not ours, and it is why this cannot be a single call.
         """
+        self.refresh_token_if_changed()
         out: dict[str, dict] = {}
         for h in self.kc.holdings():
             total = h["quantity"] + h.get("t1_quantity", 0) + h.get("collateral_quantity", 0)
@@ -141,6 +178,7 @@ class Kite:
         return float(m["equity"]["available"]["live_balance"])
 
     def ltp(self, symbols: list[str], exchange: str = "NSE") -> dict[str, float]:
+        self.refresh_token_if_changed()
         keys = [f"{exchange}:{s}" for s in symbols]
         data = self.kc.ltp(keys)
         return {k.split(":", 1)[1]: v["last_price"] for k, v in data.items()}
@@ -156,6 +194,7 @@ class Kite:
         Read-only. A quote is never a step towards an order — those go through
         core/gateway.py, which is the only path allowed to place one.
         """
+        self.refresh_token_if_changed()
         out: dict[str, dict] = {}
         clean = [s for s in dict.fromkeys(symbols) if s]
         for i in range(0, len(clean), 400):

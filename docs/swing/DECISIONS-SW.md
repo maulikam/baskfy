@@ -2324,3 +2324,30 @@ removes it; `broker_oauth.kite_login_url` stays, because the router uses it.
 `BASKFY_BROKER_OAUTH_STATE_PATH` is unset (silence rather than a link that dies at the callback),
 and the marker living beside the token blob rather than in a table.
 
+
+## SW19.1 — The desk re-reads a token that changed under it, and DRY_RUN means one thing per service · ⚠ UNREVIEWED
+
+**Context.** Two findings from deploy #6, both Maulik's to fix and both fixed here.
+
+(a) `app.main.kite()` caches one `Kite` for the life of the process and `__init__` loads the
+token once, so a token written at 09:10 — by the SW18 login, by `/callback`, by the bridge — was
+invisible until somebody restarted an order-capable container. Every morning. `Kite` now records
+the blob's mtime and `refresh_token_if_changed()` re-reads it when that moves; it is called at
+the top of `is_authed`, `holdings`, `ltp` and `quotes`, so the first request after a login carries
+the new session and none carries a stale one. One `stat` per call. The monitor never needed it
+(it builds its own client at 09:14) and keeps working unchanged.
+
+(b) The box's `.env.staging` set `DRY_RUN` twice — `true`, then `false` 57 lines later — and
+`env_file` takes the last, so the api/worker/beat ran with `false`. That is **correct** for them:
+`broker_oauth.dry_run_enabled()` reads it, and `false` is what lets `/brokers/callback` redeem a
+real Kite request token instead of storing a `sim_` stub. The stale `true` is gone, the surviving
+line carries four comment lines saying which side reads it, and `BASKFY_DESK_DRY_RUN=true` is now
+written explicitly beside it rather than relying on compose's default — the desk and the monitor
+read that one, and it is the switch that turns a Confirm into money.
+
+**Rejected.** Restarting `desk` from the nudge task (bouncing an order-capable process from a
+Celery job, and it would not help a login done at any other minute); a token-reload route on the
+desk (a new surface for the same fact the filesystem already carries).
+
+**Reversal.** Drop `refresh_token_if_changed` and its four call sites — the desk then needs
+`docker compose restart desk` after every login, which is what Q-SW13-1 says today.

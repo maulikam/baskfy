@@ -102,9 +102,28 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=18, minute=50, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT},
     },
+    # M84: NSE's own end-of-day file, half an hour before the chain that would otherwise be the
+    # only thing landing the day. 18:15 because NSE publishes the bhavcopy after the 15:30 close
+    # and `SESSION_DATA_READY_IST` puts the earliest it can exist at 18:00; the chain at 18:45
+    # then finds the session already landed and its Kite pass is a top-up rather than the single
+    # point of failure it was on 18-29 Aug. Needs no broker session at all.
+    "bhavcopy-eod": {
+        "task": "baskfy.pipeline.bhavcopy_ingest",
+        "schedule": crontab(hour=18, minute=15, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
     "refresh-reference-data": {
         "task": "baskfy.pipeline.nightly",
         "schedule": crontab(hour=18, minute=45, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    # M84: the session that never landed, run again without being asked. The morning Kite login
+    # publishes this the moment a real token is stored; this entry is the half that does not
+    # depend on anybody logging in. 06:45 — after the overnight, before the 08:50 premarket job,
+    # and early enough that a two-hour chain is finished before the market opens.
+    "session-catch-up": {
+        "task": "baskfy.pipeline.session_catch_up",
+        "schedule": crontab(hour=6, minute=45, day_of_week="mon-sat"),
         "options": {"queue": QUEUE_DEFAULT},
     },
     "purge-deleted-accounts": {

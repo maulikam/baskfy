@@ -33,6 +33,44 @@ export AWS_PROFILE="$PROFILE"
 say() { printf '\n── %s\n' "$*"; }
 box() { bash "$HERE/box.sh" "$@"; }
 
+# ---------------------------------------------------------------------------- the nightly window
+# WHY A DEPLOY REFUSES TO RUN BETWEEN 18:40 AND 21:15 IST ON A WEEKDAY (M84)
+#
+# `up -d` recreates the worker, and the nightly chain runs *inside* it from 18:45 for about an
+# hour and fifty minutes. It has been killed that way twice:
+#
+#   31 Aug 2026 — three deploys in one evening redelivered the nightly; the copies woke past
+#                 midnight and ran against a session that had not happened (runs 17, 18).
+#   3 Sep 2026  — deploy #8 landed at ~19:55; run 25 was killed mid-chain, reaped at 20:30, and
+#                 nothing re-ran it. The product served the 2 Sep session for a day.
+#
+# M84 makes a missed session heal itself, which is the safety net. This is the part that stops
+# needing the net. `DEPLOY_DURING_NIGHTLY=1` overrides it for a deliberate emergency.
+nightly_window_guard() {
+  local now day hhmm
+  now="$(TZ=Asia/Kolkata date '+%u %H%M')"; day="${now%% *}"; hhmm="${now##* }"
+  [ "$day" -le 5 ] || return 0                      # Sat/Sun: the chain does not run
+  [ "$hhmm" -ge 1840 ] && [ "$hhmm" -le 2115 ] || return 0
+  if [ "${DEPLOY_DURING_NIGHTLY:-0}" = "1" ]; then
+    printf '\n!! %s IST is inside the nightly window and DEPLOY_DURING_NIGHTLY=1 is set.\n' "$hhmm"
+    printf '   Recreating the worker now will kill tonight'"'"'s chain; the 06:45 catch-up will re-run it.\n\n'
+    return 0
+  fi
+  cat >&2 <<MSG
+
+REFUSING TO DEPLOY: it is $hhmm IST, inside the nightly window (18:40-21:15, Mon-Fri).
+
+  \`up -d\` recreates the worker, and the nightly chain runs inside it from 18:45 for about an
+  hour and fifty minutes. Deploying now kills tonight's session — that is what happened on
+  31 Aug and again on 3 Sep 2026, and the second one served a stale trading session for a day.
+
+  Wait until after 21:15, or deploy tomorrow morning. If this is an emergency and losing the
+  session is the lesser cost:  DEPLOY_DURING_NIGHTLY=1 bash tools/deploy/deploy-swing.sh
+MSG
+  exit 1
+}
+nightly_window_guard
+
 say "preflight"
 ACCOUNT="$(aws sts get-caller-identity --query Account --output text)" \
   || { echo "no AWS session — aws sso login --profile $PROFILE" >&2; exit 1; }

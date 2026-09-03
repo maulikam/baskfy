@@ -137,6 +137,33 @@ class TestSchedule:
         assert entry.hour == {18}
         assert entry.minute == {45}
 
+    def test_the_bhavcopy_lands_the_day_before_the_chain_needs_it(self) -> None:
+        """M84: NSE's own file at 18:15, so the 18:45 chain finds the session already landed.
+
+        Ordering is the whole point. Behind the chain it would be a fallback again; before it, the
+        day is on disk whatever Kite does — which is what 18-29 Aug and 3 Sep 2026 each cost.
+        """
+        entry = BEAT_SCHEDULE["bhavcopy-eod"]["schedule"]
+        nightly = BEAT_SCHEDULE["refresh-reference-data"]["schedule"]
+        assert isinstance(entry, crontab)
+        assert entry.day_of_week == {1, 2, 3, 4, 5}
+        assert entry.hour == {18}
+        assert entry.minute == {15}
+        assert min(entry.minute) < min(nightly.minute), (
+            "the bhavcopy must not queue behind the chain"
+        )
+
+    def test_the_catch_up_sweep_runs_before_the_market_opens(self) -> None:
+        """M84: a session nobody noticed was missing is re-run at 06:45, not tomorrow evening.
+
+        Saturday too — a Friday night that failed must not wait until Monday to be found.
+        """
+        entry = BEAT_SCHEDULE["session-catch-up"]["schedule"]
+        assert isinstance(entry, crontab)
+        assert entry.hour == {6}
+        assert entry.minute == {45}
+        assert entry.day_of_week == {1, 2, 3, 4, 5, 6}
+
     def test_the_weekly_integrity_audit_is_scheduled(self) -> None:
         """docs/09 §Schedule: "Sat 02:00 — full-history integrity audit"."""
         entry = BEAT_SCHEDULE["weekly-integrity-audit"]["schedule"]

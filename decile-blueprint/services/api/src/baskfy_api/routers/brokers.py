@@ -19,11 +19,12 @@ token can never be written where the real session lives (leaf 1.1.4).
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import os
 from decimal import Decimal
 from typing import Annotated, Final
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Path, Query, Request
 from pydantic import BaseModel, Field
 
 from baskfy_api.auth import AuthenticatedDep
@@ -67,6 +68,13 @@ from baskfy_providers.errors import CredentialsMissing
 #: value handed to Kite, because a redirect_uri that disagrees with the registered one fails at
 #: the end of a login rather than the start — and the two used to be written out separately.
 OAUTH_CALLBACK_PATH: Final = "/api/v1/brokers/callback"
+
+#: Published when a real broker session is stored — see the callback (M84). Named here
+#: rather than inline so the test that asserts the trigger names the same task the worker
+#: registers, and `baskfy.pipeline.*` already routes to the default queue.
+SESSION_CATCH_UP_TASK: Final = "baskfy.pipeline.session_catch_up"
+
+log = logging.getLogger("baskfy_api.brokers")
 
 router = APIRouter(prefix="/brokers", tags=["brokers"])
 
@@ -405,6 +413,7 @@ async def list_brokers(principal: AuthenticatedDep) -> BrokerListOut:
 async def oauth_callback(
     principal: AuthenticatedDep,
     session: SessionDep,
+    request: Request,
     request_token: Annotated[str, Query(min_length=8, max_length=128)],
     state: Annotated[str, Query(min_length=8, max_length=128)],
 ) -> CallbackOut:
@@ -479,6 +488,30 @@ async def oauth_callback(
 
     store_access_token(exchange.access_token, store=token_store_for())
 
+    # AND START THE SESSION'S DATA WORK NOW, FOR THE SAME REASON (M84).
+    #
+    # A verified token is the one moment the deployment knows it can talk to Kite, and it happens
+    # before the market opens. On 3 Sep 2026 a deploy killed the nightly chain mid-run; the run
+    # was reaped and alerted fifteen minutes later and then nothing re-ran it, so the product
+    # served the previous session to everybody until a person noticed the following night. This
+    # publish is what makes that heal itself: `baskfy.pipeline.session_catch_up` looks for trading
+    # days with no published run and runs the chain for them, oldest first.
+    #
+    # Idempotent and cheap when there is nothing to do — a published day is not in its list, so
+    # the ordinary morning costs one query. Best-effort exactly like the holdings pull below: a
+    # queue that is not there must not fail a login that has already succeeded.
+    catch_up_note = ""
+    try:
+        queue = getattr(request.app.state, "task_queue", None)
+        if queue is None:
+            catch_up_note = "no task queue configured, so no catch-up was requested"
+        else:
+            queue.send_task(SESSION_CATCH_UP_TASK, [])
+            catch_up_note = "any session that never published will be caught up"
+    except Exception as exc:
+        catch_up_note = f"the catch-up sweep could not be queued ({type(exc).__name__})"
+    log.info("broker connect: %s", catch_up_note)
+
     # PULL THE HOLDINGS NOW, NOT WHEN SOMEBODY REMEMBERS TO PRESS A BUTTON (M81).
     #
     # The session is only just alive and Kite ends it at the start of the next trading day, so this
@@ -522,7 +555,7 @@ async def oauth_callback(
         holdings_synced=synced,
         note=(
             f"live: a real {pending.broker_id} session was exchanged and stored encrypted. "
-            f"{sync_note}"
+            f"{sync_note} {catch_up_note}."
         ),
     )
 

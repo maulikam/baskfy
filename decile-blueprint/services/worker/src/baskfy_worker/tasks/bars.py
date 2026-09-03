@@ -94,6 +94,29 @@ async def run_fetch_daily_bars(
         return await _fetch_from_bhavcopy(
             session, provider, outcome, window, reason="daily_bars produced no rows"
         )
+
+    # M84: A PARTIAL KITE PASS IS THE CASE THE OLD FALLBACK COULD NOT SEE.
+    #
+    # The branch above asks for the bhavcopy only when Kite wrote *nothing*. A session that dies
+    # halfway — a token that expires mid-run, a burst of 429s, an instrument list Kite has stopped
+    # carrying — writes something, so it never reached the fallback and the gate judged a half
+    # day. For one session that is not a fallback at all: the bhavcopy is the exchange's own
+    # end-of-day record, it needs no credential, and it is one 200 KB file. So when Kite left any
+    # gap at all, the day is completed from it.
+    #
+    # Only for a single-session window. A multi-year backfill walks the archive day by day and
+    # belongs to `bhavcopy_backfill` on its own terms; running it as a "top-up" inside the chain
+    # would turn one night into hours. Kite also stays FIRST, unchanged: it reaches back before
+    # 2024, where the UDiFF archive begins.
+    if window.days == 1 and (failures or skipped_no_token):
+        await _fetch_from_bhavcopy(
+            session,
+            provider,
+            outcome,
+            window,
+            reason=(f"kite left gaps: {len(failures)} failed, {skipped_no_token} without a token"),
+            top_up=written,
+        )
     return written
 
 
@@ -151,13 +174,14 @@ def _credentials_are_missing(failures: dict[str, str]) -> bool:
     return any(message.startswith("CredentialsMissing") for message in failures.values())
 
 
-async def _fetch_from_bhavcopy(
+async def _fetch_from_bhavcopy(  # noqa: PLR0913 - a source, a window, and how to report it
     session: AsyncSession,
     provider: object,
     outcome: StepOutcome,
     window: DateWindow,
     *,
     reason: str,
+    top_up: int | None = None,
 ) -> int:
     """Fall back to the NSE bhavcopy when Kite cannot serve the day's bars.
 
@@ -184,9 +208,15 @@ async def _fetch_from_bhavcopy(
         return 0
 
     report = await backfill_bars_from_bhavcopy(provider, window, progress_every=0)
-    outcome.rows_out = report.bars_written
+    if top_up is None:
+        outcome.rows_out = report.bars_written
+    else:
+        # A top-up ran BESIDE a Kite pass that already wrote rows, and the two overlap by however
+        # many symbols both sources carry. Neither a sum nor a replacement would be true, so
+        # `rows_out` stays what Kite wrote and the second number is reported as its own fact.
+        outcome.note(kite_rows=top_up, bhavcopy_rows=report.bars_written)
     outcome.note(
-        fallback="bhavcopy",
+        **{"top_up" if top_up is not None else "fallback": "bhavcopy"},
         fallback_reason=reason,
         window=str(window),
         days_written=report.days_written,

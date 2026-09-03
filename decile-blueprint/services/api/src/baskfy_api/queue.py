@@ -63,6 +63,10 @@ PRODUCER_TASK_ROUTES: dict[str, dict[str, str]] = {
     # PORTFOLIO_REDESIGN.md §5.1's nightly EOD NAV job. Compute-bound over price history, like the
     # factor and curated-metric steps.
     "baskfy.portfolio.*": {"queue": "compute"},
+    # SW15: the swing book's "Scan now" — the one swing task this producer publishes. The
+    # worker's table names the same queue; the sweep beside it is Beat's, never published here.
+    "baskfy.swing.scan_now": {"queue": "compute"},
+    "baskfy.swing.scan_sweep": {"queue": "default"},
 }
 
 #: The queue an unrouted name lands on. Must match the worker's ``task_default_queue``, which is

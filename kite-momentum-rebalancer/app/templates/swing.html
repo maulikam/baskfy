@@ -64,6 +64,19 @@
       fills {{ v.status.session.fills }} · manage actions {{ v.status.session.manage_actions }} ·
       monitor ran {{ 'yes' if v.status.session.monitor_ran else 'no' }}.
     </span>
+    {#- SW15: the last detection scan, and the button. The worker's sweep publishes the row;
+        the label says whether the rows on the web hub are provisional and from what. -#}
+    <span class="muted" style="display:block;margin-top:5px" id="swScan">
+      <b>scan</b>:
+      {% if v.status.scan.label %}<span class="{{ 'warn' if v.status.scan.provisional else '' }}" id="swScanLabel">{{ v.status.scan.label }}</span>{% else %}<span id="swScanLabel">nightly{% if v.status.scan.date %} ({{ v.status.scan.date.isoformat() }}){% endif %}</span>{% endif %}
+      {% if v.status.scan.run_label %}· <span class="{{ 'bad' if v.status.scan.run and v.status.scan.run.status == 'FAILED' else '' }}" id="swScanRun">{{ v.status.scan.run_label }}</span>{% endif %}
+      {% if v.available %}
+      <form method="post" action="/swing/scan" class="sw-scan" style="display:inline" data-in-flight="{{ 'true' if v.status.scan.in_flight else 'false' }}">
+        <button type="submit" {% if v.status.scan.in_flight %}disabled{% endif %}
+                title="Run the detectors now. During the session the bar is built from live quotes and every row is provisional. Moves no money.">{{ 'Scanning…' if v.status.scan.in_flight else 'Scan now' }}</button></form>
+      <span class="sw-scan-outcome muted" aria-live="polite"></span>
+      {% endif %}
+    </span>
   </span>
 </div>
 
@@ -388,6 +401,38 @@
       } catch (err) { out.textContent = 'request failed: ' + err; }
       btn.disabled = false;
     }));
+
+  // SW15: "Scan now" posts one row; the sweep publishes it and the poll below reloads the page
+  // when the run's state changes (it is in the fingerprint). Not an order, not a confirm.
+  document.querySelectorAll('form.sw-scan').forEach(f =>
+    f.addEventListener('submit', async e => {
+      e.preventDefault();
+      const out = f.parentElement.querySelector('.sw-scan-outcome');
+      const btn = f.querySelector('button'); btn.disabled = true;
+      try {
+        const r = await fetch(f.action, {method: 'POST', body: new FormData(f)});
+        const j = r.ok ? await r.json() : {error: await r.text()};
+        out.textContent = r.ok ? ('scan ' + j.run_id + ' queued — the page reloads as it runs')
+                               : ('refused (' + r.status + ') — ' + j.error);
+        if (r.ok) { btn.textContent = 'Scanning…'; startScanPoll(); } else { btn.disabled = false; }
+      } catch (err) { out.textContent = 'request failed: ' + err; btn.disabled = false; }
+    }));
+  // Its own timer, separate from the session window's: it runs while a scan is on its way,
+  // whatever the clock says, and stops itself when the run is no longer in flight.
+  let scanTimer = null;
+  async function pollScan(){
+    try {
+      const r = await fetch('/swing/data', {cache: 'no-store'});
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j.fingerprint && j.fingerprint !== FINGERPRINT) { location.reload(); return; }
+      if (j.status && j.status.scan && !j.status.scan.in_flight && scanTimer) {
+        clearInterval(scanTimer); scanTimer = null;
+      }
+    } catch (e) { /* the next poll will say */ }
+  }
+  function startScanPoll(){ if (!scanTimer) scanTimer = setInterval(pollScan, 5000); }
+  if (document.querySelector('form.sw-scan[data-in-flight="true"]')) startScanPoll();
 
   // 5 s inside 09:15–10:45, on demand outside it. Reload only when something changed, so an
   // inline result is not wiped by an idle poll.

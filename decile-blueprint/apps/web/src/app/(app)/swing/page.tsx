@@ -19,9 +19,10 @@ import {
 } from "@/lib/swing/fetch";
 import { PAGES } from "@/lib/vocabulary";
 
-import { watchAdd, watchDismiss } from "./actions";
+import { scanNow, watchAdd, watchDismiss } from "./actions";
 import { RowActionForm } from "./_components/forms";
 import { MiniChart } from "./_components/mini-chart";
+import { ScanLabel, ScanNow } from "./_components/scan-now";
 import { breadthLine, gateCopy, tierLine } from "./copy";
 
 /**
@@ -37,6 +38,11 @@ import { breadthLine, gateCopy, tierLine } from "./copy";
  * marks the row that is already there DISMISSED. Neither moves money (`02` Track A). A swing
  * line becomes an order in the desk console, on a click, and nowhere else (Track C §4);
  * `__tests__/read-only.test.tsx` asserts it over every action this tree can name.
+ *
+ * One page action (SW15): **Scan now** queues the detectors. During the session the worker
+ * builds today's bar from live Kite quotes and every row it writes is labelled provisional —
+ * the header says "provisional — scanned 13:42 IST from live quotes" so nobody reads a 13:42
+ * base as a close. The nightly replaces those rows.
  */
 export const dynamic = "force-dynamic";
 
@@ -328,6 +334,9 @@ export default async function SwingSetupsPage(props: {
 
   const rows = setups?.data ?? [];
   const gate = setups?.gate ?? null;
+  const provisional = setups?.as_of_provisional ?? false;
+  const scannedAt = setups?.scanned_at ?? null;
+  const lastScan = setups?.last_scan ?? null;
   const watched = new Map<number, SwingWatchRow>();
   for (const row of watchlist?.data ?? []) watched.set(row.instrument_id, row);
   const focusCount = rows.filter((row) => watched.get(row.instrument_id)?.focus).length;
@@ -338,17 +347,25 @@ export default async function SwingSetupsPage(props: {
         title={PAGES["/swing"].title}
         blurb={PAGES["/swing"].blurb}
         meta={
-          asOf ? (
-            <span className="text-sm text-muted-foreground">As of {formatTradeDate(asOf)}</span>
-          ) : null
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {asOf ? (
+              <span className="text-sm text-muted-foreground">As of {formatTradeDate(asOf)}</span>
+            ) : null}
+            <ScanLabel provisional={provisional} scannedAt={scannedAt} />
+            <ScanNow action={scanNow} lastScan={lastScan} />
+          </span>
         }
       />
       <SectionTabs section="swing" />
 
       <Answer
         footnote={
-          "Detected from published end-of-day bars. Nothing here is advice, and nothing on " +
-          "this page can place an order — a line becomes an order in the desk console, on a click."
+          (provisional
+            ? "Detected on today's bar so far, built from live quotes — provisional until the " +
+              "nightly scan replaces it. "
+            : "Detected from published end-of-day bars. ") +
+          "Nothing here is advice, and nothing on this page can place an order — a line " +
+          "becomes an order in the desk console, on a click."
         }
       >
         {gate ? (

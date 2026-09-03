@@ -65,6 +65,13 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # and take the default queue for the same reason `baskfy.ops.*` does. The swing *jobs*
     # (`baskfy.swing.detect`, `.eod`, `.premarket`, …) name their queue on their Beat entry.
     "baskfy.swing.check_*": {"queue": QUEUE_DEFAULT},
+    # SW15: "Scan now". The scan itself is the nightly's body over the liquid universe — a few
+    # minutes of Polars — and takes the compute queue; the sweep that publishes the desk's
+    # queued rows is one SELECT a minute and takes the default queue for the reason the
+    # checks do. Both are named here *and* in `baskfy_api.queue.PRODUCER_TASK_ROUTES`
+    # (the API publishes `scan_now` directly), and `test_celery_config.py` holds them equal.
+    "baskfy.swing.scan_now": {"queue": QUEUE_COMPUTE},
+    "baskfy.swing.scan_sweep": {"queue": QUEUE_DEFAULT},
     # SC2: curated-basket EOD metrics. Compute-bound over price history; same queue as factors.
     "baskfy.cb.*": {"queue": QUEUE_COMPUTE},
     # PORTFOLIO_REDESIGN.md §5.1. The nightly EOD NAV job values every user's holdings against
@@ -305,6 +312,18 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "task": "baskfy.swing.catalyst",
         "schedule": crontab(hour=9, minute=17, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_COMPUTE},
+    },
+    # --- SW15: the "Scan now" sweep (docs/swing/DECISIONS-SW SW15.1) -------------------
+    #
+    # Every minute: publish every `sw_scan_run` row that is QUEUED with no `task_id`. The desk
+    # console has no Celery client (its venv carries none, and it reaches Baskfy through
+    # Postgres alone), so its button writes the row and this publishes it; the API's button
+    # publishes directly and this is its fallback when no broker was configured. One indexed
+    # SELECT on an empty table almost every minute of the day — cheaper than the queue check.
+    "swing-scan-sweep": {
+        "task": "baskfy.swing.scan_sweep",
+        "schedule": dt.timedelta(seconds=60),
+        "options": {"queue": QUEUE_DEFAULT},
     },
     # --- T8.3: one email per REBALANCE_AVAILABLE (payload.notified_at) -----------
     "cb-rebalance-notify": {

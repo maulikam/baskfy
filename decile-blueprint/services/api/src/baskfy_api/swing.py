@@ -29,6 +29,7 @@ from baskfy_core.models import (
     SwPlanLine,
     SwPlanSkip,
     SwPosition,
+    SwScanRun,
     SwSetupDaily,
     SwSignal,
 )
@@ -109,6 +110,83 @@ class SetupsPage:
     max_open_positions: int | None
     max_exposure_pct: Decimal | None
     new_entries_allowed: bool | None
+    #: SW15: the day's rows were detected on bars built from live quotes ("Scan now" during
+    #: the session), not on a published close — the header says so on every row.
+    as_of_provisional: bool = False
+    #: When the day was last scanned on demand (`sw_market_daily.detail.scan.scanned_at`);
+    #: ``None`` for a day the nightly wrote.
+    scanned_at: dt.datetime | None = None
+    #: This user's newest "Scan now" run, whatever its state — so the page can say
+    #: "scanning…" or "the last scan failed: …" without a second call.
+    last_scan: ScanRunView | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ScanRunView:
+    """One `sw_scan_run` row, as `GET /swing/scan/{id}` and the setups page read it."""
+
+    run_id: int
+    status: str
+    requested_at: dt.datetime
+    started_at: dt.datetime | None
+    finished_at: dt.datetime | None
+    session_date: dt.date | None
+    provisional: bool
+    funnel: dict[str, object] | None
+    detail: dict[str, object] | None
+    error: str | None
+
+
+def scan_run_view(row: SwScanRun) -> ScanRunView:
+    detail = row.detail if isinstance(row.detail, dict) else None
+    funnel = detail.get("funnel") if detail is not None else None
+    return ScanRunView(
+        run_id=int(row.id),
+        status=str(row.status),
+        requested_at=row.requested_at,
+        started_at=row.started_at,
+        finished_at=row.finished_at,
+        session_date=row.session_date,
+        provisional=bool(row.provisional),
+        funnel=funnel if isinstance(funnel, dict) else None,
+        detail=detail,
+        error=row.error,
+    )
+
+
+async def scan_run(session: AsyncSession, *, user_id: int, run_id: int) -> ScanRunView | None:
+    row = (
+        await session.execute(
+            select(SwScanRun).where(SwScanRun.user_id == user_id, SwScanRun.id == run_id)
+        )
+    ).scalar_one_or_none()
+    return None if row is None else scan_run_view(row)
+
+
+async def latest_scan_run(session: AsyncSession, *, user_id: int) -> ScanRunView | None:
+    """The newest run by request time — in flight, done or failed alike."""
+    row = (
+        await session.execute(
+            select(SwScanRun)
+            .where(SwScanRun.user_id == user_id)
+            .order_by(SwScanRun.requested_at.desc(), SwScanRun.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return None if row is None else scan_run_view(row)
+
+
+def _scanned_at(detail: object) -> dt.datetime | None:
+    if not isinstance(detail, dict):
+        return None
+    scan = detail.get("scan")
+    stamp = scan.get("scanned_at") if isinstance(scan, dict) else None
+    if not isinstance(stamp, str):
+        return None
+    try:
+        return dt.datetime.fromisoformat(stamp)
+    except ValueError:
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -300,8 +378,9 @@ async def setups(
     about the job.
     """
     as_of = on or await latest_setup_date(session, user_id)
+    last_scan = await latest_scan_run(session, user_id=user_id)
     if as_of is None:
-        return SetupsPage(None, (), None, None, None, None, None, None)
+        return SetupsPage(None, (), None, None, None, None, None, None, last_scan=last_scan)
 
     query = _setup_query(user_id, as_of)
     if setup is not None:
@@ -361,6 +440,10 @@ async def setups(
         max_open_positions=market.max_open_positions if market is not None else None,
         max_exposure_pct=market.max_exposure_pct if market is not None else None,
         new_entries_allowed=market.new_entries_allowed if market is not None else None,
+        as_of_provisional=(market is not None and bool(market.provisional))
+        or any(bool(row.provisional) for row, _, _ in found),
+        scanned_at=_scanned_at(detail),
+        last_scan=last_scan,
     )
 
 

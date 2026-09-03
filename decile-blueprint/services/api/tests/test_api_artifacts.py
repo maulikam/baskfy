@@ -299,6 +299,11 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # watchlist page shows yesterday's rows under a name. A read; the plan line a signal may
     # have become is named by id and not reachable from here.
     "/swing/signals": {"get"},
+    # SW15 (docs/swing/DECISIONS-SW SW15.1): "Scan now" — a money-free write that queues a
+    # detection run, and the run's state. During the session the worker detects on a bar built
+    # from live Kite quotes and labels every row provisional; `/swing/setups` carries the label.
+    "/swing/scan": {"post"},
+    "/swing/scan/{run_id}": {"get"},
     # NOT LISTED, and deliberately: nothing under `/api/public/v1`. The public tier's router is
     # not mounted while the data-redistribution review docs/11 §Compliance requires is
     # outstanding, so it is absent from this document by construction —

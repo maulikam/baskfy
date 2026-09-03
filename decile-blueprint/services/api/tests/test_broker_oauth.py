@@ -260,6 +260,13 @@ class TestSimulatedTokenNeverPoisonsTheRealSession:
             "services/worker/src/baskfy_worker/index_backfill.py",  # reader
             "services/worker/src/baskfy_worker/kite_session_cli.py",  # M58 bridge writer
             "services/worker/src/baskfy_worker/ops.py",  # reader
+            # SW18. The Celery binding builds the store to hand it to the nudge, and the
+            # nudge reads it. Reviewed and admitted as **readers that never write**:
+            # neither has a `.save(`, the token value never leaves `_token_state` (only a
+            # reason string does, written by hand rather than from the exception), and the
+            # message the job sends is asserted not to contain it.
+            "services/worker/src/baskfy_worker/tasks/celery_tasks.py",  # reader
+            "services/worker/src/baskfy_worker/tasks/kite_login_nudge.py",  # reader
         ], f"a new module opens the access-token store: {touching}"
 
     def test_the_router_only_writes_through_the_guarded_helper(self) -> None:

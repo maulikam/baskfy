@@ -20,10 +20,8 @@ from __future__ import annotations
 
 import datetime as dt
 import os
-import secrets
 from decimal import Decimal
 from typing import Annotated, Final
-from urllib.parse import urlencode
 
 from fastapi import APIRouter, Path, Query
 from pydantic import BaseModel, Field
@@ -42,11 +40,12 @@ from baskfy_api.broker_holdings_sync import (
     sync_holdings_into_portfolio,
 )
 from baskfy_api.broker_oauth import (
+    KITE_AUTHORIZE_URL,
     consume_oauth_state,
     dry_run_enabled,
     exchange_request_token,
     is_simulated_token,
-    register_oauth_state,
+    kite_login_url,
     simulated_token_storage_enabled,
     simulated_token_store_for,
     store_access_token,
@@ -75,7 +74,9 @@ router = APIRouter(prefix="/brokers", tags=["brokers"])
 #: HDFC / Kotak / ICICI / Groww stay unwired until their partner apps publish a stable
 #: public authorize URL we can register (Tree-4 leaf 4.3).
 _WIRED_AUTHORIZE: dict[str, str] = {
-    "zerodha": "https://kite.zerodha.com/connect/login",
+    # The constant, not the literal: `broker_oauth.kite_login_url` builds every Kite login
+    # URL in this codebase and the nudge task reaches for the same name.
+    "zerodha": KITE_AUTHORIZE_URL,
     "upstox": "https://api.upstox.com/v2/login/authorization/dialog",
     "angelone": "https://smartapi.angelbroking.com/publisher-login",
     "fyers": "https://api-t1.fyers.in/api/v3/generate-authcode",
@@ -628,45 +629,27 @@ async def connect_broker(
             ),
         )
 
-    state = secrets.token_urlsafe(24)
-    register_oauth_state(state=state, user_id=user_id, broker_id=broker_id)
-    # The fallback was `https://baskfy.com/brokers/callback`, which was wrong twice over and in
-    # ways that only surface at the end of a login the user has already committed to:
+    # `broker_oauth.kite_login_url` mints the state and builds the query. It used to be written
+    # out here, and SW18 needed the very same URL from a Celery task at 08:45 — a second copy of
+    # a query string whose two non-obvious rules (state inside `redirect_params`; no
+    # `redirect_uri`) are exactly the kind that get "tidied" apart. One builder, two callers.
     #
-    #   * `baskfy.com` (the apex) has no DNS record — only `staging.baskfy.com` resolves — so the
-    #     browser would be handed a redirect to a host that does not exist;
-    #   * `/brokers/callback` is not a route. The callback this service serves is
-    #     `/api/v1/brokers/callback`; `/brokers` is the *page*, and an unknown path under it just
-    #     bounces through the sign-in gate.
-    #
-    # Derived from `web_origin` rather than hard-coded, so a deployment that moves host keeps a
-    # coherent redirect without a second setting to remember. `BASKFY_BROKER_OAUTH_REDIRECT` still
-    # overrides, because the value must match what is registered in the Kite console exactly and
-    # only the operator knows what they registered.
-    # No `redirect_uri` is sent. Kite Connect uses the redirect REGISTERED against the app and
-    # ignores one supplied at login time, so passing it only looked like it was doing something.
-    # Where the value still matters is `_connect_configured()`, which compares the registered
-    # redirect against `web_origin` to decide whether a login started here can finish here —
-    # that check is the reason `BASKFY_BROKER_OAUTH_REDIRECT` exists, and it is unchanged.
-    # `state` travels in `redirect_params`, NOT as a top-level param. Kite ignores query keys it
-    # does not know and echoes back only what `redirect_params` carries, so the previous
-    # `{"state": state}` was dropped on the way out — every Baskfy-initiated login returned with
-    # no state and the callback refused it as one it had not started. Leaf 1.1.1 predicted this
-    # exactly ("`redirect_params` appears zero times in the repo") and it went unacted on until
-    # Maulik hit it. `redirect_uri` is likewise informational: Kite uses the app's REGISTERED
-    # redirect, not one supplied at login time.
-    query = urlencode(
-        {
-            "api_key": api_key,
-            "v": "3",
-            "redirect_params": urlencode({"state": state}),
-        }
+    # The fallback redirect was `https://baskfy.com/brokers/callback`, which was wrong twice over
+    # and in ways that only surface at the end of a login the user has already committed to: the
+    # apex has no DNS record, and `/brokers/callback` is not a route (it is
+    # `/api/v1/brokers/callback`). It is derived from `web_origin` now, so a deployment that moves
+    # host keeps a coherent redirect; `BASKFY_BROKER_OAUTH_REDIRECT` still overrides, because the
+    # value must match what is registered in the Kite console and only the operator knows that.
+    # Where it is read is `_connect_configured()` — nothing is sent to Kite, which uses the
+    # registered redirect and ignores one supplied at login time.
+    login = kite_login_url(
+        api_key=api_key, user_id=user_id, broker_id=broker_id, authorize_base=authorize_base
     )
     return ConnectOut(
         broker_id=broker_id,
         oauth_available=True,
-        redirect_url=f"{authorize_base}?{query}",
-        state=state,
+        redirect_url=login.url,
+        state=login.state,
         reason="",
     )
 

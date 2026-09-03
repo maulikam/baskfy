@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import os
 from collections.abc import Awaitable, Callable, Sequence
 from decimal import Decimal
 from pathlib import Path
@@ -22,6 +23,12 @@ from typing import Final
 from celery import Task, shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.broker_oauth import (
+    KiteLoginUrl,
+    kite_login_url,
+    token_encryption_key,
+    token_store_path,
+)
 from baskfy_api.screener import (
     WARM_CACHE_SCREEN_LIMIT,
     ScreenCache,
@@ -34,12 +41,13 @@ from baskfy_providers.factory import build_kite_provider, build_nse_provider
 from baskfy_providers.kite import KiteProvider
 from baskfy_providers.records import QuoteRecord
 from baskfy_providers.settings import get_provider_settings
+from baskfy_providers.tokens import AccessTokenStore
 from baskfy_worker import kite_session_cli, ops
 from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
 from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
 from baskfy_worker.db import run_checkpointed, run_in_session
 from baskfy_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
-from baskfy_worker.providers import build_cache, build_pipeline_dependencies
+from baskfy_worker.providers import build_cache, build_pipeline_dependencies, sole_user_id
 from baskfy_worker.settings import get_worker_settings
 from baskfy_worker.steps import StepOutcome
 from baskfy_worker.tasks.adjustments import instruments_with_actions, reprocess_instrument
@@ -55,6 +63,7 @@ from baskfy_worker.tasks.curated_dividends import run_curated_dividends
 from baskfy_worker.tasks.curated_metrics import run_curated_metrics
 from baskfy_worker.tasks.curated_rebalance_notify import run_curated_rebalance_notify
 from baskfy_worker.tasks.curated_sip import run_curated_sip_reminders
+from baskfy_worker.tasks.kite_login_nudge import NudgeWindow, run_login_nudge
 from baskfy_worker.tasks.portfolio_nav_job import run_portfolio_nav
 from baskfy_worker.tasks.purge_accounts import run_purge_accounts
 from baskfy_worker.tasks.resync import run_resync
@@ -901,5 +910,76 @@ def swing_catalyst_task(session_date: str | None = None) -> JsonObject:
             now=dt.datetime.now(tz=IST).replace(tzinfo=None),
         )
         return {"date": day.isoformat(), **report.as_detail()}
+
+    return run_in_session(_run)
+
+
+# --- SW18: the 08:45 Kite login nudge (docs/swing/DECISIONS-SW SW18.1) -------------------------
+
+KITE_LOGIN_NUDGE_TASK: Final = "baskfy.kite.login_nudge"
+
+
+def _login_url_for(user_id: int) -> Callable[[NudgeWindow], KiteLoginUrl]:
+    """A fresh one-time state and login URL per window, from the API's own builder.
+
+    The window is taken and ignored, deliberately: it exists so the *caller* cannot reuse the
+    08:45 state at 09:05. A state lives 30 minutes, and the 09:05 link has to still work when
+    somebody taps it at 09:20.
+    """
+
+    def build(window: NudgeWindow) -> KiteLoginUrl:
+        return kite_login_url(
+            api_key=os.environ.get("BASKFY_KITE_API_KEY", "").strip(), user_id=user_id
+        )
+
+    return build
+
+
+@shared_task(name=KITE_LOGIN_NUDGE_TASK)
+def kite_login_nudge_task(window: str = NudgeWindow.FIRST.value) -> JsonObject:
+    """08:45 and 09:05 IST: one login link per morning, only when there is no usable token.
+
+    Off unless ``BASKFY_KITE_LOGIN_NUDGE_ENABLED``; silent unless ``BASKFY_KITE_LOGIN_NUDGE_TO``
+    names a recipient. The marker that makes it once-per-morning lives beside the token blob,
+    which puts it on the state volume without a third setting to remember.
+    """
+    settings = get_worker_settings()
+    if not settings.kite_login_nudge_enabled:
+        return {"skipped": "BASKFY_KITE_LOGIN_NUDGE_ENABLED is false"}
+    user_id = sole_user_id()
+    if user_id is None:
+        # The state the link carries is bound to a user id and the callback refuses one that
+        # does not match the signed-in account, so there is no tenant to guess here.
+        return {"skipped": "no BASKFY_SOLE_USER_ID configured"}
+    if not os.environ.get("BASKFY_BROKER_OAUTH_STATE_PATH", "").strip():
+        # A `state` minted here lives in THIS process's memory unless a shared file backs it,
+        # and the API — a different container — is the one that has to consume it. Without the
+        # file the link starts a real Kite login and dies at the callback with "Invalid or
+        # expired OAuth state". Refusing is the same choice `routers/brokers.py` makes for a
+        # login it cannot finish (leaf 1.1.4): a wasted tap at 09:05 is worse than silence,
+        # and the /brokers page still works.
+        return {
+            "skipped": (
+                "BASKFY_BROKER_OAUTH_STATE_PATH is not set, so a state minted by the worker "
+                "could not be read by the API's callback and the login would fail at the end"
+            )
+        }
+    chosen = NudgeWindow(window)
+    token_path = token_store_path()
+    store = AccessTokenStore(token_path, token_encryption_key())
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        outcome = StepOutcome()
+        report = await run_login_nudge(
+            session,
+            outcome,
+            now=dt.datetime.now(tz=IST),
+            token_store=store,
+            login_url_for=_login_url_for(user_id),
+            to=settings.kite_login_nudge_to.strip(),
+            state_dir=token_path.parent,
+            window=chosen,
+        )
+        return report.as_detail()
 
     return run_in_session(_run)

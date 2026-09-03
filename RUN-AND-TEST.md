@@ -125,6 +125,28 @@ two tables; **it places nothing and makes no Kite call.**
 **It needs 125 sessions of history per name.** A database with a few weeks of bars produces no
 candidates and says so in the funnel rather than failing.
 
+### The morning Kite login link (SW18)
+
+At **08:45 IST** on a weekday, if no usable Kite token is stored for the day, one email arrives:
+subject "Kite login needed before 09:15", carrying a single Kite login link. **Tap it, log in on
+Zerodha's page, and you are done** — the token is stored by `/api/v1/brokers/callback` and the
+09:14 monitor picks it up. If the browser asks you to sign in to Baskfy on the way back, that is
+the last hop, not a failure. A link is good for 30 minutes and can be used once; if the first has
+expired, a **second and last** message follows at 09:05 with a fresh one. Nothing arrives when a
+token from this morning is already stored, on an NSE holiday, or with the flag off.
+
+The box needs `BASKFY_KITE_LOGIN_NUDGE_ENABLED=true`, `BASKFY_KITE_LOGIN_NUDGE_TO=<address>`,
+`BASKFY_SOLE_USER_ID`, `BASKFY_KITE_API_KEY` and `BASKFY_BROKER_OAUTH_STATE_PATH` on the shared
+state volume. The message never carries the api secret, the token or the encryption key, and
+there is nothing in it to reply to. **After a fresh login, `docker compose restart desk`** — the
+desk web service reads the token once, at construction (Q-SW13-1); the monitor does not need it.
+
+```bash
+cd decile-blueprint
+# what Beat runs at 08:45 / 09:05, by hand:
+uv run python -c "from baskfy_worker.tasks.celery_tasks import kite_login_nudge_task as t; print(t('first'))"
+```
+
 ### The swing book's morning (SW6)
 
 Two Beat entries and one desk process, all three dark by default:

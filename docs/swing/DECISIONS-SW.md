@@ -2284,3 +2284,43 @@ target stand alone. The 12-slug fixture rows still on the box are listed in STAT
 their predicate.
 
 | MD21 | **The gate's index is the NIFTY MidSmallcap 400, and the liquidity floor is ₹50 lakh.** (Maulik, 3 Sep.) `swing_index_slug` defaults to `nifty-mid-small-400` in both settings modules and in `run_detect_swing` (fallback `nifty-500`, then the reading is absent rather than wrong); his book trades mid- and small-caps, and a large-cap index says nothing about that tape. `sw_config.turnover_min_inr` on the box is ₹50,00,000 (audited change, 3 Sep) — the pack's ₹5 cr stays the code default because the floor is a per-book setting, not a rule. Effect measured the same evening: 402 → **605** liquid names, 9 → **13** candidates, and the 2 Sep gate RED (Nifty 500, close below both MAs) → **GREEN** (MidSmallcap 400, 10-day above 20-day, breadth 14.7 %) | SW17 |
+
+## SW18.1 — The link, never the credentials · Maulik, 3 Sep 2026 (decided in conversation)
+
+**Context.** Kite invalidates the access token at every trading day's pre-open. Something has to
+produce a new one before 09:15 or the 09:14 monitor idles and no plan line can be sent. The
+obvious automation is to store the Zerodha password and the TOTP seed on the box and have a job
+type them.
+
+**Decision.** Do not. At 08:45 IST on weekdays a job checks whether a usable token exists for
+that day and, if not, sends Maulik one message carrying the Kite login link. He taps it, logs in
+on Zerodha's own page, and the callback that already exists stores the token. A second check at
+09:05 sends the second and last message. `BASKFY_KITE_LOGIN_NUDGE_ENABLED` (default false) and
+`BASKFY_KITE_LOGIN_NUDGE_TO`.
+
+**Why not the credentials.** Two reasons, either sufficient. Zerodha's terms put the login
+credentials with the account holder and a stored TOTP seed defeats the second factor it exists to
+be — an automated login is not a thing they sanction. And the blast radius: password + seed on a
+disk is the entire trading account, transferable by one `cat`, in a repo whose own rails already
+say "never print, log, or commit secrets". The nudge's worst case is a wasted tap; the seed's
+worst case is the account. The reversible option, and the stricter security boundary when nothing
+in force changes — the two tie-breaks the root charter names.
+
+**Rejected alternatives.** (1) *A headless browser driving the login with stored credentials* —
+the blast radius above, plus a scraper against a broker's login page. (2) *A push notification
+with a confirm button* — STANDING-ANSWERS A2 forbids a channel that can act; a tap must never
+place an order, and a login link cannot. (3) *A second login endpoint on the worker* — a second
+minter of the `state` the callback validates is how the state got dropped from the authorize URL
+once already; `kite_login_url` is now the one builder and `routers/brokers.py` calls it too.
+(4) *A restart hook so the running desk picks the token up* — the desk tree is out of this
+module's scope and a restart hook is an order-capable process being bounced by a Celery task.
+Q-SW13-1 stands, and STATUS says so instead.
+
+**How to reverse.** `BASKFY_KITE_LOGIN_NUDGE_ENABLED=false` stops it dead. Deleting
+`tasks/kite_login_nudge.py`, its two Beat entries, the `baskfy.kite.*` route and the settings pair
+removes it; `broker_oauth.kite_login_url` stays, because the router uses it.
+
+**⚠ UNREVIEWED** on three details: the two clock times (08:45 / 09:05), the refusal when
+`BASKFY_BROKER_OAUTH_STATE_PATH` is unset (silence rather than a link that dies at the callback),
+and the marker living beside the token blob rather than in a table.
+

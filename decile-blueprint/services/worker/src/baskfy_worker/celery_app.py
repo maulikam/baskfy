@@ -72,6 +72,10 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # (the API publishes `scan_now` directly), and `test_celery_config.py` holds them equal.
     "baskfy.swing.scan_now": {"queue": QUEUE_COMPUTE},
     "baskfy.swing.scan_sweep": {"queue": QUEUE_DEFAULT},
+    # SW18: the 08:45 / 09:05 Kite login nudge. The compute queue, per the module's brief —
+    # it is the queue the rest of the morning's swing jobs run on, so the nudge cannot arrive
+    # after the premarket work it exists to make possible.
+    "baskfy.kite.*": {"queue": QUEUE_COMPUTE},
     # SC2: curated-basket EOD metrics. Compute-bound over price history; same queue as factors.
     "baskfy.cb.*": {"queue": QUEUE_COMPUTE},
     # PORTFOLIO_REDESIGN.md §5.1. The nightly EOD NAV job values every user's holdings against
@@ -324,6 +328,26 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "task": "baskfy.swing.scan_sweep",
         "schedule": dt.timedelta(seconds=60),
         "options": {"queue": QUEUE_DEFAULT},
+    },
+    # --- SW18: the morning Kite login nudge (docs/swing/DECISIONS-SW SW18.1) ----------
+    #
+    # Kite kills the access token every morning and no password or TOTP seed may live on this
+    # box, so the only automatable part of the login is the reminder. 08:45 leaves half an hour
+    # before the pre-open matters; 09:05 is ten minutes before the open and is the last word.
+    # Each sends at most one message per session date, only when no usable token is stored, and
+    # only with `BASKFY_KITE_LOGIN_NUDGE_ENABLED` true and a recipient configured. On a holiday
+    # the NSE calendar stops it — `mon-fri` alone does not.
+    "kite-login-nudge": {
+        "task": "baskfy.kite.login_nudge",
+        "schedule": crontab(hour=8, minute=45, day_of_week="mon-fri"),
+        "kwargs": {"window": "first"},
+        "options": {"queue": QUEUE_COMPUTE},
+    },
+    "kite-login-nudge-second": {
+        "task": "baskfy.kite.login_nudge",
+        "schedule": crontab(hour=9, minute=5, day_of_week="mon-fri"),
+        "kwargs": {"window": "second"},
+        "options": {"queue": QUEUE_COMPUTE},
     },
     # --- T8.3: one email per REBALANCE_AVAILABLE (payload.notified_at) -----------
     "cb-rebalance-notify": {

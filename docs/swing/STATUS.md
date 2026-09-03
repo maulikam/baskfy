@@ -3,7 +3,7 @@
 The status page for the swing run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: code complete; `beb5ff5` deployed to the box (SW13-run, 3 Sep 2026), the desk vhost waiting on one DNS record (NEEDS-MAULIK S4); this commit not yet deployed.** Started 2 Sep 2026 on branch `developer`; SW12 closed 3 Sep 2026. The report is `../../SW-FINAL-REPORT.md`; what needs Maulik's hands is `../../NEEDS-MAULIK.md` § Swing.
+**Run state: code complete; `ed382e8` deployed to the box (deploy #9, 3 Sep 2026) — verify-swing green, the box's Kite reads share one limit, the monitor armed for 09:14 on 4 Sep.** Started 2 Sep 2026 on branch `developer`; SW12 closed 3 Sep 2026. The report is `../../SW-FINAL-REPORT.md`; what needs Maulik's hands is `../../NEEDS-MAULIK.md` § Swing.
 
 ## Module ledger
 
@@ -2457,6 +2457,53 @@ step under SSM (it is idempotent, so re-running the script is safe).
 
 ---
 
+### Deploy #9 — `ed382e8` (SW21, the shared read limit), 3 Sep 22:4x IST
+
+Images built from a clean worktree of `ed382e8` (the main tree carries another session's six
+untracked files under `apps/web/src`, and the web bundle is built from that context), pushed at
+22:45 — web 107 MB, py 225 MB, desk 212 MB. `baskfy-py:ed382e8` is byte-identical to `0b34f00`'s:
+SW21 changes no screener code.
+
+**A worktree cannot run `deploy-swing.sh`, and the first attempt proved it.** `.terraform/` is
+untracked, so `terraform output -raw archive_bucket` printed "No outputs found" and the bucket
+name became a Terraform warning that `aws s3 cp` refused. Nothing reached the box; the tags were
+still `0b34f00`. Re-run from the main tree (`BASKFY_ARCHIVE_BUCKET=baskfy-archive` passed
+explicitly as well) — `compose.prod.yml` there is byte-identical to the pushed commit, so no
+uncommitted work could ride along. **Build in a worktree, deploy from the main tree.**
+
+Step 4 behaved this time — deploy #8's silent `compose run --rm seed` under SSM did not recur:
+`exchange: 1 · index_def: 15 · plan: 3 · screen: 6 · cb_collection: 4 · sw_config: 1 ·
+sw_config_sleeve: 1`, all idempotent. Alembic stays `0033_swing_scan_now` = head (SW21 adds no
+migration). All ten services on `ed382e8`.
+
+`verify-swing.sh` → **SWING OK**, with the two new checks green on their first real run:
+`desk /status reports read_limiter shared`, and `BASKFY_REDIS_URL is set` in **both** the desk and
+swing-monitor containers. `/status` reads
+`{"dry_run":true,"force_ipv4":true,"read_limiter":"shared","authed":true,...}`.
+
+**The probe, and this is the one that matters** — four `quote` slots taken from *each* container at
+the same moment, sorted by departure:
+
+```
+monitor 1788455930.717   desk 1788455934.717  (+1.000s)
+monitor 1788455931.717   monitor 1788455935.717  (+1.000s)
+desk    1788455932.717   desk 1788455936.717  (+1.000s)
+monitor 1788455933.717   desk 1788455937.717  (+1.000s)
+```
+
+Eight departures, every gap **1.000 s**, alternating between the two containers: one clock, one
+1 req/s cap for the box. On `0b34f00` the same eight would have gone out in ~3 s at 2 req/s.
+`baskfy:ratelimit:kite:quote` is the only limiter key in Redis afterwards, and it expires on its
+own. Both containers were already carrying `BASKFY_REDIS_URL=redis://redis:6379/0` through
+`env_file: [.env.staging]`, so the deploy switched sharing on by itself; the compose entry added
+in SW21 pins it in the file that describes the box.
+
+Rails after the deploy: `DRY_RUN=true`, `BASKFY_SWING_EXECUTION_ENABLED=false`,
+`BASKFY_SWING_TIMING_PROBE=false`; monitor and pre-open flags `true` as the operator set them;
+`swing-monitor: flag ON; next run Fri 2026-09-04 09:14 IST`; desk authed, cash ₹1,07,58,766.70.
+
+---
+
 ## SW20 — every Kite read inside a limit ✅
 
 The order path has been limited since the gateway existed (9/s, 380/min, 2,900/day). The reads
@@ -2561,14 +2608,12 @@ and this algorithm, which is a change to the pipeline. SW21.1 says how.
 
 Final state, 3 Sep 2026. Each item names who closes it.
 
-- **SW21 is not on the box.** The box runs `0b34f00` (deploy #8), which has SW20's per-process
-  limiter and no `BASKFY_REDIS_URL` in the desk containers, so `verify-swing.sh` reports its two
-  new checks as **FAIL** — "desk read limiter is not shared" and "BASKFY_REDIS_URL is unset" —
-  until deploy #9 ships this commit. Nothing else in the verify changes, and the desk trades
-  exactly as it did meanwhile.
-- **The box runs `beb5ff5`** (SW13-run), not this commit: SW12's gate rewrite, SW14's hub
-  actions and `/me/swing` are not deployed. Same five commands, one more `aws sso login`
-  (NEEDS-MAULIK SW-1). `desk.staging.baskfy.com` is NXDOMAIN until the GoDaddy A record (S4).
+- **The box runs `ed382e8`** (deploy #9, 3 Sep 2026) — this commit, so SW12's gate rewrite,
+  SW14's hub actions, `/me/swing`, SW20's read limits and SW21's shared limit are all live, and
+  `desk.staging.baskfy.com` serves with its own certificate (S4 closed). A further deploy still
+  needs an `aws sso login` by hand (NEEDS-MAULIK SW-1); build the images in a clean worktree,
+  run `deploy-swing.sh` from the main tree — a worktree has no `.terraform/` and cannot resolve
+  the archive bucket.
 - **No live morning has run anything** — not the premarket scan, the monitor, the catalyst feed,
   the probe or the evening on real quotes. `02` §3.2 is that morning (SW-5). The catalyst
   fixtures are hand-written, not captured; re-record on the first session that reaches

@@ -149,9 +149,7 @@ class TestSchedule:
         assert entry.day_of_week == {1, 2, 3, 4, 5}
         assert entry.hour == {18}
         assert entry.minute == {15}
-        assert min(entry.minute) < min(nightly.minute), (
-            "the bhavcopy must not queue behind the chain"
-        )
+        assert _earliest(entry) < _earliest(nightly), "the bhavcopy must not queue behind the chain"
 
     def test_the_catch_up_sweep_runs_before_the_market_opens(self) -> None:
         """M84: a session nobody noticed was missing is re-run at 06:45, not tomorrow evening.
@@ -248,6 +246,18 @@ class TestTheProducerRoutesWhereTheWorkerListens:
         actual = {name: _routed_queue(producer, name) for name in expected}
         assert actual == expected
         assert set(actual.values()) <= set(QUEUES), "published onto a queue no worker consumes"
+
+
+def _earliest(entry: crontab) -> int:
+    """The first minute of the hour a crontab fires on.
+
+    Celery ships `crontab.minute` untyped, so mypy sees `object` and `min()` refuses it. Narrowed
+    here once, rather than at each reading, and the narrowing is checked: a Celery release that
+    changes the representation fails this helper instead of silently comparing nothing.
+    """
+    minutes = entry.minute
+    assert isinstance(minutes, (set, frozenset)), f"crontab.minute is now a {type(minutes)}"
+    return min(int(minute) for minute in minutes)
 
 
 def _routed_queue(app: Celery, task_name: str) -> str:

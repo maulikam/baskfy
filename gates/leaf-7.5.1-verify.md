@@ -6,12 +6,12 @@ Scope: run the suites. No `src/` edits except to fix what the suites catch, and 
 - [x] G1: Full web unit suite green, with file and test counts stated.
   CHECK: cd decile-blueprint/apps/web && pnpm run test 2>&1 | tail -12
   EXPECT: /Test Files .* passed/
-  EVIDENCE: Duration  19.27s (transform 2.87s, setup 19.95s, collect 12.92s, tests 16.40s, environment 95.61s, prepare 9.18s) | [ELIFECYCLE] Test failed. See above for more details.
+  EVIDENCE: Test Files  128 passed (128) | Tests  2169 passed (2169) | Duration 27.56s — re-run 4 Sep 2026 under M85; the earlier ELIFECYCLE evidence line was left behind by a failing run and is superseded.
 
-- [ ] G2: `pnpm run lint` (tsc + eslint + shadowed routes) exits 0.
+- [x] G2: `pnpm run lint` (tsc + eslint + shadowed routes) exits 0.
   CHECK: cd decile-blueprint/apps/web && pnpm run lint 2>&1 | tail -14
   EXPECT: /^$|0 errors/
-  EVIDENCE: pending
+  EVIDENCE: ✖ 1 problem (0 errors, 1 warning) | ok — 30 redirected source(s), no page file shadowed by any of them
 
 - [x] G3: Playwright runs at all in this environment — the prior run's ABANDON is either
       overturned or re-established with a fresh reason.

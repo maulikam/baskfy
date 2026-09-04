@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+from collections.abc import Iterator
 from decimal import Decimal
 from types import SimpleNamespace
-from typing import NoReturn
+from typing import NoReturn, cast
 
 import polars as pl
 import pytest
@@ -416,8 +417,11 @@ class TestTheFallbackJoinsTheChainsTransaction:
             )
 
         monkeypatch.setattr("baskfy_worker.bhavcopy_backfill.session_scope", explode)
+        # `cast` rather than a real session: the point of this test is that the function does
+        # its reads on whatever it was handed and opens nothing of its own, and a double that
+        # answers two queries with nothing proves that where a live session could not.
         report = await backfill_bars_from_bhavcopy(
-            _NoBhavcopy(), WINDOW, session=_SessionWithNoInstruments()
+            _NoBhavcopy(), WINDOW, session=cast(AsyncSession, _SessionWithNoInstruments())
         )
         # No bhavcopy port, so it stops at the setup check — having done its reads on our session.
         assert "setup" in report.failures
@@ -492,5 +496,5 @@ class _EmptyResult:
     def all(self) -> list[object]:
         return []
 
-    def __iter__(self):  # noqa: ANN204 - a test double for SQLAlchemy's result iteration
+    def __iter__(self) -> Iterator[object]:
         return iter(())

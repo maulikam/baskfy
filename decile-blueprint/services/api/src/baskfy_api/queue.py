@@ -66,6 +66,7 @@ PRODUCER_TASK_ROUTES: dict[str, dict[str, str]] = {
     # SW15: the swing book's "Scan now" — the one swing task this producer publishes. The
     # worker's table names the same queue; the sweep beside it is Beat's, never published here.
     "baskfy.swing.scan_now": {"queue": "compute"},
+    "baskfy.swing.scan_after_login": {"queue": "compute"},
     "baskfy.swing.scan_sweep": {"queue": "default"},
     # SW18: the 08:45 / 09:05 Kite login nudge. Beat's, never published from here — mirrored
     # only because the anti-drift test walks every task the worker registers.

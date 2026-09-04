@@ -181,39 +181,85 @@ class TestTheCatchUpTaskRunsThemOldestFirst:
     """No database: what these assert is ordering and bounding, not a query."""
 
     @staticmethod
-    def _arrange(monkeypatch: pytest.MonkeyPatch, missing: list[dt.date]) -> list[str]:
+    def _arrange(
+        monkeypatch: pytest.MonkeyPatch,
+        missing: list[dt.date],
+        *,
+        plan_raises: Exception | None = None,
+    ) -> tuple[list[str], list[str]]:
+        """Returns the dates the chain ran and the dates a swing plan was built for."""
         ran: list[str] = []
+        planned: list[str] = []
         monkeypatch.setattr(celery_tasks, "run_in_session", lambda _fn: missing)
-        monkeypatch.setattr(
-            celery_tasks,
-            "nightly_pipeline",
-            lambda trade_date: ran.append(trade_date) or {"trade_date": trade_date},
-        )
-        return ran
+
+        def _record(trade_date: str) -> dict[str, object]:
+            ran.append(trade_date)
+            return {"trade_date": trade_date}
+
+        def _plan(trade_date: str) -> dict[str, object]:
+            if plan_raises is not None:
+                raise plan_raises
+            planned.append(trade_date)
+            return {"date": trade_date}
+
+        monkeypatch.setattr(celery_tasks, "nightly_pipeline", _record)
+        monkeypatch.setattr(celery_tasks, "swing_eod_task", _plan)
+        return ran, planned
 
     def test_it_runs_the_oldest_first(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Sessions land in the order they happened, so each factor window sees a full history."""
-        ran = self._arrange(monkeypatch, [WED, THU])
+        ran, _ = self._arrange(monkeypatch, [WED, THU])
         result = celery_tasks.session_catch_up(max_sessions=2)
 
         assert ran == [WED.isoformat(), THU.isoformat()]
         assert result["status"] == "ran"
         assert result["remaining"] == []
 
+    def test_a_caught_up_session_also_gets_its_swing_plan(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """M85, closing M84's own open item — and the half Maulik actually reads.
+
+        The chain's twelfth step detects the day's setups; `baskfy.swing.eod` is what turns them
+        into a plan, and it existed only as a 21:05 Beat entry. So a session caught up at 06:45
+        or after a 1pm login landed every bar and every setup and no plan, and the swing book
+        stayed on the last session that had one. Each plan follows *its own* chain, in order,
+        because the plan is built from that day's candidates and that day's gate.
+        """
+        ran, planned = self._arrange(monkeypatch, [WED, THU])
+        result = celery_tasks.session_catch_up(max_sessions=2)
+
+        assert planned == [WED.isoformat(), THU.isoformat()]
+        assert planned == ran, "a plan was built for a day whose chain did not run"
+        assert result["swing_plans"] == [{"date": WED.isoformat()}, {"date": THU.isoformat()}]
+
+    def test_a_plan_that_fails_does_not_undo_a_session_that_landed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Fail soft. The bars are the expensive part and they are already committed."""
+        ran, _ = self._arrange(monkeypatch, [WED], plan_raises=RuntimeError("no sleeve"))
+        result = celery_tasks.session_catch_up(max_sessions=1)
+
+        assert ran == [WED.isoformat()], "the chain still ran"
+        assert result["status"] == "ran"
+        assert result["swing_plans"] == [{"date": WED.isoformat(), "error": "RuntimeError"}]
+
     def test_it_is_bounded_and_says_what_it_left(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Two hours a chain: an unbounded sweep would hold a worker slot until the open."""
-        ran = self._arrange(monkeypatch, [MON, TUE, WED, THU])
+        ran, planned = self._arrange(monkeypatch, [MON, TUE, WED, THU])
         result = celery_tasks.session_catch_up(max_sessions=2)
 
         assert ran == [MON.isoformat(), TUE.isoformat()]
+        assert planned == [MON.isoformat(), TUE.isoformat()], "the bound covers the plans too"
         assert result["remaining"] == [WED.isoformat(), THU.isoformat()]
 
     def test_an_ordinary_morning_runs_nothing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The 06:45 sweep and every login fire this; when nothing is missing it must be free."""
-        ran = self._arrange(monkeypatch, [])
+        ran, planned = self._arrange(monkeypatch, [])
         result = celery_tasks.session_catch_up()
 
         assert ran == []
+        assert planned == [], "a plan was built for a session nobody was missing"
         assert result["status"] == "nothing to do"
         assert result["sessions"] == []
 
@@ -250,12 +296,17 @@ class TestTheScheduledBhavcopyJob:
         monkeypatch.setattr(celery_tasks, "run_in_session", lambda _fn: True)
         monkeypatch.setattr(celery_tasks, "backfill_bars_from_bhavcopy", _never_called)
 
+        # `cls(...)` rather than `dt.datetime(...)`: an override may not widen its return type,
+        # and `datetime.now` is typed as returning `Self`. Constructing through `cls` keeps the
+        # promise and still produces a real datetime, which is what the task goes on to use.
         class _Noon(dt.datetime):
             @classmethod
-            def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:
-                return dt.datetime(2026, 9, 4, 12, 0, tzinfo=tz)
+            def now(cls, tz: dt.tzinfo | None = None) -> _Noon:
+                return cls(2026, 9, 4, 12, 0, tzinfo=tz)
 
-        monkeypatch.setattr(celery_tasks.dt, "datetime", _Noon)
+        # `dt` here, not `celery_tasks.dt`: it is the same module object, and reaching for it
+        # through another module's import is the implicit re-export house rule 3 rules out.
+        monkeypatch.setattr(dt, "datetime", _Noon)
         result = celery_tasks.bhavcopy_ingest()
         assert result["status"] == "skipped"
         assert "not published yet" in result["reason"]

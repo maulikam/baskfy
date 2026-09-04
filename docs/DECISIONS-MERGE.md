@@ -6515,3 +6515,96 @@ suite**, which is the only responsible way to test a deadlock.
 is not better); committing the chain before the fallback (destroys the all-or-nothing property
 the orchestrator is built on); leaving the fallback out of the chain and running it only as the
 18:15 job (the chain would then still be Kite-only when it runs on a day the job missed).
+
+
+## M85 — the login is the trigger, and Kite's ceiling gets a lane under it ⚠ UNREVIEWED
+
+**What Maulik reported, 4 Sep 2026.** "The system is coded such that I would have to log in a day
+early, before the market opens, but my sleep schedule is totally different — I wake at 1pm,
+sometimes 2pm, sometimes 3pm. Once I log in I always have the older dataset and everything lags.
+The swing data is lagging, so there is a price differentiation and I am not able to buy any stock
+which is in swing." He also quoted Kite's limits back at us: 500 instruments per `/quote`, 1,000
+per `/quote/ohlc` and `/quote/ltp`, and **3 HTTP requests per second across all endpoints
+combined**, HTTP 429 beyond it.
+
+### M85.1 — a verified login publishes two refreshes, not one
+
+M84 made a stored token publish `baskfy.pipeline.session_catch_up`. That heals a session that
+never landed, which is a *history* problem. It does nothing for the 1pm problem, which is a
+*today* problem: the last published session is yesterday, correctly, and the swing book's entry
+levels are yesterday's closes while the price has already moved.
+
+The callback now publishes `baskfy.swing.scan_after_login` beside it. SW15's "Scan now" already
+knew how to detect on today so far — `decide_session` returns provisional inside the cash session
+and builds a bar per liquid name from the live quote — so this adds a trigger, not a detector.
+`request_login_scan` creates the `sw_scan_run` row with `source="broker-login"` and hands the
+running task's own id to `request_scan` through `_CurrentTaskMarker`, so no second Celery message
+is published for a scan that is already executing. Outside 09:15–15:30 IST it records nothing and
+says why: the published data is then the honest answer and a provisional row would be a lie.
+
+**Why the two are separate tasks.** `session_catch_up` routes to `default` and the scan to
+`compute`, and the box's worker takes `compute,backtest,default` with `--concurrency=2`. That is
+the parallelism Maulik asked for, and it is queue routing rather than threads: an hour-long chain
+and a two-minute scan must not be the same slot, and Celery already had the split.
+
+### M85.2 — the ceiling is combined, so every Kite read waits on one clock
+
+The deployment had `baskfy:ratelimit:kite` (a token bucket, pipeline) and the desk's three
+per-family departure clocks, and `broker_holdings.py` called `api.kite.trade` with bare `httpx`,
+invisible to both. Three limiters that did not know about each other, in front of one 3 req/s
+allowance.
+
+**Taken:** one departure clock, `baskfy:ratelimit:kite:read` at 3 req/s, that every Kite read in
+the deployment waits on. The API's holdings read goes through `build_kite_provider` instead of
+its own `httpx` call; the desk's `DeskLimits.slot` takes a `read` slot before its family's; the
+provider's Kite limiter is a `RedisCallSpacer` rather than a token bucket, because a bucket
+grants its full capacity after idle time and that burst is exactly what a 429 is.
+
+**Rejected:** keeping the per-endpoint caps alone (legal by Kite's first reading, a 429 by its
+second — `general` alone would send nine a second); a token bucket with capacity 1 (equivalent in
+steady state and still bursty across a key expiry); per-container limits divided by the container
+count (silently wrong the moment a container count changes, and nothing would notice).
+
+**Cost, stated plainly.** The desk's page reads used to space at 9 req/s and now space at 3. Three
+of its tests asserted the old floors and were rewritten to assert the new one, with the reason;
+`test_one_slow_family_never_starves_another` asserted *zero* wait behind a backfill, which is no
+longer available without exceeding the ceiling, and now asserts the bound that replaces it — one
+departure, never a queue.
+
+### M85.3 — a bulk lane, because one clock with no lanes made the problem worse
+
+M85.2 alone would have shipped a regression that reads exactly like the bug it was fixing. The
+1pm login publishes the catch-up chain — thousands of `historical_data` calls, an hour or more —
+and the interactive reads the person is waiting for. On a single shared clock the chain reserves
+every departure for that hour, and `RedisCallSpacer` refuses a wait past its budget, so the
+holdings read and the swing scan would **fail** and the product would be more stale after logging
+in than before.
+
+**Taken:** `KiteLane`. Both lanes end on the ceiling, so the broker's limit is one number for the
+whole box. `BULK` takes `baskfy:ratelimit:kite:bulk` at 2 req/s *first*, and `LayeredCallSpacer`
+holds the order. The property is arithmetic, not priority: while bulk departs at 2/s under a 3/s
+ceiling, the shared clock is drained faster than bulk fills it, so it never runs ahead of `now`
+and an interactive caller finds a slot free. `ProviderSettings` refuses a bulk rate at or above
+the ceiling at construction, because the symptom of getting it wrong is not an error — it is a
+login-time read quietly waiting behind an hour of backfill.
+
+`build_provider_stack` (the nightly chain, every backfill) is the only `BULK` caller. Everything
+else is `INTERACTIVE`, which is also the default: a call site nobody has classified is throttled
+correctly and can never be the one starving somebody, and bulk has to be asked for.
+
+**Rejected:** a priority queue in the limiter (Redis has no such primitive without a sorted-set
+scheduler and a fairness policy — a great deal of machinery to reproduce what one number does);
+pausing the catch-up while a login-time scan runs (a chain that stops mid-transaction is M84.1
+all over again); giving interactive a *higher* rate than bulk on separate clocks with no shared
+ceiling (two lanes and no limit, which is how an API key is lost).
+
+**Measured, not asserted.** `packages/providers/tests/test_kite_lanes.py::TestTheHeadroomIsReal`
+runs a backfill thread and an interactive caller against the real Redis on one wall clock: twelve
+interactive calls each waited under one ceiling interval while the backfill held ~1.7 req/s, and
+eighteen mixed reads still took at least `17/3` s — so the headroom is real and the ceiling holds.
+
+**Reversal.** Set `BASKFY_KITE_BULK_RATE_LIMIT_PER_SECOND` to just under
+`BASKFY_KITE_RATE_LIMIT_PER_SECOND` and the lane is effectively gone without a deploy; delete
+`KiteLane`, `LayeredCallSpacer` and the `lane=` argument and every caller is back on the single
+ceiling clock. M85.1's trigger reverses on its own line — remove `SWING_SCAN_AFTER_LOGIN_TASK`
+from `_queue_post_login_refresh`.

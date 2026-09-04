@@ -44,8 +44,11 @@ from baskfy_providers.records import QuoteRecord
 from baskfy_worker.celery_app import BEAT_SCHEDULE, QUEUE_COMPUTE, QUEUE_DEFAULT, TASK_ROUTES
 from baskfy_worker.steps import StepOutcome
 from baskfy_worker.tasks.celery_tasks import (
+    SWING_SCAN_AFTER_LOGIN_TASK,
     SWING_SCAN_NOW_TASK,
     SWING_SCAN_SWEEP_TASK,
+    request_login_scan,
+    swing_scan_after_login_task,
     swing_scan_now_task,
     swing_scan_sweep_task,
 )
@@ -688,6 +691,60 @@ class TestTheSweep:
         assert sent == [desk]
 
 
+class TestTheLoginTrigger:
+    async def test_an_afternoon_login_creates_a_provisional_scan_once(
+        self, session: AsyncSession
+    ) -> None:
+        dates = await _sessions_before(session, TODAY, 140)
+        user_id = await _user(session)
+        await _write_flag_but_the_last_bar(session, "LOGINSCAN", dates)
+        requested = dt.datetime(2026, 8, 18, 8, 12, tzinfo=dt.UTC)
+
+        result = await request_login_scan(
+            session,
+            user_id=user_id,
+            market_now=THIRTEEN_FORTY_TWO,
+            requested_at=requested,
+            task_id="login-task-1",
+        )
+
+        run_id = result["run_id"]
+        assert isinstance(run_id, int)
+        run = await _run(session, run_id)
+        assert run.status == QUEUED
+        assert run.provisional is False
+        assert run.task_id == "login-task-1"
+        assert run.detail == {"source": "broker-login"}
+
+        duplicate = await request_login_scan(
+            session,
+            user_id=user_id,
+            market_now=THIRTEEN_FORTY_TWO,
+            requested_at=requested + dt.timedelta(seconds=1),
+            task_id="login-task-2",
+        )
+        assert duplicate["skipped"] == "scan-in-flight"
+        assert duplicate["run_id"] == run.id
+
+    async def test_after_close_login_defers_to_the_published_data_path(
+        self, session: AsyncSession
+    ) -> None:
+        dates = await _sessions_before(session, TODAY, 140)
+        user_id = await _user(session)
+        await _write_flag_but_the_last_bar(session, "LOGINLATE", dates)
+
+        result = await request_login_scan(
+            session,
+            user_id=user_id,
+            market_now=SIX_PM,
+            requested_at=dt.datetime(2026, 8, 18, 12, 30, tzinfo=dt.UTC),
+            task_id="login-task-late",
+        )
+
+        assert result["skipped"] == REASON_PUBLISHED
+        assert "run_id" not in result
+
+
 class TestTheCeleryBinding:
     def test_scan_now_is_named_and_routed_to_the_compute_queue_with_no_beat_entry(self) -> None:
         assert SWING_SCAN_NOW_TASK == "baskfy.swing.scan_now"
@@ -696,6 +753,14 @@ class TestTheCeleryBinding:
         assert swing_scan_now_task.acks_late is True
         assert TASK_ROUTES[SWING_SCAN_NOW_TASK]["queue"] == QUEUE_COMPUTE
         assert all(entry["task"] != SWING_SCAN_NOW_TASK for entry in BEAT_SCHEDULE.values())
+
+    def test_login_scan_is_a_separate_compute_task_with_no_beat_entry(self) -> None:
+        assert SWING_SCAN_AFTER_LOGIN_TASK == "baskfy.swing.scan_after_login"
+        assert swing_scan_after_login_task.name == SWING_SCAN_AFTER_LOGIN_TASK
+        assert swing_scan_after_login_task.queue == QUEUE_COMPUTE
+        assert swing_scan_after_login_task.acks_late is True
+        assert TASK_ROUTES[SWING_SCAN_AFTER_LOGIN_TASK]["queue"] == QUEUE_COMPUTE
+        assert all(entry["task"] != SWING_SCAN_AFTER_LOGIN_TASK for entry in BEAT_SCHEDULE.values())
 
     def test_the_sweep_runs_every_minute_on_the_default_queue(self) -> None:
         assert swing_scan_sweep_task.name == SWING_SCAN_SWEEP_TASK

@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Iterator
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 from api_helpers import request_stub
@@ -354,7 +354,7 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
             simulated_exchange_reasons(api_key="", api_secret="")
         )
 
-    async def test_a_verified_token_starts_the_session_catch_up(
+    async def test_a_verified_token_starts_both_session_refreshes(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """M84, ask 1: logging in is what tells this deployment to go and get its data.
@@ -382,9 +382,14 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
         )
 
         assert result.connected is True
-        queue.send_task.assert_called_once_with(brokers_router.SESSION_CATCH_UP_TASK, [])
+        assert queue.send_task.call_args_list == [
+            call(brokers_router.SESSION_CATCH_UP_TASK, []),
+            call(brokers_router.SWING_SCAN_AFTER_LOGIN_TASK, [42]),
+        ]
         assert brokers_router.SESSION_CATCH_UP_TASK == "baskfy.pipeline.session_catch_up"
+        assert brokers_router.SWING_SCAN_AFTER_LOGIN_TASK == "baskfy.swing.scan_after_login"
         assert "caught up" in result.note
+        assert "live swing scan" in result.note
 
     async def test_a_simulated_login_never_starts_it(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """No real session, nothing to fetch with: the sweep would only fail slower."""

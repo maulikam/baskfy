@@ -8,7 +8,9 @@ to be able to print (Prompt 2 acceptance criterion 4) and what docs/03's ``local
 
 from __future__ import annotations
 
+from enum import StrEnum
 from pathlib import Path
+from typing import Final
 
 import boto3
 import redis
@@ -19,12 +21,50 @@ from baskfy_providers.fixtures import FixtureProvider, default_fixture_dir
 from baskfy_providers.kite import KiteProvider, KiteRuntime
 from baskfy_providers.nse import NSEProvider, NSERuntime, build_http_client
 from baskfy_providers.ports import HealthReporting
-from baskfy_providers.ratelimit import RedisTokenBucket, TokenBucketConfig
+from baskfy_providers.ratelimit import (
+    CallSpacingConfig,
+    LayeredCallSpacer,
+    RateLimiter,
+    RedisCallSpacer,
+    RedisTokenBucket,
+    TokenBucketConfig,
+)
 from baskfy_providers.retry import RetryHooks
 from baskfy_providers.settings import ProviderSettings, get_provider_settings
 
 #: Where the local archive lives when no S3 bucket is configured.
 LOCAL_ARCHIVE_DIRNAME = ".archive"
+
+#: Kite's combined read ceiling, as a Redis departure clock. Every Kite read in this deployment
+#: — API, worker, desk — waits on this one key, which is what makes "3 req/s" a property of the
+#: box rather than a hope about each container. The desk names the same key from its own side
+#: (`kite-momentum-rebalancer/app/core/kite_limits.py`, family ``read``).
+KITE_READ_CLOCK_KEY: Final = "baskfy:ratelimit:kite:read"
+
+#: The bulk lane's own clock, taken *before* the ceiling. See `LayeredCallSpacer`: the gap
+#: between this rate and the ceiling is the headroom a login-time read finds free.
+KITE_BULK_CLOCK_KEY: Final = "baskfy:ratelimit:kite:bulk"
+
+#: How long an interactive caller waits for a slot before giving up. Generous, because with the
+#: bulk lane in place the wait is a fraction of a second and a real wait this long means the
+#: ceiling is genuinely oversubscribed — at which point failing is better than hanging a page.
+INTERACTIVE_MAX_WAIT_SECONDS: Final = 30.0
+
+#: And how long a bulk caller waits. Much longer: a backfill has nowhere to be, and a bulk call
+#: that gives up costs a bar that then has to be caught up on another day.
+BULK_MAX_WAIT_SECONDS: Final = 300.0
+
+
+class KiteLane(StrEnum):
+    """Which side of Kite's combined ceiling a provider is built for.
+
+    ``INTERACTIVE`` is the default deliberately: it is the lane that only ever takes the ceiling
+    clock, so a call site nobody has classified is throttled correctly and is never the one
+    starving somebody. A caller has to *ask* to be bulk.
+    """
+
+    INTERACTIVE = "interactive"
+    BULK = "bulk"
 
 
 def build_rate_limiter(
@@ -46,6 +86,68 @@ def build_rate_limiter(
         key,
         TokenBucketConfig(rate_per_second=rate_per_second, capacity=rate_per_second),
     )
+
+
+def build_spaced_rate_limiter(
+    settings: ProviderSettings,
+    key: str,
+    rate_per_second: float,
+    *,
+    max_wait_seconds: float = INTERACTIVE_MAX_WAIT_SECONDS,
+) -> RedisCallSpacer | None:
+    """A shared no-burst request clock, or ``None`` when Redis is unreachable.
+
+    Kite's limit is shared across endpoints and containers. A token bucket permits its full
+    capacity immediately after idle time, so the broker can see more than three calls inside a
+    second. The departure clock is conservative by construction: every call is at least 1/rate
+    seconds after the preceding call on this Redis key.
+    """
+    try:
+        client = redis.Redis.from_url(settings.redis_url)
+        client.ping()
+    except Exception:
+        return None
+    return RedisCallSpacer(
+        client,
+        key,
+        CallSpacingConfig(rate_per_second=rate_per_second, max_wait_seconds=max_wait_seconds),
+    )
+
+
+def build_kite_read_limiter(
+    settings: ProviderSettings, lane: KiteLane = KiteLane.INTERACTIVE
+) -> RateLimiter | None:
+    """The clock (or clocks) a Kite read of this ``lane`` must wait on — M85.
+
+    Both lanes end on `KITE_READ_CLOCK_KEY`, so the broker's combined ceiling is one number for
+    the whole box no matter who is calling. ``BULK`` takes `KITE_BULK_CLOCK_KEY` first, which
+    holds a backfill below that ceiling and leaves the remainder standing free for the login-time
+    holdings read and the live swing scan. `LayeredCallSpacer` carries the arithmetic.
+
+    ``None`` when Redis is unreachable, exactly as before: `KiteProvider` then refuses to call
+    upstream at all, which is the safe direction.
+    """
+    ceiling = build_spaced_rate_limiter(
+        settings,
+        KITE_READ_CLOCK_KEY,
+        settings.kite_rate_limit_per_second,
+        max_wait_seconds=(
+            INTERACTIVE_MAX_WAIT_SECONDS if lane is KiteLane.INTERACTIVE else BULK_MAX_WAIT_SECONDS
+        ),
+    )
+    if ceiling is None or lane is KiteLane.INTERACTIVE:
+        return ceiling
+    lane_clock = build_spaced_rate_limiter(
+        settings,
+        KITE_BULK_CLOCK_KEY,
+        settings.kite_bulk_rate_limit_per_second,
+        max_wait_seconds=BULK_MAX_WAIT_SECONDS,
+    )
+    if lane_clock is None:
+        # The ceiling alone is still correct — it is the broker's actual limit. What is lost is
+        # the headroom, so say so rather than pretending the lane exists.
+        return ceiling
+    return LayeredCallSpacer((lane_clock, ceiling))
 
 
 def build_archive(settings: ProviderSettings, *, local_root: Path | None = None) -> RawArchive:
@@ -73,11 +175,13 @@ def build_archive(settings: ProviderSettings, *, local_root: Path | None = None)
 
 
 def build_kite_provider(
-    settings: ProviderSettings, retry_hooks: RetryHooks | None = None
+    settings: ProviderSettings,
+    retry_hooks: RetryHooks | None = None,
+    *,
+    lane: KiteLane = KiteLane.INTERACTIVE,
 ) -> KiteProvider:
-    limiter = build_rate_limiter(
-        settings, "baskfy:ratelimit:kite", settings.kite_rate_limit_per_second
-    )
+    """A Kite adapter throttled for ``lane``. Interactive by default — see `KiteLane`."""
+    limiter = build_kite_read_limiter(settings, lane)
     return KiteProvider(settings, KiteRuntime(rate_limiter=limiter, retry_hooks=retry_hooks))
 
 
@@ -128,7 +232,10 @@ def build_provider_stack(
     """
     resolved = settings or get_provider_settings()
     providers: list[HealthReporting] = [
-        build_kite_provider(resolved, retry_hooks),
+        # BULK: this stack is what the nightly chain and the backfills run on, and its Kite
+        # pass is thousands of `historical_data` calls. It must leave the ceiling's headroom for
+        # whoever is on the other side of a login (M85).
+        build_kite_provider(resolved, retry_hooks, lane=KiteLane.BULK),
         build_nse_provider(resolved, retry_hooks=retry_hooks),
     ]
     fixtures = build_fixture_provider(resolved)

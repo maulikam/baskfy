@@ -60,6 +60,22 @@ x-python-image: &python-image
     BASKFY_KITE_DESK_SSH_TARGET: ${BASKFY_KITE_DESK_SSH_TARGET:-desk@65.0.226.77}
     BASKFY_KITE_TOKEN_PATH: /var/lib/baskfy/state/kite-token.enc
     BASKFY_RAW_ARCHIVE_DIR: /var/lib/baskfy/archive
+    # KITE'S CEILING, AND THE LANE UNDER IT (M85).
+    #
+    # Kite states two limits and the tighter one governs: per endpoint it is 1 req/s for
+    # /quote-family calls and 3 req/s for historical, but ACROSS ALL ENDPOINTS COMBINED it is
+    # 3 HTTP requests a second, and the fourth is an HTTP 429. Every Kite read on this box —
+    # api, worker, ingest-worker, beat and the desk — waits on one Redis departure clock at
+    # this rate, so the number below is the box's whole allowance and not each container's.
+    #
+    # The bulk rate is what a *backfill* may spend of it. It exists because Maulik logs in at
+    # 1pm: the login starts a missed-session catch-up (an hour of historical_data) and, beside
+    # it, the holdings read and today's live swing scan that he is actually waiting for. With
+    # one clock and no lane the interactive reads queue behind the whole hour. Held at 2 of the
+    # 3, the shared clock is drained faster than the backfill fills it and ~1 req/s stands free.
+    # These are the ProviderSettings defaults, stated here so this file still tells the truth.
+    BASKFY_KITE_RATE_LIMIT_PER_SECOND: "${BASKFY_KITE_RATE_LIMIT_PER_SECOND:-3}"
+    BASKFY_KITE_BULK_RATE_LIMIT_PER_SECOND: "${BASKFY_KITE_BULK_RATE_LIMIT_PER_SECOND:-2}"
     BASKFY_DATABASE_URL: postgresql+asyncpg://baskfy:${BASKFY_DB_PASSWORD:?set BASKFY_DB_PASSWORD}@postgres:5432/baskfy
     BASKFY_REDIS_URL: redis://redis:6379/0
     # Root CLAUDE.md, non-negotiable 1 and the safety rails. Stated here as well as baked into the

@@ -74,6 +74,10 @@ OAUTH_CALLBACK_PATH: Final = "/api/v1/brokers/callback"
 #: registers, and `baskfy.pipeline.*` already routes to the default queue.
 SESSION_CATCH_UP_TASK: Final = "baskfy.pipeline.session_catch_up"
 
+#: A login during the cash session also starts the live, provisional swing detector. It is a
+#: separate compute-queue task from the historical catch-up, so neither waits for the other.
+SWING_SCAN_AFTER_LOGIN_TASK: Final = "baskfy.swing.scan_after_login"
+
 log = logging.getLogger("baskfy_api.brokers")
 
 router = APIRouter(prefix="/brokers", tags=["brokers"])
@@ -313,6 +317,30 @@ def _gate_out() -> BrokerGateOut:
     )
 
 
+def _queue_post_login_refresh(request: Request, user_id: int) -> str:
+    """Publish the history and live-swing refreshes without ever failing the login."""
+    queue = getattr(request.app.state, "task_queue", None)
+    if queue is None:
+        return "no task queue configured, so no data refresh was requested"
+    queued: list[str] = []
+    failed: list[str] = []
+    for name, args, label in (
+        (SESSION_CATCH_UP_TASK, [], "missed-session catch-up"),
+        (SWING_SCAN_AFTER_LOGIN_TASK, [user_id], "live swing scan"),
+    ):
+        try:
+            queue.send_task(name, args)
+            queued.append(label)
+        except Exception as exc:
+            failed.append(f"{label} ({type(exc).__name__})")
+    if failed:
+        return (
+            f"queued {', '.join(queued) if queued else 'no refresh jobs'}; "
+            f"could not be queued: {', '.join(failed)}"
+        )
+    return "missed sessions will be caught up and today's live swing scan was requested"
+
+
 def _connection_state(broker_id: str) -> tuple[bool, str]:
     """Is there a broker session behind this row, right now?
 
@@ -500,16 +528,7 @@ async def oauth_callback(
     # Idempotent and cheap when there is nothing to do — a published day is not in its list, so
     # the ordinary morning costs one query. Best-effort exactly like the holdings pull below: a
     # queue that is not there must not fail a login that has already succeeded.
-    catch_up_note = ""
-    try:
-        queue = getattr(request.app.state, "task_queue", None)
-        if queue is None:
-            catch_up_note = "no task queue configured, so no catch-up was requested"
-        else:
-            queue.send_task(SESSION_CATCH_UP_TASK, [])
-            catch_up_note = "any session that never published will be caught up"
-    except Exception as exc:
-        catch_up_note = f"the catch-up sweep could not be queued ({type(exc).__name__})"
+    catch_up_note = _queue_post_login_refresh(request, user_id)
     log.info("broker connect: %s", catch_up_note)
 
     # PULL THE HOLDINGS NOW, NOT WHEN SOMEBODY REMEMBERS TO PRESS A BUTTON (M81).

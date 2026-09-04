@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,8 +33,20 @@ class ProviderSettings(BaseSettings):
     #: secret store without touching any call site.
     kite_token_path: str = ".secrets/kite-token.enc"
 
-    #: docs/09: "Rate limit ~ 3 req/s".
+    #: docs/09: "Rate limit ~ 3 req/s". Kite states this as a combined ceiling across every
+    #: endpoint, so it is the clock EVERY Kite read waits on, whatever it is asking for.
     kite_rate_limit_per_second: float = Field(default=3.0, gt=0)
+    #: What a *bulk* caller — a backfill, a nightly bar pass, an instrument dump — may spend of
+    #: that ceiling (M85). Strictly below `kite_rate_limit_per_second`, and the difference is
+    #: the headroom an interactive caller finds waiting for it.
+    #:
+    #: The reason is the thing Maulik reported: he logs in at 1pm, the login starts a
+    #: missed-session catch-up, and the catch-up is an hour of `historical_data` at the full
+    #: ceiling. Sharing one departure clock with no lanes, the login's own holdings read and
+    #: today's live swing scan queue behind that hour and fail their wait budget — the product
+    #: would be *more* stale after logging in, not less. A bulk lane below the ceiling keeps the
+    #: shared clock from ever running ahead of now, so an interactive call finds a free slot.
+    kite_bulk_rate_limit_per_second: float = Field(default=2.0, gt=0)
     #: docs/09: "chunk backfills into <= 2000-day slices per instrument".
     kite_max_days_per_request: int = Field(default=2000, gt=0)
     #: docs/09: "run with bounded concurrency (<= 3)".
@@ -97,6 +109,23 @@ class ProviderSettings(BaseSettings):
     # --- Fixtures -------------------------------------------------------
     #: Overridable so tests can point at a temporary directory.
     fixture_dir: str = ""
+
+    @model_validator(mode="after")
+    def _bulk_leaves_headroom(self) -> ProviderSettings:
+        """A bulk lane at or above the ceiling is not a lane — it is the ceiling with extra steps.
+
+        Refused at construction rather than discovered at 1pm, because the symptom of getting
+        this wrong is not an error: it is an interactive call quietly waiting behind an hour of
+        backfill, which looks exactly like the stale product this lane exists to fix.
+        """
+        if self.kite_bulk_rate_limit_per_second >= self.kite_rate_limit_per_second:
+            raise ValueError(
+                "BASKFY_KITE_BULK_RATE_LIMIT_PER_SECOND "
+                f"({self.kite_bulk_rate_limit_per_second:g}) must be strictly below "
+                f"BASKFY_KITE_RATE_LIMIT_PER_SECOND ({self.kite_rate_limit_per_second:g}); "
+                "the difference is the headroom a login-time read depends on"
+            )
+        return self
 
     def kite_configured(self) -> bool:
         return bool(self.kite_api_key and self.kite_api_secret)

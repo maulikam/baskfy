@@ -23,6 +23,7 @@ from app.core.kite_limits import (
     GENERAL_PER_SECOND,
     HISTORICAL_PER_SECOND,
     QUOTE_PER_SECOND,
+    READ_PER_SECOND,
     DeskLimits,
     Spacer,
 )
@@ -62,6 +63,18 @@ class TestTheCapsAreKitesOwn:
         assert HISTORICAL_PER_SECOND == 3.0, "historical_data is 3 req/s"
         assert GENERAL_PER_SECOND == 9.0, "everything else is 10/s; we keep one in hand"
 
+    def test_the_combined_ceiling_sits_above_every_family(self) -> None:
+        """M85. Kite's own documentation states the limit twice, and the tighter one governs.
+
+        Per endpoint: quote 1/s, historical 3/s, everything else 10/s. **Across all endpoints
+        combined: 3 HTTP requests a second, and exceeding it is an HTTP 429.** The desk used to
+        hold only the per-family caps, which let `general` alone send nine a second — legal by
+        the first reading and a 429 by the second. `read` is the second reading, and every
+        family now takes one of its slots before its own.
+        """
+        assert READ_PER_SECOND == 3.0
+        assert FAMILY_FOR_CALL.values(), "the families still exist; read sits above them"
+
     @pytest.mark.parametrize(
         ("call", "family"),
         [
@@ -83,11 +96,15 @@ class TestTheCapsAreKitesOwn:
         assert FAMILY_FOR_CALL[call] == family
 
     def test_an_unknown_method_is_throttled_rather_than_free(self) -> None:
-        """A method somebody adds tomorrow lands in the general pool, not outside every pool."""
+        """A method somebody adds tomorrow lands in the general pool, not outside every pool.
+
+        Its floor is the combined ceiling rather than `general`'s own cap, because `general` is
+        the looser of the two and the tighter one is what Kite answers 429 on.
+        """
         limits, clock = _limits()
         limits.slot_for_call("some_endpoint_kite_adds_in_2027")
         limits.slot_for_call("some_endpoint_kite_adds_in_2027")
-        assert clock.slept == pytest.approx(1.0 / GENERAL_PER_SECOND, rel=1e-6)
+        assert clock.slept == pytest.approx(1.0 / READ_PER_SECOND, rel=1e-6)
 
 
 class TestTheBurstFloor:
@@ -103,25 +120,43 @@ class TestTheBurstFloor:
             limits.slot("historical")
         assert clock.slept == pytest.approx(29 / 3, rel=1e-6)
 
-    def test_thirty_general_calls_take_at_least_three_and_a_bit(self) -> None:
+    def test_thirty_general_calls_take_at_least_nine_and_two_thirds(self) -> None:
+        """`general`'s own cap is 9/s and the combined ceiling is 3/s, so 3/s is what binds."""
         limits, clock = _limits()
         for _ in range(30):
             limits.slot("general")
-        assert clock.slept == pytest.approx(29 / 9, rel=1e-6)
+        assert clock.slept == pytest.approx(29 / READ_PER_SECOND, rel=1e-6)
 
-    def test_one_slow_family_never_starves_another(self) -> None:
-        """A backfill spending its 3/s must not make the monitor wait for a quote."""
+    def test_a_backfill_costs_another_family_one_slot_and_never_its_queue(self) -> None:
+        """Kite's combined ceiling means a historical pull *does* delay a quote. By how much is
+        the whole question, and the answer has to be one departure — not the backfill's queue.
+
+        This test used to assert zero, which was true only while the families had no ceiling
+        above them. Zero is not available any more without exceeding 3 req/s. What is available,
+        and what the monitor actually needs, is a bound: whatever the backfill has been doing,
+        the next quote leaves within one ceiling interval.
+        """
         limits, clock = _limits()
         for _ in range(10):
             limits.slot("historical")
         before = clock.slept
         limits.slot("quote")
-        assert clock.slept == before, "the first quote of the day waited on a historical pull"
+        waited = clock.slept - before
+        assert waited <= 1.0 / READ_PER_SECOND + 1e-9, (
+            f"a quote waited {waited:.3f}s behind ten historical calls; the ceiling must cost "
+            "one departure, never a queue"
+        )
 
-    def test_the_first_call_of_each_family_does_not_wait(self) -> None:
+    def test_the_first_call_of_each_family_waits_only_on_the_combined_ceiling(self) -> None:
+        """Three calls in a row are three of the box's three-a-second, so two of them space."""
         limits, clock = _limits()
         for family in ("quote", "historical", "general"):
             limits.slot(family)
+        assert clock.slept == pytest.approx(2.0 / READ_PER_SECOND, rel=1e-6)
+
+    def test_the_very_first_call_of_the_process_is_free(self) -> None:
+        limits, clock = _limits()
+        limits.slot("quote")
         assert clock.slept == 0.0
 
     def test_two_threads_get_two_different_slots(self) -> None:
@@ -362,7 +397,10 @@ class StubScript:
 class TestTheFamiliesAreTheSameOnBothSides:
     def test_every_family_has_a_rate_and_a_spacer(self) -> None:
         limits = DeskLimits(shared={})
-        assert set(RATE_FOR_FAMILY) == {"quote", "historical", "general"}
+        # `read` is the combined ceiling every other family takes a slot from first (M85). It is
+        # in this table because the shared spacers are built from it, and a ceiling that existed
+        # locally but not in Redis would be no ceiling at all across containers.
+        assert set(RATE_FOR_FAMILY) == {"read", "quote", "historical", "general"}
         for family, rate in RATE_FOR_FAMILY.items():
             assert limits.spacer(family).interval == pytest.approx(1.0 / rate)
 

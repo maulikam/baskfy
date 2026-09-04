@@ -2692,3 +2692,42 @@ over 535 files.
   code → then the flag.
 - `tools/swing/drill.py` was **not** re-run for SW22: it resets the database it is pointed at,
   and no disposable one was available on this machine.
+
+---
+
+## SW23/SW24 — LIVE. The flags are on (4 Sep 2026, 21:31 IST)
+
+**`swing_gates().dry_run` is `False` on the box.** A confirmed swing line now reaches Zerodha with
+real money. `DECISIONS-SW.md` SW23 carries the decision, the backtest it was taken against, and
+the one-line reversal.
+
+| | |
+|---|---|
+| Deployed | `16f09b2` (deploy #12), alembic **0034_swing_intraday_plan**, `verify-swing.sh` **SWING OK** |
+| `.env.staging.compose` | `BASKFY_SWING_EXECUTION_ENABLED=true`, `BASKFY_SWING_MONITOR_ENABLED=true`, **`BASKFY_DESK_DRY_RUN=false`** |
+| `.env.staging` | `BASKFY_SWING_EXECUTION_ENABLED=true`, `BASKFY_SWING_EP_PREMARKET_ENABLED=true` |
+| Read back from the containers | desk and swing-monitor both `DRY_RUN=false`; `swing_gates().dry_run = False`; `intraday=False`, `options=False` |
+| Sleeve at go-live | ₹25,00,000 · 0.5 %/trade · `first_live_sessions_left = 5` |
+| Backups | `.env.staging.compose.bak-golive-*` and `.env.staging.bak-golive-*` on the box |
+
+**What still stands between a trigger and an order.** Non-negotiable 1 is untouched:
+`POST /swing/execute` with `confirm=true` and a `plan_id` issued in the last 30 minutes. A5's
+confirm-time re-derivation under the session row lock. CNC only. A9's half risk for five sessions.
+**Auto-execute is NOT built** (SW23.3) — every order on Monday needs Maulik's click.
+
+### Open, and worth checking
+
+- **`first_live_sessions_left` may lose one for free.** The catch-up chain for 2026-09-04 (run 30,
+  started 21:32) runs `baskfy.swing.eod` with `execution_enabled=true`, and the evening counts a
+  LIVE session when it closes. Nothing traded on 4 Sep — the flags went on after the close — so a
+  decrement would spend one of the five half-risk sessions on a day with no orders. If it reads
+  `4` tomorrow, `PATCH /swing/config` (audited) puts it back to 5. Conservative in the wrong
+  direction, not dangerous.
+- **The deploy script's seed step times out.** `run --rm seed` takes longer than `box.sh`'s 270 s
+  SSM poll, so `deploy-swing.sh` aborts at step 4 with the images pinned, the migration applied
+  and `up -d` never run. Deploy #12 was completed by hand (`up -d`, then verify). The seed is
+  idempotent reference data the box already has; the script needs a longer window or the seed
+  moved out of the per-deploy path.
+- **The box is a t4g.large (2 vCPU / 8 GB) and one background job took the whole product offline
+  for ~40 minutes on 4 Sep.** Not resized (Maulik did not select it). It matters more now that
+  orders are real: a box that can be starved is a box that can miss a stop. Recorded, not fixed.

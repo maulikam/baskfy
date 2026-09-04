@@ -194,6 +194,41 @@ def marketable_limit(
     return (limit / _TICK).to_integral_value(rounding=ROUND_DOWN) * _TICK
 
 
+def market_protection_pct(
+    *, cap: Decimal, last_price: Decimal, config: OpeningRangeConfig
+) -> Decimal | None:
+    """How far past the live price Kite may fill a MARKET entry — or ``None`` to refuse.
+
+    Maulik, 4 Sep 2026. The entry goes out as MARKET so a breakout is actually caught, and the
+    thing that stops MARKET being reckless is Kite's ``market_protection``: the exchange fills
+    at best up to this percentage past the last traded price and refuses beyond it.
+
+    The percentage is **derived from the strategy's own cap**, never from Zerodha's default 3 %:
+
+        cap        the most this setup is worth paying — `marketable_limit`, unchanged from A8
+        last_price the live price, read seconds before the order (the desk fetches it per confirm)
+        result     (cap / last_price - 1) x 100, clamped into the config's floor and maximum
+
+    **``None`` means do not send the order at all**, and it is the case that matters. When the
+    price is already at or above the cap the breakout has run past what the setup justifies:
+    every share bought there carries more risk than the plan sized for, because the stop is a
+    technical level and does not move up with a chased entry. A8 expressed that refusal as a
+    LIMIT nobody filled — the same decision, taken silently and after a wait. Taking it here,
+    before the order, is the same protection with an answer a person can read.
+
+    Pure: no clock, no broker, no I/O (law 1). The caller sends the number to Kite.
+    """
+    if last_price <= _ZERO:
+        return None
+    if last_price >= cap:
+        return None
+    room = (cap / last_price - _ONE) * _PCT
+    floor = Decimal(str(config.market_protection_floor_pct))
+    ceiling = Decimal(str(config.market_protection_max_pct))
+    room = max(room, floor)
+    return min(room, ceiling).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+
+
 def _pending_line(
     item: WatchItem,
     *,

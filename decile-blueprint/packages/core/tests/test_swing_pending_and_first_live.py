@@ -38,6 +38,7 @@ from baskfy_core.swing.plan import (
     build_entries,
     exit_lines,
     first_live_multiplier,
+    market_protection_pct,
     marketable_limit,
     sizing_at,
 )
@@ -420,3 +421,67 @@ class TestMarketableLimit:
         assert CONFIG.opening_range.entry_limit_max_adr == 0.25
         assert CONFIG.opening_range.fill_poll_seconds == 10.0
         assert CONFIG.opening_range.fill_poll_interval_seconds == 0.5
+
+
+class TestMarketProtection:
+    """4 Sep 2026: the entry cap is A8's, but it reaches the exchange as a percentage.
+
+    `marketable_limit` is unchanged and still says the most a setup is worth paying.
+    `market_protection_pct` turns that ceiling into the number Kite wants on a MARKET order,
+    and — the case that matters — returns ``None`` when there is no room left at all.
+    """
+
+    CFG = DEFAULT_SWING_CONFIG.opening_range
+
+    def test_the_percentage_is_the_room_between_the_live_price_and_the_cap(self) -> None:
+        # 101.25 cap, 100.80 live: (101.25 / 100.80 - 1) x 100 = 0.4464…, truncated to 0.44.
+        pct = market_protection_pct(
+            cap=Decimal("101.25"), last_price=Decimal("100.80"), config=self.CFG
+        )
+        assert pct == Decimal("0.44")
+
+    def test_a_price_at_or_above_the_cap_refuses_rather_than_protecting_at_zero(self) -> None:
+        """The whole point. A zero-width protection is not a refusal — it is an order that
+        may still fill at the cap. `None` is the caller's instruction not to send one."""
+        for price in (Decimal("101.25"), Decimal("101.30"), Decimal("140.00")):
+            assert (
+                market_protection_pct(cap=Decimal("101.25"), last_price=price, config=self.CFG)
+                is None
+            )
+
+    def test_a_nonsense_price_refuses_too(self) -> None:
+        for price in (Decimal("0"), Decimal("-5")):
+            assert (
+                market_protection_pct(cap=Decimal("101.25"), last_price=price, config=self.CFG)
+                is None
+            )
+
+    def test_it_never_hands_the_exchange_more_than_the_configured_maximum(self) -> None:
+        """A cap far above the price (a very wide ADR on a cheap name) must not become a
+        licence to fill anywhere. 3% is the most this strategy ever sends."""
+        pct = market_protection_pct(
+            cap=Decimal("500.00"), last_price=Decimal("100.00"), config=self.CFG
+        )
+        assert pct == Decimal(str(self.CFG.market_protection_max_pct))
+
+    def test_a_sliver_of_room_is_raised_to_the_floor_kite_accepts(self) -> None:
+        """Kite wants a number greater than zero. A cap 0.001% away would round to 0.00 and
+        be rejected as malformed; the floor is what keeps it a legal order."""
+        pct = market_protection_pct(
+            cap=Decimal("100.001"), last_price=Decimal("100.00"), config=self.CFG
+        )
+        assert pct == Decimal(str(self.CFG.market_protection_floor_pct))
+        assert pct > 0
+
+    def test_the_cap_it_reads_is_still_a8s_arithmetic(self) -> None:
+        """The two functions compose: nothing about the entry ceiling moved on 4 Sep."""
+        cap = marketable_limit(
+            trigger=Decimal("100.80"),
+            range_high=Decimal("100.00"),
+            adr_pct=Decimal("5"),
+            config=self.CFG,
+        )
+        assert cap == Decimal("101.25")
+        assert market_protection_pct(
+            cap=cap, last_price=Decimal("100.80"), config=self.CFG
+        ) == Decimal("0.44")

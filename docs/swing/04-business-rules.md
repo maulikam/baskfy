@@ -219,13 +219,32 @@ daily focus; A2); **nothing is ordered**. After `monitor_close` the same process
 clock: the 10:45 cutoff cancels every open remainder and frees every unclaimed slot (A7, A8),
 and at `gtt_sweep_at` [15:15] the sweep re-arms any filled quantity without a GTT (A8; what is
 still naked afterwards is `SWING_GTT_MISSING_AT_1515`).
-7.5 **The marketable limit and the fill poll** (SW10.5, STANDING-ANSWERS A8). A confirmed buy is
-sent as a LIMIT — never MARKET — at `plan.marketable_limit = min(trigger × (1 +
-entry_limit_buffer_pct [0.5] / 100), range_high + entry_limit_max_adr [0.25] × ADR)` snapped
-down to the tick (ADR in rupees, `adr_pct / 100 × trigger`; a line with no range reads the
-trigger as the range high). The request then polls the order for at most `fill_poll_seconds`
-[10] at one read every `fill_poll_interval_seconds` [0.5] — Kite's orders endpoint at ≤ 2
-req/s — and stops early on COMPLETE or a dead status. §9.4 says what each answer writes.
+7.5 **The entry cap, the market protection and the fill poll** (SW10.5 / STANDING-ANSWERS A8;
+order type amended by Maulik 4 Sep 2026, DECISIONS-SW **SW22**). The **cap** is unchanged:
+`plan.marketable_limit = min(trigger × (1 + entry_limit_buffer_pct [0.5] / 100), range_high +
+entry_limit_max_adr [0.25] × ADR)` snapped down to the tick (ADR in rupees, `adr_pct / 100 ×
+trigger`; a line with no range reads the trigger as the range high). It is the most this setup
+is worth paying.
+
+What changed is how the cap reaches the exchange. A confirmed buy is sent as **MARKET** with
+Kite's `market_protection` set to `plan.market_protection_pct = (cap / last_price − 1) × 100`,
+clamped into `[market_protection_floor_pct [0.05], market_protection_max_pct [3.0]]` — the same
+ceiling, at the exchange, on an order that crosses the spread. A resting LIMIT at the cap did not
+fill when the tape ran past it, which is how a breakout gets missed. `entry_order_type` selects
+between the two and `"LIMIT"` restores A8 exactly.
+
+The **live price is read per confirm** (the desk's own Kite read, M85's interactive lane), not
+taken from the plan, which `_validate` lets be half an hour old. A live buy without one is
+`BLOCKED`, never guessed: no price means no protection percentage and no value for the risk
+check. When `last_price` is already **at or above the cap** the confirm is `BLOCKED` — the
+breakout has run past what the setup justifies, and the stop is a technical level that does not
+move up with a chased entry, so a share bought there carries more risk than §5 sized for. A8
+expressed that same refusal as a LIMIT nobody filled.
+
+The request then polls the order for at most `fill_poll_seconds` [10] at one read every
+`fill_poll_interval_seconds` [0.5] — Kite's orders endpoint at ≤ 2 req/s — and stops early on
+COMPLETE or a dead status. §9.4 says what each answer writes. The GTT is unchanged
+(non-negotiable 4): armed in the same call, for exactly the quantity filled, at the plan's stop.
 
 ## §8 Market gate and progressive exposure (`market.py`, `MarketConfig`)
 

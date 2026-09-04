@@ -583,7 +583,14 @@ def client(scenario, monkeypatch, tmp_path):
 
 
 #: What the broker would quote, per symbol, when the route asks for a last price.
-LAST_PRICES = {"DELTAHELD": Decimal("104.00"), "BETAEP": Decimal("215.00")}
+#:
+#: ALPHAFLAG joined the three on 4 Sep 2026: the entry is a MARKET order now, so the route reads
+#: a live price for a BUY as well as for the two exit kinds, and a scenario whose buy has no
+#: quote would exercise one refusal instead of the path each test is about. 100.80 is that
+#: line's own trigger — where the price is when a breakout is confirmed, and below the entry
+#: cap (at least trigger x 1.005), so the order goes.
+LAST_PRICES = {"DELTAHELD": Decimal("104.00"), "BETAEP": Decimal("215.00"),
+               "ALPHAFLAG": Decimal("100.80")}
 
 
 def _forms(html: str, action: str) -> list[str]:
@@ -858,7 +865,9 @@ class TestExecuteRoute:
         assert call["gw"] == "fake-gateway"
         assert call["now"] == NOW and call["now"].tzinfo is not None
         assert call["plan_id"] == ids["signal_plan"][1] and call["line_id"] == ids["trigger_line"]
-        assert call["last_price"] is None  # a buy's entry is its trigger; no broker read
+        # SW22: the entry is a MARKET order, so a BUY gets a live price too — read here,
+        # after the cheap refusals, and it is what sets the protection percentage.
+        assert call["last_price"] == LAST_PRICES["ALPHAFLAG"]
         # the store the route handed over wrote through to the file
         assert scenario.store().line(ids["trigger_line"])["state"] == "FILLED"
         assert scenario.store().session(TODAY)["confirms"] == 2

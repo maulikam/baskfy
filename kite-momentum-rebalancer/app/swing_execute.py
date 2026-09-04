@@ -37,8 +37,14 @@ THE RULES IT ENFORCES, AND WHERE THEY COME FROM
 * STANDING-ANSWERS A7 (SW10.5) — a ``PENDING_RANGE`` line (a live gap on the MORNING plan with
   no quantity and no stop) is not executable: it is refused with a 400 before anything is read,
   the route refuses it too, and :data:`EXECUTABLE_KINDS` is the source-level set.
-* A8 — the live buy is a **marketable LIMIT** at ``min(trigger x 1.005, range_high + 0.25 x
-  ADR)`` (:func:`baskfy_core.swing.plan.marketable_limit`), never MARKET. The request then
+* A8, **as amended by Maulik on 4 Sep 2026** (STANDING-ANSWERS B16: the later letter wins) —
+  the cap is unchanged, the order type is not. ``min(trigger x 1.005, range_high + 0.25 x ADR)``
+  (:func:`baskfy_core.swing.plan.marketable_limit`) is still the most this setup is worth
+  paying; it is now sent as Kite's ``market_protection`` on a **MARKET** order rather than as a
+  resting LIMIT price, because a LIMIT the tape runs past does not fill and the breakout is
+  missed. A live price is read per confirm; a price already at or above the cap is refused
+  outright rather than chased (:func:`baskfy_core.swing.plan.market_protection_pct`). The
+  request then
   polls the order for up to ``fill_poll_seconds`` [10] at ``fill_poll_interval_seconds`` [0.5]
   through an injectable :class:`OrderSource` and clock: COMPLETE → the position, its fill and
   its GTT in the same request; partial or open → ``SENT`` with the quantity filled so far and
@@ -89,6 +95,7 @@ from baskfy_core.swing.plan import (
     SkipReason,
     WatchItem,
     first_live_multiplier,
+    market_protection_pct,
     marketable_limit,
 )
 from baskfy_core.swing.sizing import r_multiple
@@ -164,6 +171,11 @@ PENDING_RANGE = "PENDING_RANGE"
 EXECUTABLE_KINDS: frozenset[str] = frozenset({BUY_ON_TRIGGER, SELL_AT_OPEN, RAISE_GTT_STOP})
 assert EXECUTABLE_KINDS == {k.value for k in _CORE_EXECUTABLE_KINDS}  # noqa: S101 - import-time contract
 assert PENDING_RANGE not in EXECUTABLE_KINDS  # noqa: S101
+
+#: The only two order types the swing book can ever send (Track C §1/§2, asserted from the AST
+#: by `test_swing_track_c.py`). `OpeningRangeConfig.entry_order_type` picks between them —
+#: MARKET since 4 Sep 2026, LIMIT is A8's original and one setting away.
+ENTRY_ORDER_TYPES: Final[frozenset[str]] = frozenset({"LIMIT", "MARKET"})
 
 #: Kite's order statuses, as the postback and the order book report them (A8).
 ORDER_COMPLETE = "COMPLETE"
@@ -645,9 +657,12 @@ async def execute_line(  # noqa: PLR0913 - the request's parts, named
     called, so a request that dies mid-way leaves a line that answers 409 on re-post rather
     than one that can be sent again.
 
-    ``last_price`` is the instrument's last traded price when the page has one. A BUY needs
-    none (its entry is the trigger); a SELL's simulated fill and a RAISE's stop check both do,
-    and are ``BLOCKED`` — never guessed — without it.
+    ``last_price`` is the instrument's last traded price, read per confirm. **Every kind needs
+    one now** (Maulik, 4 Sep 2026): the BUY goes out as MARKET, so the price decides its
+    protection percentage, its refusal against the entry cap and its value to the risk layer;
+    a SELL's simulated fill and a RAISE's stop check needed one already. A live line without a
+    price is ``BLOCKED`` — never guessed. It used to say "a BUY needs none (its entry is the
+    trigger)", which was true only while the entry was a resting LIMIT at that trigger.
 
     ``orders``, ``clock`` and ``sleep`` (A8) are the live buy's fill poll: the order source is
     asked at most every ``fill_poll_interval_seconds`` for up to ``fill_poll_seconds`` after a
@@ -681,7 +696,7 @@ async def execute_line(  # noqa: PLR0913 - the request's parts, named
             if kind == BUY_ON_TRIGGER:
                 outcome = await _buy(store, gw, line=line, plan_id=plan_id, now=now,
                                      simulated=simulated, context=context, orders=orders,
-                                     clock=clock, sleep=sleep)
+                                     clock=clock, sleep=sleep, last_price=last_price)
             elif kind == SELL_AT_OPEN:
                 outcome = await _sell(store, gw, line=line, plan_id=plan_id, now=now,
                                       simulated=simulated, last_price=last_price)
@@ -765,7 +780,7 @@ async def rearm_gtt(
 
 async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa: PLR0913
                simulated: bool, context: SignalContext | None = None,
-               orders: OrderSource | None = None,
+               orders: OrderSource | None = None, last_price: Decimal | None = None,
                clock: Callable[[], float] = time.monotonic,
                sleep: Callable[[float], Awaitable[None]] = asyncio.sleep) -> ExecOutcome:
     symbol = line["symbol"]
@@ -816,15 +831,62 @@ async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa
                           position_value=sized.position_value, note=sized.detail)
         log.info("swing BUY %s %s", symbol, sized.detail)
     qty = sized.quantity
-    # A8: a marketable LIMIT — never MARKET — capped at half a percent past the trigger and a
-    # quarter of a normal day's range above the opening range it broke out of.
+    # THE ENTRY CAP IS STILL A8'S; HOW IT IS ENFORCED IS NOT (Maulik, 4 Sep 2026).
+    #
+    # `marketable_limit` is unchanged and still the most this setup is worth paying. What
+    # changed is that it is no longer sent as a resting LIMIT price — a LIMIT the tape runs
+    # past does not fill, and the name that was "in swing" gets bought by everybody but us.
+    # It is sent as Kite's `market_protection` on a MARKET order instead: same ceiling, at the
+    # exchange, on an order that actually catches the breakout.
+    window = DEFAULT_SWING_CONFIG.opening_range
     adr = context.detected.get(symbol, (_ZERO, None, _ZERO))[0]
-    limit = marketable_limit(trigger=trigger, range_high=store.range_high_for(int(line["id"])),
-                             adr_pct=adr, config=DEFAULT_SWING_CONFIG.opening_range)
+    cap = marketable_limit(trigger=trigger, range_high=store.range_high_for(int(line["id"])),
+                           adr_pct=adr, config=window)
+    order_type = window.entry_order_type
+    if order_type not in ENTRY_ORDER_TYPES:
+        # Track C §1/§2 is a SOURCE-LEVEL property (`test_swing_track_c.py`): the set of order
+        # types this module can send has to be readable in this file, not inferred from whatever
+        # a config field happens to hold. The field chooses between the two; it cannot invent a
+        # third, and a deployment that tries gets a refusal rather than an order.
+        return ExecOutcome("BLOCKED",
+                           f"{symbol}: entry_order_type {order_type!r} is not one of "
+                           f"{sorted(ENTRY_ORDER_TYPES)}",
+                           None, None, None, simulated)
+    # THE PRICE IS READ NOW, NOT TAKEN FROM THE PAGE. A confirm can sit behind a person
+    # reading the row; the plan itself may be half an hour old (`_validate` allows 30 minutes).
+    # A market order priced off either would be sized against a price that no longer exists.
+    # `last_price` is the desk's own per-confirm Kite read (interactive lane, M85).
+    reference = _price(last_price) if last_price is not None else None
+    if reference is None:
+        if not simulated:
+            # Live, and blind. Refusing is the only honest answer: without a price there is
+            # no protection percentage to compute and no value for the risk layer to check.
+            return ExecOutcome("BLOCKED",
+                               f"{symbol}: no live price — a market entry is not sent without "
+                               f"one (no Kite session, or the quote read failed)",
+                               None, None, None, simulated)
+        # The drill has no market. The trigger is what the dry-run gateway fills at anyway.
+        reference = trigger
+    protection = market_protection_pct(cap=cap, last_price=reference, config=window)
+    if protection is None and not simulated:
+        # A5's refusal, one step earlier and out loud. The price is at or above the cap: the
+        # breakout has run past what this setup justifies, and the stop does not move up with
+        # a chased entry, so every share bought here carries more risk than the plan sized for.
+        # A8 expressed the same decision as a LIMIT nobody filled; this says it.
+        return ExecOutcome("BLOCKED",
+                           f"{symbol}: the price has run past the entry cap — {reference} is at "
+                           f"or above {cap} (trigger {trigger}). Not chased; the setup is gone "
+                           f"for today, not cheaper later",
+                           None, None, None, simulated)
     order = await gw.place(
-        symbol=symbol, qty=qty, side="BUY", product="CNC", order_type="LIMIT",
-        price=float(limit), exchange="NSE", client_id=f"{plan_id}:{symbol}:BUY",
-        gross_exposure=float(limit * qty),
+        symbol=symbol, qty=qty, side="BUY", product="CNC", order_type=order_type,
+        price=float(cap) if order_type == "LIMIT" else None,
+        market_protection=None if protection is None else float(protection),
+        # What the risk layer values a MARKET order at — it has no price of its own, and a
+        # zero there would disarm every notional cap the layer has.
+        reference_price=float(reference),
+        exchange="NSE", client_id=f"{plan_id}:{symbol}:BUY",
+        gross_exposure=float(cap * qty),
         tenant=_sole_tenant(), plan_tenant=_sole_tenant(),
     )
     status = _ORDER_STATUS.get(order.get("status", ""), "REJECTED")

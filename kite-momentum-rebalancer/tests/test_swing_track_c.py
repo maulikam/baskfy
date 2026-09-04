@@ -553,9 +553,19 @@ class TestTheBookIsCncOnly:
             kw = {k.arg: k.value for k in call.keywords}
             assert isinstance(kw["product"], ast.Constant) and kw["product"].value == "CNC"
             assert isinstance(kw["exchange"], ast.Constant) and kw["exchange"].value == "NSE"
-            assert isinstance(kw["order_type"], ast.Constant)
-            assert kw["order_type"].value in ("LIMIT", "MARKET")
+            # The order type may be a literal (the sell's MARKET) or the name the entry
+            # resolves from config (`entry_order_type`, MARKET since 4 Sep 2026). Either way
+            # the SET it can hold is fixed in this module's source and checked below — config
+            # picks between two, it cannot invent a third.
+            if isinstance(kw["order_type"], ast.Constant):
+                assert kw["order_type"].value in X.ENTRY_ORDER_TYPES
+            else:
+                assert isinstance(kw["order_type"], ast.Name)
+                assert kw["order_type"].id == "order_type"
             assert "variety" not in kw
+        assert X.ENTRY_ORDER_TYPES == frozenset({"LIMIT", "MARKET"})
+        # ...and the module refuses anything else at run time rather than sending it.
+        assert "if order_type not in ENTRY_ORDER_TYPES:" in inspect.getsource(X._buy)
         code = _code_only(inspect.getsource(X))
         for word in ('"MIS"', '"NFO"', '"BFO"', '"co"', '"bo"', "MTF"):
             assert word not in code

@@ -1094,10 +1094,26 @@ class FakeClock:
         self.now += seconds
 
 
-def execute_live(store, gw, plan_id, line_id, *, orders=None, clock=None, now=NOW):
+#: "no price was passed" is different from "a price of None was passed on purpose".
+_AT_TRIGGER = object()
+
+
+def execute_live(store, gw, plan_id, line_id, *, orders=None, clock=None, now=NOW,
+                 last_price=_AT_TRIGGER):
+    """A live confirm. ``last_price`` defaults to the line's own trigger.
+
+    The entry is a MARKET order since 4 Sep 2026, so a live confirm without a price is BLOCKED
+    by design and every test here would exercise that one refusal instead of the path it is
+    about. The trigger is the honest default: it is where the price is at the moment a breakout
+    is confirmed, and it is below the entry cap (which is at least trigger x 1.005), so the
+    order goes. A test about the cap passes its own price.
+    """
     clock = clock or FakeClock()
+    if last_price is _AT_TRIGGER:
+        last_price = D(str(store.line(line_id)["trigger"]))
     return run(X.execute_line(store, gw, plan_id=plan_id, line_id=line_id, confirm="true",
-                              now=now, orders=orders, clock=clock, sleep=clock.sleep)), clock
+                              now=now, orders=orders, clock=clock, sleep=clock.sleep,
+                              last_price=last_price)), clock
 
 
 def test_risk_multiplier_for_is_half_only_for_a_real_order_with_sessions_left() -> None:
@@ -1201,27 +1217,65 @@ def test_first_live_sell_and_raise_are_never_halved(live) -> None:
 # --- SW10.5 / A8: the marketable limit, the poll, the late fill, the cutoff ------------------
 
 
-def test_the_buy_is_a_marketable_limit_never_market(live) -> None:
-    """A8: min(trigger x 1.005, range_high + 0.25 x ADR). Trigger 100.80 broke a 100.00
-    range on a 5% ADR: chase cap 101.30, range reach 100 + 0.25 x 5.04 = 101.26 → 101.25."""
+def test_the_entry_cap_is_still_a8s_and_is_sent_as_market_protection(live) -> None:
+    """The cap is unchanged; how it reaches the exchange is not (Maulik, 4 Sep 2026).
+
+    A8's arithmetic, untouched: trigger 100.80 broke a 100.00 range on a 5% ADR — chase cap
+    101.30, range reach 100 + 0.25 x 5.04 = 101.26, so the cap is 101.25. What changes is that
+    101.25 is no longer a resting LIMIT price. At a live price of 100.80 the room to the cap is
+    (101.25 / 100.80 - 1) x 100 = 0.446…%, which is what Kite is told to protect at.
+    """
     store = MemoryStore()
     plan_id = store.add_plan()
     line_id = store.add_line(plan_id, trigger=D("100.80"), stop=D("97.80"))
     store.range_highs[line_id] = D("100.00")
-    execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("COMPLETE", 100, "100.9")))
+    execute_live(store, live, plan_id, line_id, orders=ScriptedOrders(("COMPLETE", 100, "100.9")),
+                 last_price=D("100.80"))
     order = live.orders[0]
-    assert order["order_type"] == "LIMIT" and order["price"] == 101.25
-    code = _code_only(inspect.getsource(X._buy))
-    assert '"MARKET"' not in code
+    assert order["order_type"] == "MARKET"
+    assert order["price"] is None, "a MARKET order carries no price"
+    assert order["market_protection"] == 0.44, "the cap, as a percentage of the live price"
 
 
-def test_the_marketable_limit_is_a_limit_in_the_dry_run_journal_too(gw) -> None:
+def test_a_price_already_past_the_cap_is_refused_not_chased(live) -> None:
+    """The refusal A8 used to express as a LIMIT nobody filled.
+
+    The stop is a technical level and does not move up with a chased entry, so a share bought
+    above the cap carries more risk than the plan sized for. The answer is no, said out loud,
+    before anything is sent — not a resting order and a wait.
+    """
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, trigger=D("100.80"), stop=D("97.80"))
+    store.range_highs[line_id] = D("100.00")
+    out, _ = execute_live(store, live, plan_id, line_id, last_price=D("101.25"))
+    assert out.status == "BLOCKED"
+    assert "run past the entry cap" in out.reason
+    assert live.orders == [], "nothing reached the broker"
+
+
+def test_a_live_buy_without_a_price_is_blocked_never_guessed(live) -> None:
+    """No price, no protection percentage, and no value for the risk layer. So: no order."""
+    store = MemoryStore()
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, trigger=D("100.00"), stop=D("96.00"))
+    out, _ = execute_live(store, live, plan_id, line_id, last_price=None)
+    assert out.status == "BLOCKED" and "no live price" in out.reason
+    assert live.orders == []
+
+
+def test_the_dry_run_journal_records_the_shape_that_would_have_been_sent(gw) -> None:
+    """`02` §3 asks for a DRY_RUN morning as evidence before the flag flips, so the drill has
+    to show WHAT would have gone out — order type and protection, not only a price."""
     store = MemoryStore()
     plan_id = store.add_plan()
     line_id = store.add_line(plan_id, trigger=D("100.00"), stop=D("96.00"))
     execute(store, gw, plan_id, line_id)
     rows = [json.loads(r) for r in pathlib.Path(gw._journal_path).read_text().splitlines()]
-    assert rows[0]["event"] == "dry_run" and rows[0]["price"] == 100.5
+    assert rows[0]["event"] == "dry_run"
+    assert rows[0]["order_type"] == "MARKET"
+    assert rows[0]["price"] is None
+    assert rows[0]["reference_price"] == 100.0, "the drill falls back to the trigger"
 
 
 def test_the_request_polls_the_order_at_most_ten_seconds_at_two_a_second(live) -> None:
@@ -1571,13 +1625,21 @@ def test_module_code_never_names_a_broker_method() -> None:
 
 
 def test_prices_are_float_at_the_gateway_boundary(live) -> None:
+    """Decimal in the store, float at the broker — for the protection percentage too.
+
+    The cap is A8's and unchanged: 123.45 x 1.005 = 124.067 → 124.05 (the range reach, with no
+    range, is 123.45 + 0.25 x 5% x 123.45 = 124.99, so the chase cap binds). It now leaves as a
+    percentage of the live price rather than as `price`, and both it and the risk layer's
+    reference cross the boundary as floats.
+    """
     store = MemoryStore()
     plan_id = store.add_plan()
     line_id = store.add_line(plan_id, trigger=D("123.45"), stop=D("119.90"))
-    execute(store, live, plan_id, line_id)
-    # A8: the price is the marketable limit — 123.45 x 1.005 = 124.067 → 124.05 (the range
-    # reach, with no range, is 123.45 + 0.25 x 5% x 123.45 = 124.99, so the chase cap binds).
-    assert isinstance(live.orders[0]["price"], float) and live.orders[0]["price"] == 124.05
+    execute(store, live, plan_id, line_id, last_price=D("123.45"))
+    sent = live.orders[0]
+    assert sent["price"] is None
+    assert isinstance(sent["market_protection"], float) and sent["market_protection"] == 0.48
+    assert isinstance(sent["reference_price"], float) and sent["reference_price"] == 123.45
 
 
 def test_prices_stay_decimal_in_the_store(gw) -> None:
@@ -1602,7 +1664,9 @@ def test_live_gates_with_an_exploding_kc_are_REJECTED_never_a_position(monkeypat
     store = MemoryStore()
     plan_id = store.add_plan()
     line_id = store.add_line(plan_id)
-    out = execute(store, gw, plan_id, line_id)
+    # A live price, because a live buy without one never reaches a broker to be rejected by —
+    # which is a different proof, and `test_a_live_buy_without_a_price_is_blocked` makes it.
+    out = execute(store, gw, plan_id, line_id, last_price=D("100.00"))
     assert out.status == "REJECTED" and out.order["status"] == "ERROR"
     assert "reached the broker" in out.reason
     assert store.positions == {} and store.fills == []

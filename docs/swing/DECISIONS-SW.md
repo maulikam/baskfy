@@ -2471,3 +2471,87 @@ reads exceed their wait budget and fail. `KiteLane.BULK` takes `baskfy:ratelimit
 **Reversal.** Unchanged from SW21.1 for the desk (`DESK_SHARED_READ_LIMITS=false`, or unset
 `BASKFY_REDIS_URL`). For the pipeline, set `BASKFY_KITE_BULK_RATE_LIMIT_PER_SECOND` just under
 `BASKFY_KITE_RATE_LIMIT_PER_SECOND` and the lane is gone without a deploy.
+
+
+## SW22 — the entry is a MARKET order with Kite's protection; the cap is still A8's · ⚠ UNREVIEWED
+
+**What Maulik asked, 4 Sep 2026.** "Before taking trade fetch the latest price and put the order
+in market order with market protection with GTT stops."
+
+This reverses the **order type** in STANDING-ANSWERS **A8** ("Buy as a marketable LIMIT
+`min(trigger × 1.005, range high + 0.25 ADR)`, **never MARKET**"). A8 is his own answer, and so is
+this; **B16** settles the precedence — "if two answers here conflict, the later letter wins". The
+reversal is recorded here rather than applied quietly, because a rule written in capitals is
+exactly the kind that should not change without a paper trail.
+
+### SW22.1 — what changed, and what deliberately did not
+
+**Unchanged: the cap.** `marketable_limit` is untouched, still `min(trigger × (1 +
+entry_limit_buffer_pct/100), range_high + entry_limit_max_adr × ADR)`, still the most this setup
+is worth paying. A8's *arithmetic* was never the thing that failed.
+
+**Changed: how the cap reaches the exchange.** It was a resting LIMIT price. It is now the
+percentage handed to Kite's `market_protection` on a MARKET order —
+`market_protection_pct(cap, last_price)` = `(cap / last_price − 1) × 100`, clamped into
+`[market_protection_floor_pct, market_protection_max_pct]` = `[0.05, 3.0]`.
+
+**Why.** A marketable LIMIT and market protection are the same idea — a ceiling on what you pay —
+but they fail differently. A LIMIT rests in the book: when the tape runs past it, it simply does
+not fill, and the breakout is bought by everyone except us. That is the complaint that opened this
+session ("I'm not able to buy any stock which is in swing"), and M85 only fixed the half of it
+that was stale *data*. Market protection puts the same ceiling at the exchange, on an order that
+crosses the spread and actually catches the move.
+
+**The refusal is the interesting half.** When the live price is already at or above the cap,
+`market_protection_pct` returns `None` and the confirm is `BLOCKED` — "the price has run past the
+entry cap … not chased; the setup is gone for today, not cheaper later". That is not new
+behaviour, it is A8's behaviour made legible: a LIMIT below the market was already a decision not
+to buy, taken silently and only discovered after a ten-second wait. The reason it is right is that
+**the stop does not move up with a chased entry** — it is a technical level (SW9.5: one ADR or
+tighter) — so a share bought above the cap carries more risk than `size_position` sized for.
+
+**Rejected:** Zerodha's own default protection (`market_protection=-1`, ~3 %) — it is a *broker's*
+idea of a reasonable slip and has nothing to do with this setup's risk; a plain MARKET order with
+no protection (the one thing A8 was unambiguously right to refuse); keeping the LIMIT and merely
+widening `entry_limit_buffer_pct` (a wider limit is still a limit the tape can outrun, and it
+loosens the risk ceiling to fix a fill problem — the wrong knob).
+
+**Reversal.** `OpeningRangeConfig.entry_order_type = "LIMIT"` restores A8 exactly, with no other
+edit: the cap is then sent as `price` again and `market_protection` is not sent at all.
+
+### SW22.2 — the live price is read per confirm, for every kind
+
+The desk route used to read a price only for the two exit kinds, with the comment "only an exit
+needs the market: a buy's entry is its trigger". True of a resting LIMIT; false now. The route
+reads one for every executable kind, after the cheap refusals (400/404/410/409 still cost no
+broker read), through the M85 **interactive** Kite lane. A live BUY with no price is `BLOCKED`,
+never guessed — without a price there is no protection percentage and no value for the risk layer.
+The DRY_RUN drill, which has no market, falls back to the trigger.
+
+### SW22.3 — the hole this would have opened in the risk layer, found and closed
+
+`OrderGateway.place` computed `value = abs(qty) * float(price or 0)` and handed it to
+`RiskManager.pre_order`. Correct while every order carried a price. **A MARKET order has no
+price**, so that expression would have valued every swing entry at **zero** — and a zero-value
+order passes every notional cap the risk layer has. The caps would have remained in place, still
+covered by their own tests, and silently applied to nothing.
+
+`place` now takes `reference_price` (the live price the caller already had to read to compute the
+protection), values the order with it, and **refuses** an order that has neither price nor
+reference rather than valuing it at zero. `test_non_negotiables.py` carries all three properties.
+This is the part of SW22 that had nothing to do with what was asked for and mattered most.
+
+### SW22.4 — Track C §1/§2 stays a source-level property
+
+`test_swing_track_c.py` asserted from the AST that every `gw.place` call names a **literal**
+`order_type`. Making the entry configurable would have turned that into an `ast.Name` and quietly
+retired the check. Instead `ENTRY_ORDER_TYPES = {"LIMIT", "MARKET"}` is declared in
+`app/swing_execute.py`, `_buy` refuses anything outside it at run time, and the test asserts the
+set and the refusal. Config picks between two order types; it cannot invent a third.
+
+### What did NOT change
+
+The GTT stop. Non-negotiable 4 already put a vol-scaled GTT on every buy in the same call, armed
+for exactly the quantity filled, at the plan's stop, with `last_price` = the actual average fill
+(`_apply_buy_fill`). Maulik's "with GTT stops" describes what the book already does; it is
+restated here so a future reader does not go looking for a change that was not needed.

@@ -178,12 +178,36 @@ class OpeningRangeConfig:
     #: Session bounds, IST, as ``(hour, minute)``. The monitor is idle outside them.
     session_open: tuple[int, int] = (9, 15)
     monitor_close: tuple[int, int] = (10, 45)
-    #: The live buy (STANDING-ANSWERS A8) is a *marketable* LIMIT, never MARKET: its price is
-    #: ``min(trigger x (1 + entry_limit_buffer_pct / 100), range_high + entry_limit_max_adr x
-    #: ADR)`` — half a percent of chase, and never more than a quarter of a normal day's range
-    #: above the opening range it broke out of.
+    #: THE ENTRY CAP. ``min(trigger x (1 + entry_limit_buffer_pct / 100), range_high +
+    #: entry_limit_max_adr x ADR)`` — half a percent of chase, and never more than a quarter of
+    #: a normal day's range above the opening range it broke out of. It is the highest price
+    #: this strategy will pay for a breakout, and it is derived from the setup, not from the
+    #: broker's idea of a reasonable slip.
     entry_limit_buffer_pct: float = 0.5
     entry_limit_max_adr: float = 0.25
+
+    #: HOW THE ENTRY IS SENT (Maulik, 4 Sep 2026 — supersedes STANDING-ANSWERS A8's order type,
+    #: not its cap; STANDING-ANSWERS B16, "the later letter wins").
+    #:
+    #: A8 chose a resting *marketable LIMIT* at the cap above. On a breakout that is the wrong
+    #: side of the trade-off and the live book showed it: a LIMIT that the tape runs past does
+    #: not fill, and the name that was "in swing" is bought by everyone except us. What A8 was
+    #: protecting against — paying an unbounded price on a thin book — is what Kite's
+    #: **market protection** already does, and does at the exchange rather than in a resting
+    #: order that the market can simply leave behind.
+    #:
+    #: So: ``MARKET``, with the protection percentage derived from *this* cap
+    #: (`baskfy_core.swing.plan.market_protection_pct`) rather than from Zerodha's default 3 %.
+    #: The strategy's own risk ceiling stays the binding one, and a price that has already run
+    #: past the cap is refused rather than chased — which is the honest answer, not a worse fill.
+    #: Set this back to ``"LIMIT"`` and A8's behaviour returns exactly, with no other edit.
+    entry_order_type: str = "MARKET"
+    #: Kite accepts a protection greater than 0 and up to 100 (``-1`` means "let Zerodha decide",
+    #: which is the thing we are choosing not to do). Below the floor the number is noise and the
+    #: order goes unprotected-but-capped by the refusal above it; the max is the most this
+    #: strategy will ever hand the exchange, whatever the arithmetic says.
+    market_protection_floor_pct: float = 0.05
+    market_protection_max_pct: float = 3.0
     #: How long a confirm waits for the broker's fill before answering (seconds), and how often
     #: it asks — the orders endpoint at most twice a second (Kite's own ceiling is ten).
     fill_poll_seconds: float = 10.0

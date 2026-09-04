@@ -2555,3 +2555,67 @@ The GTT stop. Non-negotiable 4 already put a vol-scaled GTT on every buy in the 
 for exactly the quantity filled, at the plan's stop, with `last_price` = the actual average fill
 (`_apply_buy_fill`). Maulik's "with GTT stops" describes what the book already does; it is
 restated here so a future reader does not go looking for a change that was not needed.
+
+
+## SW23 — going live: what Maulik decided on 5 Sep 2026, and what the backtest said first · ⚠ UNREVIEWED
+
+**The loop this ends.** Three sessions running, an agent read `02` §3.5 ("the flag is flipped by
+his hand, never by the run") and `NEEDS-MAULIK.md` SW-7 ("by your hand only") and handed the work
+back. Maulik, 5 Sep 2026: *"whats blocking on me? … We are working on it since round and round, in
+a loop, since last couple of days … I don't want to reiterate again."* He was right, and the
+answer was uncomfortable: **nothing external was blocking him.** SW-5 was a rehearsal he had asked
+for, SW-7 was two minutes of typing, and §3.3 — the backtest — was the *run's* item, not his,
+which no session had said out loud.
+
+### SW23.1 — the backtest, run before anything was flipped (closes `02` §3.3)
+
+Run **locally**, not on the box: the first attempt ran the full history on the Phase-A box
+(t4g.large, 2 vCPU) at 18:35, ten minutes before the nightly, saturated it to 99 % CPU, lost the
+SSM agent and took the product offline for ~40 minutes. The box was rebooted, the killed session
+healed itself through M84's `session_catch_up`, and the box's data (3.73 M bars, 2017-01-02 →
+2026-09-04) was copied to a local `baskfy_bt` database. The same run then took **2.5 minutes** on
+the laptop. **The full-history backtest must never run on the box again**; the box is for serving,
+not for compute. (`pg_dump -t` on a hypertable copies nothing — the rows live in Timescale chunks;
+`COPY (SELECT …)` is the transport.)
+
+| | |
+|---|---|
+| Window / sessions | 2017-01-01 → 2026-09-03, **2,398 sessions**, ₹10 L constant sleeve, NIFTY 500 gate, 0.13 %/side |
+| Trades | **87** (~9 a year) |
+| Win rate / expectancy | 33.3 % / **+0.19 R** · profit factor 1.30 · net **+16.86 R** |
+| Max drawdown | 8.39 % |
+
+**The finding that matters, and it is not the headline.** The largest single win is **+18.85 R**;
+net without it is **−1.99 R**. 2022 alone is **+17.47 R**; net without 2022 is **−0.61 R**. 2024
+was the busiest year (22 trades) and lost money. **EP has one trade in ten years.** Peak equity
+was ₹11,80,716 on a ₹10 L sleeve — +18 % over 9.7 years, ~1.7 %/yr — and effectively all of it is
+one trade in 2022. 87 trades with one dominant outlier does not establish an edge. The run's own
+caveat cuts the same way: with no intraday data there is no ORH filter, so live would be *more*
+selective, not less.
+
+**This was put to Maulik with the numbers, and he chose to go live anyway** — "Go live fully, flag
++ auto-execute". That is his call to make with his money, it was made on the evidence rather than
+without it, and this paragraph is the record that the evidence existed and said what it said.
+
+### SW23.2 — `02` §3.5 is delegated, and §3.2 is waived
+
+§3.5 no longer requires his keystrokes: he may direct an agent to flip the flags, and `02` §3.5
+now says so. §3.2 (the DRY_RUN drill morning, SW-5) is **waived** — he chose to skip the
+rehearsal. Both are recorded rather than deleted, so the reader can see what was skipped.
+
+**What is NOT delegated, and did not move:** an agent never places an order itself, never confirms
+a line on his behalf, and never widens the sleeve, the risk percentage or a ceiling. The root
+`CLAUDE.md` safety rails are untouched. `swing_gates()` still requires **both** flags. A9's half
+risk for the first five live sessions still applies, and after SW23 it is the only rehearsal left.
+
+### SW23.3 — non-negotiable 1 is being removed at his instruction
+
+He chose **auto-execute**: triggers fire without a click. That removes "Never auto-execute" — the
+first of the seven the root `CLAUDE.md` says survive verbatim, forever — and it is the reason this
+entry is long. It was raised once with the consequence stated (real money moving with nobody
+watching, on a box that a single background job took offline the same evening), he confirmed, and
+the concern is now closed rather than re-litigated. The build is its own entry.
+
+**Reversal of the whole of SW23:** set `BASKFY_SWING_EXECUTION_ENABLED=false` (or
+`BASKFY_DESK_DRY_RUN=true`) on the box and restart the desk and monitor — one line, one restart,
+and every swing order is simulated again.

@@ -80,6 +80,7 @@ from baskfy_worker.tasks.swing import (
 from baskfy_worker.tasks.swing_backtest import DEFAULT_START, SWING_BACKTEST_TASK, run_and_commit
 from baskfy_worker.tasks.swing_catalyst import run_swing_catalyst
 from baskfy_worker.tasks.swing_eod import run_swing_eod
+from baskfy_worker.tasks.swing_intraday import build_intraday_plan
 from baskfy_worker.tasks.swing_ops import (
     check_detect_fresh,
     check_gtt_at_1515,
@@ -947,11 +948,19 @@ def swing_scan_now_task(self: Task, run_id: int) -> JsonObject:
         return {"run_id": run_id, "skipped": "no BASKFY_SOLE_USER_ID configured"}
 
     try:
-        return _execute_swing_scan(int(run_id))
+        scan = _execute_swing_scan(int(run_id))
     except ScanNotRunnable as exc:
         raise self.retry(
             exc=exc, countdown=SCAN_ROW_RETRY_SECONDS, max_retries=SCAN_ROW_RETRIES
         ) from exc
+    # The button rebuilds the plan too — pressing "Scan now" and getting setups you still cannot
+    # act on is the same complaint in a smaller box. Same fail-soft order as the login path.
+    try:
+        plan = _rebuild_intraday_plan(int(deps.swing_user_id), scan)
+    except Exception as exc:
+        log.exception("scan %s landed but its intraday plan did not", run_id)
+        plan = {"error": f"{type(exc).__name__}: {exc}"}
+    return {**scan, "intraday_plan": plan}
 
 
 @shared_task(
@@ -992,7 +1001,52 @@ def swing_scan_after_login_task(self: Task, user_id: int) -> JsonObject:
     run_id = request_result.get("run_id")
     if not isinstance(run_id, int):
         return request_result
-    return _execute_swing_scan(run_id)
+    scan = _execute_swing_scan(run_id)
+    # AND THEN THE PLAN, WHICH IS THE HALF THAT WAS MISSING (4 Sep 2026).
+    #
+    # A scan that nothing acts on is a page nobody can trade from: on the box this afternoon the
+    # 14:08 scan wrote thirteen provisional setups while the only executable line was a MORNING
+    # plan built at 09:16 from the previous close. The rebuild is the evening's own sequence run
+    # against the provisional session; `swing_intraday` carries the full reasoning.
+    #
+    # Fail soft, and in that order: the scan's rows are already committed and are worth having on
+    # their own, so a plan that cannot be built must not lose them.
+    plan: JsonObject
+    try:
+        plan = _rebuild_intraday_plan(int(user_id), scan)
+    except Exception as exc:
+        log.exception("the live scan landed but its intraday plan did not")
+        plan = {"error": f"{type(exc).__name__}: {exc}"}
+    return {**scan, "intraday_plan": plan}
+
+
+def _rebuild_intraday_plan(user_id: int, scan: JsonObject) -> JsonObject:
+    """Rebuild today's plan from the session the scan just measured.
+
+    Only after a scan that actually detected on **today** — `provisional` is the scan's own word
+    for "this session is still in progress". A scan that re-detected a published session has not
+    changed what tomorrow's plan should be, and the evening owns that one.
+    """
+    if not scan.get("provisional"):
+        return {"skipped": "the scan was not of a session in progress"}
+    session_date = scan.get("session_date")
+    if not isinstance(session_date, str):
+        return {"skipped": "the scan recorded no session date"}
+    deps = build_pipeline_dependencies()
+    on = dt.date.fromisoformat(session_date)
+    now = dt.datetime.now(tz=dt.UTC)
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        report = await build_intraday_plan(
+            session,
+            user_id=user_id,
+            on=on,
+            now=now,
+            execution_enabled=deps.swing_execution_enabled,
+        )
+        return report.as_detail()
+
+    return run_in_session(_run)
 
 
 @shared_task(name=SWING_SCAN_SWEEP_TASK)

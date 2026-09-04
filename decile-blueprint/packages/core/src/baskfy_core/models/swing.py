@@ -110,7 +110,12 @@ SW_WATCH_STATES: tuple[str, ...] = ("WATCHING", "TRIGGERED", "EXPIRED", "DISMISS
 
 #: ``sw_plan.source`` — the EOD preview, the 09:10 rebuild, or the one-line plan a live trigger
 #: creates (``docs/swing/03`` §6).
-SW_PLAN_SOURCES: tuple[str, ...] = ("EOD_PREVIEW", "MORNING", "SIGNAL")
+#: Where a plan came from. ``INTRADAY`` was added 4 Sep 2026 (Maulik): the live scan detects on
+#: today-so-far from Kite quotes, but until now nothing downstream ran, so a setup found at 13:42
+#: was visible and **not buyable** — the only executable lines were the 09:16 MORNING plan's,
+#: built from the last close. An INTRADAY plan is that same build re-run against the provisional
+#: session, so a live setup becomes a line you can confirm the same afternoon.
+SW_PLAN_SOURCES: tuple[str, ...] = ("EOD_PREVIEW", "MORNING", "SIGNAL", "INTRADAY")
 SW_LINE_STATES: tuple[str, ...] = (
     "PROPOSED",
     "CONFIRMED",

@@ -1056,6 +1056,23 @@ def _signal_text(signal: dict) -> str:
     return f"{state.lower().replace('_', ' ')} at {signal['last_price']}"
 
 
+def _todays_plan(store, today):
+    """The later of today's MORNING and INTRADAY plans, or None when neither is today's.
+
+    `built_at` decides, not the source: an INTRADAY plan is newer than the 09:16 MORNING one by
+    construction, but comparing the timestamps rather than assuming it keeps the rule true if the
+    morning job ever runs late, and keeps a stale intraday plan from outranking a fresh morning.
+    """
+    candidates = [
+        plan
+        for plan in (store.latest_plan("INTRADAY"), store.latest_plan("MORNING"))
+        if plan is not None and plan["as_of"] == today
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda plan: plan["built_at"])
+
+
 def _plan_view(
     plan: dict | None,
     store: PgSwingStore,
@@ -1296,9 +1313,16 @@ def build_view(
     triggers.sort(key=lambda t: 0 if t.get("focus") else 1)
 
     # --- the plan ------------------------------------------------------------------------
-    morning = store.latest_plan("MORNING")
-    if morning is not None and morning["as_of"] != today:
-        morning = None  # yesterday's morning plan is history, not the plan
+    # THE DAY'S PLAN, WHICHEVER OF THE TWO IS THE LATER MEASUREMENT (4 Sep 2026).
+    #
+    # `MORNING` is built once at 09:16 from the previous close. An `INTRADAY` plan is the same
+    # build re-run against the session in progress, written whenever a live scan lands. Both are
+    # "today's plan"; the later one is the one that has seen more of today, so it wins — and
+    # until an intraday scan has run there is no INTRADAY row and this is exactly what it was.
+    #
+    # Both are still filtered to `today`: yesterday's plan of either kind is history, not the
+    # plan, and rendering one would be the staleness this change exists to remove.
+    morning = _todays_plan(store, today)
     morning_view = _plan_view(morning, store, now=now, config=config, held=held)
     preview_view = _plan_view(store.latest_plan("EOD_PREVIEW"), store, now=now, config=config,
                               held=held)

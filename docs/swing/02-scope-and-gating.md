@@ -80,9 +80,22 @@ each with its evidence in `SW-FINAL-REPORT.md`:
 4. **Maulik's written risk decision**, in `DECISIONS-SW.md`: sleeve ₹25,00,000 (MD1),
    **0.5 % per trade** (MD2), **half risk for the first five live sessions** (MD12 / A9),
    the **15 % / 10 % drawdown lock-out** (SW9.5), and **rung 0** to start (MD13 / A10).
-5. **The flag is flipped by his hand, never by the run** — `BASKFY_SWING_EXECUTION_ENABLED=true`
-   together with `BASKFY_DESK_DRY_RUN=false` in the box's `/opt/baskfy/.env.staging.compose` (a
-   swing order is real only when both hold — `swing_gates()`; the second line also takes the
-   weekly book out of dry-run), recorded in `NEEDS-MAULIK.md` under Swing.
+5. ~~**The flag is flipped by his hand, never by the run**~~ — **DELEGATED BY MAULIK,
+   5 Sep 2026.** He may ask an agent to set `BASKFY_SWING_EXECUTION_ENABLED=true` together with
+   `BASKFY_DESK_DRY_RUN=false` in the box's `/opt/baskfy/.env.staging.compose` (a swing order is
+   real only when both hold — `swing_gates()`; the second line also takes the **weekly book** out
+   of dry-run). Recorded in `NEEDS-MAULIK.md` under Swing and in `DECISIONS-SW.md` SW23.
 
-There is no engineering path around this gate. The run ends with the flag false.
+   **Why this clause changed.** It was written to stop a *run* going live on its own initiative,
+   and it did that job. What it also did was stop the run going live when Maulik asked it to —
+   three sessions in a row on 4–5 Sep 2026, each one reading this line and handing the work back.
+   The rule intended to prevent an unwanted surprise was producing a loop instead. The protection
+   that actually matters is unchanged and is elsewhere: non-negotiable 1's `confirm=true` and the
+   30-minute plan expiry, the `swing_gates()` two-flag AND, and A9's half risk for five sessions.
+
+   **What is NOT delegated:** an agent still never places an order itself, never confirms a plan
+   line on his behalf, and never widens the sleeve, the risk percentage or a ceiling. Those stay
+   his, and the safety rails in the root `CLAUDE.md` are untouched.
+
+3.1–3.4 still hold and are still evidence-backed. What §3.5 no longer does is require his
+keystrokes for a decision he has already made in writing.

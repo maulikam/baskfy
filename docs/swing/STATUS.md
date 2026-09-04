@@ -2643,3 +2643,52 @@ Final state, 3 Sep 2026. Each item names who closes it.
   calendar; `write_market_row` still takes an unused `execution_enabled`;
   `baskfy_core.swing.__init__` does not re-export SW9.6's `GateMode` / `GateComparison`.
 - **The flag is false.** It stays false until Maulik's hand (SW-7), after §3.1–3.4.
+
+---
+
+## SW22 — the entry is a MARKET order with Kite's protection (4 Sep 2026) ✅
+
+**What Maulik asked.** "Before taking trade fetch the latest price and put the order in market
+order with market protection with GTT stops."
+
+This reverses the **order type** in STANDING-ANSWERS **A8** ("never MARKET"). A8 is his answer and
+so is this; **B16** settles the precedence. The full reasoning, the rejected alternatives and the
+one-field reversal are in `DECISIONS-SW.md` **SW22**; `04` §7.5 is rewritten; the A8 row is
+flagged as amended rather than overwritten, because his words are the record.
+
+| | |
+|---|---|
+| The cap | **Unchanged.** `marketable_limit` still says the most a setup is worth paying |
+| How it reaches the exchange | No longer a resting LIMIT price — it is `market_protection` on a MARKET order, `(cap / last_price − 1) × 100` clamped into `[0.05, 3.0]`. A LIMIT the tape runs past does not fill, which is how the breakout is missed |
+| A price already past the cap | **Refused, not chased.** The stop is a technical level and does not move up with a chased entry, so a share bought above the cap carries more risk than `size_position` sized for. A8 made the same refusal as a LIMIT nobody filled |
+| The live price | Read **per confirm**, for every executable kind, through M85's interactive Kite lane — not taken from a plan `_validate` lets be half an hour old. A live buy without one is `BLOCKED`, never guessed |
+| The GTT | **Unchanged.** Non-negotiable 4 already armed one in the same call, for exactly the quantity filled, at the plan's stop |
+| Reversal | `OpeningRangeConfig.entry_order_type = "LIMIT"` restores A8 exactly, no other edit |
+
+**The hole this would have opened, found and closed (SW22.3).** `OrderGateway.place` valued every
+order as `abs(qty) * float(price or 0)`. Correct while every order carried a price — and a MARKET
+order has none, so that expression would have valued every swing entry at **zero** and passed it
+through every notional cap the risk layer holds, with the caps still present, still covered by
+their own tests, and applying to nothing. `place` now takes `reference_price`, values the order
+with it, and **refuses** an order it cannot value. Three tests in `test_non_negotiables.py`. This
+was not part of what was asked for and is the change most worth reviewing.
+
+**Track C stayed a source-level property (SW22.4).** `ENTRY_ORDER_TYPES = {"LIMIT", "MARKET"}` is
+declared in `app/swing_execute.py` and `_buy` refuses anything outside it, so making the entry
+configurable did not quietly retire the AST check that every `gw.place` names a known order type.
+
+**Verified:** desk **1,775 passed, 17 skipped, 12 subtests**; screener exit 0; `make lint` clean
+over 535 files.
+
+### NOT done
+
+- **The flags are untouched and stay untouched.** `BASKFY_SWING_EXECUTION_ENABLED` is false and
+  the desk is `DRY_RUN=true`. `02` §3.5 in his own words: "the flag is flipped by his hand, never
+  by the run." **SW-5 — the DRY_RUN drill morning — has still never run**, and it is now the one
+  outstanding condition of his own five.
+- **No confirm has taken this path against a real session**, live or dry. The unit suites cover
+  the protection arithmetic, the refusal, the missing-price block and the risk valuation; a real
+  morning covers none of them yet. The right sequencing is: deploy → drill morning on **this**
+  code → then the flag.
+- `tools/swing/drill.py` was **not** re-run for SW22: it resets the database it is pointed at,
+  and no disposable one was available on this machine.

@@ -1569,3 +1569,29 @@ G1, whose evidence line had been left behind by a failing run.
   readable only in `note`. Not this module's contract.
 - **Not verified against a real 1pm login yet.** The first real proof is the next afternoon Maulik
   logs in.
+
+### Deploy #10 — `7d17581` live on the Phase A box (4 Sep 2026, 17:5x IST)
+
+`push-images.sh` (web, py, desk — arm64) then `deploy-swing.sh`; alembic `0033_swing_scan_now`
+is head and applied; ten services up on the new tag. `verify-swing.sh` **all green** — including
+the two that matter for the rails: `desk /status` reports `dry_run true` and
+`read_limiter: "shared"`, and `BASKFY_SWING_EXECUTION_ENABLED` is `false` in both the desk and
+the monitor. Nothing on this box can place an order.
+
+Verified live on the box after the deploy, not inferred from the diff:
+
+| Asked | Answered |
+|---|---|
+| Are both post-login tasks registered? | `baskfy.pipeline.session_catch_up`, `baskfy.swing.scan_after_login` |
+| On different queues, and does the worker take both? | the scan routes to `compute`, the catch-up falls to `task_default_queue` = `default`; the worker runs `-Q compute,backtest,default --concurrency=2` |
+| Is the ceiling one number? | `ceiling 3.0 bulk 2.0`; interactive key `baskfy:ratelimit:kite:read`, bulk `['baskfy:ratelimit:kite:bulk', 'baskfy:ratelimit:kite:read']` |
+| Does the desk name the same clock? | `families ['general', 'historical', 'quote', 'read']`, and all four are shared |
+
+State of the data at deploy time: last bar and last published run both **2026-09-03 v9** (today's
+bhavcopy does not exist before ~18:00, which is correct), `sw_setup_daily` already carrying
+`2026-09-04` rows from the day's scans.
+
+**Still not proven.** No 1pm login has run against this build. The first real evidence is the next
+afternoon Maulik connects Zerodha: the callback should log two queued refreshes, a `sw_scan_run`
+row should appear with `source="broker-login"` and `provisional=true`, and the Setups page should
+carry today's date. Until that happens M85 is tested, not demonstrated.

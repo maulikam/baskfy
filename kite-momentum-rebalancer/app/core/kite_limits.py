@@ -118,8 +118,10 @@ FAMILY_FOR_CALL: dict[str, str] = {
     "get_gtts": "general",
 }
 
-#: The namespace the Baskfy side already owns (`baskfy:ratelimit:kite` is the pipeline's bucket).
-#: One key per family, because Kite's caps are per family.
+#: The namespace the Baskfy side already owns. One key per family — but `read` is not a family in
+#: the same sense: it is Kite's combined 3 req/s ceiling, taken *before* the endpoint family on
+#: every call, and `baskfy_providers.factory.KITE_READ_CLOCK_KEY` is the same string on the
+#: pipeline's side so both trees queue on one clock (M85, closing SW21.1's residual).
 SHARED_KEY_PREFIX = "baskfy:ratelimit:kite"
 
 #: How long a caller will wait for a slot claimed by some other process before giving up on the

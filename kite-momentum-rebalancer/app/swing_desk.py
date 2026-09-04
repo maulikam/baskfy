@@ -1561,10 +1561,19 @@ async def swing_execute_line(
             raise HTTPException(400, f"A {line['kind']} line cannot be executed — it is "
                                      f"information only; the SIGNAL plan at range close is "
                                      f"the line.")
-        # Only an exit needs the market: a buy's entry is its trigger. Looked up before the
-        # call so a refusal (400/404/410/409) costs no broker read.
+        # EVERY EXECUTABLE KIND NEEDS THE MARKET NOW (Maulik, 4 Sep 2026).
+        #
+        # This used to read "only an exit needs the market: a buy's entry is its trigger", and
+        # that was true while the entry was a resting LIMIT at that trigger (A8). The entry is a
+        # MARKET order now, so the live price is what decides its protection percentage, whether
+        # it is refused against the entry cap at all, and what the risk layer values it at.
+        #
+        # Read here, one call, after the cheap refusals above: a 400/404/410/409 still costs no
+        # broker read, and the price the confirm uses is seconds old rather than as old as the
+        # plan — which `_validate` lets be half an hour.
         price = (
-            last_price(line["symbol"]) if line is not None and line["kind"] in EXIT_KINDS
+            last_price(line["symbol"])
+            if line is not None and line["kind"] in EXECUTABLE_KINDS
             else None
         )
         try:

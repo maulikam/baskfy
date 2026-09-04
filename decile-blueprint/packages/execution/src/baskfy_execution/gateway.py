@@ -1,17 +1,37 @@
 """Async order gateway — the ONLY module allowed to place/modify/cancel orders.
 Enforces: instrument guards → risk manager → rate limits → idempotency → journal.
 Sync kiteconnect calls run in a thread pool so the event loop never blocks."""
+
 from __future__ import annotations
 import asyncio, json, os, time, uuid, logging
 from dataclasses import dataclass
 from typing import Callable
-from .guards import (OvernightOptionError, assert_not_overnight_option,
-                     assert_tradeable)
-from .gtt import (DEFAULT_STOP_BAND, DRY_RUN_GTT, DRY_RUN_GTT_DELETE, DRY_RUN_GTT_MODIFY,
-                  GTT_DELETE_ERROR, GTT_DELETED, GTT_ERROR, GTT_LIMIT_FRACTION, GTT_MODIFIED,
-                  GTT_MODIFY_ERROR, GTT_PLACED, ORDER_CANCEL_DRY_RUN, ORDER_CANCEL_ERROR,
-                  ORDER_CANCELLED, ORDER_CANCELLED_STATUSES, StopBand, TickSizes, band_finding,
-                  drop_pct, gtt_params, kill_switch_reason, refuse_stop, to_tick)
+from .guards import OvernightOptionError, assert_not_overnight_option, assert_tradeable
+from .gtt import (
+    DEFAULT_STOP_BAND,
+    DRY_RUN_GTT,
+    DRY_RUN_GTT_DELETE,
+    DRY_RUN_GTT_MODIFY,
+    GTT_DELETE_ERROR,
+    GTT_DELETED,
+    GTT_ERROR,
+    GTT_LIMIT_FRACTION,
+    GTT_MODIFIED,
+    GTT_MODIFY_ERROR,
+    GTT_PLACED,
+    ORDER_CANCEL_DRY_RUN,
+    ORDER_CANCEL_ERROR,
+    ORDER_CANCELLED,
+    ORDER_CANCELLED_STATUSES,
+    StopBand,
+    TickSizes,
+    band_finding,
+    drop_pct,
+    gtt_params,
+    kill_switch_reason,
+    refuse_stop,
+    to_tick,
+)
 from .ratelimit import KiteLimits
 from .risk import RiskManager
 from .tenancy import TenantIds, refuse_cross_tenant
@@ -46,8 +66,7 @@ class ProductGates:
 #
 # DUPLICATE and DRY_RUN are deliberately NOT here: neither is a failure, and neither
 # carries an error to compare.
-FAILED_STATUSES: frozenset[str] = frozenset({"ERROR", "REJECTED", "BLOCKED",
-                                             "RISK_BLOCKED"})
+FAILED_STATUSES: frozenset[str] = frozenset({"ERROR", "REJECTED", "BLOCKED", "RISK_BLOCKED"})
 
 # Kite's own exception taxonomy tells you whether the order got anywhere. A refusal it
 # names — bad margin, a disallowed IP, an invalid parameter, an expired token — was
@@ -59,23 +78,27 @@ FAILED_STATUSES: frozenset[str] = frozenset({"ERROR", "REJECTED", "BLOCKED",
 # "Insufficient funds" in plain words. The warning is the right one to give when the
 # outcome is unknown and the wrong one to give when it is not: it sends you to the order
 # book to rule out a double-send that was never possible.
-_DEFINITIVE_REFUSALS = ("InputException", "OrderException", "PermissionException",
-                        "TokenException")
+_DEFINITIVE_REFUSALS = ("InputException", "OrderException", "PermissionException", "TokenException")
 
 
 class OrderGateway:
-    def __init__(self, kc, risk: RiskManager, *,
-                 gates: Callable[[], ProductGates] = ProductGates,
-                 journal_path: str = JOURNAL,
-                 stop_band: StopBand | None = None):
+    def __init__(
+        self,
+        kc,
+        risk: RiskManager,
+        *,
+        gates: Callable[[], ProductGates] = ProductGates,
+        journal_path: str = JOURNAL,
+        stop_band: StopBand | None = None,
+    ):
         self.kc, self.risk, self.limits = kc, risk, KiteLimits()
-        self._sent: dict[str, str] = {}   # client_id -> broker order_id (idempotency)
+        self._sent: dict[str, str] = {}  # client_id -> broker order_id (idempotency)
         # A SEPARATE idempotency map for GTTs, and it must stay separate. The desk builds
         # client ids as `plan_id:symbol` for orders; a stop armed for the same plan and
         # symbol would collide with the buy that created it and be reported DUPLICATE —
         # a silently skipped stop, which is the one failure this whole path exists to
         # prevent.
-        self._gtt_sent: dict[str, object] = {}   # client_id -> broker trigger_id
+        self._gtt_sent: dict[str, object] = {}  # client_id -> broker trigger_id
         self._ticks = TickSizes()
         self._stop_band = stop_band or DEFAULT_STOP_BAND
         # A CALLABLE, not a value, and deliberately: the desk reads DRY_RUN off its config
@@ -105,12 +128,36 @@ class OrderGateway:
         with open(self._journal_path, "a") as f:
             f.write(json.dumps(rec, default=str) + "\n")
 
-    async def place(self, *, symbol: str, qty: int, side: str, product: str = "CNC",
-                    order_type: str = "LIMIT", price: float | None = None,
-                    exchange: str = "NSE", variety: str = "regular",
-                    client_id: str | None = None, gross_exposure: float = 0.0,
-                    series: str | None = None, tick_size: float | None = None,
-                    tenant: TenantIds, plan_tenant: TenantIds) -> dict:
+    async def place(
+        self,
+        *,
+        symbol: str,
+        qty: int,
+        side: str,
+        product: str = "CNC",
+        order_type: str = "LIMIT",
+        price: float | None = None,
+        exchange: str = "NSE",
+        variety: str = "regular",
+        client_id: str | None = None,
+        gross_exposure: float = 0.0,
+        series: str | None = None,
+        tick_size: float | None = None,
+        market_protection: float | None = None,
+        reference_price: float | None = None,
+        tenant: TenantIds,
+        plan_tenant: TenantIds,
+    ) -> dict:
+        """Place one order through the four layers. See `market_protection` below.
+
+        ``market_protection`` is Kite's own: on a MARKET order the exchange fills at best up to
+        this percentage past the last traded price and refuses beyond it. Sent only with MARKET
+        — Kite ignores it on a LIMIT, and passing it there would be a lie in the journal.
+
+        ``reference_price`` is what a MARKET order is *worth* for the risk check, since it has
+        no price of its own. It is not sent to the broker. See the risk layer below for why it
+        is not optional in practice.
+        """
         # Law 2 multi-tenant clause (P4.3): refuse a plan built for someone else before
         # any guard, risk check, or network call. BLOCKED, not an exception — a 500 would
         # be the wrong answer to a cross-tenant post.
@@ -124,51 +171,125 @@ class OrderGateway:
         # operator most needs to tie back to a plan. Resolving it here changes nothing about
         # what is placed: an unused uuid for a refused order costs nothing.
         cid = client_id or uuid.uuid4().hex[:10]
-        assert_tradeable(symbol, series)                       # layer 1: untouchables
+        assert_tradeable(symbol, series)  # layer 1: untouchables
         # Same layer: an option under a carry product would still be open tomorrow morning.
         # Returned as BLOCKED rather than raised so one refused leg cannot abort a batch
         # that has already placed real orders.
         try:
             assert_not_overnight_option(symbol, exchange, product)
         except OvernightOptionError as exc:
-            self._journal({"event": "overnight_option_block", "symbol": symbol,
-                           "product": product, "side": side, "exchange": exchange},
-                          client_id=cid)
+            self._journal(
+                {
+                    "event": "overnight_option_block",
+                    "symbol": symbol,
+                    "product": product,
+                    "side": side,
+                    "exchange": exchange,
+                },
+                client_id=cid,
+            )
             return {"symbol": symbol, "status": "BLOCKED", "error": str(exc)}
         # MIS is an intraday product on every segment. The old NSE/BSE-only check let an
         # NFO MIS order through with INTRADAY_ENABLED=false as soon as OPTIONS_ENABLED was
         # set, so enabling options silently enabled an intraday engine as well.
         if product == "MIS" and not gates.intraday_enabled:
-            return {"symbol": symbol, "status": "BLOCKED",
-                    "error": "MIS/intraday disabled (config.INTRADAY_ENABLED)"}
+            return {
+                "symbol": symbol,
+                "status": "BLOCKED",
+                "error": "MIS/intraday disabled (config.INTRADAY_ENABLED)",
+            }
         if exchange in ("NFO", "BFO") and not gates.options_enabled:
-            return {"symbol": symbol, "status": "BLOCKED",
-                    "error": "F&O disabled (config.OPTIONS_ENABLED)"}
-        value = abs(qty) * float(price or 0)
+            return {
+                "symbol": symbol,
+                "status": "BLOCKED",
+                "error": "F&O disabled (config.OPTIONS_ENABLED)",
+            }
+        # LAYER 2 READS A PRICE, AND A MARKET ORDER HAS NONE.
+        #
+        # This used to be `abs(qty) * float(price or 0)`. That was correct while every buy was a
+        # LIMIT (A8) and every sell passed the last price. The moment an entry goes out as MARKET
+        # with `price=None` the value becomes **zero**, and a zero-value order passes every cap
+        # the risk layer has: per-order notional, gross exposure, the lot. The caps would still
+        # be there, still be tested, and silently apply to nothing — the worst shape a control
+        # can take. `reference_price` is the live price the caller already had to read to
+        # compute market protection, so there is no case where a MARKET order cannot supply one.
+        #
+        # A MARKET order with neither price nor reference is refused rather than valued at zero.
+        # Refusing is recoverable; an unpriced order against a disarmed risk check is not.
+        valuation = price if price else reference_price
+        if not valuation:
+            self._journal(
+                {
+                    "event": "unpriced_order_block",
+                    "symbol": symbol,
+                    "side": side,
+                    "qty": qty,
+                    "order_type": order_type,
+                },
+                client_id=cid,
+            )
+            return {
+                "symbol": symbol,
+                "status": "BLOCKED",
+                "error": (
+                    f"{order_type} order for {symbol} carries no price and no "
+                    "reference_price; the risk check cannot value it"
+                ),
+            }
+        value = abs(qty) * float(valuation)
         ok, why = self.risk.pre_order(symbol, value, gross_exposure)  # layer 2: risk
         if not ok:
-            self._journal({"event": "risk_block", "symbol": symbol, "why": why},
-                          client_id=cid)
+            self._journal({"event": "risk_block", "symbol": symbol, "why": why}, client_id=cid)
             return {"symbol": symbol, "status": "RISK_BLOCKED", "error": why}
-        if cid in self._sent:                                   # layer 3: idempotency
+        if cid in self._sent:  # layer 3: idempotency
             return {"symbol": symbol, "status": "DUPLICATE", "order_id": self._sent[cid]}
-        await self.limits.order_slot()                          # layer 4: rate limits
+        await self.limits.order_slot()  # layer 4: rate limits
         if gates.dry_run:
             self._sent[cid] = f"DRY-{cid}"
-            self._journal({"event": "dry_run", "symbol": symbol, "side": side,
-                           "qty": qty, "price": price, "product": product},
-                          client_id=cid)
+            # `order_type`, `market_protection` and `reference_price` are journalled here as
+            # well as on a live send, because the DRY_RUN drill morning is the evidence `02` §3
+            # asks for before the flag is flipped — and a drill that cannot show WHAT would have
+            # been sent is not evidence of anything. A MARKET entry's `price` is None by nature;
+            # the reference is what it was worth when the risk layer valued it.
+            self._journal(
+                {
+                    "event": "dry_run",
+                    "symbol": symbol,
+                    "side": side,
+                    "qty": qty,
+                    "price": price,
+                    "product": product,
+                    "order_type": order_type,
+                    "market_protection": market_protection,
+                    "reference_price": reference_price,
+                },
+                client_id=cid,
+            )
             return {"symbol": symbol, "status": "DRY_RUN", "order_id": self._sent[cid]}
-        params = dict(variety=variety, exchange=exchange, tradingsymbol=symbol,
-                      quantity=abs(int(qty)), transaction_type=side, product=product,
-                      order_type=order_type, validity="DAY")
+        params = dict(
+            variety=variety,
+            exchange=exchange,
+            tradingsymbol=symbol,
+            quantity=abs(int(qty)),
+            transaction_type=side,
+            product=product,
+            order_type=order_type,
+            validity="DAY",
+        )
+        if market_protection is not None and order_type == "MARKET":
+            # Kite: greater than 0, up to 100 (`-1` asks Zerodha to choose, which the swing
+            # book deliberately does not do — its cap comes from the setup, not the broker).
+            params["market_protection"] = round(float(market_protection), 2)
         if price and order_type == "LIMIT":
             # Option ticks are currently Rs 0.05; rounding every limit to one decimal can
             # move a price away from the selected quote. Live contract metadata remains
             # authoritative because exchange tick sizes can change.
             px = float(price)
-            params["price"] = (round(round(px / tick_size) * tick_size, 2)
-                               if tick_size and tick_size > 0 else round(px, 1))
+            params["price"] = (
+                round(round(px / tick_size) * tick_size, 2)
+                if tick_size and tick_size > 0
+                else round(px, 1)
+            )
         try:
             oid = await asyncio.to_thread(self.kc.place_order, **params)
             self._sent[cid] = oid
@@ -177,13 +298,23 @@ class OrderGateway:
         except Exception as exc:
             definitive = type(exc).__name__ in _DEFINITIVE_REFUSALS
             status = "REJECTED" if definitive else "ERROR"
-            self._journal({"event": "rejected" if definitive else "error",
-                           "symbol": symbol, "error": str(exc),
-                           "exception": type(exc).__name__}, client_id=cid)
-            return {"symbol": symbol, "status": status, "error": str(exc),
+            self._journal(
+                {
+                    "event": "rejected" if definitive else "error",
+                    "symbol": symbol,
+                    "error": str(exc),
                     "exception": type(exc).__name__,
-                    # The one thing the operator needs after a failed batch.
-                    "reached_exchange": False if definitive else None}
+                },
+                client_id=cid,
+            )
+            return {
+                "symbol": symbol,
+                "status": status,
+                "error": str(exc),
+                "exception": type(exc).__name__,
+                # The one thing the operator needs after a failed batch.
+                "reached_exchange": False if definitive else None,
+            }
 
     # --- GTT stops: non-negotiable 4, and the closing of non-negotiable 6's exception -----
     #
@@ -221,11 +352,20 @@ class OrderGateway:
             self._ticks.remember(exchange, dump)
         return self._ticks.get(symbol, exchange)
 
-    async def place_gtt_stop(self, *, symbol: str, qty: int, trigger: float,
-                             last_price: float, exchange: str = "NSE",
-                             series: str | None = None, client_id: str | None = None,
-                             tenant: TenantIds, plan_tenant: TenantIds,
-                             limit_fraction: float | None = None) -> dict:
+    async def place_gtt_stop(
+        self,
+        *,
+        symbol: str,
+        qty: int,
+        trigger: float,
+        last_price: float,
+        exchange: str = "NSE",
+        series: str | None = None,
+        client_id: str | None = None,
+        tenant: TenantIds,
+        plan_tenant: TenantIds,
+        limit_fraction: float | None = None,
+    ) -> dict:
         """Rest a vol-scaled stop-loss at the exchange. The ONLY way to create a GTT.
 
         `trigger` is `stop_from_vol(price, vol, cfg)` — computed at plan time by
@@ -258,7 +398,7 @@ class OrderGateway:
         # Resolved up front for the same reason as in `place()`: every refusal below writes a
         # journal line, and a line an operator cannot tie to a plan is half a record.
         cid = client_id or uuid.uuid4().hex[:10]
-        assert_tradeable(symbol, series)                       # GTT layer 1: untouchables
+        assert_tradeable(symbol, series)  # GTT layer 1: untouchables
         # A GTT rests at the exchange for up to a year, so an option trigger is an overnight
         # option position by construction — it can only fire on a session this system never
         # intended to be holding one. Checked against the leg's OWN product, which is CNC.
@@ -267,20 +407,38 @@ class OrderGateway:
         try:
             assert_not_overnight_option(symbol, exchange, "CNC")
         except OvernightOptionError as exc:
-            self._journal({"event": "gtt_overnight_option_block", "symbol": symbol,
-                           "exchange": exchange, "qty": int(qty), "trigger": trigger},
-                          client_id=cid)
+            self._journal(
+                {
+                    "event": "gtt_overnight_option_block",
+                    "symbol": symbol,
+                    "exchange": exchange,
+                    "qty": int(qty),
+                    "trigger": trigger,
+                },
+                client_id=cid,
+            )
             return {"symbol": symbol, "status": "BLOCKED", "error": str(exc)}
         if exchange in ("NFO", "BFO") and not gates.options_enabled:
-            return {"symbol": symbol, "status": "BLOCKED",
-                    "error": "F&O disabled (config.OPTIONS_ENABLED)"}
+            return {
+                "symbol": symbol,
+                "status": "BLOCKED",
+                "error": "F&O disabled (config.OPTIONS_ENABLED)",
+            }
         # GTT layer 1b: is this actually a stop? The desk never asked, because its own planner
         # cannot produce a bad one. Nothing enforced that, and the gateway is where it belongs.
         refusal = refuse_stop(symbol=symbol, qty=qty, trigger=trigger, last_price=last_price)
         if refusal:
-            self._journal({"event": "gtt_block", "symbol": symbol, "qty": int(qty),
-                           "trigger": trigger, "last_price": last_price, "why": refusal},
-                          client_id=cid)
+            self._journal(
+                {
+                    "event": "gtt_block",
+                    "symbol": symbol,
+                    "qty": int(qty),
+                    "trigger": trigger,
+                    "last_price": last_price,
+                    "why": refusal,
+                },
+                client_id=cid,
+            )
             return {"symbol": symbol, "status": "BLOCKED", "error": refusal}
         # GTT layer 2: risk — CONSULTED, RECORDED, AND DELIBERATELY NOT OBEYED HERE.
         #
@@ -295,33 +453,53 @@ class OrderGateway:
         # other way round — see `delete_gtt`, where risk does refuse.
         killed = kill_switch_reason(self.risk)
         if killed:
-            self._journal({"event": "gtt_risk_note", "symbol": symbol, "qty": int(qty),
-                           "trigger": trigger, "why": killed,
-                           "note": "kill switch is live; a protective stop is still armed"},
-                          client_id=cid)
+            self._journal(
+                {
+                    "event": "gtt_risk_note",
+                    "symbol": symbol,
+                    "qty": int(qty),
+                    "trigger": trigger,
+                    "why": killed,
+                    "note": "kill switch is live; a protective stop is still armed",
+                },
+                client_id=cid,
+            )
         finding = band_finding(trigger=trigger, last_price=last_price, band=self._stop_band)
         if finding:
-            self._journal({"event": "gtt_band_warning", "symbol": symbol, "finding": finding,
-                           "drop_pct": drop_pct(trigger=trigger, last_price=last_price),
-                           "band": [self._stop_band.min_pct, self._stop_band.max_pct]},
-                          client_id=cid)
-        if cid in self._gtt_sent:                              # GTT layer 3: idempotency
+            self._journal(
+                {
+                    "event": "gtt_band_warning",
+                    "symbol": symbol,
+                    "finding": finding,
+                    "drop_pct": drop_pct(trigger=trigger, last_price=last_price),
+                    "band": [self._stop_band.min_pct, self._stop_band.max_pct],
+                },
+                client_id=cid,
+            )
+        if cid in self._gtt_sent:  # GTT layer 3: idempotency
             # A re-armed stop is not a no-op: two triggers on one position sell twice what is
             # held when they fire, which is short delivery and an auction penalty (the 18 Aug
             # 2026 finding behind `protection.EXCESS`).
-            return {"symbol": symbol, "status": "DUPLICATE",
-                    "gtt_id": self._gtt_sent[cid]}
-        await self.limits.api_slot()                           # GTT layer 4: rate limits
+            return {"symbol": symbol, "status": "DUPLICATE", "gtt_id": self._gtt_sent[cid]}
+        await self.limits.api_slot()  # GTT layer 4: rate limits
         if gates.dry_run:
             # Shape preserved from `kite_client.py:252-254`: the desk reports the UNSNAPPED
             # trigger here because snapping needs the instrument dump, which is a network call
             # a dry run must not make.
-            self._journal({"event": "gtt_dry_run", "symbol": symbol, "qty": int(qty),
-                           "trigger": trigger, "last_price": last_price,
-                           "exchange": exchange, "limit_fraction": fraction}, client_id=cid)
+            self._journal(
+                {
+                    "event": "gtt_dry_run",
+                    "symbol": symbol,
+                    "qty": int(qty),
+                    "trigger": trigger,
+                    "last_price": last_price,
+                    "exchange": exchange,
+                    "limit_fraction": fraction,
+                },
+                client_id=cid,
+            )
             self._gtt_sent[cid] = f"DRY-{cid}"
-            return {"symbol": symbol, "status": DRY_RUN_GTT, "trigger": trigger,
-                    "qty": int(qty)}
+            return {"symbol": symbol, "status": DRY_RUN_GTT, "trigger": trigger, "qty": int(qty)}
         try:
             tick = await self._tick_size(symbol, exchange)
             trig = to_tick(trigger, tick)
@@ -329,25 +507,48 @@ class OrderGateway:
             # needs snapping to the same tick or the whole trigger is rejected.
             limit = to_tick(trig * fraction, tick)
         except Exception as exc:
-            self._journal({"event": "gtt_error", "symbol": symbol, "stage": "tick_size",
-                           "error": str(exc), "exception": type(exc).__name__},
-                          client_id=cid)
+            self._journal(
+                {
+                    "event": "gtt_error",
+                    "symbol": symbol,
+                    "stage": "tick_size",
+                    "error": str(exc),
+                    "exception": type(exc).__name__,
+                },
+                client_id=cid,
+            )
             return {"symbol": symbol, "status": GTT_ERROR, "error": str(exc)}
         # RE-CHECKED AFTER SNAPPING, and this is not belt-and-braces. Snapping rounds to the
         # NEAREST tick, so on a coarse-tick scrip it can round a trigger UP through the last
         # price — 99.9 against a Rs 1.00 tick becomes 100.0 — and a sell trigger at or above
         # the last price fires on the next tick and liquidates the position. The desk snapped
         # and placed; nothing looked again.
-        snapped_refusal = refuse_stop(symbol=symbol, qty=qty, trigger=trig,
-                                      last_price=last_price)
+        snapped_refusal = refuse_stop(symbol=symbol, qty=qty, trigger=trig, last_price=last_price)
         if snapped_refusal:
-            self._journal({"event": "gtt_block", "symbol": symbol, "qty": int(qty),
-                           "trigger": trig, "requested_trigger": trigger, "tick": tick,
-                           "last_price": last_price, "stage": "after_tick_snap",
-                           "why": snapped_refusal}, client_id=cid)
+            self._journal(
+                {
+                    "event": "gtt_block",
+                    "symbol": symbol,
+                    "qty": int(qty),
+                    "trigger": trig,
+                    "requested_trigger": trigger,
+                    "tick": tick,
+                    "last_price": last_price,
+                    "stage": "after_tick_snap",
+                    "why": snapped_refusal,
+                },
+                client_id=cid,
+            )
             return {"symbol": symbol, "status": "BLOCKED", "error": snapped_refusal}
-        params = gtt_params(self.kc, symbol=symbol, exchange=exchange, qty=int(qty),
-                            trigger=trig, limit=limit, last_price=last_price)
+        params = gtt_params(
+            self.kc,
+            symbol=symbol,
+            exchange=exchange,
+            qty=int(qty),
+            trigger=trig,
+            limit=limit,
+            last_price=last_price,
+        )
         # ONLY the broker call is inside the try. Reading `trigger_id` out of the response used
         # to sit here too, and that is the shape of a genuinely dangerous bug: a call that
         # SUCCEEDED but answered in an unexpected shape would have been reported GTT_ERROR, the
@@ -359,32 +560,72 @@ class OrderGateway:
         try:
             gid = await asyncio.to_thread(self.kc.place_gtt, **params)
         except Exception as exc:
-            self._journal({"event": "gtt_error", "symbol": symbol, "stage": "place_gtt",
-                           "error": str(exc), "exception": type(exc).__name__,
-                           "trigger": trig, "qty": int(qty)}, client_id=cid)
-            return {"symbol": symbol, "status": GTT_ERROR, "error": str(exc),
+            self._journal(
+                {
+                    "event": "gtt_error",
+                    "symbol": symbol,
+                    "stage": "place_gtt",
+                    "error": str(exc),
                     "exception": type(exc).__name__,
-                    # Unlike an order, a GTT refusal carries no taxonomy to read the outcome
-                    # from, so the honest answer is "unknown": check the GTT book before
-                    # re-arming, because a blind retry is how a position gets two stops.
-                    "reached_exchange": None}
+                    "trigger": trig,
+                    "qty": int(qty),
+                },
+                client_id=cid,
+            )
+            return {
+                "symbol": symbol,
+                "status": GTT_ERROR,
+                "error": str(exc),
+                "exception": type(exc).__name__,
+                # Unlike an order, a GTT refusal carries no taxonomy to read the outcome
+                # from, so the honest answer is "unknown": check the GTT book before
+                # re-arming, because a blind retry is how a position gets two stops.
+                "reached_exchange": None,
+            }
         trigger_id = gid.get("trigger_id") if isinstance(gid, dict) else None
         self._gtt_sent[cid] = trigger_id
-        self._journal({"event": "gtt_placed", "symbol": symbol, "gtt_id": trigger_id,
-                       "qty": int(qty), "trigger": trig, "limit": limit,
-                       "limit_fraction": fraction,
-                       "last_price": last_price, "exchange": exchange,
-                       "drop_pct": drop_pct(trigger=trig, last_price=last_price),
-                       **({} if trigger_id is not None
-                          else {"warning": "the broker named no trigger_id; the GTT exists "
-                                           "but cannot be addressed from this record"})},
-                      client_id=cid)
-        return {"symbol": symbol, "status": GTT_PLACED, "gtt_id": trigger_id,
-                "trigger": trig, "limit": limit}
+        self._journal(
+            {
+                "event": "gtt_placed",
+                "symbol": symbol,
+                "gtt_id": trigger_id,
+                "qty": int(qty),
+                "trigger": trig,
+                "limit": limit,
+                "limit_fraction": fraction,
+                "last_price": last_price,
+                "exchange": exchange,
+                "drop_pct": drop_pct(trigger=trig, last_price=last_price),
+                **(
+                    {}
+                    if trigger_id is not None
+                    else {
+                        "warning": "the broker named no trigger_id; the GTT exists "
+                        "but cannot be addressed from this record"
+                    }
+                ),
+            },
+            client_id=cid,
+        )
+        return {
+            "symbol": symbol,
+            "status": GTT_PLACED,
+            "gtt_id": trigger_id,
+            "trigger": trig,
+            "limit": limit,
+        }
 
-    async def delete_gtt(self, *, gtt_id: int, symbol: str, exchange: str = "NSE",
-                         series: str | None = None, client_id: str | None = None,
-                         tenant: TenantIds, plan_tenant: TenantIds) -> dict:
+    async def delete_gtt(
+        self,
+        *,
+        gtt_id: int,
+        symbol: str,
+        exchange: str = "NSE",
+        series: str | None = None,
+        client_id: str | None = None,
+        tenant: TenantIds,
+        plan_tenant: TenantIds,
+    ) -> dict:
         """Cancel one GTT trigger. The ONLY way to destroy a GTT.
 
         Ported from `kite_client.py:225-242`. The desk's own reasoning is kept — cancelling
@@ -420,47 +661,72 @@ class OrderGateway:
         """
         mismatch = refuse_cross_tenant(tenant, plan_tenant)
         if mismatch:
-            return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED",
-                    "error": mismatch}
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": mismatch}
         gates = self._gates()
         if not (symbol or "").strip():
-            why = ("a GTT cannot be cancelled without naming its instrument: the untouchable "
-                   "guard has nothing to check")
-            self._journal({"event": "gtt_delete_block", "gtt_id": gtt_id, "why": why},
-                          client_id=client_id)
+            why = (
+                "a GTT cannot be cancelled without naming its instrument: the untouchable "
+                "guard has nothing to check"
+            )
+            self._journal(
+                {"event": "gtt_delete_block", "gtt_id": gtt_id, "why": why}, client_id=client_id
+            )
             return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": why}
-        assert_tradeable(symbol, series)                       # GTT layer 1: untouchables
+        assert_tradeable(symbol, series)  # GTT layer 1: untouchables
         # A trigger id is an exchange handle, not a hint. Refusing a malformed one here rather
         # than letting `int()` decide means a bug cannot spend a rate-limit slot, and — worse —
         # cannot truncate into some OTHER live trigger's id and cancel the wrong stop.
         if not isinstance(gtt_id, int) or isinstance(gtt_id, bool) or gtt_id <= 0:
             why = f"{symbol}: {gtt_id!r} is not a GTT trigger id"
-            self._journal({"event": "gtt_delete_block", "symbol": symbol,
-                           "gtt_id": gtt_id, "why": why}, client_id=client_id)
+            self._journal(
+                {"event": "gtt_delete_block", "symbol": symbol, "gtt_id": gtt_id, "why": why},
+                client_id=client_id,
+            )
             return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": why}
-        killed = kill_switch_reason(self.risk)                 # GTT layer 2: risk
+        killed = kill_switch_reason(self.risk)  # GTT layer 2: risk
         if killed:
             why = f"{killed} — a stop is not removed while the kill switch is live"
-            self._journal({"event": "gtt_delete_risk_block", "symbol": symbol,
-                           "gtt_id": gtt_id, "why": why}, client_id=client_id)
-            return {"symbol": symbol, "gtt_id": gtt_id, "status": "RISK_BLOCKED",
-                    "error": why}
-        await self.limits.api_slot()                           # GTT layer 4: rate limits
+            self._journal(
+                {"event": "gtt_delete_risk_block", "symbol": symbol, "gtt_id": gtt_id, "why": why},
+                client_id=client_id,
+            )
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": "RISK_BLOCKED", "error": why}
+        await self.limits.api_slot()  # GTT layer 4: rate limits
         if gates.dry_run:
-            self._journal({"event": "gtt_dry_run_delete", "symbol": symbol,
-                           "gtt_id": gtt_id, "exchange": exchange}, client_id=client_id)
+            self._journal(
+                {
+                    "event": "gtt_dry_run_delete",
+                    "symbol": symbol,
+                    "gtt_id": gtt_id,
+                    "exchange": exchange,
+                },
+                client_id=client_id,
+            )
             return {"symbol": symbol, "gtt_id": gtt_id, "status": DRY_RUN_GTT_DELETE}
         try:
             await asyncio.to_thread(self.kc.delete_gtt, trigger_id=int(gtt_id))
-            self._journal({"event": "gtt_deleted", "symbol": symbol, "gtt_id": gtt_id,
-                           "exchange": exchange}, client_id=client_id)
+            self._journal(
+                {"event": "gtt_deleted", "symbol": symbol, "gtt_id": gtt_id, "exchange": exchange},
+                client_id=client_id,
+            )
             return {"symbol": symbol, "gtt_id": gtt_id, "status": GTT_DELETED}
         except Exception as exc:
-            self._journal({"event": "gtt_delete_error", "symbol": symbol, "gtt_id": gtt_id,
-                           "error": str(exc), "exception": type(exc).__name__},
-                          client_id=client_id)
-            return {"symbol": symbol, "gtt_id": gtt_id, "status": GTT_DELETE_ERROR,
-                    "error": str(exc)}
+            self._journal(
+                {
+                    "event": "gtt_delete_error",
+                    "symbol": symbol,
+                    "gtt_id": gtt_id,
+                    "error": str(exc),
+                    "exception": type(exc).__name__,
+                },
+                client_id=client_id,
+            )
+            return {
+                "symbol": symbol,
+                "gtt_id": gtt_id,
+                "status": GTT_DELETE_ERROR,
+                "error": str(exc),
+            }
 
     # --- SW10.5 (STANDING-ANSWERS A8): a live LIMIT buy that fills late -------------------
     #
@@ -472,11 +738,21 @@ class OrderGateway:
     # are order-shaped actions and both live here, behind the same four layers, because law 2
     # says the gateway is the only path to touch an order or a stop.
 
-    async def modify_gtt_quantity(self, *, gtt_id: int, symbol: str, qty: int, trigger: float,
-                                  last_price: float, exchange: str = "NSE",
-                                  series: str | None = None, client_id: str | None = None,
-                                  tenant: TenantIds, plan_tenant: TenantIds,
-                                  limit_fraction: float | None = None) -> dict:
+    async def modify_gtt_quantity(
+        self,
+        *,
+        gtt_id: int,
+        symbol: str,
+        qty: int,
+        trigger: float,
+        last_price: float,
+        exchange: str = "NSE",
+        series: str | None = None,
+        client_id: str | None = None,
+        tenant: TenantIds,
+        plan_tenant: TenantIds,
+        limit_fraction: float | None = None,
+    ) -> dict:
         """Re-size one resting GTT to ``qty`` at the same ``trigger``. The ONLY way to modify
         a GTT.
 
@@ -503,80 +779,194 @@ class OrderGateway:
             return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": mismatch}
         gates = self._gates()
         cid = client_id or uuid.uuid4().hex[:10]
-        assert_tradeable(symbol, series)                       # GTT layer 1: untouchables
+        assert_tradeable(symbol, series)  # GTT layer 1: untouchables
         if not isinstance(gtt_id, int) or isinstance(gtt_id, bool) or gtt_id <= 0:
             why = f"{symbol}: {gtt_id!r} is not a GTT trigger id"
-            self._journal({"event": "gtt_modify_block", "symbol": symbol, "gtt_id": gtt_id,
-                           "why": why}, client_id=cid)
+            self._journal(
+                {"event": "gtt_modify_block", "symbol": symbol, "gtt_id": gtt_id, "why": why},
+                client_id=cid,
+            )
             return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": why}
         if int(qty) <= 0:
-            why = (f"{symbol}: a GTT for {qty} shares is not a stop; cancel it with "
-                   f"delete_gtt instead")
-            self._journal({"event": "gtt_modify_block", "symbol": symbol, "gtt_id": gtt_id,
-                           "qty": int(qty), "why": why}, client_id=cid)
+            why = (
+                f"{symbol}: a GTT for {qty} shares is not a stop; cancel it with delete_gtt instead"
+            )
+            self._journal(
+                {
+                    "event": "gtt_modify_block",
+                    "symbol": symbol,
+                    "gtt_id": gtt_id,
+                    "qty": int(qty),
+                    "why": why,
+                },
+                client_id=cid,
+            )
             return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": why}
         refusal = refuse_stop(symbol=symbol, qty=qty, trigger=trigger, last_price=last_price)
-        if refusal:                                           # GTT layer 1b: is it a stop?
-            self._journal({"event": "gtt_modify_block", "symbol": symbol, "gtt_id": gtt_id,
-                           "qty": int(qty), "trigger": trigger, "last_price": last_price,
-                           "why": refusal}, client_id=cid)
+        if refusal:  # GTT layer 1b: is it a stop?
+            self._journal(
+                {
+                    "event": "gtt_modify_block",
+                    "symbol": symbol,
+                    "gtt_id": gtt_id,
+                    "qty": int(qty),
+                    "trigger": trigger,
+                    "last_price": last_price,
+                    "why": refusal,
+                },
+                client_id=cid,
+            )
             return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": refusal}
-        killed = kill_switch_reason(self.risk)                 # GTT layer 2: risk, recorded
+        killed = kill_switch_reason(self.risk)  # GTT layer 2: risk, recorded
         if killed:
-            self._journal({"event": "gtt_risk_note", "symbol": symbol, "gtt_id": gtt_id,
-                           "qty": int(qty), "trigger": trigger, "why": killed,
-                           "note": "kill switch is live; a protective stop is still re-sized"},
-                          client_id=cid)
-        await self.limits.api_slot()                           # GTT layer 4: rate limits
+            self._journal(
+                {
+                    "event": "gtt_risk_note",
+                    "symbol": symbol,
+                    "gtt_id": gtt_id,
+                    "qty": int(qty),
+                    "trigger": trigger,
+                    "why": killed,
+                    "note": "kill switch is live; a protective stop is still re-sized",
+                },
+                client_id=cid,
+            )
+        await self.limits.api_slot()  # GTT layer 4: rate limits
         if gates.dry_run:
-            self._journal({"event": "gtt_dry_run_modify", "symbol": symbol, "gtt_id": gtt_id,
-                           "qty": int(qty), "trigger": trigger, "last_price": last_price,
-                           "exchange": exchange, "limit_fraction": fraction}, client_id=cid)
-            return {"symbol": symbol, "gtt_id": gtt_id, "status": DRY_RUN_GTT_MODIFY,
-                    "trigger": trigger, "qty": int(qty)}
+            self._journal(
+                {
+                    "event": "gtt_dry_run_modify",
+                    "symbol": symbol,
+                    "gtt_id": gtt_id,
+                    "qty": int(qty),
+                    "trigger": trigger,
+                    "last_price": last_price,
+                    "exchange": exchange,
+                    "limit_fraction": fraction,
+                },
+                client_id=cid,
+            )
+            return {
+                "symbol": symbol,
+                "gtt_id": gtt_id,
+                "status": DRY_RUN_GTT_MODIFY,
+                "trigger": trigger,
+                "qty": int(qty),
+            }
         try:
             tick = await self._tick_size(symbol, exchange)
             trig = to_tick(trigger, tick)
             limit = to_tick(trig * fraction, tick)
         except Exception as exc:
-            self._journal({"event": "gtt_modify_error", "symbol": symbol, "gtt_id": gtt_id,
-                           "stage": "tick_size", "error": str(exc),
-                           "exception": type(exc).__name__}, client_id=cid)
-            return {"symbol": symbol, "gtt_id": gtt_id, "status": GTT_MODIFY_ERROR,
-                    "error": str(exc)}
-        snapped_refusal = refuse_stop(symbol=symbol, qty=qty, trigger=trig,
-                                      last_price=last_price)
+            self._journal(
+                {
+                    "event": "gtt_modify_error",
+                    "symbol": symbol,
+                    "gtt_id": gtt_id,
+                    "stage": "tick_size",
+                    "error": str(exc),
+                    "exception": type(exc).__name__,
+                },
+                client_id=cid,
+            )
+            return {
+                "symbol": symbol,
+                "gtt_id": gtt_id,
+                "status": GTT_MODIFY_ERROR,
+                "error": str(exc),
+            }
+        snapped_refusal = refuse_stop(symbol=symbol, qty=qty, trigger=trig, last_price=last_price)
         if snapped_refusal:
-            self._journal({"event": "gtt_modify_block", "symbol": symbol, "gtt_id": gtt_id,
-                           "qty": int(qty), "trigger": trig, "requested_trigger": trigger,
-                           "tick": tick, "last_price": last_price,
-                           "stage": "after_tick_snap", "why": snapped_refusal}, client_id=cid)
-            return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED",
-                    "error": snapped_refusal}
-        params = gtt_params(self.kc, symbol=symbol, exchange=exchange, qty=int(qty),
-                            trigger=trig, limit=limit, last_price=last_price)
+            self._journal(
+                {
+                    "event": "gtt_modify_block",
+                    "symbol": symbol,
+                    "gtt_id": gtt_id,
+                    "qty": int(qty),
+                    "trigger": trig,
+                    "requested_trigger": trigger,
+                    "tick": tick,
+                    "last_price": last_price,
+                    "stage": "after_tick_snap",
+                    "why": snapped_refusal,
+                },
+                client_id=cid,
+            )
+            return {
+                "symbol": symbol,
+                "gtt_id": gtt_id,
+                "status": "BLOCKED",
+                "error": snapped_refusal,
+            }
+        params = gtt_params(
+            self.kc,
+            symbol=symbol,
+            exchange=exchange,
+            qty=int(qty),
+            trigger=trig,
+            limit=limit,
+            last_price=last_price,
+        )
         try:
             await asyncio.to_thread(self.kc.modify_gtt, trigger_id=int(gtt_id), **params)
         except Exception as exc:
-            self._journal({"event": "gtt_modify_error", "symbol": symbol, "gtt_id": gtt_id,
-                           "stage": "modify_gtt", "error": str(exc),
-                           "exception": type(exc).__name__, "trigger": trig,
-                           "qty": int(qty)}, client_id=cid)
-            return {"symbol": symbol, "gtt_id": gtt_id, "status": GTT_MODIFY_ERROR,
-                    "error": str(exc), "exception": type(exc).__name__,
-                    # As for a placed GTT: no taxonomy to read the outcome from, so check the
-                    # GTT book before re-arming rather than assuming the old quantity rests.
-                    "reached_exchange": None}
-        self._journal({"event": "gtt_modified", "symbol": symbol, "gtt_id": gtt_id,
-                       "qty": int(qty), "trigger": trig, "limit": limit,
-                       "limit_fraction": fraction, "last_price": last_price,
-                       "exchange": exchange}, client_id=cid)
-        return {"symbol": symbol, "gtt_id": gtt_id, "status": GTT_MODIFIED, "trigger": trig,
-                "limit": limit, "qty": int(qty)}
+            self._journal(
+                {
+                    "event": "gtt_modify_error",
+                    "symbol": symbol,
+                    "gtt_id": gtt_id,
+                    "stage": "modify_gtt",
+                    "error": str(exc),
+                    "exception": type(exc).__name__,
+                    "trigger": trig,
+                    "qty": int(qty),
+                },
+                client_id=cid,
+            )
+            return {
+                "symbol": symbol,
+                "gtt_id": gtt_id,
+                "status": GTT_MODIFY_ERROR,
+                "error": str(exc),
+                "exception": type(exc).__name__,
+                # As for a placed GTT: no taxonomy to read the outcome from, so check the
+                # GTT book before re-arming rather than assuming the old quantity rests.
+                "reached_exchange": None,
+            }
+        self._journal(
+            {
+                "event": "gtt_modified",
+                "symbol": symbol,
+                "gtt_id": gtt_id,
+                "qty": int(qty),
+                "trigger": trig,
+                "limit": limit,
+                "limit_fraction": fraction,
+                "last_price": last_price,
+                "exchange": exchange,
+            },
+            client_id=cid,
+        )
+        return {
+            "symbol": symbol,
+            "gtt_id": gtt_id,
+            "status": GTT_MODIFIED,
+            "trigger": trig,
+            "limit": limit,
+            "qty": int(qty),
+        }
 
-    async def cancel_order(self, *, order_id: str, symbol: str, variety: str = "regular",
-                           series: str | None = None, client_id: str | None = None,
-                           tenant: TenantIds, plan_tenant: TenantIds) -> dict:
+    async def cancel_order(
+        self,
+        *,
+        order_id: str,
+        symbol: str,
+        variety: str = "regular",
+        series: str | None = None,
+        client_id: str | None = None,
+        tenant: TenantIds,
+        plan_tenant: TenantIds,
+    ) -> dict:
         """Cancel one open order at the broker. The ONLY way to cancel an order.
 
         SW10.5 (A8): the 10:45 sweep pulls whatever of a marketable LIMIT buy has not filled.
@@ -587,39 +977,67 @@ class OrderGateway:
         """
         mismatch = refuse_cross_tenant(tenant, plan_tenant)
         if mismatch:
-            return {"symbol": symbol, "order_id": order_id, "status": "BLOCKED",
-                    "error": mismatch}
+            return {"symbol": symbol, "order_id": order_id, "status": "BLOCKED", "error": mismatch}
         gates = self._gates()
         if not (symbol or "").strip():
-            why = ("an order cannot be cancelled without naming its instrument: the untouchable "
-                   "guard has nothing to check")
-            self._journal({"event": "order_cancel_block", "order_id": order_id, "why": why},
-                          client_id=client_id)
+            why = (
+                "an order cannot be cancelled without naming its instrument: the untouchable "
+                "guard has nothing to check"
+            )
+            self._journal(
+                {"event": "order_cancel_block", "order_id": order_id, "why": why},
+                client_id=client_id,
+            )
             return {"symbol": symbol, "order_id": order_id, "status": "BLOCKED", "error": why}
-        assert_tradeable(symbol, series)                       # layer 1: untouchables
+        assert_tradeable(symbol, series)  # layer 1: untouchables
         if not str(order_id or "").strip():
             why = f"{symbol}: {order_id!r} is not an order id"
-            self._journal({"event": "order_cancel_block", "symbol": symbol,
-                           "order_id": order_id, "why": why}, client_id=client_id)
+            self._journal(
+                {"event": "order_cancel_block", "symbol": symbol, "order_id": order_id, "why": why},
+                client_id=client_id,
+            )
             return {"symbol": symbol, "order_id": order_id, "status": "BLOCKED", "error": why}
-        await self.limits.api_slot()                           # layer 4: rate limits
+        await self.limits.api_slot()  # layer 4: rate limits
         if gates.dry_run:
-            self._journal({"event": "order_cancel_dry_run", "symbol": symbol,
-                           "order_id": order_id, "variety": variety}, client_id=client_id)
+            self._journal(
+                {
+                    "event": "order_cancel_dry_run",
+                    "symbol": symbol,
+                    "order_id": order_id,
+                    "variety": variety,
+                },
+                client_id=client_id,
+            )
             return {"symbol": symbol, "order_id": order_id, "status": ORDER_CANCEL_DRY_RUN}
         try:
-            await asyncio.to_thread(self.kc.cancel_order, variety=variety,
-                                    order_id=str(order_id))
-            self._journal({"event": "order_cancelled", "symbol": symbol, "order_id": order_id,
-                           "variety": variety}, client_id=client_id)
+            await asyncio.to_thread(self.kc.cancel_order, variety=variety, order_id=str(order_id))
+            self._journal(
+                {
+                    "event": "order_cancelled",
+                    "symbol": symbol,
+                    "order_id": order_id,
+                    "variety": variety,
+                },
+                client_id=client_id,
+            )
             return {"symbol": symbol, "order_id": order_id, "status": ORDER_CANCELLED}
         except Exception as exc:
-            self._journal({"event": "order_cancel_error", "symbol": symbol,
-                           "order_id": order_id, "error": str(exc),
-                           "exception": type(exc).__name__}, client_id=client_id)
-            return {"symbol": symbol, "order_id": order_id, "status": ORDER_CANCEL_ERROR,
-                    "error": str(exc)}
+            self._journal(
+                {
+                    "event": "order_cancel_error",
+                    "symbol": symbol,
+                    "order_id": order_id,
+                    "error": str(exc),
+                    "exception": type(exc).__name__,
+                },
+                client_id=client_id,
+            )
+            return {
+                "symbol": symbol,
+                "order_id": order_id,
+                "status": ORDER_CANCEL_ERROR,
+                "error": str(exc),
+            }
 
 
-__all__ = ["FAILED_STATUSES", "JOURNAL", "ORDER_CANCELLED_STATUSES", "OrderGateway",
-           "ProductGates"]
+__all__ = ["FAILED_STATUSES", "JOURNAL", "ORDER_CANCELLED_STATUSES", "OrderGateway", "ProductGates"]

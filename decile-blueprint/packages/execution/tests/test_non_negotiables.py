@@ -378,3 +378,130 @@ def test_non_negotiable_7b_an_untouchable_is_refused_a_gtt_in_both_directions(
         )
     with pytest.raises(UntouchableInstrumentError):
         asyncio.run(gw.delete_gtt(gtt_id=1, symbol=symbol, tenant=TENANT, plan_tenant=TENANT))
+
+
+# =====================================================================================
+# The risk layer values every order, including one that carries no price of its own
+#
+# Not one of the seven by name, but the thing that makes several of them mean anything:
+# `RiskManager.pre_order` is handed `abs(qty) * price`, and every notional cap it holds is
+# a comparison against that number. It used to be computed as `float(price or 0)`, which
+# was correct while every order this codebase sent carried a price. The swing book's entry
+# became a MARKET order on 4 Sep 2026 (Maulik) and a MARKET order has no price — so that
+# expression would have valued every entry at ZERO and passed it through every cap, with
+# the caps still present, still tested, and silently applying to nothing.
+# =====================================================================================
+def test_a_market_order_is_valued_for_risk_by_its_reference_price(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The reference price the caller read is what the risk layer sizes against."""
+    seen: list[tuple[str, float, float]] = []
+
+    class RecordingRisk(RiskManager):
+        def pre_order(
+            self, symbol: str, value: float, gross_exposure: float = 0.0
+        ) -> tuple[bool, str]:
+            seen.append((symbol, value, gross_exposure))
+            return True, ""
+
+    gw = OrderGateway(
+        ExplodingKC(),
+        RecordingRisk(),
+        gates=lambda: ProductGates(dry_run=True),
+        journal_path=str(tmp_path / "journal.jsonl"),
+    )
+    asyncio.run(
+        gw.place(
+            symbol="RELIANCE",
+            qty=100,
+            side="BUY",
+            order_type="MARKET",
+            price=None,
+            reference_price=250.0,
+            market_protection=0.5,
+            tenant=TENANT,
+            plan_tenant=TENANT,
+        )
+    )
+    assert seen == [("RELIANCE", 25_000.0, 0.0)], "a MARKET order was valued at zero"
+
+
+def test_an_order_with_no_price_and_no_reference_is_blocked_not_valued_at_zero(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The failure mode this guards: an unpriced order sailing past every notional cap.
+
+    Refusing is recoverable — the caller reads a live price and posts again. An order
+    placed against a risk check that could not value it is not.
+    """
+    gw = make_gateway(tmp_path, dry_run=True)
+    out = asyncio.run(
+        gw.place(
+            symbol="RELIANCE",
+            qty=100,
+            side="BUY",
+            order_type="MARKET",
+            price=None,
+            reference_price=None,
+            tenant=TENANT,
+            plan_tenant=TENANT,
+        )
+    )
+    assert out["status"] == "BLOCKED"
+    assert "risk check cannot value it" in out["error"]
+    journal = (tmp_path / "journal.jsonl").read_text()
+    assert "unpriced_order_block" in journal, "the refusal is on the record"
+
+
+def test_market_protection_reaches_the_broker_only_on_a_market_order(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Kite ignores `market_protection` on a LIMIT; sending it there would put a number in
+    the journal that had no effect on the order — a lie in the one record we keep."""
+    sent: list[dict[str, object]] = []
+
+    class RecordingKC(ExplodingKC):
+        def place_order(self, **kw: object) -> str:
+            sent.append(kw)
+            return "ORDER-1"
+
+    def gateway() -> OrderGateway:
+        return OrderGateway(
+            RecordingKC(),
+            RiskManager(),
+            gates=lambda: ProductGates(dry_run=False),
+            journal_path=str(tmp_path / "journal.jsonl"),
+        )
+
+    asyncio.run(
+        gateway().place(
+            symbol="RELIANCE",
+            qty=1,
+            side="BUY",
+            order_type="MARKET",
+            price=None,
+            reference_price=100.0,
+            market_protection=0.44,
+            tenant=TENANT,
+            plan_tenant=TENANT,
+            client_id="a",
+        )
+    )
+    asyncio.run(
+        gateway().place(
+            symbol="RELIANCE",
+            qty=1,
+            side="BUY",
+            order_type="LIMIT",
+            price=100.0,
+            market_protection=0.44,
+            tenant=TENANT,
+            plan_tenant=TENANT,
+            client_id="b",
+        )
+    )
+    assert sent[0]["order_type"] == "MARKET"
+    assert sent[0]["market_protection"] == 0.44
+    assert "price" not in sent[0], "a MARKET order carries no price"
+    assert sent[1]["order_type"] == "LIMIT"
+    assert "market_protection" not in sent[1]

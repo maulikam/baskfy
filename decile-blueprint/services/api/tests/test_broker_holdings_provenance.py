@@ -24,10 +24,9 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
+from api_helpers import request_stub
 from baskfy_execution.broker_ports import HoldingRow, normalize_holding
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from api_helpers import request_stub
 
 from baskfy_api import broker_holdings
 from baskfy_api.broker_holdings import (
@@ -591,8 +590,11 @@ class TestStillReadOnly:
             for forbidden in ("place_order", "place_gtt", "OrderGateway", "confirm=true"):
                 assert forbidden not in source, f"{module.__name__} names {forbidden}"
 
-    def test_the_only_broker_url_is_the_read_only_holdings_endpoint(self) -> None:
-        assert broker_holdings._KITE_HOLDINGS_URL.endswith("/portfolio/holdings")
+    def test_the_live_read_uses_the_shared_provider_not_a_direct_http_call(self) -> None:
+        source = inspect.getsource(broker_holdings.fetch_kite_holdings)
+        assert "build_kite_provider" in source
+        assert "broker_holdings" in source
+        assert "httpx.get" not in source
 
     def test_the_wired_set_still_exists_under_its_pinned_name(self) -> None:
         """C2's honesty test imports this name; C1 may change its contents, never its name."""
@@ -775,6 +777,10 @@ class TestConnectDoesNotOverClaimEither:
         register_oauth_state(state=state, user_id=1, broker_id="upstox")
         with pytest.raises(Problem) as caught:
             await oauth_callback(
-                principal_stub(), AsyncSession(), request_stub(), request_token="req-token-1234", state=state
+                principal_stub(),
+                AsyncSession(),
+                request_stub(),
+                request_token="req-token-1234",
+                state=state,
             )
         assert caught.value.status == 400

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import random
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Final, Protocol
 
@@ -74,6 +74,36 @@ redis.call('PEXPIRE', key, math.ceil(((capacity / rate) + 1) * 1000))
 return {granted, tostring(wait)}
 """
 
+#: A distributed, no-burst departure clock for broker APIs whose published limit is a hard
+#: requests-per-second ceiling. Unlike a token bucket, it never releases a cold-start burst:
+#: each successful caller atomically reserves one departure at least ``interval`` after the
+#: preceding one, using Redis's clock so containers cannot disagree about time.
+#:
+#: KEYS[1]  departure-clock key
+#: ARGV[1]  interval between calls       ARGV[2] maximum acceptable wait
+#: Returns  {claimed (0|1), wait_seconds}
+SPACING_SCRIPT = """
+local key      = KEYS[1]
+local interval = tonumber(ARGV[1])
+local max_wait = tonumber(ARGV[2])
+
+local t   = redis.call('TIME')
+local now = tonumber(t[1]) + tonumber(t[2]) / 1000000
+
+local next_at = tonumber(redis.call('GET', key))
+if next_at == nil or next_at < now then
+  next_at = now
+end
+
+local wait = next_at - now
+if wait > max_wait then
+  return {0, tostring(wait)}
+end
+
+redis.call('SET', key, next_at + interval, 'PX', math.ceil((wait + interval) * 1000) + 1000)
+return {1, tostring(wait)}
+"""
+
 
 class RedisLike(Protocol):
     """The slice of redis-py this module uses.
@@ -100,6 +130,23 @@ class RateLimiter(Protocol):
     def acquire(self, tokens: float = 1.0) -> float:
         """Block until ``tokens`` are available. Returns seconds waited. Raises RateLimited."""
         ...
+
+
+class SpacedLimiter(Protocol):
+    """A `RateLimiter` that can also say which clock it is and how fast that clock runs.
+
+    `LayeredCallSpacer` composes these rather than concrete spacers so a lane can be built from
+    anything that keeps a departure clock — and so the tests can prove the composition without
+    a Redis, which is the part of it that is pure arithmetic.
+    """
+
+    @property
+    def key(self) -> str: ...
+
+    @property
+    def config(self) -> CallSpacingConfig: ...
+
+    def acquire(self, tokens: float = 1.0) -> float: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +231,109 @@ class RedisTokenBucket:
             pause = wait + random.uniform(0, min(0.05, wait or 0.05))
             self._sleeper(pause)
             waited += pause
+
+
+@dataclass(frozen=True, slots=True)
+class CallSpacingConfig:
+    """No-burst request spacing shared by every process using the Redis key."""
+
+    rate_per_second: float
+    max_wait_seconds: float = 30.0
+
+    def __post_init__(self) -> None:
+        if self.rate_per_second <= 0:
+            raise ValueError(f"rate_per_second must be positive; got {self.rate_per_second}")
+        if self.max_wait_seconds < 0:
+            raise ValueError(f"max_wait_seconds must be non-negative; got {self.max_wait_seconds}")
+
+
+class RedisCallSpacer:
+    """Reserve evenly spaced call times in Redis; a cold limiter grants no burst.
+
+    One invocation is one upstream HTTP request. The reservation happens atomically before the
+    sleep, so concurrent API, worker and desk processes queue on the same clock rather than each
+    believing it owns the next slot.
+    """
+
+    def __init__(
+        self,
+        redis: RedisLike,
+        key: str,
+        config: CallSpacingConfig,
+        *,
+        sleeper: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self._script = redis.register_script(SPACING_SCRIPT)
+        self._key = key
+        self._config = config
+        self._sleeper = sleeper
+
+    @property
+    def key(self) -> str:
+        return self._key
+
+    @property
+    def config(self) -> CallSpacingConfig:
+        return self._config
+
+    def acquire(self, tokens: float = 1.0) -> float:
+        """Reserve one request departure, sleep until it, and return seconds waited."""
+        if tokens != 1.0:
+            raise ValueError("RedisCallSpacer grants exactly one HTTP request per acquire")
+        interval = 1.0 / self._config.rate_per_second
+        raw = self._script(
+            keys=[self._key],
+            args=[interval, self._config.max_wait_seconds],
+        )
+        claimed, wait = _decode(raw)
+        if not claimed:
+            raise RateLimited(
+                f"the next rate-limit slot on {self._key!r} is {wait:.2f}s away, exceeding "
+                f"the {self._config.max_wait_seconds:.0f}s budget"
+            )
+        if wait > 0:
+            self._sleeper(wait)
+        return max(wait, 0.0)
+
+
+class LayeredCallSpacer:
+    """Take a slot from every clock in order, so one caller can be held to two rates at once.
+
+    THE PROBLEM THIS SOLVES (M85). Kite publishes one combined ceiling — three HTTP requests a
+    second across every endpoint — and Baskfy has two kinds of caller behind it:
+
+    * **bulk** — a backfill or a nightly bar pass. Thousands of `historical_data` calls, an hour
+      or more of them, and nobody is watching. It should use the ceiling, but not all of it.
+    * **interactive** — the holdings read and the live swing scan that a broker login starts, the
+      desk's own page reads. Tens of calls, and a person is waiting for every one.
+
+    With a single shared departure clock the bulk caller reserves every slot for the next hour
+    and the interactive caller's wait exceeds any sane budget: on 4 Sep 2026 that is exactly the
+    shape of "I log in at 1pm and the data is still yesterday's". Giving the bulk caller a
+    *second*, slower clock of its own fixes it arithmetically rather than by priority: while bulk
+    departs at 2/s and the ceiling is 3/s, the shared clock is drained faster than bulk fills it,
+    so it never runs ahead of now and an interactive call finds a slot free.
+
+    Order matters. The lane clock is taken **first** and the ceiling last, so the ceiling
+    reservation — the one that is visible to every other process — happens at the lane's pace.
+    """
+
+    def __init__(self, spacers: Sequence[SpacedLimiter]) -> None:
+        if not spacers:
+            raise ValueError("a layered spacer needs at least one clock")
+        self._spacers = tuple(spacers)
+
+    @property
+    def spacers(self) -> tuple[SpacedLimiter, ...]:
+        return self._spacers
+
+    @property
+    def key(self) -> str:
+        """The ceiling's key — the last one taken, and the one the whole box shares."""
+        return self._spacers[-1].key
+
+    def acquire(self, tokens: float = 1.0) -> float:
+        return sum(spacer.acquire(tokens) for spacer in self._spacers)
 
 
 #: The Lua script returns exactly {granted, wait_seconds}.

@@ -173,6 +173,17 @@ class KiteProvider:
     def name(self) -> str:
         return PROVIDER_NAME
 
+    @property
+    def rate_limiter(self) -> RateLimiter | None:
+        """Which clock this adapter's reads wait on, or ``None`` when Redis was unreachable.
+
+        Public because *which lane a provider was built for* is a property worth being able to
+        assert and to report (M85): the difference between the bulk lane and the interactive one
+        is invisible at the call site and decides whether a login-time read waits behind an hour
+        of backfill. Read-only — nothing can swap a limiter after construction.
+        """
+        return self._rate_limiter
+
     def capabilities(self) -> frozenset[Capability]:
         """Bars, and the read-only broker ledger. Never an order verb — law 2."""
         return BARS_CAPABILITIES | HOLDINGS_CAPABILITIES

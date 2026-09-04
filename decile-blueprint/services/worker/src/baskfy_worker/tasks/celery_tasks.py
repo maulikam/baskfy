@@ -30,15 +30,18 @@ from baskfy_api.broker_oauth import (
     token_encryption_key,
     token_store_path,
 )
+from baskfy_api.problems import Problem
 from baskfy_api.screener import (
     WARM_CACHE_SCREEN_LIMIT,
     ScreenCache,
     WarmCacheResult,
     warm_screen_cache,
 )
+from baskfy_api.settings import get_settings as get_api_settings
+from baskfy_api.swing_scan import request_scan
 from baskfy_core.models.base import JsonObject
 from baskfy_providers.errors import TransientProviderError
-from baskfy_providers.factory import build_kite_provider, build_nse_provider
+from baskfy_providers.factory import KiteLane, build_kite_provider, build_nse_provider
 from baskfy_providers.kite import KiteProvider
 from baskfy_providers.records import QuoteRecord
 from baskfy_providers.settings import get_provider_settings
@@ -84,7 +87,12 @@ from baskfy_worker.tasks.swing_ops import (
     check_orders_after_cutoff,
 )
 from baskfy_worker.tasks.swing_premarket import STAGE_GAPS, QuoteSource, run_swing_premarket
-from baskfy_worker.tasks.swing_scan_now import ScanNotRunnable, run_scan_now, sweep_queued
+from baskfy_worker.tasks.swing_scan_now import (
+    ScanNotRunnable,
+    decide_session,
+    run_scan_now,
+    sweep_queued,
+)
 from baskfy_worker.tasks.swing_timing_probe import DONE_MARKER, probe_once
 from baskfy_worker.telemetry import provider_retry_hooks
 from baskfy_worker.window import DateWindow
@@ -328,17 +336,37 @@ def session_catch_up(
         }
 
     ran: list[JsonObject] = []
+    planned: list[JsonObject] = []
     for day in missing[:max_sessions]:
         log.warning("catch-up: %s never landed; running the chain for it", day.isoformat())
         # The nightly's own body, with an explicit date — which also bypasses its "is today
         # finished" guard, correctly: this list only ever holds sessions that are already over.
-        ran.append(nightly_pipeline(day.isoformat()))
+        chain = nightly_pipeline(day.isoformat())
+        ran.append(chain)
+        # AND THEN THE SWING PLAN FOR IT (M85, closing M84's own open item).
+        #
+        # The chain's twelfth step detects the day's setups; `baskfy.swing.eod` is what turns
+        # them into a plan, and it has only ever existed as a 21:05 Beat entry. So a caught-up
+        # session used to land every bar, every factor and every setup — and no plan, which is
+        # the one artefact Maulik reads in the morning. It ran, the swing book stayed on the
+        # last session that had a plan, and that is "the swing data is lagging" exactly.
+        #
+        # In process and immediately after its own chain, for the ordering `swing_eod_task`'s
+        # own docstring requires: the plan is built from the day's candidates and the day's gate.
+        # Idempotent per date, so a day whose 21:05 entry did fire is rewritten to itself.
+        # Fail soft — a plan that cannot be built must not undo a session that landed.
+        try:
+            planned.append(swing_eod_task(day.isoformat()))
+        except Exception as exc:
+            log.exception("catch-up: %s landed but its swing plan did not", day.isoformat())
+            planned.append({"date": day.isoformat(), "error": type(exc).__name__})
     return {
         "status": "ran",
         "checked_through": now_ist.date().isoformat(),
         "lookback_days": lookback_days,
         "sessions": [day.isoformat() for day in missing],
         "ran": ran,
+        "swing_plans": planned,
         "remaining": [day.isoformat() for day in missing[max_sessions:]],
     }
 
@@ -794,7 +822,10 @@ def swing_premarket_task(session_date: str | None = None, stage: str = STAGE_GAP
     settings = get_worker_settings()
     quotes: QuoteSource | None = None
     if settings.swing_ep_premarket_enabled and stage == STAGE_GAPS:
-        quotes = build_kite_provider(get_provider_settings(), provider_retry_hooks())
+        # INTERACTIVE: 09:16 is one minute after the open and the gap read is worthless late.
+        quotes = build_kite_provider(
+            get_provider_settings(), provider_retry_hooks(), lane=KiteLane.INTERACTIVE
+        )
 
     async def _run(session: AsyncSession) -> JsonObject:
         outcome = StepOutcome()
@@ -821,6 +852,7 @@ def swing_premarket_task(session_date: str | None = None, stage: str = STAGE_GAP
 #: routing table and this worker's equal for both.
 SWING_SCAN_NOW_TASK: Final = "baskfy.swing.scan_now"
 SWING_SCAN_SWEEP_TASK: Final = "baskfy.swing.scan_sweep"
+SWING_SCAN_AFTER_LOGIN_TASK: Final = "baskfy.swing.scan_after_login"
 
 
 #: The API publishes the task inside the request whose transaction inserts the row, so the
@@ -828,6 +860,76 @@ SWING_SCAN_SWEEP_TASK: Final = "baskfy.swing.scan_sweep"
 #: is retried a few seconds later; five tries covers a slow commit, not a row that never was.
 SCAN_ROW_RETRY_SECONDS: Final = 2
 SCAN_ROW_RETRIES: Final = 5
+
+
+class _CurrentTaskMarker:
+    """Give ``request_scan`` this task's id without publishing a second Celery message."""
+
+    def __init__(self, task_id: str) -> None:
+        self._task_id = task_id
+
+    def send_task(self, name: str, args: Sequence[object]) -> object:
+        if name != SWING_SCAN_NOW_TASK or len(args) != 1:
+            raise ValueError(f"unexpected scan publication {name!r} {list(args)!r}")
+        return self._task_id
+
+
+async def request_login_scan(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    market_now: dt.datetime,
+    requested_at: dt.datetime,
+    task_id: str,
+) -> JsonObject:
+    """Create one current-session scan row, or explain why login needs no new scan."""
+    settings = get_api_settings()
+    try:
+        decision = await decide_session(session, market_now)
+    except ScanNotRunnable as exc:
+        return {"skipped": str(exc)}
+    if not decision.provisional:
+        return {"skipped": decision.reason, "session_date": decision.session_date.isoformat()}
+    try:
+        row = await request_scan(
+            session,
+            user_id=user_id,
+            now=requested_at,
+            min_interval=dt.timedelta(seconds=settings.swing_scan_min_interval_seconds),
+            stale_after=dt.timedelta(seconds=settings.swing_scan_stale_after_seconds),
+            source="broker-login",
+            queue=_CurrentTaskMarker(task_id),
+        )
+    except Problem as exc:
+        return {"skipped": exc.type.value, **exc.extra}
+    return {"run_id": int(row.id)}
+
+
+def _execute_swing_scan(run_id: int) -> JsonObject:
+    """Run one already-committed scan row through the ordinary SW15 implementation."""
+    deps = build_pipeline_dependencies()
+
+    def quote_source() -> QuoteSource:
+        # INTERACTIVE, said out loud (M85). A person pressed a button or has just finished a
+        # broker login and is waiting for this; it must not queue behind the catch-up chain
+        # running beside it on the default queue. `KiteLane` carries the arithmetic.
+        return build_kite_provider(
+            get_provider_settings(), provider_retry_hooks(), lane=KiteLane.INTERACTIVE
+        )
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        report = await run_scan_now(
+            session,
+            run_id=run_id,
+            user_id=int(deps.swing_user_id or 0),
+            index_slug=deps.swing_index_slug,
+            execution_enabled=deps.swing_execution_enabled,
+            quote_source=quote_source,
+            now=dt.datetime.now(tz=IST).replace(tzinfo=None),
+        )
+        return report.as_detail()
+
+    return run_in_session(_run)
 
 
 @shared_task(name=SWING_SCAN_NOW_TASK, acks_late=True, queue=QUEUE_COMPUTE, bind=True)
@@ -844,27 +946,53 @@ def swing_scan_now_task(self: Task, run_id: int) -> JsonObject:
     if deps.swing_user_id is None:
         return {"run_id": run_id, "skipped": "no BASKFY_SOLE_USER_ID configured"}
 
-    def quote_source() -> QuoteSource:
-        return build_kite_provider(get_provider_settings(), provider_retry_hooks())
-
-    async def _run(session: AsyncSession) -> JsonObject:
-        report = await run_scan_now(
-            session,
-            run_id=int(run_id),
-            user_id=int(deps.swing_user_id or 0),
-            index_slug=deps.swing_index_slug,
-            execution_enabled=deps.swing_execution_enabled,
-            quote_source=quote_source,
-            now=dt.datetime.now(tz=IST).replace(tzinfo=None),
-        )
-        return report.as_detail()
-
     try:
-        return run_in_session(_run)
+        return _execute_swing_scan(int(run_id))
     except ScanNotRunnable as exc:
         raise self.retry(
             exc=exc, countdown=SCAN_ROW_RETRY_SECONDS, max_retries=SCAN_ROW_RETRIES
         ) from exc
+
+
+@shared_task(
+    name=SWING_SCAN_AFTER_LOGIN_TASK,
+    acks_late=True,
+    queue=QUEUE_COMPUTE,
+    bind=True,
+)
+def swing_scan_after_login_task(self: Task, user_id: int) -> JsonObject:
+    """Start today's provisional swing scan immediately after a verified broker login.
+
+    Historical catch-up runs on ``default`` while this task runs on ``compute``. The two can
+    therefore make progress in parallel, but every Kite read still queues on the same Redis
+    departure clock. Outside an open trading session this task records nothing: the published
+    data and missed-session catch-up remain authoritative.
+    """
+    deps = build_pipeline_dependencies()
+    configured = deps.swing_user_id
+    if configured is None:
+        return {"skipped": "no BASKFY_SOLE_USER_ID configured"}
+    if int(user_id) != int(configured):
+        return {"skipped": "login user does not match BASKFY_SOLE_USER_ID"}
+
+    requested_at = dt.datetime.now(tz=dt.UTC)
+    market_now = dt.datetime.now(tz=IST).replace(tzinfo=None)
+    task_id = str(getattr(self.request, "id", "") or f"broker-login-{requested_at.isoformat()}")
+
+    async def _request(session: AsyncSession) -> JsonObject:
+        return await request_login_scan(
+            session,
+            user_id=int(user_id),
+            market_now=market_now,
+            requested_at=requested_at,
+            task_id=task_id,
+        )
+
+    request_result = run_in_session(_request)
+    run_id = request_result.get("run_id")
+    if not isinstance(run_id, int):
+        return request_result
+    return _execute_swing_scan(run_id)
 
 
 @shared_task(name=SWING_SCAN_SWEEP_TASK)

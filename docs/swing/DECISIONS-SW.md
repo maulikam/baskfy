@@ -2433,3 +2433,41 @@ broker account would over-throttle, which is the safe direction — noted for P4
 **Reversal.** `DESK_SHARED_READ_LIMITS=false` in the desk's environment, or unset
 `BASKFY_REDIS_URL`: every process is back on its own spacers, which is exactly SW20's behaviour.
 No data migrates, and the keys expire on their own once a family goes idle.
+
+
+## SW21.2 — SW21.1's residual is closed: one ceiling for the box, and a bulk lane under it · ⚠ UNREVIEWED
+
+**Context.** SW21.1 ended on a stated residual: the pipeline's Kite provider kept its own token
+bucket at `baskfy:ratelimit:kite` while the desk spaced on `baskfy:ratelimit:kite:{quote,
+historical,general}`, so the desk and a nightly backfill could between them exceed Kite's cap.
+It said closing it was "one edit: point `build_kite_provider` at `SharedSpacer` and the family
+keys". `docs/DECISIONS-MERGE.md` **M85** is that edit, made for a different reason — Maulik logs
+in at 1pm and found the swing book quoting yesterday's levels — and it is recorded here because
+this file is where the claim it falsifies lives.
+
+**What changed.** Kite's binding limit is not the per-endpoint one; it is **3 HTTP requests a
+second across all endpoints combined**. So a `read` family now sits above the three endpoint
+families at 3 req/s and `DeskLimits.slot` takes it **first** on every call, and the pipeline's
+provider takes the same key — `baskfy:ratelimit:kite:read` — as a `RedisCallSpacer` built from
+the very Lua this file's `TAKE_SCRIPT` used to define, now imported from
+`baskfy_providers.ratelimit.SPACING_SCRIPT` so one clock cannot have two definitions. The desk's
+own families are unchanged and still taken second: they bound this process, the ceiling bounds
+the box.
+
+**The cost, which is real.** The desk's page reads used to space at `general`'s 9 req/s. That
+number was never available from Kite and is now 3. Five desk tests asserted the old per-family
+floors and were re-derived against the ceiling;
+`test_one_slow_family_never_starves_another` asserted *zero* wait behind a backfill, which cannot
+be had without exceeding the ceiling, and now asserts what replaces it — one departure, never a
+queue.
+
+**And the part SW21.1 could not have foreseen.** One ceiling with no lanes is *worse* than two
+uncoordinated limiters for the case that matters: a 1pm login publishes an hour of
+`historical_data` catch-up and, beside it, the holdings read and live swing scan the person is
+waiting for. On one clock the chain reserves every departure for that hour and the interactive
+reads exceed their wait budget and fail. `KiteLane.BULK` takes `baskfy:ratelimit:kite:bulk` at
+2 req/s before the ceiling; the gap is arithmetic headroom, not priority.
+
+**Reversal.** Unchanged from SW21.1 for the desk (`DESK_SHARED_READ_LIMITS=false`, or unset
+`BASKFY_REDIS_URL`). For the pipeline, set `BASKFY_KITE_BULK_RATE_LIMIT_PER_SECOND` just under
+`BASKFY_KITE_RATE_LIMIT_PER_SECOND` and the lane is gone without a deploy.

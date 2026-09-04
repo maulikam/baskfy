@@ -45,8 +45,16 @@ from typing import Literal
 import httpx
 from baskfy_execution.broker_ports import HoldingRow, normalize_holding
 
-from baskfy_api.broker_oauth import dry_run_enabled, token_store_for
+from baskfy_api.broker_oauth import (
+    dry_run_enabled,
+    token_encryption_key,
+    token_store_for,
+    token_store_path,
+)
 from baskfy_providers.errors import ProviderError
+from baskfy_providers.factory import build_kite_provider
+from baskfy_providers.records import BrokerAccountRef
+from baskfy_providers.settings import get_provider_settings
 
 __all__ = [
     "HOLDINGS_SOURCES",
@@ -72,8 +80,6 @@ _ROW_BEARING_SOURCES: frozenset[str] = frozenset({"live", "fixture"})
 #: Brokers that can sync holdings once a live adapter exists.
 _HOLDINGS_WIRED = frozenset({"zerodha"})
 
-_KITE_HOLDINGS_URL = "https://api.kite.trade/portfolio/holdings"
-
 #: Everything a read-only holdings GET can legitimately fail with: httpx's whole transport and
 #: status family, a body that is not decodable JSON, and a local socket error. Named as a tuple
 #: so the fallback below stays a narrow ``except`` rather than a blanket one (house rule 3) — a
@@ -85,6 +91,7 @@ _LIVE_FETCH_ERRORS: tuple[type[Exception], ...] = (
     json.JSONDecodeError,
     UnicodeDecodeError,
     OSError,
+    ProviderError,
 )
 
 
@@ -206,18 +213,36 @@ def parse_kite_holdings_payload(
     return rows
 
 
-def fetch_kite_holdings(*, api_key: str, access_token: str) -> list[HoldingRow]:
-    """GET Kite portfolio holdings. Read-only; never places an order."""
-    headers = {
-        "Authorization": f"token {api_key}:{access_token}",
-        "X-Kite-Version": "3",
-    }
-    response = httpx.get(_KITE_HOLDINGS_URL, headers=headers, timeout=30.0)
-    response.raise_for_status()
-    body = response.json()
-    if not isinstance(body, (dict, list)):
-        return []
-    return parse_kite_holdings_payload(body)
+def fetch_kite_holdings(*, api_key: str, broker_id: str) -> list[HoldingRow]:
+    """Read Kite holdings through the shared, rate-limited provider boundary.
+
+    The provider owns authentication, retry/error translation and the Redis departure clock.
+    Keeping the API on that path matters because Kite's three-read-per-second allowance is
+    shared with the worker and desk; a direct ``httpx`` call here used to be invisible to both.
+    """
+    settings = get_provider_settings().model_copy(
+        update={
+            "kite_api_key": api_key,
+            "kite_token_path": str(token_store_path()),
+            "kite_token_encryption_key": token_encryption_key(),
+        }
+    )
+    records = build_kite_provider(settings).broker_holdings(
+        BrokerAccountRef(broker_account_id=1, broker_id=broker_id)
+    )
+    return [
+        normalize_holding(
+            symbol=record.symbol,
+            exchange=record.exchange,
+            quantity=record.quantity,
+            t1_quantity=record.t1_quantity,
+            collateral_quantity=record.collateral_quantity,
+            average_price=record.average_price or 0,
+            last_price=record.last_price,
+            product=record.product,
+        )
+        for record in records
+    ]
 
 
 def _fixture_holdings() -> list[HoldingRow]:
@@ -297,7 +322,7 @@ def holdings_for_broker(broker_id: str) -> HoldingsResult:  # noqa: PLR0911 - a 
         store = token_store_for()
         if not store.exists():
             return _stub_holdings("this account has not connected a broker session yet")
-        token = store.require_fresh()
+        store.require_fresh()
     except (ProviderError, OSError) as exc:
         # Explicit, narrow, and reported: an expired or unreadable token is a session that
         # should have worked. Only the exception *type* is logged — the message can name
@@ -312,7 +337,7 @@ def holdings_for_broker(broker_id: str) -> HoldingsResult:  # noqa: PLR0911 - a 
         )
 
     try:
-        rows = fetch_kite_holdings(api_key=api_key, access_token=token.value)
+        rows = fetch_kite_holdings(api_key=api_key, broker_id=broker_id)
     except _LIVE_FETCH_ERRORS as exc:
         # A named family, not a blanket catch: a bug in our own row mapping still escapes and
         # is seen. 500-ing the holdings page over a broker timeout is worse than showing

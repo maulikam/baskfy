@@ -71,6 +71,7 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # checks do. Both are named here *and* in `baskfy_api.queue.PRODUCER_TASK_ROUTES`
     # (the API publishes `scan_now` directly), and `test_celery_config.py` holds them equal.
     "baskfy.swing.scan_now": {"queue": QUEUE_COMPUTE},
+    "baskfy.swing.scan_after_login": {"queue": QUEUE_COMPUTE},
     "baskfy.swing.scan_sweep": {"queue": QUEUE_DEFAULT},
     # SW18: the 08:45 / 09:05 Kite login nudge. The compute queue, per the module's brief —
     # it is the queue the rest of the morning's swing jobs run on, so the nudge cannot arrive

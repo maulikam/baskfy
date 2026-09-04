@@ -1503,3 +1503,69 @@ never does, and a dead queue still connects.
 tomorrow morning. Nothing re-runs the *swing* EOD plan after a caught-up session; the catch-up
 lands the screener chain (whose twelfth step is swing detection) but `baskfy.swing.eod` is still
 only a 21:05 Beat entry.
+
+## M85 — logging in at 1pm is enough, and a backfill can no longer starve the login (4 Sep 2026)
+
+**What Maulik saw.** "The system is coded such that I would have to log in a day early, before the
+market opens, but my sleep schedule is totally different — I wake at 1pm, sometimes 3pm. Once I log
+in I always have the older dataset and everything lags. The swing data is lagging, so there is a
+price differentiation and I am not able to buy any stock which is in swing."
+
+M84 made a verified token start the day's data work. That heals a session that never landed — a
+*history* problem. The 1pm complaint is a *today* problem: the last published session is yesterday,
+correctly, and the swing book's entry levels are yesterday's closes while the price has moved.
+
+**Shipped.**
+
+| | |
+|---|---|
+| `baskfy.swing.scan_after_login` | The callback publishes it beside the catch-up. SW15's detector already knew how to scan today from live quotes; this is the trigger. `compute` queue vs the catch-up's `default`, so the box's `--concurrency=2` worker runs both at once |
+| One ceiling, `baskfy:ratelimit:kite:read` | Every Kite read in the deployment — api, worker, ingest-worker, beat, desk — waits on one 3 req/s departure clock. The API's holdings read stopped calling `api.kite.trade` with bare `httpx` and goes through the provider |
+| `KiteLane`, and the bulk lane under it | `build_provider_stack` (the nightly, every backfill) takes `baskfy:ratelimit:kite:bulk` at 2 req/s **first**. Everything else is interactive, which is also the default |
+| Batching is Kite's own | `/quote` 500 a call (was 400), `/quote/ltp` 1,000 a call (was one call for everything) |
+| The swing plan follows a caught-up session | Closing M84's own open item: the chain detects the setups and `baskfy.swing.eod` is what turns them into a plan, and it existed only as a 21:05 Beat entry |
+| The portfolio's frame | An expired-session banner on every Portfolio tab, and a 30-second refresh bounded to 09:15–15:30 IST |
+
+**The bug M85 had to fix before it could ship.** One shared clock with no lanes is *worse* than
+what it replaced. The 1pm login publishes the catch-up — an hour or more of `historical_data` —
+and the reads the person is waiting for. On a single clock the chain reserves the next hour of
+departures and the interactive reads exceed their wait budget and fail. The bulk lane makes it
+arithmetic rather than a matter of priority: bulk at 2/s under a 3/s ceiling drains the shared
+clock faster than it fills it, so it never runs ahead of `now`.
+`packages/providers/tests/test_kite_lanes.py::TestTheHeadroomIsReal` measures it against a real
+Redis on one wall clock rather than asserting it.
+
+**Cost, stated plainly.** The desk's page reads used to space at 9 req/s and now space at 3, which
+is Kite's actual combined limit. Five of its tests asserted the old per-family floors and were
+rewritten to assert the new one; `test_one_slow_family_never_starves_another` asserted *zero* wait
+behind a backfill, which is not available any more without exceeding the ceiling, and now asserts
+the bound that replaces it — one departure, never a queue.
+
+**Also fixed on the way.** `make lint` was red at HEAD: mypy strict carried six errors in three
+worker test files (an implicit re-export of `dt`, a Liskov violation on a `datetime` subclass, a
+`list.append` used for its return value, an untyped double), and ruff carried two more this
+module's own edits introduced (`RUF059`, an unpacked `planned` never read in
+`test_session_catch_up.py` — one of the two now asserts what it was unpacked for: an ordinary
+morning builds no plan for a session nobody was missing). All fixed rather than suppressed —
+house rule 3 bans `# type: ignore`, so the gate is green with no escape hatch. 535 files clean.
+
+**Verified before the commit, on this machine, 4 Sep 2026.** `make lint` clean over 535 source
+files (0 eslint errors; the one `react-hooks/incompatible-library` warning on `data-table.tsx` is
+pre-existing). Screener suite exit 0. Desk suite **1,773 passed, 17 skipped, 12 subtests**, 76 s.
+Web **128 files, 2,169 tests passed**, 27 s — which also refreshed `gates/leaf-7.5.1-verify.md`
+G1, whose evidence line had been left behind by a failing run.
+
+### NOT done — the honest part
+
+- **The screener's own surfaces are still end-of-day.** Baskets, factors and market health read
+  published bars, by design (house rules 5 and 7). What is live is the swing book, the portfolio's
+  marks and holdings — the three things the 1pm complaint was about. A login between 15:30 and
+  18:45 gets no new session either: the day is over, the bhavcopy does not exist yet, and there is
+  nothing honest to serve but yesterday.
+- **The lane's headroom is one request a second and the interactive side does not preempt.** If
+  interactive demand exceeds ~1 req/s sustained it shares the ceiling with bulk rather than
+  displacing it. That is bounded and safe; it is not priority.
+- **The callback still lands the browser on a JSON response**, so what the login started is
+  readable only in `note`. Not this module's contract.
+- **Not verified against a real 1pm login yet.** The first real proof is the next afternoon Maulik
+  logs in.

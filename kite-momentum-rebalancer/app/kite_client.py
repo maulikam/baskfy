@@ -15,6 +15,8 @@ from .core.net import force_ipv4
 #: refresh interval and `OpeningRangeConfig.quote_poll_min_seconds`, so a page poll costs no
 #: Kite call at all and the monitor's fallback stays inside its own bound.
 LTP_CACHE_SECONDS = 5.0
+QUOTE_BATCH_SIZE = 500
+LTP_BATCH_SIZE = 1000
 
 log = logging.getLogger("kite")
 
@@ -239,14 +241,15 @@ class Kite:
                 missing.append(symbol)
         if not missing:
             return out
-        keys = [f"{exchange}:{s}" for s in missing]
-        self.limits.slot("quote")
-        data = self.kc.ltp(keys)
-        fetched = time.monotonic()
-        for key, value in data.items():
-            price = float(value["last_price"])
-            cache[key] = (fetched, price)
-            out[key.split(":", 1)[1]] = price
+        for start in range(0, len(missing), LTP_BATCH_SIZE):
+            keys = [f"{exchange}:{s}" for s in missing[start : start + LTP_BATCH_SIZE]]
+            self.limits.slot("quote")
+            data = self.kc.ltp(keys)
+            fetched = time.monotonic()
+            for key, value in data.items():
+                price = float(value["last_price"])
+                cache[key] = (fetched, price)
+                out[key.split(":", 1)[1]] = price
         return out
 
     def quotes(self, symbols: list[str], exchange: str = "NSE") -> dict[str, dict]:
@@ -263,8 +266,8 @@ class Kite:
         self.refresh_token_if_changed()
         out: dict[str, dict] = {}
         clean = [s for s in dict.fromkeys(symbols) if s]
-        for i in range(0, len(clean), 400):
-            keys = [f"{exchange}:{s}" for s in clean[i:i + 400]]
+        for i in range(0, len(clean), QUOTE_BATCH_SIZE):
+            keys = [f"{exchange}:{s}" for s in clean[i:i + QUOTE_BATCH_SIZE]]
             try:
                 self.limits.slot("quote")
                 data = self.kc.quote(keys)

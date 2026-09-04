@@ -46,15 +46,24 @@ eleven of twenty-one orders came back "Maximum allowed order requests per second
 exactly that arithmetic, and its per-second cap has been spacing rather than a bucket ever since.
 The tightest family here is `quote` at 1 req/s, where a burst of two is a 100% overshoot. So the
 Lua below is the distributed form of `Spacer.take`: claim the next departure, sleep out the
-remainder, record the next one. It cannot burst by construction. The bucket keeps the pipeline's
-key (`baskfy:ratelimit:kite`); the desk's families sit beside it under the same namespace.
+remainder, record the next one. It cannot burst by construction — and as of M85 it is literally
+the same Lua on both sides, imported from `baskfy_providers.ratelimit.SPACING_SCRIPT` rather than
+copied, so the two trees cannot drift into two definitions of one clock.
 
-**What is still not shared, and it is the honest residual.** The pipeline's Kite provider takes
-its own bucket at `baskfy:ratelimit:kite` for the calls the worker makes, so the desk and a
-nightly backfill can still, between them, exceed an endpoint's cap. The overlap is small in
-practice — the backfill runs when the desk is asleep — and unifying them means giving the ingest
-path these families and this algorithm, which is a change to the pipeline, not to the desk.
-`docs/swing/DECISIONS-SW.md` SW21.1 records it and how to close it.
+**M85: the residual SW21.1 recorded is closed — every Kite read on the box waits on one clock.**
+The honest gap this docstring used to end on was that the pipeline's Kite provider kept its own
+token bucket at `baskfy:ratelimit:kite`, so the desk and a nightly backfill could between them
+exceed Kite's cap. Kite's limit is not per endpoint at heart: it is **3 HTTP requests a second
+across every endpoint combined**, and the fourth is a 429. So a `read` family now sits above the
+three endpoint families, `slot` takes it *first* on every call, and the pipeline's provider takes
+the same key (`baskfy:ratelimit:kite:read`, `baskfy_providers.factory.KITE_READ_CLOCK_KEY`) as a
+`RedisCallSpacer` rather than a bucket. One number, one clock, every container and both trees.
+
+The cost is stated where it is paid: this desk's page reads used to space at the `general` family's
+9 req/s and now space at 3, because 9 was never available. A backfill takes a slower **bulk** lane
+under the same ceiling (`KITE_BULK_CLOCK_KEY`, 2 req/s) so that the headroom between the two is
+what an interactive read — a login's holdings sync, a live swing scan — finds free instead of
+queueing behind an hour of `historical_data`. `docs/DECISIONS-MERGE.md` M85 carries the reasoning.
 
 **Redis is a nicety, never a dependency.** No URL, an unreachable server, a connection that
 drops mid-session, or a queue longer than `MAX_SHARED_WAIT_SECONDS` all degrade to this process's
@@ -69,6 +78,8 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 
+from baskfy_providers.ratelimit import SPACING_SCRIPT
+
 from .. import config as C
 
 log = logging.getLogger("kite_limits")
@@ -77,10 +88,12 @@ log = logging.getLogger("kite_limits")
 QUOTE_PER_SECOND = 1.0
 HISTORICAL_PER_SECOND = 3.0
 GENERAL_PER_SECOND = 9.0
+READ_PER_SECOND = 3.0
 
 #: The three families and their caps, in one place: `DeskLimits` builds its spacers from this and
 #: so does the shared wiring, so a family cannot exist locally and be missing from Redis.
 RATE_FOR_FAMILY: dict[str, float] = {
+    "read": READ_PER_SECOND,
     "quote": QUOTE_PER_SECOND,
     "historical": HISTORICAL_PER_SECOND,
     "general": GENERAL_PER_SECOND,
@@ -140,27 +153,7 @@ SHARED_SOCKET_TIMEOUT_SECONDS = 1.5
 #:
 #: A refusal (`claimed == 0`) does NOT advance the clock: a caller that will not wait must not
 #: consume a slot it never used, or it would throttle the process that does wait.
-TAKE_SCRIPT = """
-local key      = KEYS[1]
-local interval = tonumber(ARGV[1])
-local max_wait = tonumber(ARGV[2])
-
-local t   = redis.call('TIME')
-local now = tonumber(t[1]) + tonumber(t[2]) / 1000000
-
-local next_at = tonumber(redis.call('GET', key))
-if next_at == nil or next_at < now then
-  next_at = now
-end
-
-local wait = next_at - now
-if wait > max_wait then
-  return {0, tostring(wait)}
-end
-
-redis.call('SET', key, next_at + interval, 'PX', math.ceil((wait + interval) * 1000) + 1000)
-return {1, tostring(wait)}
-"""
+TAKE_SCRIPT = SPACING_SCRIPT
 
 
 class Spacer:
@@ -361,13 +354,24 @@ class DeskLimits:
         self.quote = Spacer(QUOTE_PER_SECOND, clock=clock, sleep=sleep)
         self.historical = Spacer(HISTORICAL_PER_SECOND, clock=clock, sleep=sleep)
         self.general = Spacer(GENERAL_PER_SECOND, clock=clock, sleep=sleep)
+        self.read = Spacer(READ_PER_SECOND, clock=clock, sleep=sleep)
         self.shared: dict[str, SharedSpacer] = dict(
             shared if shared is not None else shared_spacers()
         )
-        self.waits: dict[str, float] = {"quote": 0.0, "historical": 0.0, "general": 0.0}
+        self.waits: dict[str, float] = {
+            "read": 0.0,
+            "quote": 0.0,
+            "historical": 0.0,
+            "general": 0.0,
+        }
         #: How many times the shared clock could not answer and this process spaced alone. The
         #: number the operator wants when asking whether the box's limit is actually one limit.
-        self.local_only: dict[str, int] = {"quote": 0, "historical": 0, "general": 0}
+        self.local_only: dict[str, int] = {
+            "read": 0,
+            "quote": 0,
+            "historical": 0,
+            "general": 0,
+        }
 
     @property
     def is_shared(self) -> bool:
@@ -386,6 +390,15 @@ class DeskLimits:
         what the whole box sends, the local spacer bounds what this process sends, and when the
         desk is alone on the box the second wait is zero because the first already spent it.
         """
+        if family not in FAMILY_FOR_CALL.values():
+            raise KeyError(f"no such Kite family: {family}")
+        waited = self._take("read") + self._take(family)
+        if waited > 0.5:
+            log.info("waited %.2fs for a Kite %s slot", waited, family)
+        return waited
+
+    def _take(self, family: str) -> float:
+        """Take one global or endpoint-family slot, shared first and local always."""
         waited = 0.0
         shared = self.shared.get(family)
         if shared is not None:
@@ -396,8 +409,6 @@ class DeskLimits:
                 waited += claimed
         waited += self.spacer(family).take()
         self.waits[family] = self.waits.get(family, 0.0) + waited
-        if waited > 0.5:
-            log.info("waited %.2fs for a Kite %s slot", waited, family)
         return waited
 
     def slot_for_call(self, call: str) -> float:

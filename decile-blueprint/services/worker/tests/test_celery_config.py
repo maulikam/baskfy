@@ -27,6 +27,7 @@ from baskfy_worker.celery_app import (
     TASK_ROUTES,
     build_celery,
 )
+from baskfy_worker.deps import PipelineDependencies
 from baskfy_worker.settings import WorkerSettings
 
 
@@ -292,3 +293,29 @@ class TestTheBrokerDoesNotRedeliverALongNight:
         assert timeout >= 2 * 60 * 60
         # And not so long that a worker killed mid-night waits until tomorrow to be retried.
         assert timeout <= 12 * 60 * 60
+
+
+class TestTheMarketGateReadsTheDocumentedBenchmark:
+    """`docs/swing/04` §8.2 and STANDING-ANSWERS A12 both name NIFTY 500.
+
+    Two places default this setting and only one of them is read. On 5 Sep 2026 they disagreed:
+    `deps.PipelineDependencies` said `nifty-500`, `WorkerSettings` said `nifty-mid-small-400`,
+    and `providers.build_pipeline_dependencies` reads the settings one — so the deployed market
+    gate ran on the mid-small index while the backtest that justified going live ran on NIFTY
+    500. It changed the verdict, not just the numbers: on 3 Sep 2026 mid-small read
+    fast 21,586.40 > slow 21,580.77 (GREEN, entries allowed) while NIFTY 500 read
+    fast 23,449.05 < slow 23,524.42 (RED, none).
+    """
+
+    def test_worker_settings_index_slug_matches_deps(self) -> None:
+        settings_default = WorkerSettings.model_fields["swing_index_slug"].default
+        deps_default = PipelineDependencies.__dataclass_fields__["swing_index_slug"].default
+
+        assert settings_default == deps_default, (
+            "the benchmark the gate actually reads has drifted from the documented default"
+        )
+
+    def test_the_documented_benchmark_is_nifty_500(self) -> None:
+        """Pinned to the document, not to the other default — so renaming both together
+        without changing `04` §8.2 still fails."""
+        assert WorkerSettings.model_fields["swing_index_slug"].default == "nifty-500"

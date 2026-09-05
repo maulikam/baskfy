@@ -55,7 +55,23 @@ class WorkerSettings(BaseSettings):
     swing_max_position_pct_max: float = Field(default=30.0, gt=0, le=100)
     swing_max_open_positions_max: int = Field(default=20, gt=0, le=50)
     #: The benchmark the market gate reads (``docs/swing/04`` §8.2), ``nifty-50`` as fallback.
-    swing_index_slug: str = "nifty-mid-small-400"
+    #:
+    #: **This was ``nifty-mid-small-400`` and that was a bug (5 Sep 2026).** `04` §8.2 and
+    #: STANDING-ANSWERS A12 both name NIFTY 500, `baskfy_worker.deps.PipelineDependencies` has
+    #: always defaulted to ``nifty-500``, and the backtest whose expectancy the go-live decision
+    #: rested on was run with ``index_slug='nifty-500'`` — but
+    #: `providers.build_pipeline_dependencies` reads *this* field, so the deployed gate ran on
+    #: the mid-small index instead.
+    #:
+    #: It changed verdicts, not just numbers. On 3 Sep 2026 NIFTY MidSmall 400 read
+    #: ``fast 21,586.40 > slow 21,580.77`` and the gate was **GREEN** (new entries allowed);
+    #: NIFTY 500 on the same session read ``fast 23,449.05 < slow 23,524.42``, which is **RED**.
+    #: The gate decides whether the book may enter at all, so the wrong benchmark is the wrong
+    #: answer to the only question it is asked.
+    #:
+    #: `test_worker_settings_index_slug_matches_deps` holds this equal to `deps`' default so the
+    #: two cannot drift apart again.
+    swing_index_slug: str = "nifty-500"
     #: SW11 (STANDING-ANSWERS A4, MD5): the one-shot S2 Kite timing probe at 09:04. Off by
     #: default; on for the one morning Maulik has logged in to Kite before 09:00, and the task
     #: disables itself with a marker file after one good run.

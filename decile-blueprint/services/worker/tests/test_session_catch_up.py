@@ -16,10 +16,10 @@ import datetime as dt
 
 import pytest
 from helpers import requires_db
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import PipelineRun, TradingDay
+from baskfy_core.models import PipelineRun, PipelineRunStep, TradingDay
 from baskfy_worker import catch_up
 from baskfy_worker.steps import RunStatus
 from baskfy_worker.tasks import celery_tasks
@@ -64,6 +64,66 @@ async def _run(
         )
     )
     await session.flush()
+
+
+async def _gate_verdict(session: AsyncSession, day: dt.date, *, passed: bool) -> None:
+    """Record the `data_quality_gate` step for that day's newest run — the verdict itself."""
+    run_id = (
+        await session.execute(
+            select(PipelineRun.id)
+            .where(PipelineRun.trade_date == day)
+            .order_by(PipelineRun.id.desc())
+            .limit(1)
+        )
+    ).scalar_one()
+    session.add(
+        PipelineRunStep(
+            run_id=run_id,
+            step=catch_up.QUALITY_GATE_STEP,
+            status="succeeded" if passed else catch_up.STEP_FAILED,
+        )
+    )
+    await session.flush()
+
+
+@pytest.mark.db
+@requires_db
+class TestADayTheGateRefusedIsNotReRunForever:
+    """5 Sep 2026. The module promised "refused again, loudly, ONCE" and did not deliver it.
+
+    `landed_sessions` reads only `data_version`, and a gate refusal leaves it null exactly as a
+    killed run does — so the sweep could not tell "no verdict" from "the verdict was no" and
+    re-ran the chain for a refused day every time it fired. It ran four full chains for
+    2026-09-04 over eighteen hours; every one of them was refused for the same uningested 1:5
+    split, and no amount of re-running could have fixed a missing corporate action.
+    """
+
+    async def test_a_gate_refusal_is_not_proposed_again(self, session: AsyncSession) -> None:
+        await _run(session, THU, status=RunStatus.FAILED, data_version=None)
+        await _gate_verdict(session, THU, passed=False)
+
+        assert await catch_up.unlanded_sessions(session, through=THU, lookback_days=0) == [], (
+            "the sweep proposed a day whose data the gate has already judged wrong"
+        )
+
+    async def test_a_killed_run_is_still_proposed(self, session: AsyncSession) -> None:
+        """The distinction that matters: no gate step at all means no verdict was reached,
+        which is the 3 Sep shape this module was written for and must keep healing."""
+        await _run(session, THU, status=RunStatus.FAILED, data_version=None)
+
+        assert await catch_up.unlanded_sessions(session, through=THU, lookback_days=0) == [THU]
+
+    async def test_a_refusal_followed_by_a_publish_is_landed_not_refused(
+        self, session: AsyncSession
+    ) -> None:
+        """The recovery path, which is what actually happened: the split was ingested and the
+        next run published. A later success must not be masked by the earlier refusal."""
+        await _run(session, THU, status=RunStatus.FAILED, data_version=None)
+        await _gate_verdict(session, THU, passed=False)
+        await _run(session, THU, status=RunStatus.SUCCEEDED, data_version=11)
+        await _gate_verdict(session, THU, passed=True)
+
+        assert await catch_up.unlanded_sessions(session, through=THU, lookback_days=0) == []
 
 
 @pytest.mark.db
@@ -186,15 +246,21 @@ class TestTheCatchUpTaskRunsThemOldestFirst:
         missing: list[dt.date],
         *,
         plan_raises: Exception | None = None,
+        published: bool = True,
     ) -> tuple[list[str], list[str]]:
-        """Returns the dates the chain ran and the dates a swing plan was built for."""
+        """Returns the dates the chain ran and the dates a swing plan was built for.
+
+        ``published`` is what the chain reports back: a `data_version` means it reached
+        `publish`, which is the only thing that earns the day a swing plan. Default True
+        because the ordinary caught-up session does publish; the refusal has its own test.
+        """
         ran: list[str] = []
         planned: list[str] = []
         monkeypatch.setattr(celery_tasks, "run_in_session", lambda _fn: missing)
 
         def _record(trade_date: str) -> dict[str, object]:
             ran.append(trade_date)
-            return {"trade_date": trade_date}
+            return {"trade_date": trade_date, "data_version": 42 if published else None}
 
         def _plan(trade_date: str) -> dict[str, object]:
             if plan_raises is not None:
@@ -232,6 +298,26 @@ class TestTheCatchUpTaskRunsThemOldestFirst:
         assert planned == [WED.isoformat(), THU.isoformat()]
         assert planned == ran, "a plan was built for a day whose chain did not run"
         assert result["swing_plans"] == [{"date": WED.isoformat()}, {"date": THU.isoformat()}]
+
+    def test_a_chain_that_did_not_publish_gets_no_swing_plan(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """5 Sep 2026, and this was wrong as M85 wrote it.
+
+        The evening ran unconditionally, so on a day the quality gate REFUSED it built a swing
+        plan on data the pipeline had just rejected — and counted a LIVE session against
+        `first_live_sessions_left`, spending one of the five half-risk sessions on numbers
+        nobody should trade. `data_version` is the product's own test for "fit to serve"; a
+        chain without one gets no plan.
+        """
+        ran, planned = self._arrange(monkeypatch, [WED], published=False)
+        result = celery_tasks.session_catch_up(max_sessions=1)
+
+        assert ran == [WED.isoformat()], "the chain still ran"
+        assert planned == [], "a plan was built on a day the gate refused"
+        assert result["swing_plans"] == [
+            {"date": WED.isoformat(), "skipped": "the chain did not publish"}
+        ]
 
     def test_a_plan_that_fails_does_not_undo_a_session_that_landed(
         self, monkeypatch: pytest.MonkeyPatch

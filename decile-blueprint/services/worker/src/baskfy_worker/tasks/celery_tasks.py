@@ -298,6 +298,16 @@ def bhavcopy_ingest(trade_date: str | None = None) -> JsonObject:
     }
 
 
+def _published(chain: JsonObject) -> bool:
+    """Did this chain run reach `publish`? `data_version` is the column that decides.
+
+    The same test `catch_up.landed_sessions` uses, and for the same reason: only a run that
+    passed the quality gate reaches `publish`, and only `publish` sets `data_version`. A run
+    that failed, was abandoned, or was refused has none.
+    """
+    return chain.get("data_version") is not None
+
+
 @shared_task(name="baskfy.pipeline.session_catch_up", acks_late=True)
 def session_catch_up(
     lookback_days: int = catch_up.DEFAULT_LOOKBACK_DAYS,
@@ -356,6 +366,18 @@ def session_catch_up(
         # own docstring requires: the plan is built from the day's candidates and the day's gate.
         # Idempotent per date, so a day whose 21:05 entry did fire is rewritten to itself.
         # Fail soft — a plan that cannot be built must not undo a session that landed.
+        #
+        # ONLY IF THE CHAIN ACTUALLY PUBLISHED (5 Sep 2026 — this was wrong as M85 wrote it).
+        #
+        # The evening ran unconditionally, and on 4-5 Sep that ran it on a day the quality gate
+        # had REFUSED: TCC's uningested 1:5 split made the day's data wrong, the chain said so,
+        # and the evening then built a swing plan on exactly that data and counted a LIVE
+        # session against `first_live_sessions_left` — spending one of the five half-risk
+        # sessions on numbers the pipeline had just rejected. Nothing downstream of a refused
+        # gate should run, and `data_version` is the product's own test for "fit to serve".
+        if not _published(chain):
+            planned.append({"date": day.isoformat(), "skipped": "the chain did not publish"})
+            continue
         try:
             planned.append(swing_eod_task(day.isoformat()))
         except Exception as exc:

@@ -2731,3 +2731,57 @@ confirm-time re-derivation under the session row lock. CNC only. A9's half risk 
 - **The box is a t4g.large (2 vCPU / 8 GB) and one background job took the whole product offline
   for ~40 minutes on 4 Sep.** Not resized (Maulik did not select it). It matters more now that
   orders are real: a box that can be starved is a box that can miss a stop. Recorded, not fixed.
+
+---
+
+## SW25 — AUTO-EXECUTE IS ON (7 Sep 2026, 14:5x IST)
+
+**`auto_execute_enabled()` returns `True` on the box.** From tomorrow's open, a trigger the
+monitor raises between 09:15 and 10:45 becomes a **real order with nobody watching**. Maulik
+asked for this twice, the second time in one sentence ("keep auto-execute on"), after the
+consequence was put to him with the backtest numbers. `DECISIONS-SW.md` SW25 is the record.
+
+| | |
+|---|---|
+| Deployed | `60b596e` (deploy #13), alembic `0034`, compose from `80cd6ad` |
+| The three flags, read from the container | `DRY_RUN=false`, `BASKFY_SWING_EXECUTION_ENABLED=true`, **`BASKFY_SWING_AUTO_EXECUTE=true`** |
+| What the code says | `auto_execute_enabled() = True`, `live_execution() = True`, `swing_gates().dry_run = False` |
+| Benchmark (M87) | `WorkerSettings` default and `build_pipeline_dependencies()` both now read **`nifty-500`**, as `04` §8.2 requires |
+| Sleeve | ₹25,00,000 · 0.5 %/trade · **`first_live_sessions_left` restored to 5** |
+
+**The compose trap, worth knowing.** `BASKFY_SWING_AUTO_EXECUTE` was not named in
+`compose.prod.yml`, so setting it in `.env.staging.compose` alone would have reached nothing —
+the desk would have read the config default (`false`) and kept waiting for a click, while every
+file said "unattended". Caught before the flip, not after; `swing-monitor` inherits the desk's
+block through `<<: *desk`, so both now read one value.
+
+**`first_live_sessions_left` restored 4 → 5.** It was spent on 4 Sep by M85's own bug (the
+catch-up ran the evening on a session the quality gate had refused, and the evening counts a
+LIVE session). Restored as remediation of that bug rather than as a change to Maulik's risk
+decision, under the autonomy charter — it is the more protective direction, and half risk is
+now the only rehearsal left between the strategy and the account. `updated_by` on the row says
+so. One `PATCH /swing/config` reverses it.
+
+### What happens tomorrow morning, stated plainly
+
+08:50 levels → 09:04 probe → **09:15–10:45 the monitor watches the tape**. If the gate is GREEN
+and a watched name breaks its opening range, `drain_auto_execute` confirms the line through
+`execute_line` and **a real MARKET order goes to Zerodha**, protected at the SW22 entry cap,
+with a GTT stop armed in the same call. At most 3 new entries a session, at most
+`min(rung, max_open_positions)` open, half risk while the countdown runs. 10:45 cancels any open
+remainder; 15:15 sweeps for a naked position.
+
+Today's gate is **RED** on both indices, so nothing would have fired today in any case.
+
+### NOT done
+
+- **No auto-executed order has ever been placed**, in any environment, live or dry. The first
+  one will be the first — there was no drill morning (SW-5, waived) and the flag has never been
+  on for a session.
+- **`verify-swing.sh` now FAILS by design.** It asserts `DRY_RUN=true` and the swing flags
+  `false`, which encoded "this box is not live". It is now wrong about a box that is. It has not
+  been rewritten, so the next reader will meet a red gate that is telling the truth about a
+  state Maulik chose.
+- **The box is still a t4g.large (2 vCPU / 8 GB)** that one background job took offline for
+  forty minutes on 4 Sep. With orders now firing unattended, a box that can be starved is a box
+  that can miss a 10:45 cutoff or a 15:15 stop sweep. Raised twice, not selected, recorded here.

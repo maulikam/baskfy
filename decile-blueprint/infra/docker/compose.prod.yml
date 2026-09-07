@@ -342,6 +342,16 @@ services:
       DRY_RUN: "${BASKFY_DESK_DRY_RUN:-true}"
       BASKFY_SWING_EXECUTION_ENABLED: "${BASKFY_SWING_EXECUTION_ENABLED:-false}"
       BASKFY_SWING_MONITOR_ENABLED: "${BASKFY_SWING_MONITOR_ENABLED:-false}"
+      # SW25 — AUTO-EXECUTE: the monitor confirms its own triggers, with nobody watching.
+      #
+      # The switch that removes the desk's first non-negotiable. A real unattended order needs
+      # ALL THREE of DRY_RUN=false, BASKFY_SWING_EXECUTION_ENABLED=true and this; the desk's
+      # `auto_execute_enabled()` is the AND of them. Stated here as well as in the env file
+      # because a variable this file does not name never reaches the container at all — setting
+      # it in `.env.staging.compose` alone would look like going unattended and do nothing.
+      # `swing-monitor` inherits this whole block through `<<: *desk`, so the process that
+      # actually fires the orders and the page that shows them read the same value.
+      BASKFY_SWING_AUTO_EXECUTE: "${BASKFY_SWING_AUTO_EXECUTE:-false}"
       BASKFY_SWING_EP_PREMARKET_ENABLED: "${BASKFY_SWING_EP_PREMARKET_ENABLED:-false}"
       BASKFY_SWING_TIMING_PROBE: "${BASKFY_SWING_TIMING_PROBE:-false}"
       # BASKFY_SOLE_USER_ID / BASKFY_SOLE_BROKER_ACCOUNT_ID (P4.3, the tenant pair every order

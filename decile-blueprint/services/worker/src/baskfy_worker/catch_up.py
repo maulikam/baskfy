@@ -73,6 +73,20 @@ STEP_FAILED: Final = "failed"
 #: values; `baskfy_worker.tasks.celery_tasks` imports it from here.
 SESSION_DATA_READY_IST: Final = dt.time(18, 0)
 
+#: ...but with a live Kite session the day's bars exist much sooner, and waiting for the
+#: bhavcopy is three hours of nothing (7 Sep 2026).
+#:
+#: Maulik: "Don't you think we should have the latest data since we have the token?" Measured
+#: rather than assumed — at **15:35 IST, five minutes after the close**, Kite already returned
+#: 7 Sep daily bars for RELIANCE (1308.00), TCS (2274.10) and INFY (1087.40). The 18:00 cutoff
+#: above was written when the bhavcopy was the only source the box could rely on; Kite has been
+#: the primary source since M84 and the bhavcopy is now the *fallback*, so the cutoff was
+#: guarding against a constraint that had already moved.
+#:
+#: The consequence was not academic: the evening plan, and therefore the next morning's
+#: watchlist, was built two to three hours later than it needed to be every single day.
+SESSION_DATA_READY_WITH_KITE_IST: Final = dt.time(15, 45)
+
 #: How far back a sweep looks. A week covers a long weekend plus the two days it takes anybody to
 #: notice, and stops the sweep from proposing to re-run a quarter after a database restore.
 DEFAULT_LOOKBACK_DAYS: Final = 7

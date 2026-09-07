@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Final
 
 from celery import Task, shared_task
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.broker_oauth import (
@@ -39,6 +40,7 @@ from baskfy_api.screener import (
 )
 from baskfy_api.settings import get_settings as get_api_settings
 from baskfy_api.swing_scan import request_scan
+from baskfy_core.models import PipelineRun
 from baskfy_core.models.base import JsonObject
 from baskfy_providers.errors import TransientProviderError
 from baskfy_providers.factory import KiteLane, build_kite_provider, build_nse_provider
@@ -109,6 +111,7 @@ log = logging.getLogger("baskfy_worker.tasks")
 #: constant with two definitions is a constant with two values. Re-exported here, where it has
 #: always been imported from.
 SESSION_DATA_READY_IST = catch_up.SESSION_DATA_READY_IST
+SESSION_DATA_READY_WITH_KITE_IST = catch_up.SESSION_DATA_READY_WITH_KITE_IST
 
 #: docs/09 §"Kite specifics" — a rate-limited or flaky upstream is worth retrying; a malformed
 #: payload or a missing credential is not. Only transient provider failures auto-retry.
@@ -168,14 +171,35 @@ def nightly_pipeline(trade_date: str | None = None) -> JsonObject:
     # rehearsal and knows it.
     if trade_date is None:
         now_ist = dt.datetime.now(tz=IST)
-        if now_ist.date() == day and now_ist.time() < SESSION_DATA_READY_IST:
+        # WHICH CUTOFF APPLIES DEPENDS ON WHETHER WE CAN ASK KITE (7 Sep 2026).
+        #
+        # 18:00 is the bhavcopy's hour. Kite has the day's bars within minutes of the close —
+        # measured at 15:35 on 7 Sep — and has been the primary source since M84, so waiting
+        # for 18:00 with a live session is three hours of nothing every day. With no session
+        # the old cutoff still governs, because then the bhavcopy really is the only source.
+        cutoff = (
+            SESSION_DATA_READY_WITH_KITE_IST if kite_session_usable() else SESSION_DATA_READY_IST
+        )
+        # AND NOT A DAY WE HAVE ALREADY PUBLISHED. Two scheduled entries now run this task for
+        # the same date (15:50 and 18:45), and re-running a landed day is about two hours of
+        # Kite calls to write the rows it already wrote. It also closes an older hole: on
+        # 31 Aug 2026 three deploys redelivered the nightly and the copies re-ran a session
+        # that was already done. An explicit `trade_date` still forces the work — that is the
+        # reprocess path, and a human asking for a specific day means it.
+        if run_already_published(day):
+            return {
+                "trade_date": day.isoformat(),
+                "status": "skipped",
+                "reason": f"{day.isoformat()} is already published; nothing to re-run",
+            }
+        if now_ist.date() == day and now_ist.time() < cutoff:
             return {
                 "trade_date": day.isoformat(),
                 "status": "skipped",
                 "reason": (
                     f"the {day.isoformat()} session has not published yet "
                     f"(now {now_ist.time().strftime('%H:%M')} IST, data expected after "
-                    f"{SESSION_DATA_READY_IST.strftime('%H:%M')})"
+                    f"{cutoff.strftime('%H:%M')})"
                 ),
             }
 
@@ -296,6 +320,51 @@ def bhavcopy_ingest(trade_date: str | None = None) -> JsonObject:
         "unmatched_symbol_count": len(report.unmatched_symbols) or None,
         "failures": report.failures or None,
     }
+
+
+def run_already_published(day: dt.date) -> bool:
+    """Has this trade date already produced a run with a ``data_version``?
+
+    The product's own test for "fit to serve", and the same one `catch_up.landed_sessions` and
+    M86's `_published` use. Failure to read answers ``False`` — a box that cannot tell should do
+    the work rather than skip a day it might be missing.
+    """
+
+    async def _check(session: AsyncSession) -> bool:
+        rows = await session.execute(
+            select(PipelineRun.id)
+            .where(PipelineRun.trade_date == day, PipelineRun.data_version.is_not(None))
+            .limit(1)
+        )
+        return rows.first() is not None
+
+    try:
+        return bool(run_in_session(_check))
+    except Exception:
+        log.warning("could not tell whether %s is published; running the chain", day.isoformat())
+        return False
+
+
+def kite_session_usable() -> bool:
+    """Is there a Kite token this box could fetch today's bars with, right now?
+
+    Local and cheap — the stored token's own issue date against the IST calendar day, the same
+    test `_connection_state` uses. No network call: this runs inside a Beat-triggered guard and
+    "is Kite reachable" is a different, slower question that the chain itself will answer a
+    moment later anyway.
+
+    Any failure to read reads as *no session*, which selects the conservative 18:00 cutoff — a
+    box that cannot tell should wait for the bhavcopy rather than run early and fail.
+    """
+    try:
+        from baskfy_api.broker_oauth import token_store_for  # noqa: PLC0415 - optional at import
+
+        store = token_store_for()
+        if not store.exists():
+            return False
+        return not store.load().is_expired()
+    except Exception:
+        return False
 
 
 def _published(chain: JsonObject) -> bool:

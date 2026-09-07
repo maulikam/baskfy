@@ -410,6 +410,19 @@ def live_execution() -> bool:
     return bool(C.SWING_EXECUTION_ENABLED) and not bool(C.DRY_RUN)
 
 
+def auto_execute_enabled() -> bool:
+    """SW25: may the monitor confirm its own triggers? All THREE flags, never fewer.
+
+    `live_execution()` is "a confirm would place a real order". This is "and nobody has to make
+    it". They are separate questions and separate switches on purpose: going live and going
+    unattended are two decisions, and either must be reversible without undoing the other.
+
+    Read from the config module at call time, like every other swing flag, so the answer cannot
+    be stale in a long-lived process.
+    """
+    return live_execution() and bool(C.SWING_AUTO_EXECUTE)
+
+
 def entries_now(
     item: WatchItem,
     context: SignalContext,
@@ -473,9 +486,14 @@ def entries_now(
 class PgSignalStore:
     """`sw_signal` + a one-line `sw_plan(SIGNAL)` for a trigger; a signal row alone otherwise.
 
-    Nothing here places anything. The line it writes is `PROPOSED`, and the only thing that can
-    move it past that is a person clicking confirm on the desk page (SW7) — with the execution
-    flag on, which it is not.
+    Nothing here places anything **unless `BASKFY_SWING_AUTO_EXECUTE` is on** (SW25, 5 Sep
+    2026). The line it writes is `PROPOSED`, and by default the only thing that can move it past
+    that is a person clicking confirm on the desk page (SW7). With all three flags on — DRY_RUN
+    off, `SWING_EXECUTION_ENABLED` on, `SWING_AUTO_EXECUTE` on — the runner's
+    `drain_auto_execute` confirms it through the same `execute_line` the button reaches, and a
+    real order is placed with nobody watching. This class only records that there is a line to
+    confirm (`pending_confirms`); it never reaches a broker itself. That is the desk's first non-negotiable removed at Maulik's instruction;
+    `docs/swing/DECISIONS-SW.md` SW25 is the record.
     """
 
     def __init__(  # noqa: PLR0913 - one keyword per collaborator
@@ -496,6 +514,12 @@ class PgSignalStore:
         #: the drill's report; never what a plan is sized against — `_plan_for` re-reads.
         self.context = context if context is not None else self.read_context()
         self.lines_written: list[int] = []
+        #: SW25: what auto-execute did this morning — `(symbol, status)` per confirmed line,
+        #: and the symbols whose execution raised. Reported by the runner at the close, so a
+        #: morning that placed real orders says so in one line rather than in the log's noise.
+        #: SW25: lines this store wrote that auto-execute may confirm, drained by the
+        #: runner. Holding them rather than acting on them is what keeps a store a store.
+        self.pending_confirms: list[tuple[Signal, Planned]] = []
         #: SW11 / A2: where a daily-focus trigger is told. ``None`` (the tests, the drill)
         #: means the row and the log line only, as SW6.3 built it.
         self.notifier = notifier
@@ -543,6 +567,13 @@ class PgSignalStore:
                 (planned.line_id, signal_id),
             )
             self.lines_written.append(planned.line_id)
+        if planned.line_id is not None and planned.plan_id is not None:
+            # SW25: RECORDED, not executed. A store writes rows; it does not reach a broker,
+            # and `test_the_store_never_names_a_placing_verb` is the check that keeps it that
+            # way — it caught exactly this method living here in the first draft. The runner
+            # (`drain_auto_execute`) is what confirms these, so the order path stays outside
+            # both the store and the strategy.
+            self.pending_confirms.append((signal, planned))
         self._notify(signal, raised_at, planned)
 
     def _notify(self, signal: Signal, raised_at: dt.datetime, planned: Planned) -> None:
@@ -708,16 +739,99 @@ class PgSignalStore:
                 signal.watch.symbol,
                 "; ".join(f"{s.reason.value} {s.detail}".strip() for s in plan.skipped),
             )
-        return Planned(line_id=line_id, plan=plan, expires_at=expires_at)
+        return Planned(line_id=line_id, plan=plan, expires_at=expires_at, plan_id=str(plan_id))
+
+
+def drain_auto_execute(store: Any) -> list[tuple[str, str]]:
+    """SW25: confirm every line the store just wrote, when all three flags say so.
+
+    THE ONE THING TO UNDERSTAND. This removes the desk's first non-negotiable — the human in
+    the loop — and **nothing else**. Each line is confirmed by the same
+    `swing_execute.execute_line` a click reaches, with ``confirm="true"`` and the ``plan_id``
+    just written, so every guard still runs: A5's re-derivation of the book under the session
+    row lock, the EXPOSURE_FULL / TIER_FULL / SESSION_CAP refusals, SW22's
+    MARKET-with-protection entry cap and its refusal above that cap, the GTT armed in the same
+    call (non-negotiable 4), and the whole gateway chain. What is gone is the person, and the
+    person was never the thing enforcing any of those.
+
+    **The queue is drained whether or not the flag is on.** A line left in `pending_confirms`
+    across a restart would be confirmed late, at a price the trigger no longer justifies; the
+    plan's own 30-minute expiry would refuse most of them, and "most" is not a safety property.
+    So with the flag off the queue is emptied and nothing is sent.
+
+    FAIL SOFT, ALWAYS. The monitor's job is to watch the tape; an execution that raises must not
+    take the watcher down with it, or one bad symbol at 09:20 costs every trigger for the rest
+    of the morning. A failure is logged and counted and the loop goes on — the signal row and
+    the plan line are already committed, so the line can be confirmed by hand from the desk
+    page exactly as before.
+
+    The price handed down is the tick that triggered it, the freshest this process has and
+    seconds old by construction. `execute_line` refuses rather than guesses without one
+    (SW22.2). Returns ``(symbol, status)`` per attempt, for the runner's close-of-morning line.
+    """
+    pending = list(store.pending_confirms)
+    store.pending_confirms.clear()
+    if not pending or not auto_execute_enabled():
+        return []
+
+    # The desk's own store, gateway and order source — the exact collaborators
+    # `POST /swing/execute` uses, resolved at call time. Imported here rather than at module
+    # scope: `swing_desk` imports the execute module, and a top-level import would tie two
+    # processes' import graphs together for a path that is off by default.
+    from . import swing_desk  # noqa: PLC0415 - see above
+    from . import swing_execute  # noqa: PLC0415 - see above
+
+    done: list[tuple[str, str]] = []
+    for signal, planned in pending:
+        symbol = signal.watch.symbol
+        try:
+            with swing_desk.open_store() as desk_store:
+                outcome = asyncio.run(
+                    swing_execute.execute_line(
+                        desk_store,
+                        swing_desk.swing_gateway(),
+                        plan_id=planned.plan_id,
+                        line_id=planned.line_id,
+                        confirm="true",
+                        now=swing_desk._now(),
+                        last_price=signal.last_price,
+                        orders=swing_desk.order_source(),
+                    )
+                )
+        except Exception as exc:  # noqa: BLE001 - the watcher must survive any single order
+            _tel.count("swing_auto_execute", outcome="error")
+            log.exception(
+                "AUTO-EXECUTE %s: %s: %s — the line is written and can be confirmed by hand",
+                symbol,
+                type(exc).__name__,
+                exc,
+            )
+            done.append((symbol, "ERROR"))
+            continue
+        _tel.count("swing_auto_execute", outcome=outcome.status)
+        log.warning(
+            "AUTO-EXECUTE %s: %s%s",
+            symbol,
+            outcome.status,
+            f" — {outcome.reason}" if outcome.reason else "",
+        )
+        done.append((symbol, outcome.status))
+    return done
 
 
 @dataclass(frozen=True)
 class Planned:
-    """What `_plan_for` wrote: the line's id (or None for a skip), the plan, its expiry."""
+    """What `_plan_for` wrote: the line's id (or None for a skip), the plan, its expiry.
+
+    ``plan_id`` is the ``sw_plan.plan_id`` uuid as a string — what `/swing/execute` and
+    `execute_line` take, and what SW25's auto-execute confirms against. Carried on the result
+    rather than re-queried, so the line that is confirmed is provably the line just written.
+    """
 
     line_id: int | None
     plan: Any
     expires_at: dt.datetime
+    plan_id: str | None = None
 
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
@@ -866,6 +980,14 @@ async def run_until_close(  # noqa: PLR0913 - the loop's collaborators, named
     the loop is not its concern.
     """
     read_now = now or (lambda: dt.datetime.now(tz=IST).replace(tzinfo=None))
+    def _drain(strat: Any) -> None:
+        """SW25's queue, emptied every pass. Tolerates a strategy whose store has no queue —
+        the replay harness drives this loop with a fake, and a monitor that cannot auto-execute
+        must still watch the tape."""
+        store = getattr(strat, "store", None)
+        if store is not None and hasattr(store, "pending_confirms"):
+            drain_auto_execute(store)
+
     queues = {token: bus.subscribe(token) for token in strategy.tokens}
     quiet_for = DEFAULT_SWING_CONFIG.opening_range.quote_poll_min_seconds
     last_tick_at = clock()
@@ -895,6 +1017,10 @@ async def run_until_close(  # noqa: PLR0913 - the loop's collaborators, named
                 while not q.empty():
                     await handle(q.get_nowait())
                     drained = True
+            # SW25: confirm whatever this pass triggered, then go back to watching. Drained
+            # here — once per loop, outside the tick handler — so a slow broker round trip
+            # cannot stall the bus, and so the queue never carries a trigger across a sleep.
+            _drain(strategy)
             if drained:
                 last_tick_at = clock()
                 continue
@@ -902,6 +1028,7 @@ async def run_until_close(  # noqa: PLR0913 - the loop's collaborators, named
                 polled = quotes.poll(moment)
                 for tick in polled or ():
                     await handle(tick)
+                _drain(strategy)
             await asyncio.sleep(poll_seconds)
     finally:
         _tel.gauge("swing_monitor_up", 0)

@@ -2619,3 +2619,68 @@ the concern is now closed rather than re-litigated. The build is its own entry.
 **Reversal of the whole of SW23:** set `BASKFY_SWING_EXECUTION_ENABLED=false` (or
 `BASKFY_DESK_DRY_RUN=true`) on the box and restart the desk and monitor — one line, one restart,
 and every swing order is simulated again.
+
+
+## SW25 — auto-execute: the monitor confirms its own triggers · ⚠ UNREVIEWED
+
+**What Maulik chose, 5 Sep 2026.** Asked who pulls the trigger once live, he chose
+**"Auto-execute triggers — the monitor fires orders itself when a trigger hits, no click."**
+The consequence was put to him in the same breath (real money moving with nobody watching, on a
+box that a single background job had taken offline that same evening), and he confirmed. This
+entry is the record; the concern is closed, not re-litigated.
+
+**This removes the desk's FIRST non-negotiable** — "Never auto-execute. Orders fire only from
+`POST /execute` with `confirm=true`" — one of the seven the root `CLAUDE.md` says survive
+verbatim, forever. Removing it is his call and it is made; what follows is how it was built so
+that it removes *only* that.
+
+### SW25.1 — three flags, not two
+
+`BASKFY_SWING_AUTO_EXECUTE`, default false, **in addition to** `DRY_RUN=false` and
+`BASKFY_SWING_EXECUTION_ENABLED=true`. `auto_execute_enabled()` is `live_execution() and
+SWING_AUTO_EXECUTE`, and a test walks all eight cells of the truth table and asserts exactly one
+of them executes.
+
+Three rather than a widening of the existing two, because **going live and going unattended are
+different decisions**. Maulik can keep placing orders by hand with auto off, or stop the
+unattended path in one line without going back to simulation. A single flag would have made
+those the same lever.
+
+### SW25.2 — what is removed is the human, and nothing else
+
+The order is placed by the same `swing_execute.execute_line` a click reaches, with
+`confirm="true"` and the `plan_id` just written. So every guard still runs: **A5**'s
+re-derivation of the book under the `sw_session` row lock, the `EXPOSURE_FULL` / `TIER_FULL` /
+`SESSION_CAP` refusals, **SW22**'s MARKET-with-protection entry cap *and its refusal above that
+cap*, the GTT armed in the same call (non-negotiable 4), CNC-only, and the whole gateway chain.
+The 30-minute plan expiry still applies — and is now load-bearing rather than decorative, since
+nobody is reading the clock.
+
+### SW25.3 — where it lives, and the test that decided that
+
+The first draft put `_auto_execute` inside `PgSignalStore`, next to the code that writes the
+`sw_signal` row. `test_the_store_never_names_a_placing_verb` failed, and it was **right**: a
+store writes rows; it does not reach a broker. The design changed rather than the test —
+the store now records `pending_confirms` and the **runner** (`drain_auto_execute`) confirms
+them, so the order path sits outside both the store and the strategy. `swing_breakout` is
+untouched and `generate_targets` still answers `[]`; Track C's source scans over both files pass
+unchanged.
+
+**The queue is drained whether or not the flag is on.** A trigger left queued across a restart
+would be confirmed late, at a price it no longer justifies; the plan's own expiry would refuse
+most of them, and "most" is not a safety property.
+
+**Fail soft, always.** An execution that raises is logged, counted and skipped — the watcher
+survives, because one bad symbol at 09:20 must not cost every trigger for the rest of the
+morning. The signal row and the plan line are already committed, so the line stays confirmable
+by hand from the desk page exactly as before.
+
+### What this does NOT do
+
+Nothing here widens the sleeve, the risk percentage or any ceiling; nothing changes what
+qualifies as a trigger; the exits, the 10:45 cutoff and the 15:15 GTT sweep are untouched. A9's
+half risk for the first live sessions still applies and, with the human gone, is now the only
+rehearsal left.
+
+**Reversal.** `BASKFY_SWING_AUTO_EXECUTE=false` and restart `swing-monitor` — one line, and
+every order needs a click again. The flag has never been on in any deployment as of this entry.

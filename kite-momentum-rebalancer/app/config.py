@@ -132,6 +132,23 @@ SWING_EXECUTION_ENABLED = os.getenv("BASKFY_SWING_EXECUTION_ENABLED", "false").l
 # The 09:15-10:45 opening-range monitor. Off until SW6's replay is green and one morning has
 # been watched by a person.
 SWING_MONITOR_ENABLED = os.getenv("BASKFY_SWING_MONITOR_ENABLED", "false").lower() == "true"
+# AUTO-EXECUTE: the monitor confirms its own triggers, with nobody watching (SW25).
+#
+# This is the one flag that removes the desk's FIRST non-negotiable — "Never auto-execute.
+# Orders fire only from POST /execute with confirm=true". Maulik asked for it on 5 Sep 2026
+# and confirmed after the consequence was put to him; `docs/swing/DECISIONS-SW.md` SW25 is the
+# record, including what was argued against it.
+#
+# It is a THIRD flag, not a widening of the other two, so that going live and going unattended
+# are separate decisions and either can be reversed without the other. A real auto-order needs
+# all three: DRY_RUN off, SWING_EXECUTION_ENABLED on, and this. Off by default, forever.
+#
+# What it does NOT change: the order still goes through `swing_execute.execute_line`, so the
+# confirm-time re-derivation under the session row lock (A5), the exposure/tier/session-cap
+# refusals, the MARKET-with-protection entry cap (SW22), the GTT armed in the same call
+# (non-negotiable 4) and every gateway guard apply exactly as they do to a human click. What
+# is removed is the human, and nothing else.
+SWING_AUTO_EXECUTE = os.getenv("BASKFY_SWING_AUTO_EXECUTE", "false").lower() == "true"
 # SW15 "Scan now" from the desk page: the same two rules the API applies, read from the same
 # environment names so the two buttons cannot disagree — at least this many seconds between
 # two requests, and a QUEUED/RUNNING run older than this no longer counts as in flight.

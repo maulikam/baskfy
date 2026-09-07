@@ -1024,3 +1024,119 @@ class TestTheDeskRereadsAFreshToken:
         client, path, _seen = self._client(tmp_path, monkeypatch)
         path.unlink()
         assert client.refresh_token_if_changed() is False
+
+
+# --- SW25: auto-execute, and the three flags that gate it ------------------------------------
+
+
+class TestAutoExecute:
+    """Maulik, 5 Sep 2026: the monitor confirms its own triggers.
+
+    This is the desk's FIRST non-negotiable removed — "Never auto-execute" — so the tests that
+    matter most here are the ones proving it stays off, and that turning it on removes the human
+    and nothing else.
+    """
+
+    @staticmethod
+    def _flags(monkeypatch, *, dry_run, execution, auto):
+        monkeypatch.setattr(C, "DRY_RUN", dry_run)
+        monkeypatch.setattr(C, "SWING_EXECUTION_ENABLED", execution)
+        monkeypatch.setattr(C, "SWING_AUTO_EXECUTE", auto)
+
+    def test_it_needs_all_three_flags_and_any_one_off_is_off(self, monkeypatch) -> None:
+        """The truth table, exhaustively. Only one of eight cells auto-executes."""
+        live = []
+        for dry_run in (True, False):
+            for execution in (False, True):
+                for auto in (False, True):
+                    self._flags(monkeypatch, dry_run=dry_run, execution=execution, auto=auto)
+                    if swing_monitor.auto_execute_enabled():
+                        live.append((dry_run, execution, auto))
+        assert live == [(False, True, True)], f"more than one live cell: {live}"
+
+    def test_with_the_flag_off_the_queue_is_drained_and_nothing_is_sent(
+        self, monkeypatch
+    ) -> None:
+        """Draining with the flag off is deliberate: a trigger left queued across a restart
+        would be confirmed late, at a price it no longer justifies."""
+        self._flags(monkeypatch, dry_run=False, execution=True, auto=False)
+
+        class Store:
+            pending_confirms = [("signal", "planned")]
+
+        store = Store()
+        monkeypatch.setattr(
+            swing_monitor,
+            "asyncio",
+            _Exploding("auto-execute ran with the flag off"),
+        )
+        assert swing_monitor.drain_auto_execute(store) == []
+        assert store.pending_confirms == [], "the queue was left to go stale"
+
+    def test_an_execution_that_raises_does_not_stop_the_monitor(self, monkeypatch) -> None:
+        """One bad symbol at 09:20 must not cost every trigger for the rest of the morning.
+        The line is already committed, so it stays confirmable by hand."""
+        self._flags(monkeypatch, dry_run=False, execution=True, auto=True)
+
+        class Store:
+            def __init__(self):
+                self.pending_confirms = [(_sig("AAA"), _planned(1)), (_sig("BBB"), _planned(2))]
+
+        import app.swing_desk as desk
+
+        def _boom():
+            raise RuntimeError("no database")
+
+        monkeypatch.setattr(desk, "open_store", _boom)
+        store = Store()
+        done = swing_monitor.drain_auto_execute(store)
+
+        assert done == [("AAA", "ERROR"), ("BBB", "ERROR")], done
+        assert store.pending_confirms == []
+
+    def test_a_skip_is_never_confirmed(self, monkeypatch) -> None:
+        """A trigger the rules refused has no line id, so there is nothing to send — the store
+        must not have queued it at all."""
+        self._flags(monkeypatch, dry_run=False, execution=True, auto=True)
+
+        class Store:
+            pending_confirms: list = []
+
+        assert swing_monitor.drain_auto_execute(Store()) == []
+
+    def test_the_store_holds_the_queue_but_never_the_order_path(self) -> None:
+        """The architectural rule this feature had to respect: a store writes rows. The first
+        draft put the execution inside `PgSignalStore` and
+        `test_the_store_never_names_a_placing_verb` caught it."""
+        source = _code_only(inspect.getsource(swing_monitor.PgSignalStore))
+        assert "pending_confirms" in source, "the store no longer records what to confirm"
+        assert "execute_line" not in source, "the store reaches the order path again"
+
+
+class _Exploding:
+    """Anything touched on this object is a code path that should not have run."""
+
+    def __init__(self, why: str) -> None:
+        self._why = why
+
+    def __getattr__(self, name: str):
+        raise AssertionError(f"{self._why} (touched .{name})")
+
+
+def _sig(symbol: str):
+    class _Watch:
+        def __init__(self, sym):
+            self.symbol = sym
+
+    class _Signal:
+        def __init__(self, sym):
+            self.watch = _Watch(sym)
+            self.last_price = Decimal("100.00")
+
+    return _Signal(symbol)
+
+
+def _planned(line_id: int):
+    return swing_monitor.Planned(
+        line_id=line_id, plan=None, expires_at=None, plan_id=f"plan-{line_id}"
+    )

@@ -111,7 +111,6 @@ log = logging.getLogger("baskfy_worker.tasks")
 #: constant with two definitions is a constant with two values. Re-exported here, where it has
 #: always been imported from.
 SESSION_DATA_READY_IST = catch_up.SESSION_DATA_READY_IST
-SESSION_DATA_READY_WITH_KITE_IST = catch_up.SESSION_DATA_READY_WITH_KITE_IST
 
 #: docs/09 §"Kite specifics" — a rate-limited or flaky upstream is worth retrying; a malformed
 #: payload or a missing credential is not. Only transient provider failures auto-retry.
@@ -171,15 +170,15 @@ def nightly_pipeline(trade_date: str | None = None) -> JsonObject:
     # rehearsal and knows it.
     if trade_date is None:
         now_ist = dt.datetime.now(tz=IST)
-        # WHICH CUTOFF APPLIES DEPENDS ON WHETHER WE CAN ASK KITE (7 Sep 2026).
+        # 18:00 IS THE BHAVCOPY'S HOUR AND IT STAYS THAT WAY (M88 reverted, 8 Sep 2026).
         #
-        # 18:00 is the bhavcopy's hour. Kite has the day's bars within minutes of the close —
-        # measured at 15:35 on 7 Sep — and has been the primary source since M84, so waiting
-        # for 18:00 with a live session is three hours of nothing every day. With no session
-        # the old cutoff still governs, because then the bhavcopy really is the only source.
-        cutoff = (
-            SESSION_DATA_READY_WITH_KITE_IST if kite_session_usable() else SESSION_DATA_READY_IST
-        )
+        # M88 moved this to 15:45 on the evidence that Kite returns the day's bars minutes
+        # after the close. It does — for the ~3,000 liquid names it covers, not for the ~4,855
+        # this universe holds. The remainder arrive in NSE's bhavcopy, so an early run writes a
+        # partial day and the quality gate refuses it: 7 Sep ingested 3,056 bars at 15:37 and
+        # was refused three times, where 4 Sep with the bhavcopy top-up ingested 4,454 and
+        # published. `catch_up.SESSION_DATA_READY_IST` carries the numbers.
+        cutoff = SESSION_DATA_READY_IST
         # AND NOT A DAY WE HAVE ALREADY PUBLISHED. Two scheduled entries now run this task for
         # the same date (15:50 and 18:45), and re-running a landed day is about two hours of
         # Kite calls to write the rows it already wrote. It also closes an older hole: on

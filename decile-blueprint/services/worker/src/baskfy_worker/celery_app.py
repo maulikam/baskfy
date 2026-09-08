@@ -113,19 +113,6 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=18, minute=15, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT},
     },
-    # THE EARLY RUN (7 Sep 2026). Kite has the day's bars within minutes of the 15:30 close —
-    # measured at 15:35 — so with a live session the chain can start at 15:50 instead of 18:45
-    # and the evening's plan is built on today rather than three hours late. With no session
-    # the task's own guard selects the 18:00 bhavcopy cutoff and this entry skips quietly,
-    # leaving `refresh-reference-data` below to do the work exactly as before.
-    #
-    # Both entries are the same task and the same date, and `nightly_pipeline` refuses a day it
-    # has already published, so the later one is a no-op on a day the early one landed.
-    "refresh-reference-data-early": {
-        "task": "baskfy.pipeline.nightly",
-        "schedule": crontab(hour=15, minute=50, day_of_week="mon-fri"),
-        "options": {"queue": QUEUE_DEFAULT},
-    },
     "refresh-reference-data": {
         "task": "baskfy.pipeline.nightly",
         "schedule": crontab(hour=18, minute=45, day_of_week="mon-fri"),

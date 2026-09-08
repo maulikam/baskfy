@@ -21,8 +21,13 @@ from baskfy_api.app import create_app
 from baskfy_api.auth import Principal, PrincipalKind
 from baskfy_api.curated_metrics_service import compute_all_metrics, upsert_metrics_row
 from baskfy_api.curated_seed import seed_curated_managers, seed_momentum_scan_basket
+from baskfy_api.problems import Problem
 from baskfy_api.routers import explore
-from baskfy_api.routers.explore import DOCUMENTED_LIST_PARAMS, list_explore_baskets
+from baskfy_api.routers.explore import (
+    DOCUMENTED_LIST_PARAMS,
+    get_explore_constituents,
+    list_explore_baskets,
+)
 from baskfy_core.models import (
     CbBasket,
     CbBasketVersion,
@@ -305,3 +310,54 @@ def _principal() -> Principal:
     """The coroutine-level tests drive handlers directly, so they must supply the principal
     the route now requires. The HTTP-level assertions live in ``test_explore_http.py``."""
     return Principal(kind=PrincipalKind.USER, user_id=1, public_id="testuser0001")
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.skipif(os.environ.get(ENV_VAR) is None, reason=f"{ENV_VAR} is not set")
+async def test_constituents_route_serves_the_newest_version(
+    engine: AsyncEngine, migrated: None
+) -> None:
+    """`/explore/{slug}/constituents` — the route the stub page was waiting for (9 Sep 2026).
+
+    `/basket/[slug]/constituents` apologised that constituent rows "need an immutable version
+    from the catalog engine (SC3)". SC3 shipped and the box carries 6 versions and 103
+    `cb_constituent` rows; what was missing was a route. This asserts the route answers the
+    newest version, heaviest weight first.
+    """
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        await _seed_exchange_and_instruments(session)
+        await session.commit()
+        await seed_momentum_scan_basket(session)
+        await session.commit()
+
+        out = await get_explore_constituents(MOMENTUM_SCAN_BASKET_SLUG, session, _signed_in())
+
+    assert out.slug == MOMENTUM_SCAN_BASKET_SLUG
+    assert out.version_no == 1
+    assert out.label == "GENESIS"
+    assert len(out.constituents) == DEFAULT_SCAN_TOP_N
+    weights = [row.weight for row in out.constituents]
+    assert weights == sorted(weights, reverse=True), "heaviest weight must lead"
+    assert all(row.symbol for row in out.constituents), "a constituent with no symbol"
+
+
+@pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.skipif(os.environ.get(ENV_VAR) is None, reason=f"{ENV_VAR} is not set")
+async def test_an_unknown_basket_is_a_404_not_an_empty_list(
+    engine: AsyncEngine, migrated: None
+) -> None:
+    """Visibility is the same predicate every explore route uses, so an unlisted or absent
+    basket must 404 here exactly as it does on the card — never leak as an empty page."""
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        with pytest.raises(Problem):
+            await get_explore_constituents("no-such-basket", session, _signed_in())
+
+
+def _signed_in() -> Principal:
+    """A signed-in principal. The route only calls `require_user()`; the tenancy that matters is
+    enforced by `_visible()` on the query, not by the caller."""
+    return Principal(kind=PrincipalKind.USER, user_id=1, email="reader@example.com")

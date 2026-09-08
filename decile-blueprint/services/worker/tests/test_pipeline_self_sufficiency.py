@@ -32,6 +32,7 @@ from baskfy_providers.errors import ProviderError
 from baskfy_worker import ops
 from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.steps import StepOutcome
+from baskfy_worker.tasks import bars as bars_module
 from baskfy_worker.tasks.bars import run_fetch_daily_bars
 from baskfy_worker.window import DateWindow
 
@@ -498,3 +499,65 @@ class _EmptyResult:
 
     def __iter__(self) -> Iterator[object]:
         return iter(())
+
+
+class TestTheFetchDoesNotHoldRowLocks:
+    """8 Sep 2026: the bars step took its first write lock in the first second and held it for
+    the whole fetch, because the chain is deliberately one transaction (M84.1).
+
+    Measured that day: the live swing scan sat on `Lock/transactionid` for 44 minutes while the
+    chain crawled the bars at the bulk lane's 2 req/s, and with `--concurrency=2` both worker
+    slots were then occupied by tasks doing nothing. py-spy put the chain in
+    `RedisCallSpacer.acquire`, sleeping for its slot with the transaction open.
+
+    The property that fixes it: **no write happens until every fetch is done.**
+    """
+
+    async def test_no_bar_is_written_until_every_fetch_has_returned(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        order: list[str] = []
+
+        class _Provider:
+            def daily_bars(self, token: int, start: dt.date, end: dt.date) -> pl.DataFrame:
+                order.append(f"fetch:{token}")
+                return pl.DataFrame(
+                    {
+                        "date": [start],
+                        "open": [1.0],
+                        "high": [1.0],
+                        "low": [1.0],
+                        "close": [1.0],
+                        "volume": [1],
+                        "turnover": [1.0],
+                    }
+                )
+
+        async def fake_upsert(session: object, instrument_id: int, frame: pl.DataFrame) -> int:
+            order.append(f"write:{instrument_id}")
+            return frame.height
+
+        monkeypatch.setattr("baskfy_worker.tasks.bars.upsert_bars", fake_upsert)
+
+        await run_fetch_daily_bars(
+            session=AsyncSession(),
+            provider=_Provider(),
+            outcome=StepOutcome(),
+            instruments=[(1, "AAA", 101), (2, "BBB", 102), (3, "CCC", 103)],
+            window=WINDOW,
+        )
+
+        fetches = [i for i, entry in enumerate(order) if entry.startswith("fetch:")]
+        writes = [i for i, entry in enumerate(order) if entry.startswith("write:")]
+        assert fetches and writes
+        assert max(fetches) < min(writes), (
+            f"a write happened while fetches were still running: {order}"
+        )
+
+    async def test_a_long_window_still_flushes_so_memory_stays_bounded(self) -> None:
+        """The escape hatch for a multi-year backfill, which does not share the box with a live
+        scan and must not buffer the whole archive."""
+        assert bars_module._FLUSH_ROWS > 0
+        assert bars_module._FLUSH_ROWS >= 100_000, (
+            "a threshold this low would flush during an ordinary session and reintroduce the bug"
+        )

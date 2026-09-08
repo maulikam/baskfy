@@ -28,6 +28,12 @@ from baskfy_worker.window import DateWindow
 UPSERT_CHUNK: int = 2000
 
 
+#: How many bar rows may be buffered before the step writes them out mid-fetch. Reached only by
+#: a multi-year backfill window; a single session's pass buffers roughly one row per instrument
+#: and flushes once at the end, holding row locks for seconds instead of the whole fetch.
+_FLUSH_ROWS = 250_000
+
+
 async def run_fetch_daily_bars(
     session: AsyncSession,
     provider: object,
@@ -45,6 +51,37 @@ async def run_fetch_daily_bars(
     written = 0
     failures: dict[str, str] = {}
     skipped_no_token = 0
+    # FETCH FIRST, WRITE AT THE END — SO THE CHAIN DOES NOT HOLD ROW LOCKS ACROSS THE NETWORK
+    # (8 Sep 2026).
+    #
+    # This loop used to `await upsert_bars(...)` immediately after each `fetch(...)`. Every write
+    # takes row locks that Postgres holds until the transaction commits, and the chain is
+    # deliberately ONE transaction (M84.1, so a night is all-or-nothing). The fetch is throttled
+    # to the bulk lane's 2 req/s (M85), so ~3,000 instruments is 25-45 minutes — and the old
+    # shape took its first lock in the first second and held everything until the end.
+    #
+    # Measured on 8 Sep: the live swing scan sat blocked on `Lock/transactionid` for 44 minutes
+    # trying to write `sw_setup_daily` while the chain crawled through the bars, and because the
+    # worker runs `--concurrency=2` both slots were then occupied by tasks doing nothing. py-spy
+    # put the chain's stack in `RedisCallSpacer.acquire` — sleeping for its slot, exactly as
+    # designed, with the transaction open the whole time.
+    #
+    # Buffering moves every lock to the end of the step: the network phase now takes none, and
+    # the writes run back-to-back in seconds just before the chain moves on. `_FLUSH_ROWS` bounds
+    # the memory a long backfill window could otherwise accumulate; the daily chain never reaches
+    # it, which is the case that shares the box with the live scan.
+    pending: list[tuple[int, pl.DataFrame]] = []
+    pending_rows = 0
+
+    async def _flush() -> int:
+        nonlocal pending, pending_rows
+        rows = 0
+        for pending_id, pending_frame in pending:
+            rows += await upsert_bars(session, pending_id, pending_frame)
+        pending = []
+        pending_rows = 0
+        return rows
+
     for instrument_id, symbol, token in instruments:
         if _credentials_are_missing(failures):
             # Stop after the first credentials failure instead of asking 10,514 times.
@@ -73,7 +110,14 @@ async def run_fetch_daily_bars(
         except ProviderError as exc:
             failures[symbol] = str(exc)
             continue
-        written += await upsert_bars(session, instrument_id, frame)
+        pending.append((instrument_id, frame))
+        pending_rows += frame.height
+        if pending_rows >= _FLUSH_ROWS:
+            # Only a long backfill window gets here. A single session's ~3,000 one-row frames
+            # stay buffered to the end, which is the whole point of the change.
+            written += await _flush()
+
+    written += await _flush()
 
     outcome.rows_in = len(instruments)
     outcome.rows_out = written

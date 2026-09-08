@@ -19,7 +19,6 @@ from helpers import requires_db
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_api import broker_oauth
 from baskfy_core.models import PipelineRun, PipelineRunStep, TradingDay
 from baskfy_worker import catch_up
 from baskfy_worker.celery_app import BEAT_SCHEDULE
@@ -406,52 +405,31 @@ async def _never_called(*args: object, **kwargs: object) -> _Report:  # pragma: 
 
 @pytest.mark.db
 @requires_db
-class TestTheDayStartsWhenTheDataDoes:
-    """7 Sep 2026. Maulik: "we should have the latest data since we have the token."
+class TestTheCutoffIsTheBhavcopysHour:
+    """M88 moved this cutoff to 15:45 and 8 Sep 2026 proved that wrong.
 
-    The 18:00 cutoff was the *bhavcopy's* hour, written when it was the only source the box
-    could rely on. Kite has been the primary source since M84 and has the day's bars within
-    minutes of the close — measured at 15:35 that day, returning 7 Sep closes for RELIANCE,
-    TCS and INFY. So the chain waited three hours for a constraint that had moved, and the
-    evening's plan was built that much later every single day.
+    Kite returns the day's bars minutes after the close — for the ~3,000 liquid names it
+    covers. This universe holds ~4,855 instruments and the rest arrive in NSE's bhavcopy, so an
+    early run writes a PARTIAL day: 7 Sep ingested 3,056 bars at 15:37 and the quality gate
+    refused it three times (3,056 against a 10-day median of 3,524), where 4 Sep with the
+    bhavcopy top-up ingested 4,454 and published.
+
+    The token does make the liquid names available sooner, and the live intraday scan already
+    uses them. The published end-of-day series waits for the day to actually be complete.
     """
 
-    def test_with_a_kite_session_the_cutoff_is_just_after_the_close(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(celery_tasks, "kite_session_usable", lambda: True)
-
-        early = dt.time(15, 50)
-        assert early >= celery_tasks.SESSION_DATA_READY_WITH_KITE_IST
-        assert early < celery_tasks.SESSION_DATA_READY_IST, (
-            "the whole point is that this hour used to be too early"
-        )
-
-    def test_without_a_session_the_bhavcopy_hour_still_governs(self) -> None:
-        """No token means the bhavcopy really is the only source, so the old cutoff is right.
-        A box that cannot tell must wait rather than run early and fail."""
+    def test_the_cutoff_is_18_00(self) -> None:
         assert dt.time(18, 0) == celery_tasks.SESSION_DATA_READY_IST
-        assert celery_tasks.SESSION_DATA_READY_WITH_KITE_IST < celery_tasks.SESSION_DATA_READY_IST
 
-    def test_an_unreadable_token_reads_as_no_session(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Conservative direction: unreadable selects 18:00, never 15:45."""
+    def test_there_is_no_earlier_kite_cutoff_any_more(self) -> None:
+        """The constant and its Beat entry are gone, not merely unused — a dormant early run
+        is one config flip away from writing partial days again."""
+        assert not hasattr(celery_tasks, "SESSION_DATA_READY_WITH_KITE_IST")
+        assert not hasattr(catch_up, "SESSION_DATA_READY_WITH_KITE_IST")
+        assert "refresh-reference-data-early" not in BEAT_SCHEDULE
 
-        def _boom() -> None:
-            raise RuntimeError("no encryption key")
-
-        monkeypatch.setattr(broker_oauth, "token_store_for", _boom)
-        assert celery_tasks.kite_session_usable() is False
-
-    def test_a_published_day_is_not_re_run_by_the_second_scheduled_entry(
-        self, session: AsyncSession
-    ) -> None:
-        """Two Beat entries now fire this task for the same date. Re-running a landed day is
-        two hours of Kite calls to rewrite the rows it already wrote — and it is the 31 Aug
-        2026 shape, where redelivered nightlies re-ran a finished session."""
+    def test_a_published_day_is_not_re_run_by_a_redelivered_schedule(self) -> None:
+        """Kept from M88, which was right about this half: re-running a landed day is two hours
+        of Kite calls to rewrite rows it already wrote. It is also the 31 Aug 2026 shape, where
+        redelivered nightlies re-ran a finished session."""
         assert callable(celery_tasks.run_already_published)
-
-    def test_both_scheduled_entries_are_the_same_task_and_date(self) -> None:
-        early: dict[str, object] = dict(BEAT_SCHEDULE["refresh-reference-data-early"])
-        late: dict[str, object] = dict(BEAT_SCHEDULE["refresh-reference-data"])
-        assert early["task"] == late["task"] == "baskfy.pipeline.nightly"
-        assert early["options"] == late["options"]

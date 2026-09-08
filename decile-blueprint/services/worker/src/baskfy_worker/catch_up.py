@@ -73,19 +73,21 @@ STEP_FAILED: Final = "failed"
 #: values; `baskfy_worker.tasks.celery_tasks` imports it from here.
 SESSION_DATA_READY_IST: Final = dt.time(18, 0)
 
-#: ...but with a live Kite session the day's bars exist much sooner, and waiting for the
-#: bhavcopy is three hours of nothing (7 Sep 2026).
+#: WHY THIS IS NOT EARLIER, THOUGH KITE ANSWERS SOONER (8 Sep 2026 — M88 reverted).
 #:
-#: Maulik: "Don't you think we should have the latest data since we have the token?" Measured
-#: rather than assumed — at **15:35 IST, five minutes after the close**, Kite already returned
-#: 7 Sep daily bars for RELIANCE (1308.00), TCS (2274.10) and INFY (1087.40). The 18:00 cutoff
-#: above was written when the bhavcopy was the only source the box could rely on; Kite has been
-#: the primary source since M84 and the bhavcopy is now the *fallback*, so the cutoff was
-#: guarding against a constraint that had already moved.
+#: Maulik asked "shouldn't we have the latest data since we have the token?", and at 15:35 on
+#: 7 Sep Kite did return that day's bars for RELIANCE, TCS and INFY. M88 concluded the cutoff
+#: could move to 15:45. **That was generalised from three of the most liquid symbols in India
+#: and it was wrong.** Kite's daily bars cover roughly 3,000 of this universe's ~4,855
+#: instruments; the rest arrive only in NSE's bhavcopy, which is published well after the close.
+#: The measured difference: 7 Sep ingested 3,056 bars at 15:37 and the quality gate refused it
+#: (3,056 against a 10-day median of 3,524), while 4 Sep — the same chain with the bhavcopy
+#: top-up — ingested 4,454 and published.
 #:
-#: The consequence was not academic: the evening plan, and therefore the next morning's
-#: watchlist, was built two to three hours later than it needed to be every single day.
-SESSION_DATA_READY_WITH_KITE_IST: Final = dt.time(15, 45)
+#: So an early run does not produce an early day; it produces a **partial** day that the gate
+#: correctly refuses, three times over. The token makes the liquid names available sooner, and
+#: the live intraday scan (M85/SW24) is what already uses them. The published end-of-day series
+#: waits for the bhavcopy because that is when the day is actually complete.
 
 #: How far back a sweep looks. A week covers a long weekend plus the two days it takes anybody to
 #: notice, and stops the sweep from proposing to re-run a quarter after a database restore.

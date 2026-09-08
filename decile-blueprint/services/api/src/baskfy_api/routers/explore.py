@@ -28,10 +28,13 @@ from baskfy_core.curated_metrics import (
 )
 from baskfy_core.models import (
     CbBasket,
+    CbBasketVersion,
     CbCollection,
+    CbConstituent,
     CbManager,
     CbMetrics,
     CbWatchlistItem,
+    Instrument,
 )
 
 router = APIRouter(tags=["explore"])
@@ -491,6 +494,106 @@ async def get_explore_basket(
         )
     ).scalar_one_or_none()
     return _card(basket, manager, metrics)
+
+
+class ConstituentOut(BaseModel):
+    symbol: str
+    name: str | None
+    segment: str
+    #: Percent of the basket, as stored — `cb_constituent.weight` is a numeric, and house rule 8
+    #: rounds at write time, so the API hands over exactly what the table holds.
+    weight: Decimal
+
+
+class ConstituentsOut(BaseModel):
+    """A published version and the names in it.
+
+    The version is the *newest* one for the basket. `cb_constituent` rows hang off a version id
+    rather than off the basket, which is what makes a version immutable: a rebalance writes a new
+    version with new rows and never edits an old one, so a constituent list is always as-of a
+    date somebody can name.
+    """
+
+    slug: str
+    version_no: int
+    #: None when the basket has no published version yet. Inventing a date here (its
+    #: creation date, say) would put a number on the page that means nothing.
+    effective_date: dt.date | None
+    label: str
+    added_count: int
+    removed_count: int
+    constituents: list[ConstituentOut]
+
+
+@router.get("/explore/{slug}/constituents", response_model=ConstituentsOut)
+async def get_explore_constituents(
+    slug: SlugPath, session: SessionDep, principal: AuthenticatedDep
+) -> ConstituentsOut:
+    """The basket's current constituents, as of its newest published version (SC5 / SC3).
+
+    `/basket/[slug]/constituents` was a stub whose message said constituent rows "need an
+    immutable version from the catalog engine (SC3)". SC3 shipped — `docs/smallcase/STATUS.md`
+    marks it green and `cb_basket_version` / `cb_constituent` carry 6 versions and 103 rows on
+    the box — but no route was ever added to serve them, so the page kept apologising for data
+    that existed. This is that route (9 Sep 2026).
+
+    Read-only, and visibility is the same `_visible()` predicate every other explore route uses,
+    so an unlisted basket is a 404 here exactly as it is on the card. A basket with no version
+    yet is **not** an error: it answers 200 with an empty list and version_no 0, because "this
+    basket has not been rebalanced into existence yet" is a state the page should render rather
+    than a failure it should hide.
+    """
+    principal.require_user()
+    basket = (
+        await session.execute(select(CbBasket).where(CbBasket.slug == slug, *_visible()))
+    ).scalar_one_or_none()
+    if basket is None:
+        raise not_found("basket", slug)
+
+    version = (
+        await session.execute(
+            select(CbBasketVersion)
+            .where(CbBasketVersion.basket_id == basket.id)
+            .order_by(CbBasketVersion.version_no.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if version is None:
+        return ConstituentsOut(
+            slug=slug,
+            version_no=0,
+            effective_date=None,
+            label="GENESIS",
+            added_count=0,
+            removed_count=0,
+            constituents=[],
+        )
+
+    rows = (
+        await session.execute(
+            select(CbConstituent, Instrument)
+            .join(Instrument, Instrument.id == CbConstituent.instrument_id)
+            .where(CbConstituent.version_id == version.id)
+            .order_by(CbConstituent.weight.desc(), Instrument.symbol.asc())
+        )
+    ).all()
+    return ConstituentsOut(
+        slug=slug,
+        version_no=version.version_no,
+        effective_date=version.effective_date,
+        label=version.label,
+        added_count=version.added_count,
+        removed_count=version.removed_count,
+        constituents=[
+            ConstituentOut(
+                symbol=instrument.symbol,
+                name=instrument.name,
+                segment=constituent.segment,
+                weight=constituent.weight,
+            )
+            for constituent, instrument in rows
+        ],
+    )
 
 
 @router.get("/watchlist", response_model=WatchlistOut)

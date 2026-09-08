@@ -133,6 +133,31 @@ export async function fetchExploreBasket(slug: string): Promise<ExploreBasketCar
   return (await readExploreJson(`/explore/${encodeURIComponent(slug)}`)) as ExploreBasketCard;
 }
 
+export interface ExploreConstituent {
+  symbol: string;
+  name: string | null;
+  segment: string;
+  /** Percent of the basket, as a string: the API sends a numeric and JSON has no decimal type,
+   * so parsing it to a float here would be the rounding house rule 9 exists to prevent. */
+  weight: string;
+}
+
+export interface ExploreConstituents {
+  slug: string;
+  version_no: number;
+  effective_date: string;
+  label: string;
+  added_count: number;
+  removed_count: number;
+  constituents: ExploreConstituent[];
+}
+
+export async function fetchExploreConstituents(slug: string): Promise<ExploreConstituents> {
+  return (await readExploreJson(
+    `/explore/${encodeURIComponent(slug)}/constituents`,
+  )) as ExploreConstituents;
+}
+
 export interface ExploreManager {
   slug: string;
   name: string;

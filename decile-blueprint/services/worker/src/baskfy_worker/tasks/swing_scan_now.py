@@ -7,15 +7,17 @@ detects on **today so far**.
 
 THE ONE DECISION THIS MODULE MAKES
 ----------------------------------
-Which session to scan (:func:`decide_session`). On a trading day between the open and the close
-(`MARKET_OPEN` to `MARKET_CLOSE` IST) and before tonight's publish, the session is **today**, and
-today's bar does not exist yet — so one is built per liquid name from the live quote
+Which session to scan (:func:`decide_session`). On a trading day **from the open onwards** — any
+hour after 09:15 IST, not merely until the close (:func:`session_has_started`, widened 8 Sep 2026
+so a 16:00 login stops being served yesterday) — and before tonight's publish, the session is
+**today**, and today's bar does not exist yet — so one is built per liquid name from the live quote
 (:func:`provisional_bars`): open / high / low from the quote's ``ohlc``, close = ``last_price``,
 volume = the session's volume so far, turnover = close x volume, the day's ``upper_circuit``, the
 last published bar's ``adj_factor`` (`docs/swing/04` §1 read for a day still in progress —
 DECISIONS-SW SW15.1). That bar is appended to the published ones and the whole of
-`run_detect_swing` runs over it with ``provisional=True`` stamped on every row. Outside those
-hours the session is the last published one and the run is the nightly's body, plain.
+`run_detect_swing` runs over it with ``provisional=True`` stamped on every row. Before the open
+the session is the last published one and the run is the nightly's body, plain — a quote at 08:00
+carries *yesterday's* close, and stamping that as today would be a lie the detectors act on.
 
 A provisional bar is honest about what it is: a base that "tightened" by 13:42 can widen by
 15:30, the volume dry-up is measured on four hours of volume, and the breadth over such bars is
@@ -76,7 +78,11 @@ FAILED: Final = "FAILED"
 
 #: How the decision explains itself on the run row.
 REASON_MARKET_OPEN: Final = "market open: today so far, from live quotes"
-REASON_PUBLISHED: Final = "outside market hours: the last published session, from published bars"
+REASON_PUBLISHED: Final = "before the open: the last published session, from published bars"
+#: After 15:30 and before tonight's publish, a quote carries the day's final traded price — so
+#: today is still the honest session to scan, and the bar built from it is very nearly the one
+#: the bhavcopy will confirm.
+REASON_AFTER_CLOSE: Final = "after the close: today so far, from the day's final quotes"
 REASON_ALREADY_PUBLISHED: Final = "today is already published: re-detected from published bars"
 
 
@@ -136,8 +142,33 @@ def market_is_open(now: dt.datetime) -> bool:
     return MARKET_OPEN <= now.time() <= MARKET_CLOSE
 
 
+def session_has_started(now: dt.datetime) -> bool:
+    """Has today's session begun? True from 09:15 onwards, at any hour after it.
+
+    WHY THIS IS NOT `market_is_open` (Maulik, 8 Sep 2026).
+
+    "Given any period of the day, whenever user connects zerodha, start fetching data across the
+    instruments, so we show all the data live across the site."
+
+    The scan used to build today's provisional bar only between 09:15 and 15:30. So a login at
+    16:00 — after the close, before the nightly publishes around 18:45 — got *yesterday*, for
+    two and a half hours, on a day whose prices were final and sitting in Kite ready to be read.
+    That is the window this opens.
+
+    **The asymmetry is deliberate.** After the close a quote returns the day's last traded
+    price, so a provisional bar for today is accurate rather than a guess — it is very nearly
+    the bar the bhavcopy will confirm. Before 09:15 a quote returns *yesterday's* close, and
+    stamping that as today would be a lie the detectors would then act on. So the window opens
+    at the open and stays open; it does not wrap around to the small hours.
+
+    The caller's `published >= today` check still comes first, so once the nightly has published
+    today this never fires and no provisional row is written over a settled one.
+    """
+    return now.time() >= MARKET_OPEN
+
+
 async def decide_session(session: AsyncSession, now: dt.datetime) -> ScanDecision:
-    """Today from live quotes while the market is open, else the last published session.
+    """Today from live quotes from the open onwards; before the open, the last published session.
 
     ``now`` is IST and naive, as every swing task passes it. "Today is published" cannot happen
     during the session, but a redelivered task waking after the nightly could see it; that
@@ -149,8 +180,9 @@ async def decide_session(session: AsyncSession, now: dt.datetime) -> ScanDecisio
     today = now.date()
     if published >= today:
         return ScanDecision(published, False, published, REASON_ALREADY_PUBLISHED)
-    if market_is_open(now) and await is_trading_day(session, today):
-        return ScanDecision(today, True, published, REASON_MARKET_OPEN)
+    if session_has_started(now) and await is_trading_day(session, today):
+        reason = REASON_MARKET_OPEN if market_is_open(now) else REASON_AFTER_CLOSE
+        return ScanDecision(today, True, published, reason)
     return ScanDecision(published, False, published, REASON_PUBLISHED)
 
 

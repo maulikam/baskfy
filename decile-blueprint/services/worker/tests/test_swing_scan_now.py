@@ -43,6 +43,7 @@ from baskfy_core.swing.config import Setup
 from baskfy_providers.records import QuoteRecord
 from baskfy_worker.celery_app import BEAT_SCHEDULE, QUEUE_COMPUTE, QUEUE_DEFAULT, TASK_ROUTES
 from baskfy_worker.steps import StepOutcome
+from baskfy_worker.tasks import swing_scan_now
 from baskfy_worker.tasks.celery_tasks import (
     SWING_SCAN_AFTER_LOGIN_TASK,
     SWING_SCAN_NOW_TASK,
@@ -58,6 +59,7 @@ from baskfy_worker.tasks.swing_scan_now import (
     DONE,
     FAILED,
     QUEUED,
+    REASON_AFTER_CLOSE,
     REASON_ALREADY_PUBLISHED,
     REASON_MARKET_OPEN,
     REASON_PUBLISHED,
@@ -264,16 +266,30 @@ class TestTheSessionDecision:
         assert decision.published_as_of == dates[-2]
         assert decision.reason == REASON_MARKET_OPEN
 
-    async def test_outside_hours_it_scans_the_last_published_session_plainly(
+    async def test_before_the_open_it_scans_the_last_published_session_plainly(
         self, session: AsyncSession
     ) -> None:
+        """Only BEFORE the open now (widened 8 Sep 2026). A quote at 08:00 carries yesterday's
+        close, so stamping it as today would be a lie the detectors act on."""
         dates = await _sessions_before(session, TODAY, 140)
         await _write_flag_but_the_last_bar(session, "FLAGCO", dates)
-        for when in (SIX_PM, dt.datetime(2026, 8, 18, 8, 0), dt.datetime(2026, 8, 22, 13, 42)):
+        for when in (dt.datetime(2026, 8, 18, 8, 0), dt.datetime(2026, 8, 18, 9, 14)):
             decision = await decide_session(session, when)
             assert decision.session_date == dates[-2], when
             assert decision.provisional is False
             assert decision.reason == REASON_PUBLISHED
+
+    async def test_after_the_close_it_still_scans_today(self, session: AsyncSession) -> None:
+        """This used to answer "the last published session" and that was the bug Maulik hit:
+        a 16:00 or 18:00 login was served yesterday for the hours between the close and the
+        nightly, on a day whose prices were final and readable from Kite."""
+        dates = await _sessions_before(session, TODAY, 140)
+        await _write_flag_but_the_last_bar(session, "FLAGCO", dates)
+        for when in (dt.datetime(2026, 8, 18, 16, 0), SIX_PM):
+            decision = await decide_session(session, when)
+            assert decision.session_date == TODAY, when
+            assert decision.provisional is True
+            assert decision.reason == REASON_AFTER_CLOSE
 
     async def test_a_day_already_published_is_never_scanned_twice_over(
         self, session: AsyncSession
@@ -726,9 +742,10 @@ class TestTheLoginTrigger:
         assert duplicate["skipped"] == "scan-in-flight"
         assert duplicate["run_id"] == run.id
 
-    async def test_after_close_login_defers_to_the_published_data_path(
-        self, session: AsyncSession
-    ) -> None:
+    async def test_after_close_login_still_scans_today(self, session: AsyncSession) -> None:
+        """M85 wrote the opposite of this — an after-close login "defers to the published data
+        path". Maulik asked for the reverse on 8 Sep: a login at any hour after the open should
+        fetch today. Overriding my own earlier decision, at his instruction."""
         dates = await _sessions_before(session, TODAY, 140)
         user_id = await _user(session)
         await _write_flag_but_the_last_bar(session, "LOGINLATE", dates)
@@ -741,8 +758,8 @@ class TestTheLoginTrigger:
             task_id="login-task-late",
         )
 
-        assert result["skipped"] == REASON_PUBLISHED
-        assert "run_id" not in result
+        assert "skipped" not in result, "an after-close login was served yesterday"
+        assert "run_id" in result
 
 
 class TestTheCeleryBinding:
@@ -782,3 +799,38 @@ class TestTheCeleryBinding:
             "published": [],
             "skipped": "no BASKFY_SOLE_USER_ID configured",
         }
+
+
+class TestALoginAtAnyHourGetsTodaysData:
+    """Maulik, 8 Sep 2026: "given any period of the day, whenever user connects zerodha, start
+    fetching data across the instruments, so we show all the data live across the site."
+
+    The scan built today's provisional bar only between 09:15 and 15:30, so a login at 16:00 —
+    after the close, before the nightly publishes around 18:45 — was served *yesterday* for two
+    and a half hours, on a day whose prices were final and already readable from Kite.
+    """
+
+    def test_the_window_opens_at_the_open_and_stays_open(self) -> None:
+        started = swing_scan_now.session_has_started
+        assert started(dt.datetime(2026, 9, 8, 9, 15)) is True
+        assert started(dt.datetime(2026, 9, 8, 13, 0)) is True
+        assert started(dt.datetime(2026, 9, 8, 16, 0)) is True, "the 16:00 login this exists for"
+        assert started(dt.datetime(2026, 9, 8, 23, 59)) is True
+
+    def test_before_the_open_it_is_shut_and_that_is_deliberate(self) -> None:
+        """The asymmetry is the point. After the close a quote is the day's final traded price,
+        so a provisional bar is accurate. Before 09:15 a quote is YESTERDAY's close, and
+        stamping that as today would be a lie the detectors then act on."""
+        started = swing_scan_now.session_has_started
+        assert started(dt.datetime(2026, 9, 8, 0, 1)) is False
+        assert started(dt.datetime(2026, 9, 8, 8, 0)) is False
+        assert started(dt.datetime(2026, 9, 8, 9, 14)) is False
+
+    def test_it_is_strictly_wider_than_market_is_open_and_never_narrower(self) -> None:
+        """Whatever the old window allowed, the new one must still allow — this widened the
+        behaviour, it did not move it."""
+        for hour in range(24):
+            for minute in (0, 14, 15, 30, 59):
+                moment = dt.datetime(2026, 9, 8, hour, minute)
+                if swing_scan_now.market_is_open(moment):
+                    assert swing_scan_now.session_has_started(moment), moment

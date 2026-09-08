@@ -173,6 +173,20 @@ class TestTheScheduleRespectsTheCalendar:
         assert "bool(found)" in code, "an absent row must be falsy, not an error or a default"
 
 
+@pytest.fixture(autouse=True)
+def _stub_coverage_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`run_fetch_daily_bars` asks the database which instruments the bhavcopy already covered
+    (8 Sep 2026). Most tests in this module drive a bare `AsyncSession()` with no bind, so the
+    read is stubbed to "nothing covered" — which is also the pre-change behaviour, keeping every
+    existing assertion about the Kite pass meaningful. `TestTheBhavcopyLeadsForACompletedSession`
+    overrides it to exercise the filtering itself."""
+
+    async def _none(session: object, on: object) -> set[int]:
+        return set()
+
+    monkeypatch.setattr("baskfy_worker.tasks.bars._instruments_with_bars", _none)
+
+
 class TestItDoesNotAskTenThousandTimes:
     """`CredentialsMissing` is a fact about the deployment, not about the instrument.
 
@@ -308,7 +322,13 @@ class TestAPartialKitePassIsCompletedFromTheBhavcopy:
     async def test_a_gap_reaches_the_bhavcopy_even_though_kite_wrote_rows(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Some rows is not all rows, and the gate downstream cannot tell the difference."""
+        """Some rows is not all rows, and the gate downstream cannot tell the difference.
+
+        M84 asserted this as a *top-up* running after Kite. Since 8 Sep 2026 the bhavcopy LEADS
+        — one 207 KB request against Kite's ~3,000 — so the file is read once at the start and
+        the property this test exists for, that the day is never left half-landed, holds a
+        fortiori. What is re-pinned is the mechanism, not the guarantee.
+        """
         calls: list[DateWindow] = []
         self._patch(monkeypatch, calls)
         outcome = StepOutcome()
@@ -321,15 +341,12 @@ class TestAPartialKitePassIsCompletedFromTheBhavcopy:
             window=WINDOW,
         )
 
-        assert written == 1, "the step still returns what Kite itself wrote"
         assert [str(w) for w in calls] == [str(WINDOW)], "the day was left half-landed"
-        assert outcome.detail["top_up"] == "bhavcopy"
+        assert outcome.detail["bhavcopy_first"] == 3635
+        assert written == 3636, "the file's rows plus what Kite added on top"
         assert outcome.detail["failures"] == {
             "BBB": "[kite] Kite rejected the request as malformed: invalid token"
         }, "the bhavcopy's report overwrote the only record of why Kite failed"
-        assert outcome.detail["kite_rows"] == 1
-        assert outcome.detail["bhavcopy_rows"] == 3635
-        assert outcome.rows_out == 1, "a top-up must not overwrite Kite's count with an overlap"
 
     async def test_an_instrument_without_a_token_is_a_gap_too(
         self, monkeypatch: pytest.MonkeyPatch
@@ -346,13 +363,20 @@ class TestAPartialKitePassIsCompletedFromTheBhavcopy:
             window=WINDOW,
         )
 
-        assert written == 1
-        assert len(calls) == 1
+        assert written >= 1
+        assert len(calls) == 1, "the file is read exactly once for a session"
 
-    async def test_a_clean_kite_pass_costs_no_second_fetch(
+    async def test_the_file_is_read_once_a_session_and_never_twice(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """An ordinary night must not pay for a file it does not need."""
+        """M84 asserted the opposite — "an ordinary night must not pay for a file it does not
+        need" — and that premise inverted on 8 Sep 2026.
+
+        The file is ONE 207 KB request. The Kite pass it displaces is ~3,000 requests and ~25
+        minutes at the bulk lane's 2 req/s, which is what made 7 Sep take 73 minutes. It is now
+        the cheap half of the step, so every session pays for it deliberately. What must not
+        happen is paying TWICE — the end-of-step top-up re-reading the file that already led.
+        """
         calls: list[DateWindow] = []
         self._patch(monkeypatch, calls)
         outcome = StepOutcome()
@@ -365,8 +389,8 @@ class TestAPartialKitePassIsCompletedFromTheBhavcopy:
             window=WINDOW,
         )
 
-        assert calls == []
-        assert "top_up" not in outcome.detail
+        assert len(calls) == 1, f"the session read the bhavcopy {len(calls)} times"
+        assert "top_up" not in outcome.detail, "the end-of-step top-up re-read the same file"
 
     async def test_a_backfill_window_is_left_to_the_backfill(
         self, monkeypatch: pytest.MonkeyPatch
@@ -561,3 +585,111 @@ class TestTheFetchDoesNotHoldRowLocks:
         assert bars_module._FLUSH_ROWS >= 100_000, (
             "a threshold this low would flush during an ordinary session and reintroduce the bug"
         )
+
+
+class TestTheBhavcopyLeadsForACompletedSession:
+    """8 Sep 2026. Maulik: "why are we waiting so much?"
+
+    Because `historical_data` has no batch form — one instrument per HTTP request, ~3,000
+    requests, ~25 minutes at the bulk lane's 2 req/s. NSE's bhavcopy answers the same question
+    in ONE request: measured for 7 Sep, a 207 KB zip with 3,704 rows (3,405 equity), which on
+    its own cleared the quality gate's 3,171 threshold that day.
+
+    So the file goes first and Kite is asked only for what it did not cover. Same coverage —
+    the finished 7 Sep held 4,477 bars against the bhavcopy's 3,405, so Kite still matters — at
+    roughly a third of the calls.
+    """
+
+    async def test_kite_is_only_asked_for_what_the_bhavcopy_missed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        asked: list[int] = []
+
+        class _Provider:
+            def daily_bars(self, token: int, start: dt.date, end: dt.date) -> pl.DataFrame:
+                asked.append(token)
+                return pl.DataFrame(
+                    {
+                        "date": [start],
+                        "open": [1.0],
+                        "high": [1.0],
+                        "low": [1.0],
+                        "close": [1.0],
+                        "volume": [1],
+                        "turnover": [1.0],
+                    }
+                )
+
+        async def fake_bhavcopy(*a: object, **k: object) -> int:
+            return 2
+
+        # instruments 1 and 2 came from the file; only 3 is left for Kite
+        async def fake_covered(session: object, on: dt.date) -> set[int]:
+            return {1, 2}
+
+        monkeypatch.setattr("baskfy_worker.tasks.bars._fetch_from_bhavcopy", fake_bhavcopy)
+        monkeypatch.setattr("baskfy_worker.tasks.bars._instruments_with_bars", fake_covered)
+        monkeypatch.setattr(
+            "baskfy_worker.tasks.bars.upsert_bars",
+            lambda session, instrument_id, frame: _async_int(frame.height),
+        )
+
+        outcome = StepOutcome()
+        await run_fetch_daily_bars(
+            session=AsyncSession(),
+            provider=_Provider(),
+            outcome=outcome,
+            instruments=[(1, "AAA", 101), (2, "BBB", 102), (3, "CCC", 103)],
+            window=WINDOW,
+        )
+
+        assert asked == [103], f"Kite was asked for names the bhavcopy already had: {asked}"
+        assert outcome.detail["kite_calls_saved"] == 2
+        assert outcome.detail["kite_calls_remaining"] == 1
+
+    async def test_a_missing_file_falls_through_to_kite_untouched(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Running before NSE publishes, or NSE refusing, must not cost the session — the whole
+        Kite pass still runs exactly as it did before."""
+        asked: list[int] = []
+
+        class _Provider:
+            def daily_bars(self, token: int, start: dt.date, end: dt.date) -> pl.DataFrame:
+                asked.append(token)
+                return pl.DataFrame(
+                    {
+                        "date": [start],
+                        "open": [1.0],
+                        "high": [1.0],
+                        "low": [1.0],
+                        "close": [1.0],
+                        "volume": [1],
+                        "turnover": [1.0],
+                    }
+                )
+
+        async def boom(*a: object, **k: object) -> int:
+            raise RuntimeError("bhavcopy not published yet")
+
+        monkeypatch.setattr("baskfy_worker.tasks.bars._fetch_from_bhavcopy", boom)
+        monkeypatch.setattr(
+            "baskfy_worker.tasks.bars.upsert_bars",
+            lambda session, instrument_id, frame: _async_int(frame.height),
+        )
+
+        outcome = StepOutcome()
+        await run_fetch_daily_bars(
+            session=AsyncSession(),
+            provider=_Provider(),
+            outcome=outcome,
+            instruments=[(1, "AAA", 101), (2, "BBB", 102)],
+            window=WINDOW,
+        )
+
+        assert asked == [101, 102], "a missing file must not skip the Kite pass"
+        assert "bhavcopy_first_error" in outcome.detail
+
+
+async def _async_int(value: int) -> int:
+    return value

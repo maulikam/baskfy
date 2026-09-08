@@ -12,10 +12,12 @@ produces identical rows."
 
 from __future__ import annotations
 
+import datetime as dt
 from collections.abc import Sequence
 from decimal import Decimal
 
 import polars as pl
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +53,12 @@ async def run_fetch_daily_bars(
     written = 0
     failures: dict[str, str] = {}
     skipped_no_token = 0
+
+    bhavcopy_first, instruments = await _lead_with_bhavcopy(
+        session, provider, outcome, window, instruments
+    )
+    written += bhavcopy_first
+
     # FETCH FIRST, WRITE AT THE END — SO THE CHAIN DOES NOT HOLD ROW LOCKS ACROSS THE NETWORK
     # (8 Sep 2026).
     #
@@ -152,7 +160,9 @@ async def run_fetch_daily_bars(
     # belongs to `bhavcopy_backfill` on its own terms; running it as a "top-up" inside the chain
     # would turn one night into hours. Kite also stays FIRST, unchanged: it reaches back before
     # 2024, where the UDiFF archive begins.
-    if window.days == 1 and (failures or skipped_no_token):
+    # Not when the bhavcopy already led: it has been read once for this session and re-reading
+    # it would download the same file to write the same rows.
+    if window.days == 1 and not bhavcopy_first and (failures or skipped_no_token):
         await _fetch_from_bhavcopy(
             session,
             provider,
@@ -216,6 +226,74 @@ def _credentials_are_missing(failures: dict[str, str]) -> bool:
     afterwards and the decision to stop are the same fact rather than two that can disagree.
     """
     return any(message.startswith("CredentialsMissing") for message in failures.values())
+
+
+async def _lead_with_bhavcopy(
+    session: AsyncSession,
+    provider: object,
+    outcome: StepOutcome,
+    window: DateWindow,
+    instruments: Sequence[tuple[int, str, int | None]],
+) -> tuple[int, list[tuple[int, str, int | None]]]:
+    """Take the session's bhavcopy first; return its rows and the names Kite must still fetch.
+
+    THE BHAVCOPY GOES FIRST FOR A COMPLETED SESSION (8 Sep 2026).
+
+    Maulik: "why are we waiting so much?" Because `historical_data` has no batch form — Kite
+    serves ONE instrument per HTTP request, so ~3,000 instruments is ~3,000 requests, and at the
+    bulk lane's 2 req/s that is ~25 minutes. It is what made the 7 Sep chain take 73 minutes.
+    The quote endpoints do batch 500-1,000, but they answer "what is the price now", not "what
+    was this day's candle".
+
+    NSE's bhavcopy answers the whole question in ONE request. Measured for 7 Sep 2026: a 207 KB
+    zip carrying 3,704 rows, 3,405 of them equity series — on its own above the quality gate's
+    3,171 threshold that day. `_fetch_from_bhavcopy`'s own docstring has always called it "the
+    *better* source for this window", because it carries `turnover` and both circuit bands
+    natively where Kite does not; it was simply used last instead of first.
+
+    Kite still matters: the finished 7 Sep held 4,477 bars against the bhavcopy's 3,405. So this
+    does not replace the Kite pass, it shrinks it — roughly a thousand names instead of three
+    thousand, for the same coverage.
+
+    Only for a single completed session. A multi-year backfill walks the archive day by day and
+    belongs to `bhavcopy_backfill` on its own terms; a window that includes today may have no
+    file published yet. Both fall through with the instrument list untouched, so the Kite pass
+    behaves exactly as it did before.
+    """
+    remaining = list(instruments)
+    if window.days != 1:
+        return 0, remaining
+    try:
+        rows = await _fetch_from_bhavcopy(
+            session,
+            provider,
+            outcome,
+            window,
+            reason="the exchange's own record, one request for the session",
+        )
+    except Exception as exc:
+        # No file yet, or NSE refused. Never fatal: Kite is about to do the whole pass anyway.
+        outcome.note(bhavcopy_first_error=f"{type(exc).__name__}: {exc}")
+        return 0, remaining
+    if rows <= 0:
+        return 0, remaining
+    covered = await _instruments_with_bars(session, window.end)
+    kept = [row for row in remaining if row[0] not in covered]
+    outcome.note(
+        bhavcopy_first=rows,
+        kite_calls_saved=len(remaining) - len(kept),
+        kite_calls_remaining=len(kept),
+    )
+    return rows, kept
+
+
+async def _instruments_with_bars(session: AsyncSession, on: dt.date) -> set[int]:
+    """Which instrument ids already hold a bar for ``on`` — including rows written but not yet
+    committed by this transaction, which is the point: the bhavcopy has just landed them."""
+    rows = await session.execute(
+        select(OhlcvDaily.instrument_id).where(OhlcvDaily.date == on).distinct()
+    )
+    return {int(value) for value in rows.scalars()}
 
 
 async def _fetch_from_bhavcopy(  # noqa: PLR0913 - a source, a window, and how to report it

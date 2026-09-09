@@ -30,7 +30,9 @@ from __future__ import annotations
 import datetime as dt
 import logging
 from dataclasses import dataclass, field
+from typing import Final
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import PipelineRun
@@ -108,6 +110,23 @@ class PipelineOutcome:
         return self.status is RunStatus.SUCCEEDED and self.data_version is not None
 
 
+#: The advisory-lock key the nightly chain serialises on. An arbitrary constant, chosen once and
+#: never derived from anything: two chains must contend even when they are for different trade
+#: dates, because they lock the same `instrument`, `ohlcv_daily` and `pipeline_run_step` rows.
+PIPELINE_CHAIN_LOCK_KEY: Final = 0x0BA5_C1FA
+
+
+async def try_lock_pipeline(session: AsyncSession) -> bool:
+    """Claim the chain lock for this transaction, or answer False if another chain holds it.
+
+    Transaction-scoped (`pg_try_advisory_xact_lock`), so it is released by commit, by rollback,
+    and by the backend dying — no path leaves it stuck. Non-blocking, so a loser returns
+    immediately instead of waiting while holding locks of its own.
+    """
+    held = await session.execute(select(func.pg_try_advisory_xact_lock(PIPELINE_CHAIN_LOCK_KEY)))
+    return bool(held.scalar_one())
+
+
 async def run_nightly_pipeline(
     session: AsyncSession,
     trade_date: dt.date,
@@ -136,6 +155,39 @@ async def run_nightly_pipeline(
             # stale-run reaper will eventually call a Sunday an abandoned pipeline.
             await close_run(session, await adopt_run(session, run_id), RunStatus.ABORTED)
         return PipelineOutcome(trade_date, RunStatus.ABORTED, run_id=run_id, error=str(exc))
+
+    # ONE CHAIN AT A TIME (9 Sep 2026).
+    #
+    # On the night of 8 Sep three runs overlapped: 41 (18:40-18:54), 42 (18:45-20:42) and 43
+    # (20:06-20:57). Each chain is deliberately ONE transaction (M84.1) holding row locks from
+    # its first write to its commit, so overlapping chains do not run in parallel — they
+    # serialise on each other's locks. Run 43 sat blocked on `Lock/transactionid` for an hour
+    # trying to write a `pipeline_run_step` row, and run 42 took **1h57m** where an uncontended
+    # chain now takes ~14 minutes. Both eventually succeeded, so nothing alerted; it simply cost
+    # two hours and looked like a hang.
+    #
+    # `pg_try_advisory_xact_lock` is the right instrument rather than a "is any run running?"
+    # query, for one reason: it is held by the TRANSACTION and released the moment that
+    # transaction ends — commit, rollback, or the backend dying. A `pipeline_run.status` check
+    # cannot say that. This session has watched a `running` row outlive its worker three times
+    # (runs 29, 38, 42), each needing a person to reap it; a lock that a crash releases needs
+    # nobody.
+    #
+    # Non-blocking on purpose. A second chain that waited would still be holding its own locks
+    # while it waited, which is the shape being fixed. It gives up instead, says so, and the
+    # session it wanted is picked up by the catch-up sweep or the next schedule.
+    if not await try_lock_pipeline(session):
+        if run_id is not None:
+            await close_run(session, await adopt_run(session, run_id), RunStatus.ABORTED)
+        return PipelineOutcome(
+            trade_date,
+            RunStatus.ABORTED,
+            run_id=run_id,
+            error=(
+                "another pipeline run holds the chain lock; this attempt was abandoned rather "
+                "than queued behind it"
+            ),
+        )
 
     run = (
         await adopt_run(session, run_id)

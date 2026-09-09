@@ -21,6 +21,7 @@ could not publish, which is the same harm this module was written about.
 from __future__ import annotations
 
 from baskfy_core.universes import UNIVERSES
+from baskfy_providers.composite import CompositeProvider
 from baskfy_providers.kite import KiteProvider
 from baskfy_providers.nse import NSEProvider
 from baskfy_worker.tasks.membership import DERIVED_BY_RULE, PROVIDER_SOURCED
@@ -119,4 +120,30 @@ class TestTheTwoUniversesThatUsedToScreenToNothing:
         # NIFTY indices, and they were all populated on the box.
         assert all(slug.startswith("nifty-") or slug.startswith("nse-") for slug in unresolvable), (
             f"a universe with no plausible source: {unresolvable}"
+        )
+
+
+class TestTheCompositeCanActuallyServeThem:
+    """The gap that made M95's first deploy a no-op (9 Sep 2026).
+
+    `KiteProvider.fno_underlyings` and `NSEProvider.etf_symbols` both worked — 216 and 350,
+    readable from the box — and the universes still wrote ZERO rows, with no failure recorded.
+    The pipeline does not hold those providers; it holds a `CompositeProvider`, which delegates
+    an explicit list of methods. A method missing there makes
+    `membership._from_named_method` answer `[]`, by design, so that one universe cannot fail a
+    night — and the cost of that design is a silent empty universe with no clue.
+
+    So the contract worth asserting is not "the provider has the method" but "the thing the
+    pipeline is actually handed has it".
+    """
+
+    def test_the_composite_serves_every_provider_sourced_universe(self) -> None:
+        missing = [
+            f"{slug} -> {method}"
+            for slug, method in PROVIDER_SOURCED.items()
+            if not hasattr(CompositeProvider, method)
+        ]
+        assert not missing, (
+            "the pipeline's provider cannot answer these, so they will screen to nothing "
+            f"with no failure recorded: {missing}"
         )

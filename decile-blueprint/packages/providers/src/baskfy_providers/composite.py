@@ -229,6 +229,35 @@ class CompositeProvider:
             lambda p: list(getattr(p, "sme_listings", list)()),
         )
 
+    def etf_symbols(self) -> list[str]:
+        """NSE's ETF security list, from whichever routed provider publishes one.
+
+        Duck-typed exactly like :meth:`sme_listings` above, and routed on ``LISTINGS`` because
+        that is the capability a provider needs to serve a security register.
+
+        WITHOUT THIS THE `etf` UNIVERSE STAYS EMPTY AND SAYS NOTHING (9 Sep 2026). The pipeline
+        does not hold a `NSEProvider`; it holds this composite. `membership._from_named_method`
+        answers `[]` for a provider that lacks the method — deliberately, so one universe cannot
+        fail a night — so a method that exists on `NSEProvider` and not here produces an empty
+        universe, no failure, and no clue. That is precisely what happened on the first deploy
+        of M95: 350 symbols readable from the box, 0 written.
+        """
+        return self.route(
+            Capability.LISTINGS,
+            lambda p: [str(s) for s in getattr(p, "etf_symbols", list)()],
+        )
+
+    def fno_underlyings(self) -> list[str]:
+        """The F&O universe, from whichever routed provider can name it.
+
+        Routed on ``LIST_INSTRUMENTS``: the answer comes from the broker's instrument dump, not from
+        a published file. Same duck-typed shape and same reason as :meth:`etf_symbols`.
+        """
+        return self.route(
+            Capability.LIST_INSTRUMENTS,
+            lambda p: [str(s) for s in getattr(p, "fno_underlyings", list)()],
+        )
+
     def bhavcopy(self, on: dt.date) -> pl.DataFrame:
         return self.route(Capability.BHAVCOPY, lambda p: _reference(p).bhavcopy(on))
 

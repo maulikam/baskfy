@@ -13,15 +13,17 @@ are proved against stubs, because what they assert is ordering and bounding.
 from __future__ import annotations
 
 import datetime as dt
+import inspect
 
 import pytest
 from helpers import requires_db
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from baskfy_core.models import PipelineRun, PipelineRunStep, TradingDay
-from baskfy_worker import catch_up
+from baskfy_worker import catch_up, orchestrator
 from baskfy_worker.celery_app import BEAT_SCHEDULE
+from baskfy_worker.orchestrator import try_lock_pipeline
 from baskfy_worker.steps import RunStatus
 from baskfy_worker.tasks import celery_tasks
 
@@ -433,3 +435,55 @@ class TestTheCutoffIsTheBhavcopysHour:
         of Kite calls to rewrite rows it already wrote. It is also the 31 Aug 2026 shape, where
         redelivered nightlies re-ran a finished session."""
         assert callable(celery_tasks.run_already_published)
+
+
+@pytest.mark.db
+@requires_db
+class TestOnlyOneChainRunsAtATime:
+    """9 Sep 2026. Three runs overlapped on the night of 8 Sep:
+
+        RUN 41  18:40 -> 18:54
+        RUN 42  18:45 -> 20:42   started while 41 was still running
+        RUN 43  20:06 -> 20:57   started while 42 was still running
+
+    Each chain is one transaction holding row locks from its first write to its commit (M84.1),
+    so overlapping chains do not run in parallel — they serialise on each other's locks. Run 43
+    sat on `Lock/transactionid` for an hour waiting to write a `pipeline_run_step` row, and run
+    42 took 1h57m where an uncontended chain takes ~14 minutes. Both succeeded, so nothing
+    alerted: it just cost two hours and looked like a hang.
+    """
+
+    async def test_a_second_transaction_is_refused_the_lock(self, engine: AsyncEngine) -> None:
+        """The property, against a real Postgres — a mock cannot show a lock."""
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as first, factory() as second:
+            assert await try_lock_pipeline(first) is True, "the first chain could not start"
+            assert await try_lock_pipeline(second) is False, (
+                "two chains hold the lock at once — they will serialise on row locks instead"
+            )
+
+    async def test_the_lock_is_released_when_the_transaction_ends(
+        self, engine: AsyncEngine
+    ) -> None:
+        """Why `pg_try_advisory_xact_lock` and not a `pipeline_run.status` check: this session
+        watched a `running` row outlive its worker three times (runs 29, 38, 42), each needing a
+        person to reap it. A transaction-scoped lock is released by commit, by rollback, and by
+        the backend dying — no path leaves it stuck."""
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as first:
+            assert await try_lock_pipeline(first) is True
+            await first.rollback()
+
+        async with factory() as second:
+            assert await try_lock_pipeline(second) is True, (
+                "the lock outlived the transaction that took it"
+            )
+
+    async def test_the_key_is_a_constant_shared_by_every_trade_date(self) -> None:
+        """Two chains must contend even for different dates: they lock the same `instrument`,
+        `ohlcv_daily` and `pipeline_run_step` rows regardless of which session they are for.
+        A key derived from the trade date would have let 7 Sep and 8 Sep collide exactly as
+        runs 41 and 42 did."""
+        assert isinstance(orchestrator.PIPELINE_CHAIN_LOCK_KEY, int)
+        source = inspect.getsource(orchestrator.try_lock_pipeline)
+        assert "trade_date" not in source, "the lock key varies by date; chains would not contend"

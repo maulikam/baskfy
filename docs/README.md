@@ -19,6 +19,12 @@ rules as of today) and the AWS deployment design.
 | [`07-feasibility-study.md`](07-feasibility-study.md) | **The outside world checked.** Name cleared, stack verdicts, and the 2025–26 SEBI/Zerodha/data-licensing rules the plan must obey |
 | [`08-aws-architecture.md`](08-aws-architecture.md) | The AWS design — Mumbai, two phases: a $50/mo box through P3, the managed topology from P4 |
 
+Runs commissioned since the merge, each a folder with its own read order, scope law, module plan
+and status page: [`smallcase/`](smallcase/) (the product surface), [`swing/`](swing/) (Kullamägi's
+setups, SW0–SW14, code complete), [`go-rewrite/`](go-rewrite/) (the strangler, pre-G0), and
+[`condor/`](condor/) (one hedged expiry-day NIFTY iron condor, OC0–OC12, **not started** — the
+kickoff prompt is [`condor/KICKOFF-PROMPT.md`](condor/KICKOFF-PROMPT.md)).
+
 ## The one-paragraph version
 
 `kite-momentum-rebalancer` is a working, deployed, order-placing momentum desk whose brain

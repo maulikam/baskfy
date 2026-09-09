@@ -41,6 +41,8 @@ from baskfy_worker.tasks.market_health import (
     run_compute_market_health,
 )
 from baskfy_worker.tasks.membership import (
+    DERIVED_BY_RULE,
+    PROVIDER_SOURCED,
     SOURCE_DERIVED,
     SOURCE_NSE_FILE,
     SOURCE_RECONSTRUCTED,
@@ -212,6 +214,20 @@ class TestMembershipSource:
         allcap = UNIVERSE_BY_SLUG["nifty-allcap"]
         assert await resolve_universe(session, allcap, TRADE_DATE) == [listed]
 
+    async def test_etf_and_derived_by_rule_are_disjoint(self) -> None:
+        """One branch must answer for any universe (9 Sep 2026).
+
+        `etf` used to be derived by the rule `instrument_type == "ETF"`, and nothing ever wrote
+        that type, so it screened to nothing every day. It now comes from NSE's published ETF
+        list via `PROVIDER_SOURCED`. Leaving it in BOTH sets would have let the provider branch
+        silently win over a rule that still looked authoritative.
+        """
+        assert "etf" in PROVIDER_SOURCED
+        assert "etf" not in DERIVED_BY_RULE
+        assert not (set(PROVIDER_SOURCED) & DERIVED_BY_RULE), (
+            "a universe resolved by two different branches"
+        )
+
     async def test_etf_holds_only_etf_instruments(self, session: AsyncSession) -> None:
         equity = await make_instrument(session, "EQCO", token=1)
         await add_bar(session, equity, TRADE_DATE, "100")
@@ -228,7 +244,9 @@ class TestMembershipSource:
         await add_bar(session, etf.id, TRADE_DATE, "250")
 
         await refresh_membership(session, ChangingMembershipProvider({}), TRADE_DATE)
-        assert await resolve_universe(session, UNIVERSE_BY_SLUG["etf"], TRADE_DATE) == [etf.id]
+        # Kept as the record of what the rule DID, and it still works for any universe that
+        # uses it — but `etf` no longer does, so nothing is written for it here.
+        assert await resolve_universe(session, UNIVERSE_BY_SLUG["etf"], TRADE_DATE) == []
 
 
 class TestCriterion2MarketHealthByHand:

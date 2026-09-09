@@ -1434,3 +1434,33 @@ Resolved: **S1** (notification channel) → MD3 / SW11: email now, Telegram dark
 `A  desk.staging  →  3.108.148.38` (or delegate the zone to Route 53). Caddy then passes ACME
 on its own; nothing on the box needs touching. Until then the desk service is up and verified on
 the box but not reachable from the internet.
+
+## Condor
+
+Raised by the pack, 9 Sep 2026 (`docs/condor/`). The run does not wait on any of these; each has
+a standing default in `docs/condor/QUESTIONS.md`. OC0 fills in what it verifies.
+
+### C1 — The risk decision, in writing (blocks the real-money gate, nothing before it)
+Account ₹, margin pool ₹, execution buffer ₹, the starting per-expiry risk budget (the method
+says ₹10,000–₹15,000 and one or two lots), the daily / monthly limits, NIFTY only. Write it as
+an entry in `docs/condor/DECISIONS-OC.md`; `oc_config` is seeded at zero until then.
+
+### C2 — Historical NSE option data (blocks Tier 3 of the backtest only)
+Kite serves no history for expired contracts (OC0 records the actual error). A minute-level
+option-chain history from a vendor is a **new provider** (Track C §9) and a licensing question,
+so it is yours. If you buy one, the loader wants: underlying, expiry, strike, type, minute
+timestamp, bid, ask, last, volume, OI (depth if available) → `oc_chain_snapshot` with
+`source=VENDOR`. Until then Tier 3 runs on the collector's own snapshots.
+
+### C3 — F&O segment, margin pool, `basket_order_margins` (blocks the flags, `02` §3.5)
+Whether the account the desk trades has the F&O segment active and the pool in place. OC0
+reads `margins()` and records what it sees; the rest is yours.
+
+### C4 — The event-day list for FY 2026–27 (nothing blocked)
+The six RBI MPC decision dates, Budget day, any election-result date. The seed is the pack's
+best knowledge; edit on `/condor/calendar` once OC4 lands.
+
+### C5 — The four-flag flip (blocks nothing until OC12; PACK.8)
+`DRY_RUN=false`, `OPTIONS_ENABLED`, `INTRADAY_ENABLED`, `BASKFY_CONDOR_EXECUTION_ENABLED` — by
+your hand after `02` §3, or delegated by one line here (then recorded in DECISIONS-OC before an
+agent acts). Note the two product flags also widen what the *weekly* book's gateway accepts.

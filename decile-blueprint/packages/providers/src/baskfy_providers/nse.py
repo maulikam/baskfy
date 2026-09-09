@@ -147,6 +147,9 @@ SME_SERIES: Final[frozenset[str]] = frozenset({"SM", "ST", "SZ"})
 #: publishes that lot size. See `DECISIONS-MERGE.md` M59 on why that keeps SME screener-only.
 SME_LISTINGS_PATH: Final = "/emerge/corporates/content/SME_EQUITY_L.csv"
 KIND_SME_LISTINGS: Final = "sme-listings"
+#: NSE's own ETF security list — the source the `etf` universe never had (9 Sep 2026).
+KIND_ETF_LIST: Final = "etf-list"
+ETF_LIST_PATH: Final = "/content/equities/eq_etfseclist.csv"
 
 
 class HttpResponseLike(Protocol):
@@ -347,6 +350,40 @@ class NSEProvider:
         separate archive kinds: one can be re-read without re-reading the other.
         """
         return self._listings_from(KIND_SME_LISTINGS, SME_LISTINGS_PATH, context="sme listings")
+
+    def etf_symbols(self) -> list[str]:
+        """Every ETF listed on NSE — the ``etf`` universe's membership (9 Sep 2026).
+
+        WHY THIS EXISTS. `etf` screened to nothing on every run.
+        `membership.DERIVED_BY_RULE` resolves it as ``instrument.instrument_type == "ETF"`` and
+        **nothing ever writes that type** — the instrument table holds only EQ and INDEX — so the
+        rule selected an empty set and the screen honestly returned nothing for an empty universe.
+        `quality.NO_MEMBERSHIP_SOURCE` recorded the gap rather than fixing it.
+
+        NSE publishes the list: ``eq_etfseclist.csv``, 350 rows, a ``Symbol`` column.
+
+        **Why this and not reclassifying instruments.** The obvious fix is to stamp
+        ``instrument_type = "ETF"`` during the listings ingest, which is what the note in
+        `quality.py` proposed. It would also silently REMOVE those 350 names from every
+        EQ-derived universe — `nifty-allcap` is "every EQ instrument", and it currently carries
+        4,275 including the ETFs. Changing what a name *is* to fix which list it appears on is a
+        much larger change than the one being asked for, and it would shrink a universe nobody
+        asked to shrink. Sourcing the membership leaves every other universe exactly as it is.
+        """
+        payload = self._archived(
+            KIND_ETF_LIST, dt.date.today(), f"{self._settings.nse_archive_url}{ETF_LIST_PATH}"
+        )
+        frame = _read_csv(payload, context="etf list")
+        for column in ("Symbol", "SYMBOL", "symbol"):
+            if column in frame.columns:
+                return sorted(
+                    {
+                        str(value).strip().upper()
+                        for value in frame[column].to_list()
+                        if value is not None and str(value).strip()
+                    }
+                )
+        raise UnexpectedPayload(f"the ETF list has no Symbol column: {frame.columns}")
 
     def _listings_from(self, kind: str, path: str, *, context: str) -> list[ListingRecord]:
         """One listings register. The two files spell their headers differently, so every

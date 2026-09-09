@@ -168,9 +168,10 @@ async def _members_for(
     # Checked before the other branches because these slugs would otherwise fall to
     # `DERIVED_BY_RULE` (etf) or to an `index_constituents` file that does not exist (nifty-fno),
     # which is exactly how they came to be empty.
-    method = PROVIDER_SOURCED.get(universe.slug)
-    if method is not None:
-        return _from_named_method(provider, method), SOURCE_PROVIDER_LIST
+    sourced = PROVIDER_SOURCED.get(universe.slug)
+    if sourced is not None:
+        method, source = sourced
+        return _from_named_method(provider, method), source
 
     if universe.slug in DERIVED_BY_RULE:
         return await _derived_members(session, universe, on), SOURCE_DERIVED
@@ -188,13 +189,22 @@ async def _members_for(
 
 #: Universes whose membership comes from a provider list rather than a constituents file or a
 #: rule. Slug -> the provider method that answers it.
-PROVIDER_SOURCED: dict[str, str] = {
-    "nifty-fno": "fno_underlyings",
-    "etf": "etf_symbols",
+#: Slug -> (provider method, the `index_member_daily.source` the answer is stamped with).
+#:
+#: THE SOURCE LABEL IS NOT DECORATION. `index_member_daily.source` carries a CHECK constraint of
+#: exactly three values — 'nse_file', 'reconstructed', 'derived' — because backtests read it "to
+#: exclude uncertain periods" (`models/market.py`). A fourth value was tried first and the insert
+#: was refused by the database, correctly. Each of these two is labelled with the one that is
+#: actually true of it rather than with a new word:
+#:
+#:   etf        `nse_file`. It IS an NSE published file — `eq_etfseclist.csv`.
+#:   nifty-fno  `derived`. Kite's instrument dump is not a constituent file; the universe is
+#:              resolved from it by rule ("every underlying that has a futures contract"), which
+#:              is what `derived` already means here. Certain, not reconstructed.
+PROVIDER_SOURCED: dict[str, tuple[str, str]] = {
+    "nifty-fno": ("fno_underlyings", SOURCE_DERIVED),
+    "etf": ("etf_symbols", SOURCE_NSE_FILE),
 }
-
-#: How `_members_for` labels an answer that came from one of those.
-SOURCE_PROVIDER_LIST = "provider_list"
 
 
 def _from_named_method(provider: object, method: str) -> list[str]:

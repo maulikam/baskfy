@@ -104,7 +104,9 @@ class TestTheTwoUniversesThatUsedToScreenToNothing:
         """The mapping is only as good as the methods it names — a typo here would put the
         universe straight back to empty, silently, because `_from_named_method` answers [] for a
         provider that lacks the method."""
-        assert PROVIDER_SOURCED == {"nifty-fno": "fno_underlyings", "etf": "etf_symbols"}
+        assert set(PROVIDER_SOURCED) == {"nifty-fno", "etf"}
+        assert PROVIDER_SOURCED["nifty-fno"][0] == "fno_underlyings"
+        assert PROVIDER_SOURCED["etf"][0] == "etf_symbols"
         assert callable(KiteProvider.fno_underlyings)
         assert callable(NSEProvider.etf_symbols)
 
@@ -140,10 +142,17 @@ class TestTheCompositeCanActuallyServeThem:
     def test_the_composite_serves_every_provider_sourced_universe(self) -> None:
         missing = [
             f"{slug} -> {method}"
-            for slug, method in PROVIDER_SOURCED.items()
+            for slug, (method, _source) in PROVIDER_SOURCED.items()
             if not hasattr(CompositeProvider, method)
         ]
         assert not missing, (
             "the pipeline's provider cannot answer these, so they will screen to nothing "
             f"with no failure recorded: {missing}"
         )
+
+    def test_every_source_label_is_one_the_database_accepts(self) -> None:
+        """`index_member_daily.source` has a CHECK of exactly three values. A fourth was tried
+        first and Postgres refused the insert — correctly, and only after a deploy."""
+        allowed = {"nse_file", "reconstructed", "derived"}
+        labels = {source for _method, source in PROVIDER_SOURCED.values()}
+        assert labels <= allowed, f"a source the CHECK constraint will refuse: {labels - allowed}"

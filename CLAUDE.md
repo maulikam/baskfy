@@ -60,6 +60,35 @@ history; D3 is no longer the engineering blocker.
    has one documented exception.
 7. Filter-rejected stocks are never bought; `EXCLUDED_SYMBOLS` instruments are untouchable.
 
+## When the code and a doc disagree, the DECISION wins — not the doc (9 Sep 2026)
+
+**This cost two days and a wrong live trading gate. Read it before "fixing" a setting that
+disagrees with a document.**
+
+The swing market gate reads **NIFTY MidSmallcap 400** (`nifty-mid-small-400`), fallback NIFTY 500.
+Maulik set it in SW17 (`67df9b4`, 3 Sep 2026): *"the book trades mid- and small-caps, so the tape
+it asks about is nifty-mid-small-400."* The book screens mid- and small-cap breakouts; a
+large-cap-weighted index answers a question about a market it does not trade.
+
+`docs/swing/04` §8.2 and STANDING-ANSWERS A12 still said NIFTY 500, because SW17 changed the code
+and not the prose. On 9 Sep an agent (this one) read the doc, concluded the code was buggy,
+"fixed" it back to NIFTY 500 — **and wrote a test pinning it "against the document" so it could
+not drift again.** That is a decision reverted, and then locked, by an agent who never asked why
+the two disagreed.
+
+**The rule.** A doc describes intent at the time it was written. A setting someone deliberately
+changed, with a commit message saying why, is a *later* fact. When they conflict:
+
+1. `git log -S "<the value>" -- <the file>` — find when and why it changed. A commit message
+   naming Maulik and giving a reason is a decision, not a bug.
+2. If it is a decision: **fix the doc**, and say in it that the doc was the stale half.
+3. If there is no such commit, it may genuinely be a bug — then say so and change it.
+4. **Never pin a value to a document.** Pin it to the decision, and cite the commit.
+
+It changed the verdict, not just a number: on 3 Sep the MidSmall 400 read GREEN (10-day 21,592.34
+over 20-day 21,581.78) where NIFTY 500 read RED, and the gate decides whether the book may enter
+at all. With auto-execute armed, a wrong gate is a wrong trade or a missed one.
+
 ## Which date the product shows, and why it is not today (settled 9 Sep 2026)
 
 **Read this before "fixing" the data date. It has been asked three times in one week and twice

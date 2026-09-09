@@ -36,7 +36,9 @@ class PipelineDependencies:
     # a nightly job may invent.
     swing_user_id: int | None = None
     #: The benchmark `04` §8.2's gate reads; `nifty-50` is the fallback inside the step.
-    swing_index_slug: str = "nifty-500"
+    #: SW17 / M87-reverted: the MidSmallcap 400 is the book's tape. See
+    #: `WorkerSettings.swing_index_slug` for why, and why it is not nifty-500.
+    swing_index_slug: str = "nifty-mid-small-400"
     #: PACK.6: while this is false the exposure ladder reads *simulated* closes. The step needs
     #: it to pick which book to summarise, and it places nothing either way.
     swing_execution_enabled: bool = False

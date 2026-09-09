@@ -251,8 +251,16 @@ COMPLETE or a dead status. §9.4 says what each answer writes. The GTT is unchan
 8.1 **Breadth** over the liquid universe at the close: `pct_up_strong_1m` = share with
 `ret_20 ≥ strong_move_pct` [25]; `pct_new_52w_high` = share with `close ≥ high_1y`;
 `pct_above_ma_slow` = share with `close > ma_slow`.
-8.2 **Index reading:** NIFTY 500's `index_ma_fast` [10]- and `index_ma_slow` [20]-bar SMAs
-(fallback NIFTY 50; none → the index is ignored). `IndexReading.long_bias = ma_fast > ma_slow`;
+8.2 **Index reading:** **NIFTY MidSmallcap 400**'s `index_ma_fast` [10]- and `index_ma_slow`
+[20]-bar SMAs (fallback NIFTY 500; none → the index is ignored).
+
+> ⚠ **This said NIFTY 500 until 9 Sep 2026 and that was stale, not the rule.** SW17 (`67df9b4`,
+> 3 Sep) changed the benchmark on Maulik's call — *"the book trades mid- and small-caps, so the
+> tape it asks about is nifty-mid-small-400"* — and this line was never updated. M87 then read
+> this line, decided the code was wrong, and reverted the setting; it took two days and a live
+> RED gate to notice. **The decision is the authority; if the code and this paragraph disagree
+> again, fix the paragraph.** A large-cap-weighted index answers a question about a market this
+> book does not trade. `IndexReading.long_bias = ma_fast > ma_slow`;
 `bearish = ma_fast < ma_slow`; equal averages are neither. The close itself is **not**
 consulted (SW9.5): his filter for longs is the 10-day above the 20-day — a pullback under both
 averages on a rising 10-day is still a long tape, a bounce over both under a falling one is

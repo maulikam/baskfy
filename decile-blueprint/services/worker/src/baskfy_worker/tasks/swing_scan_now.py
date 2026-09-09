@@ -121,6 +121,23 @@ class BarBuild:
         }
 
 
+def _live_index_level(source: object, slug: str) -> float | None:
+    """The benchmark's level right now, or None if this provider cannot say.
+
+    Duck-typed on `index_level` so the scan works with any quote source — the replay harness and
+    the tests hand it fakes that have no such method, and they must keep working.
+    """
+    fetch = getattr(source, "index_level", None)
+    if not callable(fetch):
+        return None
+    try:
+        level = fetch(slug)
+    except Exception:
+        log.warning("could not read a live level for %s; the gate reads published closes", slug)
+        return None
+    return None if level is None else float(level)
+
+
 async def last_published_session(session: AsyncSession) -> dt.date | None:
     """The newest date with a published bar — "the last session" as the page means it."""
     return (await session.execute(select(func.max(OhlcvDaily.date)))).scalar_one_or_none()
@@ -420,15 +437,34 @@ async def _scan(  # noqa: PLR0913 - one keyword per input the scan depends on
         "reason": decision.reason,
     }
     build: BarBuild | None = None
+    live_index_level: float | None = None
     if decision.provisional:
         if quote_source is None:
             raise ScanNotRunnable(
                 "the market is open and there is no Kite quote source (no Kite session)"
             )
+        source = quote_source()
         build = await build_provisional_frame(
-            session, user_id=user_id, decision=decision, quotes=quote_source()
+            session, user_id=user_id, decision=decision, quotes=source
         )
         scan["quotes"] = build.quotes
+        # THE BENCHMARK'S LIVE LEVEL, SO THE GATE'S INDEX RULE CAN MOVE TODAY (9 Sep 2026).
+        #
+        # Maulik: "tomorrow it might get green on live market data ... once a user logs in and
+        # connects the Kite broker, verify whether it's red or green."
+        #
+        # Breadth already recomputed from the provisional bars. The index rule did not: it read
+        # `index_snapshot_daily`, which holds published sessions only, so its newest row is
+        # yesterday's and the half of the gate that decides the verdict was frozen until the
+        # nightly ran. One extra quote fixes that.
+        #
+        # Best-effort by construction. A provider that cannot quote the index answers None, the
+        # gate falls back to published closes, and the scan is exactly as good as it was before —
+        # late, never wrong. A live gate that raised would be worse than a late one.
+        level = _live_index_level(source, index_slug)
+        if level is not None:
+            live_index_level = level
+            scan["live_index_level"] = level
     outcome = StepOutcome()
     written = await run_detect_swing(
         session,
@@ -441,6 +477,7 @@ async def _scan(  # noqa: PLR0913 - one keyword per input the scan depends on
         provisional=decision.provisional,
         reference_date=decision.published_as_of if decision.provisional else None,
         scan=scan,
+        live_index_level=live_index_level,
     )
     detail: dict[str, object] = {
         "reason": decision.reason,

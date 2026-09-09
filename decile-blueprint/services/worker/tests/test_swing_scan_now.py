@@ -33,13 +33,16 @@ from test_swing_detect import _flag_shape, _sessions_before
 
 from baskfy_core.models import (
     AppUser,
+    IndexDef,
+    IndexSnapshotDaily,
     OhlcvDaily,
     SwConfig,
     SwMarketDaily,
     SwScanRun,
     SwSetupDaily,
 )
-from baskfy_core.swing.config import Setup
+from baskfy_core.swing.config import DEFAULT_SWING_CONFIG, Setup
+from baskfy_providers.kite import KiteProvider
 from baskfy_providers.records import QuoteRecord
 from baskfy_worker.celery_app import BEAT_SCHEDULE, QUEUE_COMPUTE, QUEUE_DEFAULT, TASK_ROUTES
 from baskfy_worker.steps import StepOutcome
@@ -53,7 +56,7 @@ from baskfy_worker.tasks.celery_tasks import (
     swing_scan_now_task,
     swing_scan_sweep_task,
 )
-from baskfy_worker.tasks.swing import run_detect_swing
+from baskfy_worker.tasks.swing import load_index_reading, run_detect_swing
 from baskfy_worker.tasks.swing_premarket import LiquidName, QuoteSource
 from baskfy_worker.tasks.swing_scan_now import (
     DONE,
@@ -834,3 +837,91 @@ class TestALoginAtAnyHourGetsTodaysData:
                 moment = dt.datetime(2026, 9, 8, hour, minute)
                 if swing_scan_now.market_is_open(moment):
                     assert swing_scan_now.session_has_started(moment), moment
+
+
+#: The benchmark the gate actually reads (SW17), and the config the reading is taken with.
+INDEX_SLUG = "nifty-mid-small-400"
+CONFIG = DEFAULT_SWING_CONFIG
+
+
+async def _index_series(session: AsyncSession, dates: list[dt.date], *, level: float) -> None:
+    """A flat published series for the benchmark — flat so any movement in the averages can
+    only have come from the live level the test adds."""
+    index_id = (
+        await session.execute(sa.select(IndexDef.id).where(IndexDef.slug == INDEX_SLUG))
+    ).scalar_one()
+    for on in dates:
+        session.add(IndexSnapshotDaily(index_id=index_id, date=on, level=Decimal(str(level))))
+    await session.flush()
+
+
+class TestTheGateSeesTodaysIndex:
+    """Maulik, 9 Sep 2026: "tomorrow it might get green on live market data ... once a user logs
+    in and connects the Kite broker, verify whether it's red or green. If it is green, it should
+    start executing."
+
+    Half the gate was already live and half was frozen. A provisional scan recomputed BREADTH
+    from the live bars, but the index rule read `index_snapshot_daily`, which holds published
+    sessions only — so its newest row is yesterday's. Measured on 9 Sep: the live row and the
+    published row carried the SAME index close, 23,106.10, while breadth had moved 16.61% ->
+    15.81%. The half that decides RED or GREEN could not move until the nightly ran.
+    """
+
+    async def test_a_live_level_moves_the_averages_onto_today(self, session: AsyncSession) -> None:
+        """The published series ends yesterday; the live level extends it to today, so the
+        10- and 20-day windows end on today as the rule intends."""
+        dates = await _sessions_before(session, TODAY, 40)
+        await _index_series(session, dates, level=100.0)
+
+        stale, _ = await load_index_reading(
+            session, TODAY, slug=INDEX_SLUG, fallback="nifty-500", config=CONFIG
+        )
+        live, _ = await load_index_reading(
+            session,
+            TODAY,
+            slug=INDEX_SLUG,
+            fallback="nifty-500",
+            config=CONFIG,
+            live_level=200.0,
+        )
+
+        assert stale is not None and live is not None
+        assert live.close == 200.0, "the live level is not the close the gate reads"
+        assert live.ma_fast > stale.ma_fast, "today's level did not reach the 10-day average"
+        assert live.ma_slow > stale.ma_slow, "today's level did not reach the 20-day average"
+
+    async def test_without_a_live_level_nothing_changes(self, session: AsyncSession) -> None:
+        """The fallback must be exactly the old behaviour: late, never wrong. A provider that
+        cannot quote the index leaves the gate reading published closes."""
+        dates = await _sessions_before(session, TODAY, 40)
+        await _index_series(session, dates, level=100.0)
+
+        before, slug_a = await load_index_reading(
+            session, TODAY, slug=INDEX_SLUG, fallback="nifty-500", config=CONFIG
+        )
+        after, slug_b = await load_index_reading(
+            session, TODAY, slug=INDEX_SLUG, fallback="nifty-500", config=CONFIG, live_level=None
+        )
+        assert before is not None and after is not None
+        assert (before.ma_fast, before.ma_slow, slug_a) == (after.ma_fast, after.ma_slow, slug_b)
+
+    def test_a_quote_source_that_cannot_answer_is_not_an_error(self) -> None:
+        """The replay harness and every fake quote source lack `index_level`; a scan must still
+        run. And a source that raises must not take the scan down — a gate reading yesterday is
+        better than no scan at all."""
+
+        class NoMethod:
+            pass
+
+        class Explodes:
+            def index_level(self, slug: str) -> float:
+                raise RuntimeError("kite is down")
+
+        assert swing_scan_now._live_index_level(NoMethod(), INDEX_SLUG) is None
+        assert swing_scan_now._live_index_level(Explodes(), INDEX_SLUG) is None
+
+    def test_the_benchmark_maps_to_a_kite_symbol(self) -> None:
+        """A slug with no mapping silently has no live level, so the one the gate actually reads
+        must be present — `nifty-mid-small-400` (SW17), not just the fallback."""
+        assert "nifty-mid-small-400" in KiteProvider.INDEX_QUOTE_SYMBOL
+        assert KiteProvider.INDEX_QUOTE_SYMBOL["nifty-mid-small-400"] == "NIFTY MIDSML 400"

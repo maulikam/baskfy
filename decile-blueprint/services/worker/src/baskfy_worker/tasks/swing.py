@@ -577,8 +577,14 @@ async def _write_setups(
     return written
 
 
-async def load_index_reading(
-    session: AsyncSession, on: dt.date, *, slug: str, fallback: str, config: SwingConfig
+async def load_index_reading(  # noqa: PLR0913 - one keyword per input the reading depends on
+    session: AsyncSession,
+    on: dt.date,
+    *,
+    slug: str,
+    fallback: str,
+    config: SwingConfig,
+    live_level: float | None = None,
 ) -> tuple[IndexReading | None, str | None]:
     """The benchmark's close and its two moving averages (`04` §8.2).
 
@@ -588,6 +594,25 @@ async def load_index_reading(
     """
     for candidate in (slug, fallback):
         levels = await _index_levels(session, on, candidate, config.market.index_ma_slow)
+        # TODAY'S LEVEL, WHEN THE CALLER HAS ONE (9 Sep 2026).
+        #
+        # Maulik: "tomorrow it might get green on live market data ... once a user logs in and
+        # connects the Kite broker, verify whether it's red or green."
+        #
+        # `index_snapshot_daily` only holds PUBLISHED sessions, so during the day its newest row
+        # is yesterday's. A provisional scan therefore recomputed breadth from live bars — that
+        # part always worked — and then read the index rule off yesterday's averages, so the half
+        # of the gate that actually decides the verdict could not move until the nightly ran. On
+        # 9 Sep the live row and the published row carried the SAME index close, 23,106.10, while
+        # breadth had already moved from 16.61% to 15.81%.
+        #
+        # `live_level` is today's level from a Kite index quote. It is appended, not substituted:
+        # the 10- and 20-day windows then end on today, which is what the rule means by "the
+        # 10-day over the 20-day" while a session is running. Only for the FIRST candidate — the
+        # level belongs to the benchmark the caller quoted, and silently applying it to the
+        # fallback would put one index's price in another index's average.
+        if live_level is not None and candidate == slug:
+            levels = [*levels, float(live_level)][-config.market.index_ma_slow :]
         if len(levels) >= config.market.index_ma_slow:
             fast = sum(levels[-config.market.index_ma_fast :]) / config.market.index_ma_fast
             slow = sum(levels[-config.market.index_ma_slow :]) / config.market.index_ma_slow
@@ -810,6 +835,7 @@ async def run_detect_swing(  # noqa: PLR0913 - one keyword per input the day dep
     provisional: bool = False,
     reference_date: dt.date | None = None,
     scan: dict[str, object] | None = None,
+    live_index_level: float | None = None,
 ) -> int:
     """Detect the day's setups and write the day's market row. Returns the candidate count.
 
@@ -839,6 +865,7 @@ async def run_detect_swing(  # noqa: PLR0913 - one keyword per input the day dep
             provisional=provisional,
             reference_date=reference_date,
             scan=scan,
+            live_index_level=live_index_level,
         )
 
 
@@ -866,6 +893,7 @@ async def _detect_swing(  # noqa: PLR0913 - one keyword per input the day depend
     provisional: bool = False,
     reference_date: dt.date | None = None,
     scan: dict[str, object] | None = None,
+    live_index_level: float | None = None,
 ) -> int:
     config = await load_swing_config(session, user_id)
     start = await lookback_start(session, trade_date, LOOKBACK_SESSIONS)
@@ -955,6 +983,7 @@ async def _detect_swing(  # noqa: PLR0913 - one keyword per input the day depend
         provisional=provisional,
         reference_date=reference_date,
         scan=scan,
+        live_index_level=live_index_level,
     )
 
     outcome.rows_in = bars.height
@@ -978,6 +1007,7 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
     provisional: bool = False,
     reference_date: dt.date | None = None,
     scan: dict[str, object] | None = None,
+    live_index_level: float | None = None,
 ) -> MarketGate:
     """Breadth, the gate and tomorrow's tier — `04` §8, written to ``sw_market_daily``.
 
@@ -1004,7 +1034,12 @@ async def write_market_row(  # noqa: PLR0913 - one keyword per input the row dep
         else BreadthSnapshot(0, 0.0, 0.0, 0.0)
     )
     reading, used_slug = await load_index_reading(
-        session, lookup, slug=index_slug, fallback="nifty-500", config=config
+        session,
+        lookup,
+        slug=index_slug,
+        fallback="nifty-500",
+        config=config,
+        live_level=live_index_level,
     )
     gate = market_gate(breadth, reading, config.market)
 

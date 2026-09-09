@@ -28,15 +28,50 @@ CID="$(aws ssm send-command --region "$REGION" --instance-ids "$ID" \
   --document-name AWS-RunShellScript --cli-input-json "{\"Parameters\":$CMD_JSON}" \
   --query 'Command.CommandId' --output text)"
 
-for _ in $(seq 1 90); do
+# HOW LONG TO WAIT, AND WHY IT USED TO BE WRONG (9 Sep 2026).
+#
+# This polled 90 times at 3s — a hard 270-second ceiling — and then ran
+# `[ "$ST" = "Success" ] || exit 1`. A command still *running* exits non-zero there, so a
+# caller with `set -e` treats a healthy long step as a failure. `deploy-swing.sh` hit that on
+# every single deploy: its `run --rm seed` outlives 270s, so the script aborted after applying
+# the migration and before `up -d`, leaving the database a version AHEAD of the running code and
+# needing the deploy finished by hand. Six deploys were completed that way before anyone traced
+# it to the transport rather than the seed.
+#
+# Two separate fixes, because they were two separate bugs:
+#   1. wait long enough — 30 minutes by default, which covers the seed, a migration and a pull;
+#   2. never again report "still running" as "failed" — a timeout says so, in those words, and
+#      names the command id so it can be followed on the box instead of guessed at.
+BOX_TIMEOUT_SECONDS="${BOX_TIMEOUT_SECONDS:-1800}"
+DEADLINE=$(( $(date +%s) + BOX_TIMEOUT_SECONDS ))
+ST="Pending"
+while [ "$(date +%s)" -lt "$DEADLINE" ]; do
   sleep 3
   ST="$(aws ssm get-command-invocation --region "$REGION" --command-id "$CID" \
         --instance-id "$ID" --query Status --output text 2>/dev/null || echo Pending)"
   case "$ST" in Success|Failed|Cancelled|TimedOut) break;; esac
 done
+
 aws ssm get-command-invocation --region "$REGION" --command-id "$CID" --instance-id "$ID" \
   --query 'StandardOutputContent' --output text
 ERR="$(aws ssm get-command-invocation --region "$REGION" --command-id "$CID" --instance-id "$ID" \
   --query 'StandardErrorContent' --output text)"
 [ -n "$ERR" ] && [ "$ERR" != "None" ] && { echo "--- stderr ---" >&2; echo "$ERR" >&2; }
-[ "$ST" = "Success" ] || exit 1
+
+case "$ST" in
+  Success) exit 0;;
+  InProgress|Pending|Delayed)
+    cat >&2 <<MSG
+
+STILL RUNNING after ${BOX_TIMEOUT_SECONDS}s — this is NOT a failure, and the command is very
+likely still working on the box. Nothing has been rolled back.
+
+  command id : $CID
+  instance   : $ID
+  follow it  : aws ssm get-command-invocation --region $REGION --command-id $CID --instance-id $ID
+
+Re-run with a longer budget if this is expected:  BOX_TIMEOUT_SECONDS=3600 $0 ...
+MSG
+    exit 2;;
+  *) exit 1;;
+esac

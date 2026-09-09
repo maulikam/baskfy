@@ -235,6 +235,36 @@ class KiteProvider:
                 records.append(record)
         return records
 
+    def fno_underlyings(self) -> list[str]:
+        """Every equity that has a futures contract — the ``nifty-fno`` universe (9 Sep 2026).
+
+        WHY THIS EXISTS. `nifty-fno` screened to nothing, on every run, because it had no
+        membership source at all: `quality.NO_MEMBERSHIP_SOURCE` listed it as needing "NSE's F&O
+        constituent file, which no provider fetches", so `index_member_daily` held zero rows for
+        it and the screen correctly returned an empty set for an empty universe.
+
+        No such file is needed. Kite's own instrument dump carries the F&O segment, and every
+        futures row names its underlying — so the set of distinct ``name`` values across NFO
+        futures IS the F&O universe, from a source this deployment already speaks to.
+
+        **Futures, not options.** Every F&O underlying has a futures contract, and one per expiry
+        rather than the hundreds of strikes an option chain adds; filtering to ``FUT`` is both the
+        complete answer and the cheap one. Deduplicated and sorted so a re-run writes identical
+        rows (house rule 7).
+
+        One HTTP call, on the same rate-limited path as everything else. `list_instruments` asks
+        for ``"NSE"``; this asks for ``"NFO"``, and neither is a per-instrument fetch.
+        """
+        raw = self._call(lambda client: client.instruments("NFO"))
+        underlyings: set[str] = set()
+        for row in raw:
+            if (_text(row.get("instrument_type")) or "").upper() != "FUT":
+                continue
+            name = _text(row.get("name"))
+            if name:
+                underlyings.add(name.upper())
+        return sorted(underlyings)
+
     def daily_bars(self, token: int, start: dt.date, end: dt.date) -> pl.DataFrame:
         """Raw daily candles for one instrument, chunked to respect the day-interval cap.
 

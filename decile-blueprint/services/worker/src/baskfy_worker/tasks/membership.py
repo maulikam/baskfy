@@ -46,7 +46,12 @@ SOURCE_RECONSTRUCTED = "reconstructed"
 SOURCE_DERIVED = "derived"
 
 #: docs/06 §"Step 2" — universes defined by rule rather than by a published file.
-DERIVED_BY_RULE: frozenset[str] = frozenset({"nifty-allcap", "etf", "nse-sme-emerge"})
+#: ``etf`` LEFT THIS SET ON 9 Sep 2026. Its rule was `instrument.instrument_type == "ETF"` and
+#: nothing ever wrote that type, so it selected an empty set on every run and the screen returned
+#: nothing. It is now in `PROVIDER_SOURCED`, read from NSE's own ETF list. Removed from here
+#: rather than left in both, so exactly one branch answers for any universe — the two sets are
+#: asserted disjoint by `test_reference_data.py`.
+DERIVED_BY_RULE: frozenset[str] = frozenset({"nifty-allcap", "nse-sme-emerge"})
 
 #: docs/09 §Backfill: NSE constituent files are unavailable "pre-2018". Before this, membership
 #: can only be reconstructed, and is marked as such.
@@ -148,6 +153,25 @@ async def _members_for(
     allow_reconstruction: bool,
 ) -> tuple[list[str], str]:
     """Resolve one universe's members for ``on``, and say where the answer came from."""
+    # THE TWO UNIVERSES THAT HAD NO SOURCE AT ALL (9 Sep 2026).
+    #
+    # `nifty-fno` and `etf` screened to nothing on every run — not a bug in the screen, but an
+    # empty membership set honestly returned for an empty universe. `quality.NO_MEMBERSHIP_SOURCE`
+    # named both and recorded why: the F&O constituents "no provider fetches", and `etf`'s derived
+    # rule reads `instrument_type == "ETF"` which nothing ever writes.
+    #
+    # Both have a source this deployment already speaks to:
+    #   nifty-fno  Kite's own instrument dump carries the F&O segment; the distinct `name` across
+    #              NFO futures IS the F&O universe. One call, no new credential.
+    #   etf        NSE publishes `eq_etfseclist.csv`, 350 rows with a Symbol column.
+    #
+    # Checked before the other branches because these slugs would otherwise fall to
+    # `DERIVED_BY_RULE` (etf) or to an `index_constituents` file that does not exist (nifty-fno),
+    # which is exactly how they came to be empty.
+    method = PROVIDER_SOURCED.get(universe.slug)
+    if method is not None:
+        return _from_named_method(provider, method), SOURCE_PROVIDER_LIST
+
     if universe.slug in DERIVED_BY_RULE:
         return await _derived_members(session, universe, on), SOURCE_DERIVED
 
@@ -160,6 +184,34 @@ async def _members_for(
 
     reconstructed = await _reconstruct(session, universe, on)
     return reconstructed, SOURCE_RECONSTRUCTED
+
+
+#: Universes whose membership comes from a provider list rather than a constituents file or a
+#: rule. Slug -> the provider method that answers it.
+PROVIDER_SOURCED: dict[str, str] = {
+    "nifty-fno": "fno_underlyings",
+    "etf": "etf_symbols",
+}
+
+#: How `_members_for` labels an answer that came from one of those.
+SOURCE_PROVIDER_LIST = "provider_list"
+
+
+def _from_named_method(provider: object, method: str) -> list[str]:
+    """Call one of `PROVIDER_SOURCED`'s methods, or answer empty if the provider lacks it.
+
+    Empty rather than raising, for the reason `_from_provider` gives just below: a provider that
+    cannot serve one universe must not fail a run that has already landed every other one. The
+    quality gate sees the resulting size and decides.
+    """
+    fetch = getattr(provider, method, None)
+    if not callable(fetch):
+        return []
+    try:
+        result = fetch()
+    except (UnexpectedPayload, ProviderError):
+        return []
+    return [str(symbol) for symbol in result] if isinstance(result, list) else []
 
 
 def _from_provider(provider: object, universe: Universe, on: dt.date) -> list[str]:

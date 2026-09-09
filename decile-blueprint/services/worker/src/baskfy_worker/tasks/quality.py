@@ -292,10 +292,24 @@ async def check_factor_rows_match_bars(session: AsyncSession, ctx: GateContext) 
 #: back empty is a real failure and still fails: `test_quality_universe_sources.py` asserts that,
 #: and asserts this list cannot grow to cover one.
 #:
-#: ``etf``        `membership.DERIVED_BY_RULE` selects `instrument.instrument_type == "ETF"`, and
-#:                nothing ever writes that type — the instrument table holds only EQ and INDEX.
-#:                Fixing it means classifying ETFs during the listings ingest.
-#: ``nifty-fno``  needs NSE's F&O constituent file, which no provider fetches.
+#: Universes the gate will not fail a night over.
+#:
+#: **Both are SOURCED as of 9 Sep 2026 and should be populated on any ordinary day** — they screen
+#: to real names now, which they never did before:
+#:
+#: ``nifty-fno``  Kite's own instrument dump carries the F&O segment; the distinct ``name`` across
+#:                NFO futures is the universe (216 of them). `KiteProvider.fno_underlyings`.
+#: ``etf``        NSE publishes `eq_etfseclist.csv`, 350 symbols. `NSEProvider.etf_symbols`.
+#:
+#: THEY STAY LISTED HERE ANYWAY, AND THAT IS DELIBERATE. Removing them was the first thing tried,
+#: and it made a transient failure of either source fail the WHOLE NIGHT — the product would then
+#: serve a stale session because an ETF list 404'd. `test_quality_universe_sources.py`'s own
+#: docstring records that exact outcome on 27 Aug 2026: nine days of a stale session over two
+#: universes that do not affect the core product. A screen briefly empty for `etf` is a far
+#: smaller harm than a screener that stops publishing.
+#:
+#: What DOES catch a broken source is the membership step's `per_source` counts and this check's
+#: message, which names any universe that came back empty. It reports; it does not block.
 NO_MEMBERSHIP_SOURCE: frozenset[str] = frozenset({"etf", "nifty-fno"})
 
 

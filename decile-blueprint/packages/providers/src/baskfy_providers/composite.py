@@ -247,6 +247,23 @@ class CompositeProvider:
             lambda p: [str(s) for s in getattr(p, "etf_symbols", list)()],
         )
 
+    def index_level(self, slug: str) -> Decimal | None:
+        """Today's live level for a benchmark index, from whichever routed provider can quote it.
+
+        Delegated here for the reason M95.1 learned the hard way: the pipeline holds this
+        composite, not a `KiteProvider`, and a method that exists only on the latter is a feature
+        that silently does nothing.
+
+        Routed on ``DAILY_BARS`` because there is no `QUOTES` capability and that is the one the
+        price provider declares — a live index level is price data from the same broker session
+        the bars come from. `index_snapshots` would read better and would route to NSE, which
+        publishes yesterday and cannot answer "what is it right now".
+        """
+        return self.route(
+            Capability.DAILY_BARS,
+            lambda p: getattr(p, "index_level", lambda _slug: None)(slug),
+        )
+
     def fno_underlyings(self) -> list[str]:
         """The F&O universe, from whichever routed provider can name it.
 

@@ -235,6 +235,47 @@ class KiteProvider:
                 records.append(record)
         return records
 
+    #: Our universe slug -> Kite's own index tradingsymbol. Kite abbreviates; nothing derives one
+    #: name from the other, so the two the swing gate can ask about are written out. A slug that
+    #: is not here simply has no live level and the gate falls back to published closes, which is
+    #: the pre-9-Sep-2026 behaviour and never wrong, only late.
+    INDEX_QUOTE_SYMBOL: Final[dict[str, str]] = {
+        "nifty-mid-small-400": "NIFTY MIDSML 400",
+        "nifty-500": "NIFTY 500",
+    }
+
+    def index_level(self, slug: str) -> Decimal | None:
+        """Today's live level for a benchmark index, or ``None`` if it cannot be quoted.
+
+        WHY THE GATE NEEDS THIS (Maulik, 9 Sep 2026). `index_snapshot_daily` holds only PUBLISHED
+        sessions, so during the day its newest row is yesterday's. A live scan recomputed breadth
+        from live bars but read the index rule off yesterday's averages — so the half of the gate
+        that actually decides RED or GREEN could not move until the nightly ran. He wants the
+        verdict checked against the live tape when he connects Kite, and this is the missing
+        input.
+
+        ``None`` rather than an exception for an unmapped slug, a missing quote or a malformed
+        one: without a live level the gate reads published closes, which is exactly what it did
+        before and is never wrong, only late. A live gate that raises would be worse than a
+        late one.
+        """
+        symbol = self.INDEX_QUOTE_SYMBOL.get(slug)
+        if symbol is None:
+            return None
+        key = f"NSE:{symbol}"
+        payload = self._call(lambda client: client.quote(key))
+        row = payload.get(key) if isinstance(payload, dict) else None
+        if not isinstance(row, dict):
+            return None
+        last = row.get("last_price")
+        if last is None:
+            return None
+        try:
+            level = Decimal(str(last))
+        except (ArithmeticError, ValueError):
+            return None
+        return level if level > 0 else None
+
     def fno_underlyings(self) -> list[str]:
         """Every equity that has a futures contract — the ``nifty-fno`` universe (9 Sep 2026).
 

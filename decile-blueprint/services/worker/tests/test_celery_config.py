@@ -295,16 +295,17 @@ class TestTheBrokerDoesNotRedeliverALongNight:
         assert timeout <= 12 * 60 * 60
 
 
-class TestTheMarketGateReadsTheDocumentedBenchmark:
-    """`docs/swing/04` §8.2 and STANDING-ANSWERS A12 both name NIFTY 500.
+class TestTheMarketGateReadsTheMidSmallcap400:
+    """SW17's decision, and the guard against "fixing" it back (9 Sep 2026).
 
-    Two places default this setting and only one of them is read. On 5 Sep 2026 they disagreed:
-    `deps.PipelineDependencies` said `nifty-500`, `WorkerSettings` said `nifty-mid-small-400`,
-    and `providers.build_pipeline_dependencies` reads the settings one — so the deployed market
-    gate ran on the mid-small index while the backtest that justified going live ran on NIFTY
-    500. It changed the verdict, not just the numbers: on 3 Sep 2026 mid-small read
-    fast 21,586.40 > slow 21,580.77 (GREEN, entries allowed) while NIFTY 500 read
-    fast 23,449.05 < slow 23,524.42 (RED, none).
+    `67df9b4`: *"Maulik's call: the book trades mid- and small-caps, so the tape it asks about is
+    nifty-mid-small-400, with nifty-500 as the fallback."* The book screens mid- and small-cap
+    breakouts; a large-cap-weighted index answers a question about somebody else's market.
+
+    M87 reverted that to `nifty-500` because `docs/swing/04` §8.2 still said so, and pinned the
+    wrong value with a test asserting the setting matched THE DOCUMENT. That is the failure this
+    class now guards against from the other side: the decision is the authority, and a doc that
+    disagrees is the thing to fix.
     """
 
     def test_worker_settings_index_slug_matches_deps(self) -> None:
@@ -312,10 +313,13 @@ class TestTheMarketGateReadsTheDocumentedBenchmark:
         deps_default = PipelineDependencies.__dataclass_fields__["swing_index_slug"].default
 
         assert settings_default == deps_default, (
-            "the benchmark the gate actually reads has drifted from the documented default"
+            "the benchmark the gate actually reads has drifted from the other default"
         )
 
-    def test_the_documented_benchmark_is_nifty_500(self) -> None:
-        """Pinned to the document, not to the other default — so renaming both together
-        without changing `04` §8.2 still fails."""
-        assert WorkerSettings.model_fields["swing_index_slug"].default == "nifty-500"
+    def test_the_benchmark_is_the_midsmallcap_400(self) -> None:
+        """Pinned to SW17's decision. It changed the verdict when M87 undid it: on 3 Sep the
+        MidSmall 400 read GREEN (10-day 21,592.34 over 20-day 21,581.78) where the Nifty 500
+        read RED, and the gate decides whether the book may enter at all."""
+        assert WorkerSettings.model_fields["swing_index_slug"].default == "nifty-mid-small-400", (
+            "nifty-500 is the FALLBACK, not the benchmark — see SW17 and M87's reversal"
+        )

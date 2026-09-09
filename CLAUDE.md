@@ -60,6 +60,42 @@ history; D3 is no longer the engineering blocker.
    has one documented exception.
 7. Filter-rejected stocks are never bought; `EXCLUDED_SYMBOLS` instruments are untouchable.
 
+## Which date the product shows, and why it is not today (settled 9 Sep 2026)
+
+**Read this before "fixing" the data date. It has been asked three times in one week and twice
+led to a change that had to be reverted.**
+
+The product serves **two different clocks** and they are both correct:
+
+| Surface | Clock | Why |
+|---|---|---|
+| Baskets, factors, market health, the screener, the freshness pill's `as_of` | The **last completed trading session** | A daily bar is a *closed* day. House rules 5 and 7: point-in-time, idempotent. There is no "today" bar until today ends |
+| Portfolio marks and holdings, the swing book's setups and triggers | **Live, from Kite quotes** | These are prices, not bars, and a quote is available whenever the market is |
+
+So on a weekday at 13:15 the pill correctly reads **yesterday**, while the portfolio and the
+swing book are showing this minute. That is not staleness; it is the only honest reading of a
+half-finished day. **Do not make the published series claim today while today is still running.**
+
+### What was tried and reverted, so nobody tries it again
+
+* **M88 (8 Sep 2026)** moved the publish cutoff to 15:45 because Kite returned that day's bars
+  for RELIANCE, TCS and INFY five minutes after the close. Three of the most liquid symbols in
+  India are not evidence about a 4,855-instrument universe: Kite's `historical_data` covers
+  ~3,000 of them and the rest arrive only in NSE's bhavcopy. The early run wrote a **partial**
+  day, the quality gate refused it three times, and the change was reverted the next morning.
+  `baskfy_worker.catch_up.SESSION_DATA_READY_IST` carries the numbers.
+
+### What IS legitimate to improve
+
+* Making a *label* say what it means — the freshness pill appends "· market open" during a
+  session and its tooltip names which surfaces are live (9 Sep 2026).
+* Getting the published day out **sooner after the close**. M90 did this properly: the bhavcopy
+  leads, so the chain takes ~14 minutes instead of 73. Earlier is good; *earlier than the day's
+  end* is not.
+* Widening what counts as live where a quote genuinely answers the question — M91 lets a login
+  at any hour after 09:15 scan today, because after the close a quote *is* the day's final
+  price. Before 09:15 it is yesterday's, and stamping that as today would be a lie.
+
 ## The screener's house rules (they govern the data plant, and the root lacked them)
 
 Verbatim from `decile-blueprint/CLAUDE.md`, with module paths updated for M2's rename. A

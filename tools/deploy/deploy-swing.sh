@@ -114,6 +114,23 @@ box "$(step "aws ecr get-login-password --region $REGION | docker login --userna
     "$C exec -T postgres psql -U baskfy -d baskfy -tAc 'select version_num from alembic_version'"
 
 say "4. seed reference; seed swing (sleeve ₹$SWING_CAPITAL, risk $SWING_RISK %)"
+# THE LONGEST STEP, AND THE ONE THAT USED TO KILL THE DEPLOY (9 Sep 2026).
+#
+# `run --rm seed` pulls the reference universe and takes several minutes. `box.sh` used to give
+# every command a hard 270 seconds and then exit non-zero — reporting a step that was still
+# working as a failure — so `set -e` aborted the script here, AFTER the migration and BEFORE
+# `up -d`. That leaves the database a version ahead of the running code, which is the worst of
+# the three possible outcomes, and it happened on six consecutive deploys.
+#
+# box.sh now waits 30 minutes by default and distinguishes "still running" (exit 2, with the
+# command id to follow) from "failed" (exit 1). This budget is stated anyway: it belongs next to
+# the step that needs it, not only in the transport's default.
+#
+# The seed stays in the per-deploy path deliberately. It is idempotent — re-running writes the
+# same rows — and it is what makes a deploy to a FRESH box work without a separate ceremony.
+# The cost is minutes on a box that already has the data; the alternative is a first deploy that
+# silently comes up with an empty universe.
+BOX_TIMEOUT_SECONDS="${SEED_TIMEOUT_SECONDS:-1800}" \
 box "$(step "$C run --rm seed" "seed reference" 12)" \
     "$(step "$C run --rm seed python -m baskfy_api.seed swing --capital $SWING_CAPITAL --risk $SWING_RISK" "seed swing" 4)"
 

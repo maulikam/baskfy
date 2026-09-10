@@ -3,7 +3,7 @@
 The status page for the volume-breakout run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: VB3 green — the schema exists and is bounded. VB4–VB10 not started.** Started 10 Sep 2026 on branch
+**Run state: VB4 green — the nightly chain detects this sleeve. VB5–VB10 not started.** Started 10 Sep 2026 on branch
 `developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
@@ -15,7 +15,7 @@ what is NOT done**. A fresh session resumes from the first module not marked ✅
 | VB1 — The pure core | ✅ | Nine modules, 43 named thresholds and **245 tests**; law 1 asserted over the source, and no rule module spells out a number that is not 0, 1, 2 or 100 |
 | VB2 — Goldens: reproduce the study | ✅ | **All 761 trades, to the paisa.** 32,929 scan hits, 6,293 signals, CAGR 18.23%, drawdown −27.94%, the yearly table to one decimal, and eleven of twelve neighbourhood cases to a tenth of a point |
 | VB3 — Schema and settings | ✅ | Twelve `vb_` tables in migration **`0037_vbt`**, generated from the models and verified against them by Alembic's own comparison — 0 differences, and a downgrade/upgrade round trip; four settings, three ceilings, two flags, and a sleeve seeded at ₹0 |
-| VB4 — The nightly job | ⬜ | |
+| VB4 — The nightly job | ✅ | `baskfy.vbt.detect` writes `vb_signal_daily` + `vb_breadth_daily`, wired in as the chain's **thirteenth** step (unable to fail the night), with a 21:10 retry that asks before it works and `make vbt DATE=…` |
 | VB5 — The sleeve's cash and book | ⬜ | |
 | VB6 — Desk plan and `/vbt/execute` | ⬜ | |
 | VB7 — The working order and its expiry | ⬜ | |
@@ -216,6 +216,49 @@ reason in a comment above `VBT_EXECUTION_ENABLED`.
   database this module's tests used, and nowhere else.
 * `baskfy_vb3_check` and `baskfy_vb_test` are scratch databases in the local dev Postgres. They
   are this run's, and dropping them costs nothing.
+
+---
+
+## VB4 — The nightly job ✅ (10 Sep 2026)
+
+`baskfy.vbt.detect(trade_date)` loads 260 sessions of the `04` §1 universe, drops the thin
+sessions, computes the indicators, runs the scan and the six filters, measures the breadth, and
+upserts one `vb_signal_daily` row per scan hit plus one `vb_breadth_daily` row per session.
+
+| | |
+|---|---|
+| The step | `PipelineStep.COMPUTE_VBT`, **thirteenth**, in `POST_PUBLISH_STEPS`, wrapped by `run_compute_vbt_step` which cannot raise (DECISIONS-VB **VB4.1**) |
+| The retry | Beat `vbt-detect` at **21:10 IST** weekdays — after the swing detect (21:00) and its plan (21:05). It counts the session's rows first and does nothing when the chain already wrote them (**VB4.2**) |
+| The CLI | `make vbt DATE=2026-09-09 [SESSIONS=5] [FORCE=1]` — it prints the funnel, because "0 signals" and "0 signals out of 1,412 names with a 200-day average" are different answers |
+| Storage precision | `COLUMN_PRECISION` extended: levels 2 dp, `close_position` and `pct_above_dma` **4** dp — rounding a number to the precision of its own threshold is how a rule starts disagreeing with the row that recorded it |
+| Tests | `services/worker/tests/test_vbt_detect.py` — **22 passed** against a real database |
+
+### The four claims the tests make
+
+* **Twice changes nothing** (house rule 7), over the whole job rather than one insert.
+* **A date with no bars writes nothing and says so** — `SKIPPED` with a reason, because "no
+  signals" and "no data" look identical on a page and are opposite problems.
+* **A split stores the exchange price**: an instrument whose stored series is twice what the
+  exchange printed yields `limit_price` ₹48.00, `stop_price` ₹42.20 and a 200-day average that is
+  also in today's money (**VB4.4**).
+* **The step's failure leaves the run SUCCEEDED**, proven by making the detector raise.
+
+Plus: a shut gate still writes the signals (the gate refuses *entries*; a gate that stopped the
+detector would be measuring itself), a rejected scan hit is stored with the letters that failed
+(`["E"]` for a 22% day), an ETF is not in the universe while GOLDIAM is, and the sleeve writes no
+`sw_` row.
+
+### What is NOT done at VB4
+
+* **Nothing plans anything.** There is no `vb_plan`, no `vb_order`, no `vb_position` row and no
+  way to make one. VB6 is the first module that builds a plan; VB7 is the first that expires an
+  order.
+* The job has never run against the plant's real bars — only against synthetic ones. The dev
+  database holds ten sessions of history (`docs/swing/STATUS.md` SW0), so `make vbt` there
+  detects nothing and says so.
+* No page reads these rows.
+* `vb_signal_daily.bars_in_window` is written as null: the count is computable and nothing reads
+  it yet, and a column filled with a number no surface shows is a column that quietly rots.
 
 ### Resume instructions for a fresh session
 

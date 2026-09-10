@@ -50,6 +50,11 @@ class PipelineStep(StrEnum):
     #: that is otherwise good. `docs/swing/06-module-plan.md` says so in as many words -- the step
     #: is "unable to fail the run".
     COMPUTE_SWING = "compute_swing"
+    #: VB4. Last, and for the same reason as the two above it: the volume-breakout detector reads
+    #: bars the chain has already published, and a detector bug must not be able to hold back a
+    #: `data_version` that is otherwise good. `docs/vbt/06-module-plan.md` says so, and
+    #: `docs/vbt/DECISIONS-VB.md` VB0.5 records the trade as a decision rather than an edit.
+    COMPUTE_VBT = "compute_vbt"
 
 
 #: The chain, in the order docs/03 lists it. The orchestrator walks exactly this.
@@ -57,17 +62,17 @@ NIGHTLY_CHAIN: Final[tuple[PipelineStep, ...]] = tuple(PipelineStep)
 
 #: The steps that run **after** ``publish`` and may not fail the run.
 #:
-#: Both are caches in the sense that matters: they read what `publish` has already blessed, and
-#: nothing downstream depends on either having succeeded. `refresh_basket` (M30) records its own
-#: failure and returns; `compute_swing` (SW3) is wrapped by
-#: :func:`baskfy_worker.orchestrator.run_compute_swing_step`, which cannot raise.
+#: All three are caches in the sense that matters: they read what `publish` has already blessed,
+#: and nothing downstream depends on any of them having succeeded. `refresh_basket` (M30) records
+#: its own failure and returns; `compute_swing` (SW3) and `compute_vbt` (VB4) are each wrapped by
+#: an orchestrator step that cannot raise.
 #:
 #: Named here rather than asserted as "is the last step", because "last" stopped being the
 #: property the moment there were two of them — and the property was never the position. A step
-#: added after these two must either join this set or be a step the run's success depends on,
-#: which is a decision, not an edit.
+#: added after these must either join this set or be a step the run's success depends on, which
+#: is a decision, not an edit. VB4 read that sentence and made the decision (DECISIONS-VB VB0.5).
 POST_PUBLISH_STEPS: Final[frozenset[PipelineStep]] = frozenset(
-    {PipelineStep.REFRESH_BASKET, PipelineStep.COMPUTE_SWING}
+    {PipelineStep.REFRESH_BASKET, PipelineStep.COMPUTE_SWING, PipelineStep.COMPUTE_VBT}
 )
 
 

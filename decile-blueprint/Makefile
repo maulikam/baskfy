@@ -3,7 +3,7 @@ COMPOSE := docker compose -f infra/docker/compose.yml
 UV      := uv run
 
 .DEFAULT_GOAL := help
-.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants fundamentals refactors index-repair token-sync shadow backend-parity friday-drill cb-metrics swing
+.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants fundamentals refactors index-repair token-sync shadow backend-parity friday-drill cb-metrics swing vbt
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -158,6 +158,9 @@ bhavcopy:      ## Bar backfill from the NSE bhavcopy (no Kite needed): make bhav
 
 swing:         ## Detect swing setups for one date: make swing DATE=2026-09-01 [SESSIONS=5]
 	$(UV) python -m baskfy_worker.swing_cli $(if $(DATE),--date $(DATE),) $(if $(SESSIONS),--sessions $(SESSIONS),)
+
+vbt:           ## Detect volume-breakout signals for one date: make vbt DATE=2026-09-09 [SESSIONS=5] [FORCE=1]
+	$(UV) python -m baskfy_worker.vbt_cli $(if $(DATE),--date $(DATE),) $(if $(SESSIONS),--sessions $(SESSIONS),) $(if $(FORCE),--force,)
 
 swing-premarket: ## SW6's morning job: make swing-premarket DATE=2026-09-02 [STAGE=LEVELS|GAPS]
 	$(UV) python -m baskfy_worker.swing_cli $(if $(DATE),--date $(DATE),) --premarket $(or $(STAGE),GAPS)

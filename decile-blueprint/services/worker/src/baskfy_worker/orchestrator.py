@@ -80,6 +80,7 @@ from baskfy_worker.tasks import (
 from baskfy_worker.tasks import fundamentals as fundamentals_task
 from baskfy_worker.tasks import instruments as instruments_task
 from baskfy_worker.tasks import swing as swing_task
+from baskfy_worker.tasks import vbt as vbt_task
 from baskfy_worker.tasks.quality import GateReport
 from baskfy_worker.window import DateWindow
 
@@ -368,6 +369,53 @@ async def _run_chain(  # noqa: PLR0915 - one block per pipeline step, and docs/0
     # --- 12. compute_swing -------------------------------------------------
     await run_compute_swing_step(session, run.id, trade_date, deps)
     outcome.steps_completed.append(PipelineStep.COMPUTE_SWING)
+
+    # --- 13. compute_vbt ---------------------------------------------------
+    await run_compute_vbt_step(session, run.id, trade_date, deps)
+    outcome.steps_completed.append(PipelineStep.COMPUTE_VBT)
+
+
+async def run_compute_vbt_step(
+    session: AsyncSession, run_id: int, trade_date: dt.date, deps: PipelineDependencies
+) -> None:
+    """Step 13 (VB4): the volume-breakout detector, over the bars this chain has just published.
+
+    **This coroutine cannot raise, and that is its whole job**, for the reason
+    :func:`run_compute_swing_step` above it cannot: a `vb_signal_daily` row nobody wrote is a page
+    saying "no candidates today", while a nightly run that failed is a screener serving yesterday
+    to everybody. `docs/vbt/06-module-plan.md` requires the step to be "unable to fail the run"
+    and `docs/vbt/DECISIONS-VB.md` VB0.5 records it as a decision rather than an edit, because
+    `steps.py` asks for one.
+
+    A step of its own rather than a block inside :func:`_run_chain`, so the guarantee can be
+    tested for what it is — "this raises nothing, whatever the detector does" — rather than only
+    through a full pipeline run, where the answer would depend on twelve earlier steps.
+
+    ``deps.vbt_user_id`` is ``None`` on a deployment with no sole tenant, and then the step says
+    so and does nothing. ``deps.vbt_nightly_enabled`` is `docs/vbt/02` Track B's one on-by-default
+    flag: detection moves no money, and a sleeve with no history is a sleeve with no evidence.
+    """
+    async with record_step(session, run_id, PipelineStep.COMPUTE_VBT, trade_date) as step:
+        if not deps.vbt_nightly_enabled:
+            step.status = StepStatus.SKIPPED
+            step.note(skipped_reason="BASKFY_VBT_NIGHTLY_ENABLED is false")
+            return
+        if deps.vbt_user_id is None:
+            step.status = StepStatus.SKIPPED
+            step.note(skipped_reason="no BASKFY_SOLE_USER_ID configured")
+            return
+        try:
+            await vbt_task.run_detect_vbt(
+                session,
+                step,
+                trade_date,
+                user_id=deps.vbt_user_id,
+                pipeline_run_id=run_id,
+            )
+        except Exception as exc:
+            step.status = StepStatus.SKIPPED
+            step.note(skipped_reason=f"{type(exc).__name__}: {exc}")
+            log.warning("compute_vbt failed for %s: %s", trade_date, exc)
 
 
 async def run_compute_swing_step(

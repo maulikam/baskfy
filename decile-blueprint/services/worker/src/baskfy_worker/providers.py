@@ -58,6 +58,9 @@ def build_pipeline_dependencies() -> PipelineDependencies:
         swing_user_id=_sole_user_id(),
         swing_index_slug=get_worker_settings().swing_index_slug,
         swing_execution_enabled=get_worker_settings().swing_execution_enabled,
+        # VB4. The same tenant and the same rule: read once, here, never inside the step.
+        vbt_user_id=_sole_user_id(),
+        vbt_nightly_enabled=get_worker_settings().vbt_nightly_enabled,
     )
 
 

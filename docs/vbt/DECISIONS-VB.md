@@ -368,3 +368,64 @@ exactly like a broken migration and is not, and because it will recur on any mac
 sessions test at once. The fixture itself is unchanged: it is the *environment variable* that was
 pointed elsewhere, which is the smallest change that fixes it and the only one that leaves CI
 alone.
+
+---
+
+## VB4 — the nightly job
+
+### VB4.1 — The step is thirteenth, after `compute_swing`, and cannot fail the night · ⚠ UNREVIEWED
+
+`steps.py` asks for this to be a decision rather than an edit: *"A step added after these two must
+either join this set or be a step the run's success depends on, which is a decision, not an
+edit."* This is the decision. `COMPUTE_VBT` joins `POST_PUBLISH_STEPS` and is wrapped by
+`run_compute_vbt_step`, which cannot raise.
+
+**A `vb_signal_daily` row nobody wrote is a page saying "no candidates today"; a nightly run that
+failed is a screener serving yesterday to everybody.** The trade is not close. After
+`compute_swing` rather than before it because the swing book is the older sleeve and its evening
+has an established shape; nothing in either step reads the other's rows.
+
+Rejected: a blocking step (a detector bug would hold back a good `data_version`); a separate
+Beat-only job with no step at all (the pipeline's own record would then not say whether the
+sleeve ran, and `/admin/pipeline` at 21:00 is where an operator looks).
+
+### VB4.2 — The 21:10 retry asks before it works · ⚠ UNREVIEWED
+
+The swing book's 21:00 entry re-detects unconditionally and is idempotent, which is fine: its
+detectors read 200 sessions of a *liquid* universe. This detector densifies **260 sessions of the
+whole cash register** — about 800,000 rows before a single window is computed — so re-deriving
+rows the chain has already written costs minutes to arrive at the same answer.
+
+So `baskfy.vbt.detect` counts the session's rows first and returns `{"skipped": "already
+detected"}` when there are any. `make vbt DATE=… FORCE=1` is the escape hatch for the case the
+rule gets wrong: a threshold changed and the stored rows are stale.
+
+Rejected: unconditional re-detection (correct, and wasteful every ordinary evening); no retry at
+all (a night the chain failed its quality gate would have no signals, and the bars were fine).
+
+### VB4.3 — A thin session gets a row saying it was thin · ⚠ UNREVIEWED
+
+`04` §2.1 removes muhurat and special-Saturday sessions from the rolling calendar. The job could
+simply write nothing on such a day. It writes a `vb_breadth_daily` row with `thin_session = true`,
+a shut gate and zero counts instead.
+
+A hole in a daily series reads like a job that failed, and the one thing this pack keeps insisting
+on is that "no signals" and "no data" must never look the same. Rejected: no row (indistinguishable
+from an outage); a row with the day's real breadth (it would be breadth over ~200 names, which is
+the number the rule exists to refuse). Reversal: one branch.
+
+### VB4.4 — The context levels come back into today's money · ⚠ UNREVIEWED
+
+`limit_price` is the bar's own `close_raw` — the exchange print, which is what a broker is sent.
+The stored `sma_200`, `ema_21` and `high_20_prior` are adjusted-series values **divided by the
+row's `adj_factor`**, so a page can compare them with the limit.
+
+Without that, the morning after a 1:2 split a page would show a limit of ₹48 against a 200-day
+average of ₹90 and report a name below a trend it is comfortably above. The factor is stored
+beside them, so tomorrow's job can tell that a split happened overnight. `upper_circuit` goes the
+other way — multiplied by the factor on the way *in* — because the band is an exchange print and
+`high` has been adjusted in place, and an unconverted comparison would report the whole market
+locked.
+
+Rejected: storing the adjusted levels raw (a page that compares two different spaces); storing
+only the limit (the page then has no trend context at all, and `05` §2's mini chart wants it).

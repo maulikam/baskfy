@@ -90,6 +90,26 @@ COLUMN_PRECISION: Final[dict[str, int]] = {
     "rvol": PERCENT_DP,
     "gap_pct": PERCENT_DP,
     "adj_factor": RATIO_DP,
+    # --- VB4: `vb_signal_daily` and `vb_breadth_daily` (docs/vbt/03 §2, §3) ---------------
+    #
+    # The same rule for the same reason: the detector's numbers are written once, rounded, and
+    # every surface reads the stored value. A limit shown as 137.35 must not be sent to the
+    # broker as 137.3512.
+    #
+    # `close_position` and `pct_above_dma` keep four places, because both are shares rather than
+    # prices: two would round a 0.6015 close position to 0.60, which is the exact value filter D
+    # tests against, and a breadth of 40.0049% to 40.00, which is the exact value the gate tests
+    # against. Rounding a number to the precision of its own threshold is how a rule starts
+    # disagreeing with the row that recorded it.
+    "limit_price": PRICE_DP,
+    "stop_price": PRICE_DP,
+    "sma_200": PRICE_DP,
+    "ema_21": PRICE_DP,
+    "high_20_prior": PRICE_DP,
+    "change_pct": PERCENT_DP,
+    "ret_20_pct": PERCENT_DP,
+    "close_position": RSI_DP,
+    "pct_above_dma": RSI_DP,
 }
 
 #: Columns stored as whole numbers: marketcap in ₹ crore, turnover and volumes in ₹.
@@ -111,6 +131,12 @@ INTEGER_COLUMNS: Final[frozenset[str]] = frozenset(
         "circuits_12m",
         # SW3: `sw_setup_daily.turnover_avg` is bigint rupees, like every other volume column.
         "turnover_avg",
+        # VB4: `vb_signal_daily`'s volumes and rupee turnovers, and the rank key, which is one
+        # of them (`04` §3.4 ranks by the signal day's own turnover).
+        "vol_sma_50",
+        "turnover_inr",
+        "turnover_avg_20",
+        "rank_key",
     }
 )
 

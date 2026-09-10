@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import type { SleeveListOut } from "@baskfy/api-client";
 
+import { AllocationAnalytics } from "@/components/portfolio/allocation-analytics";
 import { PortfoliosList } from "@/components/portfolios/portfolios-list";
 import { serverApi } from "@/lib/api/server";
 import { fetchInvestments } from "@/lib/investments/fetch";
+import { fetchPortfolioOverview } from "@/lib/portfolio/fetch";
 import type { BookInvestment } from "@/lib/portfolios/book";
 import { PAGES } from "@/lib/vocabulary";
 
@@ -22,9 +24,15 @@ export const dynamic = "force-dynamic";
 
 export default async function PortfolioPortfoliosPage() {
   const api = await serverApi();
-  const [{ data, error }, investments] = await Promise.all([
+  // The overview is the ALLOCATION LEDGER's answer — what each portfolio is worth, what it did
+  // today, how many holdings it has. The two calls below it read the older forest API and the
+  // basket book, which is why this page could show "15 holdings filed here" beside an "Overall"
+  // panel reading "—": the grouping came from one source and the money from another that knew
+  // nothing about grouped holdings. Maulik reported exactly that on 11 Sep 2026.
+  const [{ data, error }, investments, overview] = await Promise.all([
     api.GET("/api/v1/portfolios"),
     fetchInvestments(),
+    fetchPortfolioOverview(),
   ]);
   const list = data?.data ?? [];
   const initialSleeves: Record<number, SleeveListOut> = {};
@@ -55,11 +63,19 @@ export default async function PortfolioPortfoliosPage() {
   }));
 
   return (
-    <PortfoliosList
-      initial={list}
-      error={data ? null : (error ?? "unreachable")}
-      investments={bookInvestments}
-      initialSleeves={initialSleeves}
-    />
+    <div className="space-y-6">
+      {/* Monitoring views are excluded: §4.1 says a lens enters no total, and every figure in the
+          band is a share of one. They keep their own row in the list below. */}
+      <AllocationAnalytics
+        rows={overview?.portfolios ?? []}
+        unallocated={overview?.unallocated ?? null}
+      />
+      <PortfoliosList
+        initial={list}
+        error={data ? null : (error ?? "unreachable")}
+        investments={bookInvestments}
+        initialSleeves={initialSleeves}
+      />
+    </div>
   );
 }

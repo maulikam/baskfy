@@ -99,6 +99,8 @@ from baskfy_worker.tasks.swing_scan_now import (
 )
 from baskfy_worker.tasks.swing_timing_probe import DONE_MARKER, probe_once
 from baskfy_worker.tasks.vbt import published_signal_count, run_detect_vbt
+from baskfy_worker.tasks.vbt_backtest import DEFAULT_START as VBT_BACKTEST_START
+from baskfy_worker.tasks.vbt_backtest import run_vbt_backtest
 from baskfy_worker.tasks.vbt_evening import (
     SOURCE_MORNING,
     last_detected_session,
@@ -1371,6 +1373,36 @@ def _vbt_check(
         return {"skipped": "no BASKFY_SOLE_USER_ID configured"}
     user_id = int(deps.vbt_user_id)
     return run_in_session(lambda session: check(session, user_id))
+
+
+@shared_task(name="baskfy.vbt.backtest", acks_late=True)
+def vbt_backtest_task(start: str | None = None, end: str | None = None) -> JsonObject:
+    """VB9: re-run the study over the plant's bars and append one `vb_backtest_run` row.
+
+    On demand rather than on Beat. The full history takes minutes, the answer only moves when the
+    bars or the code do, and a nightly re-run would put a long compute job in the same window as
+    the chain it would be competing with. `make vbt-backtest` is the handle.
+    """
+    deps = build_pipeline_dependencies()
+    if deps.vbt_user_id is None:
+        return {"skipped": "no BASKFY_SOLE_USER_ID configured"}
+    user_id = int(deps.vbt_user_id)
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        row = await run_vbt_backtest(
+            session,
+            user_id=user_id,
+            start=dt.date.fromisoformat(start) if start else VBT_BACKTEST_START,
+            end=dt.date.fromisoformat(end) if end else None,
+        )
+        return {
+            "run_id": row.id,
+            "source": row.source,
+            "finished_at": row.finished_at.isoformat() if row.finished_at else None,
+            "drift": row.drift,
+        }
+
+    return run_in_session(_run)
 
 
 @shared_task(name="baskfy.vbt.check_orders_past_expiry")

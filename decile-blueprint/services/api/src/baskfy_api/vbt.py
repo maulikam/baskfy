@@ -661,12 +661,20 @@ async def backtests(session: AsyncSession, *, user_id: int) -> tuple[BacktestRun
     """The latest **finished** run per source (`05` §2).
 
     A run still going, or one that failed with an error and no stats, is not what the page
-    compares against the published numbers — `vb_backtest_run` is append-only (`03` §11) and the
-    page's job is to show the newest one that finished, not the newest one that started.
+    compares against the published numbers — `vb_backtest_run` is append-only (`03` §8) and the
+    page's job is to show the newest one that **finished with a result**, not the newest one that
+    started and not the newest one that stopped.
     """
     newest = (
         select(VbBacktestRun.source, func.max(VbBacktestRun.finished_at).label("finished_at"))
-        .where(VbBacktestRun.user_id == user_id, VbBacktestRun.finished_at.is_not(None))
+        .where(
+            VbBacktestRun.user_id == user_id,
+            VbBacktestRun.finished_at.is_not(None),
+            # **And it must have produced something.** A failed run sets `finished_at` too
+            # (`03` §8), so without this a re-run that raised would displace the last good number
+            # with a card full of blanks — the opposite of what an append-only table is for.
+            VbBacktestRun.stats.is_not(None),
+        )
         .group_by(VbBacktestRun.source)
         .subquery()
     )

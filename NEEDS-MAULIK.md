@@ -1515,6 +1515,23 @@ the twenty for this sleeve (DECISIONS-VB **PACK.7**), because it has rehearsed n
 genuinely new mechanism — a limit order that expires after three **sessions** — can only be
 exercised by sessions passing. One line from you shortens it.
 
+### V6 — One timing on the box: how long the backtest takes against the real plant
+
+VB9's acceptance asks the full-history re-run to finish in **under 30 minutes**. The engine half
+is measured — **23 seconds** for all three books over 2017–2026, from the research export. The
+half that is not measured is the `ohlcv_daily` read for the whole 4,186-name universe, because no
+database this run could reach holds that history.
+
+One command on the box answers it:
+
+```
+make vbt-backtest              # appends one vb_backtest_run row and prints the drift
+```
+
+It reads bars and writes one row. It places nothing, and it cannot: the module names no broker.
+If it takes more than half an hour, say so and the loader gets a chunked read; if it takes two
+minutes, DECISIONS-VB **VB9.4** gets its number and the open item closes.
+
 ### V5 — Deploys (unchanged from every other run)
 
 `aws sso login --profile baskfy-poc` and the deploy commands. **This run deploys nothing**; the

@@ -373,8 +373,12 @@ describe("the Backtest page puts the caveats above the numbers", () => {
           started_at: "2026-09-09T15:00:00Z",
           finished_at: "2026-09-09T15:20:00Z",
           params: {},
-          stats: { cagr_pct: 14.8, max_drawdown_pct: -31.2, trades: 742 },
-          drift: { flagged: true, cagr_points: -3.4 },
+          stats: {
+            full: { cagr_pct: 14.8, max_drawdown_pct: -31.2, trades: 742 },
+            gate_off: { cagr_pct: 15.1, max_drawdown_pct: -48.8, trades: 980 },
+            raw_scan: { cagr_pct: 0.8, max_drawdown_pct: -47.9, trades: 3100 },
+          },
+          drift: { flagged: true, cagr_pct_delta: -3.4, threshold_cagr_points: 1 },
           error: null,
         },
       ],
@@ -389,5 +393,50 @@ describe("the Backtest page puts the caveats above the numbers", () => {
     expect(banner).toHaveTextContent(
       "Do not use the published number until this is explained",
     );
+  });
+
+  it("draws the equity curve and the yearly table when the run carries them", async () => {
+    vi.mocked(fetchBacktest).mockResolvedValue({
+      ...BACKTEST,
+      runs: [
+        {
+          id: 11,
+          source: "PLANT",
+          started_at: "2026-09-09T15:00:00Z",
+          finished_at: "2026-09-09T15:20:00Z",
+          params: {},
+          stats: {
+            full: {
+              cagr_pct: 18.2,
+              max_drawdown_pct: -27.9,
+              trades: 761,
+              // House rule 9: money reaches the page as a string of its exact decimal.
+              equity_curve: [
+                { date: "2024-01-01", equity_inr: "1000000.00" },
+                { date: "2024-01-02", equity_inr: "1100000.00" },
+                { date: "2024-01-03", equity_inr: "900000.00" },
+              ],
+              yearly: [
+                { year: 2024, return_pct: 31.4, trades: 92, win_rate_pct: 38.0 },
+                { year: 2025, return_pct: -8.1, trades: 77, win_rate_pct: 31.2 },
+              ],
+            },
+          },
+          drift: { flagged: false, cagr_pct_delta: -0.03 },
+          error: null,
+        },
+      ],
+    });
+
+    render(await VbtBacktestPage());
+
+    expect(screen.getByTestId("equity-curve")).toBeInTheDocument();
+    // The deepest fall below the running peak is 1.1m -> 0.9m, or -18.2%.
+    expect(screen.getByTestId("equity-curve-trough")).toBeInTheDocument();
+    const table = screen.getByTestId("yearly-table");
+    expect(table).toHaveTextContent("2024");
+    expect(table).toHaveTextContent("31.4%");
+    expect(table).toHaveTextContent("-8.1%");
+    expect(screen.queryByTestId("drift-banner")).not.toBeInTheDocument();
   });
 });

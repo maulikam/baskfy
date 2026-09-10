@@ -47,6 +47,12 @@ The repointing walks `pg_constraint` rather than naming tables, so a table added
 without anyone remembering to edit this file — and TimescaleDB's chunk-level foreign keys are
 skipped, because updating the parent hypertable moves its chunks with it.
 
+It repoints **one pair at a time with literal ids**, which looks needlessly slow and is not.
+`ohlcv_daily` is compressed and segmented by `instrument_id`; a statement joining to a temp table
+cannot be pruned to a segment, so the first version decompressed 3.4 million tuples to move 800
+rows and hit TimescaleDB's limit mid-deploy. A literal id prunes to that instrument. See the
+comment on the loop.
+
 Revision ID: 0039_merge_duplicate_instruments
 Revises: 0038_broker_pile_flag
 """
@@ -76,9 +82,11 @@ _MERGE = """
 DO $$
 DECLARE
   fk       record;
+  pair     record;
   key_cols text[];
   join_on  text;
   moved    bigint;
+  rows_now bigint;
 BEGIN
   CREATE TEMP TABLE dupmap ON COMMIT DROP AS
     SELECT i.id AS loser, k.keep
@@ -139,18 +147,41 @@ BEGIN
     IF key_cols IS NOT NULL THEN
       SELECT string_agg(format('k.%I IS NOT DISTINCT FROM l.%I', c, c), ' AND ')
         INTO join_on FROM unnest(key_cols) AS c;
-      EXECUTE format(
-        'DELETE FROM %s l USING dupmap d WHERE l.%I = d.loser AND EXISTS '
-        '(SELECT 1 FROM %s k WHERE k.%I = d.keep AND %s)',
-        fk.tbl, fk.col, fk.tbl, fk.col, join_on
-      );
+    ELSE
+      join_on := NULL;
     END IF;
 
-    EXECUTE format(
-      'UPDATE %s l SET %I = d.keep FROM dupmap d WHERE l.%I = d.loser',
-      fk.tbl, fk.col, fk.col
-    );
-    GET DIAGNOSTICS moved = ROW_COUNT;
+    -- ONE PAIR AT A TIME, WITH LITERAL IDS, AND THAT IS NOT FUSSINESS.
+    --
+    -- `ohlcv_daily` is a compressed hypertable segmented BY `instrument_id`. A statement that
+    -- joins to a temp table cannot be pruned to a segment, so TimescaleDB decompresses every
+    -- chunk that might match — on the live box that was 3,406,169 tuples against a limit of
+    -- 100,000, and the deploy failed there:
+    --
+    --     ConfigurationLimitExceededError: tuple decompression limit exceeded by operation
+    --
+    -- to move 800 rows. A literal `instrument_id = 83745` prunes to that instrument's segments,
+    -- which is a few hundred tuples. The limit is left alone deliberately: raising it would let
+    -- this decompress the whole history to do a tiny job, and the guard is right to object.
+    --
+    -- 120 pairs across ~20 tables is a few thousand small statements. That is cheap, and it is
+    -- the difference between a migration that runs and one that cannot.
+    moved := 0;
+    FOR pair IN SELECT loser, keep FROM dupmap LOOP
+      IF join_on IS NOT NULL THEN
+        EXECUTE format(
+          'DELETE FROM %s l WHERE l.%I = %s AND EXISTS '
+          '(SELECT 1 FROM %s k WHERE k.%I = %s AND %s)',
+          fk.tbl, fk.col, pair.loser, fk.tbl, fk.col, pair.keep, join_on
+        );
+      END IF;
+      EXECUTE format(
+        'UPDATE %s SET %I = %s WHERE %I = %s',
+        fk.tbl, fk.col, pair.keep, fk.col, pair.loser
+      );
+      GET DIAGNOSTICS rows_now = ROW_COUNT;
+      moved := moved + rows_now;
+    END LOOP;
     IF moved > 0 THEN
       RAISE NOTICE 'repointed % row(s) in %.%', moved, fk.tbl, fk.col;
     END IF;

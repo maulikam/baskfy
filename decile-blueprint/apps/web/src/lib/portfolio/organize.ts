@@ -221,6 +221,7 @@ export function selectionTotal(
   rows: readonly AggregatedHolding[],
   selected: ReadonlySet<string>,
   quantities: ReadonlyMap<string, string> = new Map(),
+  targetPortfolioId: number | null = null,
 ): SelectionTotal {
   const values: Array<string | null> = [];
   const instruments = new Set<number>();
@@ -244,7 +245,7 @@ export function selectionTotal(
       // API priced, so the split is done here rather than by re-multiplying a price the client
       // would have to round itself — the server's figure stays the authority and this only ever
       // takes a fraction of it.
-      values.push(shareOfValue(line.value, quantities.get(id), freeQuantity(line)));
+      values.push(shareOfValue(line.value, quantities.get(id), capacityFor(line, targetPortfolioId)));
     }
   }
 
@@ -252,12 +253,44 @@ export function selectionTotal(
 }
 
 /**
- * How many of a leg's shares are not already filed into a capital portfolio — the most a new
+ * How many of a leg's shares are not already filed into a capital portfolio — the most a NEW
  * portfolio may take. Falls back to the whole position for a payload that predates 0035.
  */
 export function freeQuantity(line: HoldingBrokerLine): string {
   const free = (line as { unallocated_quantity?: string }).unallocated_quantity;
   return free ?? line.quantity;
+}
+
+/**
+ * The most a picker may offer for this leg, which depends on **where it is going**.
+ *
+ * Creating a portfolio can only take what is unallocated: a group that does not exist yet has no
+ * claim on shares another group is holding. Adding to a portfolio that DOES exist may move them,
+ * so its ceiling is the whole position less whatever that portfolio already holds.
+ *
+ * Getting this wrong is not cosmetic, and it shipped that way for one deploy: with every share
+ * filed into "Swing Manual", the add-to-existing flow showed `of 0 free` on every row and turned
+ * red on any number typed — refusing in the browser what the server would have accepted. The
+ * control has to be able to express the operation the route performs.
+ */
+export function capacityFor(
+  line: HoldingBrokerLine,
+  targetPortfolioId: number | null | undefined,
+): string {
+  if (targetPortfolioId === null || targetPortfolioId === undefined) return freeQuantity(line);
+  const already = (line.allocations ?? []).find(
+    (slice) => slice.portfolio.portfolio_id === targetPortfolioId,
+  )?.quantity;
+  if (already === undefined) return line.quantity;
+  // Shares this portfolio already holds are not capacity: asking for them would be asking it to
+  // take them from itself, which `_apply_allocation` deliberately refuses to do.
+  return addDecimalStrings([line.quantity, negateDecimal(already)]) ?? line.quantity;
+}
+
+/** `"12"` -> `"-12"`, `"-12"` -> `"12"`. String-level, so no parse can round it. */
+function negateDecimal(value: string): string {
+  const text = value.trim();
+  return text.startsWith("-") ? text.slice(1) : `-${text}`;
 }
 
 /**

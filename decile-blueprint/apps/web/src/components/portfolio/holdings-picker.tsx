@@ -10,9 +10,9 @@ import {
   describeAllocations,
   describeHolding,
   EMPTY_FILTERS,
+  capacityFor,
   filterHoldings,
   formatShares,
-  freeQuantity,
   holdingKeyId,
   isOverFree,
   isUnallocated,
@@ -73,6 +73,12 @@ export interface HoldingsPickerProps {
    */
   quantities?: ReadonlyMap<string, string>;
   onQuantitiesChange?: (next: Map<string, string>) => void;
+  /**
+   * The portfolio being filed INTO, when that portfolio already exists. It changes the ceiling on
+   * every box: a new portfolio may only take unallocated shares, while an existing one may move
+   * them, so its ceiling is the position less what it already holds. Null while creating.
+   */
+  targetPortfolioId?: number | null;
   /** The name typed so far, shown as the right panel's heading. */
   portfolioName: string;
 }
@@ -84,6 +90,7 @@ export function HoldingsPicker({
   onChange,
   quantities = new Map(),
   onQuantitiesChange,
+  targetPortfolioId = null,
   portfolioName,
 }: HoldingsPickerProps) {
   const [filters, setFilters] = useState<HoldingFilters>(EMPTY_FILTERS);
@@ -92,8 +99,8 @@ export function HoldingsPicker({
   const sectorNames = useMemo(() => sectorsIn(rows, sectors), [rows, sectors]);
   const visible = useMemo(() => filterHoldings(rows, filters, sectors), [rows, filters, sectors]);
   const total = useMemo(
-    () => selectionTotal(rows, selected, quantities),
-    [rows, selected, quantities],
+    () => selectionTotal(rows, selected, quantities, targetPortfolioId),
+    [rows, selected, quantities, targetPortfolioId],
   );
   /** `holdingKeyId -> the leg`, so the basket can show each one's free shares without re-walking. */
   const legsById = useMemo(() => {
@@ -305,7 +312,9 @@ export function HoldingsPicker({
             {portfolioName.trim() === "" ? "New portfolio" : portfolioName.trim()}
           </h3>
           <p className="text-xs text-muted-foreground">
-            Leave a quantity blank to file the whole holding.
+            {targetPortfolioId === null
+              ? "Leave a quantity blank to file the whole holding."
+              : "Leave a quantity blank to move the whole holding here. Unallocated shares are taken first."}
           </p>
         </div>
 
@@ -365,7 +374,7 @@ export function HoldingsPicker({
                   {chosen.map((id) => {
                     const leg = legsById.get(id);
                     if (leg === undefined) return null;
-                    const free = freeQuantity(leg.line);
+                    const free = capacityFor(leg.line, targetPortfolioId);
                     const typed = quantities.get(id) ?? "";
                     const tooMany = isOverFree(typed, free);
                     return (
@@ -390,7 +399,7 @@ export function HoldingsPicker({
                           data-testid={`picker-quantity-${id}`}
                         />
                         <span className="text-muted-foreground">
-                          of {formatShares(free)} free
+                          of {formatShares(free)} {targetPortfolioId === null ? "free" : "available"}
                         </span>
                         {tooMany ? (
                           <span className="text-destructive" data-testid={`picker-over-${id}`}>

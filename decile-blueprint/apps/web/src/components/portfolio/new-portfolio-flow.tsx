@@ -178,9 +178,13 @@ export function NewPortfolioFlow({
   /** The existing portfolio being filed into, when `start` is EXISTING. */
   const [targetId, setTargetId] = useState<number | null>(null);
 
+  /** EXISTING skips kind, name and benchmark — the portfolio already has all three. */
+  const filingIntoExisting = start === "EXISTING";
+  const target = targets.find((option) => option.portfolio_id === targetId) ?? null;
+
   const total = useMemo(
-    () => selectionTotal(rows, selected, quantities),
-    [rows, selected, quantities],
+    () => selectionTotal(rows, selected, quantities, filingIntoExisting ? targetId : null),
+    [rows, selected, quantities, filingIntoExisting, targetId],
   );
 
   const sourceOptions: readonly SourceOption[] =
@@ -196,9 +200,6 @@ export function NewPortfolioFlow({
     setStep(next === "HOLDINGS" ? "holdings" : next === "EMPTY" ? "kind" : "source");
   }
 
-  /** EXISTING skips kind, name and benchmark — the portfolio already has all three. */
-  const filingIntoExisting = start === "EXISTING";
-  const target = targets.find((option) => option.portfolio_id === targetId) ?? null;
 
   function back(): void {
     if (step === "review") setStep("details");
@@ -369,6 +370,7 @@ export function NewPortfolioFlow({
           onChange={setSelected}
           quantities={quantities}
           onQuantitiesChange={setQuantities}
+          targetPortfolioId={filingIntoExisting ? targetId : null}
           portfolioName={name}
         />
       ) : null}

@@ -11,6 +11,7 @@ import {
   rowKeyIds,
   selectionTotal,
   sectorsIn,
+  capacityFor,
   type AggregatedHolding,
   type GroupingSuggestion,
 } from "@/lib/portfolio/organize";
@@ -73,6 +74,57 @@ const HDFC = holding(
 );
 const ITC = holding(2, "ITC", "ITC", [leg(7, "Zerodha", "500", "225000.50")], "225000.50");
 const UNPRICED = holding(3, "NEWCO", "Newco", [leg(7, "Zerodha", "10", null)], null);
+
+describe("capacityFor — the ceiling depends on where the shares are going", () => {
+  /* This shipped wrong for one deploy and it is worth pinning hard. With every share filed into
+     "Swing Manual", the add-to-existing flow showed "of 0 free" on every row and turned red on
+     any number typed — refusing in the browser an operation the server performs. A control that
+     cannot express what the route does is a control that blocks the feature. */
+
+  function line(quantity: string, free: string, allocations: Array<[number, string]> = []) {
+    return {
+      broker: { broker_account_id: 1, broker_id: "zerodha", label: "Zerodha" },
+      quantity,
+      unallocated_quantity: free,
+      allocations: allocations.map(([portfolio_id, qty]) => ({
+        portfolio: {
+          portfolio_id,
+          name: `P${portfolio_id}`,
+          kind: "CAPITAL" as const,
+          source: "HOLDING_GROUP" as const,
+        },
+        quantity: qty,
+      })),
+      value: null,
+      price: null,
+      avg_price: null,
+      cost_basis: null,
+      allocation: null,
+      monitoring_views: [],
+      first_bought_on: null,
+      history_source: "NONE",
+      pending_reconciliation: false,
+    };
+  }
+
+  it("creating a portfolio may only take what is unallocated", () => {
+    expect(capacityFor(line("100", "40", [[7, "60"]]), null)).toBe("40");
+  });
+
+  it("adding to an existing portfolio may move shares out of another", () => {
+    // 100 held, 60 in portfolio 7, none free — and 100 is still available to portfolio 9.
+    expect(capacityFor(line("100", "0", [[7, "100"]]), 9)).toBe("100");
+  });
+
+  it("never offers a portfolio the shares it already holds", () => {
+    // Asking portfolio 7 to take its own 60 would be asking it to take them from itself.
+    expect(capacityFor(line("100", "40", [[7, "60"]]), 7)).toBe("40");
+  });
+
+  it("offers the whole position when the target holds none of it", () => {
+    expect(capacityFor(line("100", "0", [[7, "100"]]), 8)).toBe("100");
+  });
+});
 
 describe("holding keys", () => {
   it("keys a holding by instrument and broker account, and round-trips", () => {

@@ -347,7 +347,6 @@ async def _simulate_fill(  # noqa: PLR0913 - the rehearsal needs the whole line'
     position_id = store.create_position(
         {
             "instrument_id": line["instrument_id"],
-            "order_id": order_row,
             "entry_date": plan["session_date"],
             "entry_avg": limit,
             "quantity_entered": quantity,
@@ -369,8 +368,18 @@ async def _simulate_fill(  # noqa: PLR0913 - the rehearsal needs the whole line'
             "simulated": True,
         }
     )
+    # The order-to-position link is `vb_order.position_id` (`03` §5), and it is set **here**.
+    # Until VB10's drill ran this against a real Postgres it was written the other way round, as
+    # a `vb_position.order_id` the schema has never had: the in-memory store the unit tests use
+    # accepted any key, so the mistake was invisible to every test that existed.
     store.update_order(
-        order_row, {"state": "FILLED", "filled_quantity": quantity, "avg_fill_price": limit}
+        order_row,
+        {
+            "state": "FILLED",
+            "filled_quantity": quantity,
+            "avg_fill_price": limit,
+            "position_id": position_id,
+        },
     )
     store.set_line(line["id"], state="FILLED", position_id=position_id)
     store.bump_session(plan["session_date"], mode="DRY_RUN", fills=1)

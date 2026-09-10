@@ -805,3 +805,63 @@ not proof that it does. It goes to `NEEDS-MAULIK.md` as a one-command check on t
 Rejected: quoting the 23 seconds as though it were the whole run (it is a quarter of the work);
 synthesising 7 million bars to make a number (a timing measured on invented data answers a
 question nobody asked).
+
+---
+
+## VB10 — safety, and the claims become theorems
+
+### VB10.1 — The drill found a bug every test had missed · ⚠ UNREVIEWED
+
+`app/vbt_execute.py` wrote `vb_position.order_id` on a simulated fill. **That column has never
+existed.** The link `03` §5 specifies is the other way round — `vb_order.position_id`, "the
+position it became" — and the code never set it.
+
+Nothing caught it because every test of that path used `MemoryStore`, a dict, which accepts any
+key. `test_vbt_execute.py` has 22 tests over that store and `test_vbt_desk.py` 21 over a sqlite
+schema built by hand; between them they exercise the confirm thoroughly and neither could see it.
+The drill hit it on its first run against a real Postgres, because a real schema refuses a column
+it does not have.
+
+Fixed both halves: the position insert drops `order_id`, and `update_order` now sets
+`position_id` alongside the fill. Rejected: adding an `order_id` column to `vb_position` to make
+the code right (it would duplicate a link that already exists, and a position can have more than
+one order behind it once partial fills are real).
+
+**The general lesson, and it is the reason the drill exists:** a fake that accepts anything tests
+the caller, not the contract. The drill is now the thing that tests the contract, and VB10's
+acceptance is that it runs.
+
+### VB10.2 — What the source scan excludes, and why that is not a loophole · ⚠ UNREVIEWED
+
+`test_vbt_safety.py` asserts no `BASKFY_VBT_AUTO_EXECUTE`-shaped setting exists anywhere. Two
+exclusions were needed and each could be a hole if it were wider:
+
+* **comments and docstrings are stripped** before matching, because `settings.py` and
+  `config.py` say in prose that no such flag exists — which is exactly where a reader would look
+  for it, and worth keeping. A prohibition must not trip the check that states it;
+* **test trees are excluded**, because this file and the API's and web's read-only tests all name
+  the pattern in order to forbid it. A flag in a test cannot arm anything.
+
+The risk in both is a real flag hiding in an excluded place. That is why
+`test_the_scan_would_catch_a_real_one` exists: it plants `vbt_auto_execute: bool = True` with a
+trailing comment, runs it through the same stripper, and asserts the pattern still matches. A
+stripped scan that matched nothing would pass whatever the tree contained, and that test is the
+one assertion that rules it out.
+
+### VB10.3 — The swing package is pinned by hash, not by inspection · ⚠ UNREVIEWED
+
+`test_vbt_neighbours.py` holds a SHA-256 of every `.py` under `baskfy_core/swing`, and asserts it.
+
+A claim about what was *not* changed is worth exactly as much as the test that checks it, and
+"we did not touch the swing book" is one of this run's louder claims. The hash was verified to be
+the **start** state rather than merely the current one:
+`git log c68c57f..HEAD -- packages/core/src/baskfy_core/swing` is empty.
+
+Updating the constant is how a swing change gets declared — deliberately annoying, because the
+next agent to change the swing rules should have to say so in the same commit. Rejected: a git
+diff against a base commit (it would go stale the moment the branch moved); trusting the review.
+
+The import checks beside it are over the **syntax tree**, not the text, because both packages
+cross-reference each other in prose — `vbt/indicators.py` explains how its rolling windows differ
+from the swing book's, which is a comment worth encouraging. A cross-reference is not a
+dependency; an import is.

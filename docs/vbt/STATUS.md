@@ -3,7 +3,7 @@
 The status page for the volume-breakout run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: VB9 green — the study re-runs from the plant's own bars and says how far it landed from the published number. VB10 not started.** Started 10 Sep 2026 on branch
+**Run state: VB10 green — every claim of `02` is a test, and a whole DRY_RUN session runs end to end with 0 orders reaching a broker. The run is complete.** Started 10 Sep 2026 on branch
 `developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
@@ -21,7 +21,7 @@ what is NOT done**. A fresh session resumes from the first module not marked ✅
 | VB7 — The working order and its expiry | ✅ | The window is a field, proven at 1/2/3/5/10 sessions over random calendars with holidays in them; four `VBT_*` alerts raised in-process at 21:30 and 21:40, runbook 8, and **not one of the four writes a row** |
 | VB8 — The pages | ✅ | Six read routes and one settings write; three Next.js pages with **no server actions at all**; `GET /vbt/today` p95 **140.7 ms** against a 300 ms budget over 2,500 rows |
 | VB9 — The backtest on the page | ✅ | Three books over one detection pass, appended to `vb_backtest_run` and never edited; drift flagged past one CAGR point; the engine does the whole nine years in **23 seconds** |
-| VB10 — Safety, and the claims become theorems | ⬜ | |
+| VB10 — Safety, and the claims become theorems | ✅ | A gateway spy under both DRY_RUN values, a source scan that proves it would catch a real flag, the swing package pinned by hash, and a drill that walks a whole session — **0 broker calls** |
 
 States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked · 🟡 partial.
 
@@ -520,4 +520,66 @@ run and one failed one. VB8 shipped it because its fixtures only ever contained 
 * The backtest task is **on demand only** — no Beat entry. The answer moves only when the bars or
   the code do, and a multi-minute compute job in the nightly window would compete with the chain.
 * The monthly table of `04` §11 is not stored. The yearly table and the equity curve are.
+
+---
+
+## VB10 — Safety, and the claims become theorems ✅ (11 Sep 2026)
+
+### The theorems
+
+| Claim (`docs/vbt/02`) | Where it is proved |
+|---|---|
+| With the flag false, nothing reaches a broker | `tests/test_vbt_safety.py` — a **spy** over the real gateway, every executable line kind, under both values of `DRY_RUN`. Not "it would raise if touched" but "it was never called" |
+| No auto-execute exists | A source scan over both trees with comments and docstrings stripped — plus a test that plants a real flag and proves the scan catches it |
+| Only a confirmed request produces an order | Over the route, the signature and the desk router's single `POST` |
+| A stop never falls | `test_vbt_safety_property.py` — hypothesis over pairs **and sequences**, because a ratchet can be monotone one step at a time and still drift |
+| A sell is for exactly what is held | The same file, over random books; and the desk's refusals with both numbers named |
+| Every `vb_` write carries the user | `test_vbt_tenancy.py` — over the schema (all twelve tables, non-null, foreign-keyed) **and** over a real evening |
+| The neighbours are untouched | `test_vbt_neighbours.py` — `baskfy_core.swing` pinned by SHA-256, imports checked over the syntax tree |
+
+### The drill
+
+`tools/vbt/drill.py` walks a whole DRY_RUN session against a scratch Postgres it creates and
+drops: the evening plan, the morning rebuild, **a real confirm through the real gateway**, VB7's
+expiry sweep, and the counters. It exits 0 and prints `calls: 0`.
+
+```
+5. one confirm, through the real gateway
+   PLACE_LIMIT DRILLCO -> SIMULATED
+6. the third session's expiry sweep
+   cancels=1   CANCEL_LIMIT line 3 qty=100 state=PROPOSED
+8. the broker
+   calls: 0  []
+```
+
+**It earned its place on the first run** by finding a bug 43 tests had missed: the desk wrote
+`vb_position.order_id`, a column that has never existed, and every test of that path used an
+in-memory store that accepts any key. DECISIONS-VB VB10.1.
+
+### Suites at the end of the run
+
+| Tree | Result |
+|---|---|
+| `decile-blueprint` (api + core + worker) | **6,0xx passed**, 3 skipped |
+| `kite-momentum-rebalancer` (the desk) | **1,852 passed**, 17 skipped |
+| `apps/web` | **2,205 passed** |
+
+### What is NOT done at VB10
+
+* **No page has been opened in a browser and no order has ever been placed.** Everything above
+  is a test or a drill.
+* The drill's confirm is one `PLACE_LIMIT`. The other three kinds are driven by the spy test,
+  not by the drill, because a simulated fill leaves no working order for a cancel to act on.
+* `counted_for_dry_run_gate` stays false in the drill: the DRY_RUN session counter moves in the
+  settle path, which a single scripted session does not reach. The twenty sessions of `02` §3
+  therefore stand at **zero**.
+* ⚠ **One golden failed once, and I could not reproduce it.** In one of five full-sweep runs,
+  `test_vbt_goldens.py::TestTheNeighbourhood::test_the_gate_halves_the_drawdown_for_the_same_return`
+  failed. It has since passed in three consecutive runs of that module alone and in a clean full
+  sweep of 6,055 tests, and the run's output was truncated before the assertion was captured, so
+  **I do not know which of its two assertions moved or why.** The plausible cause is float
+  summation order in `summarise()` varying with thread count under memory pressure, but that is a
+  guess and it is recorded as one. It matters because this file is the run's central evidence:
+  a golden that is not deterministic is not a golden. Worth pinning down before the flag is ever
+  considered — run the module in a loop under load and capture the numbers.
 

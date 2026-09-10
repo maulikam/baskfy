@@ -429,3 +429,50 @@ locked.
 
 Rejected: storing the adjusted levels raw (a page that compares two different spaces); storing
 only the limit (the page then has no trend context at all, and `05` §2's mini chart wants it).
+
+---
+
+## VB5 — the sleeve's cash and book
+
+### VB5.1 — Cash and cash-available are different numbers · ⚠ UNREVIEWED
+
+`SleeveValue` carries both. `cash` is what the sleeve has; `cash_available` is `cash` minus what
+its **resting limits** have spoken for. A plan sizes against the second.
+
+This is the distinction a naive implementation loses, and losing it is expensive in exactly one
+way: three limits resting at ₹1 lakh each look like ₹10 lakh of cash to a fourth line, and on the
+morning all four fill the book is 40% over-committed. `04` §9.1's `SLOTS_FULL` counts working
+orders beside positions for the same reason, and the two rules have to agree or the second is
+decoration.
+
+`cash_available` is floored at zero: a book cannot un-commit money, and a negative budget would
+size a line at zero rather than refusing it, which is a different sentence on the page.
+
+Rejected: one number (the failure above); tracking commitment only in the plan builder (the desk
+and the page would each re-derive it, and one of them would get it wrong).
+
+### VB5.2 — A suspended holding is marked at its entry, not dropped · ⚠ UNREVIEWED
+
+A position in a name that has not printed since it was bought has no mark. It is valued at its
+**entry**, so the sleeve's equity still contains it.
+
+Dropping it would report an equity the sleeve does not have, and the number would silently
+improve the day a holding went bad enough to be suspended. `04` §6.5's five-session write-off is
+what eventually removes it, at the last close anybody saw. Rejected: excluding it (an equity that
+flatters itself); marking it at zero (a claim nobody has evidence for).
+
+### VB5.3 — The sleeve's database tests live in the worker tree · ⚠ UNREVIEWED
+
+`baskfy_api.vbt_sleeve` is an API module, and its database tests are in
+`services/worker/tests/test_vbt_sleeve_db.py`.
+
+Two reasons, and the first is the honest one: the worker's conftest already provides a
+per-test `session` against a migrated database, while the API's `screener_helpers.seeded_database()`
+also loads the 271-row reference export — which this loader does not need and which, on the day
+this was written, was failing for an unrelated reason (a concurrent session's in-flight migration
+had dropped a unique constraint that seeder upserts on). The second reason is that the reader of
+this loader that matters most **is** the evening job, which is the worker's.
+
+Rejected: a hand-rolled engine fixture in the API tree (a fourth copy of a fixture three trees
+already have). Reversal: move the file when the API's seeder is fixed; the test body does not
+change.

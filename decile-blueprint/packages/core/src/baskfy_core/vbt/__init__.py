@@ -22,6 +22,7 @@ Module map
 ``sizing``      ten equal slots → a share count, with the cap that bound named
 ``exits``       the 12% stop, the 21-EMA exit, and what one close says about one position
 ``orders``      the limit that works for three **sessions** and is then cancelled
+``sleeve``      the sleeve's own cash and equity — never the account's
 ``plan``        signals + book + gate → a plan the desk can confirm line by line
 ``backtest``    `04` §11: the study, re-run by every one of the functions above
 """
@@ -134,6 +135,12 @@ from baskfy_core.vbt.sizing import (
     first_live_multiplier,
     size_entry,
 )
+from baskfy_core.vbt.sleeve import (
+    OpenPositionValue,
+    SleeveValue,
+    WorkingCommitment,
+    sleeve_value,
+)
 
 __all__ = [
     "DEFAULT_VBT_CONFIG",
@@ -165,6 +172,7 @@ __all__ = [
     "LineKind",
     "ManageAction",
     "OpenPosition",
+    "OpenPositionValue",
     "OrderState",
     "Panel",
     "PlanLine",
@@ -177,10 +185,12 @@ __all__ = [
     "SizingConfig",
     "SkipReason",
     "Skipped",
+    "SleeveValue",
     "TrendConfig",
     "TrendFilter",
     "VbtConfig",
     "VbtPlan",
+    "WorkingCommitment",
     "WorkingOrder",
     "YearRow",
     "advance_session",
@@ -213,6 +223,7 @@ __all__ = [
     "sessions_since",
     "signal_mask",
     "size_entry",
+    "sleeve_value",
     "stop_fill",
     "summarise",
     "thin_sessions",

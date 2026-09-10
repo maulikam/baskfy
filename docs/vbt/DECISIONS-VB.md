@@ -185,3 +185,52 @@ everybody.** The trade is not close.
 
 Rejected: making it a blocking step (a detector bug would hold back a good `data_version`).
 Reversal: remove it from the set and unwrap the step.
+
+---
+
+## VB1 — the pure core
+
+### VB1.1 — The indicators densify against the calendar · ⚠ UNREVIEWED
+
+`with_vbt_indicators` lays every instrument's bars out against the session calendar with a
+**null** where the name did not print, and every rolling statistic carries
+`min_samples = round(0.9 x window)`. The alternative — computing over the rows that exist — is
+simpler and is a different rule: the 50-day volume average of a name that missed two of the last
+fifty sessions would then be the average of its last fifty *traded* bars, reaching back further
+in time for exactly the illiquid names the filters are trying to judge.
+
+This is what `04` §2.2 means by "the way a screener that only sees traded bars computes them",
+and it is what the research's dense numpy panel did. Verified while deciding: Polars'
+`rolling_mean(window, min_samples=n)` counts **non-null values** and produces a value at a null
+position, matching pandas' `rolling(window, min_periods=n)` exactly; `ewm_mean(..., adjust=False,
+ignore_nulls=False)` matches `pandas.Series.ewm(..., adjust=False)` likewise.
+
+The cost is memory: a full-history panel is 4,186 x 2,396 rows. VB2's runner processes
+instruments in chunks for that reason. Rejected: row-wise rolling (a different rule, silently);
+a `rolling_*_by` window keyed on a session index (equivalent for the averages, but the
+prior-20-session high and the 20-session-ago close both need an exact session offset that only a
+dense frame gives). Reversal: one function.
+
+### VB1.2 — `close_position` is null at a missing bar, 0.5 at a rangeless one · ⚠ UNREVIEWED
+
+The research computes `where(high - low > 0, (close - low) / range, 0.5)`, which hands a
+**missing** bar the same 0.5 it hands a locked one. Here a missing bar is null and a rangeless bar
+is 0.5.
+
+No rule can tell the difference — filter D is only evaluated where the close exists — but the
+column is also read by a page, and "this bar closed mid-range" is a false statement about a
+session the name did not trade. Rejected: matching the research exactly (identical results, a
+column that lies to a reader). Reversal: one `when` clause.
+
+### VB1.3 — There is no risk-based sizing, and that is the strategy · ⚠ UNREVIEWED
+
+The swing sleeve sizes by risk per trade because its stop is a technical level whose distance
+varies by name. VBT-1's stop is a **flat percentage of the entry**, so risk-per-trade sizing and
+equal-weight sizing are the same arithmetic with different constants, and the research sized it
+equal-weight. `SizingConfig` therefore has no `risk_per_trade_pct` and `size_entry` takes no
+stop distance into its budgets.
+
+The stop still appears in the sized result, because `risk_inr` is what a person reads to know
+what one full stop-out costs. Rejected: a `risk_per_trade_pct` that would always resolve to the
+same slot (a knob with no effect is a knob somebody will turn). Reversal: a fifth budget in
+`size_entry`.

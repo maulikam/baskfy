@@ -3,7 +3,7 @@
 The status page for the volume-breakout run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: VB0 green (the pack). VB1–VB10 not started.** Started 10 Sep 2026 on branch
+**Run state: VB1 green (the pure core). VB2–VB10 not started.** Started 10 Sep 2026 on branch
 `developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
@@ -12,7 +12,7 @@ what is NOT done**. A fresh session resumes from the first module not marked ✅
 | Module | State | One line |
 |---|---|---|
 | VB0 — The pack | ✅ | Eight documents, the seven pre-taken decisions, the standing defaults, and the two measurements that settled how the strategy is read |
-| VB1 — The pure core | ⬜ | |
+| VB1 — The pure core | ✅ | Nine modules, 43 named thresholds and **245 tests**; law 1 asserted over the source, and no rule module spells out a number that is not 0, 1, 2 or 100 |
 | VB2 — Goldens: reproduce the study | ⬜ | |
 | VB3 — Schema and settings | ⬜ | |
 | VB4 — The nightly job | ⬜ | |
@@ -79,6 +79,57 @@ what the numerical contract says.
   order has ever been placed, simulated or otherwise.
 * **0 of 20 DRY_RUN sessions** (`02` §3.1).
 * Nothing is deployed. The box does not know this sleeve exists.
+
+---
+
+## VB1 — The pure core ✅ (10 Sep 2026)
+
+`decile-blueprint/packages/core/src/baskfy_core/vbt/` — nine modules, DataFrames and dataclasses
+in, DataFrames and dataclasses out.
+
+| Module | What it holds |
+|---|---|
+| `config.py` | Eight frozen dataclasses, **43 fields**, every one with the reason for its value |
+| `calendar.py` | The thin-session rule and session counting — a holiday consumes no session |
+| `indicators.py` | The eleven per-bar columns, computed on a **densified** frame so a window counts sessions rather than rows |
+| `signals.py` | Chartink's five lines, the six trend filters, `SIGNAL` / `SCAN_ONLY` and `failed_filters` |
+| `breadth.py` | The share above the 200-day average, and the two-valued gate |
+| `sizing.py` | Ten equal slots, four budgets, the cap that bound named |
+| `exits.py` | The 12% stop from the fill, the 21-EMA queue, the precedence |
+| `orders.py` | The limit that works three **sessions**, its expiry and its fill model |
+| `plan.py` | `build_entries` in `04` §9.1's order, `exit_lines`, `assemble`, `plan_hash` |
+
+**245 tests, all green**, in ten files. The ones that are load-bearing rather than routine:
+
+* `test_vbt_purity.py` — law 1 over the source: no database, network, disk or clock import, no
+  `baskfy_execution`, no `kite_client`, **no import of `baskfy_core.swing`**, and no setting whose
+  name contains `AUTO_EXECUTE` (`02` Track C §3).
+* `test_vbt_no_literals.py` — over the **syntax tree**, not the text: a rule module may spell out
+  0, 1, 2 and 100 and nothing else. Every threshold is a field.
+* `test_vbt_docs_parity.py` — `04` §12's table is regenerated from the code and compared **both
+  ways**; a field added, renamed or re-valued without a doc edit is red, and so is a row with no
+  field behind it.
+* `test_vbt_plan.py::test_every_skip_reason_is_reachable_from_the_plan` — a reason nothing can
+  produce is a reason a page will never explain. One is deliberately unreachable from a signal
+  (`STOP_NOT_BELOW_ENTRY`) and the test says why in its own message.
+
+### Two things settled while writing it
+
+* **`# type: ignore` is not available** (house rule 3, enforced by `test_no_escape_hatches.py`
+  across the tree). Two helpers exist because of it: `number()` in the signal tests and `at()` in
+  the indicator tests, each of which asserts the cell's type rather than silencing the checker.
+* **A bar exactly on 6.5% is a floating-point boundary and is deliberately not pinned.**
+  `(95.85 / 90 - 1) x 100` is `6.499999999999995` in IEEE 754 — the research's arithmetic produces
+  the same value, so the two agree about the edge whichever way it falls. What the test pins is
+  the **sense** of the comparison.
+
+### What is NOT done at VB1
+
+* **Nothing has run against real bars.** The next module is the one that matters: VB2 reproduces
+  the study's 761 trades and 18.2% CAGR, or explains why it cannot.
+* No `backtest.py` yet — the engine of `04` §11 is VB2's.
+* No migration, no task, no router, no page, no desk route. `vb_config` does not exist.
+* The mutation harness (`make mutants`) does not yet include `baskfy_core.vbt`.
 
 ### Resume instructions for a fresh session
 

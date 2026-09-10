@@ -3,7 +3,7 @@
 The status page for the volume-breakout run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: VB8 green — the whole thing is on a page, and not one of those pages can write. VB9–VB10 not started.** Started 10 Sep 2026 on branch
+**Run state: VB9 green — the study re-runs from the plant's own bars and says how far it landed from the published number. VB10 not started.** Started 10 Sep 2026 on branch
 `developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
@@ -20,7 +20,7 @@ what is NOT done**. A fresh session resumes from the first module not marked ✅
 | VB6 — Desk plan and `/vbt/execute` | ✅ | The evening job writes a plan with its skips and settles the session; the desk page shows it in three panels; one click per line goes through the real gateway and **0 orders reach a broker** |
 | VB7 — The working order and its expiry | ✅ | The window is a field, proven at 1/2/3/5/10 sessions over random calendars with holidays in them; four `VBT_*` alerts raised in-process at 21:30 and 21:40, runbook 8, and **not one of the four writes a row** |
 | VB8 — The pages | ✅ | Six read routes and one settings write; three Next.js pages with **no server actions at all**; `GET /vbt/today` p95 **140.7 ms** against a 300 ms budget over 2,500 rows |
-| VB9 — The backtest on the page | ⬜ | |
+| VB9 — The backtest on the page | ✅ | Three books over one detection pass, appended to `vb_backtest_run` and never edited; drift flagged past one CAGR point; the engine does the whole nine years in **23 seconds** |
 | VB10 — Safety, and the claims become theorems | ⬜ | |
 
 States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked · 🟡 partial.
@@ -469,4 +469,55 @@ than the market).
   need `vb_backtest_run.stats` to carry the series, which VB9 writes. The page renders the
   headline comparison, the drift banner and the two halves.
 * The generated API artefacts carry a concurrent session's field changes (VB8.3).
+
+---
+
+## VB9 — The backtest on the page ✅ (10 Sep 2026)
+
+### What it does
+
+`baskfy_worker.tasks.vbt_backtest` loads the universe and its bars from the plant, detects once,
+and runs `04` §11's engine three ways — `full`, `gate_off`, `raw_scan` — appending **one**
+`vb_backtest_run` row with `params` written on the way in and `stats`, `drift` or `error` on the
+way out. `tools/vbt/backtest.py` does the same over the research export without a database, for
+the moments the question is "did my change move a number".
+
+| | |
+|---|---|
+| Tests | `services/worker/tests/test_vbt_backtest.py` **12 passed**, plus 22 in the API's |
+| The planted year | The same trade `test_vbt_backtest.py` works by hand, driven through the loader, the indicators, the detector and the job — its return reproduces to **2 dp** |
+| Append-only | A second run appends and edits nothing; a run that raises stores its `error`, sets `finished_at`, and the page still reads the last good number |
+
+### The three books, measured on the export (10 Sep 2026)
+
+| book | CAGR | max drawdown | trades | fill rate |
+|---|---|---|---|---|
+| `full` | 18.23% | −27.94% | 761 | 83.8% |
+| `gate_off` | 18.48% | −48.78% | 1,037 | 84.2% |
+| `raw_scan` | 0.76% | −48.10% | 958 | 84.5% |
+
+**The gate costs a quarter of a CAGR point and buys 21 points of drawdown.** That is the whole
+argument for it, and it is invisible in the CAGR column — which is why `/vbt/backtest` prints the
+contributions with a sentence saying to read the drawdowns before reading either number.
+
+### A VB8 bug found by writing VB9's failure test first
+
+`baskfy_api.vbt.backtests` filtered on `finished_at IS NOT NULL` alone. A **failed** run sets
+`finished_at` too (`03` §8), so a re-run that raised would have replaced a real result with a
+card of blanks — the exact thing an append-only table exists to prevent. Both the API query and
+the worker's `latest_finished` now require `stats IS NOT NULL`, with a test that seeds one good
+run and one failed one. VB8 shipped it because its fixtures only ever contained runs that worked
+(DECISIONS-VB VB9.3).
+
+### What is NOT done at VB9
+
+* **The full-history run has never been executed against the plant.** The engine does all three
+  books in 23 seconds from the export; the `ohlcv_daily` read for 4,186 names over nine years is
+  unmeasured, because no database this run could reach holds that history. VB9's "< 30 minutes"
+  acceptance is therefore **not met, only made likely** — `NEEDS-MAULIK.md` V6 is the one command
+  that settles it (VB9.4).
+* No `vb_backtest_run` row exists anywhere outside a test database.
+* The backtest task is **on demand only** — no Beat entry. The answer moves only when the bars or
+  the code do, and a multi-minute compute job in the nightly window would compete with the chain.
+* The monthly table of `04` §11 is not stored. The yearly table and the equity curve are.
 

@@ -198,15 +198,65 @@ export interface VbtPublished {
   modelled_fill_rate_pct: number;
 }
 
+/** One point on the equity curve. Money arrives as a string of its exact decimal (house rule 9). */
+export interface VbtEquityPoint {
+  date: string;
+  equity_inr: string;
+}
+
+export interface VbtYearRow {
+  year: number;
+  return_pct: number;
+  trades: number;
+  win_rate_pct: number;
+}
+
+/**
+ * One of `04` §11's three books. `full` is the strategy; `gate_off` replaces breadth with OPEN
+ * every session; `raw_scan` is the five Chartink lines with the same gate and execution.
+ * Breadth's contribution is `full - gate_off`, the trend filters' is `full - raw_scan`.
+ */
+export interface VbtBacktestBook {
+  cagr_pct?: number;
+  max_drawdown_pct?: number;
+  trades?: number;
+  win_rate_pct?: number;
+  profit_factor?: number | null;
+  avg_hold_sessions?: number;
+  avg_trade_pct?: number;
+  exposure_pct?: number;
+  sharpe?: number;
+  fill_rate_pct?: number | null;
+  orders_offered?: number;
+  equity_curve?: VbtEquityPoint[];
+  yearly?: VbtYearRow[];
+  [key: string]: unknown;
+}
+
 export interface VbtBacktestRun {
   id: number;
   source: string;
   started_at: string;
   finished_at: string | null;
   params: Record<string, unknown>;
-  stats: Record<string, number | string> | null;
+  /** The three books, plus the universe and session counts the run saw. */
+  stats: {
+    full?: VbtBacktestBook;
+    gate_off?: VbtBacktestBook;
+    raw_scan?: VbtBacktestBook;
+    universe?: number;
+    sessions?: number;
+    [key: string]: unknown;
+  } | null;
   /** VB9's comparison, and whether it is more than a CAGR point out. */
-  drift: { flagged?: boolean; cagr_points?: number; [key: string]: unknown } | null;
+  drift: {
+    flagged?: boolean;
+    cagr_pct_delta?: number;
+    max_dd_pct_delta?: number;
+    trades_delta?: number;
+    threshold_cagr_points?: number;
+    [key: string]: unknown;
+  } | null;
   error: string | null;
 }
 

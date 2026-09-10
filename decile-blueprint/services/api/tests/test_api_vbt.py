@@ -480,7 +480,12 @@ class TestTheBacktestRoute:
         **finished** — not the newest one that started."""
         user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
         base = dt.datetime(2026, 9, 1, 12, 0, tzinfo=dt.UTC)
-        for offset, stats in ((0, {"cagr_pct": 17.0}), (1, {"cagr_pct": 18.2})):
+        # The real shape: `stats` is keyed by book, because `04` §11 reports three over one
+        # detection pass and `full` is the primary one.
+        for offset, stats in (
+            (0, {"full": {"cagr_pct": 17.0}}),
+            (1, {"full": {"cagr_pct": 18.2}}),
+        ):
             screener_session.add(
                 VbBacktestRun(
                     user_id=user_id,
@@ -506,7 +511,47 @@ class TestTheBacktestRoute:
 
         runs = response.json()["runs"]
         assert len(runs) == 1
-        assert runs[0]["stats"]["cagr_pct"] == pytest.approx(18.2)
+        assert runs[0]["stats"]["full"]["cagr_pct"] == pytest.approx(18.2)
+
+    async def test_a_failed_re_run_does_not_displace_the_last_good_number(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`03` §8: a failed run sets `finished_at` too, so "latest finished" is not enough.
+
+        Without the stats check, a re-run that raised would replace a real result with a card
+        full of blanks — which is exactly what an append-only table exists to prevent.
+        """
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        base = dt.datetime(2026, 9, 1, 12, 0, tzinfo=dt.UTC)
+        screener_session.add(
+            VbBacktestRun(
+                user_id=user_id,
+                source="PLANT",
+                params={"config": "default"},
+                started_at=base,
+                finished_at=base + dt.timedelta(hours=1),
+                stats={"full": {"cagr_pct": 18.2}},
+            )
+        )
+        screener_session.add(
+            VbBacktestRun(
+                user_id=user_id,
+                source="PLANT",
+                params={"config": "default"},
+                started_at=base + dt.timedelta(days=1),
+                finished_at=base + dt.timedelta(days=1, hours=1),
+                error="RuntimeError: the plant fell over",
+            )
+        )
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/vbt/backtest"), headers=bearer(public_id))
+
+        runs = response.json()["runs"]
+        assert len(runs) == 1
+        assert runs[0]["stats"]["full"]["cagr_pct"] == pytest.approx(18.2)
+        assert runs[0]["error"] is None
 
 
 class TestTheConfigRoutes:

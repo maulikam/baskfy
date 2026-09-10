@@ -3,10 +3,15 @@ import type { Metadata } from "next";
 import { Answer, Mark } from "@/components/shell/answer";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
-import { fetchBacktest, type VbtBacktestRun } from "@/lib/vbt/fetch";
+import {
+  fetchBacktest,
+  type VbtBacktestBook,
+  type VbtBacktestRun,
+} from "@/lib/vbt/fetch";
 import { PAGES } from "@/lib/vocabulary";
 
 import { BacktestCaveats } from "../_components/caveats";
+import { EquityCurve } from "../_components/equity-curve";
 
 /**
  * `/vbt/backtest` — the Backtest tab of `docs/vbt/05` §2.
@@ -39,9 +44,27 @@ function number(
   return Number.isFinite(asNumber) ? `${asNumber.toFixed(1)}${suffix}` : "—";
 }
 
+/**
+ * One statistic out of a run's **primary** book.
+ *
+ * `vb_backtest_run.stats` is keyed by book — `full`, `gate_off`, `raw_scan` — because `04` §11
+ * reports three over one detection pass. `full` is the strategy; the other two exist to measure
+ * what the gate and the filters are each worth.
+ */
 function stat(run: VbtBacktestRun, key: string): number | string | null {
-  const value = run.stats?.[key];
-  return value === undefined ? null : value;
+  const value = run.stats?.full?.[key];
+  return typeof value === "number" || typeof value === "string" ? value : null;
+}
+
+function book(run: VbtBacktestRun, label: "full" | "gate_off" | "raw_scan"): VbtBacktestBook | null {
+  return run.stats?.[label] ?? null;
+}
+
+/** `01` §3's ablation, recomputed: what the gate and the filters were worth on these bars. */
+function contribution(run: VbtBacktestRun, against: "gate_off" | "raw_scan"): number | null {
+  const full = book(run, "full")?.cagr_pct;
+  const other = book(run, against)?.cagr_pct;
+  return typeof full === "number" && typeof other === "number" ? full - other : null;
 }
 
 /** `05` §2's three books: the strategy, the strategy without its gate, and the raw scan. */
@@ -76,7 +99,7 @@ export default async function VbtBacktestPage() {
         >
           <p className="font-medium text-rose-800 dark:text-rose-300">
             This run is{" "}
-            {Math.abs(Number(drifted[0]?.drift?.cagr_points ?? 0)).toFixed(1)}{" "}
+            {Math.abs(Number(drifted[0]?.drift?.cagr_pct_delta ?? 0)).toFixed(1)}{" "}
             points away from the published number.
           </p>
           <p className="mt-1 max-w-[80ch] text-foreground/90">
@@ -182,6 +205,74 @@ export default async function VbtBacktestPage() {
               compare the study against.
             </p>
           ) : null}
+        </section>
+      ) : null}
+
+      {runs.length > 0 && book(runs[0]!, "full")?.equity_curve?.length ? (
+        <section aria-label="Equity curve" className="space-y-2">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+            What the run did, session by session
+          </h2>
+          <EquityCurve data={book(runs[0]!, "full")!.equity_curve!} />
+        </section>
+      ) : null}
+
+      {runs.length > 0 && book(runs[0]!, "full")?.yearly?.length ? (
+        <section aria-label="Year by year" className="space-y-2">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+            Year by year
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[32rem] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="py-2 pr-3 font-medium">Year</th>
+                  <th className="py-2 pr-3 font-medium">Return</th>
+                  <th className="py-2 pr-3 font-medium">Trades</th>
+                  <th className="py-2 pr-3 font-medium">Win rate</th>
+                </tr>
+              </thead>
+              <tbody data-testid="yearly-table">
+                {book(runs[0]!, "full")!.yearly!.map((row) => (
+                  <tr key={row.year} className="border-b border-border/40">
+                    <td className="py-2 pr-3 tabular-nums">{row.year}</td>
+                    <td className="py-2 pr-3 tabular-nums">{row.return_pct.toFixed(1)}%</td>
+                    <td className="py-2 pr-3 tabular-nums">{row.trades}</td>
+                    <td className="py-2 pr-3 tabular-nums">{row.win_rate_pct.toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
+      {runs.length > 0 && contribution(runs[0]!, "gate_off") !== null ? (
+        <section aria-label="What each part is worth" className="space-y-2">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+            What the gate and the filters were worth, on these bars
+          </h2>
+          <dl
+            className="grid max-w-[46rem] grid-cols-2 gap-x-6 gap-y-1 text-sm"
+            data-testid="contributions"
+          >
+            <dt className="text-muted-foreground">The breadth gate</dt>
+            <dd className="tabular-nums">
+              {contribution(runs[0]!, "gate_off")!.toFixed(1)} points of CAGR against the same
+              strategy with the gate held open
+            </dd>
+            <dt className="text-muted-foreground">The six trend filters</dt>
+            <dd className="tabular-nums">
+              {contribution(runs[0]!, "raw_scan") === null
+                ? "—"
+                : `${contribution(runs[0]!, "raw_scan")!.toFixed(1)} points of CAGR against the raw scan, traded the same way`}
+            </dd>
+          </dl>
+          <p className="max-w-[80ch] text-xs text-muted-foreground">
+            The gate is worth more than its CAGR difference suggests: it buys most of its keep in
+            drawdown, not in return. Compare the two drawdowns above before reading either number
+            as the gate&rsquo;s value.
+          </p>
         </section>
       ) : null}
 

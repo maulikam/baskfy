@@ -734,3 +734,74 @@ Rejected: adding "book" to the jargon test's exception list (that list is for wo
 meaning §8 never legislated over — a trading book is exactly the meaning it did); renaming the
 route as well (a documented path changed to satisfy a copy rule is over-reach, and `05` §2 names
 `/vbt/book`).
+
+---
+
+## VB9 — the backtest on the page
+
+### VB9.1 — Two ways to re-run the study, and they answer different questions · ⚠ UNREVIEWED
+
+`06` VB9 asks for "`tools/vbt/backtest.py` **and** a `baskfy.vbt.backtest` task". Both exist and
+they are not duplicates:
+
+* the **task** (`baskfy_worker.tasks.vbt_backtest`) runs over the plant's `ohlcv_daily`, appends
+  a `vb_backtest_run` row and flags drift. It is the one that matters, because it measures the
+  data the book will actually trade on;
+* the **tool** runs over the research export, prints, and touches no database. It is what you
+  reach for when the question is "did my change move a number" and the answer wanted is a diff.
+
+Both call the same core functions, so neither can drift from the book (`04` §11). Rejected: only
+the task (a database round trip to answer a question about an engine change is friction that
+stops people asking); only the tool (it cannot put a number on the page, which is the module's
+goal).
+
+### VB9.2 — The three books share one detection pass · ⚠ UNREVIEWED
+
+`full`, `gate_off` and `raw_scan` differ only in what they may act on — the gate vector and the
+signal column — so `three_books()` detects once and runs the engine three times.
+
+Detecting three times would spend three times the work to produce the same signals, and would
+leave open the possibility of the three disagreeing about what a signal was, which would make the
+differences between them uninterpretable. The differences are the whole point: breadth's
+contribution is `full − gate_off` and the trend filters' is `full − raw_scan`.
+
+**Measured on the export, 10 Sep 2026** — and the numbers say something the CAGR column alone
+does not:
+
+| book | CAGR | max drawdown | trades |
+|---|---|---|---|
+| `full` | 18.23% | −27.94% | 761 |
+| `gate_off` | 18.48% | −48.78% | 1,037 |
+| `raw_scan` | 0.76% | −48.10% | 958 |
+
+The gate **costs** a quarter of a CAGR point and **buys 21 points of drawdown**. Anyone reading
+the ablation as "the gate is worth −0.25%" has read the wrong column, and `/vbt/backtest` says so
+in a sentence under the contributions.
+
+### VB9.3 — The API's "latest finished" needed a second condition, and did not have one · ⚠ UNREVIEWED
+
+`03` §8 says a failed re-run must never displace the last good number. `baskfy_api.vbt.backtests`
+filtered on `finished_at IS NOT NULL` alone — and a *failed* run sets `finished_at` too, by the
+same section's rule. So a re-run that raised would have replaced a real result with a card full
+of blanks: the exact failure an append-only table exists to prevent.
+
+Fixed by requiring `stats IS NOT NULL` as well, in both the API's query and the worker's
+`latest_finished`, with a test that seeds a good run and a failed one and asserts the page reads
+the good one. Found at VB9 by writing the failure test first; VB8 shipped the bug because its own
+fixtures only ever contained runs that succeeded.
+
+### VB9.4 — The full-history run is measured on the export, not on the plant · ⚠ UNREVIEWED
+
+VB9's acceptance asks that "the run over the full history completes on the dev box in **< 30
+minutes**". The engine half is measured: **23 seconds** for all three books over the whole
+2017–2026 history, printed by `tools/vbt/backtest.py`.
+
+The plant-loaded half is **not measured**, and STATUS says so. No database this run had access to
+holds the full 4,186-name history — the test database carries fixtures — so the number that would
+complete the claim is the `ohlcv_daily` read, and it cannot be produced here honestly. The engine
+being three orders of magnitude inside the budget is evidence that the whole is likely to fit,
+not proof that it does. It goes to `NEEDS-MAULIK.md` as a one-command check on the box.
+
+Rejected: quoting the 23 seconds as though it were the whole run (it is a quarter of the work);
+synthesising 7 million bars to make a number (a timing measured on invented data answers a
+question nobody asked).

@@ -71,6 +71,15 @@ PRODUCER_TASK_ROUTES: dict[str, dict[str, str]] = {
     # SW18: the 08:45 / 09:05 Kite login nudge. Beat's, never published from here — mirrored
     # only because the anti-drift test walks every task the worker registers.
     "baskfy.kite.*": {"queue": "compute"},
+    # VB9: the volume-breakout backtest is compute-bound — minutes of Polars and NumPy over nine
+    # years of bars. Mirrored here for the same reason as the line above: it is invoked by hand
+    # and by Beat, never published from the API, but the anti-drift test walks every name the
+    # worker registers and a task on `compute` there and `default` here is a real misroute.
+    #
+    # The sleeve's other tasks need no line: `baskfy.vbt.detect`, `.evening` and `.morning` take
+    # their queue from their Beat entries' `options`, and `baskfy.vbt.check_*` routes to
+    # `default` on the worker, which is this table's default too — so both sides already agree.
+    "baskfy.vbt.backtest": {"queue": "compute"},
 }
 
 #: The queue an unrouted name lands on. Must match the worker's ``task_default_queue``, which is

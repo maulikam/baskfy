@@ -15,6 +15,7 @@ you whether to look at the data or at the thresholds.
     uv run python -m baskfy_worker.vbt_cli --date 2026-09-09 --force
     uv run python -m baskfy_worker.vbt_cli --date 2026-09-09 --plan          # VB6's evening
     uv run python -m baskfy_worker.vbt_cli --date 2026-09-09 --plan MORNING  # …rebuilt
+    uv run python -m baskfy_worker.vbt_cli --backtest                        # VB9's re-run
 
 Every date is idempotent, so re-running one changes nothing but the row's ``created_at`` default.
 By default a date that already has rows is left alone (the 21:10 retry's rule); ``--force``
@@ -44,6 +45,7 @@ from baskfy_worker.celery_app import IST
 from baskfy_worker.providers import build_pipeline_dependencies
 from baskfy_worker.steps import StepOutcome
 from baskfy_worker.tasks.vbt import published_signal_count, run_detect_vbt
+from baskfy_worker.tasks.vbt_backtest import DEFAULT_START, run_vbt_backtest
 from baskfy_worker.tasks.vbt_evening import SOURCE_EVENING, SOURCE_MORNING, run_vbt_evening
 
 
@@ -93,7 +95,35 @@ async def _plan_one(
     return report.as_detail()
 
 
-async def _run(day: dt.date, sessions: int, *, force: bool, plan: str | None = None) -> JsonObject:
+async def _backtest_one(
+    session: AsyncSession, *, user_id: int, start: dt.date | None, end: dt.date | None
+) -> JsonObject:
+    """VB9: re-run the study over the plant's bars, and say how far it landed from the study."""
+    row = await run_vbt_backtest(session, user_id=user_id, start=start or DEFAULT_START, end=end)
+    stats = row.stats or {}
+    full = stats.get("full", {}) if isinstance(stats, dict) else {}
+    headline = full if isinstance(full, dict) else {}
+    return {
+        "run_id": row.id,
+        "source": row.source,
+        "started_at": row.started_at.isoformat(),
+        "finished_at": row.finished_at.isoformat() if row.finished_at else None,
+        "cagr_pct": headline.get("cagr_pct"),
+        "max_drawdown_pct": headline.get("max_drawdown_pct"),
+        "trades": headline.get("trades"),
+        "drift": row.drift,
+    }
+
+
+async def _run(  # noqa: PLR0913 - one keyword per mode the CLI offers
+    day: dt.date,
+    sessions: int,
+    *,
+    force: bool,
+    plan: str | None = None,
+    backtest: bool = False,
+    start: dt.date | None = None,
+) -> JsonObject:
     deps = build_pipeline_dependencies()
     if deps.vbt_user_id is None:
         return {
@@ -104,6 +134,13 @@ async def _run(day: dt.date, sessions: int, *, force: bool, plan: str | None = N
     maker = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with maker() as session, session.begin():
+            if backtest:
+                return {
+                    "user_id": deps.vbt_user_id,
+                    "backtest": await _backtest_one(
+                        session, user_id=deps.vbt_user_id, start=start, end=day
+                    ),
+                }
             days = [day] if sessions <= 1 else await _recent_sessions(session, day, sessions)
             if plan is not None:
                 return {
@@ -141,9 +178,29 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="build the plan for the date instead of detecting (VB6). Places nothing.",
     )
+    parser.add_argument(
+        "--backtest",
+        action="store_true",
+        help="VB9: re-run the study over the plant's bars, ending at --date, and append a "
+        "vb_backtest_run row. Places nothing and edits no stored result.",
+    )
+    parser.add_argument(
+        "--start",
+        default=None,
+        help="first tradeable session of the backtest (YYYY-MM-DD); default 2017-10-16",
+    )
     args = parser.parse_args(argv)
     day = dt.date.fromisoformat(args.date) if args.date else dt.datetime.now(tz=IST).date()
-    report = asyncio.run(_run(day, args.sessions, force=args.force, plan=args.plan))
+    report = asyncio.run(
+        _run(
+            day,
+            args.sessions,
+            force=args.force,
+            plan=args.plan,
+            backtest=args.backtest,
+            start=dt.date.fromisoformat(args.start) if args.start else None,
+        )
+    )
     print(json.dumps(report, indent=2, default=str))
     return 1 if "error" in report else 0
 

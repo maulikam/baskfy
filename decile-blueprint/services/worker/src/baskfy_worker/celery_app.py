@@ -67,6 +67,9 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     "baskfy.swing.check_*": {"queue": QUEUE_DEFAULT},
     # VB7: the same argument for the volume-breakout sleeve's four.
     "baskfy.vbt.check_*": {"queue": QUEUE_DEFAULT},
+    # VB9: the backtest is a compute job — minutes of Polars and NumPy over nine years of bars —
+    # so it takes the compute queue like the detectors, not the default one the checks use.
+    "baskfy.vbt.backtest": {"queue": QUEUE_COMPUTE},
     # SW15: "Scan now". The scan itself is the nightly's body over the liquid universe — a few
     # minutes of Polars — and takes the compute queue; the sweep that publishes the desk's
     # queued rows is one SELECT a minute and takes the default queue for the reason the

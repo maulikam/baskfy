@@ -109,9 +109,29 @@ def test_incomplete_range_never_triggers() -> None:
     assert verdict("110", opening=partial).state is TriggerState.RANGE_INCOMPLETE
 
 
-def test_after_the_monitor_window_the_session_is_over() -> None:
+def test_a_break_after_1045_is_still_a_break() -> None:
+    """SW26: the window is the whole session, so 10:46 is no longer SESSION_OVER.
+
+    This test asserted the opposite until 9 Sep 2026 — Maulik: "build the auto execute outside
+    monitor window anytime during trading time". A late break of the OPENING range is a real
+    signal in this method; what 10:45 gates now is `pending_cutoff_at`, not the trigger.
+    """
     late = dt.datetime.combine(DAY, dt.time(10, 46))
+    assert verdict("110", at=late).state is TriggerState.TRIGGERED
+
+
+def test_after_the_monitor_window_the_session_is_over() -> None:
+    late = dt.datetime.combine(DAY, dt.time(*CONFIG.monitor_close)) + dt.timedelta(minutes=1)
     assert verdict("110", at=late).state is TriggerState.SESSION_OVER
+
+
+def test_the_chores_run_before_the_window_closes() -> None:
+    """SW26 kept 10:45 as `pending_cutoff_at`, and its order against the close is the contract.
+
+    Pinned as an ordering, not as three numbers: extending the window again must not push the
+    cutoff past the 15:15 GTT sweep, which is what a single setting would have done.
+    """
+    assert CONFIG.pending_cutoff_at < CONFIG.monitor_close
 
 
 def test_stop_is_the_lower_of_range_low_and_day_low() -> None:

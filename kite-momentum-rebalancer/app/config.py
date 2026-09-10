@@ -129,7 +129,8 @@ OPTIONS_ENABLED = os.getenv("OPTIONS_ENABLED", "false").lower() == "true"
 # morning docs/swing/02 §3 asks for — a rehearsal of this code rather than of a different
 # branch. Flipping it needs the five conditions in §3, by Maulik's hand.
 SWING_EXECUTION_ENABLED = os.getenv("BASKFY_SWING_EXECUTION_ENABLED", "false").lower() == "true"
-# The 09:15-10:45 opening-range monitor. Off until SW6's replay is green and one morning has
+# The 09:15-15:30 opening-range monitor (SW26; 09:15-10:45 before it). Off until SW6's replay is
+# green and one morning has
 # been watched by a person.
 SWING_MONITOR_ENABLED = os.getenv("BASKFY_SWING_MONITOR_ENABLED", "false").lower() == "true"
 # AUTO-EXECUTE: the monitor confirms its own triggers, with nobody watching (SW25).

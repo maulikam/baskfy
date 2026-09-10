@@ -12,6 +12,7 @@ from decimal import Decimal
 import pytest
 
 from app import swing_clock, telemetry
+from baskfy_core.swing.config import DEFAULT_SWING_CONFIG
 from app.core.risk import RiskManager
 from app.swing_execute import build_swing_gateway
 from baskfy_execution.gtt import DRY_RUN_GTT
@@ -251,3 +252,40 @@ class TestTheStoresNote:
         row = store.session(DAY)
         assert row is not None and row["confirms"] == 1
         assert row["notes"] == "cutoff 10:45: 0 reconciled\ngtt-sweep 15:15: 1 naked, 1 armed, 0 still naked"
+
+
+class TestTheChoresKeepTheirOwnHours:
+    """SW25 extended the watch to 15:30 (9 Sep 2026), and that nearly inverted the session.
+
+    `run_after_close` fires the cutoff the moment the strategy stops. With the watch ending at
+    10:45 that was the 10:45 cutoff; with it ending at 15:30 the cutoff would have run AFTER the
+    15:15 GTT sweep — the chore that frees slots running after the chore that re-arms stops.
+
+    So `monitor_close` (when triggers stop) and `pending_cutoff_at` (when the housekeeping runs)
+    are separate settings, and the monitor calls the chores from inside its loop at their hours.
+    """
+
+    def test_the_cutoff_still_precedes_the_sweep(self) -> None:
+        window = DEFAULT_SWING_CONFIG.opening_range
+        cutoff = dt.time(*window.pending_cutoff_at)
+        sweep = dt.time(*window.gtt_sweep_at)
+        close = dt.time(*window.monitor_close)
+
+        assert cutoff < sweep, "the cutoff would run after the GTT sweep"
+        assert sweep <= close, "the sweep would fall outside the watch that runs it"
+
+    def test_the_watch_now_covers_the_cash_session(self) -> None:
+        """Maulik: "anytime during trading time". 09:15 to 15:30, not to 10:45."""
+        window = DEFAULT_SWING_CONFIG.opening_range
+        assert window.session_open == (9, 15)
+        assert window.monitor_close == (15, 30)
+        assert window.pending_cutoff_at == (10, 45), (
+            "A7/A8's housekeeping moved with the watch; a gap's slot would be held all afternoon"
+        )
+
+    def test_run_chore_is_the_single_entry_point(self) -> None:
+        """Both callers — the loop and `run_after_close` — must reach the same implementation,
+        so a chore cannot be written twice and drift."""
+        assert callable(swing_clock.run_chore)
+        assert callable(swing_clock.run_cutoff)
+        assert callable(swing_clock.run_gtt_sweep)

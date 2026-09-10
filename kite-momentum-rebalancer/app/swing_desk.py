@@ -1,7 +1,8 @@
 """The swing book's desk page: triggers, plan, book, and the one button (SW7, the page half).
 
-`docs/swing/05` §3: "One page, three panels, refreshed every 5 s during 09:15–10:45 and on
-demand otherwise." Triggers on top — today's `sw_signal` rows, newest first, each with the line
+`docs/swing/05` §3: "One page, three panels, refreshed every 5 s during 09:15–15:30 and on
+demand otherwise." (The window is read from `OpeningRangeConfig`, so SW26's widening moved the
+poll and the status bar with it — nothing here hardcodes the hour.) Triggers on top — today's `sw_signal` rows, newest first, each with the line
 it became and a **Confirm** per line. The plan in the middle — the morning plan and the EOD
 preview, exits first, then the buys waiting for a signal, then the skips with their reasons.
 The book at the bottom — open positions with their GTT ids, **Re-arm GTT** for a naked one, the
@@ -530,7 +531,7 @@ class PgSwingStore:
         manage_actions: int = 0,
     ) -> None:
         """Upsert on (user_id, session_date), adding to the counters — the row may already
-        exist (the monitor marks it at 10:45, the evening job writes the rest) or not yet."""
+        exist (the monitor marks it at `monitor_close`, the evening job writes the rest) or not yet."""
         self.conn.execute(
             f"INSERT INTO {self.t('sw_session')} AS s (user_id, session_date, mode, monitor_ran, "
             "signals, confirms, fills, manage_actions, notes) "

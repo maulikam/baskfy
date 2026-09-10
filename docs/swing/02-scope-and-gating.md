@@ -20,7 +20,7 @@ tracks. A module that cannot say which track a surface is on has not understood 
 | Flag | Default | What it unlocks | Flip condition |
 |---|---|---|---|
 | `BASKFY_SWING_EXECUTION_ENABLED` | `false` | A confirmed swing line may call `OrderGateway.place` / `place_gtt_stop` with `DRY_RUN=false`. With it false the desk's `/swing/execute` returns the simulated result and journals `simulated=true` **regardless of `DRY_RUN`** | §3 below, by Maulik's hand, recorded in NEEDS-MAULIK.md |
-| `BASKFY_SWING_MONITOR_ENABLED` | `false` | The 09:15–10:45 monitor process subscribes to the `TickBus` for the day's watchlist | After SW6's replay test is green and one manual morning has been observed |
+| `BASKFY_SWING_MONITOR_ENABLED` | `false` | The **09:15–15:30** monitor process (SW26; 10:45 until then) subscribes to the `TickBus` for the day's watchlist | After SW6's replay test is green and one manual morning has been observed |
 | `BASKFY_SWING_EP_PREMARKET_ENABLED` | `false` | The 08:50 job pulls pre-open quotes for the whole liquid universe (≤ 6 quote calls) | After SW6; independent of the monitor |
 
 A flag is read once per process at startup by `baskfy_worker.settings` / the desk's `config.py`
@@ -67,7 +67,7 @@ each with its evidence in `SW-FINAL-REPORT.md`:
    simulated fill and a simulated GTT for every confirmed line and **0 orders reach a broker**.
 2. **One DRY_RUN drill morning on a real session.** On the deployed box, on a weekday, with a
    Kite login before 09:00 and `DRY_RUN=true`: the 08:50 levels, the 09:04 probe, the 09:14
-   monitor to its 10:45 cutoff, the 09:16 gap scan and MORNING plan, the 09:17 catalyst, the
+   monitor to its 15:30 close (SW26) and its 10:45 chores, the 09:16 gap scan and MORNING plan, the 09:17 catalyst, the
    15:15 sweep, the 21:00 detect and the 21:05 evening all run on live quotes and write their
    `sw_session` row with `mode=DRY_RUN`; every confirm that morning journals `simulated=true`.
    The steps are in

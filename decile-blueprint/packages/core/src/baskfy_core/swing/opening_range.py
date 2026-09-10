@@ -121,7 +121,11 @@ def evaluate_trigger(  # noqa: PLR0913 - one keyword per input the verdict depen
     * For a FLAG the price must also be above the daily pivot (an ORH break inside the base is
       not a breakout); pass ``pivot_high=None`` for an EP, whose pivot is the gap itself.
     * A last price at or above the upper circuit is a lock, not a trigger.
-    * After ``monitor_close`` the answer is SESSION_OVER — he trades the first 60-90 minutes.
+    * After ``monitor_close`` the answer is SESSION_OVER. That used to mean 10:45 — "he trades
+      the first 60-90 minutes" — and it now means 15:30, the end of the session. Maulik asked
+      for the window to run all day (9 Sep 2026); the reasoning, and how to put it back, are on
+      ``OpeningRangeConfig.monitor_close``. A late break is still a break; what 10:45 now gates
+      is ``pending_cutoff_at``, the hour after which an untriggered *plan* is abandoned.
 
     The stop is the lower of the range low and the low of the day so far, never above the
     range low: a stop above the opening range is a stop inside the noise.

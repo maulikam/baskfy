@@ -121,7 +121,8 @@ swing jobs sit beside:
 | `weekly-integrity-audit` | Sat 02:00 |
 | `kite-token-expiry` | hourly at :05 |
 
-So `swing-premarket` (08:50/09:09), the monitor window (09:15–10:45), `swing-eod` (after
+So `swing-premarket` (08:50/09:09), the monitor window (09:15–**15:30** since SW26; 10:45 when
+this was written), `swing-eod` (after
 publish) and `swing-weekend` (Sat 07:00) land in gaps rather than on top of anything.
 
 ### What SW0 changed
@@ -483,9 +484,10 @@ is one.
 | 08:50 | `baskfy.swing.premarket --stage LEVELS`: every `WATCHING` row that a detector wrote has its `trigger`/`stop_ref` re-expressed under the latest bar's `adj_factor` (`03` §9 — a split since detection would otherwise leave the person watching the wrong price by exactly that ratio). `MANUAL` rows keep what was typed. No Kite call | `services/worker/.../tasks/swing_premarket.py` `refresh_levels` |
 | 09:09 | `--stage GAPS`: with `BASKFY_SWING_EP_PREMARKET_ENABLED=true`, the liquid universe as of the last close (the detectors' own `liquid_expr`, over the same bars) is quoted through `KiteProvider.quotes` — **≤ 500 symbols a call, one limiter token a call** — and every name `live_gap` accepts becomes an `sw_watch` row: setup `EP`, source `DETECTOR`, catalyst empty, trigger = the indicative price, **no stop yet** (SW6.2), expiring after `ep.valid_bars` sessions. A name already watched is not duplicated. With the flag off, no quote is pulled and the report says `universe: 0` | `liquid_universe`, `evaluate_gaps`, `watch_live_gaps` |
 | 09:09 | Either way: the plan is rebuilt from the same watchlist as the evening's preview, with the last close's gate and rung, as `sw_plan.source = MORNING` (`03` §6) | `build_morning_plan` — SW5's `watch_items` / `sleeve_account` / `store_plan`, now public |
-| 09:15 → 10:45 | `python -m app.swing_monitor` in the desk, only with `BASKFY_SWING_MONITOR_ENABLED=true`: loads the watchlist (tokens from `instrument.kite_token`, circuit bands from one quote pass), subscribes on the `TickBus`, builds each name's opening range at window close from `historical_data(interval="minute")` (fallback: the ticks' own high/low), runs `evaluate_trigger` on every tick | `kite-momentum-rebalancer/app/swing_monitor.py`, `app/strategies/swing_breakout.py` |
+| 09:15 → 15:30 (SW26; 10:45 until 9 Sep 2026) | `python -m app.swing_monitor` in the desk, only with `BASKFY_SWING_MONITOR_ENABLED=true`: loads the watchlist (tokens from `instrument.kite_token`, circuit bands from one quote pass), subscribes on the `TickBus`, builds each name's opening range at window close from `historical_data(interval="minute")` (fallback: the ticks' own high/low), runs `evaluate_trigger` on every tick | `kite-momentum-rebalancer/app/swing_monitor.py`, `app/strategies/swing_breakout.py` |
 | on a break | `TRIGGERED` → one `sw_signal` row **and** one `sw_plan(source=SIGNAL)` whose single line is sized by the same `build_entries` the evening uses — so a RED gate, a full tier, an already-held name or an empty sleeve produce a plan with a *skip and its reason*, never a line. `LOCKED_UPPER_CIRCUIT` / `BELOW_PIVOT` → a signal row and nothing else, once each. A name that triggered is done for the session. The line is `PROPOSED`; nothing on this path can move it | `PgSignalStore` |
-| 10:45 | The monitor stops and marks `sw_session.monitor_ran` for the day (upsert; the evening fills in the rest) | `run_until_close`, `record_monitor_ran` |
+| 10:45 | **The chores**, from the loop itself via `swing_clock.run_chore` (SW26): A7's unclaimed slots freed and A8's open remainders cancelled (`pending_cutoff_at`). The monitor does *not* stop | `_chores`, `run_cutoff` |
+| 15:30 | The monitor stops and marks `sw_session.monitor_ran` for the day (upsert; the evening fills in the rest) | `run_until_close`, `record_monitor_ran` |
 
 ### The provider grew one read
 
@@ -667,7 +669,7 @@ Per `05` §3, top to bottom:
 
 | Panel | What it shows |
 |---|---|
-| **Status bar** | `DRY_RUN`, `BASKFY_SWING_EXECUTION_ENABLED`, the mode they add up to (SIMULATED unless both allow), the monitor's state (`idle` / `running since 09:15` / `stopped at 10:45` / `not enabled` / **`did not run`** — derived from the flag, the clock and `sw_session.monitor_ran`, SW7.3), the Kite token's age from the encrypted store (read only when the file exists, so looking at the bar never writes a key file), and today's `sw_session` counters — or "no row yet" |
+| **Status bar** | `DRY_RUN`, `BASKFY_SWING_EXECUTION_ENABLED`, the mode they add up to (SIMULATED unless both allow), the monitor's state (`idle` / `running since 09:15` / `stopped at 15:30` / `not enabled` / **`did not run`** — derived from the flag, the clock and `sw_session.monitor_ran`, SW7.3), the Kite token's age from the encrypted store (read only when the file exists, so looking at the bar never writes a key file), and today's `sw_session` counters — or "no row yet" |
 | **Triggers** | today's `sw_signal` rows newest first: time, symbol, setup, "5-min ORH 100.50 broken at 100.80", entry, stop, the sized line (`SWING BUY ALPHAFLAG x1666 @ 100.80`, ₹ risk, ₹ value, % of allocation, cap), the plan id and its countdown, and **one Confirm form per line**. A `LOCKED_UPPER_CIRCUIT` row shows with no button; a triggered name the SIGNAL plan skipped shows the skip and its reason (found through the plan's skip row — the signal links only to a line) |
 | **Plan** | the day's `MORNING` plan (yesterday's is not shown) and the latest `EOD_PREVIEW` (collapsed, and always expired — it is built at 21:05 with a 30-minute TTL): exits first (`SELL_AT_OPEN`, then `RAISE_GTT_STOP`), then the waiting buys, then the skips with reasons. A waiting buy carries a Confirm — the EOD entry mode of PACK.2 — unless the name is already held; an exit carries one unless there is no position, the SELL is for more than is open, or the RAISE is not above the resting stop |
 | **Book** | open positions, the unprotected one first, with GTT id and trigger or **naked** in red, **Re-arm GTT** only on a naked row, `Simulated` / `Real` per row; then the last five manage actions (the exit-kind lines, newest first, with the state each reached) |
@@ -675,7 +677,7 @@ Per `05` §3, top to bottom:
 Every line label starts with **SWING**. An expired plan stays on the page with `0:00` and no
 button. Confirm posts through `fetch` and renders the `ExecOutcome` inline (`SIMULATED` /
 `SENT` / `FILLED` / `BLOCKED (reason)`); a 4xx renders as "not executed". The page polls
-`/swing/data` every 5 s inside 09:15–10:45 and reloads only when the view's fingerprint
+`/swing/data` every 5 s inside 09:15–15:30 (SW26) and reloads only when the view's fingerprint
 changes; outside the window it does not poll. **There is no confirm-all**: the template has one
 form shape, one `line_id` per form, and no checkbox.
 
@@ -2785,3 +2787,49 @@ Today's gate is **RED** on both indices, so nothing would have fired today in an
 - **The box is still a t4g.large (2 vCPU / 8 GB)** that one background job took offline for
   forty minutes on 4 Sep. With orders now firing unattended, a box that can be starved is a box
   that can miss a 10:45 cutoff or a 15:15 stop sweep. Raised twice, not selected, recorded here.
+
+---
+
+## SW26 — THE WINDOW IS THE WHOLE SESSION (9 Sep 2026)
+
+**`monitor_close` `(10, 45)` → `(15, 30)`.** Maulik: *"yes build the auto execute outside monitor
+window anytime during trading time"*. With SW25's flag already on, this means **a real MARKET
+order with nobody watching can now fire at any point from 09:15 to 15:30**, where the exposure
+was 90 minutes. A strategy change, not a bug fix; `DECISIONS-SW.md` SW26 carries the reasoning
+and the one-line reversal.
+
+| | |
+|---|---|
+| Changed | `OpeningRangeConfig.monitor_close = (15, 30)`; new `pending_cutoff_at = (10, 45)` |
+| New | `swing_clock.run_chore(name, *, day)` — one never-raising entry point; `swing_monitor._chores(moment)` calls it from the loop |
+| Unchanged | what a trigger *is* (opening range, buffer, pivot, circuit lock), the sleeve, `risk_pct`, 3 new entries a session, the entry cap, the GTT stop, the gate, A9's half risk |
+| Tests | `test_a_break_after_1045_is_now_a_trigger`, `test_after_the_market_closes_nothing_is_raised` (15:30), `TestTheChoresKeepTheirOwnHours` (pins `pending_cutoff_at < gtt_sweep <= monitor_close`, not the numbers) |
+
+**Why 10:45 did not simply move with it.** It was doing two jobs. The second — A7's unclaimed
+slot release and A8's open-remainder cancel — belongs at 10:45 on its own merits (a gap whose
+range has not resolved by then will not, and its slot starves the watchlist all afternoon), and
+a single setting at 15:30 would have put the cutoff *after* the 15:15 GTT sweep. Hence two
+settings, and a test that pins their order rather than their values.
+
+**Why the chores now also run from the monitor loop.** The monitor is the process that is awake
+at 10:45 now that it outlives it; leaving the chores solely to the separate clock made a restart
+or a drift silently skip them. Both paths are safe — each chore is idempotent and keyed on the
+day.
+
+**A mid-session restart is safe, and now verified.** A deploy or a crash at 13:10 puts a
+watching process back on the tape where before it would simply have exited. The window is an
+absolute clock, so no afternoon tick lands inside `[09:15, 09:20)`: the range is rebuilt from
+Kite's 09:15 minute candles and an afternoon break is measured against the **morning's** high,
+not the last few minutes'. With no candles the name raises nothing at all for the rest of the
+day. Both pinned in `test_swing_monitor.py`.
+
+### NOT done
+
+- **No afternoon trigger has ever been taken**, live or dry. Every session the desk has run
+  ended at 10:45. The first 11:00-and-later break will be the first, and it will be unattended.
+- The primary source still says the entries cluster in the first 60–90 minutes (`01` §1), and
+  nothing here disputes that — the change is that the rest are taken too. Whether that is
+  additive or dilutive is **unmeasured**: SW23's backtest was run on the 10:45 window. A
+  re-run over the wider window is the honest next check and has not happened.
+- The t4g.large concern from SW25 is now larger, not smaller: the monitor holds a websocket and
+  polls for six and a quarter hours instead of ninety minutes on the same 2 vCPU.

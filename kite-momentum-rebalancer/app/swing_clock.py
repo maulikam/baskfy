@@ -155,6 +155,48 @@ async def run_gtt_sweep(
     return SweepReport(len(naked), armed, still, tuple(outcomes))
 
 
+def run_chore(  # noqa: PLR0913 - the same seams `run_after_close` takes
+    name: str,
+    *,
+    day: dt.date,
+    now: Callable[[], dt.datetime] = _now,
+    open_store: Callable[[], Any] | None = None,
+    gateway: Callable[[], Any] | None = None,
+    orders: Callable[[], Any] | None = None,
+    price_of: Callable[[str], Decimal | None] | None = None,
+) -> None:
+    """Run ONE of the session's chores now — 'cutoff' or 'gtt_sweep'.
+
+    WHY THIS EXISTS (9 Sep 2026). SW25 extended the watch to 15:30 so auto-execute works all
+    session. `run_after_close` fires the cutoff the moment the strategy stops, which at 15:30
+    would run the 10:45 cutoff after the 15:15 sweep — inverted. The monitor now calls the chores
+    from inside its loop at their own hours, and this is the single entry point both paths use so
+    a chore cannot be implemented twice and drift.
+
+    Never raises: a store or gateway that cannot be built is logged and counted, exactly as in
+    `run_after_close`. The watch is what places orders for the rest of the session and a failed
+    chore must not stop it.
+    """
+    stores = open_store or swing_desk.open_store
+    build_gw = gateway or swing_desk.swing_gateway
+    order_source = orders or swing_desk.order_source
+    prices = price_of or swing_desk.last_price
+    moment = now()
+    try:
+        with stores() as store:
+            gw = build_gw()
+            if name == "cutoff":
+                asyncio.run(run_cutoff(store, gw, orders=order_source(), now=moment))
+            elif name == "gtt_sweep":
+                asyncio.run(run_gtt_sweep(store, gw, price_of=prices, now=moment))
+            else:
+                raise ValueError(f"no such chore: {name!r}")
+    except Exception as exc:  # noqa: BLE001 - logged and counted, never raised into the watch
+        log.error("clock: the %s chore could not run: %s", name, exc)
+        _count(name, "unavailable")
+        _capture(exc, sweep=name)
+
+
 def run_after_close(  # noqa: PLR0913 - the clock's seams, for the tests
     *,
     day: dt.date,
@@ -170,6 +212,13 @@ def run_after_close(  # noqa: PLR0913 - the clock's seams, for the tests
     The seams default to the desk's own (`app.swing_desk`): the sole user's Postgres store,
     the swing gateway, the Kite order book and `Kite.ltp`. Each is built when its chore starts,
     inside the chore's own `with`, and nothing is held between them.
+
+    **SINCE SW26 THIS IS THE BACKSTOP, NOT THE PRIMARY PATH.** The watch runs to 15:30 and calls
+    `run_chore` at each mark as it passes (`swing_monitor._chores`), so by the time this function
+    is reached both chores have normally already run and the sleep below is a no-op. It is kept,
+    and kept unconditional, because two paths reach it with nothing having run: an empty watchlist
+    (which never enters `run_until_close` at all) and a loop that died early. Both chores are
+    idempotent and keyed on the day, so a second pass costs a query and cancels nothing twice.
     """
     from . import swing_desk  # noqa: PLC0415 - the page module; at call time, like the store
 

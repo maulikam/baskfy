@@ -195,7 +195,8 @@ Sell lines execute **at the next open** (`SELL_AT_OPEN`); a stop-out is the GTT'
 7.1 `session_open` [09:15 IST]; windows `windows_minutes` [(1, 5, 60)], `default_window_minutes` [5]; the range is the
 high/low of candles with `open ≤ start < open + window`; `complete` only once a candle at or
 after the window's end exists (no clock is consulted).
-7.2 `evaluate_trigger`, precedence: after `monitor_close` [10:45] → `SESSION_OVER`; range
+7.2 `evaluate_trigger`, precedence: after `monitor_close` [**15:30**, SW26 — 10:45 until
+9 Sep 2026] → `SESSION_OVER`; range
 incomplete → `RANGE_INCOMPLETE`; `last_price ≥ upper_circuit` → `LOCKED_UPPER_CIRCUIT`;
 `last_price ≤ range_high × (1 + break_buffer_pct [0.1] / 100)` → `WAITING`; FLAG with
 `last_price ≤ pivot_high` → `BELOW_PIVOT`; else `TRIGGERED` with `entry = last_price`,
@@ -215,10 +216,20 @@ tick range for the verdicts that follow; a signal already raised stands). Fallba
 the ticker has gone quiet on: Kite `quote` for ≤ 500 instruments per call, at most one call
 every `quote_poll_min_seconds` [5], inside the limiter — anything faster is a bug (B10). Every
 `TRIGGERED` verdict is one `sw_signal` row and one desk notification (email, one-way, for the
-daily focus; A2); **nothing is ordered**. After `monitor_close` the same process is the desk's
-clock: the 10:45 cutoff cancels every open remainder and frees every unclaimed slot (A7, A8),
-and at `gtt_sweep_at` [15:15] the sweep re-arms any filled quantity without a GTT (A8; what is
-still naked afterwards is `SWING_GTT_MISSING_AT_1515`).
+daily focus; A2); **nothing is ordered** on this path (auto-execute is a separate, flagged
+step — SW25). The same process is also the desk's clock, and since SW26 it runs the session's
+two chores **from inside the watch**, each once, at its own hour rather than after the watch
+ends: at `pending_cutoff_at` [**10:45**] the cutoff cancels every open remainder and frees every
+unclaimed slot (A7, A8), and at `gtt_sweep_at` [15:15] the sweep re-arms any filled quantity
+without a GTT (A8; what is still naked afterwards is `SWING_GTT_MISSING_AT_1515`). `run_after_close`
+still runs both once more when the watch ends, as a backstop for the empty-watchlist and
+died-early paths; both chores are idempotent and keyed on the day.
+
+**Why `pending_cutoff_at` is a setting of its own.** `monitor_close` used to carry both jobs, so
+SW26's widening would have moved the cutoff to 15:30 — *after* the 15:15 sweep. It also belongs
+at 10:45 on its own merits: a gap whose opening range has not resolved by then will not, and its
+slot would starve the watchlist all afternoon. The invariant, and it is what the test pins:
+`pending_cutoff_at < gtt_sweep_at ≤ monitor_close`.
 7.5 **The entry cap, the market protection and the fill poll** (SW10.5 / STANDING-ANSWERS A8;
 order type amended by Maulik 4 Sep 2026, DECISIONS-SW **SW22**). The **cap** is unchanged:
 `plan.marketable_limit = min(trigger × (1 + entry_limit_buffer_pct [0.5] / 100), range_high +

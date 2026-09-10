@@ -2684,3 +2684,89 @@ rehearsal left.
 
 **Reversal.** `BASKFY_SWING_AUTO_EXECUTE=false` and restart `swing-monitor` — one line, and
 every order needs a click again. The flag has never been on in any deployment as of this entry.
+
+---
+
+## SW26 — the trigger window is the whole session, and 10:45 keeps only the chores · ⚠ UNREVIEWED
+
+**Maulik, 9 Sep 2026:** *"yes build the auto execute outside monitor window anytime during
+trading time"*, following SW25's auto-execute going on. Until this entry the desk could only
+buy between 09:15 and 10:45: `evaluate_trigger` answered `SESSION_OVER` past `monitor_close`,
+so a name that broke its opening range at 14:00 was seen, scored, and dropped on the floor.
+
+**This is a strategy change, not a bug fix.** `docs/swing/01-method.md` §"first hour" is where
+the 10:45 came from — "nearly all entries happen in the first 60–90 minutes" — and
+`evaluate_trigger`'s own docstring said so out loud. The primary source is not wrong about where
+the entries cluster; Maulik's instruction is that the ones outside the cluster should be taken
+too, unattended. With SW25's auto-execute on, that means **live MARKET orders can now fire at any
+point between 09:15 and 15:30 with nobody watching**, where before the exposure was 90 minutes.
+Recorded plainly because it is the largest widening of unattended live risk in the swing sleeve
+so far, and it is his to make.
+
+### What changed
+
+`OpeningRangeConfig.monitor_close` `(10, 45)` → **`(15, 30)`**.
+
+### What did NOT change, deliberately
+
+**What a trigger is.** The break is still measured against the OPENING range — the 09:15 window
+of `windows_minutes`, not a rolling high — and still needs `break_buffer_pct`, still needs a FLAG
+to be above its daily pivot, and a locked upper circuit is still a lock, not an entry. Only the
+clock over which that unchanged test is applied got wider. A 14:00 break of the 09:20 range is a
+real signal in this method; a 14:00 break of the 13:55 high is not, and this does not create one.
+
+**The session's housekeeping.** `monitor_close` was doing two jobs, and moving it would have
+moved both. So the second is now its own setting: **`pending_cutoff_at = (10, 45)`** — A7's slot
+release and A8's "cancel any open remainder". Both belong at 10:45 on their own merits: a gap
+whose opening range has not resolved by 10:45 is not going to, and holding one of the session's
+three new-entry slots all afternoon starves the rest of the watchlist. Keeping them separate also
+avoids an inversion — a single setting at 15:30 would have run the cutoff *after* the 15:15 GTT
+sweep, cancelling remainders the sweep had just armed stops for.
+
+Everything else is untouched: the sleeve, `risk_pct`, `max_new_entries_per_session` [3], the
+entry cap, the GTT stop, A9's half risk, and the gate. Three new entries a session is still three
+— the window is longer, the budget is not bigger.
+
+### The chores now run from the monitor loop, not only from the clock
+
+`app/swing_clock.py` gained `run_chore(name, *, day)`, one entry point wrapping `run_cutoff` and
+`run_gtt_sweep` that never raises, and `swing_monitor._chores(moment)` calls it as the loop
+passes each mark. The monitor now outlives 10:45, so it is the process that is actually awake
+when the cutoff is due; leaving the chores solely to the separate clock would have made a
+restart, a slow tick or a clock drift silently skip them. Running from both is safe because each
+chore is already idempotent and keyed on the day.
+
+### Tests
+
+`test_a_break_after_1045_is_now_a_trigger` (was the assertion that it was not) and
+`test_after_the_market_closes_nothing_is_raised` at 15:30; and
+`TestTheChoresKeepTheirOwnHours`, which pins the ordering rather than the numbers —
+`pending_cutoff_at < gtt_sweep <= monitor_close` — so the inversion above cannot come back by
+someone editing one of the three.
+
+### A restart in the middle of the session is now routine, and it is safe
+
+Before this entry a monitor that came up at 13:10 had nothing to do — the window was long shut.
+Now a deploy, a crash-restart or a box reboot at any hour puts a watching process back on the
+tape, so the question "what range does it think it has?" started to matter. The expensive answer
+would be the afternoon's own ticks: every name would look like a breakout of the last few
+minutes.
+
+It is not that answer. The window is an absolute clock — `[session_open, session_open + window)`
+— so no afternoon tick falls inside it, `_tick_range` returns `None`, and the range comes from
+Kite's 09:15 minute candles through the one reconcile. A 13:10 break is measured against the
+**morning's** high. And if Kite cannot answer, the name has no range and raises nothing for the
+rest of the day, rather than trading against an invented one. Both halves are pinned:
+`test_a_monitor_started_in_the_afternoon_still_uses_the_MORNING_range` and
+`test_an_afternoon_start_with_no_candles_refuses_to_trigger_at_all`.
+
+Two smaller restart facts, for the record. `state.triggered` is per-process, so a restart forgets
+that a name fired — but `load_context` re-reads the book, so a filled name comes back
+`ALREADY_HELD` and the session cap counts what the store says, not what the process remembers
+(SW10.4). A name that triggered and whose order was cancelled unfilled at 10:45 *can* be taken
+again in the afternoon after a restart; under this entry's policy that is the intended answer,
+and it is bounded by the same three-entries-a-session cap.
+
+**Reversal.** `monitor_close = (10, 45)` in `swing/config.py` and redeploy: one line, and the
+desk is back to the opening 90 minutes. `BASKFY_SWING_AUTO_EXECUTE=false` remains the wider
+brake — it does not narrow the window, but it puts a human click back in front of every order.

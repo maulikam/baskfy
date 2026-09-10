@@ -14,7 +14,9 @@ pivot points where the stop is tight relative to the potential move. Win rate on
 only 25–35%; average winners are 3–5x (often far more) the average loser; a few outliers a
 year make the year. Fundamentals barely matter for entries — price, volume and relative
 strength are the signal. Nearly all entries happen in the first 60–90 minutes of the session;
-the rest of the time is scanning and waiting.
+the rest of the time is scanning and waiting. (The desk **watches** for a break all session as of
+SW26 — Maulik's 9 Sep 2026 call. The primary source is not wrong about where the entries cluster;
+the change is that the ones outside the cluster are taken too, on the same unchanged test.)
 
 ## 2. Setup 1 — the breakout (flag / continuation) · ~70% of his trades
 
@@ -42,7 +44,7 @@ months.
 |---|---|---|
 | Leader precondition, base geometry, MA structure, dry-up | **Adopt.** `detect_flags` on adjusted daily bars | `baskfy_core.swing.setups`, `04` §2 |
 | "Young stock / hot theme" preference | **Adapt** as a score component, not a filter: `instrument.listed_on` within 2 years earns points (SW3); theme = the instrument's sector index from `index_member_daily` (SW3 lists the top sectors by breadth) | `04` §2.6 |
-| ORH-break entry | **Adopt**, live, 09:15–10:45 IST, 5-minute default | `opening_range`, SW6 |
+| ORH-break entry | **Adopt**, live, **09:15–15:30 IST** (was 10:45 — SW26), 5-minute default. The range is always the 09:15 one; only the clock that reads it widened | `opening_range`, SW6, SW26 |
 | EOD alternative when the monitor is not running | **Adapt:** a `BUY_ON_TRIGGER` line at the pivot the next day, stop at the prior day's low — see PACK.2 | `plan`, SW5 |
 | LOD / ORL stop, armed the same session | **Adopt** via GTT (non-negotiable 4) | SW7 |
 | Partial day 3–5, 10/20 trail, breakeven | **Adopt** | `stops.manage`, `04` §6 |
@@ -153,7 +155,7 @@ about four years of losses before it clicked.
 | Piece | Baskfy | Where |
 |---|---|---|
 | Premarket | `swing-premarket` Beat 08:50 IST: pulls pre-open quotes, refreshes the watch levels to exchange prices, writes `sw_watch` for the day | SW6 |
-| First hour | the monitor, 09:15–10:45 IST, a desk process on the `TickBus`; at most `max_new_entries_per_session` [3] new lines a session (SW9.5) | SW6, `04` §9.1 |
+| The session | the monitor, **09:15–15:30 IST** (SW26; it was the first hour, to 10:45), a desk process on the `TickBus`; at most `max_new_entries_per_session` [3] new lines a session (SW9.5) — a longer window, not a bigger budget. At 10:45 it still runs the chores: A7's slot release and A8's remainder cancel (`pending_cutoff_at`) | SW6, SW26, `04` §9.1 |
 | EOD | `swing-eod` after the nightly `publish` step: detectors, market gate, `stops.manage` on every open position, the ladder and the drawdown settled (SW9.5), tomorrow's plan preview, alert email | SW4, SW5, SW8 |
 | Staged exits | **Adapt:** the partial and the 10/20 trail are in (`04` §6); the streams' three-stage 10/20/50 exit is recorded, not adopted — one trail, chosen by ADR, is what the desk can execute at the open | `04` §6.2–6.4 |
 | Weekend | `swing-weekend` Saturday 07:00 IST: the full scan over the last 5 sessions, watchlist candidates with levels, the weekly breadth note | SW4 |

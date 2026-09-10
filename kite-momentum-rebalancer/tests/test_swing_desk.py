@@ -49,10 +49,17 @@ from app import config as C
 from app import main as M
 from app import swing_desk
 from app.swing_desk import IST, PgSwingStore, build_view, monitor_state
+from baskfy_core.swing.config import DEFAULT_SWING_CONFIG
 
 USER = 1
 TODAY = dt.date(2026, 9, 2)  # a Wednesday
 NOW = dt.datetime(2026, 9, 2, 9, 40, tzinfo=IST)
+#: One minute past `monitor_close`, read from the config rather than typed. SW26 moved
+#: that from 10:45 to 15:30, and every "after the window" case below follows it.
+AFTER_CLOSE = (
+    dt.datetime.combine(TODAY, dt.time(*DEFAULT_SWING_CONFIG.opening_range.monitor_close))
+    + dt.timedelta(minutes=1)
+).time()
 
 # ---------------------------------------------------------------------------------------
 # The DDL: 0028_swing.py, column for column, in sqlite's spelling. NUMERIC columns keep
@@ -713,8 +720,13 @@ class TestStatusBar:
             (False, False, dt.time(9, 40), "not enabled"),
             (True, False, dt.time(8, 50), "idle"),
             (True, False, dt.time(9, 40), "running"),
-            (True, True, dt.time(11, 0), "stopped"),
-            (True, False, dt.time(11, 0), "did not run"),
+            # SW26 widened the window to 15:30, so 11:00 is INSIDE it. The two cases that used
+            # to read "stopped" / "did not run" at 11:00 now sit after the close instead — the
+            # states themselves are unchanged, and the hour they start at is read from the
+            # config so the next change to the window moves them too.
+            (True, True, AFTER_CLOSE, "stopped"),
+            (True, False, AFTER_CLOSE, "did not run"),
+            (True, False, dt.time(14, 0), "running"),
         ],
     )
     def test_status_bar_monitor_state_is_derived_from_flag_clock_and_mark(self, enabled, ran, when, state):
@@ -733,7 +745,12 @@ class TestStatusBar:
         assert inside["poll_ms"] == 5000 and inside["window_opens_in_ms"] is None
         before = build_view(s, now=NOW.replace(hour=8, minute=0), token=inside["status"]["token"])
         assert before["poll_ms"] == 0 and before["window_opens_in_ms"] == 75 * 60 * 1000
-        after = build_view(s, now=NOW.replace(hour=14), token=inside["status"]["token"])
+        # SW26: 14:00 is inside the window now, so the page still polls at 14:00. "After" is
+        # after `monitor_close`, wherever the config puts it.
+        during = build_view(s, now=NOW.replace(hour=14), token=inside["status"]["token"])
+        assert during["poll_ms"] == 5000 and during["window_opens_in_ms"] is None
+        after = build_view(s, now=dt.datetime.combine(NOW.date(), AFTER_CLOSE, tzinfo=IST),
+                           token=inside["status"]["token"])
         assert after["poll_ms"] == 0 and after["window_opens_in_ms"] is None
 
 

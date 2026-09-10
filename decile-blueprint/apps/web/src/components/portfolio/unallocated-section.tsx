@@ -9,6 +9,7 @@ import {
   type CreateOutcome,
   type NewPortfolioSeed,
   type SourceOption,
+  type TargetPortfolio,
 } from "@/components/portfolio/new-portfolio-flow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,8 @@ export interface UnallocatedSectionProps {
   screens?: readonly SourceOption[] | undefined;
   strategies?: readonly SourceOption[] | undefined;
   benchmarks?: readonly string[] | undefined;
+  /** Portfolios the user already has, for "add to a portfolio you already have". */
+  targets?: readonly TargetPortfolio[] | undefined;
   onCreate?: ((draft: PortfolioDraft) => Promise<CreateOutcome>) | undefined;
 }
 
@@ -76,6 +79,7 @@ export function UnallocatedSection({
   screens = [],
   strategies = [],
   benchmarks,
+  targets,
   onCreate,
 }: UnallocatedSectionProps) {
   const [seed, setSeed] = useState<NewPortfolioSeed | null>(null);
@@ -108,6 +112,7 @@ export function UnallocatedSection({
       screens={screens}
       strategies={strategies}
       benchmarks={benchmarks}
+      targets={targets}
       onCancel={() => {
         setOpen(false);
         setSeed(null);

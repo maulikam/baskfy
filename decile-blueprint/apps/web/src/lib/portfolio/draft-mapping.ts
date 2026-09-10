@@ -39,7 +39,15 @@ type PortfolioSource = NewPortfolioIn["source"];
  * `HOLDING_GROUP` — which decides the headline metric (§5.2) and the badge. TypeScript refuses to
  * compile this table if a start is missing, so the omission is caught where it is cheap.
  */
-const SOURCE_FOR_START: Readonly<Record<PortfolioDraft["start"], PortfolioSource>> = {
+/**
+ * Every start that CREATES a portfolio. `EXISTING` is excluded because it does not create one —
+ * it files holdings into a portfolio that already has a source, a kind and a name, and it reaches
+ * a different route entirely. Excluding it here is what keeps the table below total and honest:
+ * an entry for `EXISTING` would have to invent a source that is never read.
+ */
+type CreatingStart = Exclude<PortfolioDraft["start"], "EXISTING">;
+
+const SOURCE_FOR_START: Readonly<Record<CreatingStart, PortfolioSource>> = {
   SUBSCRIBED: "SUBSCRIBED",
   MY_SCREEN: "MY_SCREEN",
   MY_STRATEGY: "MY_STRATEGY",
@@ -50,6 +58,12 @@ const SOURCE_FOR_START: Readonly<Record<PortfolioDraft["start"], PortfolioSource
 
 /** §3's source for a draft. Total by construction — see {@link SOURCE_FOR_START}. */
 export function sourceForStart(start: PortfolioDraft["start"]): PortfolioSource {
+  if (start === "EXISTING") {
+    // Reached only by a caller that routed an "add to an existing portfolio" draft through the
+    // create body. Throwing beats returning a plausible source: the latter would create a second
+    // portfolio silently, beside the one the user meant to add to.
+    throw new Error("EXISTING files into a portfolio that already has a source; it creates none");
+  }
   return SOURCE_FOR_START[start];
 }
 
@@ -101,13 +115,28 @@ export function bodyForDraft(
     // than `null` so the key is absent from the JSON entirely — the API reads a missing quantity
     // as "the whole free remainder", and a literal null would mean the same thing while looking
     // like a value somebody chose.
-    holdings: draft.keys.map((key) => {
-      const typed = draft.quantities?.get(holdingKeyId(key))?.trim();
-      return {
-        instrument_id: key.instrument_id,
-        broker_account_id: key.broker_account_id,
-        ...(typed === undefined || typed === "" ? {} : { quantity: typed }),
-      };
-    }),
+    holdings: holdingsForDraft(draft),
   };
+}
+
+
+/**
+ * The holding entries a draft sends, shared by the create route and the add-to-existing one.
+ *
+ * 0035: a quantity per holding, omitted when the user did not narrow it. `undefined` rather than
+ * `null` so the key is absent from the JSON entirely — the API reads a missing quantity as
+ * "everything available", and a literal null would mean the same thing while looking like a value
+ * somebody chose.
+ */
+export function holdingsForDraft(
+  draft: PortfolioDraft,
+): Array<{ instrument_id: number; broker_account_id: number; quantity?: string }> {
+  return draft.keys.map((key) => {
+    const typed = draft.quantities?.get(holdingKeyId(key))?.trim();
+    return {
+      instrument_id: key.instrument_id,
+      broker_account_id: key.broker_account_id,
+      ...(typed === undefined || typed === "" ? {} : { quantity: typed }),
+    };
+  });
 }

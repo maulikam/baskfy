@@ -431,7 +431,19 @@ export const DEFAULT_BENCHMARKS: readonly string[] = [
 ];
 
 /** §6.7's five starting points for a new portfolio. */
-export type NewPortfolioStart = "SUBSCRIBED" | "MY_SCREEN" | "MY_STRATEGY" | "HOLDINGS" | "EMPTY";
+/**
+ * How the flow begins. `EXISTING` is not a way to start a *new* portfolio — it is the flow being
+ * reused to file holdings into one that is already there, which Maulik asked for on 11 Sep 2026:
+ * "the current system does not allow to add stock into existing portfolio, it only allows to
+ * create a new one". It skips kind, name and benchmark, because the portfolio already has them.
+ */
+export type NewPortfolioStart =
+  | "SUBSCRIBED"
+  | "MY_SCREEN"
+  | "MY_STRATEGY"
+  | "HOLDINGS"
+  | "EMPTY"
+  | "EXISTING";
 
 /** What the flow hands back on confirm. Not a write — the caller owns that. */
 export interface PortfolioDraft {
@@ -448,4 +460,9 @@ export interface PortfolioDraft {
   quantities?: ReadonlyMap<string, string>;
   /** The subscribed model / screen / strategy chosen, when the start was one of those. */
   sourceId: string | null;
+  /**
+   * The portfolio to file into, when `start` is `EXISTING`. Null for every other start, where the
+   * portfolio does not exist yet and `name`/`kind`/`benchmark` describe the one to make.
+   */
+  targetPortfolioId?: number | null;
 }

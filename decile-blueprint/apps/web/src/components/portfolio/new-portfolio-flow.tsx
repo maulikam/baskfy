@@ -39,7 +39,7 @@ import { cn } from "@/lib/utils";
  * appears to save and does not is worse than one that says why it cannot.
  */
 
-type Step = "start" | "source" | "holdings" | "kind" | "details" | "review";
+type Step = "start" | "source" | "target" | "holdings" | "kind" | "details" | "review";
 
 export interface SourceOption {
   id: string;
@@ -63,8 +63,17 @@ export type CreateOutcome =
   | { readonly ok: true; readonly portfolioId: number }
   | { readonly ok: false; readonly reason: string };
 
+/** One portfolio the flow may file holdings INTO. Piles are excluded by the caller. */
+export interface TargetPortfolio {
+  portfolio_id: number;
+  name: string;
+  kind: PortfolioKind;
+}
+
 export interface NewPortfolioFlowProps {
   rows: readonly AggregatedHolding[];
+  /** Existing portfolios, for the "add to one of these" path. Empty hides that option. */
+  targets?: readonly TargetPortfolio[] | undefined;
   sectors?: Readonly<Record<string, string>> | undefined;
   seed?: NewPortfolioSeed | null | undefined;
   subscribedBaskets?: readonly SourceOption[] | undefined;
@@ -112,6 +121,11 @@ const START_OPTIONS: ReadonlyArray<{
     title: "Empty",
     blurb: "A named, empty portfolio to fill in later.",
   },
+  {
+    start: "EXISTING",
+    title: "Add to a portfolio you already have",
+    blurb: "File more shares into one of your portfolios, moving them out of wherever they are.",
+  },
 ];
 
 const SOURCE_COPY: Record<
@@ -137,6 +151,7 @@ const SOURCE_COPY: Record<
 
 export function NewPortfolioFlow({
   rows,
+  targets = [],
   sectors = {},
   seed = null,
   subscribedBaskets = [],
@@ -160,6 +175,8 @@ export function NewPortfolioFlow({
   const [name, setName] = useState(seed?.name ?? "");
   const [benchmark, setBenchmark] = useState(benchmarks[0] ?? "");
   const [sourceId, setSourceId] = useState<string | null>(seed?.sourceId ?? null);
+  /** The existing portfolio being filed into, when `start` is EXISTING. */
+  const [targetId, setTargetId] = useState<number | null>(null);
 
   const total = useMemo(
     () => selectionTotal(rows, selected, quantities),
@@ -171,13 +188,23 @@ export function NewPortfolioFlow({
 
   function chooseStart(next: NewPortfolioStart): void {
     setStart(next);
+    if (next === "EXISTING") {
+      setTargetId(targets[0]?.portfolio_id ?? null);
+      setStep("target");
+      return;
+    }
     setStep(next === "HOLDINGS" ? "holdings" : next === "EMPTY" ? "kind" : "source");
   }
+
+  /** EXISTING skips kind, name and benchmark — the portfolio already has all three. */
+  const filingIntoExisting = start === "EXISTING";
+  const target = targets.find((option) => option.portfolio_id === targetId) ?? null;
 
   function back(): void {
     if (step === "review") setStep("details");
     else if (step === "details") setStep("kind");
     else if (step === "kind") setStep(start === "HOLDINGS" ? "holdings" : start === "EMPTY" ? "start" : "source");
+    else if (step === "holdings" && filingIntoExisting) setStep("target");
     else setStep("start");
   }
 
@@ -199,6 +226,7 @@ export function NewPortfolioFlow({
         // them would be sending a fact the server has nowhere to put.
         ...(kind === "MONITORING" ? {} : { quantities }),
         sourceId,
+        targetPortfolioId: filingIntoExisting ? targetId : null,
       });
       // A handler that resolves to nothing is a spy in a test that only cares the click fired;
       // treating that as a refusal would put an error on screen for a create that worked.
@@ -232,7 +260,11 @@ export function NewPortfolioFlow({
       {/* ------------------------------------------------------------- start */}
       {step === "start" ? (
         <ul className="grid gap-2 sm:grid-cols-2" data-testid="start-options">
-          {START_OPTIONS.map((option) => (
+          {/* "Add to a portfolio you already have" is hidden until there is one. An option that
+              leads to an empty list is a dead end dressed as a choice. */}
+          {START_OPTIONS.filter(
+            (option) => option.start !== "EXISTING" || targets.length > 0,
+          ).map((option) => (
             <li key={option.start}>
               <button
                 type="button"
@@ -248,7 +280,11 @@ export function NewPortfolioFlow({
       ) : null}
 
       {/* ------------------------------------------------------------ source */}
-      {step === "source" && start !== null && start !== "HOLDINGS" && start !== "EMPTY" ? (
+      {step === "source" &&
+      start !== null &&
+      start !== "HOLDINGS" &&
+      start !== "EMPTY" &&
+      start !== "EXISTING" ? (
         <div className="space-y-3" data-testid="source-step">
           <h3 className="text-sm font-semibold">{SOURCE_COPY[start].heading}</h3>
           {sourceOptions.length === 0 ? (
@@ -287,6 +323,44 @@ export function NewPortfolioFlow({
       ) : null}
 
       {/* ---------------------------------------------------------- holdings */}
+      {/* ------------------------------------------------------------- target */}
+      {step === "target" ? (
+        <div className="space-y-3" data-testid="target-step">
+          <div>
+            <h3 className="text-sm font-semibold">Which portfolio?</h3>
+            <p className="text-xs text-muted-foreground">
+              Shares you pick next are filed into it. Anything already in another portfolio moves
+              across; unallocated shares are taken first.
+            </p>
+          </div>
+          {targets.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+              You have no portfolios to add to yet. Create one first.
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {targets.map((option) => (
+                <li key={option.portfolio_id}>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted/40">
+                    <input
+                      type="radio"
+                      name="target-portfolio"
+                      checked={targetId === option.portfolio_id}
+                      onChange={() => setTargetId(option.portfolio_id)}
+                      className="size-4"
+                    />
+                    <span className="flex-1 truncate">{option.name}</span>
+                    {option.kind === "MONITORING" ? (
+                      <span className="text-xs text-muted-foreground">watchlist — no quantities</span>
+                    ) : null}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
+
       {step === "holdings" ? (
         <HoldingsPicker
           rows={rows}
@@ -408,16 +482,32 @@ export function NewPortfolioFlow({
             Back
           </Button>
 
+          {step === "target" ? (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              disabled={targetId === null}
+              onClick={() => setStep("holdings")}
+            >
+              Continue
+            </Button>
+          ) : null}
+
           {step === "holdings" ? (
             <>
               <Button
                 type="button"
                 variant="primary"
                 size="sm"
-                disabled={total.holdings === 0}
-                onClick={() => setStep("kind")}
+                disabled={total.holdings === 0 || saving}
+                onClick={() => (filingIntoExisting ? void confirm() : setStep("kind"))}
               >
-                Continue
+                {filingIntoExisting
+                  ? saving
+                    ? "Adding…"
+                    : `Add to ${target?.name ?? "portfolio"}`
+                  : "Continue"}
               </Button>
               {total.holdings === 0 ? (
                 <span className="text-xs text-muted-foreground">Pick at least one holding.</span>

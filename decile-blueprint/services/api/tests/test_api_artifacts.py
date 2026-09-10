@@ -135,6 +135,10 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/portfolio/reconciliation/{item_id}/resolve": {"post"},
     "/portfolio/{portfolio_id}": {"get"},
     "/portfolio/{portfolio_id}/nav": {"get"},
+    # 11 Sep 2026: file more shares into a portfolio that already exists. Distinct from
+    # `PUT /portfolios/{id}/holdings` above, which REPLACES a legacy portfolio's list from a CSV;
+    # this one moves quantities between the redesign's groups and never removes a name.
+    "/portfolio/{portfolio_id}/holdings": {"post"},
     # docs/07 §Backtests (Prompt 15). The four paths docs/07 does not list — the collection read,
     # `holdings`, the SSE stream and the download the signed `export` link redeems against — are
     # Prompt 15 deliverables 4, 5 and 6; each is argued for in `baskfy_api.routers.backtests` and

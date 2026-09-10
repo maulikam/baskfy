@@ -66,9 +66,7 @@ def etf_instrument_ids(directory: Path = EXPORT) -> set[int]:
 def universe(config: VbtConfig = DEFAULT_VBT_CONFIG, directory: Path = EXPORT) -> pl.DataFrame:
     """``(id, symbol)`` for every name ``04`` §1 admits: NSE cash, EQ/BE/BZ, no ETFs, no SME."""
     data = config.data
-    frame = _read("instrument", directory).filter(
-        pl.col("instrument_type") == data.instrument_type
-    )
+    frame = _read("instrument", directory).filter(pl.col("instrument_type") == data.instrument_type)
     series = pl.col("series").fill_null("EQ" if data.keep_null_series else "")
     frame = frame.with_columns(series.alias("series")).filter(
         pl.col("series").is_in(list(data.series_allowed))

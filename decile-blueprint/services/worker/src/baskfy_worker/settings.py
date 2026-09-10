@@ -79,6 +79,21 @@ class WorkerSettings(BaseSettings):
     #: ``docs/swing/status`` on a checkout; on the box a directory on the state volume.
     swing_timing_probe_dir: str = "docs/swing/status"
 
+    # --- The volume-breakout sleeve (docs/vbt) -------------------------------
+    #
+    # The worker reads both flags at startup, not per task (``docs/vbt/02``: "A flag is read once
+    # per process at startup and never from a form"). ``vbt_execution_enabled`` appears here even
+    # though the worker places nothing, because the evening job writes the plan a confirm will
+    # execute and has to know whether that confirm would be real: it is what decides the session's
+    # ``mode``, whether the first-live halving applies, and whether the DRY_RUN counter moves.
+    vbt_execution_enabled: bool = False
+    #: Detection moves no money, so this is on. Set it false to silence the nightly step and the
+    #: 21:00 retry without removing them.
+    vbt_nightly_enabled: bool = True
+    vbt_max_open_positions_max: int = Field(default=15, gt=0, le=30)
+    vbt_max_position_pct_max: float = Field(default=15.0, gt=0, le=100)
+    vbt_stop_pct_max: float = Field(default=15.0, gt=0, le=50)
+
     # --- SW18: the 08:45 Kite login nudge (docs/swing/DECISIONS-SW SW18.1) ------
     #
     # Kite kills the access token every morning and nothing on this box may hold a Zerodha

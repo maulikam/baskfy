@@ -308,3 +308,63 @@ constant: reproducing the study means using the study's tick, and placing an ord
 the exchange's. A run that does not say which tick it used has not said what it measured.
 Rejected: one tick everywhere (either the reproduction fails or the desk sends a price the
 exchange rejects). Reversal: the field.
+
+---
+
+## VB3 — schema and settings
+
+### VB3.1 — The migration is generated from the models, then committed as ordinary code · ⚠ UNREVIEWED
+
+Twelve tables and about 280 columns is more than anyone types twice without a typo, and a
+migration that disagrees with its models by one nullability is a bug nobody finds until a night
+job writes a null.
+
+So `0037_vbt.py`'s body was **emitted from `Base.metadata`** by a throwaway script and committed
+as ordinary `op.create_table` calls — self-contained Alembic code, no import of the models, which
+is the rule a migration has to obey because models change and history does not. The generator is
+not committed: its output is the artefact, and keeping it would invite someone to re-run it
+against changed models and overwrite a migration that has already been applied somewhere.
+
+Verified rather than assumed: a scratch database was created, migrated from base to head, and
+compared against the models with **Alembic's own `compare_metadata`** — **0 differences among the
+`vb_` tables**. Then downgraded to `0036_check_name` (all twelve dropped) and upgraded again
+(all twelve back), and compared once more. Rejected: hand-writing it (typo risk with no
+detection); `alembic revision --autogenerate` against the dev database (it writes to a database
+another session is using, and it was at `0026` anyway).
+
+### VB3.2 — `0037`, not `0036` — the head moved mid-run · ⚠ UNREVIEWED
+
+The pack recorded `0035_split_allocation` as the head and `0036` as the next free number. While
+VB1 and VB2 were being built, a concurrent session committed `0036_check_name`, and `alembic
+heads` reported **two heads** — the only symptom a linear history gives.
+
+The migration was renumbered to `0037_vbt`, revising `0036_check_name`. Chaining onto the
+committed state is the rule when two sessions collide; the alternative (asking the other session
+to renumber) trades a rename for a coordination round-trip and gets nothing. `docs/vbt/03` now
+says so, and says what the symptom looked like, because it will happen again.
+
+### VB3.3 — Four settings, and `max_open_positions` has a ceiling above the strategy's own · ⚠ UNREVIEWED
+
+`vb_config` carries the sleeve's capital, the position count, the position cap and the stop
+(PACK.5). The ceiling on the count is **15** while the strategy's own `SizingConfig.max_slots` is
+**10**, which looks like a contradiction and is not: `04` §9.1 takes `min(setting, max_slots)`, so
+a setting above ten cannot widen the book — it can only fail to narrow it.
+
+The ceiling is higher than the slot count deliberately, so the number stays visible as a setting a
+person may lower rather than one the server has already pinned. Rejected: a ceiling of 10 (the
+setting and the ceiling would then be the same number, and a form field that can only ever be
+lowered reads as broken); no ceiling at all (a setting with no bound is not a setting, it is a
+hole). Reversal: one default in `Settings`.
+
+### VB3.4 — The db-marked tests ran against their own database · ⚠ UNREVIEWED
+
+`BASKFY_TEST_DATABASE_URL` points at one shared `baskfy_test`, and `screener_helpers.seeded_database()`
+**drops and re-migrates** it. A concurrent session was running the whole API suite against that
+same database, and the symptom was `relation "app_user" does not exist` in the middle of a test
+that had just created one.
+
+VB3's runs therefore used a private `baskfy_vb_test`. Worth recording because the failure looks
+exactly like a broken migration and is not, and because it will recur on any machine where two
+sessions test at once. The fixture itself is unchanged: it is the *environment variable* that was
+pointed elsewhere, which is the smallest change that fixes it and the only one that leaves CI
+alone.

@@ -11,6 +11,7 @@ Usage:
     python -m baskfy_api.seed bars               # 3 years of bars from FixtureProvider
     python -m baskfy_api.seed market             # index snapshots + market-health breadth
     python -m baskfy_api.seed swing              # sw_config for the sole tenant (SW2)
+    python -m baskfy_api.seed vbt                # vb_config for the sole tenant (VB3)
     python -m baskfy_api.seed swing --capital 2500000 --risk 0.5   # ...and set the sleeve (SW13)
     python -m baskfy_api.seed e2e                # everything the browser acceptance suite needs
 
@@ -63,6 +64,7 @@ from baskfy_core.models import (
     Subscription,
     SwConfig,
     TradingDay,
+    VbConfig,
 )
 from baskfy_core.reference_export import ReferenceRows, to_rows
 from baskfy_core.seed_data import (
@@ -684,6 +686,32 @@ async def seed_swing_config(session: AsyncSession) -> int:
     return 1
 
 
+async def seed_vbt_config(session: AsyncSession) -> int:
+    """One ``vb_config`` row for the sole tenant, with ``sleeve_capital_inr = 0`` (VB3).
+
+    **Zero capital is the point, not an oversight**, and for the same reason it is for the swing
+    book above: ``docs/vbt/02-scope-and-gating.md`` §3.4 makes writing this sleeve's capital one
+    of the five conditions on the real-money flag, and ``baskfy_core.vbt.sizing`` refuses every
+    entry with ``NO_SLEEVE_CAPITAL`` while equity is zero. So a freshly seeded database has a
+    volume-breakout sleeve that detects, ranks, stores and plans **nothing to buy** until a person
+    decides what it may risk. Any other default would mean the number a trade was sized against
+    was one this seeder chose.
+
+    Idempotent: ``ON CONFLICT DO NOTHING`` rather than ``DO UPDATE``, because this is the row's
+    *creation* and not its management. Re-running never resets a capital or a stop a person has
+    already chosen.
+
+    Seeded rather than written by migration ``0037_vbt`` because the user id comes from
+    ``BASKFY_SOLE_USER_ID``, and an environment variable does not belong in schema history.
+    """
+    user_id = await _sole_user_id(session)
+    if user_id is None:
+        return 0
+    statement = insert(VbConfig).values(user_id=user_id, updated_by="seed")
+    await session.execute(statement.on_conflict_do_nothing(index_elements=[VbConfig.user_id]))
+    return 1
+
+
 async def set_swing_sleeve(
     session: AsyncSession,
     *,
@@ -805,6 +833,9 @@ async def _run(
                 counts["sw_config_sleeve"] = await set_swing_sleeve(
                     session, capital_inr=capital, risk_pct=risk
                 )
+        if command in ("all", "vbt"):
+            # Same placement and the same reason as the swing row above.
+            counts["vb_config"] = await seed_vbt_config(session)
         if command in ("all", "market"):
             await seed_reference(session)
             counts["index_snapshot_daily"] = await seed_index_snapshots(session)
@@ -832,8 +863,9 @@ async def _run(
             counts["market_health_daily"] = await seed_market_health(session, to_rows().as_of)
             counts["pipeline_run"] = await seed_published_run(session, to_rows().as_of)
             counts["app_user"] = await seed_e2e_account(session)
-            # Last: it needs the account the line above creates.
+            # Last: they need the account the line above creates.
             counts["sw_config"] = await seed_swing_config(session)
+            counts["vb_config"] = await seed_vbt_config(session)
         return counts
 
 
@@ -841,7 +873,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="baskfy-seed", description=__doc__)
     parser.add_argument(
         "command",
-        choices=("all", "reference", "trading-days", "fixture", "bars", "market", "swing", "e2e"),
+        choices=(
+            "all",
+            "reference",
+            "trading-days",
+            "fixture",
+            "bars",
+            "market",
+            "swing",
+            "vbt",
+            "e2e",
+        ),
         help="which seed set to apply",
     )
     parser.add_argument("--database-url", default=None, help="override BASKFY_DATABASE_URL")

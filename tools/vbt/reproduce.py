@@ -21,11 +21,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import dataclasses
 import datetime as dt
 import json
 import sys
 import time
-from decimal import Decimal
 from pathlib import Path
 
 import numpy as np
@@ -33,23 +33,32 @@ import polars as pl
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from baskfy_core.vbt.backtest import (  # noqa: E402
+from research_panel import RESULTS, load
+
+from baskfy_core.vbt.backtest import (
     BacktestParams,
     BacktestResult,
+    BacktestStats,
     gate_vector,
     panel_from_frame,
     run_backtest,
     summarise,
     yearly,
 )
-from baskfy_core.vbt.breadth import breadth_series  # noqa: E402
-from baskfy_core.vbt.config import DEFAULT_VBT_CONFIG, EntryConfig, VbtConfig  # noqa: E402
-from baskfy_core.vbt.indicators import with_vbt_indicators  # noqa: E402
-from baskfy_core.vbt.signals import with_signal_columns  # noqa: E402
-from research_panel import RESULTS, load  # noqa: E402
+from baskfy_core.vbt.breadth import breadth_series
+from baskfy_core.vbt.config import DEFAULT_VBT_CONFIG, EntryConfig, VbtConfig
+from baskfy_core.vbt.indicators import with_vbt_indicators
+from baskfy_core.vbt.signals import with_signal_columns
 
 #: The study's own frame: the first 200 sessions are warm-up, so the book starts here.
 FIRST_SESSION = dt.date(2017, 10, 16)
+
+#: What the study counted, and what this run must count too (``06`` VB2 AC 1).
+STUDY_SCAN_HITS = 32_929
+STUDY_SIGNALS = 6_293
+
+#: Prices agree to the paisa or they do not agree (``06`` VB2 AC 4).
+A_PAISA = 0.01
 
 #: How close each headline number has to be. The study stored some of them rounded to one
 #: decimal (``win_rate_pct`` 37.8, ``avg_hold`` 18.3, ``exposure_pct`` 63.2), so half of that
@@ -71,6 +80,7 @@ def published() -> dict[str, float]:
     stored = json.loads((RESULTS / "final_metrics.json").read_text(encoding="utf-8"))
     return {name: float(stored[name]) for name in TOLERANCE}
 
+
 #: The research's exit labels, mapped onto ``ExitReason``. ``stop_day0`` is a stop that fired on
 #: the entry session itself; the production engine calls that a stop like any other.
 REASON_OF = {
@@ -91,7 +101,7 @@ def build(config: VbtConfig) -> tuple[pl.DataFrame, pl.DataFrame]:
     return tagged, breadth_series(tagged, config)
 
 
-def run(
+def run(  # noqa: PLR0913 - one keyword per knob a neighbourhood case turns
     tagged: pl.DataFrame,
     breadth: pl.DataFrame,
     *,
@@ -102,9 +112,7 @@ def run(
 ) -> BacktestResult:
     panel = panel_from_frame(tagged, signal_column)
     open_at = (
-        gate_vector(breadth, panel.sessions)
-        if gate
-        else np.ones(panel.sessions_count, dtype=bool)
+        gate_vector(breadth, panel.sessions) if gate else np.ones(panel.sessions_count, dtype=bool)
     )
     params = BacktestParams(start=FIRST_SESSION, config=config, label=label)
     return run_backtest(panel, open_at, params)
@@ -142,8 +150,9 @@ def compare_trades(result: BacktestResult) -> tuple[list[str], dict[str, object]
             if summary["first_divergence"] is None:
                 summary["first_divergence"] = {
                     "index": index,
-                    "study": {k: their[k] for k in ("symbol", "entry_date", "exit_date", "qty",
-                                                    "reason")},
+                    "study": {
+                        k: their[k] for k in ("symbol", "entry_date", "exit_date", "qty", "reason")
+                    },
                     "core": {
                         "symbol": our.symbol,
                         "entry_date": our.entry_date.isoformat(),
@@ -159,21 +168,21 @@ def compare_trades(result: BacktestResult) -> tuple[list[str], dict[str, object]
             abs(float(our.exit_price) - float(their["exit"])),
         )
         summary["worst_price_gap"] = max(float(summary["worst_price_gap"]), gap)
-        if gap <= 0.01:
+        if gap <= A_PAISA:
             summary["price_within_a_paisa"] += 1
     return notes, summary
 
 
-def compare_metrics(stats: dict[str, object]) -> list[tuple[str, float, float, float]]:
+def compare_metrics(stats: BacktestStats) -> list[tuple[str, float, float, float]]:
     """``(name, study, core, difference)`` for each headline number. ``06`` VB2 AC 5."""
     ours = {
-        "cagr_pct": float(stats["cagr_pct"]),
-        "max_dd_pct": float(stats["max_drawdown_pct"]),
-        "trades": float(stats["trades"]),
-        "win_rate_pct": float(stats["win_rate_pct"]),
-        "profit_factor": float(stats["profit_factor"] or 0.0),
-        "avg_hold": float(stats["avg_hold_sessions"]),
-        "exposure_pct": float(stats["exposure_pct"]),
+        "cagr_pct": stats.cagr_pct,
+        "max_dd_pct": stats.max_drawdown_pct,
+        "trades": float(stats.trades),
+        "win_rate_pct": stats.win_rate_pct,
+        "profit_factor": stats.profit_factor or 0.0,
+        "avg_hold": stats.avg_hold_sessions,
+        "exposure_pct": stats.exposure_pct,
     }
     theirs = published()
     return [(name, theirs[name], ours[name], ours[name] - theirs[name]) for name in TOLERANCE]
@@ -195,12 +204,9 @@ def sensitivity(tagged: pl.DataFrame, breadth: pl.DataFrame) -> list[tuple[str, 
         "no gate": 18.5,
         "raw Chartink scan": 0.8,
     }
-    import dataclasses
 
     def with_entry(sessions: int) -> VbtConfig:
-        return dataclasses.replace(
-            DEFAULT_VBT_CONFIG, entry=EntryConfig(valid_sessions=sessions)
-        )
+        return dataclasses.replace(DEFAULT_VBT_CONFIG, entry=EntryConfig(valid_sessions=sessions))
 
     def with_field(group: str, **changes: object) -> VbtConfig:
         sub = dataclasses.replace(getattr(DEFAULT_VBT_CONFIG, group), **changes)
@@ -234,7 +240,8 @@ def sensitivity(tagged: pl.DataFrame, breadth: pl.DataFrame) -> list[tuple[str, 
         result = run(
             tagged, gate_frame, config=config, signal_column=column, gate=gated, label=label
         )
-        out.append((label, published[label], float(summarise(result)["cagr_pct"])))
+        stats = summarise(result)
+        out.append((label, published[label], stats.cagr_pct if stats else float("nan")))
     return out
 
 
@@ -260,6 +267,9 @@ def main() -> int:
 
     result = run(tagged, breadth)
     stats = summarise(result)
+    if stats is None:
+        print("the run produced no equity curve at all — nothing to compare")
+        return 1
     notes, trade_summary = compare_trades(result)
     metrics = compare_metrics(stats)
 
@@ -288,12 +298,12 @@ def main() -> int:
     print("\n-- by year -----------------------------------------------------------")
     for row in yearly(result):
         print(
-            f"  {row['year']}  {float(row['return_pct']):+7.1f}%  "
-            f"{row['trades']:4d} trades  win {float(row['win_rate_pct']):.0f}%"
+            f"  {row.year}  {row.return_pct:+7.1f}%  "
+            f"{row.trades:4d} trades  win {row.win_rate_pct:.0f}%"
         )
 
     print("\n-- exits -------------------------------------------------------------")
-    print(f"  {stats['by_reason']}")
+    print(f"  {stats.by_reason}")
 
     sensitivity_rows: list[tuple[str, float, float]] = []
     if not args.skip_sensitivity:
@@ -307,14 +317,10 @@ def main() -> int:
         "scan_hits": scan_hits,
         "signals": signals,
         "trades": trade_summary,
-        "metrics": [
-            {"name": n, "study": s, "core": c, "delta": d} for n, s, c, d in metrics
-        ],
-        "stats": stats,
-        "yearly": yearly(result),
-        "sensitivity": [
-            {"case": label, "study": s, "core": c} for label, s, c in sensitivity_rows
-        ],
+        "metrics": [{"name": n, "study": s, "core": c, "delta": d} for n, s, c, d in metrics],
+        "stats": stats.to_json(),
+        "yearly": [row.to_json() for row in yearly(result)],
+        "sensitivity": [{"case": label, "study": s, "core": c} for label, s, c in sensitivity_rows],
         "notes": notes,
     }
     if args.json:
@@ -328,12 +334,11 @@ def main() -> int:
     # DECISIONS-VB VB2.2. At the 40% the strategy uses, the verdict is identical on every session.
     allowance = {"gate 35%": 0.25}
     sensitivity_ok = all(
-        abs(core - study) <= allowance.get(label, 0.1)
-        for label, study, core in sensitivity_rows
+        abs(core - study) <= allowance.get(label, 0.1) for label, study, core in sensitivity_rows
     )
     ok = (
-        signals == 6_293
-        and scan_hits == 32_929
+        signals == STUDY_SIGNALS
+        and scan_hits == STUDY_SCAN_HITS
         and trade_summary["our_count"] == trade_summary["their_count"]
         and trade_summary["identity_matches"] == trade_summary["their_count"]
         and trade_summary["price_within_a_paisa"] == trade_summary["their_count"]

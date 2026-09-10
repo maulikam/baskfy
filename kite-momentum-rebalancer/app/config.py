@@ -170,6 +170,33 @@ SWING_STOP_BAND_MAX = float(os.getenv("BASKFY_SWING_STOP_BAND_MAX", "0.10"))
 # a fast-falling book, leaving a tight swing stop resting unfilled. 0.97 rests it 3% under.
 # Passed per call to place_gtt_stop, so the weekly book's GTTs are byte-for-byte as before.
 SWING_GTT_LIMIT_FRACTION = float(os.getenv("BASKFY_SWING_GTT_LIMIT_FRACTION", "0.97"))
+# ---- The volume-breakout sleeve (docs/vbt) ----------------------------------------------
+# The third sleeve, beside the weekly book and the swing book. An end-of-day strategy: the
+# plan is built from a closed session and its orders are sent the next morning, so there is no
+# monitor here, no tick bus, and no opening range.
+#
+# BASKFY_VBT_EXECUTION_ENABLED is this sleeve's DRY_RUN and is DELIBERATELY INDEPENDENT of
+# DRY_RUN itself, for the same reason the swing flag above is: with it false, /vbt/execute runs
+# the entire path — guards, risk, rate limits, journal — through the gateway's dry-run adapter
+# and records simulated=true whatever DRY_RUN says, so a DRY_RUN session rehearses THIS code.
+# docs/vbt/02 §3 lists what must be true before it flips: TWENTY DRY_RUN sessions, VB10 green,
+# the backtest on the page, a written risk decision, half risk for the first five live sessions.
+#
+# THERE IS NO BASKFY_VBT_AUTO_EXECUTE AND THERE WILL NOT BE ONE. Non-negotiable 1's named
+# exception is the swing sleeve's, by Maulik's own hand (DECISIONS-SW SW25); DECISIONS-VB
+# PACK.2 records why it is not copied here, and VB10 asserts that no setting of that shape
+# exists anywhere in the tree. A VBT order exists because a person pressed Confirm.
+VBT_EXECUTION_ENABLED = os.getenv("BASKFY_VBT_EXECUTION_ENABLED", "false").lower() == "true"
+# The VBT GTT band and cushion (DECISIONS-VB PACK.3). The desk's own STOP_MIN/STOP_MAX (8-12%)
+# are the WEEKLY book's; the swing sleeve carries 0.5-10%; this strategy's stop is a flat 12%
+# with a 15% ceiling, so its band is 0.5-15%. Passed per call, so neither other book changes.
+VBT_STOP_BAND_MIN = float(os.getenv("BASKFY_VBT_STOP_BAND_MIN", "0.005"))
+VBT_STOP_BAND_MAX = float(os.getenv("BASKFY_VBT_STOP_BAND_MAX", "0.15"))
+# Where the VBT GTT's LIMIT leg rests, as a fraction of its trigger — the same mechanism and
+# the same 0.97 the swing route uses, for the same reason: a GTT fires a LIMIT order, and a
+# stop that rests at its own trigger can be walked through by a fast-falling book.
+VBT_GTT_LIMIT_FRACTION = float(os.getenv("BASKFY_VBT_GTT_LIMIT_FRACTION", "0.97"))
+
 # ---- The swing book's notifier (SW11, STANDING-ANSWERS A2) -------------------------------
 # One-way. A TRIGGERED signal for a daily-focus name is emailed with the whole line; nothing
 # that comes back — a reply, a tap — can reach an order. The desk does not import the data

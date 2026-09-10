@@ -1,9 +1,13 @@
 # 03 — Data model: the `vb_` schema
 
-Postgres, Alembic migration **`0036_vbt.py`** in
-`decile-blueprint/services/api/alembic/versions/` (the head at write time is `0035_split_allocation`,
-so `0036` is the next free number — VB3 re-checks before it writes). SQLAlchemy models in
-`packages/core/src/baskfy_core/models/vbt.py`.
+Postgres, Alembic migration **`0037_vbt.py`** in
+`decile-blueprint/services/api/alembic/versions/`, revising `0036_check_name`. SQLAlchemy models
+in `packages/core/src/baskfy_core/models/vbt.py`.
+
+> The pack said `0036`, because `0035_split_allocation` was the head the morning it was written.
+> A concurrent session landed `0036_check_name` while VB1 and VB2 were being built, so VB3 chained
+> onto that instead — `alembic heads` reported two heads, which is the only symptom a linear
+> history gives you and is worth knowing to look for.
 
 Conventions inherited from `models/base.py`: `PRICE` (18,2) for prices and levels, `PRICE_RAW`
 (18,4) where an exchange print must survive adjustment, `INR` (12,2) for money, `BREADTH` (7,4)

@@ -173,7 +173,11 @@ warn_unreachable = true
 # house rule "no `any`" is enforced instead by ruff's ANN401 and by
 # packages/core/tests/test_no_escape_hatches.py, which scan our source rather than generated code.
 plugins = ["pydantic.mypy"]
-mypy_path = "packages/core/src:packages/core/tests:packages/execution/src:packages/providers/src:packages/providers/tests:services/api/src:services/api/tests:services/worker/src:services/worker/tests"
+# `../tools/vbt` is on the path so that `packages/core/tests/test_vbt_goldens.py` can resolve
+# `research_panel` — the loader VB2 and VB9 share, which lives beside the repository's other
+# operator tools rather than inside a package, so that a reproduction of the study and a run
+# over the plant cannot drift apart by having two copies of it.
+mypy_path = "packages/core/src:packages/core/tests:packages/execution/src:packages/providers/src:packages/providers/tests:services/api/src:services/api/tests:services/worker/src:services/worker/tests:../tools/vbt"
 explicit_package_bases = true
 # NOTE: `conftest.py` files are excluded below. Each test tree is a mypy base (so that its
 # sibling helper module — `stubs`, `helpers` — resolves), which makes every conftest the

@@ -220,6 +220,7 @@ export interface SelectionTotal {
 export function selectionTotal(
   rows: readonly AggregatedHolding[],
   selected: ReadonlySet<string>,
+  quantities: ReadonlyMap<string, string> = new Map(),
 ): SelectionTotal {
   const values: Array<string | null> = [];
   const instruments = new Set<number>();
@@ -239,11 +240,90 @@ export function selectionTotal(
         unpriced += 1;
         continue;
       }
-      values.push(line.value);
+      // A part of a leg is worth that part of its value (0035). The whole leg's value is what the
+      // API priced, so the split is done here rather than by re-multiplying a price the client
+      // would have to round itself — the server's figure stays the authority and this only ever
+      // takes a fraction of it.
+      values.push(shareOfValue(line.value, quantities.get(id), freeQuantity(line)));
     }
   }
 
   return { value: addDecimalStrings(values), unpriced, holdings, instruments: instruments.size };
+}
+
+/**
+ * How many of a leg's shares are not already filed into a capital portfolio — the most a new
+ * portfolio may take. Falls back to the whole position for a payload that predates 0035.
+ */
+export function freeQuantity(line: HoldingBrokerLine): string {
+  const free = (line as { unallocated_quantity?: string }).unallocated_quantity;
+  return free ?? line.quantity;
+}
+
+/**
+ * `value * (wanted / free)`, as an exact decimal string, or the whole value when the user has not
+ * narrowed the quantity.
+ *
+ * Returns the whole value for anything it cannot divide honestly — a blank box, a zero
+ * denominator, an unparseable number. The picker is a preview, and a preview that guesses is
+ * worse than one that shows the untrimmed figure while the user is still typing.
+ */
+/**
+ * Has the user typed more shares than this leg has free? Blank and unparseable are **not** over:
+ * the box is being typed into, and turning a half-typed number red is noise, not help.
+ */
+/**
+ * The caption under a holding in the picker: where its shares already are.
+ *
+ * Since 0035 a holding can be in several places at once, so this names them all with their
+ * quantities — " · already 20 in Long term, 34 in Swing" — rather than the single
+ * " · already in X" it replaced, which would have named the first of four and been wrong about
+ * the rest. A wholly unfiled holding says so, because "unallocated" is a real, common state on a
+ * first run and an empty caption reads as missing data.
+ */
+export function describeAllocations(row: AggregatedHolding): string {
+  const parts: string[] = [];
+  for (const line of row.brokers ?? []) {
+    for (const slice of line.allocations ?? []) {
+      parts.push(`${formatShares(slice.quantity)} in ${slice.portfolio.name}`);
+    }
+  }
+  if (parts.length === 0) return " · unallocated";
+  return ` · already ${parts.join(", ")}`;
+}
+
+export function isOverFree(typed: string, free: string): boolean {
+  if (typed.trim() === "") return false;
+  const asked = parseDecimal(typed);
+  const available = parseDecimal(free);
+  if (asked === null || available === null) return false;
+  return compareDecimalStrings(toDecimalString(asked), toDecimalString(available)) > 0;
+}
+
+export function shareOfValue(
+  value: string,
+  wanted: string | undefined,
+  free: string,
+): string | null {
+  if (wanted === undefined || wanted.trim() === "") return value;
+  const asked = parseDecimal(wanted);
+  const available = parseDecimal(free);
+  const priced = parseDecimal(value);
+  if (asked === null || available === null || priced === null) return value;
+
+  // Scaled-integer arithmetic throughout, the way `decimal.ts` does it: bring the two quantities
+  // to a common scale so they can be compared and divided as bigints without ever becoming a
+  // float. `EXTRA` digits of headroom before the divide stop a small fraction of a leg from
+  // truncating to zero and quietly leaving money out of the running total.
+  const scale = Math.max(asked.scale, available.scale);
+  const askedUnits = asked.units * 10n ** BigInt(scale - asked.scale);
+  const availableUnits = available.units * 10n ** BigInt(scale - available.scale);
+  if (availableUnits <= 0n || askedUnits <= 0n) return null;
+  if (askedUnits >= availableUnits) return value;
+
+  const EXTRA = 4;
+  const scaled = (priced.units * askedUnits * 10n ** BigInt(EXTRA)) / availableUnits;
+  return toDecimalString({ units: scaled, scale: priced.scale + EXTRA });
 }
 
 /**
@@ -360,6 +440,12 @@ export interface PortfolioDraft {
   name: string;
   benchmark: string;
   keys: HoldingKey[];
+  /**
+   * `holdingKeyId -> how many shares of that leg`, for the legs the user narrowed (0035). A key
+   * that is absent means "all of the free shares", which is what an untouched tick means and
+   * what the API reads a null `quantity` as.
+   */
+  quantities?: ReadonlyMap<string, string>;
   /** The subscribed model / screen / strategy chosen, when the start was one of those. */
   sourceId: string | null;
 }

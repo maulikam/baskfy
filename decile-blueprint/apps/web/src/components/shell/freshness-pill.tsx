@@ -135,7 +135,7 @@ export function FreshnessPill({ className }: { className?: string }) {
           : degraded
             ? `The last pipeline run did not publish. You are seeing the ${formatTradeDate(data.as_of)} trading session.`
             : behindToday
-              ? `Published for the ${formatTradeDate(data.as_of)} trading session — the last one that has closed. Today's publishes after the market closes. Your portfolio's prices and the swing book's setups are live from Kite right now; baskets, factors and market health are end-of-day by design.`
+              ? `Published for the ${formatTradeDate(data.as_of)} trading session — the last one that has closed. Today's publishes after the market closes. Your portfolio's prices and the swing desk's setups are live from Kite right now; baskets, factors and market health are end-of-day by design.`
               : `Published for the ${formatTradeDate(data.as_of)} trading session.`}
       </TooltipContent>
     </Tooltip>

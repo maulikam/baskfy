@@ -154,12 +154,17 @@ export function NewPortfolioFlow({
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState<Step>(seed?.step ?? (seed ? "holdings" : "start"));
   const [selected, setSelected] = useState<Set<string>>(() => new Set(seed?.selected ?? []));
+  /** `holdingKeyId -> shares`, only for the legs the user narrowed. Blank means "all of it". */
+  const [quantities, setQuantities] = useState<Map<string, string>>(() => new Map());
   const [kind, setKind] = useState<PortfolioKind>(seed?.kind ?? "CAPITAL");
   const [name, setName] = useState(seed?.name ?? "");
   const [benchmark, setBenchmark] = useState(benchmarks[0] ?? "");
   const [sourceId, setSourceId] = useState<string | null>(seed?.sourceId ?? null);
 
-  const total = useMemo(() => selectionTotal(rows, selected), [rows, selected]);
+  const total = useMemo(
+    () => selectionTotal(rows, selected, quantities),
+    [rows, selected, quantities],
+  );
 
   const sourceOptions: readonly SourceOption[] =
     start === "SUBSCRIBED" ? subscribedBaskets : start === "MY_SCREEN" ? screens : strategies;
@@ -184,7 +189,17 @@ export function NewPortfolioFlow({
     setSaving(true);
     setRefusal(null);
     try {
-      const outcome = await onCreate({ start, kind, name: name.trim(), benchmark, keys, sourceId });
+      const outcome = await onCreate({
+        start,
+        kind,
+        name: name.trim(),
+        benchmark,
+        keys,
+        // A lens takes no quantities (§4.1): it answers "which names", not "how many". Sending
+        // them would be sending a fact the server has nowhere to put.
+        ...(kind === "MONITORING" ? {} : { quantities }),
+        sourceId,
+      });
       // A handler that resolves to nothing is a spy in a test that only cares the click fired;
       // treating that as a refusal would put an error on screen for a create that worked.
       if (!outcome) return;
@@ -278,6 +293,8 @@ export function NewPortfolioFlow({
           sectors={sectors}
           selected={selected}
           onChange={setSelected}
+          quantities={quantities}
+          onQuantitiesChange={setQuantities}
           portfolioName={name}
         />
       ) : null}

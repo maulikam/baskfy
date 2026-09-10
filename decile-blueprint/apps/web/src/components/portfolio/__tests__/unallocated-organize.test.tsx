@@ -28,6 +28,10 @@ function leg(
   return {
     broker: { broker_account_id: brokerAccountId, broker_id: label.toLowerCase(), label },
     quantity,
+    // 0035: nothing is filed away in these fixtures, so every share is free. A leg's free
+    // quantity is what the picker may offer, and defaulting it to the whole position keeps these
+    // tests describing the same pre-split world they were written for.
+    unallocated_quantity: quantity,
     value,
     price: null,
     avg_price: null,
@@ -266,19 +270,66 @@ describe("§6.7 — the two-panel picker", () => {
     expect(within(picker).getByTestId("picker-selected")).toHaveTextContent("(1 of 2 brokers)");
   });
 
-  it("offers no partial-quantity control anywhere — §4.2, whole holdings only", async () => {
+  it("offers a quantity per picked leg, capped at its free shares — 0035", async () => {
+    /* This test asserted the OPPOSITE until 10 Sep 2026: "offers no partial-quantity control
+       anywhere — §4.2, whole holdings only". Maulik asked for the reversal in his own words —
+       "one stock can appear in multiple portfolios, so if stock a bought 100 qty for shortterm
+       20 for long term 34 for some swing 36 for momentum" — so what is pinned now is where the
+       control lives and what it is bounded by, not that it is absent. */
     const { user, picker } = await openPicker();
-    await user.click(within(picker).getByRole("button", { name: "Select all unallocated" }));
+    await user.click(within(picker).getByLabelText("Add HDFC Bank at Zerodha to this portfolio"));
 
-    expect(within(picker).queryAllByRole("spinbutton")).toHaveLength(0);
-    expect(within(picker).queryAllByRole("slider")).toHaveLength(0);
-    const inputs = Array.from(picker.querySelectorAll("input"));
-    expect(inputs.length).toBeGreaterThan(0);
-    for (const input of inputs) {
-      expect(["checkbox", "search"]).toContain(input.type);
-    }
-    expect(picker.querySelector('input[type="number"]')).toBeNull();
-    expect(within(picker).queryByLabelText(/quantity/i)).toBeNull();
+    const box = within(picker).getByLabelText(
+      "Shares of HDFC Bank at Zerodha for this portfolio",
+    );
+
+    /* Blank means "all of it", so the untouched flow is still one click and the total is whole. */
+    expect(box).toHaveValue("");
+    expect(box).toHaveAttribute("placeholder", "200");
+    expect(within(picker).getByTestId("picker-total")).toHaveTextContent("₹3,00,000.00");
+  });
+
+  it("narrowing a leg narrows the running total in proportion", async () => {
+    const { user, picker } = await openPicker();
+    await user.click(within(picker).getByLabelText("Add HDFC Bank at Zerodha to this portfolio"));
+    const box = within(picker).getByLabelText(
+      "Shares of HDFC Bank at Zerodha for this portfolio",
+    );
+
+    await user.type(box, "50");
+
+    /* A quarter of the 200-share leg is a quarter of its ₹3,00,000. */
+    expect(within(picker).getByTestId("picker-total")).toHaveTextContent("₹75,000.00");
+  });
+
+  it("says so when the typed quantity exceeds what is free, before the API has to", async () => {
+    const { user, picker } = await openPicker();
+    await user.click(within(picker).getByLabelText("Add HDFC Bank at Zerodha to this portfolio"));
+    const box = within(picker).getByLabelText(
+      "Shares of HDFC Bank at Zerodha for this portfolio",
+    );
+
+    await user.type(box, "500");
+
+    expect(box).toHaveAttribute("aria-invalid", "true");
+    expect(within(picker).getByText("more than you have")).toBeInTheDocument();
+  });
+
+  it("forgets a typed quantity when its leg is un-ticked", async () => {
+    /* Otherwise a leg re-ticked later silently carries a number set for a different portfolio. */
+    const { user, picker } = await openPicker();
+    const tick = within(picker).getByLabelText("Add HDFC Bank at Zerodha to this portfolio");
+    await user.click(tick);
+    await user.type(
+      within(picker).getByLabelText("Shares of HDFC Bank at Zerodha for this portfolio"),
+      "50",
+    );
+    await user.click(tick);
+    await user.click(tick);
+
+    expect(
+      within(picker).getByLabelText("Shares of HDFC Bank at Zerodha for this portfolio"),
+    ).toHaveValue("");
   });
 
   it("carries the selection through kind, name and benchmark to a confirm", async () => {

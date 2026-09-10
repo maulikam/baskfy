@@ -9,13 +9,15 @@ The suggestions route is the "helps sort it" half and the create route is the "4
 half. Everything below is read against a **real** PostgreSQL, for the same reason
 ``test_portfolio_overview.py`` is: the facts under test are database facts.
 
-* Acceptance criterion 2 — a holding can never be in two capital portfolios — is enforced by
-  ``uq_portfolio_holding_one_capital_portfolio``, a *partial* unique index that Postgres applies
-  and no mock reproduces. The test that a monitoring view may overlap freely is the same index
-  seen from the other side: ``MONITORING`` rows are outside it by construction.
-* §4.2's whole-holding rule is asserted **against the request schema itself**, not against a
-  handler's behaviour. A quantity that is validated away is a quantity a later patch can start
-  honouring; the assertion here is that no such field exists anywhere in the body's JSON Schema.
+* Acceptance criterion 2 — *a holding can never be in two capital portfolios* — was **reversed on
+  10 Sep 2026** (`PORTFOLIO_REDESIGN.md` §11.2a), and migration ``0035`` dropped the partial
+  unique index that enforced it. What is asserted now is the invariant that replaced it: the
+  slices of a holding never sum past the holding, refused in words with the numbers attached.
+  Monitoring views still overlap freely, and always did.
+* §4.2's whole-holding rule became **a quantity per holding** in the same change. It is asserted
+  against the request schema itself, not against a handler's behaviour: that the field exists,
+  that omitting it means "all of it", and that zero and negative are refused by the schema rather
+  than left for the route to notice.
 * Tenancy is a predicate that has to actually filter rows. A foreign broker account, a foreign
   holding and an unknown benchmark all answer ``NOT_FOUND`` and never ``FORBIDDEN`` — a 403 would
   confirm the id names a real row, which is the fact a stranger is probing for.
@@ -702,30 +704,53 @@ def _property_names(schema: object) -> set[str]:
     return found
 
 
-def test_the_create_body_has_no_quantity_field_anywhere() -> None:
-    """§4.2, asserted against the schema rather than against a handler's behaviour.
+def test_the_create_body_takes_a_quantity_per_holding() -> None:
+    """The reversal of §4.2, asserted against the schema (0035 / PF2, 10 Sep 2026).
 
-    v1 allocates a holding **whole**. The rule is not "a partial quantity is rejected": a rejected
-    field is a field a client can send, a field a future patch can start honouring, and a field a
-    reader believes the product supports. It is absent — from the body, from the holding entry,
-    and from every schema either of them references.
+    This test used to assert the opposite, at length: that there was no quantity field and there
+    must not be one, because "v1 allocates a holding whole" and partial allocation "arrives, if it
+    arrives, as a migration and a new field". This is that migration and that field. Maulik:
+    *"one stock can appear in multiple portfolios, so if stock a bought 100 qty for shortterm 20
+    for long term 34 for some swing 36 for momentum"*.
 
-    §4.2's own reason, kept in front of whoever next edits this: partial allocation breaks sell
-    attribution (§4.3) and corporate-action math (§4.5). It arrives, if it arrives, as a migration
-    and a new field — not as a quantity that was here all along.
+    It lives on the holding entry and nowhere else: a quantity on the *body* would be a portfolio
+    with one number for every holding in it, which is not a thing.
     """
-    names = _property_names(NewPortfolioIn.model_json_schema())
-
-    assert "quantity" not in names
-    assert not any("quantity" in name or "qty" in name for name in names)
-    assert "quantity" not in HoldingKeyIn.model_fields
+    assert "quantity" in HoldingKeyIn.model_fields
     assert "quantity" not in NewPortfolioIn.model_fields
 
 
-def test_sending_a_quantity_is_refused_by_the_schema_rather_than_ignored() -> None:
-    """``extra="forbid"``: an unknown key is a key somebody expected to mean something."""
+def test_a_quantity_is_optional_and_omitting_it_means_all_of_it() -> None:
+    """The common case — "file this whole holding into Long term" — stays the shortest to write,
+    and every client written before 0035 keeps working unchanged.
+
+    ``None`` is resolved against the ledger by the route, not defaulted here, because the number
+    it means is the position's unallocated remainder and a schema cannot see that.
+    """
+    whole = HoldingKeyIn.model_validate({"instrument_id": 1, "broker_account_id": 1})
+    part = HoldingKeyIn.model_validate(
+        {"instrument_id": 1, "broker_account_id": 1, "quantity": "20"}
+    )
+
+    assert whole.quantity is None
+    assert part.quantity == Decimal("20")
+
+
+def test_a_quantity_that_is_not_a_quantity_is_refused_by_the_schema() -> None:
+    """Zero and negative are refused here rather than in the handler: neither is a slice, and a
+    schema that accepted them would make the route responsible for a shape it never needs."""
+    for bad in ("0", "-20"):
+        with pytest.raises(ValidationError):
+            HoldingKeyIn.model_validate(
+                {"instrument_id": 1, "broker_account_id": 1, "quantity": bad}
+            )
+
+
+def test_an_unknown_key_is_still_refused_rather_than_ignored() -> None:
+    """``extra="forbid"`` survives the change: an unknown key is a key somebody expected to mean
+    something, and silently dropping it is how a client ships a bug it cannot see."""
     with pytest.raises(ValidationError):
-        HoldingKeyIn.model_validate({"instrument_id": 1, "broker_account_id": 1, "quantity": "600"})
+        HoldingKeyIn.model_validate({"instrument_id": 1, "broker_account_id": 1, "qty": "600"})
 
 
 def test_the_write_half_says_in_its_own_source_that_it_is_not_an_order_path() -> None:
@@ -810,21 +835,31 @@ async def test_an_empty_capital_portfolio_is_a_legitimate_thing_to_make(
 
 @requires_db
 @pytest.mark.asyncio
-async def test_allocating_a_holding_already_in_another_capital_portfolio_is_refused(
+async def test_asking_for_more_shares_than_are_free_is_refused_with_the_numbers(
     session: AsyncSession, pile: Pile
 ) -> None:
-    """Acceptance criterion 2, answered in words rather than as a database error.
+    """§11.2a's refusal, replacing criterion 2's (10 Sep 2026).
 
-    The partial unique index would refuse this write on its own, with an integrity error naming a
-    constraint. The refusal here names the *stock* and the *portfolio it is already in*, which is
-    what §6.7's picker needs in order to offer "remove these from the selection" — and it points
-    at the monitoring view as the thing that overlaps legitimately.
+    This test asserted the opposite until Maulik reversed the rule: filing a holding that was
+    already in another capital portfolio used to be a 400 that said "a holding belongs to exactly
+    one capital portfolio". Filing the same stock into several portfolios is now the feature, so
+    the only thing left to refuse is arithmetic — you cannot file more shares than you own.
+
+    The message carries the numbers, not just the fact, because §6.7's picker needs something the
+    user can correct *to*: how many were asked for, how many are free, and where the rest already
+    are.
     """
     body = NewPortfolioIn(
         name="Banks",
         kind=PortfolioKind.CAPITAL,
         source=PortfolioSource.HOLDING_GROUP,
-        holdings=[HoldingKeyIn(instrument_id=pile.hdfc, broker_account_id=pile.zerodha)],
+        holdings=[
+            HoldingKeyIn(
+                instrument_id=pile.hdfc,
+                broker_account_id=pile.zerodha,
+                quantity=Decimal("100000"),
+            )
+        ],
     )
     with pytest.raises(Problem) as raised:
         await new_portfolio(body, session, pile.owner)
@@ -832,9 +867,8 @@ async def test_allocating_a_holding_already_in_another_capital_portfolio_is_refu
     problem = raised.value
     assert problem.status == 400
     assert "HDFCBANK" in problem.detail
-    assert "Core" in problem.detail
-    assert "exactly one capital portfolio" in problem.detail
-    assert "monitoring view" in problem.detail
+    assert "more shares than you own" in problem.detail
+    assert "are free" in problem.detail
     # ...and nothing was created: a portfolio that could not hold what it named is not a portfolio.
     assert await _capital_row(session, pile.hdfc, pile.zerodha) == pile.core
     assert (

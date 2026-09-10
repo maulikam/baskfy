@@ -23,6 +23,10 @@ function leg(brokerAccountId: number, label: string, quantity: string): HoldingB
   return {
     broker: { broker_account_id: brokerAccountId, broker_id: label.toLowerCase(), label },
     quantity,
+    // 0035: nothing is filed away in these fixtures, so every share is free. A leg's free
+    // quantity is what the picker may offer, and defaulting it to the whole position keeps these
+    // tests describing the same pre-split world they were written for.
+    unallocated_quantity: quantity,
     value: null,
     price: null,
     avg_price: null,

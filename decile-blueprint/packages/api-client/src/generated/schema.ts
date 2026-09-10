@@ -1550,6 +1550,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/explore/{slug}/constituents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Explore Constituents
+         * @description The basket's current constituents, as of its newest published version (SC5 / SC3).
+         *
+         *     `/basket/[slug]/constituents` was a stub whose message said constituent rows "need an
+         *     immutable version from the catalog engine (SC3)". SC3 shipped — `docs/smallcase/STATUS.md`
+         *     marks it green and `cb_basket_version` / `cb_constituent` carry 6 versions and 103 rows on
+         *     the box — but no route was ever added to serve them, so the page kept apologising for data
+         *     that existed. This is that route (9 Sep 2026).
+         *
+         *     Read-only, and visibility is the same `_visible()` predicate every other explore route uses,
+         *     so an unlisted basket is a 404 here exactly as it is on the card. A basket with no version
+         *     yet is **not** an error: it answers 200 with an empty list and version_no 0, because "this
+         *     basket has not been rebalanced into existence yet" is a state the page should render rather
+         *     than a failure it should hide.
+         */
+        get: operations["getExploreConstituents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/explore/{slug}/kite": {
         parameters: {
             query?: never;
@@ -4745,16 +4777,30 @@ export interface components {
             /** Weight */
             weight: number | string;
         };
-        /** ConstituentOut */
-        ConstituentOut: {
-            /** Instrument Id */
-            instrument_id: number;
-            /** Segment */
-            segment: string;
-            /** Symbol */
-            symbol: string;
-            /** Weight */
-            weight: string;
+        /**
+         * ConstituentsOut
+         * @description A published version and the names in it.
+         *
+         *     The version is the *newest* one for the basket. `cb_constituent` rows hang off a version id
+         *     rather than off the basket, which is what makes a version immutable: a rebalance writes a new
+         *     version with new rows and never edits an old one, so a constituent list is always as-of a
+         *     date somebody can name.
+         */
+        ConstituentsOut: {
+            /** Added Count */
+            added_count: number;
+            /** Constituents */
+            constituents: components["schemas"]["baskfy_api__routers__explore__ConstituentOut"][];
+            /** Effective Date */
+            effective_date: string | null;
+            /** Label */
+            label: string;
+            /** Removed Count */
+            removed_count: number;
+            /** Slug */
+            slug: string;
+            /** Version No */
+            version_no: number;
         };
         /**
          * CorporateActionOut
@@ -4884,7 +4930,7 @@ export interface components {
         /** CreateBasketOut */
         CreateBasketOut: {
             /** Constituents */
-            constituents: components["schemas"]["ConstituentOut"][];
+            constituents: components["schemas"]["baskfy_api__routers__curated_create__ConstituentOut"][];
             /** Id */
             id: number;
             /** Label */
@@ -5720,6 +5766,8 @@ export interface components {
          */
         HoldingBrokerLineOut: {
             allocation?: components["schemas"]["PortfolioRefOut"] | null;
+            /** Allocations */
+            allocations?: components["schemas"]["HoldingSliceOut"][];
             /** Avg Price */
             avg_price?: string | null;
             broker: components["schemas"]["BrokerRefOut"];
@@ -5743,6 +5791,11 @@ export interface components {
             price?: string | null;
             /** Quantity */
             quantity: string;
+            /**
+             * Unallocated Quantity
+             * @default 0
+             */
+            unallocated_quantity: string;
             /** Value */
             value?: string | null;
         };
@@ -5760,23 +5813,31 @@ export interface components {
         };
         /**
          * HoldingKeyIn
-         * @description One holding to allocate. **There is no quantity field and there must not be one** (§4.2).
+         * @description One holding to allocate, and **how many of it** (Phase 3, 10 Sep 2026).
          *
-         *     v1 allocates a holding *whole* to one capital portfolio. The rule is not "a partial quantity
-         *     is rejected" — a rejected field is a field a client can send, a field a future patch can
-         *     start honouring, and a field a reader believes the product supports. It is absent, and
-         *     ``extra="forbid"`` makes sending one a 422 rather than a silently ignored key.
+         *     This class used to say, at length, that there was no quantity field and there must not be
+         *     one — that v1 allocated a holding whole, and that partial allocation was a Phase-3 item which
+         *     would arrive "as a migration and a new field, not as a quantity that was here all along".
+         *     This is that migration and that field.
          *
-         *     §4.2's own rationale is worth keeping in front of whoever next edits this class: partial
-         *     allocation breaks sell attribution (§4.3) and corporate-action math (§4.5). It is a Phase-3
-         *     item, gated on the ledger being stable, and it arrives — if it arrives — as a migration and a
-         *     new field, not as a quantity that was here all along.
+         *     Maulik asked for it in his own words: *"one stock can appear in multiple portfolios, so if
+         *     stock a bought 100 qty for shortterm 20 for long term 34 for some swing 36 for momentum"*.
+         *     The old text was right that the ledger had to be stable first; it is, and
+         *     :func:`~baskfy_core.allocation_ledger.validate_against_holdings` is what now carries the
+         *     invariant the whole-holding rule used to carry for free.
+         *
+         *     ``quantity`` is **optional, and omitting it means "all of it"** — which keeps every existing
+         *     client working unchanged and makes the common case ("file this whole holding into Long term")
+         *     the shortest thing to write. It is not defaulted to a number here because the number depends
+         *     on the position, which this schema cannot see; the route resolves it against the ledger.
          */
         HoldingKeyIn: {
             /** Broker Account Id */
             broker_account_id: number;
             /** Instrument Id */
             instrument_id: number;
+            /** Quantity */
+            quantity?: number | string | null;
         };
         /**
          * HoldingKeyOut
@@ -5829,6 +5890,19 @@ export interface components {
          * @enum {string}
          */
         HoldingProfile: "CONSERVATIVE" | "BALANCED" | "AGGRESSIVE";
+        /**
+         * HoldingSliceOut
+         * @description One capital portfolio's share of one physical position (0035).
+         *
+         *     The wire form of `allocation_ledger.Allocation`. It exists because a holding may now be filed
+         *     into several portfolios at once, and every surface that used to print one portfolio's name
+         *     needs to be able to print four with their quantities instead.
+         */
+        HoldingSliceOut: {
+            portfolio: components["schemas"]["PortfolioRefOut"];
+            /** Quantity */
+            quantity: string;
+        };
         /**
          * HoldingsIn
          * @description docs/07: `PUT /portfolios/{id}/holdings`. A replacement, not a merge.
@@ -10098,6 +10172,17 @@ export interface components {
          * @enum {string}
          */
         Weighting: "equal" | "inverse_volatility" | "rank" | "marketcap";
+        /** ConstituentOut */
+        baskfy_api__routers__curated_create__ConstituentOut: {
+            /** Instrument Id */
+            instrument_id: number;
+            /** Segment */
+            segment: string;
+            /** Symbol */
+            symbol: string;
+            /** Weight */
+            weight: string;
+        };
         /** HoldingsOut */
         baskfy_api__routers__desk__HoldingsOut: {
             /** As Of */
@@ -10126,6 +10211,17 @@ export interface components {
             invested: number;
             /** Nav */
             nav: number;
+        };
+        /** ConstituentOut */
+        baskfy_api__routers__explore__ConstituentOut: {
+            /** Name */
+            name: string | null;
+            /** Segment */
+            segment: string;
+            /** Symbol */
+            symbol: string;
+            /** Weight */
+            weight: string;
         };
         /** ManagerOut */
         baskfy_api__routers__explore__ManagerOut: {
@@ -18474,6 +18570,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BasketCardOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getExploreConstituents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConstituentsOut"];
                 };
             };
             /** @description Invalid screen definition */

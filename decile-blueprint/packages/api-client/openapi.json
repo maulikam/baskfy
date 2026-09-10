@@ -3020,33 +3020,59 @@
         "title": "ConstituentIn",
         "type": "object"
       },
-      "ConstituentOut": {
+      "ConstituentsOut": {
+        "description": "A published version and the names in it.\n\nThe version is the *newest* one for the basket. `cb_constituent` rows hang off a version id\nrather than off the basket, which is what makes a version immutable: a rebalance writes a new\nversion with new rows and never edits an old one, so a constituent list is always as-of a\ndate somebody can name.",
         "properties": {
-          "instrument_id": {
-            "title": "Instrument Id",
+          "added_count": {
+            "title": "Added Count",
             "type": "integer"
           },
-          "segment": {
-            "title": "Segment",
+          "constituents": {
+            "items": {
+              "$ref": "#/components/schemas/baskfy_api__routers__explore__ConstituentOut"
+            },
+            "title": "Constituents",
+            "type": "array"
+          },
+          "effective_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Date"
+          },
+          "label": {
+            "title": "Label",
             "type": "string"
           },
-          "symbol": {
-            "title": "Symbol",
+          "removed_count": {
+            "title": "Removed Count",
+            "type": "integer"
+          },
+          "slug": {
+            "title": "Slug",
             "type": "string"
           },
-          "weight": {
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Weight",
-            "type": "string"
+          "version_no": {
+            "title": "Version No",
+            "type": "integer"
           }
         },
         "required": [
-          "symbol",
-          "instrument_id",
-          "weight",
-          "segment"
+          "slug",
+          "version_no",
+          "effective_date",
+          "label",
+          "added_count",
+          "removed_count",
+          "constituents"
         ],
-        "title": "ConstituentOut",
+        "title": "ConstituentsOut",
         "type": "object"
       },
       "CorporateActionOut": {
@@ -3380,7 +3406,7 @@
         "properties": {
           "constituents": {
             "items": {
-              "$ref": "#/components/schemas/ConstituentOut"
+              "$ref": "#/components/schemas/baskfy_api__routers__curated_create__ConstituentOut"
             },
             "title": "Constituents",
             "type": "array"
@@ -5585,6 +5611,13 @@
               }
             ]
           },
+          "allocations": {
+            "items": {
+              "$ref": "#/components/schemas/HoldingSliceOut"
+            },
+            "title": "Allocations",
+            "type": "array"
+          },
           "avg_price": {
             "anyOf": [
               {
@@ -5658,6 +5691,12 @@
             "title": "Quantity",
             "type": "string"
           },
+          "unallocated_quantity": {
+            "default": "0",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unallocated Quantity",
+            "type": "string"
+          },
           "value": {
             "anyOf": [
               {
@@ -5727,7 +5766,7 @@
       },
       "HoldingKeyIn": {
         "additionalProperties": false,
-        "description": "One holding to allocate. **There is no quantity field and there must not be one** (§4.2).\n\nv1 allocates a holding *whole* to one capital portfolio. The rule is not \"a partial quantity\nis rejected\" — a rejected field is a field a client can send, a field a future patch can\nstart honouring, and a field a reader believes the product supports. It is absent, and\n``extra=\"forbid\"`` makes sending one a 422 rather than a silently ignored key.\n\n§4.2's own rationale is worth keeping in front of whoever next edits this class: partial\nallocation breaks sell attribution (§4.3) and corporate-action math (§4.5). It is a Phase-3\nitem, gated on the ledger being stable, and it arrives — if it arrives — as a migration and a\nnew field, not as a quantity that was here all along.",
+        "description": "One holding to allocate, and **how many of it** (Phase 3, 10 Sep 2026).\n\nThis class used to say, at length, that there was no quantity field and there must not be\none — that v1 allocated a holding whole, and that partial allocation was a Phase-3 item which\nwould arrive \"as a migration and a new field, not as a quantity that was here all along\".\nThis is that migration and that field.\n\nMaulik asked for it in his own words: *\"one stock can appear in multiple portfolios, so if\nstock a bought 100 qty for shortterm 20 for long term 34 for some swing 36 for momentum\"*.\nThe old text was right that the ledger had to be stable first; it is, and\n:func:`~baskfy_core.allocation_ledger.validate_against_holdings` is what now carries the\ninvariant the whole-holding rule used to carry for free.\n\n``quantity`` is **optional, and omitting it means \"all of it\"** — which keeps every existing\nclient working unchanged and makes the common case (\"file this whole holding into Long term\")\nthe shortest thing to write. It is not defaulted to a number here because the number depends\non the position, which this schema cannot see; the route resolves it against the ledger.",
         "properties": {
           "broker_account_id": {
             "exclusiveMinimum": 0.0,
@@ -5738,6 +5777,22 @@
             "exclusiveMinimum": 0.0,
             "title": "Instrument Id",
             "type": "integer"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
           }
         },
         "required": [
@@ -5869,6 +5924,25 @@
         ],
         "title": "HoldingProfile",
         "type": "string"
+      },
+      "HoldingSliceOut": {
+        "description": "One capital portfolio's share of one physical position (0035).\n\nThe wire form of `allocation_ledger.Allocation`. It exists because a holding may now be filed\ninto several portfolios at once, and every surface that used to print one portfolio's name\nneeds to be able to print four with their quantities instead.",
+        "properties": {
+          "portfolio": {
+            "$ref": "#/components/schemas/PortfolioRefOut"
+          },
+          "quantity": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio",
+          "quantity"
+        ],
+        "title": "HoldingSliceOut",
+        "type": "object"
       },
       "HoldingsIn": {
         "additionalProperties": false,
@@ -17559,6 +17633,35 @@
         "title": "Weighting",
         "type": "string"
       },
+      "baskfy_api__routers__curated_create__ConstituentOut": {
+        "properties": {
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "segment": {
+            "title": "Segment",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "weight": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Weight",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "instrument_id",
+          "weight",
+          "segment"
+        ],
+        "title": "ConstituentOut",
+        "type": "object"
+      },
       "baskfy_api__routers__desk__HoldingsOut": {
         "properties": {
           "as_of": {
@@ -17639,6 +17742,42 @@
           "cash"
         ],
         "title": "NavPointOut",
+        "type": "object"
+      },
+      "baskfy_api__routers__explore__ConstituentOut": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "segment": {
+            "title": "Segment",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "weight": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Weight",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "name",
+          "segment",
+          "weight"
+        ],
+        "title": "ConstituentOut",
         "type": "object"
       },
       "baskfy_api__routers__explore__ManagerOut": {
@@ -28017,6 +28156,131 @@
           }
         },
         "summary": "Get Explore Basket",
+        "tags": [
+          "explore"
+        ]
+      }
+    },
+    "/api/v1/explore/{slug}/constituents": {
+      "get": {
+        "description": "The basket's current constituents, as of its newest published version (SC5 / SC3).\n\n`/basket/[slug]/constituents` was a stub whose message said constituent rows \"need an\nimmutable version from the catalog engine (SC3)\". SC3 shipped — `docs/smallcase/STATUS.md`\nmarks it green and `cb_basket_version` / `cb_constituent` carry 6 versions and 103 rows on\nthe box — but no route was ever added to serve them, so the page kept apologising for data\nthat existed. This is that route (9 Sep 2026).\n\nRead-only, and visibility is the same `_visible()` predicate every other explore route uses,\nso an unlisted basket is a 404 here exactly as it is on the card. A basket with no version\nyet is **not** an error: it answers 200 with an empty list and version_no 0, because \"this\nbasket has not been rebalanced into existence yet\" is a state the page should render rather\nthan a failure it should hide.",
+        "operationId": "getExploreConstituents",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConstituentsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Get Explore Constituents",
         "tags": [
           "explore"
         ]

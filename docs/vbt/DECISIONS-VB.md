@@ -234,3 +234,77 @@ The stop still appears in the sized result, because `risk_inr` is what a person 
 what one full stop-out costs. Rejected: a `risk_per_trade_pct` that would always resolve to the
 same slot (a knob with no effect is a knob somebody will turn). Reversal: a fifth budget in
 `size_entry`.
+
+---
+
+## VB2 — the goldens
+
+**The headline: the core reproduces the study exactly.** 32,929 scan hits, 6,293 signals, all
+**761** trades matching on symbol, entry date, exit date, quantity and reason, every entry and
+exit price agreeing to **₹0.0000**, CAGR **18.23%**, maximum drawdown **−27.94%**, the exit split
+**688 EMA / 62 stop / 1 no-bar / 10 end-of-run**, and `01` §4's yearly table to one decimal.
+Eleven of the twelve neighbourhood cases reproduce to a tenth of a point. The four entries below
+are the things that had to be settled to get there.
+
+### VB2.1 — Multiplying a price by one is not a no-op, and it cost 589 trades · ⚠ UNREVIEWED
+
+The first full run matched 172 of 761 trades and then diverged. The cause was one line: the fill
+test computed `limit × (1 − fill_through_pct/100)` before comparing it with the session's low,
+and with a through-requirement of zero that multiplication is by exactly one.
+
+It is not a no-op. A bar price converted from a `float` carries about **fifty** significant
+digits of exact binary expansion; Decimal rounds the result of a multiplication to the context's
+**twenty-eight**. So a limit that a low touched *exactly* — the same price, the same bit pattern,
+which is what "a pullback to the previous close" looks like — came back a hair **above** that low
+and never filled. The study's float arithmetic has no such step.
+
+`_fill_threshold` returns the limit itself when there is nothing to discount it by. Rejected:
+raising the Decimal context's precision inside the engine (fixes this instance, leaves the same
+trap for the next exact comparison, and makes every other operation slower for no reason);
+comparing in float (house rule 9, and the fix would have been invisible). Reversal: none wanted;
+the guard is one branch with a docstring that explains itself.
+
+**What it says about the engine generally:** exact comparisons against a tape price must not pass
+through Decimal arithmetic first. Money may; prices being compared with a bar may not.
+
+### VB2.2 — One name sits exactly on its own average, and two libraries disagree · ⚠ UNREVIEWED
+
+`breadth_series` and the research's own series agree on the **gate's verdict at 40% on every one
+of 2,396 sessions**, and on the percentage itself to within one name in the numerator (~0.1 of a
+percentage point out of ~1,100 measured names).
+
+The residual is a genuine tie. PRIVISCL's adjusted close has been ₹0.10 for months; its 200-day
+average is ₹0.10. Polars' rolling mean returns `0.09999999999999999` and pandas' returns `0.1`,
+a difference of one unit in the last place, and `close > average` flips. On 2018-05-30 that is
+390 names above out of 1,114 rather than 389 — 35.009% against 34.919%.
+
+At the strategy's own 40% it changes nothing, ever. At a **35%** gate it flips one session of
+2,396, and 0.2 CAGR points follow — which is not a defect to be tuned away but a measurement of
+how thin the 2018 margin is, and an argument for 40 rather than the edge of the plateau.
+
+Rejected: rounding breadth to a fixed number of decimals before the comparison (a threshold that
+depends on a rounding rule is worse, not better); reproducing pandas' summation order (chasing an
+implementation, not a rule). Reversal: none; the tolerance is documented in `04` §4.6 and
+asserted in `test_vbt_goldens.py`.
+
+### VB2.3 — The end-of-run liquidations are trades · ⚠ UNREVIEWED
+
+Ten of the study's 761 are positions still open on the last session, sold at its close. The first
+draft of `04` §11 excluded them from the win rate as an artefact.
+
+They are not an artefact. A book that is 63% invested is always carrying something, and reporting
+only the trades that closed on their own terms would flatter the win rate by exactly the
+positions whose outcome is unknown. They are labelled `END_OF_RUN`, counted in every statistic,
+and the page says how many there were. Rejected: excluding them (a nicer number about a different
+book). Reversal: one filter, and a line on the page saying it was applied.
+
+### VB2.4 — The engine's tick is the paise; the desk's is five · ⚠ UNREVIEWED
+
+The study floored stops and rounded exits to ₹0.01. NSE quotes most cash equities in ₹0.05, which
+is what a level the desk *sends* must be snapped to (`04` §7.1, `TICK_INR`).
+
+Both are right, for different jobs, so the tick is a `BacktestParams` field rather than a
+constant: reproducing the study means using the study's tick, and placing an order means using
+the exchange's. A run that does not say which tick it used has not said what it measured.
+Rejected: one tick everywhere (either the reproduction fails or the desk sends a price the
+exchange rejects). Reversal: the field.

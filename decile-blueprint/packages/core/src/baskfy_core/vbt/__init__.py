@@ -23,10 +23,22 @@ Module map
 ``exits``       the 12% stop, the 21-EMA exit, and what one close says about one position
 ``orders``      the limit that works for three **sessions** and is then cancelled
 ``plan``        signals + book + gate → a plan the desk can confirm line by line
+``backtest``    `04` §11: the study, re-run by every one of the functions above
 """
 
 from __future__ import annotations
 
+from baskfy_core.vbt.backtest import (
+    BacktestParams,
+    BacktestResult,
+    BacktestTrade,
+    Panel,
+    gate_vector,
+    panel_from_frame,
+    run_backtest,
+    summarise,
+    yearly,
+)
 from baskfy_core.vbt.breadth import (
     BreadthReading,
     breadth_above_dma,
@@ -131,6 +143,9 @@ __all__ = [
     "TERMINAL_STATES",
     "TICK_INR",
     "Action",
+    "BacktestParams",
+    "BacktestResult",
+    "BacktestTrade",
     "Bar",
     "BookState",
     "BreadthConfig",
@@ -148,6 +163,7 @@ __all__ = [
     "ManageAction",
     "OpenPosition",
     "OrderState",
+    "Panel",
     "PlanLine",
     "ScanConfig",
     "SessionCalendar",
@@ -181,20 +197,25 @@ __all__ = [
     "fill_if_touched",
     "first_live_multiplier",
     "gate_for",
+    "gate_vector",
     "initial_stop",
     "is_expired",
     "manage",
+    "panel_from_frame",
     "r_multiple",
     "require_columns",
+    "run_backtest",
     "session_counts",
     "sessions_since",
     "signal_mask",
     "size_entry",
     "stop_fill",
+    "summarise",
     "thin_sessions",
     "tick_floor",
     "to_tick",
     "trend_filters",
     "with_signal_columns",
     "with_vbt_indicators",
+    "yearly",
 ]

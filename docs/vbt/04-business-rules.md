@@ -160,9 +160,18 @@ entry, not a tuning pass.
 
 **4.5 This is not `market_health_daily`.** That table's `pct_above_200dma` is measured over an
 index's point-in-time membership. This one is measured over the whole traded universe on this
-run's thin-session calendar. They answer different questions and will differ; VB4 asserts the
-`vb_breadth_daily` series reproduces `research/volume-breakout/out/breadth200.csv` to 1e-12 and
+run's thin-session calendar. They answer different questions and will differ; the `vb_` series
 makes no claim about the other.
+
+**4.6 One name can sit exactly on its own average, and two libraries can disagree about it.**
+Measured at VB2: over the study's 2,396 sessions this series and the research's agree on **the
+gate's verdict at 40% on every single session**, and the percentages themselves agree to within
+**one name in the numerator** — about 0.1 of a percentage point out of ~1,100 measured names. The
+cause is a real tie rather than a bug: a penny stock whose adjusted close has been ₹0.10 for
+months has a 200-day average of ₹0.10, and Polars' rolling mean returns `0.09999999999999999`
+where pandas' returns `0.1`. "Is the close above its own average" then has two defensible
+answers. It costs nothing at 40%; at a 35% gate one session of 2,396 flips and 0.2 CAGR points
+follow it, which is a fact about how thin the 2018 margin is. `DECISIONS-VB.md` **VB2.2**.
 
 ---
 
@@ -296,6 +305,21 @@ exists anyway.
 > single most likely place the live result parts company with the study. VB9's drift flag reads
 > CAGR; this line is the one a human reads.
 
+> **And the fill test is an equality, not an inequality, more often than it looks.** Yesterday's
+> close *is* today's low often enough to matter — it is what a pullback to the previous close
+> looks like — so the comparison has to be exact. Computing `limit × 1` before comparing is not a
+> no-op: a bar price converted from a float carries about fifty significant digits and Decimal
+> rounds a product to twenty-eight, which pushes such a limit a hair above the low that touched
+> it and the order never fills. VB2 found this as 589 missing trades; `_fill_threshold` in
+> `backtest.py` is the one line that fixes it. `DECISIONS-VB.md` **VB2.1**.
+
+**7.7 The book sizes at plan time; the backtest sizes at the fill.** A resting order must carry a
+quantity when it is placed, so the evening plan sizes it against the sleeve as it stands that
+night. The study sized each entry at the moment it filled, against the equity of the session
+before. Over a three-session window the difference is small, and it is a **structural** one: the
+same `size_entry` runs in both places, at different moments. Where a page compares the two, it
+says which.
+
 **7.4 A locked open.** A session whose `open == high == low` for the name is a locked circuit and
 no fill is possible; the order keeps working and the session is not counted against §7.2's three.
 
@@ -417,12 +441,26 @@ For each session *j* on §2's calendar, in this order:
 5. **At the close**: mark equity, and queue tomorrow's `EMA_EXIT` for every position whose close
    is below its 21-EMA.
 6. At the end of the run, open positions are liquidated at the last close so the equity curve
-   reads cleanly. Those exits are labelled `END_OF_RUN` and are excluded from the win-rate and
-   profit-factor statistics, never from the curve.
+   reads cleanly. Those exits are labelled `END_OF_RUN` and are **counted as trades**: the
+   study's 761 includes ten of them, and dropping them would flatter the win rate by hiding the
+   positions the book was still carrying when the history ran out.
 
 **The gate is read at *j−1*.** A signal at session *t*'s close is acted on at *t+1*, and the gate
 that governs it is the breadth of *t* — the same close that produced the signal. VB4's
 look-ahead test shifts the series by one session and asserts the number of entries changes.
+
+**Three details the sequencing turns on**, each of which changes a number if it is read the
+other way and each of which was settled against the study at VB2:
+
+* **The turnover cap reads the previous session's 20-day average**, not the signal day's — the
+  last one a book sizing at the moment of the fill could have seen. For a next-session fill they
+  are the same number; for a fill on the third session they are not.
+* **Every price in the engine is the adjusted series**, as the study computed it. The live plan
+  converts a level to an exchange price by dividing by the row's `adj_factor` before an order
+  carries it (`03` §9). On the signal day those are the same number by definition.
+* **The engine's tick is the paise (₹0.01)**, which is what the study floored stops and rounded
+  exits to. The desk snaps the levels it *sends* to ₹0.05 (§7.1). Reproducing the study means
+  using the study's tick, and `BacktestParams.tick` is the field that says so.
 
 **Reported**: CAGR, max drawdown and its dates, Sharpe (daily, 0 rf), Calmar, trades, win rate,
 profit factor, average win/loss/trade, average hold, exposure %, the yearly and monthly tables,

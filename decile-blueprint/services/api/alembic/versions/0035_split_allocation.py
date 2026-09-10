@@ -64,7 +64,12 @@ depends_on: str | Sequence[str] | None = None
 #: 0021 named it; PF2 drops it. Spelled once so the upgrade and the downgrade cannot disagree.
 _ONE_CAPITAL_INDEX = "uq_portfolio_holding_one_capital_portfolio"
 
-_QUANTITY_CHECK = "ck_portfolio_holding_quantity_not_negative"
+#: The name WITHOUT the `ck_` prefix, because `alembic`'s naming convention adds it — and with
+#: the table name repeated, because that is this schema's house style for every other check
+#: (`ck_portfolio_portfolio_parent_not_self`, `ck_portfolio_portfolio_kind_known`), and because
+#: the ORM model spells it the same way. Getting this wrong on the first deploy produced
+#: `ck_portfolio_holding_ck_portfolio_holding_quantity_not_negative` on the box; 0036 renames it.
+_QUANTITY_CHECK = "portfolio_holding_quantity_not_negative"
 
 
 def upgrade() -> None:
@@ -77,6 +82,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # The bare name, like `create_check_constraint` above: alembic applies the `ck_%(table_name)s_`
+    # convention to BOTH, and passing the full name here produced
+    # `ck_portfolio_holding_ck_portfolio_holding_portfolio_hol_f256` — prefixed twice and then
+    # truncated to fit. Proved by running the downgrade, not by reading the docs.
     op.drop_constraint(_QUANTITY_CHECK, "portfolio_holding", type_="check")
 
     # Refuse loudly rather than fail obscurely, or worse, choose a slice to keep. See the module

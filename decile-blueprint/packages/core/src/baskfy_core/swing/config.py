@@ -177,7 +177,30 @@ class OpeningRangeConfig:
     live_min_volume_pace: float = 3.0
     #: Session bounds, IST, as ``(hour, minute)``. The monitor is idle outside them.
     session_open: tuple[int, int] = (9, 15)
-    monitor_close: tuple[int, int] = (10, 45)
+    #: WHEN TRIGGERS STOP BEING EVALUATED — the whole cash session since 9 Sep 2026.
+    #:
+    #: This was ``(10, 45)`` and `opening_range.evaluate_trigger` still explains why: "he trades
+    #: the first 60-90 minutes". Maulik asked for the opposite — *"build the auto execute outside
+    #: monitor window anytime during trading time"* — so a name that breaks its opening range at
+    #: 14:00 is now a trigger, where before it answered SESSION_OVER and nothing fired.
+    #:
+    #: A strategy change, not a bug fix, and his to make. What is unchanged is WHAT a trigger is:
+    #: the break is still measured against the OPENING range (`windows_minutes`), still needs the
+    #: buffer, still needs a FLAG above its daily pivot, and a locked circuit is still a lock. The
+    #: window over which that test is applied is all that widened.
+    monitor_close: tuple[int, int] = (15, 30)
+    #: ...and when the session's housekeeping runs, which did NOT move with it.
+    #:
+    #: `monitor_close` used to serve two purposes, and extending it would have moved both. This is
+    #: the second: A7/A8's chore — cancel any open remainder, and free the `PENDING_RANGE` slots
+    #: that no range ever resolved so a lower-scored flag can use them. It belongs at 10:45
+    #: because a gap whose range has not resolved by then is not going to, and holding its slot
+    #: all afternoon starves the rest of the watchlist.
+    #:
+    #: Keeping them separate also avoids an inversion: the desk's clock runs the cutoff as soon
+    #: as the strategy stops, so a single setting at 15:30 would have put the cutoff AFTER the
+    #: 15:15 GTT sweep.
+    pending_cutoff_at: tuple[int, int] = (10, 45)
     #: THE ENTRY CAP. ``min(trigger x (1 + entry_limit_buffer_pct / 100), range_high +
     #: entry_limit_max_adr x ADR)`` — half a percent of chase, and never more than a quarter of
     #: a normal day's range above the opening range it broke out of. It is the highest price

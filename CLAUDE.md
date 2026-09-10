@@ -44,9 +44,16 @@ history; D3 is no longer the engineering blocker.
 
 ## The desk's seven non-negotiables (survive verbatim, forever)
 
-1. **Never auto-execute.** Orders fire only from `POST /execute` with `confirm=true` and the
-   `plan_id` issued by `/analyze`; plans expire in 30 minutes. `DRY_RUN=true` must simulate end
-   to end.
+1. **Never auto-execute — with one named, flagged exception since 5 Sep 2026.** Orders fire only
+   from `POST /execute` with `confirm=true` and the `plan_id` issued by `/analyze`; plans expire
+   in 30 minutes. `DRY_RUN=true` must simulate end to end.
+   ⚠️ **The exception, and it is Maulik's, not an agent's:** the swing sleeve's monitor confirms
+   its own triggers when `BASKFY_SWING_AUTO_EXECUTE=true` (`docs/swing/DECISIONS-SW.md` SW25),
+   and since SW26 it may do so **any time between 09:15 and 15:30**, not just the opening 90
+   minutes. Everything else about the path is unchanged — it goes through the same plan, the same
+   gateway, the same guards, the same GTT stop, the same three-entries-a-session cap. The
+   *weekly* rebalancer has no such flag and never gains one. An agent may not widen this
+   exception, add a second one, or default the flag to true.
 2. Holdings quantity = `quantity` + `t1_quantity` + `collateral_quantity`.
 3. Pledged shares sell directly (Zerodha instant-sale); plan flags them as info only.
 4. Every buy gets a GTT stop the same session, vol-scaled 8–12% via `stop_from_vol()`.

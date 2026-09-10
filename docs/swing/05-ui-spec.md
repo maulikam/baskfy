@@ -97,7 +97,7 @@ SW14.1), `settingsSave`, and that none imports anything from `baskfy_execution` 
 
 ## 3. The desk console `/swing` (Jinja, `kite-momentum-rebalancer/app`)
 
-One page, three panels, refreshed every 5 s during 09:15–10:45 and on demand otherwise.
+One page, three panels, refreshed every 5 s during **09:15–15:30** (SW26; 10:45 until then) and on demand otherwise.
 
 **Triggers (top).** `sw_signal` rows for today, **focus names first** (A14 — `sw_watch.focus`),
 newest first within each group: time, symbol, setup, "5-min ORH
@@ -129,7 +129,7 @@ frees unclaimed pending-range slots. Both are websec-covered form posts; neither
 actions.
 
 Status bar: `DRY_RUN`, `BASKFY_SWING_EXECUTION_ENABLED`, monitor state (idle / running since
-09:15 / stopped at 10:45 / **not enabled**), Kite token age, the session's counters written to
+09:15 / stopped at 15:30 / **not enabled**), Kite token age, the session's counters written to
 `sw_session`.
 
 The desk's existing login, CSRF and `websec` middleware cover the page; `DRY_RUN` is shown in

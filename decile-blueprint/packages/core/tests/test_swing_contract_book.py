@@ -876,9 +876,30 @@ class TestTheTriggerVerdict:
     """§7.2's precedence, top to bottom, each at its boundary."""
 
     def test_the_monitor_closes_after_the_documented_time(self) -> None:
-        """ "after `monitor_close` [10:45] -> `SESSION_OVER`" - 10:45 itself is still open."""
-        assert _verdict(last="120", at=dt.time(10, 45)).state is not TriggerState.SESSION_OVER
-        assert _verdict(last="120", at=dt.time(10, 45, 1)).state is TriggerState.SESSION_OVER
+        """ "after `monitor_close` [15:30] -> `SESSION_OVER`" - the mark itself is still open.
+
+        The number moved from 10:45 to 15:30 in SW26; the boundary rule did not. Read from the
+        config rather than retyped, so the next change to §7.2 moves this with it.
+        """
+        close = dt.time(*RANGE.monitor_close)
+        assert _verdict(last="120", at=close).state is not TriggerState.SESSION_OVER
+        assert _verdict(last="120", at=close.replace(second=1)).state is TriggerState.SESSION_OVER
+
+    def test_a_break_after_1045_is_a_trigger_not_a_closed_session(self) -> None:
+        """SW26, stated as its own case because it is the change, not a boundary.
+
+        A name that breaks its OPENING range at 14:00 is a trigger. It was `SESSION_OVER` until
+        9 Sep 2026, and with auto-execute on that is now an unattended live order.
+        """
+        assert _verdict(last="120", at=dt.time(14, 0)).state is TriggerState.TRIGGERED
+
+    def test_the_cutoff_still_precedes_the_gtt_sweep(self) -> None:
+        """§7.4's invariant: `pending_cutoff_at < gtt_sweep_at <= monitor_close`.
+
+        Pinned as an ordering, not as three times: widening the window again must not push the
+        cutoff past the sweep, which is exactly what one shared setting would have done.
+        """
+        assert RANGE.pending_cutoff_at < RANGE.gtt_sweep_at <= RANGE.monitor_close
 
     def test_an_incomplete_range_says_so(self) -> None:
         assert _verdict(last="120", complete=False).state is TriggerState.RANGE_INCOMPLETE

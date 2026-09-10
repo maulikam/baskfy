@@ -71,12 +71,12 @@ fire only from the desk, only on confirm, only in `DRY_RUN=false` after the gate
 | Flag / continuation setup | `detect_flags` → `sw_setup_daily` rows with `setup='FLAG'`, status `SETTING_UP` or `BREAKOUT_TODAY`, `pivot_high`, `stop_ref` |
 | Episodic pivot | `detect_eps` on the gap day (EOD) + `live_gap` at 09:16 (pre-open quotes) → `setup='EP'` |
 | Parabolic short | `detect_parabolic` → `setup='PARABOLIC_SHORT'`, **detect-only**; never a plan line (Track C) |
-| Opening-range high break (1/5/60-min) | `opening_range` + `evaluate_trigger` fed by the desk's `TickBus` / Kite minute candles, 09:15–10:45 IST |
+| Opening-range high break (1/5/60-min) | `opening_range` + `evaluate_trigger` fed by the desk's `TickBus` / Kite minute candles, **09:15–15:30 IST** (SW26; 10:45 until 9 Sep 2026) |
 | Stop at low of day / ORL | `stops.initial_stop`; armed as a GTT through `OrderGateway.place_gtt_stop` the same session (non-negotiable 4) with a swing `StopBand` (PACK.3) |
 | Sell ⅓–½ into strength day 3–5, trail 10/20 SMA, breakeven | `stops.manage` after every close → next morning's `SELL_AT_OPEN` / `RAISE_GTT_STOP` lines |
 | Risk 0.25–1%/trade, 20–25% cap, never average down, never widen | `sizing.size_position` (named caps and refusals); ceilings are **system-only** env (`BASKFY_SWING_*`), the chosen value is a bounded setting |
 | Market gate: breadth, index vs 10/20 MA, own results → progressive exposure | `market.breadth_snapshot` + `market_gate` + `exposure_tier`; the tier ladder is the exposure overlay of this book, separate from the desk's R1–R4 |
-| The daily routine (premarket gap scan, first hour, EOD review, weekend scan) | Beat entries `swing-premarket` 08:50, the monitor 09:15–10:45, `swing-eod` after publish, `swing-weekend` Sat; all IST |
+| The daily routine (premarket gap scan, the session, EOD review, weekend scan) | Beat entries `swing-premarket` 08:50, the monitor **09:15–15:30** (SW26), `swing-eod` after publish, `swing-weekend` Sat; all IST |
 | Journal, win rate, R-multiples | `journal.summarize` over `sw_position` closes; the exposure ladder reads it |
 | "Plan → confirm" | The desk's existing plan/confirm shape: a `SwingPlan` gets a `plan_id`, expires in 30 min, `POST /swing/execute confirm=true` per line |
 

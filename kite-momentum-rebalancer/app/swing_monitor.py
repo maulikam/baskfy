@@ -5,7 +5,10 @@
 `TickBus`; at window close build the range from `historical_data(interval="minute")` (fallback:
 the ticks' own high/low), then `evaluate_trigger` on every tick; `TRIGGERED` → `sw_signal` row +
 a one-line `sw_plan(source=SIGNAL)` + desk notification. `generate_targets` returns `[]` — this
-strategy **never** places. Stops at 10:45."
+strategy **never** places. Stops at `monitor_close`."
+
+**SW26 widened `monitor_close` to 15:30** (Maulik, 9 Sep 2026 — SW6's own words were "stops at
+10:45"). 10:45 keeps only the session's chores, now `pending_cutoff_at`; see `_chores` below.
 
 This module is everything around the strategy that touches the world: the flag, the database,
 the broker's candles and the websocket. The strategy itself (`app/strategies/swing_breakout.py`)
@@ -969,6 +972,7 @@ async def run_until_close(  # noqa: PLR0913 - the loop's collaborators, named
     now: Callable[[], dt.datetime] | None = None,
     clock: Callable[[], float] = time.monotonic,
     on_first_tick: Callable[[], None] | None = None,
+    run_chore: Callable[[str, dt.date], None] | None = None,
 ) -> int:
     """Consume the bus until `monitor_close`; returns the number of signals raised.
 
@@ -978,8 +982,44 @@ async def run_until_close(  # noqa: PLR0913 - the loop's collaborators, named
     strategy: that is the moment the monitor is demonstrably watching the market, and it is
     when `main` writes `sw_session.monitor_ran` (SW11.2). A callback that raises is logged;
     the loop is not its concern.
+    ``run_chore`` is the seam onto `swing_clock.run_chore` (SW26). It defaults to the real
+    one, which opens the desk's database and its gateway — so the loop's own tests inject a
+    recorder rather than reaching for Postgres to prove that a chore fired at its hour.
     """
     read_now = now or (lambda: dt.datetime.now(tz=IST).replace(tzinfo=None))
+    #: SW25 EXTENDED (9 Sep 2026). The watch now runs to 15:30, so the session's two chores can
+    #: no longer wait for the loop to end — `run_after_close` fires the cutoff the moment the
+    #: strategy stops, which at 15:30 would put the 10:45 cutoff AFTER the 15:15 GTT sweep.
+    #: They run inside the loop instead, each once, at its own hour.
+    done_chores: set[str] = set()
+
+    def _run_chore(name: str, day: dt.date) -> None:
+        from . import swing_clock  # noqa: PLC0415 - the desk's chores, resolved at call
+
+        swing_clock.run_chore(name, day=day)
+
+    fire_chore = run_chore or _run_chore
+
+    def _chores(moment: dt.datetime) -> None:
+        """The cutoff at `pending_cutoff_at` and the GTT sweep at `gtt_sweep_at`, while watching.
+
+        Each fires once. Both are wrapped by `run_after_close`'s own error handling when it runs
+        them, and by this function's when it does: a chore that cannot run must not stop the
+        watch, because the watch is now what places orders for the rest of the session.
+        """
+        window = DEFAULT_SWING_CONFIG.opening_range
+        for name, (hour, minute) in (
+            ("cutoff", window.pending_cutoff_at),
+            ("gtt_sweep", window.gtt_sweep_at),
+        ):
+            if name in done_chores or moment.time() < dt.time(hour, minute):
+                continue
+            done_chores.add(name)
+            try:
+                fire_chore(name, moment.date())
+            except Exception as exc:  # noqa: BLE001 - a chore must never stop the watch
+                log.error("clock: the %s chore failed inside the watch: %s", name, exc)
+
     def _drain(strat: Any) -> None:
         """SW25's queue, emptied every pass. Tolerates a strategy whose store has no queue —
         the replay harness drives this loop with a fake, and a monitor that cannot auto-execute
@@ -1021,6 +1061,7 @@ async def run_until_close(  # noqa: PLR0913 - the loop's collaborators, named
             # here — once per loop, outside the tick handler — so a slow broker round trip
             # cannot stall the bus, and so the queue never carries a trigger across a sleep.
             _drain(strategy)
+            _chores(moment)
             if drained:
                 last_tick_at = clock()
                 continue
@@ -1114,8 +1155,11 @@ def main() -> int:
 
             raised = asyncio.run(_serve())
             record_monitor_ran(conn, user_id=user_id, day=day, signals=raised)
-    # The strategy is done and holds nothing. What follows is the desk's clock: the 10:45
-    # cutoff now, the 15:15 GTT sweep later — `app.swing_clock` builds what those need.
+    # The strategy is done and holds nothing. What follows is the desk's clock as a BACKSTOP
+    # (SW26): the loop above already ran both chores at their own hours, so this normally finds
+    # nothing to do. It still runs unconditionally, because the empty-watchlist branch above
+    # never entered the loop and a loop that died early never reached the marks. Both chores are
+    # idempotent and keyed on the day.
     from .swing_clock import run_after_close  # noqa: PLC0415 - after the monitor, never before
 
     return run_after_close(day=day)

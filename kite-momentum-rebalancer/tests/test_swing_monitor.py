@@ -40,6 +40,14 @@ if str(ROOT / "tools" / "swing") not in sys.path:
 import replay  # noqa: E402 - the harness under test, on the path above
 
 DAY = dt.date(2026, 8, 19)
+#: One minute after `monitor_close`, so a loop test ends when the session does.
+#:
+#: These read `dt.datetime(2026, 8, 19, 10, 46)` until SW26 widened the window to 15:30,
+#: and then the loop simply never exited — two tests hung the whole desk suite. Derived
+#: from the config so the next change to the window cannot do that again.
+PAST_CLOSE = dt.datetime.combine(
+    DAY, dt.time(*DEFAULT_SWING_CONFIG.opening_range.monitor_close)
+) + dt.timedelta(minutes=1)
 
 
 def _code_only(source: str) -> str:
@@ -314,15 +322,35 @@ class TestTheStrategy:
         assert store.signals == []
         assert 99 not in strategy.state
 
-    def test_after_monitor_close_nothing_is_raised(self):
+    def test_a_break_after_1045_is_now_a_trigger(self):
+        """SW25 extended, 9 Sep 2026. This asserted the opposite — a 10:46 tick raised nothing,
+        because `monitor_close` was 10:45 and `evaluate_trigger` answered SESSION_OVER.
+
+        Maulik: "build the auto execute outside monitor window anytime during trading time." So
+        the watch runs to 15:30 and an afternoon break is a trigger. What a trigger IS did not
+        change: still measured against the OPENING range, still needs the buffer and the pivot.
+        """
         store = ListStore()
         strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")], store=store,
                                  candles=NoCandles(), day=DAY)
         _drive(strategy, [_tick(1, 99.0, "09:15"), _tick(1, 99.0, "09:20"),
                           _tick(1, 150.0, "10:46")])
+        assert len(store.signals) == 1, "an afternoon break raised nothing"
+        assert store.signals[0].verdict.state is TriggerState.TRIGGERED
+
+    def test_after_the_market_closes_nothing_is_raised(self):
+        """The window still ends — at 15:30 now, not 10:45. A tick after the close is not a
+        trade, and SESSION_OVER still exists to say so."""
+        store = ListStore()
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")], store=store,
+                                 candles=NoCandles(), day=DAY)
+        _drive(strategy, [_tick(1, 99.0, "09:15"), _tick(1, 99.0, "09:20"),
+                          _tick(1, 150.0, "15:31")])
         assert store.signals == []
-        assert strategy.session_over(dt.datetime(2026, 8, 19, 10, 46))
-        assert not strategy.session_over(dt.datetime(2026, 8, 19, 10, 45))
+        assert strategy.session_over(dt.datetime(2026, 8, 19, 15, 31))
+        assert not strategy.session_over(dt.datetime(2026, 8, 19, 15, 30))
+        # The old boundary is squarely inside the window now — that IS the change.
+        assert not strategy.session_over(dt.datetime(2026, 8, 19, 10, 46))
 
     def test_a_failing_store_does_not_stop_the_monitor(self):
         class Broken:
@@ -751,6 +779,43 @@ class TestTheRangeIsTheTicks:
         assert strategy.state[1].opening.high == Decimal("99.5")
         assert strategy.state[1].reconciled is True
 
+    def test_a_monitor_started_in_the_afternoon_still_uses_the_MORNING_range(self):
+        """SW26 made a mid-session restart a routine event, and this is what makes it safe.
+
+        Before SW26 the monitor exited at 10:45, so a process that came up at 13:10 had nothing
+        to do. Now it watches until 15:30, and the expensive way to get this wrong is to build
+        the "opening" range out of the afternoon's own ticks — every name would look like a
+        breakout of the last few minutes. It does not: the window is an absolute clock
+        ([09:15, 09:20)), no afternoon tick falls inside it, so the range comes from Kite's
+        09:15 minute candles and the 13:10 break is measured against the morning's high.
+        """
+        source = CountingCandles([_candle("09:15", "99", "99.5", "98.0", "99.2"),
+                                  _candle("09:20", "99.2", "99.4", "99.0", "99.1")])
+        store = ListStore()
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")], store=store,
+                                 candles=source, day=DAY)
+        _drive(strategy, [_tick(1, 101.0, "13:10", low=99.8)])
+        opening = strategy.state[1].opening
+        assert (opening.high, opening.low) == (Decimal("99.5"), Decimal("98.0")), \
+            "the afternoon's own prints became the opening range"
+        assert [s.verdict.state for s in store.signals] == [TriggerState.TRIGGERED]
+        assert store.signals[0].verdict.entry == Decimal("101.0")
+
+    def test_an_afternoon_start_with_no_candles_refuses_to_trigger_at_all(self):
+        """The fail-safe half of the test above: no morning range, no verdict.
+
+        `_tick_range` returns None when nothing printed inside the window, and the reconcile is
+        asked once. If Kite cannot answer, the name is silent for the rest of the day rather
+        than trading against a range invented from the afternoon. With auto-execute armed that
+        difference is a real order.
+        """
+        store = ListStore()
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")], store=store,
+                                 candles=NoCandles(), day=DAY)
+        _drive(strategy, [_tick(1, 101.0, "13:10"), _tick(1, 120.0, "14:00")])
+        assert strategy.state[1].opening is None
+        assert store.signals == []
+
     def test_the_fixture_replay_asks_for_candles_once_per_name_a_minute_after_the_window(self):
         day, window, watchlist = replay.read_watchlist(FIXTURES / "morning-synthetic.watchlist.json")
         candles = replay.read_candles(FIXTURES / "morning-synthetic.csv")
@@ -856,14 +921,14 @@ class TestTheQuoteCap:
                 if clock.t - 1000.0 < ticks_flowing["until"]:
                     bus.q.put_nowait(_tick(1, 99.0, "09:25"))
                 if clock.t - 1000.0 >= 40.0:
-                    moment["now"] = dt.datetime(2026, 8, 19, 10, 46)
+                    moment["now"] = PAST_CLOSE
                 await original_sleep(0)
 
             swing_monitor.asyncio.sleep = fake_sleep
             try:
                 return await swing_monitor.run_until_close(
                     strategy, bus, quotes=fallback, now=lambda: moment["now"], clock=clock,
-                    poll_seconds=1.0,
+                    poll_seconds=1.0, run_chore=lambda name, day: None,
                 )
             finally:
                 swing_monitor.asyncio.sleep = original_sleep
@@ -938,19 +1003,105 @@ class TestMonitorRanIsWrittenAtStart:
             original_sleep = asyncio.sleep
 
             async def fake_sleep(seconds):
-                moment["now"] = dt.datetime(2026, 8, 19, 10, 46)
+                moment["now"] = PAST_CLOSE
                 await original_sleep(0)
 
             swing_monitor.asyncio.sleep = fake_sleep
             try:
                 return await swing_monitor.run_until_close(
                     strategy, Bus(), now=lambda: moment["now"], on_first_tick=on_first,
+                    run_chore=lambda name, day: None,
                 )
             finally:
                 swing_monitor.asyncio.sleep = original_sleep
 
         asyncio.run(go())
         assert fired == [1] and len(strategy.verdict_seconds) == 3
+
+
+class TestTheChoresFireFromInsideTheWatch:
+    """SW26: the watch outlives 10:45, so it is the process that is awake when a chore is due.
+
+    `run_after_close` still runs both afterwards as a backstop, but by then the 15:15 sweep
+    would already have happened — so leaving the cutoff to it would put the two in the wrong
+    order. These drive the real loop over a fake clock and assert what actually fired.
+    """
+
+    @staticmethod
+    def _run(marks: list[dt.datetime]):
+        """Walk `marks` one loop pass at a time; returns the (name, day) pairs that fired."""
+        fired: list[tuple[str, dt.date]] = []
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")],
+                                 store=ListStore(), candles=NoCandles(), day=DAY)
+
+        class Bus:
+            def subscribe(self, token):
+                return asyncio.Queue()
+
+        moments = iter([*marks, PAST_CLOSE])
+        moment = {"now": next(moments)}
+
+        async def go():
+            original_sleep = asyncio.sleep
+
+            async def fake_sleep(seconds):
+                moment["now"] = next(moments)
+                await original_sleep(0)
+
+            swing_monitor.asyncio.sleep = fake_sleep
+            try:
+                await swing_monitor.run_until_close(
+                    strategy, Bus(), now=lambda: moment["now"],
+                    run_chore=lambda name, day: fired.append((name, day)),
+                )
+            finally:
+                swing_monitor.asyncio.sleep = original_sleep
+
+        asyncio.run(go())
+        return fired
+
+    def test_each_chore_fires_once_at_its_own_hour_while_the_watch_continues(self):
+        window = DEFAULT_SWING_CONFIG.opening_range
+        before = dt.datetime.combine(DAY, dt.time(*window.pending_cutoff_at)) - dt.timedelta(minutes=1)
+        at_cutoff = dt.datetime.combine(DAY, dt.time(*window.pending_cutoff_at))
+        midday = dt.datetime.combine(DAY, dt.time(13, 0))
+        at_sweep = dt.datetime.combine(DAY, dt.time(*window.gtt_sweep_at))
+        fired = self._run([before, at_cutoff, midday, at_sweep, at_sweep])
+        assert fired == [("cutoff", DAY), ("gtt_sweep", DAY)], fired
+
+    def test_a_chore_that_raises_does_not_stop_the_watch(self):
+        """The watch is what places orders for the rest of the session (SW25). A cutoff that
+        cannot reach the database must cost the cutoff, not the afternoon."""
+        strategy = SwingBreakout(None, watchlist=[_name("AAA", 1, pivot="100")],
+                                 store=ListStore(), candles=NoCandles(), day=DAY)
+
+        class Bus:
+            def subscribe(self, token):
+                return asyncio.Queue()
+
+        cutoff = dt.datetime.combine(DAY, dt.time(*DEFAULT_SWING_CONFIG.opening_range.pending_cutoff_at))
+        moments = iter([cutoff, cutoff, PAST_CLOSE])
+        moment = {"now": next(moments)}
+
+        def explode(name, day):
+            raise RuntimeError("no database")
+
+        async def go():
+            original_sleep = asyncio.sleep
+
+            async def fake_sleep(seconds):
+                moment["now"] = next(moments)
+                await original_sleep(0)
+
+            swing_monitor.asyncio.sleep = fake_sleep
+            try:
+                return await swing_monitor.run_until_close(
+                    strategy, Bus(), now=lambda: moment["now"], run_chore=explode,
+                )
+            finally:
+                swing_monitor.asyncio.sleep = original_sleep
+
+        assert asyncio.run(go()) == 0  # the loop reached its close, it did not blow up
 
 
 class TestTheDeskRereadsAFreshToken:

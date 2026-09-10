@@ -95,18 +95,23 @@ papered over.
 
 - **AC:**
   1. Signal count over 2017-01-02 → 2026-09-09 is **6,293**, and the raw scan is **32,929**.
-  2. The breadth series equals `out/breadth200.csv` to 1e-12 at every session.
+  2. The breadth series agrees with `out/breadth200.csv` to within one name in the numerator, and
+     **the gate's verdict at 40% is identical on every one of the 2,396 sessions**. (The first
+     draft of this criterion asked for 1e-12 on the values; the measurement in `04` §4.6 shows
+     why that is the wrong question and what the right one is.)
   3. `drop_thin_sessions` finds **exactly the six dates** of `04` §2.1 over the plant's history —
      found by the rule, not by a list.
   4. Every one of the **761** trades matches on `(symbol, entry_date, exit_date, quantity,
      reason)`, and entry and exit prices agree to **₹0.01**.
   5. The metrics agree: CAGR **18.2%**, max drawdown **−27.9%**, trades **761**, win rate
-     **37.8%**, profit factor **1.55**, average hold **18.3** sessions, exposure **63.2%** —
-     each to the precision STRATEGY §4 states it in.
-  6. The sensitivity neighbourhood reproduces: entry window 2 / 3 / 5 sessions → **11.4 / 18.2 /
-     17.1%**; stop 10 / 12 / 15 → **16.4 / 18.2 / 16.6%**; slots 8 / 10 / 15 → **15.5 / 18.2 /
-     12.9%**; gate 30 / 35 / 40 / 45 / 50 → **15.6 / 18.6 / 18.2 / 15.4 / 10.9%**; no gate →
-     **18.5% at −48.8%**; next-open entry → **9.6%**; raw scan same execution → **0.8%**.
+     **37.8%**, profit factor **1.55**, average hold **18.3** sessions, exposure **63.2%** — each
+     to the precision the study stored it at — and the **whole yearly table** of `01` §4
+     reproduces to one decimal.
+  6. The sensitivity neighbourhood reproduces to a tenth of a point: entry window 2 / 3 / 5
+     sessions → **11.4 / 18.2 / 17.1%**; stop 10 / 12 / 15 → **16.4 / 18.2 / 16.6%**; slots
+     8 / 10 / 15 → **15.5 / 18.2 / 12.9%**; gate 30 / 40 / 45 / 50 → **15.6 / 18.2 / 15.4 /
+     10.9%**; no gate → **18.5% at −48.8%**; raw scan same execution → **0.8%**. The gate at 35%
+     is the one case that does not, by 0.2 points, for the reason `04` §4.6 measures.
   7. Any residual difference is a numbered `DECISIONS-VB.md` entry stating the size of the
      difference, its cause, and whether it changes a decision.
 

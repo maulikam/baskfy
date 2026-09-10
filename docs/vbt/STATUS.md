@@ -3,7 +3,7 @@
 The status page for the volume-breakout run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: VB1 green (the pure core). VB2–VB10 not started.** Started 10 Sep 2026 on branch
+**Run state: VB2 green — the core reproduces the study exactly. VB3–VB10 not started.** Started 10 Sep 2026 on branch
 `developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
@@ -13,7 +13,7 @@ what is NOT done**. A fresh session resumes from the first module not marked ✅
 |---|---|---|
 | VB0 — The pack | ✅ | Eight documents, the seven pre-taken decisions, the standing defaults, and the two measurements that settled how the strategy is read |
 | VB1 — The pure core | ✅ | Nine modules, 43 named thresholds and **245 tests**; law 1 asserted over the source, and no rule module spells out a number that is not 0, 1, 2 or 100 |
-| VB2 — Goldens: reproduce the study | ⬜ | |
+| VB2 — Goldens: reproduce the study | ✅ | **All 761 trades, to the paisa.** 32,929 scan hits, 6,293 signals, CAGR 18.23%, drawdown −27.94%, the yearly table to one decimal, and eleven of twelve neighbourhood cases to a tenth of a point |
 | VB3 — Schema and settings | ⬜ | |
 | VB4 — The nightly job | ⬜ | |
 | VB5 — The sleeve's cash and book | ⬜ | |
@@ -130,6 +130,60 @@ in, DataFrames and dataclasses out.
 * No `backtest.py` yet — the engine of `04` §11 is VB2's.
 * No migration, no task, no router, no page, no desk route. `vb_config` does not exist.
 * The mutation harness (`make mutants`) does not yet include `baskfy_core.vbt`.
+
+---
+
+## VB2 — The goldens ✅ (10 Sep 2026)
+
+**The core is the study.** `baskfy_core.vbt.backtest` runs `04` §11's sequencing over the VB1
+functions and, against `research/volume-breakout/aws/`, produces:
+
+| | The study | The core |
+|---|---|---|
+| raw Chartink scan | 32,929 | **32,929** |
+| VBT-1 signals | 6,293 | **6,293** |
+| trades | 761 | **761**, every one matching on symbol, entry, exit, quantity and reason |
+| worst price gap | | **₹0.0000** |
+| CAGR | 18.23% | **18.23%** |
+| max drawdown | −27.94% | **−27.94%** |
+| win rate / profit factor | 37.8% / 1.55 | **37.84% / 1.55** |
+| exits | 688 EMA · 62 stop · 1 no-bar · 10 end-of-run | **identical** |
+| yearly table (`01` §4) | +17.3 −19.3 −3.8 +20.4 +45.6 +16.1 +64.7 +35.1 +1.2 +6.3 | **identical to one decimal** |
+
+The neighbourhood reproduces too: entry window 2/3/5 → 11.4 / 18.2 / 17.1; stop 10/12/15 →
+16.4 / 18.2 / 16.6; slots 8/10/15 → 15.5 / 18.2 / 12.9; gate 30/40/45/50 → 15.6 / 18.2 / 15.4 /
+10.9; no gate → 18.5% at −48.8%; the raw scan traded the same way → 0.8%. **The one case that
+does not is a 35% gate, by 0.2 points**, and DECISIONS-VB VB2.2 measures exactly why.
+
+### What was written
+
+| | |
+|---|---|
+| `packages/core/src/baskfy_core/vbt/backtest.py` | the `Panel`, the sequencing, the statistics, the yearly table |
+| `tools/vbt/research_panel.py` | the export loader — **the same one VB9's plant run will use**, so a difference between the two runs is a difference in the data and never in the loader |
+| `tools/vbt/reproduce.py` | the comparison as a command; exits 0 on PASS, and prints where it does not |
+| `packages/core/tests/vbt_backtest_fixtures.py` | a planted trade with its arithmetic worked by hand in the docstring |
+| `packages/core/tests/test_vbt_backtest.py` | 22 tests over that trade — runs everywhere, no export needed |
+| `packages/core/tests/test_vbt_goldens.py` | 21 tests over the real bars; **skips loudly** when the 68 MB export is absent |
+
+### The one thing that had to be found
+
+The first full run matched 172 of 761 trades. The cause was `limit × 1` in the fill test: a bar
+price from a `float` carries ~50 significant digits, Decimal rounds a product to 28, and a limit
+that a low touched *exactly* came back a hair above it. Yesterday's close being today's low is
+what a pullback looks like, so the case is common rather than exotic. One branch fixed it
+(DECISIONS-VB **VB2.1**), and the lesson is general: an exact comparison against a tape price
+must not pass through Decimal arithmetic first.
+
+### What is NOT done at VB2
+
+* **Nothing has touched the plant's own database.** Every number above is from the research
+  export, which is gitignored; on a machine without it `test_vbt_goldens.py` skips.
+* The reproduction takes **76 seconds** and about 2 GB of memory (a 3,837 × 2,396 dense panel).
+  VB9 will need the same on the plant's bars, where the universe is larger.
+* No migration, no task, no router, no page, no desk route. `vb_config` still does not exist.
+* The **262 missing instrument-days** and the sparse pre-2024 corporate actions are unchanged
+  (NEEDS-MAULIK § VBT, V2). Reproducing the study exactly reproduces its data gaps exactly.
 
 ### Resume instructions for a fresh session
 

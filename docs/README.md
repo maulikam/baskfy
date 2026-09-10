@@ -21,9 +21,12 @@ rules as of today) and the AWS deployment design.
 
 Runs commissioned since the merge, each a folder with its own read order, scope law, module plan
 and status page: [`smallcase/`](smallcase/) (the product surface), [`swing/`](swing/) (Kullamägi's
-setups, SW0–SW14, code complete), [`go-rewrite/`](go-rewrite/) (the strangler, pre-G0), and
+setups, SW0–SW14, code complete), [`go-rewrite/`](go-rewrite/) (the strangler, pre-G0),
 [`condor/`](condor/) (one hedged expiry-day NIFTY iron condor, OC0–OC12, **not started** — the
-kickoff prompt is [`condor/KICKOFF-PROMPT.md`](condor/KICKOFF-PROMPT.md)).
+kickoff prompt is [`condor/KICKOFF-PROMPT.md`](condor/KICKOFF-PROMPT.md)), and
+[`vbt/`](vbt/) (VBT-1, the volume-breakout sleeve, VB0–VB10 — the strategy is
+[`research/volume-breakout/STRATEGY.md`](../research/volume-breakout/STRATEGY.md) and the pack is
+VB0-green).
 
 ## The one-paragraph version
 

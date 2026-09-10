@@ -1464,3 +1464,60 @@ best knowledge; edit on `/condor/calendar` once OC4 lands.
 `DRY_RUN=false`, `OPTIONS_ENABLED`, `INTRADAY_ENABLED`, `BASKFY_CONDOR_EXECUTION_ENABLED` — by
 your hand after `02` §3, or delegated by one line here (then recorded in DECISIONS-OC before an
 agent acts). Note the two product flags also widen what the *weekly* book's gateway accepts.
+
+## VBT — the volume-breakout sleeve
+
+Raised by the pack, 10 Sep 2026 (`docs/vbt/`). The run does not wait on any of these; each has a
+standing default in `docs/vbt/QUESTIONS.md`, and every module that does not depend on an answer
+is built anyway.
+
+### V1 — The risk decision, in writing (blocks the real-money gate, nothing before it)
+
+The sleeve's capital, the slot count, whether equal weight stands, and the stop percentage.
+Write it as an entry in `docs/vbt/DECISIONS-VB.md`; `vb_config.sleeve_capital_inr` is seeded at
+**0** until then and nothing is planned. The standing default the run drills against is the
+study's own frame: **₹10,00,000, equal weight, 10 slots, 12% stop** (STRATEGY §3–4).
+
+### V2 — The 262 missing instrument-days and the six thin sessions (the plant's to fill)
+
+STRATEGY §1 and §6: the reproduction against Chartink misses 352 of its signals, of which **262
+are days on which Baskfy has no bar at all for the instrument** and 81 have too few bars in the
+50-session window. Six **thin sessions** (muhurat and special Saturdays, where only ~200 names
+printed) are dropped from the calendar by rule, because a single such column poisons every 50-
+and 200-session window that spans it.
+
+Neither is this run's to fix — they are the data plant's — and neither blocks a module. What they
+do is bound the confidence in every number: STRATEGY §6's own recommendation is to re-run the
+study once the plant fills the missing bars and the **pre-2024 corporate actions** (403 rows,
+2024→; the earlier history is sparse). VB9 builds the drift flag so the re-run is a button rather
+than a project, and the page says which bars produced the number.
+
+**What would close it:** a backfill pass that fills the missing instrument-days, and a
+corporate-action backfill before 2024. Both are `docs/07` §4b territory, and both are Kite-rate
+limited, not agent-limited.
+
+### V3 — The execution flag (blocks real orders, nothing else)
+
+`BASKFY_VBT_EXECUTION_ENABLED=true`, by your hand, after `docs/vbt/02` §3's five conditions hold
+and their evidence is in `VB-FINAL-REPORT.md`: twenty DRY_RUN sessions, VB10 green, the backtest
+on the page, your written risk decision (V1), and half risk for the first five live sessions.
+
+**The swing sleeve's delegation does not extend here.** `docs/swing/02` §3.5 (5 Sep 2026) lets an
+agent set the *swing* flag on your written decision. If you want the same for this sleeve, one
+line here says so and an agent records it in `DECISIONS-VB.md` before acting on it. Until then
+no agent touches this flag.
+
+### V4 — Twenty DRY_RUN sessions, or the shorter gate you gave the swing book?
+
+You withdrew the twenty-session paper gate for the swing sleeve (STANDING-ANSWERS A11) because
+its code work was complete and one real DRY_RUN morning bought the same rehearsal. The pack keeps
+the twenty for this sleeve (DECISIONS-VB **PACK.7**), because it has rehearsed nothing and its one
+genuinely new mechanism — a limit order that expires after three **sessions** — can only be
+exercised by sessions passing. One line from you shortens it.
+
+### V5 — Deploys (unchanged from every other run)
+
+`aws sso login --profile baskfy-poc` and the deploy commands. **This run deploys nothing**; the
+box does not know this sleeve exists. When it is time, the sleeve needs `0036` applied, the two
+`BASKFY_VBT_*` flags in the box's env files (both leaving execution false), and the `vbt-detect`
+Beat entry.

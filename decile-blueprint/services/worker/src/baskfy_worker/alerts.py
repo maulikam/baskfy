@@ -84,6 +84,13 @@ class AlertName(StrEnum):
     SWING_DETECT_STALE = "SWING_DETECT_STALE"
     SWING_ORDER_OPEN_AFTER_CUTOFF = "SWING_ORDER_OPEN_AFTER_CUTOFF"
     SWING_GTT_MISSING_AT_1515 = "SWING_GTT_MISSING_AT_1515"
+    # VB4/VB7/VB8 (docs/vbt/05 §4): the volume-breakout sleeve's four. Same convention as the
+    # swing book's above — upper-case, verbatim in `alerts.yml`, and each one a condition the
+    # worker can raise itself rather than one that waits for Prometheus to be deployed.
+    VBT_POSITION_NAKED = "VBT_POSITION_NAKED"
+    VBT_DETECT_STALE = "VBT_DETECT_STALE"
+    VBT_ORDER_PAST_EXPIRY = "VBT_ORDER_PAST_EXPIRY"
+    VBT_POSITION_NO_BAR = "VBT_POSITION_NO_BAR"
 
 
 #: How long the webhook is given before it is abandoned. An alert that blocks the reaper for

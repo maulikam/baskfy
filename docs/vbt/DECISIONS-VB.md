@@ -554,3 +554,78 @@ person to sit in front of it during a session, which is not how this strategy is
 `05` §3 says so; this records that it is a choice. Rejected: matching the swing page for
 consistency (consistency of *behaviour* between two sleeves that behave differently is a
 disguise, not a virtue).
+
+---
+
+## VB7 — the working order that stops being one
+
+### VB7.1 — The expiry window is a config field, and the property test parametrises it · ⚠ UNREVIEWED
+
+`EntryConfig.limit_valid_sessions` is 3, and `test_vbt_expiry_property.py` runs its whole
+argument at 1, 2, 3, 5 and 10 rather than at three alone.
+
+`04` §7.2 is **the parameter with a cliff**: two sessions returns 11.4% a year where three
+returns 18.2% (STRATEGY §4's ablation). A number that matters that much is the number a future
+reader is most likely to want to try — and a test suite that has the literal three sprinkled
+through it turns a one-field experiment into an afternoon. Parametrising it also proves what the
+sensitivity table cannot: that the *machinery* is window-agnostic and only the returns are not.
+
+Rejected: pinning three everywhere and calling the cliff a reason for rigidity (it is a reason
+for care, which is not the same thing); a hypothesis strategy over the window too (it would make
+every failure report a random window, and the five values that matter are known).
+
+### VB7.2 — The four alerts are raised in-process, not by Prometheus · ⚠ UNREVIEWED
+
+`05` §4 predicted Prometheus rules in `infra/prometheus/alerts.yml`. VB7 built
+`baskfy.vbt.check_*` tasks on Beat instead, at 21:30 and 21:40, each raising through
+`baskfy_worker.alerts.dispatch`.
+
+This is `alerts.py`'s own argument, applied: the four facts here — an order past its window, a
+naked position, a detector that did not run, a held name that stopped printing — are things this
+codebase *knows*, with a date and a row id attached, not threshold crossings over a window. And
+the box has no Prometheus deployed. A rule that fires only in an environment that does not exist
+is not an alert; it is a note. The swing book made the same call at SW11 and this follows it, so
+one pattern covers both sleeves.
+
+Not exclusive: nothing here stops a Prometheus rule being added for the same names later, the way
+`publish_late` is raised from both sides. Reversal: delete four Beat entries.
+
+### VB7.3 — Every check is silent on a weekend, and none of them writes · ⚠ UNREVIEWED
+
+Each check returns `{"checked": False, "reason": "not a weekday"}` on a Saturday, and none of the
+four issues an UPDATE — a test asserts the row counts do not move.
+
+Silence: a naked position cannot come to harm while the exchange is shut, and the condition is
+still true on Monday at 21:40, which is when it is worth waking someone for. Paging for a weekend
+is how a check trains people to ignore it.
+
+No writes: the fix for every one of these is a confirmed line on the desk page. A check that
+cancelled the order it found would be a job that cancels orders without a person, which is what
+`02` Track C §3 forbids in the direction people forget — VB6.4 made the same call for the sweep.
+
+Rejected: a check that auto-cancels a `PROPOSED` order (defensible, and still the beginning of a
+worker that acts); running the book checks daily including weekends (noise).
+
+### VB7.4 — A null `expires_after_session` is not a late order · ⚠ UNREVIEWED
+
+`check_orders_past_expiry` filters on `expires_after_session IS NOT NULL`. A row whose window is
+unset is a row the evening has not adopted yet — the state a manually inserted order or a
+half-finished migration leaves — and paging about it says "cancel this" when the answer is "set
+its window". Runbook 8's step 4 is that answer. Rejected: treating null as expired (it would
+cancel orders that had not started); treating null as never-expiring (that is what the row
+already does, silently, and the runbook is what makes it visible).
+
+### VB7.5 — `VBT_DETECT_STALE` reads breadth, not signals, with four days of tolerance · ⚠ UNREVIEWED
+
+`05` §4 said "no `vb_signal_daily` row for the published session". The check reads
+`vb_breadth_daily` instead, and allows four days.
+
+A session where nothing qualified writes **no** signal rows and **one** breadth row. Alerting on
+missing signals would page on every quiet night — and quiet nights are most of them: the study's
+6,293 signals over 2,396 sessions leave many days empty. The breadth row is what distinguishes
+"nothing qualified" from "the detector did not run", which is the whole question. Four days
+covers a Thursday-to-Monday holiday weekend without a page.
+
+Rejected: reading `pipeline_run_step` for `compute_vbt` (it records that the step ran, not that
+it produced anything); a one-day tolerance (it pages every long weekend, and a check that cries
+wolf on the calendar gets muted).

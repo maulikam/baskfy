@@ -77,6 +77,12 @@ RUNBOOKS: Final[dict[AlertName, str]] = {
     AlertName.SWING_DETECT_STALE: "docs/runbooks/06-swing-morning.md",
     AlertName.SWING_ORDER_OPEN_AFTER_CUTOFF: "docs/runbooks/06-swing-morning.md",
     AlertName.SWING_GTT_MISSING_AT_1515: "docs/runbooks/06-swing-morning.md",
+    # VB7/VB8: the volume-breakout sleeve's four, one runbook
+    # (`baskfy_worker.tasks.vbt_ops.RUNBOOK`).
+    AlertName.VBT_POSITION_NAKED: "docs/runbooks/08-vbt-evening.md",
+    AlertName.VBT_DETECT_STALE: "docs/runbooks/08-vbt-evening.md",
+    AlertName.VBT_ORDER_PAST_EXPIRY: "docs/runbooks/08-vbt-evening.md",
+    AlertName.VBT_POSITION_NO_BAR: "docs/runbooks/08-vbt-evening.md",
 }
 
 

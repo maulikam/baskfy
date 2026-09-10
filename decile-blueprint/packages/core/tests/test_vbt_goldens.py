@@ -21,6 +21,7 @@ import datetime as dt
 import json
 import sys
 from pathlib import Path
+from typing import Protocol, cast
 
 import numpy as np
 import polars as pl
@@ -36,6 +37,7 @@ from baskfy_core.vbt.backtest import (
     yearly,
 )
 from baskfy_core.vbt.breadth import breadth_series
+from baskfy_core.vbt.calendar import SessionCalendar
 from baskfy_core.vbt.config import DEFAULT_VBT_CONFIG, EntryConfig
 from baskfy_core.vbt.indicators import with_vbt_indicators
 from baskfy_core.vbt.signals import with_signal_columns
@@ -88,14 +90,33 @@ pytestmark = pytest.mark.skipif(
 from research_panel import load  # noqa: E402 - the sys.path insert above has to come first
 
 
-@pytest.fixture(scope="module")
-def loaded() -> object:
-    return load(DEFAULT_VBT_CONFIG)
+class Panel(Protocol):
+    """What `research_panel.load` returns, stated here because mypy cannot follow it.
+
+    The loader lives in `tools/vbt/`, outside every package, and reaches this file through the
+    `sys.path` insert above — so its `LoadedPanel` is an untyped import and every attribute read
+    would otherwise need an escape hatch (house rule 3). A structural type is the honest fix: it
+    says what this test depends on, and it fails if the loader stops providing it.
+    """
+
+    @property
+    def bars(self) -> pl.DataFrame: ...
+
+    @property
+    def calendar(self) -> SessionCalendar: ...
+
+    @property
+    def universe(self) -> pl.DataFrame: ...
 
 
 @pytest.fixture(scope="module")
-def tagged(loaded: object) -> pl.DataFrame:
-    frame = with_vbt_indicators(loaded.bars, loaded.calendar, DEFAULT_VBT_CONFIG)  # type: ignore[attr-defined]
+def loaded() -> Panel:
+    return cast(Panel, load(DEFAULT_VBT_CONFIG))
+
+
+@pytest.fixture(scope="module")
+def tagged(loaded: Panel) -> pl.DataFrame:
+    frame = with_vbt_indicators(loaded.bars, loaded.calendar, DEFAULT_VBT_CONFIG)
     return with_signal_columns(frame, DEFAULT_VBT_CONFIG)
 
 
@@ -119,21 +140,21 @@ def study_metrics() -> dict[str, float]:
 class TestTheDataPlantFindings:
     """STRATEGY §1, as tests. `06` VB2 AC 3."""
 
-    def test_the_rule_finds_exactly_the_six_thin_sessions(self, loaded: object) -> None:
-        assert loaded.calendar.dropped == THIN_SESSIONS  # type: ignore[attr-defined]
+    def test_the_rule_finds_exactly_the_six_thin_sessions(self, loaded: Panel) -> None:
+        assert loaded.calendar.dropped == THIN_SESSIONS
 
-    def test_a_thin_session_really_was_thin(self, loaded: object) -> None:
+    def test_a_thin_session_really_was_thin(self, loaded: Panel) -> None:
         """~200 names against ~1,900 — muhurat and special Saturdays, not trading days for a
         daily strategy, and a single such column poisons every window that spans it."""
-        counts = loaded.calendar.counts  # type: ignore[attr-defined]
+        counts = loaded.calendar.counts
         ordinary = sorted(counts.values())[len(counts) // 2]
         for session in THIN_SESSIONS:
             assert counts[session] < 0.25 * ordinary, session
 
-    def test_the_universe_is_the_cash_segment_without_etfs(self, loaded: object) -> None:
+    def test_the_universe_is_the_cash_segment_without_etfs(self, loaded: Panel) -> None:
         """`04` §1 — 4,186 instruments in the research's panel, 349 of them ETFs."""
-        assert loaded.universe.height >= 3_800  # type: ignore[attr-defined]
-        symbols = set(loaded.universe["symbol"].to_list())  # type: ignore[attr-defined]
+        assert loaded.universe.height >= 3_800
+        symbols = set(loaded.universe["symbol"].to_list())
         assert not {"NIFTYBEES", "BANKBEES", "GOLDBEES"} & symbols
         # The ETF patterns are narrow on purpose: a wider one would take GOLDIAM with GOLDBEES.
         assert "GOLDIAM" in symbols

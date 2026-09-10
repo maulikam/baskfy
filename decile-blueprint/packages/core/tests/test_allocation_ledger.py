@@ -15,6 +15,7 @@ import datetime as dt
 import pathlib
 import re
 from decimal import Decimal
+from typing import cast
 
 import pytest
 
@@ -34,7 +35,7 @@ from baskfy_core.allocation_ledger import (
     ReconciliationReason,
     ReturnFigure,
     SellAttribution,
-    allocation_of,
+    allocated_quantity,
     apply_corporate_action,
     attribute_sell,
     consolidated_value,
@@ -44,7 +45,12 @@ from baskfy_core.allocation_ledger import (
     model_figure,
     portfolio_value,
     portfolio_values,
+    pro_rata_split,
+    scale_allocations,
+    slices_of,
     unallocated_holdings,
+    unallocated_quantity,
+    validate_against_holdings,
     validate_allocations,
 )
 
@@ -97,8 +103,8 @@ class TestCriterion1NetWorthBalances:
             Holding(HDFC_AT_UPSTOX, Decimal("11")),
         ]
         allocations = [
-            Allocation(HDFC, 1),
-            Allocation(TCS, 2),
+            Allocation(HDFC, 1, Decimal("13")),
+            Allocation(TCS, 2, Decimal("7")),
             # HDFC_AT_UPSTOX deliberately has no row at all: absence means Unallocated.
         ]
         portfolios = {1: capital(1), 2: capital(2, "Momentum")}
@@ -144,7 +150,7 @@ class TestPortfolioValuesTable:
         or means the portfolio was deleted."""
         values = portfolio_values(
             [Holding(HDFC, Decimal("10"))],
-            [Allocation(HDFC, 1)],
+            [Allocation(HDFC, 1, Decimal("10"))],
             {1: capital(1), 2: capital(2, "Momentum")},
             {1: Decimal("100")},
         )
@@ -155,7 +161,7 @@ class TestPortfolioValuesTable:
     def test_a_monitoring_view_gets_no_row_in_the_totals(self) -> None:
         values = portfolio_values(
             [Holding(HDFC, Decimal("10"))],
-            [Allocation(HDFC, 1)],
+            [Allocation(HDFC, 1, Decimal("10"))],
             {1: capital(1), 9: monitoring(9)},
             {1: Decimal("100")},
         )
@@ -168,7 +174,10 @@ class TestPortfolioValuesTable:
             Holding(TCS, Decimal("7")),
             Holding(HDFC_AT_UPSTOX, Decimal("11")),
         ]
-        allocations = [Allocation(HDFC, 1), Allocation(TCS, 2)]
+        allocations = [
+            Allocation(HDFC, 1, Decimal("13")),
+            Allocation(TCS, 2, Decimal("7")),
+        ]
         portfolios = {1: capital(1), 2: capital(2, "Momentum"), 9: monitoring(9)}
         prices = {1: Decimal("1666.67"), 2: Decimal("3333.33")}
 
@@ -177,43 +186,149 @@ class TestPortfolioValuesTable:
 
         assert sum(values.values()) == whole
 
-    def test_the_table_refuses_an_illegal_allocation_set(self) -> None:
-        with pytest.raises(ValueError, match="exactly one capital portfolio"):
+    def test_the_table_still_sums_when_a_holding_is_split_four_ways(self) -> None:
+        """Criterion 1 under Phase 3, on Maulik's own example (10 Sep 2026).
+
+        100 shares filed 20 long-term / 34 swing / 36 momentum / 10 short-term. This is the case
+        the old whole-holding rule could not represent at all, and the property that had to
+        survive representing it is that the parts still add to the whole.
+        """
+        holdings = [Holding(HDFC, Decimal("100"))]
+        allocations = [
+            Allocation(HDFC, 1, Decimal("20")),
+            Allocation(HDFC, 2, Decimal("34")),
+            Allocation(HDFC, 3, Decimal("36")),
+            Allocation(HDFC, 4, Decimal("10")),
+        ]
+        portfolios = {
+            1: capital(1, "Long term"),
+            2: capital(2, "Swing"),
+            3: capital(3, "Momentum"),
+            4: capital(4, "Short term"),
+        }
+        prices = {1: Decimal("450")}
+
+        values = portfolio_values(holdings, allocations, portfolios, prices)
+        whole = consolidated_value(holdings, allocations, portfolios, prices)
+
+        assert values[1] == Decimal("9000.00")
+        assert values[2] == Decimal("15300.00")
+        assert values[3] == Decimal("16200.00")
+        assert values[4] == Decimal("4500.00")
+        assert values[UNALLOCATED] == Decimal("0.00")
+        assert sum(values.values()) == whole == Decimal("45000.00")
+
+    def test_a_partly_filed_holding_leaves_the_rest_in_unallocated(self) -> None:
+        """The remainder is a real, valued thing — §6.6's centerpiece, not a rounding leftover."""
+        holdings = [Holding(HDFC, Decimal("100"))]
+        allocations = [Allocation(HDFC, 1, Decimal("30"))]
+
+        values = portfolio_values(holdings, allocations, {1: capital(1)}, {1: Decimal("10")})
+
+        assert values[1] == Decimal("300.00")
+        assert values[UNALLOCATED] == Decimal("700.00")
+        assert sum(values.values()) == Decimal("1000.00")
+
+    def test_the_table_refuses_an_over_allocated_set(self) -> None:
+        """The failure Phase 3 introduced, and the reason `validate_against_holdings` exists.
+
+        Slices summing past the position produce a net worth that is too high **and internally
+        consistent** — every row adds up, the total agrees with the rows, and the number is
+        wrong. That is the exact failure criterion 1 was written to catch, so it is a raise.
+        """
+        with pytest.raises(ValueError, match="over-allocated"):
             portfolio_values(
-                [Holding(HDFC, Decimal("1"))],
-                [Allocation(HDFC, 1), Allocation(HDFC, 2)],
+                [Holding(HDFC, Decimal("10"))],
+                [Allocation(HDFC, 1, Decimal("7")), Allocation(HDFC, 2, Decimal("7"))],
                 {1: capital(1), 2: capital(2, "Momentum")},
                 {1: Decimal("100")},
             )
 
 
-class TestCriterion2OneCapitalPortfolio:
-    """ "A holding can never be in two capital portfolios; monitoring views never affect any
-    total." — §11.2"""
+class TestTheSlicesNeverExceedTheHolding:
+    """§11.2's criterion 2, as Maulik restated it on 10 Sep 2026.
 
-    def test_criterion_2_a_holding_in_two_capital_portfolios_is_refused(self) -> None:
-        allocations = [Allocation(HDFC, 1), Allocation(HDFC, 2)]
-        with pytest.raises(ValueError, match="exactly one capital portfolio"):
-            validate_allocations(allocations, {1: capital(1), 2: capital(2, "Momentum")})
+    It used to read: "A holding can never be in two capital portfolios; monitoring views never
+    affect any total." The first half is gone — he asked for exactly that, in those words:
+    *"one stock can appear in multiple portfolios, so if stock a bought 100 qty for shortterm 20
+    for long term 34 for some swing 36 for momentum"*. The second half is untouched.
 
-    def test_criterion_2_the_same_instrument_at_two_brokers_is_not_a_double_allocation(
-        self,
-    ) -> None:
-        """The rule is about a *position*, not a stock; allocating each broker's lot apart is
-        legal and is what makes a per-broker sell attributable."""
+    What replaces it is the arithmetic the old rule was really protecting: the slices of a
+    holding never add up to more than the holding, and the difference is Unallocated.
+    """
+
+    def test_a_holding_in_two_capital_portfolios_is_now_LEGAL(self) -> None:
+        """The headline reversal. This raised until 10 Sep 2026."""
         validate_allocations(
-            [Allocation(HDFC, 1), Allocation(HDFC_AT_UPSTOX, 2)],
+            [Allocation(HDFC, 1, Decimal("6")), Allocation(HDFC, 2, Decimal("4"))],
             {1: capital(1), 2: capital(2, "Momentum")},
         )
 
-    def test_criterion_2_a_monitoring_view_holds_no_allocation(self) -> None:
-        with pytest.raises(ValueError, match="monitoring view"):
-            validate_allocations([Allocation(HDFC, 9)], {9: monitoring(9)})
+    def test_the_same_pair_twice_is_still_refused(self) -> None:
+        """Two rows saying "4 of HDFC in Momentum" is a double write, not an 8-share position.
 
-    def test_criterion_2_monitoring_views_do_not_change_a_total(self) -> None:
+        Summing them would credit shares nobody owns, silently, in a way that still balances
+        against itself — so the index refuses instead of adding.
+        """
+        with pytest.raises(ValueError, match="two allocations to portfolio"):
+            validate_allocations(
+                [Allocation(HDFC, 2, Decimal("4")), Allocation(HDFC, 2, Decimal("4"))],
+                {2: capital(2, "Momentum")},
+            )
+
+    def test_a_zero_or_negative_slice_is_not_a_row(self) -> None:
+        """ "None here" is the absence of a row, never a row saying zero."""
+        with pytest.raises(ValueError, match="positive quantity"):
+            Allocation(HDFC, 1, Decimal("0"))
+        with pytest.raises(ValueError, match="positive quantity"):
+            Allocation(HDFC, 1, Decimal("-5"))
+
+    def test_unallocated_is_a_remainder_and_cannot_be_written_as_a_row(self) -> None:
+        """The other half of the reversal: `portfolio_id=None` used to mean Unallocated.
+
+        It cannot now, because the remainder is derived. A stored row could disagree with the
+        arithmetic, and then two surfaces would print two different remainders from one dataset.
+        """
+        # `cast` rather than a `type: ignore` comment or an `Any` annotation, both of which
+        # house rule 3 bans and `test_no_escape_hatches` scans for. What is under test is the
+        # runtime refusal, and the cast says plainly that the value is a lie told on purpose.
+        with pytest.raises(ValueError, match="Unallocated is the remainder"):
+            Allocation(HDFC, cast("int", None), Decimal("5"))
+
+    def test_over_allocation_is_refused_with_the_numbers_the_user_can_act_on(self) -> None:
+        with pytest.raises(ValueError, match=r"over-allocated: 12 shares .* only 10 are held"):
+            validate_against_holdings(
+                [Holding(HDFC, Decimal("10"))],
+                [Allocation(HDFC, 1, Decimal("7")), Allocation(HDFC, 2, Decimal("5"))],
+            )
+
+    def test_filing_exactly_the_whole_position_is_fine(self) -> None:
+        """The boundary: equal is legal, one more is not."""
+        validate_against_holdings(
+            [Holding(HDFC, Decimal("10"))],
+            [Allocation(HDFC, 1, Decimal("6")), Allocation(HDFC, 2, Decimal("4"))],
+        )
+
+    def test_a_slice_of_a_position_that_is_no_longer_held_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="not held at all"):
+            validate_against_holdings([], [Allocation(HDFC, 1, Decimal("1"))])
+
+    def test_the_same_instrument_at_two_brokers_is_not_one_holding(self) -> None:
+        """The rule is about a *position*, not a stock; each broker's lot is filed apart, which
+        is what makes a per-broker sell attributable."""
+        validate_against_holdings(
+            [Holding(HDFC, Decimal("10")), Holding(HDFC_AT_UPSTOX, Decimal("10"))],
+            [Allocation(HDFC, 1, Decimal("10")), Allocation(HDFC_AT_UPSTOX, 2, Decimal("10"))],
+        )
+
+    def test_a_monitoring_view_holds_no_allocation(self) -> None:
+        with pytest.raises(ValueError, match="monitoring view"):
+            validate_allocations([Allocation(HDFC, 9, Decimal("1"))], {9: monitoring(9)})
+
+    def test_monitoring_views_do_not_change_a_total(self) -> None:
         """A lens overlapping a capital portfolio *completely* must move nothing."""
         holdings = [Holding(HDFC, Decimal("10"))]
-        allocations = [Allocation(HDFC, 1)]
+        allocations = [Allocation(HDFC, 1, Decimal("10"))]
         prices = {1: Decimal("1000")}
 
         without = consolidated_value(holdings, allocations, {1: capital(1)}, prices)
@@ -225,35 +340,119 @@ class TestCriterion2OneCapitalPortfolio:
 
     def test_an_allocation_to_a_portfolio_that_does_not_exist_is_refused(self) -> None:
         with pytest.raises(ValueError, match="does not exist"):
-            validate_allocations([Allocation(HDFC, 77)], {})
+            validate_allocations([Allocation(HDFC, 77, Decimal("1"))], {})
 
     def test_consolidated_value_validates_before_it_sums(self) -> None:
         """The invalid set must never produce a number, however plausible."""
-        with pytest.raises(ValueError, match="exactly one capital portfolio"):
+        with pytest.raises(ValueError, match="over-allocated"):
             consolidated_value(
                 [Holding(HDFC, Decimal("1"))],
-                [Allocation(HDFC, 1), Allocation(HDFC, 2)],
+                [Allocation(HDFC, 1, Decimal("1")), Allocation(HDFC, 2, Decimal("1"))],
                 {1: capital(1), 2: capital(2, "Momentum")},
                 {1: Decimal("100")},
             )
 
-    def test_criterion_2_a_single_portfolio_value_refuses_an_illegal_set_too(self) -> None:
-        """The hole this closes: validating only on the consolidated path let one row return a
-        number while the total refused, so the parts and the whole disagreed about whether the
-        data was even legal."""
-        with pytest.raises(ValueError, match="exactly one capital portfolio"):
-            portfolio_value(
-                1,
-                [Holding(HDFC, Decimal("1"))],
-                [Allocation(HDFC, 1), Allocation(HDFC, 2)],
-                {1: Decimal("100")},
-            )
+    def test_a_single_portfolio_value_reads_only_its_own_slice(self) -> None:
+        """The hole this closes: one row returning a number the total would disagree with."""
+        holdings = [Holding(HDFC, Decimal("10"))]
+        allocations = [Allocation(HDFC, 1, Decimal("6")), Allocation(HDFC, 2, Decimal("4"))]
 
-    def test_a_holding_with_no_allocation_row_is_unallocated(self) -> None:
-        assert allocation_of([], HDFC) is UNALLOCATED
+        assert portfolio_value(1, holdings, allocations, {1: Decimal("100")}) == Decimal("600.00")
+        assert portfolio_value(2, holdings, allocations, {1: Decimal("100")}) == Decimal("400.00")
+        assert portfolio_value(UNALLOCATED, holdings, allocations, {1: Decimal("100")}) == Decimal(
+            "0.00"
+        )
+
+    def test_a_holding_with_no_allocation_row_is_wholly_unallocated(self) -> None:
+        assert slices_of([], HDFC) == {}
+        assert allocated_quantity([], HDFC) == Decimal("0")
+        assert unallocated_quantity(Holding(HDFC, Decimal("1")), []) == Decimal("1")
         assert unallocated_holdings([Holding(HDFC, Decimal("1"))], []) == [
             Holding(HDFC, Decimal("1"))
         ]
+
+    def test_unallocated_holdings_returns_the_REMAINDER_not_the_position(self) -> None:
+        """§6.6's section has to shrink as the user sorts, or it is not a to-do list.
+
+        Returning the full 100 for a holding already 90 filed would tell the user there is as
+        much left to do as when they started.
+        """
+        holdings = [Holding(HDFC, Decimal("100"), Decimal("400")), Holding(TCS, Decimal("7"))]
+        allocations = [Allocation(HDFC, 1, Decimal("90"))]
+
+        assert unallocated_holdings(holdings, allocations) == [
+            Holding(HDFC, Decimal("10"), Decimal("400")),
+            Holding(TCS, Decimal("7")),
+        ]
+
+    def test_a_fully_filed_holding_leaves_the_section_entirely(self) -> None:
+        assert (
+            unallocated_holdings(
+                [Holding(HDFC, Decimal("100"))], [Allocation(HDFC, 1, Decimal("100"))]
+            )
+            == []
+        )
+
+
+class TestProRataSplitIsExact:
+    """The suggestion a user accepts in one click has to add up to what they sold."""
+
+    def test_it_divides_by_weight(self) -> None:
+        split = pro_rata_split(
+            Decimal("30"), {1: Decimal("20"), 2: Decimal("34"), 3: Decimal("36"), 4: Decimal("10")}
+        )
+        assert split[1] == Decimal("6.0000")
+        assert split[2] == Decimal("10.2000")
+        assert split[3] == Decimal("10.8000")
+        assert split[4] == Decimal("3.0000")
+        assert sum(split.values()) == Decimal("30")
+
+    def test_a_ratio_that_does_not_divide_evenly_still_sums_to_the_whole(self) -> None:
+        """The case naive rounding loses a share on: 10 across three equal slices."""
+        split = pro_rata_split(Decimal("10"), {1: Decimal("7"), 2: Decimal("7"), 3: Decimal("7")})
+        assert sum(split.values()) == Decimal("10")
+
+    def test_it_is_deterministic(self) -> None:
+        """Same pile, same answer, every time — or a test could only assert a tolerance."""
+        weights = {3: Decimal("1"), 1: Decimal("1"), 2: Decimal("1")}
+        assert pro_rata_split(Decimal("10"), weights) == pro_rata_split(Decimal("10"), weights)
+
+    def test_it_refuses_a_split_that_means_nothing(self) -> None:
+        with pytest.raises(ValueError, match="non-positive"):
+            pro_rata_split(Decimal("0"), {1: Decimal("1")})
+        with pytest.raises(ValueError, match="sum to zero"):
+            pro_rata_split(Decimal("10"), {})
+
+
+class TestACorporateActionScalesEverySlice:
+    """§4.5 under Phase 3: a split multiplies the slices, and the residue goes to Unallocated."""
+
+    def test_every_slice_is_scaled_by_the_same_multiple(self) -> None:
+        allocations = [Allocation(HDFC, 1, Decimal("20")), Allocation(HDFC, 2, Decimal("30"))]
+        scaled = scale_allocations(allocations, HDFC, Decimal("3"))
+
+        assert {a.portfolio_id: a.quantity for a in scaled} == {
+            1: Decimal("60.0000"),
+            2: Decimal("90.0000"),
+        }
+
+    def test_the_rounding_residue_falls_to_unallocated_not_to_a_slice(self) -> None:
+        """Chosen direction: a larger Unallocated is a visible prompt; a larger slice is an
+        invisible share credited to a portfolio that never earned it."""
+        holding = Holding(HDFC, Decimal("3"))
+        allocations = [Allocation(HDFC, 1, Decimal("1")), Allocation(HDFC, 2, Decimal("2"))]
+
+        after = apply_corporate_action(
+            holding, CorporateAction(HDFC, CorporateActionKind.SPLIT, Decimal("3"), Decimal("1"))
+        )
+        scaled = scale_allocations(allocations, HDFC, Decimal("1") / Decimal("3"))
+
+        assert sum(a.quantity for a in scaled) <= after.quantity
+        validate_against_holdings([after], scaled)
+
+    def test_other_holdings_pass_through_untouched(self) -> None:
+        others = [Allocation(TCS, 1, Decimal("5"))]
+        assert scale_allocations(others, HDFC, Decimal("2")) == others
 
 
 class TestCriterion4SellAttribution:
@@ -264,7 +463,7 @@ class TestCriterion4SellAttribution:
         outcome = attribute_sell(
             DetectedSell(HDFC, Decimal("100")),
             [Holding(HDFC, Decimal("320"))],
-            [Allocation(HDFC, 1)],
+            [Allocation(HDFC, 1, Decimal("320"))],
         )
         assert outcome.attributed
         assert outcome.portfolio_id == 1
@@ -287,7 +486,7 @@ class TestCriterion4SellAttribution:
         outcome = attribute_sell(
             DetectedSell(HDFC, Decimal("400")),
             [Holding(HDFC, Decimal("320"))],
-            [Allocation(HDFC, 1)],
+            [Allocation(HDFC, 1, Decimal("320"))],
         )
         assert not outcome.attributed
         assert outcome.item is not None

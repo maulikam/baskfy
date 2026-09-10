@@ -21,14 +21,51 @@ crosses the line fails a test rather than a review (the same guard `portfolio_un
 
 THE ONE RULE EVERYTHING ELSE HANGS OFF
 --------------------------------------
-A holding belongs to **exactly one** capital portfolio, or to Unallocated (§4.1, §4.2). Whole
-holdings only in v1. That single constraint is what makes sell attribution automatic (§4.3) and
-what makes the totals add up (criterion 1) — and it is why partial-quantity allocation is Phase 3
-rather than a nice-to-have: split a holding across two portfolios and a sell has no owner.
+**The slices of a holding never add up to more than the holding.** Formally, for every physical
+position, ``sum(allocated quantities) <= held quantity``, and the difference is Unallocated.
+
+This replaced a stricter rule on 10 Sep 2026, and the old wording is worth keeping because it
+explains the shape of everything below. It read:
+
+    "A holding belongs to exactly one capital portfolio, or to Unallocated. Whole holdings only
+    in v1. That single constraint is what makes sell attribution automatic and what makes the
+    totals add up — and it is why partial-quantity allocation is Phase 3 rather than a
+    nice-to-have: split a holding across two portfolios and a sell has no owner."
+
+Maulik asked for Phase 3 directly: *"one stock can appear in multiple portfolios, so if stock a
+bought 100 qty for shortterm 20 for long term 34 for some swing 36 for momentum"*. He is right
+that this is what the product is for — a person does not buy ITC once, they buy it four times for
+four reasons — and the old rule made the product unable to say so.
+
+**What the old rule was protecting, and how each part is protected now:**
+
+*Criterion 1, the totals add up.* Previously true because each holding had one owner. Now true
+because the slices partition the holding: :func:`validate_against_holdings` refuses any set whose
+slices exceed what is held, so parts + remainder = whole by construction rather than by luck.
+Over-allocation is a **hard error**, not a warning, for the same reason a missing price is: a net
+worth that is too high and still balances is the worst number this product can print.
+
+*Criterion 4, sell attribution.* Previously free. Now free **only when the holding has exactly one
+slice** — which is the old whole-holding case, so nothing that works today starts asking
+questions. A sell out of a split holding raises :attr:`ReconciliationReason.SPLIT_HOLDING` with a
+pro-rata suggestion attached, and attributes nothing until a human answers. That is Maulik's
+choice, taken on 10 Sep 2026 over silent pro-rata: *"ask me, pre-filled pro-rata"*. Silent
+pro-rata was rejected because selling the swing lot would quietly move all four portfolios'
+returns and nothing would say so.
+
+*Rounding.* A split has to be exact. :func:`pro_rata_split` apportions by largest remainder, so
+the parts sum to the whole for any ratio; and :func:`scale_allocations` gives a corporate action's
+residue to Unallocated rather than to whichever slice rounded up last.
 
 A *holding* here is the physical position: `(instrument_id, broker_account_id)`. Not the
 instrument. The same stock at two brokers is two holdings which the UI displays aggregated
 (§6.7); the ledger keeps them apart because they can be allocated apart and sold apart.
+
+MONITORING LENSES ARE STILL WHOLE-HOLDING, DELIBERATELY
+-------------------------------------------------------
+Only capital slices carry a quantity. A lens ("all defence stocks") answers a question about
+*which names* you hold, not how many of them belong to it, and it enters no total — so giving it
+a quantity would add a number nobody could use and one more thing to keep summing correctly.
 
 MONITORING VIEWS ARE OUTSIDE THE ARITHMETIC
 -------------------------------------------
@@ -43,7 +80,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from typing import Final
 
@@ -66,7 +103,7 @@ __all__ = [
     "ReconciliationReason",
     "ReturnFigure",
     "SellAttribution",
-    "allocation_of",
+    "allocated_quantity",
     "apply_corporate_action",
     "attribute_sell",
     "consolidated_value",
@@ -77,7 +114,12 @@ __all__ = [
     "model_figure",
     "portfolio_value",
     "portfolio_values",
+    "pro_rata_split",
+    "scale_allocations",
+    "slices_of",
     "unallocated_holdings",
+    "unallocated_quantity",
+    "validate_against_holdings",
     "validate_allocations",
 ]
 
@@ -143,6 +185,10 @@ class ReconciliationReason(StrEnum):
     UNALLOCATED_HOLDING = "UNALLOCATED_HOLDING"
     QUANTITY_MISMATCH = "QUANTITY_MISMATCH"
     UNKNOWN_INFLOW = "UNKNOWN_INFLOW"
+    #: 10 Sep 2026. The holding is split across capital portfolios, so a sell has more than one
+    #: possible owner and the ledger will not pick. The item carries `suggested_split` — a
+    #: pro-rata pre-fill — so answering is one click when pro-rata is what happened.
+    SPLIT_HOLDING = "SPLIT_HOLDING"
 
     @property
     def question(self) -> str:
@@ -156,6 +202,9 @@ class ReconciliationReason(StrEnum):
             ),
             ReconciliationReason.UNKNOWN_INFLOW: (
                 "We saw shares arrive that we cannot account for — which portfolio?"
+            ),
+            ReconciliationReason.SPLIT_HOLDING: (
+                "You hold this name in more than one portfolio — which of them did you sell from?"
             ),
         }[self]
 
@@ -215,14 +264,37 @@ class Portfolio:
 
 @dataclass(frozen=True, slots=True)
 class Allocation:
-    """Which capital portfolio a holding counts against, or Unallocated.
+    """**A quantity** of one holding counted against one capital portfolio.
 
-    ``portfolio_id`` is ``None`` for Unallocated. A monitoring view never appears here: membership
-    of a lens is not an allocation, which is the whole reason lenses may overlap.
+    A monitoring view never appears here: membership of a lens is not an allocation, which is the
+    whole reason lenses may overlap.
+
+    ``portfolio_id`` is not nullable, and that is the change of 10 Sep 2026. It used to be
+    ``int | None`` with ``None`` meaning Unallocated, which made sense when a holding had exactly
+    one allocation. With slices it does not: Unallocated is now *the remainder*
+    (``held - sum(slices)``), a quantity that is computed rather than stored, so a row asserting
+    it could disagree with the arithmetic. :func:`unallocated_quantity` is the only way to ask.
+
+    ``quantity`` is the number of shares in this slice, always positive. A zero slice is not "no
+    shares here", it is a row that should not exist — and permitting it would let two callers
+    disagree about whether a portfolio holds a name at all.
     """
 
     key: HoldingKey
-    portfolio_id: int | None
+    portfolio_id: int
+    quantity: Decimal
+
+    def __post_init__(self) -> None:
+        if self.portfolio_id is None:
+            raise ValueError(
+                "an allocation names a capital portfolio; Unallocated is the remainder, not a "
+                "row — ask unallocated_quantity() for it"
+            )
+        if self.quantity <= 0:
+            raise ValueError(
+                f"an allocation must be a positive quantity; got {self.quantity}. Remove the row "
+                "instead of writing a zero one"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,6 +322,11 @@ class ReconciliationItem:
     reason: ReconciliationReason
     #: The portfolio the UI should pre-select. A suggestion, never an attribution.
     suggested_portfolio_id: int | None = None
+    #: ``((portfolio_id, quantity), ...)`` the UI should pre-fill when the holding is split, from
+    #: :func:`pro_rata_split`. Empty for a single-owner holding, where `suggested_portfolio_id`
+    #: says everything. It is a SUGGESTION with the same force as the field above: the sell is
+    #: not attributed, the figures stay frozen, and a human is still the one who decides.
+    suggested_split: tuple[tuple[int, Decimal], ...] = ()
 
     @property
     def question(self) -> str:
@@ -345,30 +422,34 @@ class ReturnFigure:
 # ---------------------------------------------------------------------------
 
 
-def _allocation_index(allocations: Sequence[Allocation]) -> dict[HoldingKey, int | None]:
-    """``{holding -> capital portfolio}``, and the place criterion 2 is actually enforced.
+def _slice_index(allocations: Sequence[Allocation]) -> dict[HoldingKey, dict[int, Decimal]]:
+    """``{holding -> {capital portfolio -> quantity}}``, and where a duplicate slice is caught.
 
-    Every function that needs to know where a holding sits builds this index, so the duplicate
-    check is unavoidable rather than something the totals path happens to do. That matters more
-    than it looks: an earlier shape validated only inside :func:`consolidated_value`, which meant
-    :func:`portfolio_value` would happily return a number for an allocation set the consolidated
-    figure refused — the parts and the whole disagreeing about whether the data was even legal.
+    Every function that needs to know how a holding is divided builds this index, so the
+    duplicate check is unavoidable rather than something the totals path happens to do. That
+    matters more than it looks: an earlier shape validated only inside :func:`consolidated_value`,
+    which meant :func:`portfolio_value` would happily return a number for an allocation set the
+    consolidated figure refused — the parts and the whole disagreeing about whether the data was
+    even legal.
+
+    A repeated ``(holding, portfolio)`` pair is refused rather than summed. Two rows saying "40 of
+    ITC in Momentum" almost always means one write happened twice, and adding them produces 80
+    shares the user does not own — silently, and in a way that still balances against itself.
 
     It is also the difference between O(holdings x allocations) and O(holdings + allocations).
     §6.5 draws a row per portfolio, so the quadratic version was quadratic *per page render*.
     """
-    index: dict[HoldingKey, int | None] = {}
+    index: dict[HoldingKey, dict[int, Decimal]] = {}
     for allocation in allocations:
-        if allocation.portfolio_id is UNALLOCATED:
-            continue
-        previous = index.get(allocation.key)
-        if previous is not None:
+        slices = index.setdefault(allocation.key, {})
+        if allocation.portfolio_id in slices:
             raise ValueError(
-                f"holding {allocation.key} is allocated to both portfolio {previous} and "
-                f"portfolio {allocation.portfolio_id}; a holding belongs to exactly one capital "
-                "portfolio (spec section 4.2, acceptance criterion 2)"
+                f"holding {allocation.key} has two allocations to portfolio "
+                f"{allocation.portfolio_id} ({slices[allocation.portfolio_id]} and "
+                f"{allocation.quantity}); a holding has at most one slice per portfolio, and "
+                "summing them would credit shares nobody owns"
             )
-        index[allocation.key] = allocation.portfolio_id
+        slices[allocation.portfolio_id] = allocation.quantity
     return index
 
 
@@ -378,46 +459,184 @@ def validate_allocations(
 ) -> None:
     """Refuse an allocation set that breaks §4.1 or §4.2. Raises, never repairs.
 
-    Three ways to break it, and all three are a caller bug rather than a user mistake:
+    What this checks is everything decidable **without knowing the holdings**:
 
-    * the same holding allocated twice — criterion 2's headline case, caught by the index;
-    * a holding allocated to a monitoring view — lenses are not allocations, and permitting it
-      would put an overlapping portfolio into the totals;
-    * a holding allocated to a portfolio that does not exist.
+    * the same ``(holding, portfolio)`` pair twice — caught by the index;
+    * a slice in a monitoring view — lenses are not allocations, and permitting it would put an
+      overlapping portfolio into the totals;
+    * a slice in a portfolio that does not exist.
+
+    What it deliberately does **not** check is over-allocation, because that is a fact about the
+    holdings and this function is not given them. :func:`validate_against_holdings` is that check,
+    and every valuation path calls both.
 
     Raising rather than dropping the bad row is deliberate. A ledger that silently discards an
     allocation still adds up, which is precisely how a wrong net worth would survive review.
     """
-    for portfolio_id in _allocation_index(allocations).values():
-        portfolio = portfolios.get(portfolio_id) if portfolio_id is not None else None
-        if portfolio is None:
-            raise ValueError(f"allocation names portfolio {portfolio_id}, which does not exist")
-        if portfolio.kind is PortfolioKind.MONITORING:
+    for slices in _slice_index(allocations).values():
+        for portfolio_id in slices:
+            portfolio = portfolios.get(portfolio_id)
+            if portfolio is None:
+                raise ValueError(f"allocation names portfolio {portfolio_id}, which does not exist")
+            if portfolio.kind is PortfolioKind.MONITORING:
+                raise ValueError(
+                    f"{portfolio.name!r} is a monitoring view, and a monitoring view holds no "
+                    "allocation: it overlaps other portfolios by design and is excluded from "
+                    "every total (spec section 4.1)"
+                )
+
+
+def validate_against_holdings(
+    holdings: Sequence[Holding],
+    allocations: Sequence[Allocation],
+) -> None:
+    """The Phase-3 invariant: no holding's slices may exceed what is held. Raises.
+
+    This is the check that took over criterion 1's job when whole-holding allocation ended. It
+    has to be separate from :func:`validate_allocations` because it needs the holdings, and a lot
+    of callers legitimately have allocations in hand before they have quantities.
+
+    Two failure shapes, and the message names the numbers because the user can act on them:
+
+    * the slices sum to more than the position — the caller is about to print a net worth that is
+      too high **and internally consistent**, which is the one thing this module exists to stop;
+    * a slice against a holding that is not in the list at all — usually a position that was sold
+      to zero while an allocation row survived it.
+
+    A shortfall is not an error: that is Unallocated, and it is the normal state of a freshly
+    connected broker account.
+    """
+    held = {holding.key: holding.quantity for holding in holdings}
+    for key, slices in _slice_index(allocations).items():
+        if key not in held:
             raise ValueError(
-                f"{portfolio.name!r} is a monitoring view, and a monitoring view holds no "
-                "allocation: it overlaps other portfolios by design and is excluded from every "
-                "total (spec section 4.1)"
+                f"allocations name holding {key}, which is not held at all; a slice of a position "
+                "that no longer exists cannot be valued"
+            )
+        allocated = sum(slices.values(), Decimal("0"))
+        if allocated > held[key]:
+            raise ValueError(
+                f"holding {key} is over-allocated: {allocated} shares are filed across "
+                f"{len(slices)} portfolio(s) but only {held[key]} are held. Free "
+                f"{allocated - held[key]} before this can be valued"
             )
 
 
-def allocation_of(allocations: Sequence[Allocation], key: HoldingKey) -> int | None:
-    """The capital portfolio a holding counts against, or ``None`` for Unallocated.
+def slices_of(allocations: Sequence[Allocation], key: HoldingKey) -> dict[int, Decimal]:
+    """``{capital portfolio -> quantity}`` for one holding; empty when wholly unallocated.
 
     The single-holding convenience. Anything walking a list should build the index once instead.
     """
-    return _allocation_index(allocations).get(key, UNALLOCATED)
+    return _slice_index(allocations).get(key, {})
+
+
+def allocated_quantity(allocations: Sequence[Allocation], key: HoldingKey) -> Decimal:
+    """How many of this holding's shares are filed somewhere. Zero when none are."""
+    return sum(slices_of(allocations, key).values(), Decimal("0"))
+
+
+def unallocated_quantity(holding: Holding, allocations: Sequence[Allocation]) -> Decimal:
+    """``held - sum(slices)``, never negative. **The only way to ask about Unallocated.**
+
+    Computed rather than stored, which is why :class:`Allocation` no longer has a nullable
+    ``portfolio_id``: a stored row could disagree with the arithmetic, and then two surfaces would
+    print two different remainders from the same data.
+
+    Clamped at zero rather than returning a negative, because an over-allocated holding is a hard
+    error that :func:`validate_against_holdings` raises — a caller that skipped the check should
+    not be handed a negative quantity that silently reduces a total.
+    """
+    remainder = holding.quantity - allocated_quantity(allocations, holding.key)
+    return remainder if remainder > 0 else Decimal("0")
 
 
 def unallocated_holdings(
     holdings: Sequence[Holding], allocations: Sequence[Allocation]
 ) -> list[Holding]:
-    """Everything in no capital portfolio. §6.6 makes this the centerpiece, not a footer.
+    """The **unfiled remainder** of every holding. §6.6 makes this the centerpiece, not a footer.
 
-    A holding with no allocation row at all is unallocated — absence is the default, so a newly
-    synced broker account lands entirely here and the product has something to help sort.
+    Each returned holding carries the remaining quantity, not the full position: a 100-share ITC
+    filed 20/34/36 comes back as 10. Holdings with nothing left over are absent entirely, so the
+    section empties as the user sorts — which is the behaviour §6.6 is describing when it calls
+    getting from 40 unallocated holdings to 4 named portfolios "activation".
+
+    A holding with no allocation at all comes back whole, because absence is the default and a
+    newly synced broker account lands here in its entirety.
     """
-    index = _allocation_index(allocations)
-    return [h for h in holdings if index.get(h.key, UNALLOCATED) is UNALLOCATED]
+    index = _slice_index(allocations)
+    remainders: list[Holding] = []
+    for holding in holdings:
+        filed = sum(index.get(holding.key, {}).values(), Decimal("0"))
+        remaining = holding.quantity - filed
+        if remaining > 0:
+            remainders.append(replace(holding, quantity=remaining))
+    return remainders
+
+
+def pro_rata_split(quantity: Decimal, weights: Mapping[int, Decimal]) -> dict[int, Decimal]:
+    """Divide ``quantity`` across ``weights`` so the parts sum to the whole **exactly**.
+
+    Largest remainder, not naive rounding. Selling 30 of a 100-share holding filed 20/34/36/10
+    gives 6 / 10.2 / 10.8 / 3 — which happens to land, but 30 of a 7/7/7 split does not, and the
+    naive version loses or invents shares there. Every leftover unit of
+    :data:`QUANTITY_PRECISION` goes to the largest fractional remainder, ties broken by portfolio
+    id so the same input always produces the same answer.
+
+    Exactness is not fussiness here. This function's output is a *suggestion* the user accepts in
+    one click, and a suggestion that does not add up to what they sold is worse than none: they
+    would accept it, and the ledger would then hold a position that disagrees with the broker's.
+    """
+    if quantity <= 0:
+        raise ValueError(f"cannot split a non-positive quantity; got {quantity}")
+    total_weight = sum(weights.values(), Decimal("0"))
+    if total_weight <= 0:
+        raise ValueError("cannot split across weights that sum to zero")
+
+    exact = {pid: quantity * weight / total_weight for pid, weight in weights.items()}
+    floors = {
+        pid: value.quantize(QUANTITY_PRECISION, rounding=ROUND_DOWN) for pid, value in exact.items()
+    }
+    shortfall = quantity - sum(floors.values(), Decimal("0"))
+    # Hand out the residue one unit at a time, biggest fractional part first. Sorting by
+    # (-remainder, portfolio_id) makes it deterministic: the same pile always splits the same way,
+    # which is what lets a test assert an answer rather than a tolerance.
+    order = sorted(exact, key=lambda pid: (-(exact[pid] - floors[pid]), pid))
+    units = int(shortfall / QUANTITY_PRECISION)
+    for i in range(units):
+        pid = order[i % len(order)]
+        floors[pid] += QUANTITY_PRECISION
+    return floors
+
+
+def scale_allocations(
+    allocations: Sequence[Allocation], key: HoldingKey, multiple: Decimal
+) -> list[Allocation]:
+    """Scale one holding's slices by a corporate action's multiple (§4.5).
+
+    Rounds each slice **down** and lets the residue fall to Unallocated rather than giving it to
+    whichever slice rounded up last. That direction is chosen deliberately: a slightly larger
+    Unallocated is a visible prompt the user can act on, whereas a slightly larger slice is an
+    invisible share credited to a portfolio that never earned it — and over enough splits, to the
+    same portfolio every time.
+
+    Slices of other holdings pass through untouched, so this can be applied to the whole set.
+    """
+    if multiple <= 0:
+        raise ValueError(f"a corporate-action multiple must be positive; got {multiple}")
+    scaled: list[Allocation] = []
+    for allocation in allocations:
+        if allocation.key != key:
+            scaled.append(allocation)
+            continue
+        quantity = (allocation.quantity * multiple).quantize(
+            QUANTITY_PRECISION, rounding=ROUND_DOWN
+        )
+        # A slice that rounds away entirely is dropped, not written as zero: `Allocation` refuses
+        # a zero quantity, and a reverse split deep enough to erase a slice has genuinely erased
+        # it. The shares it stood for are still in the holding, and land in Unallocated.
+        if quantity > 0:
+            scaled.append(replace(allocation, quantity=quantity))
+    return scaled
 
 
 # ---------------------------------------------------------------------------
@@ -447,17 +666,22 @@ def portfolio_value(
     allocations: Sequence[Allocation],
     prices: Mapping[int, Decimal],
 ) -> Decimal:
-    """The market value allocated to one capital portfolio, or to Unallocated when ``None``.
+    """The market value of one capital portfolio's **slices**, or of Unallocated when ``None``.
 
-    Summed per holding *after* each is quantised, so this figure equals the sum of the rows a
-    user can see on the holdings tab. Quantising the total instead would produce a headline that
-    disagrees with its own breakdown by a paisa, and users notice exactly that.
+    Summed per holding *after* each slice is quantised, so this figure equals the sum of the rows
+    a user can see on the holdings tab. Quantising the total instead would produce a headline
+    that disagrees with its own breakdown by a paisa, and users notice exactly that.
     """
-    index = _allocation_index(allocations)
+    index = _slice_index(allocations)
     total = Decimal("0")
     for holding in holdings:
-        if index.get(holding.key, UNALLOCATED) == portfolio_id:
-            total += holding_value(holding, prices)
+        slices = index.get(holding.key, {})
+        if portfolio_id is UNALLOCATED:
+            remaining = holding.quantity - sum(slices.values(), Decimal("0"))
+            if remaining > 0:
+                total += holding_value(replace(holding, quantity=remaining), prices)
+        elif portfolio_id in slices:
+            total += holding_value(replace(holding, quantity=slices[portfolio_id]), prices)
     return money(total)
 
 
@@ -475,18 +699,27 @@ def portfolio_values(
     table does not have to decide whether a missing key means zero or means the portfolio is
     gone.
 
-    Validates first, so a table can never be drawn from an allocation set the consolidated total
-    would reject.
+    Validates first — **both** checks — so a table can never be drawn from an allocation set the
+    consolidated total would reject. That includes over-allocation, which is why this takes the
+    holdings it walks rather than trusting them.
     """
     validate_allocations(allocations, portfolios)
-    index = _allocation_index(allocations)
+    validate_against_holdings(holdings, allocations)
+    index = _slice_index(allocations)
     values: dict[int | None, Decimal] = {UNALLOCATED: Decimal("0")}
     for portfolio in portfolios.values():
         if portfolio.kind is PortfolioKind.CAPITAL:
             values[portfolio.portfolio_id] = Decimal("0")
     for holding in holdings:
-        target = index.get(holding.key, UNALLOCATED)
-        values[target] = values.get(target, Decimal("0")) + holding_value(holding, prices)
+        slices = index.get(holding.key, {})
+        for portfolio_id, quantity in slices.items():
+            sliced = replace(holding, quantity=quantity)
+            values[portfolio_id] = values.get(portfolio_id, Decimal("0")) + holding_value(
+                sliced, prices
+            )
+        remaining = holding.quantity - sum(slices.values(), Decimal("0"))
+        if remaining > 0:
+            values[UNALLOCATED] += holding_value(replace(holding, quantity=remaining), prices)
     return {key: money(value) for key, value in values.items()}
 
 
@@ -500,16 +733,20 @@ def consolidated_value(
 ) -> Decimal:
     """Consolidated net worth: every capital portfolio, plus Unallocated, plus cash.
 
-    **Criterion 1 is a property of this function**: because a holding has at most one allocation
-    (enforced first, by :func:`validate_allocations`) and every holding is either allocated or
-    unallocated, summing the parts and summing the whole are the same walk over the same list.
-    They cannot drift, which is stronger than asserting equality after the fact.
+    **Criterion 1 is a property of this function**: it walks the holdings once and adds each one
+    whole, so it cannot disagree with :func:`portfolio_values` — whose slices plus remainder sum
+    to exactly the same thing, guaranteed by :func:`validate_against_holdings` refusing any set
+    where they would not. That is stronger than asserting equality after the fact, and it is the
+    property that had to be re-established when slices replaced whole-holding allocation: with
+    over-allocation permitted, the parts would exceed this total while each half stayed
+    internally consistent.
 
     Monitoring views contribute nothing and are not consulted — they hold no allocations at all,
     so there is no filter here to forget. ``portfolios`` is taken so the allocation set can be
     validated against it, which is the only reason it is a parameter.
     """
     validate_allocations(allocations, portfolios)
+    validate_against_holdings(holdings, allocations)
     total = cash
     for holding in holdings:
         total += holding_value(holding, prices)
@@ -528,17 +765,29 @@ def attribute_sell(
 ) -> SellAttribution:
     """Decide which portfolio a detected sell belongs to, or ask (§4.3).
 
-    Whole-holding allocation is what makes the common case free: the holding has one capital
-    portfolio, so the sell has one owner and is applied silently. Everything else becomes a
-    question, and the type makes "guess quietly" unrepresentable.
+    **One owner means one answer, and that stays free.** A holding filed entirely into a single
+    capital portfolio is attributed silently, exactly as before slices existed — so nothing that
+    works today starts asking questions tomorrow. Everything else becomes a question, and the type
+    makes "guess quietly" unrepresentable.
 
-    The three questions, in the order they can occur:
+    The four questions, in the order they can occur:
 
-    * the holding is not in any portfolio -> ``UNALLOCATED_HOLDING``;
+    * we have no record of the holding at all -> ``UNKNOWN_INFLOW``;
     * more was sold than we recorded -> ``QUANTITY_MISMATCH``, which usually means a trade we
       never saw, and attributing the excess to the portfolio we do know would corrupt its return
       series with volume it never held;
-    * we have no record of the holding at all -> ``UNKNOWN_INFLOW``.
+    * the holding is in no portfolio at all -> ``UNALLOCATED_HOLDING``;
+    * the holding is **split** across capital portfolios -> ``SPLIT_HOLDING`` (10 Sep 2026), with
+      a pro-rata pre-fill attached.
+
+    On the last one: pro-rata is offered and never applied. Maulik chose that over silent
+    pro-rata, and the reason is that the two are indistinguishable in the data and very different
+    in fact — a person who sells 30 of a 100 filed 20/34/36/10 has almost always sold *one lot*,
+    not a sixth of each. Applying the suggestion would move four portfolios' returns at once and
+    print nothing to say it had happened.
+
+    The unallocated remainder is not offered as a slice. Shares nobody has filed are not a
+    portfolio, and pre-selecting them would answer the question the item is asking.
     """
     held = next((h for h in holdings if h.key == sell.key), None)
     if held is None:
@@ -550,17 +799,19 @@ def attribute_sell(
             )
         )
 
-    portfolio_id = _allocation_index(allocations).get(sell.key, UNALLOCATED)
+    slices = _slice_index(allocations).get(sell.key, {})
+    sole = next(iter(slices)) if len(slices) == 1 else None
     if sell.quantity > held.quantity:
         return SellAttribution(
             item=ReconciliationItem(
                 key=sell.key,
                 quantity=sell.quantity,
                 reason=ReconciliationReason.QUANTITY_MISMATCH,
-                suggested_portfolio_id=portfolio_id,
+                suggested_portfolio_id=sole,
+                suggested_split=_suggest(sell.quantity, slices) if len(slices) > 1 else (),
             )
         )
-    if portfolio_id is UNALLOCATED:
+    if not slices:
         return SellAttribution(
             item=ReconciliationItem(
                 key=sell.key,
@@ -568,7 +819,32 @@ def attribute_sell(
                 reason=ReconciliationReason.UNALLOCATED_HOLDING,
             )
         )
-    return SellAttribution(portfolio_id=portfolio_id)
+    if sole is not None:
+        # The old whole-holding case, whether or not the slice covers the whole position. A sell
+        # bigger than the slice but no bigger than the holding is still this portfolio's — the
+        # rest of the position is Unallocated, and Unallocated cannot have sold anything.
+        return SellAttribution(portfolio_id=sole)
+    return SellAttribution(
+        item=ReconciliationItem(
+            key=sell.key,
+            quantity=sell.quantity,
+            reason=ReconciliationReason.SPLIT_HOLDING,
+            suggested_split=_suggest(sell.quantity, slices),
+        )
+    )
+
+
+def _suggest(quantity: Decimal, slices: Mapping[int, Decimal]) -> tuple[tuple[int, Decimal], ...]:
+    """The pre-fill for a split sell: pro-rata, capped at what is actually sliced.
+
+    Capped because ``QUANTITY_MISMATCH`` reaches here with a quantity larger than the position,
+    and suggesting that someone sold more out of a portfolio than it ever held would be a
+    pre-fill that cannot be accepted. In that case the suggestion drains the slices and leaves
+    the excess for the human to explain, which is what the item is asking about anyway.
+    """
+    filed = sum(slices.values(), Decimal("0"))
+    split = pro_rata_split(min(quantity, filed), slices)
+    return tuple(sorted((pid, qty) for pid, qty in split.items() if qty > 0))
 
 
 # ---------------------------------------------------------------------------

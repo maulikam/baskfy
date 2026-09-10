@@ -513,9 +513,9 @@ class TestOverlapDetectionIsInformationNotAWarning:
     ]:
         holdings = [Holding(key(i), Decimal("10")) for i in (1, 2, 3, 4)]
         allocations = [
-            Allocation(key(1), 1),
-            Allocation(key(2), 1),
-            Allocation(key(3), 2),
+            Allocation(key(1), 1, Decimal("10")),
+            Allocation(key(2), 1, Decimal("10")),
+            Allocation(key(3), 2, Decimal("10")),
             # key(4) has no row at all: absence means Unallocated.
         ]
         portfolios = {
@@ -622,10 +622,12 @@ class TestOverlapDetectionIsInformationNotAWarning:
 
     def test_an_illegal_allocation_set_is_refused_before_anything_is_reported(self) -> None:
         holdings, _, portfolios, memberships, prices = self.scenario()
-        both = [Allocation(key(1), 1), Allocation(key(1), 2)]
+        # Phase 3 made two capital portfolios legal, so the illegal set is now one that claims
+        # more shares than exist — 10 + 10 against a 10-share position.
+        over = [Allocation(key(1), 1, Decimal("10")), Allocation(key(1), 2, Decimal("10"))]
 
-        with pytest.raises(ValueError, match="exactly one capital portfolio"):
-            monitoring_overlaps(holdings, both, portfolios, memberships, prices)
+        with pytest.raises(ValueError, match="over-allocated"):
+            monitoring_overlaps(holdings, over, portfolios, memberships, prices)
 
 
 class TestContributionsSumToTheMove:
@@ -648,8 +650,8 @@ class TestContributionsSumToTheMove:
         show in a paise column.
         """
         holdings = [Holding(key(i), Decimal("1")) for i in range(1, 12)]
-        allocations = [Allocation(key(i), 1) for i in range(1, 6)] + [
-            Allocation(key(i), 2) for i in range(6, 11)
+        allocations = [Allocation(key(i), 1, Decimal("1")) for i in range(1, 6)] + [
+            Allocation(key(i), 2, Decimal("1")) for i in range(6, 11)
         ]
         portfolios = {1: capital(1, "Momentum"), 2: capital(2, "Long term")}
         values = {key(i): Decimal("1000.00") for i in range(1, 12)}

@@ -561,7 +561,7 @@ async def _value_user(session: AsyncSession, as_of: dt.date, user_id: int) -> Us
             pending_portfolios.add(portfolio_id)
             continue
         holdings.append(Holding(key=key, quantity=quantity))
-        allocations.append(Allocation(key=key, portfolio_id=portfolio_id))
+        allocations.append(Allocation(key=key, portfolio_id=portfolio_id, quantity=quantity))
 
     # Both calls walk the same list, which is why the parts and the whole cannot disagree.
     values = portfolio_values(holdings, allocations, portfolios, prices)

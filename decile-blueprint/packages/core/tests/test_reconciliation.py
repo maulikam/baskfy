@@ -204,7 +204,7 @@ class TestTheBridgeFromTheLedger:
         """§4.2 -> §4.3: whole-holding allocation makes the common case free, and an inbox padded
         with resolved-on-arrival rows buries the ones that matter."""
         holdings = [Holding(HDFC, Decimal("320"))]
-        allocations = [Allocation(HDFC, LONG_TERM)]
+        allocations = [Allocation(HDFC, LONG_TERM, Decimal("320"))]
         attribution = attribute_sell(DetectedSell(HDFC, Decimal("100")), holdings, allocations)
 
         assert attribution.attributed
@@ -229,7 +229,10 @@ class TestSection43FreezesTheHoldingAndNothingElse:
 
     def test_an_open_item_freezes_exactly_the_affected_holding(self) -> None:
         holdings = [Holding(HDFC, Decimal("320")), Holding(TCS, Decimal("50"))]
-        allocations = [Allocation(HDFC, LONG_TERM), Allocation(TCS, MOMENTUM)]
+        allocations = [
+            Allocation(HDFC, LONG_TERM, Decimal("320")),
+            Allocation(TCS, MOMENTUM, Decimal("50")),
+        ]
         positions = positions_from_allocations(holdings, allocations)
 
         report = freeze_report([open_entry(HDFC)], positions)
@@ -242,7 +245,10 @@ class TestSection43FreezesTheHoldingAndNothingElse:
         """The blast radius is the point. A user with two portfolios and one unanswered sell
         keeps one honest headline number."""
         holdings = [Holding(HDFC, Decimal("320")), Holding(TCS, Decimal("50"))]
-        allocations = [Allocation(HDFC, LONG_TERM), Allocation(TCS, MOMENTUM)]
+        allocations = [
+            Allocation(HDFC, LONG_TERM, Decimal("320")),
+            Allocation(TCS, MOMENTUM, Decimal("50")),
+        ]
         positions = positions_from_allocations(holdings, allocations)
 
         report = freeze_report([open_entry(HDFC)], positions)
@@ -256,7 +262,10 @@ class TestSection43FreezesTheHoldingAndNothingElse:
         """A freeze keyed on the instrument rather than the physical position would stop a
         portfolio that has nothing to do with the question."""
         holdings = [Holding(HDFC, Decimal("200")), Holding(HDFC_AT_UPSTOX, Decimal("120"))]
-        allocations = [Allocation(HDFC, LONG_TERM), Allocation(HDFC_AT_UPSTOX, MOMENTUM)]
+        allocations = [
+            Allocation(HDFC, LONG_TERM, Decimal("200")),
+            Allocation(HDFC_AT_UPSTOX, MOMENTUM, Decimal("120")),
+        ]
 
         report = freeze_report(
             [open_entry(HDFC)], positions_from_allocations(holdings, allocations)
@@ -269,7 +278,7 @@ class TestSection43FreezesTheHoldingAndNothingElse:
         """A lens is excluded from every *total* (§4.1); it still prints a return in §6.5's muted
         tab, and a lens over a position we cannot value honestly is exactly as dishonest."""
         holdings = [Holding(HDFC, Decimal("320"))]
-        allocations = [Allocation(HDFC, LONG_TERM)]
+        allocations = [Allocation(HDFC, LONG_TERM, Decimal("320"))]
         positions = positions_from_allocations(holdings, allocations, {HDFC: [DEFENCE_LENS]})
 
         report = freeze_report([open_entry(HDFC)], positions)
@@ -280,7 +289,9 @@ class TestSection43FreezesTheHoldingAndNothingElse:
         """Criterion 1 makes the whole the sum of the parts, so one dishonest part makes a
         dishonest whole — the one place the blast radius is deliberately total."""
         holdings = [Holding(HDFC, Decimal("320"))]
-        positions = positions_from_allocations(holdings, [Allocation(HDFC, LONG_TERM)])
+        positions = positions_from_allocations(
+            holdings, [Allocation(HDFC, LONG_TERM, Decimal("320"))]
+        )
 
         assert freeze_report([open_entry(HDFC)], positions).consolidated_pending
 
@@ -304,7 +315,9 @@ class TestSection43FreezesTheHoldingAndNothingElse:
 
     def test_nothing_is_frozen_when_the_inbox_is_empty(self) -> None:
         holdings = [Holding(HDFC, Decimal("320"))]
-        positions = positions_from_allocations(holdings, [Allocation(HDFC, LONG_TERM)])
+        positions = positions_from_allocations(
+            holdings, [Allocation(HDFC, LONG_TERM, Decimal("320"))]
+        )
 
         report = freeze_report([], positions)
 
@@ -329,11 +342,21 @@ class TestResolvingAnItem:
         assert not report.is_pending(LONG_TERM)
         assert not report.consolidated_pending
 
-    def test_resolving_yields_the_allocation_it_implies(self) -> None:
-        """Whole-holding allocation (§4.2) is what makes one row a complete answer."""
-        outcome = resolve(open_entry(HDFC), MOMENTUM, PORTFOLIOS, TODAY)
+    def test_resolving_allocates_the_quantity_the_item_was_about(self) -> None:
+        """The answer covers the shares in question, not the whole position (Phase 3).
 
-        assert outcome.implied_allocation == Allocation(key=HDFC, portfolio_id=MOMENTUM)
+        Until 10 Sep 2026 those were the same thing, because a holding had one owner and one row
+        was a complete answer. With slices they diverge, and the item's own quantity is the
+        honest one: a user answering "those 100 were Momentum" has said nothing about the other
+        220, and filing them too would put shares in a portfolio on the strength of a question
+        that never mentioned them.
+        """
+        entry = open_entry(HDFC)
+        outcome = resolve(entry, MOMENTUM, PORTFOLIOS, TODAY)
+
+        assert outcome.implied_allocation == Allocation(
+            key=HDFC, portfolio_id=MOMENTUM, quantity=entry.quantity
+        )
 
     def test_resolving_records_the_portfolio_and_the_date_it_was_answered(self) -> None:
         outcome = resolve(open_entry(HDFC), MOMENTUM, PORTFOLIOS, TODAY)
@@ -511,7 +534,10 @@ class TestSection64NeedsAttention:
         return AttentionInputs(
             as_of=TODAY,
             holdings=[Holding(HDFC, Decimal("320")), Holding(TCS, Decimal("50"))],
-            allocations=[Allocation(HDFC, LONG_TERM), Allocation(TCS, MOMENTUM)],
+            allocations=[
+                Allocation(HDFC, LONG_TERM, Decimal("320")),
+                Allocation(TCS, MOMENTUM, Decimal("50")),
+            ],
             prices_as_of=TODAY,
         )
 
@@ -524,7 +550,7 @@ class TestSection64NeedsAttention:
         inputs = AttentionInputs(
             as_of=TODAY,
             holdings=[Holding(HDFC, Decimal("320")), Holding(TCS, Decimal("50"))],
-            allocations=[Allocation(HDFC, LONG_TERM)],
+            allocations=[Allocation(HDFC, LONG_TERM, Decimal("320"))],
             entries=[open_entry(HDFC)],
             expired_broker_account_ids=[10, 20],
             rebalance_due_portfolio_ids=[MOMENTUM],
@@ -560,7 +586,7 @@ class TestSection64NeedsAttention:
                 Holding(TCS, Decimal("50")),
                 Holding(HDFC_AT_UPSTOX, Decimal("120")),
             ],
-            allocations=[Allocation(HDFC, LONG_TERM)],
+            allocations=[Allocation(HDFC, LONG_TERM, Decimal("320"))],
         )
         (item,) = attention_items(inputs)
 
@@ -575,7 +601,7 @@ class TestSection64NeedsAttention:
             as_of=TODAY,
             prices_as_of=TODAY,
             holdings=[Holding(HDFC, Decimal("320"))],
-            allocations=[Allocation(HDFC, LONG_TERM)],
+            allocations=[Allocation(HDFC, LONG_TERM, Decimal("320"))],
             entries=[
                 open_entry(HDFC, item_id=1),
                 open_entry(HDFC, ReconciliationReason.QUANTITY_MISMATCH, item_id=2),

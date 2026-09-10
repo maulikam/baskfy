@@ -90,7 +90,6 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.allocation_ledger import (
-    UNALLOCATED,
     Allocation,
     DetectedSell,
     Holding,
@@ -567,14 +566,17 @@ def _ledger_view(
         key = HoldingKey(instrument_id=entry.instrument_id, broker_account_id=broker_account_id)
         if entry.quantity is not None:
             holdings.append(Holding(key=key, quantity=entry.quantity, avg_price=entry.avg_price))
-        allocations.append(
-            Allocation(
-                key=key,
-                portfolio_id=entry.capital_portfolio_id
-                if entry.capital_portfolio_id is not None
-                else UNALLOCATED,
+        # Unallocated is a REMAINDER since 10 Sep 2026, not a row: a holding filed nowhere simply
+        # has no allocation, and `unallocated_quantity` derives the rest. Writing an explicit
+        # `portfolio_id=None` row is now refused by `Allocation` itself.
+        if entry.capital_portfolio_id is not None and entry.quantity is not None:
+            allocations.append(
+                Allocation(
+                    key=key,
+                    portfolio_id=entry.capital_portfolio_id,
+                    quantity=entry.quantity,
+                )
             )
-        )
     return holdings, allocations
 
 

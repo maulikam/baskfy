@@ -676,3 +676,123 @@ async def test_the_same_shares_are_never_counted_twice_across_portfolios(
     ]
     assert position.unallocated_quantity == Decimal("0"), "the pile should be empty"
     assert position.holding.quantity == Decimal("100")
+
+
+# ===========================================================================================
+# Adding to a portfolio that already exists (Maulik, 11 Sep 2026)
+# ===========================================================================================
+#
+# "the current system does not allow to add stock into exisiting portfolio, it only allows to
+# create a new one". It made the product unusable after one pass: every share he owned had gone
+# into a group called "Swing Manual", and the picker then refused every row for having none free —
+# correctly, and with no screen anywhere that could free them.
+
+
+@pytest.mark.asyncio
+async def test_unallocated_is_drained_before_another_portfolio_is_touched(
+    db: AsyncSession,
+) -> None:
+    """60 in Swing Manual, 40 free; add 20 to Long term and Swing Manual is left alone."""
+    user_id = await _user(db)
+    broker_account_id = await _broker(db, user_id)
+    instrument_id = await _instrument(db)
+    await _sync(db, user_id, broker_account_id)
+
+    key = HoldingKey(instrument_id=instrument_id, broker_account_id=broker_account_id)
+    swing = await _portfolio(db, user_id, "PF3 Swing Manual")
+    await _apply_allocation(
+        db,
+        await _ledger_for(db, user_id),
+        Allocation(key=key, portfolio_id=swing, quantity=Decimal("60")),
+        resolved_on=AS_OF,
+    )
+    await db.flush()
+
+    long_term = await _portfolio(db, user_id, "PF3 Long term")
+    await _apply_allocation(
+        db,
+        await _ledger_for(db, user_id),
+        Allocation(key=key, portfolio_id=long_term, quantity=Decimal("20")),
+        resolved_on=AS_OF,
+    )
+    await db.flush()
+
+    assert await _slice_in(db, "PF3 Swing Manual", instrument_id) == Decimal("60")
+    assert await _slice_in(db, "PF3 Long term", instrument_id) == Decimal("20")
+    assert await _total_held(db, instrument_id) == Decimal("100")
+
+
+@pytest.mark.asyncio
+async def test_when_nothing_is_free_the_shares_come_out_of_the_other_portfolio(
+    db: AsyncSession,
+) -> None:
+    """Maulik's actual state: everything in one group, nothing unallocated.
+
+    Creating a portfolio may only take free shares — a new group has no claim on anything. Adding
+    to an existing one MOVES them, because that is what a person means when the shares are already
+    somewhere and belong somewhere else.
+    """
+    user_id = await _user(db)
+    broker_account_id = await _broker(db, user_id)
+    instrument_id = await _instrument(db)
+    await _sync(db, user_id, broker_account_id)
+
+    key = HoldingKey(instrument_id=instrument_id, broker_account_id=broker_account_id)
+    swing = await _portfolio(db, user_id, "PF3 Swing Manual")
+    await _apply_allocation(
+        db,
+        await _ledger_for(db, user_id),
+        Allocation(key=key, portfolio_id=swing, quantity=Decimal("100")),
+        resolved_on=AS_OF,
+    )
+    await db.flush()
+
+    after_fill = await _ledger_for(db, user_id)
+    position = next(p for p in after_fill.positions if p.key.instrument_id == instrument_id)
+    assert position.unallocated_quantity == Decimal("0"), "nothing free — his exact situation"
+
+    long_term = await _portfolio(db, user_id, "PF3 Long term")
+    await _apply_allocation(
+        db,
+        after_fill,
+        Allocation(key=key, portfolio_id=long_term, quantity=Decimal("30")),
+        resolved_on=AS_OF,
+    )
+    await db.flush()
+
+    assert await _slice_in(db, "PF3 Swing Manual", instrument_id) == Decimal("70")
+    assert await _slice_in(db, "PF3 Long term", instrument_id) == Decimal("30")
+    assert await _total_held(db, instrument_id) == Decimal("100"), "shares were invented"
+
+
+@pytest.mark.asyncio
+async def test_a_move_that_drains_a_slice_removes_its_row(db: AsyncSession) -> None:
+    """A portfolio holding zero of something is not holding it. `Allocation` refuses a zero
+    quantity, so the row goes rather than being written as one."""
+    user_id = await _user(db)
+    broker_account_id = await _broker(db, user_id)
+    instrument_id = await _instrument(db)
+    await _sync(db, user_id, broker_account_id)
+
+    key = HoldingKey(instrument_id=instrument_id, broker_account_id=broker_account_id)
+    swing = await _portfolio(db, user_id, "PF3 Swing Manual")
+    await _apply_allocation(
+        db,
+        await _ledger_for(db, user_id),
+        Allocation(key=key, portfolio_id=swing, quantity=Decimal("100")),
+        resolved_on=AS_OF,
+    )
+    await db.flush()
+
+    long_term = await _portfolio(db, user_id, "PF3 Long term")
+    await _apply_allocation(
+        db,
+        await _ledger_for(db, user_id),
+        Allocation(key=key, portfolio_id=long_term, quantity=Decimal("100")),
+        resolved_on=AS_OF,
+    )
+    await db.flush()
+
+    assert await _slice_in(db, "PF3 Swing Manual", instrument_id) is None
+    assert await _slice_in(db, "PF3 Long term", instrument_id) == Decimal("100")
+    assert await _total_held(db, instrument_id) == Decimal("100")

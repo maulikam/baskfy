@@ -58,6 +58,13 @@ export default async function PortfolioHoldingsPage() {
         // §6.7's confirm. A server action passed straight into a client component: the write
         // runs on the server, so the bearer token never reaches the browser, and the flow does
         // not need to know that is what happened.
+        // The portfolios "add to a portfolio you already have" may file into. Broker piles are
+        // already absent from this list — the overview draws them as Unallocated instead
+        // (0038) — which is exactly the set that can be added to, since adding to a pile is a
+        // removal and the route refuses it.
+        targets={[...(overview?.portfolios ?? []), ...(overview?.monitoring_views ?? [])].map(
+          (row) => ({ portfolio_id: row.portfolio_id, name: row.name, kind: row.kind }),
+        )}
         onCreate={createPortfolioAction}
       />
 

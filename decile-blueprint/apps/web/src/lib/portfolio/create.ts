@@ -2,7 +2,7 @@ import "server-only";
 
 import { serverApiOrigin } from "@/lib/api/config";
 import { auth } from "@/lib/auth";
-import { bodyForDraft, type BenchmarkOption } from "@/lib/portfolio/draft-mapping";
+import { bodyForDraft, holdingsForDraft, type BenchmarkOption } from "@/lib/portfolio/draft-mapping";
 import type { PortfolioDraft } from "@/lib/portfolio/organize";
 
 /**
@@ -73,6 +73,12 @@ export async function fetchBenchmarkOptions(): Promise<readonly BenchmarkOption[
  * A failure to resolve it is not a failure to create — see {@link benchmarkIndexId}.
  */
 export async function createPortfolio(draft: PortfolioDraft): Promise<CreateResult> {
+  // "Add to a portfolio you already have" is the same screen and a different verb: it files into
+  // a portfolio that has its own name, kind and benchmark, so there is nothing to create and no
+  // body to build. Routed here rather than from the component so a client component never has to
+  // know two endpoints, and so the refusal wording arrives through one path.
+  if (draft.start === "EXISTING") return addToPortfolio(draft);
+
   const body = bodyForDraft(draft, await fetchBenchmarkOptions());
   try {
     const response = await fetch(`${serverApiOrigin()}/api/v1/portfolio`, {
@@ -121,4 +127,35 @@ function portfolioIdOf(created: unknown): number {
     if (typeof fallback === "number") return fallback;
   }
   return 0;
+}
+
+
+/**
+ * `POST /portfolio/{id}/holdings` — file the picked holdings into a portfolio that exists.
+ *
+ * The server MOVES shares here: unallocated first, then the smallest other slice. That is the
+ * operation Maulik was missing on 11 Sep 2026 — every share he owned had gone into one group, and
+ * the only path the product offered was creating yet another one.
+ */
+async function addToPortfolio(draft: PortfolioDraft): Promise<CreateResult> {
+  const portfolioId = draft.targetPortfolioId;
+  if (portfolioId === null || portfolioId === undefined) {
+    return { ok: false, reason: "Pick a portfolio to add these holdings to." };
+  }
+  const body = { holdings: holdingsForDraft(draft) };
+  try {
+    const response = await fetch(
+      `${serverApiOrigin()}/api/v1/portfolio/${portfolioId}/holdings`,
+      {
+        method: "POST",
+        headers: { ...(await authHeaders()), "content-type": "application/json" },
+        body: JSON.stringify(body),
+        cache: "no-store",
+      },
+    );
+    if (response.ok) return { ok: true, portfolioId };
+    return { ok: false, reason: await refusalReason(response) };
+  } catch {
+    return { ok: false, reason: UNREACHABLE };
+  }
 }

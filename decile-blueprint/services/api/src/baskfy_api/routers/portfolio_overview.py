@@ -3901,6 +3901,136 @@ def _filed_elsewhere(ledger: _Ledger, position: _Position) -> str:
     return ", already " + " and ".join(parts)
 
 
+class AddHoldingsIn(BaseModel):
+    """``POST /portfolio/{id}/holdings`` — file more shares into a portfolio that already exists.
+
+    The same holding entries `POST /portfolio` takes, and the same meaning: a quantity narrows the
+    request, omitting it means "everything available".
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    holdings: list[HoldingKeyIn] = Field(min_length=1)
+
+
+@router.post("/{portfolio_id}/holdings", response_model=PortfolioDetailOut)
+async def add_holdings(
+    session: SessionDep,
+    principal: AuthenticatedDep,
+    portfolio_id: Annotated[int, Path(ge=1)],
+    body: AddHoldingsIn,
+) -> PortfolioDetailOut:
+    """Add shares to a portfolio that already exists. **Not an order path.**
+
+    Maulik, 11 Sep 2026: *"the current system does not allow to add stock into existing portfolio,
+    it only allows to create a new one"*. He was right, and it made the product unusable after the
+    first pass: everything he owned went into one group called "Swing Manual", and the only way to
+    build a second was to free the shares by hand first — with no screen that could free them.
+
+    **This route MOVES shares, and that is the difference between it and `POST /portfolio`.**
+    Creating a group takes only what is unallocated, because a new portfolio has no claim on
+    anything yet. Adding to an existing one is the operation a person reaches for when the shares
+    are already somewhere and belong somewhere else, so the cap here is the **whole position**,
+    not the free remainder. `_apply_allocation` takes the free shares first and then the smallest
+    other slice, so the fewest portfolios are disturbed and Unallocated drains before anything is
+    taken out of a group the user built.
+
+    What it refuses is still arithmetic: more shares than exist. And it refuses a **broker pile**
+    as the target — those rows are Unallocated by definition (0038), and "add these shares to
+    Unallocated" is a *removal*, which is a different verb and deserves its own route rather than
+    this one quietly doing two things.
+
+    A MONITORING view takes membership, not quantity (§4.1): a lens answers "which names", never
+    "how many", so a quantity sent for one is accepted and ignored rather than refused — the body
+    is shared with the create route and a client should not have to know which kind it is talking
+    to before it can send a holding.
+    """
+    user_id = principal.require_user()
+    await _owned_portfolio(session, portfolio_id, principal)
+
+    requested = _requested_quantities(body.holdings)
+    wanted = sorted(requested, key=lambda key: (key.instrument_id, key.broker_account_id))
+    for key in wanted:
+        await _owned_broker_account(session, key.broker_account_id, user_id)
+
+    ledger = await _load_ledger(session, user_id)
+    if portfolio_id in ledger.pile_ids:
+        raise Problem(
+            ALLOCATION_REFUSED,
+            f"{ledger.portfolios[portfolio_id].name!r} is where unsorted shares already live, so "
+            "there is nothing to add to it. Remove them from the portfolio they are in instead.",
+        )
+    portfolio = ledger.portfolios[portfolio_id]
+    today = dt.datetime.now(tz=dt.UTC).date()
+
+    by_key = {position.key: position for position in ledger.positions}
+    chosen: list[tuple[_Position, Decimal]] = []
+    for key in wanted:
+        position = by_key.get(key)
+        if position is None:
+            raise not_found(
+                "holding",
+                f"instrument {key.instrument_id} at broker account {key.broker_account_id}",
+            )
+        asked = requested[key]
+        held_here = position.capital_slices.get(portfolio_id, ZERO)
+        # `None` means "everything this portfolio does not already hold" — the free shares plus
+        # whatever is filed elsewhere. On the create route the same `None` means only the free
+        # shares, because a portfolio that does not exist yet cannot be taking from itself.
+        chosen.append((position, position.holding.quantity - held_here if asked is None else asked))
+
+    if portfolio.kind is PortfolioKind.CAPITAL:
+        _refuse_more_than_is_held(ledger, chosen, portfolio_id)
+
+    async with session.begin_nested():
+        for position, quantity in chosen:
+            if quantity <= ZERO:
+                # Already entirely in this portfolio, or an explicit zero. Not an error: a user
+                # ticking a row that is already filed here has asked for a state that is true.
+                continue
+            if portfolio.kind is PortfolioKind.CAPITAL:
+                await _apply_allocation(
+                    session,
+                    ledger,
+                    Allocation(key=position.key, portfolio_id=portfolio_id, quantity=quantity),
+                    resolved_on=today,
+                )
+            elif portfolio_id not in position.monitoring_portfolio_ids:
+                _add_to_monitoring_view(session, portfolio_id, position, added_on=today)
+        await session.flush()
+
+    return await portfolio_detail(session, principal, portfolio_id)
+
+
+def _refuse_more_than_is_held(
+    ledger: _Ledger, chosen: Sequence[tuple[_Position, Decimal]], portfolio_id: int
+) -> None:
+    """The only arithmetic left to refuse when shares may be moved: more than you own.
+
+    `_refuse_over_allocation` guards the create route against the free remainder; this one guards
+    against the whole position, because moving a holding out of one portfolio and into another is
+    the point of the route rather than a thing to prevent. What both refuse is a portfolio ending
+    up with shares nobody has.
+    """
+    over = [
+        (position, wanted)
+        for position, wanted in chosen
+        if wanted > position.holding.quantity - position.capital_slices.get(portfolio_id, ZERO)
+    ]
+    if not over:
+        return
+    named = [
+        f"{_symbol_of(ledger, position.key.instrument_id)}: asked for {wanted:g}, "
+        f"{position.holding.quantity:g} held in total"
+        for position, wanted in over
+    ]
+    raise Problem(
+        ALLOCATION_REFUSED,
+        "You cannot file more shares than you own — " + "; ".join(named) + ".",
+        instrument_ids=[position.key.instrument_id for position, _ in over],
+    )
+
+
 # ---------------------------------------------------------------------------
 # GET /portfolio/{id} and /{id}/nav — §7 and §6.3
 #

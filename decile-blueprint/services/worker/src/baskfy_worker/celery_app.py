@@ -259,6 +259,25 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=21, minute=5, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_COMPUTE},
     },
+    # --- VB4: the volume-breakout sleeve's nightly detection (docs/vbt/06) --------
+    #
+    # The chain already runs `compute_vbt` as its thirteenth step, after `publish` and after
+    # `compute_swing`. This entry is the belt to that brace, and it is the same argument the
+    # swing entry above makes: on a night the chain failed its quality gate the bars are still
+    # there, and a signal is worth having whether or not the screener had a bad night.
+    #
+    # Unlike the swing entry it asks before it works — a date that already has `vb_signal_daily`
+    # rows is answered without re-detecting — because this detector densifies 260 sessions over
+    # the whole cash universe and re-deriving rows the chain has already written would cost
+    # minutes to arrive at the same answer.
+    #
+    # 21:10, after the swing detect (21:00) and its plan (21:05), so the three compute jobs of
+    # the evening queue in the order their books were built rather than racing for a worker slot.
+    "vbt-detect": {
+        "task": "baskfy.vbt.detect",
+        "schedule": crontab(hour=21, minute=10, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
     # docs/swing/01 §8: "Weekend: a full scan, a watchlist of a few dozen forming flags, the
     # levels that would trigger next week." Saturday morning, before anyone looks.
     "swing-weekend": {

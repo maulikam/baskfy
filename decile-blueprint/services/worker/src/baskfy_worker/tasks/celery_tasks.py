@@ -97,6 +97,7 @@ from baskfy_worker.tasks.swing_scan_now import (
     sweep_queued,
 )
 from baskfy_worker.tasks.swing_timing_probe import DONE_MARKER, probe_once
+from baskfy_worker.tasks.vbt import published_signal_count, run_detect_vbt
 from baskfy_worker.telemetry import provider_retry_hooks
 from baskfy_worker.window import DateWindow
 
@@ -795,6 +796,39 @@ def swing_detect_task(trade_date: str | None = None) -> JsonObject:
             execution_enabled=deps.swing_execution_enabled,
         )
         return {"date": day.isoformat(), "candidates": written, "detail": outcome.detail}
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.vbt.detect", acks_late=True)
+def vbt_detect_task(trade_date: str | None = None) -> JsonObject:
+    """VB4: detect the session's volume-breakout signals and write its breadth row.
+
+    Idempotent per ``(user_id, date)``: re-running a date overwrites its own rows and moves no
+    counter (house rule 7). Defaults to today in IST when Beat fires without an argument.
+
+    **This is the 21:00 retry as well as the CLI's entry point.** The nightly chain already runs
+    the same detector as its thirteenth step, where it cannot fail the night; if the chain has not
+    published by the time Beat fires — a slow bhavcopy, a provider stall — this is what writes the
+    session anyway. It asks first: a date that already has rows is answered without work, because
+    a retry that re-detects a session the chain already wrote would burn a few minutes of Polars
+    to arrive at the same rows.
+    """
+    day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
+    deps = build_pipeline_dependencies()
+    if not deps.vbt_nightly_enabled:
+        return {"date": day.isoformat(), "skipped": "BASKFY_VBT_NIGHTLY_ENABLED is false"}
+    if deps.vbt_user_id is None:
+        return {"date": day.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        user_id = int(deps.vbt_user_id or 0)
+        already = await published_signal_count(session, user_id, day)
+        if already:
+            return {"date": day.isoformat(), "skipped": "already detected", "rows": already}
+        outcome = StepOutcome()
+        signals = await run_detect_vbt(session, outcome, day, user_id=user_id)
+        return {"date": day.isoformat(), "signals": signals, "detail": outcome.detail}
 
     return run_in_session(_run)
 

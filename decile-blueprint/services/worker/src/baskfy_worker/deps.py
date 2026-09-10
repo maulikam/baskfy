@@ -42,3 +42,13 @@ class PipelineDependencies:
     #: PACK.6: while this is false the exposure ladder reads *simulated* closes. The step needs
     #: it to pick which book to summarise, and it places nothing either way.
     swing_execution_enabled: bool = False
+
+    # --- VB4: the volume-breakout detection step -----------------------------
+    #
+    # Passed in for the same reason as the swing pair above, and `None` means the same thing:
+    # this deployment has no sole tenant, so the step skips itself and says so. The `vb_` schema
+    # is keyed by user and a nightly job may not invent one.
+    vbt_user_id: int | None = None
+    #: `docs/vbt/02` Track B. Detection moves no money, so it defaults on; false silences the
+    #: step (and the 21:00 retry) without removing either.
+    vbt_nightly_enabled: bool = True

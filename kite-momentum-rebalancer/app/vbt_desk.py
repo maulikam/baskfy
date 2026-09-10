@@ -28,6 +28,8 @@ from typing import Any, Final
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
+from baskfy_core.vbt.config import DRY_RUN_SESSIONS_REQUIRED as _DRY_RUN_SESSIONS_REQUIRED
+
 from . import config as C
 
 log = logging.getLogger("vbt.desk")
@@ -37,8 +39,10 @@ SCHEMA: Final = "public"
 
 router = APIRouter()
 
-#: `02` §3.1's gate, shown on the status bar as "7 of 20".
-DRY_RUN_SESSIONS_REQUIRED: Final = 20
+#: `02` §3.1's gate, shown on the status bar as "7 of 20". Imported rather than typed: VB8 put
+#: the number in `baskfy_core.vbt.config` because the desk page, the web page and the API's
+#: settings view all print it, and three copies is two too many.
+DRY_RUN_SESSIONS_REQUIRED: Final = _DRY_RUN_SESSIONS_REQUIRED
 
 #: The order `04` §9.3 renders a plan in: risk coming off before risk going on.
 KIND_ORDER: Final[tuple[str, ...]] = (

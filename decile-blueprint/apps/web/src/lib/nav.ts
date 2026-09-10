@@ -181,6 +181,10 @@ export const SECTION_TABS = {
     { href: "/create" as Route, label: "Create" },
     /* `docs/swing/05` §1: "The **Build** hub gains a section tab **Swing**". */
     { href: "/swing" as Route, label: "Swing" },
+    /* `docs/vbt/05` §1, the same shape: the third allocation is a tab beside the second, not a
+       new hub. It is read-only here — a volume-breakout line becomes an order in the desk
+       console and nowhere else (`docs/vbt/02` Track C §4). */
+    { href: "/vbt" as Route, label: "Volume breakout" },
   ],
   /*
     The swing hub (SW4, `docs/swing/05` §2): "Setups | Watchlist | Market | Positions | Journal".
@@ -193,6 +197,20 @@ export const SECTION_TABS = {
     { href: "/swing/market" as Route, label: "Market" },
     { href: "/swing/positions" as Route, label: "Positions" },
     { href: "/swing/journal" as Route, label: "Journal" },
+  ],
+  /*
+    The volume-breakout hub (VB8, `docs/vbt/05` §2): "Today | Book | Backtest". Three tabs, and
+    no fourth — there is no settings tab here because the sleeve's four numbers live under Me
+    with the swing book's, for the same reason: they are about a person's money, not today's tape.
+  */
+  vbt: [
+    { href: "/vbt" as Route, label: "Today" },
+    /* `docs/vbt/05` §2 calls this tab "Book". The label is **Positions**, matching the swing
+       hub's: PORTFOLIO_REDESIGN.md §8 retires "book" from what a reader sees, and two sleeves
+       that show the same thing should not name it two different ways. The route keeps its
+       documented `/vbt/book` path. DECISIONS-VB VB8.5. */
+    { href: "/vbt/book" as Route, label: "Positions" },
+    { href: "/vbt/backtest" as Route, label: "Backtest" },
   ],
   /*
     PORTFOLIO_REDESIGN.md §2, in order. Overview first because it is the default landing tab —
@@ -234,6 +252,7 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   discover: "Discover",
   build: "Build",
   swing: "Build",
+  vbt: "Build",
   portfolio: "Portfolio",
   me: "Me",
 };
@@ -296,6 +315,9 @@ export function primarySection(pathname: string): SectionKey | null {
   // Build in the primary chrome rather than adding a sixth destination — HOME1 fixes the primary
   // nav at five.
   if (pathname === "/swing" || pathname.startsWith("/swing/")) return "swing";
+  // `docs/vbt/05` §1: the third sleeve, by the same argument. It lights Build too, and for the
+  // same reason — the primary nav stays at five.
+  if (pathname === "/vbt" || pathname.startsWith("/vbt/")) return "vbt";
   /* `/portfolios` (plural, the desk's rebalance sub-pages) must not match here — hence the exact
      compare and the trailing slash, never a bare `startsWith("/portfolio")`. */
   if (pathname === "/portfolio" || pathname.startsWith("/portfolio/")) return "portfolio";

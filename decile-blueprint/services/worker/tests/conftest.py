@@ -47,6 +47,12 @@ PIPELINE_TABLES = (
     # still be there for the next and "the gate was RED" would depend on execution order.
     "sw_setup_daily, sw_market_daily, sw_config_audit, sw_config, sw_watch, sw_signal, "
     "sw_plan_line, sw_plan_skip, sw_plan, sw_fill, sw_position, sw_session, "
+    # VB4/VB5's tables, by exactly the argument the swing line above makes — and it was missed
+    # until VB8 ran the whole worker suite in one process. `vb_config`, `vb_breadth_daily` and
+    # `vb_session` are keyed by user, so they do not cascade from `instrument`, and a config row
+    # left behind by one test made the next one's fixture fail at setup.
+    "vb_signal_daily, vb_breadth_daily, vb_config_audit, vb_config, vb_fill, vb_order, "
+    "vb_position, vb_plan_line, vb_plan_skip, vb_plan, vb_session, vb_backtest_run, "
     # Prompt 12's account purge is a worker task too, and it writes `app_user` — which nothing
     # else here truncates, so without these a second test run finds the first one's accounts.
     "index_def"

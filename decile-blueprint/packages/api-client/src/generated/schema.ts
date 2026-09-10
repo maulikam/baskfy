@@ -3358,6 +3358,150 @@ export interface paths {
         patch: operations["patchWatch"];
         trace?: never;
     };
+    "/api/v1/vbt/backtest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The backtest, and the study
+         * @description The latest finished run per source, beside STRATEGY §4's published numbers.
+         *
+         *     The caveats are `01` §5's and they belong **above** these numbers on the page, as a component
+         *     rather than a footer (house rule 9). This route serves the numbers; `05` §2 says where the
+         *     caveats go, and the read-only test does not let the page forget them.
+         */
+        get: operations["getVbtBacktest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vbt/book": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Working orders, the book, the fill rate
+         * @description `05` §2's Book tab. Simulated rows are labelled and never share a total with real ones.
+         */
+        get: operations["getVbtBook"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vbt/breadth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The breadth gauge's series
+         * @description The `vb_breadth_daily` series with the 40% line that decides the gate.
+         *
+         *     With no window the last year is served (`05` §2), because an unbounded default would grow
+         *     into a nine-year payload on a page that draws one chart.
+         */
+        get: operations["getVbtBreadth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vbt/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The sleeve's settings
+         * @description The four editable numbers, the server's ceilings, and the two only a job may write.
+         *
+         *     The ceilings come back on every read so a form can render "max 15% — set by the server"
+         *     rather than discovering the limit by being refused.
+         */
+        get: operations["getVbtConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a sleeve setting
+         * @description The one write on this surface, and it moves no money.
+         *
+         *     Four numbers. No order path, no broker, no session counter: `VbtConfigPatch` forbids unknown
+         *     fields, so `{"dry_run_sessions": 20}` is refused rather than ignored — a caller who tried to
+         *     declare the paper run finished is told the field does not exist here instead of being
+         *     answered `200` and believing they had.
+         *
+         *     A value above its ceiling answers **422** naming the ceiling and the environment variable
+         *     that sets it, and the refusal is atomic: a two-field patch that crosses a ceiling on the
+         *     second field changes neither.
+         */
+        patch: operations["patchVbtConfig"];
+        trace?: never;
+    };
+    "/api/v1/vbt/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The session's candidates and the gate
+         * @description `05` §2's Today tab, in one call.
+         *
+         *     The default is **the latest session the detector wrote**, not today's date: `04` §10's clock
+         *     is the published session's, so during a session "today" has no bar and asking for it would
+         *     answer with an empty page instead of the last real one.
+         */
+        get: operations["getVbtToday"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vbt/today/{instrument_id}/bars": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Closes for the mini chart */
+        get: operations["getVbtBars"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/watchlist": {
         parameters: {
             query?: never;
@@ -10007,6 +10151,411 @@ export interface components {
             source: string;
             /** Title */
             title: string;
+        };
+        /** VbtBacktestOut */
+        VbtBacktestOut: {
+            published: components["schemas"]["VbtPublishedOut"];
+            /** Runs */
+            runs: components["schemas"]["VbtBacktestRunOut"][];
+        };
+        /** VbtBacktestRunOut */
+        VbtBacktestRunOut: {
+            /** Drift */
+            drift: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Id */
+            id: number;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Source */
+            source: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Stats */
+            stats: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** VbtBarOut */
+        VbtBarOut: {
+            /** Close */
+            close: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+        };
+        /** VbtBarsOut */
+        VbtBarsOut: {
+            /**
+             * Adjusted
+             * @default true
+             */
+            adjusted: boolean;
+            /** Data */
+            data: components["schemas"]["VbtBarOut"][];
+            /** Instrument Id */
+            instrument_id: number;
+        };
+        /** VbtBookOut */
+        VbtBookOut: {
+            /** Closed Positions */
+            closed_positions: components["schemas"]["VbtClosedOut"][];
+            fill_rate: components["schemas"]["VbtFillRateOut"];
+            /** Open Positions */
+            open_positions: components["schemas"]["VbtPositionOut"][];
+            /** Working */
+            working: components["schemas"]["VbtWorkingOut"][];
+        };
+        /** VbtBreadthOut */
+        VbtBreadthOut: {
+            /** Data */
+            data: components["schemas"]["VbtBreadthPointOut"][];
+            /** Threshold Pct */
+            threshold_pct: string;
+        };
+        /** VbtBreadthPointOut */
+        VbtBreadthPointOut: {
+            /** Above Count */
+            above_count: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Gate */
+            gate: string;
+            /** Measured Count */
+            measured_count: number;
+            /** Pct Above Dma */
+            pct_above_dma: string;
+            /** Thin Session */
+            thin_session: boolean;
+        };
+        /**
+         * VbtCandidateOut
+         * @description One candidate, or one reject. `failed_filters` is empty for a signal and carries the
+         *     letters (`04` §3.2's A…F) for a `SCAN_ONLY` row — `01` §3's ablation is the argument for the
+         *     filters, and a page that never shows what they rejected makes that argument unreadable.
+         */
+        VbtCandidateOut: {
+            /** Change Pct */
+            change_pct: string | null;
+            /** Close */
+            close: string;
+            /** Close Position */
+            close_position: string | null;
+            /** Ema 21 */
+            ema_21: string | null;
+            /** Failed Filters */
+            failed_filters: string[];
+            /** High 20 Prior */
+            high_20_prior: string | null;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Limit Price */
+            limit_price: string;
+            /** Locked Upper Circuit */
+            locked_upper_circuit: boolean;
+            /** Name */
+            name: string;
+            /** Pct Above Dma */
+            pct_above_dma: string | null;
+            /** Rank Key */
+            rank_key: number;
+            /** Ret 20 Pct */
+            ret_20_pct: string | null;
+            /** Rvol */
+            rvol: string | null;
+            /** Sma 200 */
+            sma_200: string | null;
+            /** State */
+            state: string;
+            /** Stop Price */
+            stop_price: string;
+            /** Symbol */
+            symbol: string;
+            /** Turnover Avg 20 */
+            turnover_avg_20: number | null;
+        };
+        /** VbtClosedOut */
+        VbtClosedOut: {
+            /** Close Reason */
+            close_reason: string | null;
+            /** Closed On */
+            closed_on: string | null;
+            /** Entry Avg */
+            entry_avg: string;
+            /**
+             * Entry Date
+             * Format: date
+             */
+            entry_date: string;
+            /** Exit Avg */
+            exit_avg: string | null;
+            /** Id */
+            id: number;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Name */
+            name: string;
+            /** Quantity Entered */
+            quantity_entered: number;
+            /** R Multiple */
+            r_multiple: string | null;
+            /** Return Pct */
+            return_pct: string | null;
+            /** Simulated */
+            simulated: boolean;
+            /** Symbol */
+            symbol: string;
+        };
+        /**
+         * VbtConfigPatch
+         * @description A partial update. Every field optional; unset means "leave it alone".
+         *
+         *     ``extra="forbid"`` is the load-bearing line. Without it, ``PATCH {"dry_run_sessions": 20}``
+         *     would be accepted, ignored and answered ``200`` — the caller believing they had satisfied the
+         *     gate by asking for it. With it, they are told the field does not exist here.
+         *
+         *     The bounds on each field are the *engine's* limits, not the server's ceilings: a zero stop or
+         *     a negative capital is nonsense at any ceiling, and nonsense is a 400. The ceilings are
+         *     checked afterwards, in :func:`apply_patch`, and answer 422 — a different question with a
+         *     different answer.
+         */
+        VbtConfigPatch: {
+            /** Max Open Positions */
+            max_open_positions?: number | null;
+            /** Max Position Pct */
+            max_position_pct?: number | string | null;
+            /** Sleeve Capital Inr */
+            sleeve_capital_inr?: number | string | null;
+            /** Stop Pct */
+            stop_pct?: number | string | null;
+        };
+        /**
+         * VbtConfigView
+         * @description What a reader gets: the settings, the ceilings, and the read-only system fields.
+         */
+        VbtConfigView: {
+            /** Ceilings */
+            ceilings: {
+                [key: string]: string;
+            };
+            /** Dry Run Sessions */
+            dry_run_sessions: number;
+            /** Dry Run Sessions Required */
+            dry_run_sessions_required: number;
+            /** Execution Enabled */
+            execution_enabled: boolean;
+            /** First Live Sessions Left */
+            first_live_sessions_left: number;
+            /** Max Open Positions */
+            max_open_positions: number;
+            /** Max Position Pct */
+            max_position_pct: string;
+            /** Sleeve Capital Inr */
+            sleeve_capital_inr: string;
+            /** Stop Pct */
+            stop_pct: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
+        };
+        /**
+         * VbtFillRateOut
+         * @description `04` §7.3: the single most likely place the live result parts company with the study.
+         *
+         *     `rate_pct` is null until an order has resolved — a book with three working limits and no
+         *     history has no fill rate, and showing 0% would be a lie about the machinery rather than a
+         *     fact about the market.
+         */
+        VbtFillRateOut: {
+            /** Filled */
+            filled: number;
+            /** Modelled Pct */
+            modelled_pct: string;
+            /** Rate Pct */
+            rate_pct: string | null;
+            /** Resolved */
+            resolved: number;
+        };
+        /** VbtPositionOut */
+        VbtPositionOut: {
+            /** Distance To Ema Pct */
+            distance_to_ema_pct: string | null;
+            /** Ema 21 */
+            ema_21: string | null;
+            /** Entry Avg */
+            entry_avg: string;
+            /**
+             * Entry Date
+             * Format: date
+             */
+            entry_date: string;
+            /** Exit Queued For */
+            exit_queued_for: string | null;
+            /** Exit Reason Queued */
+            exit_reason_queued: string | null;
+            /** Gtt Id */
+            gtt_id: string | null;
+            /** Id */
+            id: number;
+            /** Initial Stop */
+            initial_stop: string;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Last Close */
+            last_close: string | null;
+            /** Naked */
+            naked: boolean;
+            /** Name */
+            name: string;
+            /** Quantity Open */
+            quantity_open: number;
+            /** R Multiple */
+            r_multiple: string | null;
+            /** Return Pct */
+            return_pct: string | null;
+            /** Sessions Held */
+            sessions_held: number | null;
+            /** Simulated */
+            simulated: boolean;
+            /** Stop Price */
+            stop_price: string;
+            /** Symbol */
+            symbol: string;
+        };
+        /**
+         * VbtPublishedOut
+         * @description STRATEGY §4's numbers, so the page never transcribes them into a template.
+         */
+        VbtPublishedOut: {
+            /** Avg Hold Sessions */
+            avg_hold_sessions: number;
+            /** Cagr Pct */
+            cagr_pct: number;
+            /** End */
+            end: string;
+            /** Exposure Pct */
+            exposure_pct: number;
+            /** In Sample Cagr Pct */
+            in_sample_cagr_pct: number;
+            /** In Sample Dd Pct */
+            in_sample_dd_pct: number;
+            /** Max Drawdown Pct */
+            max_drawdown_pct: number;
+            /** Modelled Fill Rate Pct */
+            modelled_fill_rate_pct: number;
+            /** Out Of Sample Cagr Pct */
+            out_of_sample_cagr_pct: number;
+            /** Out Of Sample Dd Pct */
+            out_of_sample_dd_pct: number;
+            /** Profit Factor */
+            profit_factor: number;
+            /** Sharpe */
+            sharpe: number;
+            /** Start */
+            start: string;
+            /** Trades */
+            trades: number;
+            /** Win Rate Pct */
+            win_rate_pct: number;
+            /** Years */
+            years: number;
+        };
+        /**
+         * VbtTodayOut
+         * @description `05` §2's Today tab.
+         *
+         *     `as_of` null means the detector has never written a session — **not** that today had no
+         *     candidates. The two look identical on a page without the funnel, which is why the funnel is
+         *     on it even at zero.
+         */
+        VbtTodayOut: {
+            /** Above Count */
+            above_count: number | null;
+            /** As Of */
+            as_of: string | null;
+            /** Candidates */
+            candidates: components["schemas"]["VbtCandidateOut"][];
+            /** Funnel */
+            funnel: {
+                [key: string]: unknown;
+            } | null;
+            /** Gate */
+            gate: string | null;
+            /** Gate Threshold Pct */
+            gate_threshold_pct: string;
+            /** Measured Count */
+            measured_count: number | null;
+            /** Pct Above Dma */
+            pct_above_dma: string | null;
+            /** Rejects */
+            rejects: components["schemas"]["VbtCandidateOut"][];
+            /** Shut Sessions Recent */
+            shut_sessions_recent: number;
+            /** Shut Window */
+            shut_window: number;
+            /** Thin Session */
+            thin_session: boolean;
+        };
+        /** VbtWorkingOut */
+        VbtWorkingOut: {
+            /** Broker Order Id */
+            broker_order_id: string | null;
+            /** Expires After Session */
+            expires_after_session: string | null;
+            /** Expires Tonight */
+            expires_tonight: boolean;
+            /** Filled Quantity */
+            filled_quantity: number;
+            /** Id */
+            id: number;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Limit Price */
+            limit_price: string;
+            /** Name */
+            name: string;
+            /** Quantity */
+            quantity: number;
+            /** Sessions Allowed */
+            sessions_allowed: number;
+            /** Sessions Worked */
+            sessions_worked: number;
+            /**
+             * Signal Date
+             * Format: date
+             */
+            signal_date: string;
+            /** Simulated */
+            simulated: boolean;
+            /** State */
+            state: string;
+            /** Stop Price */
+            stop_price: string;
+            /** Symbol */
+            symbol: string;
+            /** Value Inr */
+            value_inr: string;
+            /** Working From */
+            working_from: string | null;
         };
         /**
          * WatchlistAddIn
@@ -27624,6 +28173,728 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SwingWatchOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getVbtBacktest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VbtBacktestOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getVbtBook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VbtBookOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getVbtBreadth: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VbtBreadthOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getVbtConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VbtConfigView"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patchVbtConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VbtConfigPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VbtConfigView"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getVbtToday: {
+        parameters: {
+            query?: {
+                /** @description a published session; default the latest */
+                date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VbtTodayOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getVbtBars: {
+        parameters: {
+            query?: {
+                /** @description as of; default the latest session */
+                date?: string | null;
+            };
+            header?: never;
+            path: {
+                instrument_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VbtBarsOut"];
                 };
             };
             /** @description Invalid screen definition */

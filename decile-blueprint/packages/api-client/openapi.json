@@ -17160,6 +17160,1248 @@
         "title": "UpdatePostOut",
         "type": "object"
       },
+      "VbtBacktestOut": {
+        "properties": {
+          "published": {
+            "$ref": "#/components/schemas/VbtPublishedOut"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/VbtBacktestRunOut"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "published",
+          "runs"
+        ],
+        "title": "VbtBacktestOut",
+        "type": "object"
+      },
+      "VbtBacktestRunOut": {
+        "properties": {
+          "drift": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drift"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "stats": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stats"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "started_at",
+          "finished_at",
+          "params",
+          "stats",
+          "drift",
+          "error"
+        ],
+        "title": "VbtBacktestRunOut",
+        "type": "object"
+      },
+      "VbtBarOut": {
+        "properties": {
+          "close": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Close",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "close"
+        ],
+        "title": "VbtBarOut",
+        "type": "object"
+      },
+      "VbtBarsOut": {
+        "properties": {
+          "adjusted": {
+            "default": true,
+            "title": "Adjusted",
+            "type": "boolean"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/VbtBarOut"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "data"
+        ],
+        "title": "VbtBarsOut",
+        "type": "object"
+      },
+      "VbtBookOut": {
+        "properties": {
+          "closed_positions": {
+            "items": {
+              "$ref": "#/components/schemas/VbtClosedOut"
+            },
+            "title": "Closed Positions",
+            "type": "array"
+          },
+          "fill_rate": {
+            "$ref": "#/components/schemas/VbtFillRateOut"
+          },
+          "open_positions": {
+            "items": {
+              "$ref": "#/components/schemas/VbtPositionOut"
+            },
+            "title": "Open Positions",
+            "type": "array"
+          },
+          "working": {
+            "items": {
+              "$ref": "#/components/schemas/VbtWorkingOut"
+            },
+            "title": "Working",
+            "type": "array"
+          }
+        },
+        "required": [
+          "working",
+          "open_positions",
+          "closed_positions",
+          "fill_rate"
+        ],
+        "title": "VbtBookOut",
+        "type": "object"
+      },
+      "VbtBreadthOut": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/VbtBreadthPointOut"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "threshold_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Threshold Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "threshold_pct",
+          "data"
+        ],
+        "title": "VbtBreadthOut",
+        "type": "object"
+      },
+      "VbtBreadthPointOut": {
+        "properties": {
+          "above_count": {
+            "title": "Above Count",
+            "type": "integer"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "gate": {
+            "title": "Gate",
+            "type": "string"
+          },
+          "measured_count": {
+            "title": "Measured Count",
+            "type": "integer"
+          },
+          "pct_above_dma": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Pct Above Dma",
+            "type": "string"
+          },
+          "thin_session": {
+            "title": "Thin Session",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "date",
+          "pct_above_dma",
+          "above_count",
+          "measured_count",
+          "gate",
+          "thin_session"
+        ],
+        "title": "VbtBreadthPointOut",
+        "type": "object"
+      },
+      "VbtCandidateOut": {
+        "description": "One candidate, or one reject. `failed_filters` is empty for a signal and carries the\nletters (`04` §3.2's A…F) for a `SCAN_ONLY` row — `01` §3's ablation is the argument for the\nfilters, and a page that never shows what they rejected makes that argument unreadable.",
+        "properties": {
+          "change_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Pct"
+          },
+          "close": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Close",
+            "type": "string"
+          },
+          "close_position": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Position"
+          },
+          "ema_21": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ema 21"
+          },
+          "failed_filters": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failed Filters",
+            "type": "array"
+          },
+          "high_20_prior": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "High 20 Prior"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "limit_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Limit Price",
+            "type": "string"
+          },
+          "locked_upper_circuit": {
+            "title": "Locked Upper Circuit",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pct_above_dma": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Above Dma"
+          },
+          "rank_key": {
+            "title": "Rank Key",
+            "type": "integer"
+          },
+          "ret_20_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ret 20 Pct"
+          },
+          "rvol": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rvol"
+          },
+          "sma_200": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sma 200"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "stop_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Stop Price",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "turnover_avg_20": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnover Avg 20"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "symbol",
+          "name",
+          "state",
+          "failed_filters",
+          "close",
+          "limit_price",
+          "stop_price",
+          "change_pct",
+          "rvol",
+          "close_position",
+          "ret_20_pct",
+          "turnover_avg_20",
+          "sma_200",
+          "ema_21",
+          "high_20_prior",
+          "pct_above_dma",
+          "locked_upper_circuit",
+          "rank_key"
+        ],
+        "title": "VbtCandidateOut",
+        "type": "object"
+      },
+      "VbtClosedOut": {
+        "properties": {
+          "close_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Reason"
+          },
+          "closed_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed On"
+          },
+          "entry_avg": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Entry Avg",
+            "type": "string"
+          },
+          "entry_date": {
+            "format": "date",
+            "title": "Entry Date",
+            "type": "string"
+          },
+          "exit_avg": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Avg"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "quantity_entered": {
+            "title": "Quantity Entered",
+            "type": "integer"
+          },
+          "r_multiple": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "R Multiple"
+          },
+          "return_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Pct"
+          },
+          "simulated": {
+            "title": "Simulated",
+            "type": "boolean"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "instrument_id",
+          "symbol",
+          "name",
+          "entry_date",
+          "closed_on",
+          "entry_avg",
+          "exit_avg",
+          "quantity_entered",
+          "close_reason",
+          "return_pct",
+          "r_multiple",
+          "simulated"
+        ],
+        "title": "VbtClosedOut",
+        "type": "object"
+      },
+      "VbtConfigPatch": {
+        "additionalProperties": false,
+        "description": "A partial update. Every field optional; unset means \"leave it alone\".\n\n``extra=\"forbid\"`` is the load-bearing line. Without it, ``PATCH {\"dry_run_sessions\": 20}``\nwould be accepted, ignored and answered ``200`` — the caller believing they had satisfied the\ngate by asking for it. With it, they are told the field does not exist here.\n\nThe bounds on each field are the *engine's* limits, not the server's ceilings: a zero stop or\na negative capital is nonsense at any ceiling, and nonsense is a 400. The ceilings are\nchecked afterwards, in :func:`apply_patch`, and answer 422 — a different question with a\ndifferent answer.",
+        "properties": {
+          "max_open_positions": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Open Positions"
+          },
+          "max_position_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Position Pct"
+          },
+          "sleeve_capital_inr": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleeve Capital Inr"
+          },
+          "stop_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Pct"
+          }
+        },
+        "title": "VbtConfigPatch",
+        "type": "object"
+      },
+      "VbtConfigView": {
+        "description": "What a reader gets: the settings, the ceilings, and the read-only system fields.",
+        "properties": {
+          "ceilings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Ceilings",
+            "type": "object"
+          },
+          "dry_run_sessions": {
+            "title": "Dry Run Sessions",
+            "type": "integer"
+          },
+          "dry_run_sessions_required": {
+            "title": "Dry Run Sessions Required",
+            "type": "integer"
+          },
+          "execution_enabled": {
+            "title": "Execution Enabled",
+            "type": "boolean"
+          },
+          "first_live_sessions_left": {
+            "title": "First Live Sessions Left",
+            "type": "integer"
+          },
+          "max_open_positions": {
+            "title": "Max Open Positions",
+            "type": "integer"
+          },
+          "max_position_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Max Position Pct",
+            "type": "string"
+          },
+          "sleeve_capital_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Sleeve Capital Inr",
+            "type": "string"
+          },
+          "stop_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Stop Pct",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "sleeve_capital_inr",
+          "max_open_positions",
+          "max_position_pct",
+          "stop_pct",
+          "dry_run_sessions",
+          "first_live_sessions_left",
+          "updated_at",
+          "updated_by",
+          "ceilings",
+          "execution_enabled",
+          "dry_run_sessions_required"
+        ],
+        "title": "VbtConfigView",
+        "type": "object"
+      },
+      "VbtFillRateOut": {
+        "description": "`04` §7.3: the single most likely place the live result parts company with the study.\n\n`rate_pct` is null until an order has resolved — a book with three working limits and no\nhistory has no fill rate, and showing 0% would be a lie about the machinery rather than a\nfact about the market.",
+        "properties": {
+          "filled": {
+            "title": "Filled",
+            "type": "integer"
+          },
+          "modelled_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Modelled Pct",
+            "type": "string"
+          },
+          "rate_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Pct"
+          },
+          "resolved": {
+            "title": "Resolved",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "filled",
+          "resolved",
+          "rate_pct",
+          "modelled_pct"
+        ],
+        "title": "VbtFillRateOut",
+        "type": "object"
+      },
+      "VbtPositionOut": {
+        "properties": {
+          "distance_to_ema_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance To Ema Pct"
+          },
+          "ema_21": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ema 21"
+          },
+          "entry_avg": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Entry Avg",
+            "type": "string"
+          },
+          "entry_date": {
+            "format": "date",
+            "title": "Entry Date",
+            "type": "string"
+          },
+          "exit_queued_for": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Queued For"
+          },
+          "exit_reason_queued": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Reason Queued"
+          },
+          "gtt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gtt Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "initial_stop": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Initial Stop",
+            "type": "string"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "last_close": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Close"
+          },
+          "naked": {
+            "title": "Naked",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "quantity_open": {
+            "title": "Quantity Open",
+            "type": "integer"
+          },
+          "r_multiple": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "R Multiple"
+          },
+          "return_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Pct"
+          },
+          "sessions_held": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessions Held"
+          },
+          "simulated": {
+            "title": "Simulated",
+            "type": "boolean"
+          },
+          "stop_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Stop Price",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "instrument_id",
+          "symbol",
+          "name",
+          "entry_date",
+          "entry_avg",
+          "quantity_open",
+          "initial_stop",
+          "stop_price",
+          "gtt_id",
+          "naked",
+          "last_close",
+          "ema_21",
+          "distance_to_ema_pct",
+          "return_pct",
+          "r_multiple",
+          "sessions_held",
+          "exit_queued_for",
+          "exit_reason_queued",
+          "simulated"
+        ],
+        "title": "VbtPositionOut",
+        "type": "object"
+      },
+      "VbtPublishedOut": {
+        "description": "STRATEGY §4's numbers, so the page never transcribes them into a template.",
+        "properties": {
+          "avg_hold_sessions": {
+            "title": "Avg Hold Sessions",
+            "type": "number"
+          },
+          "cagr_pct": {
+            "title": "Cagr Pct",
+            "type": "number"
+          },
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "exposure_pct": {
+            "title": "Exposure Pct",
+            "type": "number"
+          },
+          "in_sample_cagr_pct": {
+            "title": "In Sample Cagr Pct",
+            "type": "number"
+          },
+          "in_sample_dd_pct": {
+            "title": "In Sample Dd Pct",
+            "type": "number"
+          },
+          "max_drawdown_pct": {
+            "title": "Max Drawdown Pct",
+            "type": "number"
+          },
+          "modelled_fill_rate_pct": {
+            "title": "Modelled Fill Rate Pct",
+            "type": "number"
+          },
+          "out_of_sample_cagr_pct": {
+            "title": "Out Of Sample Cagr Pct",
+            "type": "number"
+          },
+          "out_of_sample_dd_pct": {
+            "title": "Out Of Sample Dd Pct",
+            "type": "number"
+          },
+          "profit_factor": {
+            "title": "Profit Factor",
+            "type": "number"
+          },
+          "sharpe": {
+            "title": "Sharpe",
+            "type": "number"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          },
+          "trades": {
+            "title": "Trades",
+            "type": "integer"
+          },
+          "win_rate_pct": {
+            "title": "Win Rate Pct",
+            "type": "number"
+          },
+          "years": {
+            "title": "Years",
+            "type": "number"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "years",
+          "cagr_pct",
+          "max_drawdown_pct",
+          "trades",
+          "win_rate_pct",
+          "profit_factor",
+          "avg_hold_sessions",
+          "exposure_pct",
+          "sharpe",
+          "in_sample_cagr_pct",
+          "in_sample_dd_pct",
+          "out_of_sample_cagr_pct",
+          "out_of_sample_dd_pct",
+          "modelled_fill_rate_pct"
+        ],
+        "title": "VbtPublishedOut",
+        "type": "object"
+      },
+      "VbtTodayOut": {
+        "description": "`05` §2's Today tab.\n\n`as_of` null means the detector has never written a session — **not** that today had no\ncandidates. The two look identical on a page without the funnel, which is why the funnel is\non it even at zero.",
+        "properties": {
+          "above_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Above Count"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/VbtCandidateOut"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "funnel": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Funnel"
+          },
+          "gate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gate"
+          },
+          "gate_threshold_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Gate Threshold Pct",
+            "type": "string"
+          },
+          "measured_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured Count"
+          },
+          "pct_above_dma": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pct Above Dma"
+          },
+          "rejects": {
+            "items": {
+              "$ref": "#/components/schemas/VbtCandidateOut"
+            },
+            "title": "Rejects",
+            "type": "array"
+          },
+          "shut_sessions_recent": {
+            "title": "Shut Sessions Recent",
+            "type": "integer"
+          },
+          "shut_window": {
+            "title": "Shut Window",
+            "type": "integer"
+          },
+          "thin_session": {
+            "title": "Thin Session",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "as_of",
+          "gate",
+          "pct_above_dma",
+          "above_count",
+          "measured_count",
+          "gate_threshold_pct",
+          "thin_session",
+          "funnel",
+          "shut_sessions_recent",
+          "shut_window",
+          "candidates",
+          "rejects"
+        ],
+        "title": "VbtTodayOut",
+        "type": "object"
+      },
+      "VbtWorkingOut": {
+        "properties": {
+          "broker_order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broker Order Id"
+          },
+          "expires_after_session": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires After Session"
+          },
+          "expires_tonight": {
+            "title": "Expires Tonight",
+            "type": "boolean"
+          },
+          "filled_quantity": {
+            "title": "Filled Quantity",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "limit_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Limit Price",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "sessions_allowed": {
+            "title": "Sessions Allowed",
+            "type": "integer"
+          },
+          "sessions_worked": {
+            "title": "Sessions Worked",
+            "type": "integer"
+          },
+          "signal_date": {
+            "format": "date",
+            "title": "Signal Date",
+            "type": "string"
+          },
+          "simulated": {
+            "title": "Simulated",
+            "type": "boolean"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "stop_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Stop Price",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "value_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value Inr",
+            "type": "string"
+          },
+          "working_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Working From"
+          }
+        },
+        "required": [
+          "id",
+          "instrument_id",
+          "symbol",
+          "name",
+          "limit_price",
+          "stop_price",
+          "quantity",
+          "value_inr",
+          "state",
+          "signal_date",
+          "working_from",
+          "expires_after_session",
+          "sessions_worked",
+          "sessions_allowed",
+          "expires_tonight",
+          "broker_order_id",
+          "filled_quantity",
+          "simulated"
+        ],
+        "title": "VbtWorkingOut",
+        "type": "object"
+      },
       "WatchlistAddIn": {
         "additionalProperties": false,
         "description": "docs/07 conventions: unknown keys are rejected.\n\n``nav_at_watch`` is bounded to the column it lands in (``PRICE`` is ``Numeric(18, 2)``).\nUnbounded, a value like ``1e100000`` passed Pydantic, reached Postgres, raised *numeric\nfield overflow* and surfaced as a 500 rather than a 422 — and a negative NAV stored\nsilently, waiting for whichever module first divides by it.",
@@ -39428,6 +40670,884 @@
         "summary": "Annotate a watched name",
         "tags": [
           "swing"
+        ]
+      }
+    },
+    "/api/v1/vbt/backtest": {
+      "get": {
+        "description": "The latest finished run per source, beside STRATEGY §4's published numbers.\n\nThe caveats are `01` §5's and they belong **above** these numbers on the page, as a component\nrather than a footer (house rule 9). This route serves the numbers; `05` §2 says where the\ncaveats go, and the read-only test does not let the page forget them.",
+        "operationId": "getVbtBacktest",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VbtBacktestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The backtest, and the study",
+        "tags": [
+          "vbt"
+        ]
+      }
+    },
+    "/api/v1/vbt/book": {
+      "get": {
+        "description": "`05` §2's Book tab. Simulated rows are labelled and never share a total with real ones.",
+        "operationId": "getVbtBook",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VbtBookOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Working orders, the book, the fill rate",
+        "tags": [
+          "vbt"
+        ]
+      }
+    },
+    "/api/v1/vbt/breadth": {
+      "get": {
+        "description": "The `vb_breadth_daily` series with the 40% line that decides the gate.\n\nWith no window the last year is served (`05` §2), because an unbounded default would grow\ninto a nine-year payload on a page that draws one chart.",
+        "operationId": "getVbtBreadth",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VbtBreadthOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The breadth gauge's series",
+        "tags": [
+          "vbt"
+        ]
+      }
+    },
+    "/api/v1/vbt/config": {
+      "get": {
+        "description": "The four editable numbers, the server's ceilings, and the two only a job may write.\n\nThe ceilings come back on every read so a form can render \"max 15% — set by the server\"\nrather than discovering the limit by being refused.",
+        "operationId": "getVbtConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VbtConfigView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The sleeve's settings",
+        "tags": [
+          "vbt"
+        ]
+      },
+      "patch": {
+        "description": "The one write on this surface, and it moves no money.\n\nFour numbers. No order path, no broker, no session counter: `VbtConfigPatch` forbids unknown\nfields, so `{\"dry_run_sessions\": 20}` is refused rather than ignored — a caller who tried to\ndeclare the paper run finished is told the field does not exist here instead of being\nanswered `200` and believing they had.\n\nA value above its ceiling answers **422** naming the ceiling and the environment variable\nthat sets it, and the refusal is atomic: a two-field patch that crosses a ceiling on the\nsecond field changes neither.",
+        "operationId": "patchVbtConfig",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VbtConfigPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VbtConfigView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Change a sleeve setting",
+        "tags": [
+          "vbt"
+        ]
+      }
+    },
+    "/api/v1/vbt/today": {
+      "get": {
+        "description": "`05` §2's Today tab, in one call.\n\nThe default is **the latest session the detector wrote**, not today's date: `04` §10's clock\nis the published session's, so during a session \"today\" has no bar and asking for it would\nanswer with an empty page instead of the last real one.",
+        "operationId": "getVbtToday",
+        "parameters": [
+          {
+            "description": "a published session; default the latest",
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "a published session; default the latest",
+              "title": "Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VbtTodayOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The session's candidates and the gate",
+        "tags": [
+          "vbt"
+        ]
+      }
+    },
+    "/api/v1/vbt/today/{instrument_id}/bars": {
+      "get": {
+        "operationId": "getVbtBars",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instrument_id",
+            "required": true,
+            "schema": {
+              "title": "Instrument Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "as of; default the latest session",
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "as of; default the latest session",
+              "title": "Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VbtBarsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Closes for the mini chart",
+        "tags": [
+          "vbt"
         ]
       }
     },

@@ -196,6 +196,18 @@ BUDGETS: Final[tuple[Budget, ...]] = (
         "kite-momentum-rebalancer/tests/test_swing_budgets.py",
         "none",
     ),
+    # --- The volume-breakout allocation (docs/vbt/06 VB8) --------------------------------
+    # The same budget as `/swing/setups` and for the same reason: `05` §2's Today tab is the
+    # hub's landing page, and a landing page that takes half a second to answer "may I buy
+    # today" is a page somebody stops opening.
+    Budget(
+        "vbt_today_p95",
+        "GET /vbt/today (2,500 instruments) — `vbt_today_p95`",
+        "p95 < 300 ms",
+        300.0,
+        "ms",
+        "services/api/tests/test_api_vbt_benchmark.py",
+    ),
 )
 
 BUDGET_BY_KEY: Final[dict[str, Budget]] = {budget.key: budget for budget in BUDGETS}

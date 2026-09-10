@@ -301,9 +301,16 @@ exists anyway.
 > **In life the order rests at the exchange and fills or does not.** The backtest's assumption is
 > optimistic in exactly one way: it fills every touch. The live book journals the truth —
 > `vb_order.filled_quantity` and the broker's own fills — and `05` §2 shows the two side by side
-> as "modelled fill rate 91%" against "this book's fill rate", because that difference is the
-> single most likely place the live result parts company with the study. VB9's drift flag reads
-> CAGR; this line is the one a human reads.
+> as "modelled fill rate **83.8%**" against "this book's fill rate", because that difference is
+> the single most likely place the live result parts company with the study. VB9's drift flag
+> reads CAGR; this line is the one a human reads.
+
+> **83.8% is measured, and the number this paragraph carried until VB8 was not.** VB0 wrote 91%
+> from nothing. `BacktestResult.fill_rate_pct()` counts it: 761 fills out of the **908** orders
+> the engine actually offered a fill test — past the three-a-session cap and the ten slots, with
+> a bar, not locked at a circuit. The denominator matters more than the number. Over all 5,954
+> working orders the rate is 12.8%, but most of those never got a slot, so that figure measures
+> the slot count rather than the market. DECISIONS-VB VB8.1.
 
 > **And the fill test is an equality, not an inequality, more often than it looks.** Yesterday's
 > close *is* today's low often enough to matter — it is what a pullback to the previous close

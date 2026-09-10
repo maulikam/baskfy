@@ -3,7 +3,7 @@
 The status page for the volume-breakout run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: VB4 green — the nightly chain detects this sleeve. VB5–VB10 not started.** Started 10 Sep 2026 on branch
+**Run state: VB5 green — the sleeve has its own money. VB6–VB10 not started.** Started 10 Sep 2026 on branch
 `developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
@@ -16,7 +16,7 @@ what is NOT done**. A fresh session resumes from the first module not marked ✅
 | VB2 — Goldens: reproduce the study | ✅ | **All 761 trades, to the paisa.** 32,929 scan hits, 6,293 signals, CAGR 18.23%, drawdown −27.94%, the yearly table to one decimal, and eleven of twelve neighbourhood cases to a tenth of a point |
 | VB3 — Schema and settings | ✅ | Twelve `vb_` tables in migration **`0037_vbt`**, generated from the models and verified against them by Alembic's own comparison — 0 differences, and a downgrade/upgrade round trip; four settings, three ceilings, two flags, and a sleeve seeded at ₹0 |
 | VB4 — The nightly job | ✅ | `baskfy.vbt.detect` writes `vb_signal_daily` + `vb_breadth_daily`, wired in as the chain's **thirteenth** step (unable to fail the night), with a 21:10 retry that asks before it works and `make vbt DATE=…` |
-| VB5 — The sleeve's cash and book | ⬜ | |
+| VB5 — The sleeve's cash and book | ✅ | `baskfy_core.vbt.sleeve` states the arithmetic once; `baskfy_api.vbt_sleeve` loads it from `vb_` rows and nothing else. A holding this sleeve did not buy is invisible to it, and a resting limit commits cash without spending it |
 | VB6 — Desk plan and `/vbt/execute` | ⬜ | |
 | VB7 — The working order and its expiry | ⬜ | |
 | VB8 — The pages | ⬜ | |
@@ -259,6 +259,39 @@ detector would be measuring itself), a rejected scan hit is stored with the lett
 * No page reads these rows.
 * `vb_signal_daily.bars_in_window` is written as null: the count is computable and nothing reads
   it yet, and a column filled with a number no surface shows is a column that quietly rots.
+
+---
+
+## VB5 — The sleeve's cash and book ✅ (10 Sep 2026)
+
+| | |
+|---|---|
+| The arithmetic | `packages/core/src/baskfy_core/vbt/sleeve.py` — pure, stated once, so the evening job, the desk page and the confirm path cannot each derive a slightly different equity |
+| The loading | `services/api/src/baskfy_api/vbt_sleeve.py` — reads `vb_config`, `vb_position`, `vb_order` and `ohlcv_daily`, and **nothing else** |
+| Tests | 16 without a database (`test_vbt_sleeve.py`) + 9 against one (`test_vbt_sleeve_db.py`) — **25 passed** |
+
+```
+cash            = capital + realised - cost of open
+cash available  = cash - committed          ← what a new line may spend
+equity          = cash + value of open      ← the slot is a tenth of this
+open exposure   = value of open + committed
+```
+
+**The two claims the tests make.** A resting limit commits cash without spending it
+(DECISIONS-VB **VB5.1**) — three limits at ₹1 lakh look like ₹10 lakh of cash to a fourth line
+unless something subtracts them. And a holding the sleeve did not buy is invisible: the test
+writes an instrument, a bar and a price of ₹500 for a name with no `vb_position` row, and the
+sleeve's equity does not move.
+
+### What is NOT done at VB5
+
+* **Nothing builds a plan yet.** `load_sleeve` has no caller outside its tests; VB6 is the first.
+* No position or order has ever been written by code — only by test fixtures.
+* The **API tree's own database fixture is broken by another session's in-flight migration**
+  (`0039_merge_duplicate_instruments` drops a unique constraint `seed_reference_fixture` upserts
+  on). It is not this run's, and it is why VB5's database tests are in the worker tree
+  (DECISIONS-VB **VB5.3**). A fresh session seeing `there is no unique or exclusion constraint
+  matching the ON CONFLICT specification` should look there rather than at the `vb_` schema.
 
 ### Resume instructions for a fresh session
 

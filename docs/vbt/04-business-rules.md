@@ -437,3 +437,67 @@ experienced (§7.3); no intraday data, so a limit that the day's low touched is 
 `upper_circuit` is absent before 2020 and no lock is assumed where it is missing; survivorship is
 handled by `instrument.delisted_on` where known and by §6.5 where it is not; corporate actions
 before 2024 are as the source adjusted them; and STRATEGY §5 verbatim.
+
+---
+
+## §12 The contract, in one table
+
+Every field of `baskfy_core.vbt.config`, with the value it holds. **This table is generated from
+the code and asserted against it** (`packages/core/tests/test_vbt_docs_parity.py`): a field added,
+renamed or re-valued without an edit here turns that test red, and a row here with no field
+behind it turns it red too. The sections above say *why* each number is what it is; this one
+exists so the two can never quietly disagree.
+
+Units are §0's: `*_pct` is a percent, `*_bars` and `*_sessions` count sessions of §2's calendar,
+`*_inr` is rupees.
+
+| Field | Value |
+|---|---|
+| `data.instrument_type` | `EQ` |
+| `data.series_allowed` | `EQ, BE, BZ` |
+| `data.keep_null_series` | `true` |
+| `data.etf_universe_slug` | `etf` |
+| `data.etf_name_pattern` | `\bETF\b` |
+| `data.etf_symbol_pattern` | `(BEES|ETF|IETF)$` |
+| `data.thin_session_min_share` | `0.25` |
+| `data.thin_session_window_bars` | `41` |
+| `data.thin_session_min_periods` | `5` |
+| `data.rolling_min_share` | `0.9` |
+| `scan.vol_mult` | `3.0` |
+| `scan.vol_sma_bars` | `50` |
+| `scan.min_close_raw_inr` | `30.0` |
+| `scan.min_change_pct` | `6.5` |
+| `scan.min_vol_sma` | `25000.0` |
+| `scan.min_volume` | `50000.0` |
+| `trend.dma_bars` | `200` |
+| `trend.breakout_high_bars` | `20` |
+| `trend.ret_bars` | `20` |
+| `trend.max_ret_20_pct` | `25.0` |
+| `trend.min_close_position` | `0.6` |
+| `trend.max_change_pct` | `15.0` |
+| `trend.turnover_bars` | `20` |
+| `trend.min_turnover_avg_inr` | `20000000.0` |
+| `breadth.dma_bars` | `200` |
+| `breadth.min_pct_above_dma` | `40.0` |
+| `entry.limit_at` | `SIGNAL_CLOSE` |
+| `entry.valid_sessions` | `3` |
+| `entry.fill_through_pct` | `0.0` |
+| `sizing.max_slots` | `10` |
+| `sizing.max_position_pct` | `12.5` |
+| `sizing.max_new_entries_per_session` | `3` |
+| `sizing.max_position_vs_turnover` | `0.01` |
+| `sizing.min_trade_value_inr` | `10000.0` |
+| `sizing.risk_multiplier_first_live` | `0.5` |
+| `sizing.first_live_sessions` | `5` |
+| `exits.stop_pct` | `12.0` |
+| `exits.gtt_limit_fraction` | `0.97` |
+| `exits.gtt_band_min_pct` | `0.005` |
+| `exits.gtt_band_max_pct` | `0.15` |
+| `exits.trail_ema_bars` | `21` |
+| `exits.no_bar_tolerance_sessions` | `5` |
+| `costs.cost_pct_per_side` | `0.25` |
+
+Four of these are also bounded `vb_config` settings a person may change without a code change —
+`sizing.max_slots`, `sizing.max_position_pct`, `exits.stop_pct` and the sleeve's capital — and
+`02` §2 carries their ceilings. Everything else is a code change with a `DECISIONS-VB.md` entry
+(PACK.5).

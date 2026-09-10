@@ -21,6 +21,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     UniqueConstraint,
+    false,
     text,
 )
 from sqlalchemy.dialects.postgresql import CITEXT, JSONB
@@ -320,6 +321,12 @@ class Portfolio(Base):
     broker_account_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("broker_account.id", ondelete="SET NULL")
     )
+    #: 0038. True for the ONE group per broker account that `broker_holdings_sync` creates and
+    #: fills — "Zerodha holdings", where every share lands before the user sorts it. Its rows are
+    #: PORTFOLIO_REDESIGN §6.6's Unallocated, not a strategy's slice, and every surface reads this
+    #: column rather than inferring it from `source` + `broker_account_id`: a user's own grouping
+    #: of one broker's holdings has both of those too. See 0038 for what that inference cost.
+    is_broker_pile: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false())
     name: Mapped[str] = mapped_column(String, nullable=False)
     #: PORTFOLIO_REDESIGN.md §4.1. CAPITAL sums into consolidated net worth and holds each of its
     #: holdings exclusively; MONITORING is an overlapping lens that never enters a total. The

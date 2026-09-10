@@ -88,15 +88,22 @@ async def portfolio_for_broker_account(
 ) -> Portfolio:
     """The broker's own holding group, created once and then reused.
 
-    Looked up by `(user_id, broker_account_id, source)` rather than by name, so renaming the
-    portfolio in the UI does not orphan it and cause the next sync to create a second one.
+    Looked up by `is_broker_pile` (0038), not by name, so renaming it in the UI does not orphan it
+    and cause the next sync to create a second one.
+
+    It used to be looked up by `(user_id, broker_account_id, source)`, which a user's own grouping
+    of one broker's holdings matches exactly: `POST /portfolio` sets `broker_account_id` when
+    every chosen leg comes from one account, and HOLDING_GROUP is one of §6.7's offered sources.
+    So `scalar_one_or_none()` could raise on a second match — or, worse, return the user's own
+    portfolio and let the next sync write over it. 0038's partial unique index now makes two piles
+    per account unrepresentable, so the `one_or_none` is a fact rather than a hope.
     """
     existing = (
         await session.execute(
             select(Portfolio).where(
                 Portfolio.user_id == user_id,
                 Portfolio.broker_account_id == broker_account_id,
-                Portfolio.source == PortfolioSource.HOLDING_GROUP.value,
+                Portfolio.is_broker_pile.is_(True),
             )
         )
     ).scalar_one_or_none()
@@ -109,6 +116,9 @@ async def portfolio_for_broker_account(
         name=f"{broker_name} holdings",
         kind=PortfolioKind.CAPITAL.value,
         source=PortfolioSource.HOLDING_GROUP.value,
+        #: 0038. The whole point of this row: it is the system's container for shares nobody has
+        #: sorted yet, which is why §6.6 draws it as Unallocated rather than as a portfolio.
+        is_broker_pile=True,
         # First sight, set once. See the module docstring on why this must not move.
         started_on=as_of,
     )

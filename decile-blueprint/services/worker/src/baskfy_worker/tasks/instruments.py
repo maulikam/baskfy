@@ -7,6 +7,11 @@ is not sufficient alone"). Both are merged onto ``instrument``, keyed by symbol.
 Rows are never deleted (docs/04): an instrument that has left the exchange is marked with
 ``delisted_on`` and stays, because point-in-time screens over a delisted name are the difference
 between an honest backtest and a survivorship-biased one (docs/01 §10).
+
+**"Keyed by symbol" is now true of the code as well as of this sentence.** Until 0039 the upsert
+keyed on ``(exchange_id, symbol, series)``, so a stock moving between EQ and BE grew a second row
+and both stayed active — see the comment on ``mutable`` below, and 0039 for the 120 symbols that
+had to be merged because of it.
 """
 
 from __future__ import annotations
@@ -95,8 +100,18 @@ async def run_refresh_instruments(
     ]
     for batch in _batched(values, UPSERT_BATCH_ROWS):
         stmt = insert(Instrument).values(batch)
+        # `series` IS MUTABLE, and 0039 is the migration that had to clean up believing otherwise.
+        #
+        # It used to sit in the conflict key instead, which made it part of the instrument's
+        # identity. NSE moves stocks between EQ and BE whenever trade-to-trade surveillance turns
+        # on or off, and every such move inserted a SECOND row: the key `(NSE, GAYAPROJ, 'EQ')`
+        # matched nothing, and the old BE row — absent from the dump, so never updated — kept
+        # `is_active = true` for good. 120 symbols were in that state, and `resolve_symbols`
+        # answers AMBIGUOUS for any of them, which the holdings sync reports to the user as
+        # "symbol not recognised". Maulik hit it on GAYAPROJ, 11 Sep 2026.
         mutable = (
             "name",
+            "series",
             "instrument_type",
             "isin",
             "kite_token",
@@ -117,7 +132,9 @@ async def run_refresh_instruments(
         )
         await session.execute(
             stmt.on_conflict_do_update(
-                index_elements=[Instrument.exchange_id, Instrument.symbol, Instrument.series],
+                # 0039: `(exchange_id, symbol)`. One symbol on one exchange is one instrument,
+                # whatever series it happens to trade in today.
+                index_elements=[Instrument.exchange_id, Instrument.symbol],
                 set_={
                     **{column: stmt.excluded[column] for column in mutable},
                     "updated_at": dt.datetime.now(tz=dt.UTC),

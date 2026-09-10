@@ -98,6 +98,11 @@ from baskfy_worker.tasks.swing_scan_now import (
 )
 from baskfy_worker.tasks.swing_timing_probe import DONE_MARKER, probe_once
 from baskfy_worker.tasks.vbt import published_signal_count, run_detect_vbt
+from baskfy_worker.tasks.vbt_evening import (
+    SOURCE_MORNING,
+    last_detected_session,
+    run_vbt_evening,
+)
 from baskfy_worker.telemetry import provider_retry_hooks
 from baskfy_worker.window import DateWindow
 
@@ -829,6 +834,76 @@ def vbt_detect_task(trade_date: str | None = None) -> JsonObject:
         outcome = StepOutcome()
         signals = await run_detect_vbt(session, outcome, day, user_id=user_id)
         return {"date": day.isoformat(), "signals": signals, "detail": outcome.detail}
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.vbt.evening", acks_late=True)
+def vbt_evening_task(trade_date: str | None = None) -> JsonObject:
+    """VB6: cancel what expired, queue the exits, plan the entries, settle the session.
+
+    Always **after** ``baskfy.vbt.detect`` and never instead of it: the plan is built from the
+    session's signals and the session's gate, and an evening that ran before the detector would
+    plan against yesterday's tape.
+
+    Nothing here places an order. Every line it writes is ``PROPOSED`` until a person confirms it
+    on the desk (``docs/vbt/02`` Track C §3, DECISIONS-VB PACK.2).
+    """
+    day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
+    deps = build_pipeline_dependencies()
+    if deps.vbt_user_id is None:
+        return {"date": day.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        outcome = StepOutcome()
+        report = await run_vbt_evening(
+            session,
+            outcome,
+            day,
+            user_id=int(deps.vbt_user_id or 0),
+            execution_enabled=deps.vbt_execution_enabled,
+        )
+        if report is None:
+            return {"date": day.isoformat(), "skipped": outcome.detail}
+        return report.as_detail()
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.vbt.morning", acks_late=True)
+def vbt_morning_task(trade_date: str | None = None) -> JsonObject:
+    """VB6: the same plan, rebuilt before the open.
+
+    Same signals, same levels, re-sized against the sleeve as it stands — because the desk's plans
+    expire in thirty minutes and last night's cannot be confirmed at 09:20. ``trade_date`` is the
+    **signal** session, which before the open is the previous one.
+    """
+    today = dt.datetime.now(tz=IST).date()
+    deps = build_pipeline_dependencies()
+    if deps.vbt_user_id is None:
+        return {"date": today.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        user_id = int(deps.vbt_user_id or 0)
+        day = (
+            dt.date.fromisoformat(trade_date)
+            if trade_date
+            else await last_detected_session(session, user_id, today)
+        )
+        if day is None:
+            return {"date": today.isoformat(), "skipped": "no detected session to plan from"}
+        outcome = StepOutcome()
+        report = await run_vbt_evening(
+            session,
+            outcome,
+            day,
+            user_id=user_id,
+            execution_enabled=deps.vbt_execution_enabled,
+            source=SOURCE_MORNING,
+        )
+        if report is None:
+            return {"date": day.isoformat(), "skipped": outcome.detail}
+        return report.as_detail()
 
     return run_in_session(_run)
 

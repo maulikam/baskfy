@@ -278,6 +278,26 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=21, minute=10, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_COMPUTE},
     },
+    # VB6: the plan, five minutes after the detector. The order matters and is the same argument
+    # the swing pair makes at 21:00/21:05 — the plan is built from the session's signals and the
+    # session's gate, so an evening that ran first would plan against yesterday's tape.
+    #
+    # Nothing this job writes is an order. Every line is PROPOSED until a person confirms it on
+    # the desk, and there is no flag that changes that (docs/vbt/02 Track C §3).
+    "vbt-evening": {
+        "task": "baskfy.vbt.evening",
+        "schedule": crontab(hour=21, minute=15, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
+    # VB6: the same plan, rebuilt before the open. The desk's plans expire in thirty minutes, so
+    # last night's cannot be confirmed at 09:20; this rebuilds it from the same signals and the
+    # same levels, re-sized against the sleeve as it stands. 09:00, before the 09:15 open and
+    # after the morning's Kite login window, so a person opening the desk has a live plan waiting.
+    "vbt-morning": {
+        "task": "baskfy.vbt.morning",
+        "schedule": crontab(hour=9, minute=0, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
     # docs/swing/01 §8: "Weekend: a full scan, a watchlist of a few dozen forming flags, the
     # levels that would trigger next week." Saturday morning, before anyone looks.
     "swing-weekend": {

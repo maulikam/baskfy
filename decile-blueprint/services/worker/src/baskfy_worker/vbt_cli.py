@@ -13,6 +13,8 @@ you whether to look at the data or at the thresholds.
     uv run python -m baskfy_worker.vbt_cli --date 2026-09-09
     uv run python -m baskfy_worker.vbt_cli --date 2026-09-09 --sessions 5
     uv run python -m baskfy_worker.vbt_cli --date 2026-09-09 --force
+    uv run python -m baskfy_worker.vbt_cli --date 2026-09-09 --plan          # VB6's evening
+    uv run python -m baskfy_worker.vbt_cli --date 2026-09-09 --plan MORNING  # …rebuilt
 
 Every date is idempotent, so re-running one changes nothing but the row's ``created_at`` default.
 By default a date that already has rows is left alone (the 21:10 retry's rule); ``--force``
@@ -42,6 +44,7 @@ from baskfy_worker.celery_app import IST
 from baskfy_worker.providers import build_pipeline_dependencies
 from baskfy_worker.steps import StepOutcome
 from baskfy_worker.tasks.vbt import published_signal_count, run_detect_vbt
+from baskfy_worker.tasks.vbt_evening import SOURCE_EVENING, SOURCE_MORNING, run_vbt_evening
 
 
 async def _recent_sessions(session: AsyncSession, as_of: dt.date, count: int) -> list[dt.date]:
@@ -80,7 +83,17 @@ async def _detect_one(
     }
 
 
-async def _run(day: dt.date, sessions: int, *, force: bool) -> JsonObject:
+async def _plan_one(
+    session: AsyncSession, day: dt.date, *, user_id: int, source: str
+) -> JsonObject:
+    outcome = StepOutcome()
+    report = await run_vbt_evening(session, outcome, day, user_id=user_id, source=source)
+    if report is None:
+        return {"date": day.isoformat(), "status": outcome.status.value, "detail": outcome.detail}
+    return report.as_detail()
+
+
+async def _run(day: dt.date, sessions: int, *, force: bool, plan: str | None = None) -> JsonObject:
     deps = build_pipeline_dependencies()
     if deps.vbt_user_id is None:
         return {
@@ -92,6 +105,15 @@ async def _run(day: dt.date, sessions: int, *, force: bool) -> JsonObject:
     try:
         async with maker() as session, session.begin():
             days = [day] if sessions <= 1 else await _recent_sessions(session, day, sessions)
+            if plan is not None:
+                return {
+                    "user_id": deps.vbt_user_id,
+                    "execution_enabled": deps.vbt_execution_enabled,
+                    "plans": [
+                        await _plan_one(session, one, user_id=deps.vbt_user_id, source=plan)
+                        for one in days
+                    ],
+                }
             return {
                 "user_id": deps.vbt_user_id,
                 "nightly_enabled": deps.vbt_nightly_enabled,
@@ -111,9 +133,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--force", action="store_true", help="re-detect a date that already has rows"
     )
+    parser.add_argument(
+        "--plan",
+        nargs="?",
+        const=SOURCE_EVENING,
+        choices=(SOURCE_EVENING, SOURCE_MORNING),
+        default=None,
+        help="build the plan for the date instead of detecting (VB6). Places nothing.",
+    )
     args = parser.parse_args(argv)
     day = dt.date.fromisoformat(args.date) if args.date else dt.datetime.now(tz=IST).date()
-    report = asyncio.run(_run(day, args.sessions, force=args.force))
+    report = asyncio.run(_run(day, args.sessions, force=args.force, plan=args.plan))
     print(json.dumps(report, indent=2, default=str))
     return 1 if "error" in report else 0
 

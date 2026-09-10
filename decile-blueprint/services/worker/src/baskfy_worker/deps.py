@@ -50,5 +50,9 @@ class PipelineDependencies:
     # is keyed by user and a nightly job may not invent one.
     vbt_user_id: int | None = None
     #: `docs/vbt/02` Track B. Detection moves no money, so it defaults on; false silences the
-    #: step (and the 21:00 retry) without removing either.
+    #: step (and the 21:10 retry) without removing either.
     vbt_nightly_enabled: bool = True
+    #: `docs/vbt/02` Track B's real one. The evening job places nothing either way, but it has to
+    #: know whether a confirm would be real: it is what decides the session's `mode`, whether
+    #: `04` §5.4's first-live halving applies, and whether `02` §3.1's DRY_RUN counter moves.
+    vbt_execution_enabled: bool = False

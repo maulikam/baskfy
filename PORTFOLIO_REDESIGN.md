@@ -223,16 +223,67 @@ broker holdings sync → allocation ledger (whole-holding, §4.2) → Unallocate
 
 **Phase 2 — the page:** Overview (§6) with hero metrics, combined chart, portfolio table + drawer, unallocated-first onboarding (§6.6), needs-attention ribbon, renames (§8), detail page (§7).
 
-**Phase 3 — depth:** CAS import (§5.3) → true XIRR for holding groups · partial-quantity allocation · monitoring-view suggestions · column customization · intraday estimates · contribution analysis, overlap detection, "explain today's move".
+**Phase 3 — depth:** CAS import (§5.3) → true XIRR for holding groups · ~~partial-quantity allocation~~ **(shipped 10 Sep 2026 — §11.2a)** · monitoring-view suggestions · column customization · intraday estimates · contribution analysis, overlap detection, "explain today's move".
 
 ---
 
 ## 11. Acceptance criteria (v1)
 
 1. Sum of all capital portfolios + unallocated (stocks + cash) equals consolidated net worth, to the paisa, at all times.
-2. A holding can never be in two capital portfolios; monitoring views never affect any total.
+2. ~~A holding can never be in two capital portfolios~~; monitoring views never affect any total.
+   **AMENDED 10 Sep 2026 — Maulik.** A holding *may* be filed into several capital portfolios, a
+   quantity at a time: *"one stock can appear in multiple portfolios, so if stock a bought 100 qty
+   for shortterm 20 for long term 34 for some swing 36 for momentum"*. What replaces the struck
+   clause is the arithmetic it was protecting: **the slices of a holding never sum to more than
+   the holding, and the difference is Unallocated.** The monitoring clause is untouched — lenses
+   still overlap freely and still enter no total. See §11.2a.
+### 11.2a Partial-quantity allocation (Phase 3, shipped 10 Sep 2026)
+
+**What changed and why.** §4.2 allocated whole holdings, and said plainly why: *"partial
+allocation breaks sell attribution (§4.3) and corporate-action math (§4.5)"*. That was a correct
+statement about the code as it stood, not about the product. A person does not buy ITC once for
+one reason — they buy it four times for four reasons — and the old rule made the product unable
+to say so. Maulik asked for the reversal directly.
+
+**The invariant that replaced criterion 2.** For every physical position
+`(instrument_id, broker_account_id)`:
+
+> `sum(capital slices) <= held quantity`, and the difference is Unallocated.
+
+Unallocated is a **remainder**, computed, never a stored row — a stored row could disagree with
+the arithmetic and then two surfaces would print two different figures from one dataset.
+
+**How each thing the old rule protected is protected now.**
+
+| Was protected by | Now protected by |
+|---|---|
+| Criterion 1 (totals add up) | `validate_against_holdings` refuses any set whose slices exceed the position, and every write MOVES quantity rather than asserting a total, so shares are conserved by the operation. Over-allocation is a hard error, not a warning: a net worth that is too high *and internally consistent* is the one failure criterion 1 cannot otherwise catch |
+| Criterion 4 (sell attribution) | Free when a holding has exactly one slice — the old whole-holding case, so nothing that worked before starts asking. A split holding raises `SPLIT_HOLDING` with a pro-rata **suggestion** and attributes nothing. Maulik chose that over silent pro-rata: someone selling 30 of a 100 filed 20/34/36/10 has almost always sold one lot, and applying the suggestion would move four return series at once and print nothing to say so |
+| Criterion 6 (corporate actions) | `scale_allocations` multiplies every slice and gives the rounding residue to Unallocated — a bigger Unallocated is a visible prompt; a bigger slice is an invisible share credited to a portfolio that never earned it |
+
+**Enforcement is not a database constraint, deliberately.** `sum(slices) <= held` is a fact about
+a *group* of rows: no CHECK can see it, and a trigger would re-aggregate on every write to the
+busiest table in the schema. Migration `0035` therefore drops
+`uq_portfolio_holding_one_capital_portfolio` and adds nothing in its place except a row-local
+`quantity >= 0`. Conservation comes from the write path instead.
+
+**The double-count this nearly introduced.** `replace_holdings` makes the broker's own holding
+group hold exactly what a sync gives it. Once shares can be filed elsewhere, that hands them
+back: 20 filed into Long term plus 100 restored to the pile is 120 shares of a 100-share
+position, in two rows that each look correct. `broker_holdings_sync._minus_what_is_filed_elsewhere`
+is the fix — the broker group now holds the **remainder**, which is exactly what §6.6 means by
+Unallocated — and `test_broker_sync_keeps_slices.py` is the regression, asserted after a *second*
+sync because one cannot show the drift.
+
+**Swing positions file themselves** (same date, same conversation). The desk already records
+every entry in `sw_position`, so making the user hand-sort the one strategy the product trades
+for them would be asking them to re-enter data the product wrote. The slice is **set** to
+`quantity_open` on each sync, never added — so a partial exit shrinks it, a close releases it —
+and it is capped at what the user has not already claimed, so the desk never takes shares filed
+by hand.
+
 3. Every displayed return number carries a label stating what it is (TWR / XIRR / since-grouped) and its start date on hover.
-4. A sell detected by sync either auto-attributes (whole-holding case) or creates a reconciliation item — it never silently alters a return series.
+4. A sell detected by sync either auto-attributes (**single-slice** case) or creates a reconciliation item — it never silently alters a return series. Amended 10 Sep 2026 with §11.2a: a sell out of a *split* holding always asks, carrying a pro-rata pre-fill it never applies.
 5. Model performance and the user's actual performance are never combined into one figure.
 6. A split/bonus changes quantity and average price but produces zero P&L.
 7. No internal jargon from §8's left column appears anywhere in the UI.

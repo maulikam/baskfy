@@ -37,11 +37,26 @@ Both are CHECK-constrained, and the values are generated from
 `baskfy_core.allocation_ledger.PortfolioKind` / `.PortfolioSource` rather than typed twice, so the
 database and the domain cannot drift into disagreeing about what a kind is.
 
-## 2. Acceptance criterion 2, as a database fact (0021)
+## 2. Acceptance criterion 2, as a database fact (0021) — **REVERSED BY 0035**
 
-§11.2: *a holding can never be in two capital portfolios.* Enforced by Postgres, not by the
-application, because a rule the application owns survives exactly as long as every writer
-remembers it — and a bulk broker sync is the writer most likely to forget.
+> **Read this heading before the section.** Migration `0035` (10 Sep 2026) dropped the index this
+> section is about. §11.2 was amended by Maulik — a holding *may* now be filed into several
+> capital portfolios, a quantity at a time — and `PORTFOLIO_REDESIGN.md` §11.2a carries the new
+> invariant and the reasoning. What follows is kept because the `(id, kind)` foreign-key
+> machinery below is still live and still doing its job; only the partial unique index is gone.
+>
+> Why nothing replaced it in the database: the new rule is `sum(slices) <= held`, a fact about a
+> *group* of rows. No CHECK can see it, and a trigger would re-aggregate the position on every
+> write to the busiest table in the schema. Conservation comes from the write path instead —
+> every path into `portfolio_holding` moves quantity rather than asserting a total.
+
+§11.2, as it read until 10 Sep 2026: *a holding can never be in two capital portfolios.* Enforced
+by Postgres, not by the application, because a rule the application owns survives exactly as long
+as every writer remembers it — and a bulk broker sync is the writer most likely to forget.
+
+That last clause turned out to be the prescient one, in the other direction: when the rule was
+lifted, the bulk broker sync *was* the writer that would have got it wrong, by handing back shares
+the user had filed elsewhere. See §11.2a's "double-count this nearly introduced".
 
 The shape, since a unique index cannot read another table:
 

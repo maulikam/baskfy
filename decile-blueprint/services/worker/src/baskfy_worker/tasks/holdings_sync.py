@@ -239,7 +239,15 @@ class _Recorded:
     instrument_id: int
     quantity: Decimal | None
     avg_price: Decimal | None
-    capital_portfolio_id: int | None
+    #: 0035: ``{capital portfolio -> quantity}``. It was a single ``capital_portfolio_id`` until
+    #: a holding could be filed into several, and the sum of these is the position.
+    capital_slices: Mapping[int, Decimal]
+
+    @property
+    def sole_portfolio_id(self) -> int | None:
+        """The one capital portfolio this holding sits in, or ``None`` if split or unfiled."""
+        return next(iter(self.capital_slices)) if len(self.capital_slices) == 1 else None
+
     portfolio_ids: tuple[int, ...]
     inconsistent: bool = False
 
@@ -460,19 +468,38 @@ async def _recorded_positions(
 
     recorded: dict[int, _Recorded] = {}
     for instrument_id, entries in collected.items():
-        capital = [entry for entry in entries if entry[1] == PortfolioKind.CAPITAL]
-        # At most one, guaranteed by 0021's partial unique index. If the database ever hands us
-        # two, the ledger's own validation raises when it builds its allocation index — which is
-        # the right place for it to be caught, and the reason nothing is patched up here.
-        chosen = capital[0] if capital else entries[0]
-        quantities = {entry[2] for entry in entries if entry[2] is not None}
+        capital = sorted(
+            (entry for entry in entries if entry[1] == PortfolioKind.CAPITAL),
+            key=lambda entry: entry[0],
+        )
+        monitoring = [entry for entry in entries if entry[1] != PortfolioKind.CAPITAL]
+        # 0035: THE POSITION IS THE SUM OF ITS CAPITAL SLICES. There used to be at most one
+        # capital row — 0021's partial unique index guaranteed it and this code read its quantity
+        # as the position. A holding filed 20/34/36 has three, and reading the first would have
+        # reported 20 shares of a 90-share position, which the sync would then have seen as a
+        # 70-share sell that never happened.
+        slices = {entry[0]: entry[2] for entry in capital if entry[2] is not None}
+        position_quantity: Decimal | None = (
+            sum(slices.values(), Decimal("0"))
+            if slices
+            else _sole({entry[2] for entry in monitoring if entry[2] is not None})
+        )
+        # `inconsistent` compares the LENSES against the position, not the rows against each
+        # other. Before 0035 every row carried the whole holding, so any disagreement was a data
+        # error; now capital rows are meant to differ — they are slices — and comparing them
+        # would flag every split holding the moment it was created.
+        seen_by_lenses = {entry[2] for entry in monitoring if entry[2] is not None}
         recorded[instrument_id] = _Recorded(
             instrument_id=instrument_id,
-            quantity=chosen[2] if chosen[2] is not None else _sole(quantities),
-            avg_price=chosen[3],
-            capital_portfolio_id=capital[0][0] if capital else None,
+            quantity=position_quantity,
+            avg_price=capital[0][3] if capital else (entries[0][3] if entries else None),
+            capital_slices=slices,
             portfolio_ids=tuple(entry[0] for entry in entries),
-            inconsistent=len(quantities) > 1,
+            inconsistent=bool(
+                position_quantity is not None
+                and seen_by_lenses
+                and seen_by_lenses != {position_quantity}
+            ),
         )
     return recorded
 
@@ -569,14 +596,11 @@ def _ledger_view(
         # Unallocated is a REMAINDER since 10 Sep 2026, not a row: a holding filed nowhere simply
         # has no allocation, and `unallocated_quantity` derives the rest. Writing an explicit
         # `portfolio_id=None` row is now refused by `Allocation` itself.
-        if entry.capital_portfolio_id is not None and entry.quantity is not None:
-            allocations.append(
-                Allocation(
-                    key=key,
-                    portfolio_id=entry.capital_portfolio_id,
-                    quantity=entry.quantity,
+        for portfolio_id, quantity in entry.capital_slices.items():
+            if quantity > 0:
+                allocations.append(
+                    Allocation(key=key, portfolio_id=portfolio_id, quantity=quantity)
                 )
-            )
     return holdings, allocations
 
 
@@ -633,9 +657,11 @@ async def _reconcile(  # noqa: PLR0913 - every argument is a distinct fact about
             broker_account_id=broker_account_id,
             reason=ReconciliationReason.UNKNOWN_INFLOW,
             quantity=broker_quantity - position.recorded_quantity,
-            suggested=(
-                None if position.recorded is None else position.recorded.capital_portfolio_id
-            ),
+            # Suggested only when there is ONE portfolio to suggest (0035). A split holding has
+            # no single answer, and pre-selecting the first of four would be a suggestion that is
+            # wrong three times out of four — on a question about shares arriving, where a wrong
+            # answer accepted in one click puts real money in the wrong return series.
+            suggested=(None if position.recorded is None else position.recorded.sole_portfolio_id),
             on=on,
         )
         return

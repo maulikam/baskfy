@@ -341,7 +341,19 @@ class Portfolio(Base):
 
 
 class PortfolioHolding(Base):
-    """One instrument held in one portfolio **at one broker account** (0019).
+    """**A quantity** of one instrument, in one portfolio, at one broker account (0019, 0035).
+
+    Since 0035 a row is a **slice**, not the whole position: a 100-share ITC filed 20 long-term /
+    34 swing / 36 momentum is three rows, and the physical position is their SUM. Before 0035 a
+    partial unique index (`uq_portfolio_holding_one_capital_portfolio`) allowed exactly one
+    CAPITAL row per `(instrument_id, broker_account_id)`, which made the row and the position the
+    same thing and made Maulik's four-way split unrepresentable.
+
+    The invariant that replaced it — the slices never sum past the position — is not enforced
+    here because it cannot be: it is a fact about a group of rows. It holds because allocation
+    moves quantity between rows in one transaction rather than asserting a new total, so shares
+    are conserved by the operation itself. See 0035's docstring for the full reasoning, and
+    `baskfy_core.allocation_ledger.validate_against_holdings` for the in-memory belt.
 
     Before 0019 the primary key was ``(portfolio_id, instrument_id)``, which asserted that a
     portfolio holds a name in exactly one place. That is false the moment a user holds INFY at
@@ -374,14 +386,15 @@ class PortfolioHolding(Base):
             name="fk_portfolio_holding_portfolio_kind",
             onupdate="CASCADE",
         ),
-        # Acceptance criterion 2, enforced by Postgres: at most one CAPITAL row per physical
-        # holding. Monitoring rows are absent from the index, so lenses overlap freely (§4.1).
-        Index(
-            "uq_portfolio_holding_one_capital_portfolio",
-            "instrument_id",
-            "broker_account_id",
-            unique=True,
-            postgresql_where=text("portfolio_kind = 'CAPITAL'"),
+        # 0035. A row-local guard, and the only half of the Phase-3 invariant a single row can
+        # see. The other half — `sum(slices) <= held` — is a fact about a GROUP of rows, so no
+        # CHECK can express it; it holds because allocation MOVES quantity between rows rather
+        # than asserting a new total, which conserves shares by construction. NULL survives
+        # because 0022 lets a holding's numbers be unknown, and "we do not know how many" is not
+        # "minus one".
+        CheckConstraint(
+            "quantity IS NULL OR quantity >= 0",
+            name="portfolio_holding_quantity_not_negative",
         ),
     )
 

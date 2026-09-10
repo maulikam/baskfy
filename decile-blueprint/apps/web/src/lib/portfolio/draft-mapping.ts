@@ -26,7 +26,7 @@
 
 import type { Schemas } from "@baskfy/api-client";
 
-import type { PortfolioDraft } from "@/lib/portfolio/organize";
+import { holdingKeyId, type PortfolioDraft } from "@/lib/portfolio/organize";
 
 export type NewPortfolioIn = Schemas["NewPortfolioIn"];
 type PortfolioSource = NewPortfolioIn["source"];
@@ -97,11 +97,17 @@ export function bodyForDraft(
     kind: draft.kind,
     source: sourceForStart(draft.start),
     benchmark_index_id: benchmarkIndexId(draft.benchmark, benchmarks),
-    // Whole holdings only (§4.2). There is no quantity here because there is no quantity in the
-    // request schema — the constraint is structural, not validated away.
-    holdings: draft.keys.map((key) => ({
-      instrument_id: key.instrument_id,
-      broker_account_id: key.broker_account_id,
-    })),
+    // 0035: a quantity per holding, omitted when the user did not narrow it. `undefined` rather
+    // than `null` so the key is absent from the JSON entirely — the API reads a missing quantity
+    // as "the whole free remainder", and a literal null would mean the same thing while looking
+    // like a value somebody chose.
+    holdings: draft.keys.map((key) => {
+      const typed = draft.quantities?.get(holdingKeyId(key))?.trim();
+      return {
+        instrument_id: key.instrument_id,
+        broker_account_id: key.broker_account_id,
+        ...(typed === undefined || typed === "" ? {} : { quantity: typed }),
+      };
+    }),
   };
 }

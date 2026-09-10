@@ -7,11 +7,14 @@ import { Button } from "@/components/ui/button";
 import {
   brokerBreakdown,
   brokersIn,
+  describeAllocations,
   describeHolding,
   EMPTY_FILTERS,
   filterHoldings,
   formatShares,
+  freeQuantity,
   holdingKeyId,
+  isOverFree,
   isUnallocated,
   NO_FIGURE,
   NO_FILTER,
@@ -19,7 +22,9 @@ import {
   sectorsIn,
   selectionTotal,
   type AggregatedHolding,
+  type HoldingBrokerLine,
   type HoldingFilters,
+  type InstrumentRef,
 } from "@/lib/portfolio/organize";
 import { formatRupees } from "@/lib/portfolios/decimal";
 import { cn } from "@/lib/utils";
@@ -30,10 +35,19 @@ import { cn } from "@/lib/utils";
  *
  * Three rules from the spec are structural here rather than decorative.
  *
- * **Whole holdings only (§4.2).** There is no quantity field anywhere in this component, and there
- * cannot be one: the only control is a checkbox per holding. A partial allocation would break sell
- * attribution (§4.3) and corporate-action maths (§4.5) — so v1 does not offer the input at all,
- * rather than offering it and validating it away.
+ * **Part quantities (0035, 10 Sep 2026).** This block used to say the opposite — "there is no
+ * quantity field anywhere in this component, and there cannot be one" — because v1 allocated a
+ * holding whole. Maulik asked for the opposite: *"one stock can appear in multiple portfolios, so
+ * if stock a bought 100 qty for shortterm 20 for long term 34 for some swing 36 for momentum"*.
+ *
+ * So the tick is still the only control on the left — picking is one gesture — and the *amount*
+ * is tuned on the right, in the basket, where the user is already looking at what they have
+ * chosen. A blank box means "all of it", which keeps the common case a single click and keeps
+ * every pre-0035 flow behaving exactly as it did.
+ *
+ * The box is capped at the leg's **free** shares, not its total: shares already filed into
+ * another portfolio are spoken for, and offering them here would produce a refusal from the API
+ * that the user could have been shown before they typed.
  *
  * **Aggregated display, per-broker truth (§6.7).** A stock held at two brokers shows as
  * "HDFC Bank — 320 (Zerodha 200 · Upstox 120)". Ticking that row ticks both legs, because that is
@@ -52,6 +66,13 @@ export interface HoldingsPickerProps {
   /** Selected `holdingKeyId`s. */
   selected: ReadonlySet<string>;
   onChange: (next: Set<string>) => void;
+  /**
+   * `holdingKeyId -> how many shares`, as the user typed it. A missing or blank entry means
+   * "all of the free shares", which is what an untouched tick means and what the API's own
+   * `quantity: null` means on the wire.
+   */
+  quantities?: ReadonlyMap<string, string>;
+  onQuantitiesChange?: (next: Map<string, string>) => void;
   /** The name typed so far, shown as the right panel's heading. */
   portfolioName: string;
 }
@@ -61,6 +82,8 @@ export function HoldingsPicker({
   sectors = {},
   selected,
   onChange,
+  quantities = new Map(),
+  onQuantitiesChange,
   portfolioName,
 }: HoldingsPickerProps) {
   const [filters, setFilters] = useState<HoldingFilters>(EMPTY_FILTERS);
@@ -68,7 +91,24 @@ export function HoldingsPicker({
   const brokers = useMemo(() => brokersIn(rows), [rows]);
   const sectorNames = useMemo(() => sectorsIn(rows, sectors), [rows, sectors]);
   const visible = useMemo(() => filterHoldings(rows, filters, sectors), [rows, filters, sectors]);
-  const total = useMemo(() => selectionTotal(rows, selected), [rows, selected]);
+  const total = useMemo(
+    () => selectionTotal(rows, selected, quantities),
+    [rows, selected, quantities],
+  );
+  /** `holdingKeyId -> the leg`, so the basket can show each one's free shares without re-walking. */
+  const legsById = useMemo(() => {
+    const found = new Map<string, { line: HoldingBrokerLine; instrument: InstrumentRef }>();
+    for (const row of rows) {
+      for (const line of row.brokers ?? []) {
+        const id = holdingKeyId({
+          instrument_id: row.instrument.instrument_id,
+          broker_account_id: line.broker.broker_account_id,
+        });
+        found.set(id, { line, instrument: row.instrument });
+      }
+    }
+    return found;
+  }, [rows]);
   const selectedRows = useMemo(
     () => rows.filter((row) => rowKeyIds(row).some((id) => selected.has(id))),
     [rows, selected],
@@ -81,6 +121,22 @@ export function HoldingsPicker({
       else next.delete(id);
     }
     onChange(next);
+    // Un-ticking forgets the amount that was typed. Keeping it would mean a leg re-ticked later
+    // silently carries a number the user set for a different portfolio in a different session.
+    if (!on && onQuantitiesChange) {
+      const kept = new Map(quantities);
+      let changed = false;
+      for (const id of ids) changed = kept.delete(id) || changed;
+      if (changed) onQuantitiesChange(kept);
+    }
+  }
+
+  function setQuantity(id: string, raw: string): void {
+    if (!onQuantitiesChange) return;
+    const next = new Map(quantities);
+    if (raw.trim() === "") next.delete(id);
+    else next.set(id, raw);
+    onQuantitiesChange(next);
   }
 
   function selectAllUnallocated(): void {
@@ -183,9 +239,7 @@ export function HoldingsPicker({
                       <p className="text-xs text-muted-foreground">
                         {row.instrument.symbol}
                         {sector === undefined ? "" : ` · ${sector}`}
-                        {row.allocated && row.allocation
-                          ? ` · already in ${row.allocation.name}`
-                          : " · unallocated"}
+                        {describeAllocations(row)}
                       </p>
                     </div>
                     <p className="shrink-0 text-sm tabular-nums">
@@ -250,7 +304,9 @@ export function HoldingsPicker({
           <h3 className="text-sm font-semibold">
             {portfolioName.trim() === "" ? "New portfolio" : portfolioName.trim()}
           </h3>
-          <p className="text-xs text-muted-foreground">Whole holdings only — no part quantities.</p>
+          <p className="text-xs text-muted-foreground">
+            Leave a quantity blank to file the whole holding.
+          </p>
         </div>
 
         <div className="rounded-lg border border-border bg-background p-3">
@@ -276,31 +332,74 @@ export function HoldingsPicker({
         </div>
 
         {selectedRows.length > 0 ? (
-          <ul className="space-y-1" data-testid="picker-selected">
+          <ul className="space-y-2" data-testid="picker-selected">
             {selectedRows.map((row) => {
               const ids = rowKeyIds(row);
               const chosen = ids.filter((id) => selected.has(id));
               const breakdown = brokerBreakdown(row);
               return (
-                <li key={row.instrument.instrument_id} className="flex items-baseline gap-2 text-sm">
-                  <span className="min-w-0 flex-1 truncate">
-                    {row.instrument.name}
-                    {chosen.length < ids.length ? (
-                      <span className="text-xs text-muted-foreground">
-                        {" "}
-                        ({chosen.length} of {ids.length} brokers)
-                      </span>
-                    ) : breakdown === null ? null : (
-                      <span className="text-xs text-muted-foreground"> ({breakdown})</span>
-                    )}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setKeys(ids, false)}
-                    className="shrink-0 text-xs text-muted-foreground underline-offset-4 hover:underline"
-                  >
-                    Remove
-                  </button>
+                <li key={row.instrument.instrument_id} className="space-y-1 text-sm">
+                  <div className="flex items-baseline gap-2">
+                    <span className="min-w-0 flex-1 truncate">
+                      {row.instrument.name}
+                      {chosen.length < ids.length ? (
+                        <span className="text-xs text-muted-foreground">
+                          {" "}
+                          ({chosen.length} of {ids.length} brokers)
+                        </span>
+                      ) : breakdown === null ? null : (
+                        <span className="text-xs text-muted-foreground"> ({breakdown})</span>
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setKeys(ids, false)}
+                      className="shrink-0 text-xs text-muted-foreground underline-offset-4 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  {/* One box per chosen leg. The cap is the leg's FREE shares, so the control
+                      cannot express a request the API would refuse. */}
+                  {chosen.map((id) => {
+                    const leg = legsById.get(id);
+                    if (leg === undefined) return null;
+                    const free = freeQuantity(leg.line);
+                    const typed = quantities.get(id) ?? "";
+                    const tooMany = isOverFree(typed, free);
+                    return (
+                      <div key={id} className="flex items-center gap-2 pl-1 text-xs">
+                        {ids.length > 1 ? (
+                          <span className="w-20 shrink-0 truncate text-muted-foreground">
+                            {leg.line.broker.label}
+                          </span>
+                        ) : null}
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={typed}
+                          placeholder={formatShares(free)}
+                          onChange={(event) => setQuantity(id, event.target.value)}
+                          aria-label={`Shares of ${leg.instrument.name} at ${leg.line.broker.label} for this portfolio`}
+                          aria-invalid={tooMany || undefined}
+                          className={cn(
+                            "h-7 w-24 rounded-sm border bg-background px-2 text-right tabular-nums",
+                            tooMany ? "border-destructive text-destructive" : "border-input",
+                          )}
+                          data-testid={`picker-quantity-${id}`}
+                        />
+                        <span className="text-muted-foreground">
+                          of {formatShares(free)} free
+                        </span>
+                        {tooMany ? (
+                          <span className="text-destructive" data-testid={`picker-over-${id}`}>
+                            more than you have
+                          </span>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </li>
               );
             })}

@@ -81,14 +81,14 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Final
 
 from fastapi import APIRouter, Path, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Select, func, select, update
+from sqlalchemy import Select, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -672,6 +672,18 @@ class OverviewOut(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class HoldingSliceOut(BaseModel):
+    """One capital portfolio's share of one physical position (0035).
+
+    The wire form of `allocation_ledger.Allocation`. It exists because a holding may now be filed
+    into several portfolios at once, and every surface that used to print one portfolio's name
+    needs to be able to print four with their quantities instead.
+    """
+
+    portfolio: PortfolioRefOut
+    quantity: Decimal
+
+
 class HoldingBrokerLineOut(BaseModel):
     """One physical position: this instrument, at this broker, and what it is allocated to.
 
@@ -682,10 +694,21 @@ class HoldingBrokerLineOut(BaseModel):
 
     broker: BrokerRefOut
     quantity: Decimal
+    #: 0035: how many of `quantity` are not filed into any capital portfolio yet — the most the
+    #: picker may offer for a new one. Sent because the client cannot derive it: it would have to
+    #: know every portfolio this leg already appears in, which is exactly what `allocations`
+    #: below carries but which a checkbox has no way to add up.
+    unallocated_quantity: Decimal = Decimal(0)
+    #: Every capital slice of this leg, so the picker can say "already 20 in Long term" and the
+    #: detail page can show where the shares went. Empty for a wholly unfiled position.
+    allocations: list[HoldingSliceOut] = Field(default_factory=list)
     price: Decimal | None = None
     value: Decimal | None = None
     avg_price: Decimal | None = None
     cost_basis: Decimal | None = None
+    #: The single portfolio this leg is filed into, when there is exactly one. ``None`` when it is
+    #: unfiled **or split** — a caption naming the first of four would be wrong three times out
+    #: of four, so `allocations` is the field to read when this is null but the leg is filed.
     allocation: PortfolioRefOut | None = None
     monitoring_views: list[PortfolioRefOut] = Field(default_factory=list)
     first_bought_on: dt.date | None = None
@@ -1133,20 +1156,46 @@ class _Prices:
 
 @dataclass(frozen=True, slots=True)
 class _Position:
-    """One physical holding, plus every portfolio row that claims it.
+    """One physical holding, plus every portfolio row that claims a piece of it.
 
     The ledger's key is ``(instrument_id, broker_account_id)`` and the schema stores that
-    position once per portfolio it appears in — at most one CAPITAL row (0021's partial unique
-    index) and any number of MONITORING rows. This gathers them back into the one position they
-    describe, which is the shape both the ledger and §6.7's display need.
+    position once per portfolio it appears in. Until 0035 that meant at most one CAPITAL row, and
+    this class had a ``capital_portfolio_id: int | None`` to match. It now means **any number of
+    capital slices** — Maulik's 100-share ITC filed 20/34/36/10 is four rows — so the field is a
+    mapping and ``holding.quantity`` is their sum plus whatever is unfiled.
+
+    ``capital_slices`` is ordered by portfolio id so every surface that walks it renders the same
+    way twice, and so a test can assert a list rather than a set.
     """
 
     key: HoldingKey
     holding: Holding
-    capital_portfolio_id: int | None
+    capital_slices: Mapping[int, Decimal]
     monitoring_portfolio_ids: tuple[int, ...]
     first_bought_on: dt.date | None
     history_source: str
+
+    @property
+    def sole_capital_portfolio_id(self) -> int | None:
+        """The one portfolio this holding is filed into, or ``None`` if it is split or unfiled.
+
+        The pre-0035 question, kept because several surfaces genuinely still ask it — "can this
+        sell be attributed without asking", "which single portfolio does this row belong under".
+        It answers ``None`` for a *split* holding as well as an unfiled one, which is correct for
+        every one of those callers: neither has a single answer, and both must take the branch
+        that asks rather than the branch that assumes.
+        """
+        return next(iter(self.capital_slices)) if len(self.capital_slices) == 1 else None
+
+    @property
+    def allocated_quantity(self) -> Decimal:
+        return sum(self.capital_slices.values(), ZERO)
+
+    @property
+    def unallocated_quantity(self) -> Decimal:
+        """What is left of the position after every slice. §6.6's pile, per holding."""
+        remainder = self.holding.quantity - self.allocated_quantity
+        return remainder if remainder > ZERO else ZERO
 
 
 @dataclass(frozen=True, slots=True)
@@ -1193,23 +1242,41 @@ class _Ledger:
         `Allocation` itself and would have been double-counting waiting to happen.
         """
         return [
-            Allocation(
-                key=position.key,
-                portfolio_id=position.capital_portfolio_id,
-                quantity=position.holding.quantity,
-            )
+            Allocation(key=position.key, portfolio_id=portfolio_id, quantity=quantity)
             for position in self.positions
-            if position.capital_portfolio_id is not UNALLOCATED and position.holding.quantity > 0
+            for portfolio_id, quantity in position.capital_slices.items()
+            if quantity > ZERO
         ]
 
     @property
     def ledger_positions(self) -> list[LedgerPosition]:
-        """Every appearance of every holding — the shape §4.5's fan-out and §4.3's freeze need."""
+        """Every appearance of every holding — the shape §4.5's fan-out and §4.3's freeze need.
+
+        **One capital row per SLICE since 0035**, each carrying that slice's quantity, plus one
+        Unallocated row for any remainder. A split holding appears once per portfolio it is filed
+        into, which is what makes a corporate action fan out to all of them and what makes a
+        freeze bite on the right ones.
+
+        A monitoring view still sees the WHOLE holding: a lens answers "which names", not "how
+        many" (§4.1), and it enters no total, so there is nothing here to double-count.
+        """
         found: list[LedgerPosition] = []
         for position in self.positions:
-            found.append(
-                LedgerPosition(portfolio_id=position.capital_portfolio_id, holding=position.holding)
-            )
+            for portfolio_id, quantity in position.capital_slices.items():
+                found.append(
+                    LedgerPosition(
+                        portfolio_id=portfolio_id,
+                        holding=replace(position.holding, quantity=quantity),
+                    )
+                )
+            remainder = position.unallocated_quantity
+            if remainder > ZERO or not position.capital_slices:
+                found.append(
+                    LedgerPosition(
+                        portfolio_id=UNALLOCATED,
+                        holding=replace(position.holding, quantity=remainder),
+                    )
+                )
             for view_id in position.monitoring_portfolio_ids:
                 found.append(LedgerPosition(portfolio_id=view_id, holding=position.holding))
         return found
@@ -1419,15 +1486,27 @@ def _positions_from(rows: Sequence[PortfolioHolding]) -> tuple[_Position, ...]:
         capital = [row for row in group if row.portfolio_kind == PortfolioKind.CAPITAL]
         monitoring = [row for row in group if row.portfolio_kind == PortfolioKind.MONITORING]
         source_row = capital[0] if capital else max(group, key=lambda r: r.quantity or ZERO)
+        # 0035: THE POSITION IS THE SUM OF ITS CAPITAL SLICES. Before it, one capital row was the
+        # whole position and this read its quantity directly; with a holding filed 20/34/36/10
+        # that would report 20 shares of a 100-share position and every total below it would be
+        # wrong by the rest. Monitoring rows are excluded from the sum for the reason they are
+        # excluded from every total (§4.1) — a lens sees the same shares again, it does not add
+        # more of them.
+        slices = {
+            int(row.portfolio_id): row.quantity
+            for row in sorted(capital, key=lambda r: int(r.portfolio_id))
+            if row.quantity is not None
+        }
+        quantity = (
+            sum(slices.values(), ZERO)
+            if slices
+            else (source_row.quantity if source_row.quantity is not None else ZERO)
+        )
         positions.append(
             _Position(
                 key=key,
-                holding=Holding(
-                    key=key,
-                    quantity=source_row.quantity if source_row.quantity is not None else ZERO,
-                    avg_price=source_row.avg_price,
-                ),
-                capital_portfolio_id=int(capital[0].portfolio_id) if capital else UNALLOCATED,
+                holding=Holding(key=key, quantity=quantity, avg_price=source_row.avg_price),
+                capital_slices=slices,
                 monitoring_portfolio_ids=tuple(int(row.portfolio_id) for row in monitoring),
                 first_bought_on=source_row.first_bought_on,
                 history_source=source_row.history_source,
@@ -2390,7 +2469,7 @@ def _members_of(ledger: _Ledger, portfolio: LedgerPortfolio) -> list[_Position]:
         return [
             position
             for position in ledger.positions
-            if position.capital_portfolio_id == portfolio.portfolio_id
+            if portfolio.portfolio_id in position.capital_slices
         ]
     return [
         position
@@ -2620,7 +2699,15 @@ async def portfolio_holdings(
         if value is not None:
             total += value
 
-        allocated_ids = {position.capital_portfolio_id for position in group}
+        # 0035: a holding can be split ACROSS PORTFOLIOS as well as across brokers, and this row
+        # already had the vocabulary for it. `allocated_ids` now gathers every slice of every leg,
+        # so `split_across_portfolios` is true for one broker filed four ways exactly as it was
+        # for one name held at two brokers — which is what the user means by the word either way.
+        allocated_ids: set[int | None] = set()
+        for position in group:
+            allocated_ids.update(position.capital_slices)
+            if position.unallocated_quantity > ZERO or not position.capital_slices:
+                allocated_ids.add(UNALLOCATED)
         one_allocation = len(allocated_ids) == 1 and allocated_ids != {UNALLOCATED}
         allocation_id = next(iter(allocated_ids)) if one_allocation else None
         if allocated_ids == {UNALLOCATED}:
@@ -2670,7 +2757,9 @@ def _broker_line(
     """One physical position as a line under its aggregated row (§6.7)."""
     account = ledger.brokers.get(position.key.broker_account_id)
     value = ledger.value_of(position.holding)
-    allocation_id = position.capital_portfolio_id
+    # Named only when there is ONE name to give (0035). A split leg has no single allocation, and
+    # printing the first of four would be a caption that is wrong three times out of four.
+    allocation_id = position.sole_capital_portfolio_id
     return HoldingBrokerLineOut(
         broker=(
             _broker_ref(account)
@@ -2682,6 +2771,14 @@ def _broker_line(
             )
         ),
         quantity=position.holding.quantity,
+        unallocated_quantity=position.unallocated_quantity,
+        allocations=[
+            HoldingSliceOut(
+                portfolio=_portfolio_ref(ledger.portfolios[portfolio_id]), quantity=quantity
+            )
+            for portfolio_id, quantity in position.capital_slices.items()
+            if portfolio_id in ledger.portfolios
+        ],
         price=ledger.prices.latest.get(position.key.instrument_id),
         value=value,
         avg_price=position.holding.avg_price,
@@ -2847,7 +2944,7 @@ async def _corporate_actions(
         else [
             position
             for position in ledger.positions
-            if position.capital_portfolio_id == portfolio_id
+            if portfolio_id in position.capital_slices
             or portfolio_id in position.monitoring_portfolio_ids
         ]
     )
@@ -3037,49 +3134,121 @@ async def _apply_allocation(
     *,
     resolved_on: dt.date,
 ) -> None:
-    """Write the allocation the answer implied — the second half of the outcome.
+    """File ``allocation.quantity`` shares into ``allocation.portfolio_id``, taking them from
+    somewhere they already are. **Shares are conserved by this function, always.**
 
-    Whole-holding allocation (§4.2) is what makes this one row rather than a split: the position
-    now counts against exactly one capital portfolio. If it already had one, that row *moves*
-    (its primary key changes) rather than being duplicated, because 0021's partial unique index
-    allows exactly one CAPITAL row per physical holding and a second insert would be refused by
-    the database — correctly, and after the state change had already been written.
+    This is where the Phase-3 invariant actually lives. 0035 removed the unique index that used
+    to enforce "one capital portfolio per holding" and deliberately put nothing in its place,
+    because ``sum(slices) <= held`` is a fact about a group of rows that no CHECK can see. What
+    makes it true is that every path into `portfolio_holding` moves quantity rather than
+    asserting a total — and this is that path.
 
-    The quantity comes from whatever row already described the position, falling back to the
-    quantity the question was about. A resolution is an answer about attribution, not a
-    restatement of how many shares exist.
+    Before 0035 the whole row moved: its ``portfolio_id`` changed and the position was now
+    somewhere else, entire. Now a *quantity* moves:
+
+    1. take from the **unallocated remainder** first, because those shares are spoken for by
+       nobody and moving them costs no other portfolio's return series;
+    2. then from other capital slices, **smallest first**, so filing 30 out of 20/34/36 empties
+       the 20 before it touches the 34 — the fewest portfolios disturbed, and the small slice a
+       user is most likely to have meant to consolidate;
+    3. a source slice drained to zero is deleted rather than left as a zero row, because a
+       portfolio holding zero of something is not a holding, and the ledger's `Allocation`
+       refuses to represent it.
+
+    Asking for more than the position holds is a caller bug and raises, rather than filing what
+    is available: silently allocating 80 when 100 was asked for leaves the user believing a
+    portfolio holds shares it does not. `new_portfolio` checks first so a *user* gets a sentence
+    naming the numbers instead.
+
+    ``resolved_on`` dates the new row. A resolution is an answer about attribution, not a
+    restatement of how many shares exist, so `first_bought_on` and `history_source` are carried
+    across from the position rather than re-derived.
     """
     existing = next(
         (position for position in ledger.positions if position.key == allocation.key), None
     )
     target_id = allocation.portfolio_id
-    assert target_id is not None, "an implied allocation always names a capital portfolio"
+    wanted = allocation.quantity
 
-    if existing is not None and existing.capital_portfolio_id is not None:
-        await session.execute(
-            update(PortfolioHolding)
-            .where(
-                PortfolioHolding.portfolio_id == existing.capital_portfolio_id,
-                PortfolioHolding.instrument_id == allocation.key.instrument_id,
-                PortfolioHolding.broker_account_id == allocation.key.broker_account_id,
+    if existing is None:
+        # Nothing recorded for this position at all — an inflow answered before a sync ever saw
+        # it. There is nothing to take from, so the row is written as stated.
+        session.add(
+            PortfolioHolding(
+                portfolio_id=target_id,
+                instrument_id=allocation.key.instrument_id,
+                broker_account_id=allocation.key.broker_account_id,
+                portfolio_kind=PortfolioKind.CAPITAL.value,
+                quantity=wanted,
+                avg_price=None,
+                added_on=resolved_on,
+                first_bought_on=None,
+                history_source="NONE",
             )
-            .values(portfolio_id=target_id, portfolio_kind=PortfolioKind.CAPITAL.value)
         )
         return
 
-    quantity = existing.holding.quantity if existing is not None else ZERO
-    avg_price = existing.holding.avg_price if existing is not None else None
+    if wanted > existing.holding.quantity:
+        raise ValueError(
+            f"cannot file {wanted} shares of {allocation.key}: only "
+            f"{existing.holding.quantity} are held"
+        )
+
+    # (1) the free shares, then (2) other slices smallest first. The target's own slice is never a
+    # source — taking from it to give to it would be a no-op that also deleted the row.
+    outstanding = wanted - min(wanted, existing.unallocated_quantity)
+    donors = sorted(
+        ((pid, qty) for pid, qty in existing.capital_slices.items() if pid != target_id),
+        key=lambda pair: (pair[1], pair[0]),
+    )
+    for donor_id, donor_quantity in donors:
+        if outstanding <= ZERO:
+            break
+        taken = min(outstanding, donor_quantity)
+        outstanding -= taken
+        if taken >= donor_quantity:
+            await session.execute(
+                delete(PortfolioHolding).where(
+                    PortfolioHolding.portfolio_id == donor_id,
+                    PortfolioHolding.instrument_id == allocation.key.instrument_id,
+                    PortfolioHolding.broker_account_id == allocation.key.broker_account_id,
+                )
+            )
+        else:
+            await session.execute(
+                update(PortfolioHolding)
+                .where(
+                    PortfolioHolding.portfolio_id == donor_id,
+                    PortfolioHolding.instrument_id == allocation.key.instrument_id,
+                    PortfolioHolding.broker_account_id == allocation.key.broker_account_id,
+                )
+                .values(quantity=donor_quantity - taken)
+            )
+
+    already = existing.capital_slices.get(target_id)
+    if already is not None:
+        await session.execute(
+            update(PortfolioHolding)
+            .where(
+                PortfolioHolding.portfolio_id == target_id,
+                PortfolioHolding.instrument_id == allocation.key.instrument_id,
+                PortfolioHolding.broker_account_id == allocation.key.broker_account_id,
+            )
+            .values(quantity=already + wanted)
+        )
+        return
+
     session.add(
         PortfolioHolding(
             portfolio_id=target_id,
             instrument_id=allocation.key.instrument_id,
             broker_account_id=allocation.key.broker_account_id,
             portfolio_kind=PortfolioKind.CAPITAL.value,
-            quantity=quantity,
-            avg_price=avg_price,
+            quantity=wanted,
+            avg_price=existing.holding.avg_price,
             added_on=resolved_on,
-            first_bought_on=existing.first_bought_on if existing is not None else None,
-            history_source=existing.history_source if existing is not None else "NONE",
+            first_bought_on=existing.first_bought_on,
+            history_source=existing.history_source,
         )
     )
 
@@ -3478,21 +3647,18 @@ async def new_portfolio(
     if body.benchmark_index_id is not None:
         await _benchmark_index(session, body.benchmark_index_id)
 
-    # De-duplicated, and ordered the way the ledger orders holdings, so two bodies naming the
-    # same legs in a different order produce the same portfolio and the same refusal.
-    wanted = sorted(
-        {
-            HoldingKey(instrument_id=h.instrument_id, broker_account_id=h.broker_account_id)
-            for h in body.holdings
-        },
-        key=lambda key: (key.instrument_id, key.broker_account_id),
-    )
+    # De-duplicated by holding and ordered the way the ledger orders holdings, so two bodies
+    # naming the same legs in a different order produce the same portfolio and the same refusal.
+    # Two lines for one holding ADD UP rather than the last winning: a client that sends
+    # {ITC: 20} and {ITC: 14} means 34, and picking one silently would file the wrong number.
+    requested = _requested_quantities(body.holdings)
+    wanted = sorted(requested, key=lambda key: (key.instrument_id, key.broker_account_id))
     for key in wanted:
         await _owned_broker_account(session, key.broker_account_id, user_id)
 
     ledger = await _load_ledger(session, user_id)
     by_key = {position.key: position for position in ledger.positions}
-    chosen: list[_Position] = []
+    chosen: list[tuple[_Position, Decimal]] = []
     for key in wanted:
         position = by_key.get(key)
         if position is None:
@@ -3500,15 +3666,27 @@ async def new_portfolio(
                 "holding",
                 f"instrument {key.instrument_id} at broker account {key.broker_account_id}",
             )
-        chosen.append(position)
+        asked = requested[key]
+        # `None` means "everything not already filed elsewhere" (see `HoldingKeyIn.quantity`).
+        # Resolved here rather than in the schema because only the ledger knows the remainder.
+        chosen.append((position, position.unallocated_quantity if asked is None else asked))
 
     if body.kind is PortfolioKind.CAPITAL:
-        _refuse_double_allocation(ledger, chosen)
+        _refuse_over_allocation(ledger, chosen)
+        empty = [position for position, quantity in chosen if quantity <= ZERO]
+        if empty:
+            raise Problem(
+                ALLOCATION_REFUSED,
+                "Every holding in a capital portfolio needs shares in it, and "
+                + ", ".join(_symbol_of(ledger, position.key.instrument_id) for position in empty)
+                + " has none free. Free some, or leave it out of the selection.",
+                instrument_ids=[position.key.instrument_id for position in empty],
+            )
 
     # NULL means "a roll-up spanning brokers" and NOT NULL means "everything under this is
     # attributable to exactly one account" (see `models.accounts.Portfolio`). Stating it only
     # when it is true is the point of the column; an empty portfolio spans nothing and gets NULL.
-    accounts = {position.key.broker_account_id for position in chosen}
+    accounts = {position.key.broker_account_id for position, _ in chosen}
     portfolio = Portfolio(
         user_id=user_id,
         name=body.name,
@@ -3526,19 +3704,18 @@ async def new_portfolio(
             session.add(portfolio)
             await session.flush()
             portfolio_id = int(portfolio.id)
-            for position in chosen:
+            for position, quantity in chosen:
                 if body.kind is PortfolioKind.CAPITAL:
                     await _apply_allocation(
                         session,
                         ledger,
-                        Allocation(
-                            key=position.key,
-                            portfolio_id=portfolio_id,
-                            quantity=position.holding.quantity,
-                        ),
+                        Allocation(key=position.key, portfolio_id=portfolio_id, quantity=quantity),
                         resolved_on=today,
                     )
                 else:
+                    # A lens takes no quantity (§4.1): it answers "which names", not "how many",
+                    # and it enters no total. A body that named one for a MONITORING view is not
+                    # refused — it is simply not a fact a lens can carry.
                     _add_to_monitoring_view(session, portfolio_id, position, added_on=today)
             await session.flush()
     except IntegrityError as exc:
@@ -3556,49 +3733,107 @@ async def new_portfolio(
     return await portfolio_detail(session, principal, int(portfolio.id))
 
 
-def _refuse_double_allocation(ledger: _Ledger, chosen: Sequence[_Position]) -> None:
-    """Acceptance criterion 2, answered in words before the database answers it in Latin.
+def _refuse_over_allocation(
+    ledger: _Ledger,
+    chosen: Sequence[tuple[_Position, Decimal]],
+) -> None:
+    """Refuse a selection that asks for more shares than the user holds, in words.
+
+    **This replaced `_refuse_double_allocation` on 10 Sep 2026.** That function refused a holding
+    that was already in another capital portfolio, because acceptance criterion 2 said a holding
+    belongs to exactly one. Maulik removed that rule — filing the same stock into four portfolios
+    is the feature — so the refusal it was making is gone, and the only thing left to refuse is
+    arithmetic: you cannot file 60 shares of a 50-share position.
 
     Every conflict is collected rather than the first one raised, because a user who selected
     twelve holdings in §6.7's picker and got told about one of them would fix it, retry, and be
-    told about the next. The refusal names each holding and the portfolio it is already in, which
-    is what the flow needs in order to offer "remove these from the selection".
+    told about the next. The refusal names the symbol, what was asked for and what is actually
+    free, which is what the picker needs to show a number the user can correct to.
 
-    This is a refusal and not a move, deliberately. Moving a holding between capital portfolios is
-    a real act with a consequence for two return series, and §6.7's create step is not where a
-    user is asking for it.
+    It refuses rather than clamping to the available quantity. Filing 40 when 60 was asked for
+    would leave the user believing a portfolio holds half again what it does, and nothing on the
+    page would say otherwise.
     """
     conflicts = [
-        position for position in chosen if position.capital_portfolio_id is not UNALLOCATED
+        (position, wanted) for position, wanted in chosen if wanted > position.unallocated_quantity
     ]
     if not conflicts:
         return
     named: list[str] = []
     subject_ids: list[int] = []
-    for position in conflicts:
-        held_by = position.capital_portfolio_id
-        assert held_by is not None, "a conflict is a position with a capital portfolio"
-        existing = ledger.portfolios.get(held_by)
-        instrument = ledger.instruments.get(position.key.instrument_id)
-        symbol = instrument.symbol if instrument is not None else str(position.key.instrument_id)
-        name = existing.name if existing is not None else str(held_by)
-        named.append(f"{symbol} is already in {name!r}")
+    for position, wanted in conflicts:
+        symbol = _symbol_of(ledger, position.key.instrument_id)
+        free = position.unallocated_quantity
+        where = _filed_elsewhere(ledger, position)
+        named.append(f"{symbol}: you asked for {wanted:g} and only {free:g} are free{where}")
         subject_ids.append(position.key.instrument_id)
     raise Problem(
         ALLOCATION_REFUSED,
-        "A holding belongs to exactly one capital portfolio, and "
+        "A holding cannot be filed into more shares than you own — "
         + "; ".join(named)
-        + ". Remove those from the selection, or create this as a monitoring view instead.",
+        + ". Lower those quantities, or free the shares from the portfolios they are in.",
         conflicts=[
             {
                 "instrument_id": position.key.instrument_id,
                 "broker_account_id": position.key.broker_account_id,
-                "portfolio_id": position.capital_portfolio_id,
+                "requested": str(wanted),
+                "available": str(position.unallocated_quantity),
+                "slices": {str(pid): str(qty) for pid, qty in position.capital_slices.items()},
             }
-            for position in conflicts
+            for position, wanted in conflicts
         ],
         instrument_ids=subject_ids,
     )
+
+
+def _requested_quantities(
+    lines: Sequence[HoldingKeyIn],
+) -> dict[HoldingKey, Decimal | None]:
+    """Collapse the body's holding lines into one request per holding.
+
+    Two lines for the same holding **add up** rather than the last one winning: a client that
+    sends ``{ITC: 20}`` and ``{ITC: 14}`` means 34, and silently picking one would file a number
+    the user never asked for. A line with no quantity means "all of it" (see
+    `HoldingKeyIn.quantity`), which cannot be added to anything and so wins over any explicit
+    amount for the same holding — the wider of the two intents, and the one a picker sends when
+    the user ticks the whole row.
+    """
+    requested: dict[HoldingKey, Decimal | None] = {}
+    for line in lines:
+        key = HoldingKey(instrument_id=line.instrument_id, broker_account_id=line.broker_account_id)
+        if line.quantity is None:
+            requested[key] = None
+        elif key not in requested:
+            requested[key] = line.quantity
+        elif requested[key] is not None:
+            requested[key] = (requested[key] or ZERO) + line.quantity
+    return requested
+
+
+def _symbol_of(ledger: _Ledger, instrument_id: int) -> str:
+    """The ticker a refusal names, falling back to the id when the instrument is not loaded.
+
+    A message that says "instrument 4711" is still actionable; one that raises while building a
+    refusal turns a 400 the user could fix into a 500 they cannot.
+    """
+    instrument = ledger.instruments.get(instrument_id)
+    return instrument.symbol if instrument is not None else str(instrument_id)
+
+
+def _filed_elsewhere(ledger: _Ledger, position: _Position) -> str:
+    """ ", already 20 in 'Long term' and 34 in 'Swing'" — or "" when nothing is filed.
+
+    The sentence fragment that turns "only 46 are free" from a bare refusal into something the
+    user can act on without opening another page.
+    """
+    if not position.capital_slices:
+        return ""
+    parts = []
+    for portfolio_id, quantity in position.capital_slices.items():
+        portfolio = ledger.portfolios.get(portfolio_id)
+        name = portfolio.name if portfolio is not None else str(portfolio_id)
+        parts.append(f"{quantity:g} in {name!r}")
+    return ", already " + " and ".join(parts)
 
 
 # ---------------------------------------------------------------------------

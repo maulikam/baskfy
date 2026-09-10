@@ -15,6 +15,7 @@ import pytest
 import screener_helpers
 from api_helpers import assert_problem, bearer, make_user, url
 from screener_helpers import AS_OF, requires_db
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import Instrument, SymbolAlias
@@ -294,32 +295,84 @@ class TestMessyImport:
 
 
 class TestAmbiguity:
-    async def test_a_symbol_on_two_series_is_ambiguous_not_guessed(
+    async def test_an_old_symbol_pointing_at_two_instruments_is_ambiguous_not_guessed(
         self, api: httpx.AsyncClient, screener_session: AsyncSession
     ) -> None:
-        """``instrument`` is unique on (exchange, symbol, series), so this is a real state."""
-        for series in ("EQ", "BE"):
+        """Refusing to guess between two candidates, over a state that can still occur.
+
+        This test used to build the ambiguity out of one symbol under two series — "``instrument``
+        is unique on (exchange, symbol, series), so this is a real state". 0039 made it *not* a
+        real state: `series` left the key, because it is an attribute NSE changes rather than part
+        of a listing's identity, and 120 symbols on the live box were sitting in that condition
+        with the holdings sync reporting every one of them as "not recognised".
+
+        The behaviour under test is unchanged and still matters — two candidates must produce a
+        question, never a guess — so it is exercised through `symbol_alias`, where one retired
+        ticker genuinely can map to two instruments (a demerger, or a backfill that recorded both
+        successors). That is the ambiguity that survives, and it is the one worth pinning.
+        """
+        first = await screener_helpers.add_instrument(screener_session, "SPLITCO-A")
+        second = await screener_helpers.add_instrument(screener_session, "SPLITCO-B")
+        for instrument_id in (first, second):
             screener_session.add(
-                Instrument(
-                    exchange_id=NSE_EXCHANGE_ID,
-                    symbol="TWINCO",
-                    name=f"TWIN COMPANY {series}",
-                    series=series,
-                    instrument_type="EQ",
-                    is_active=True,
+                SymbolAlias(
+                    instrument_id=instrument_id,
+                    old_symbol="SPLITCO",
+                    changed_on=dt.date(2026, 1, 1),
                 )
             )
         await screener_session.flush()
 
         headers = await owner(screener_session, "ambig@example.com")
-        created = await make_portfolio(api, headers, holdings=[{"symbol": "TWINCO"}])
+        created = await make_portfolio(api, headers, holdings=[{"symbol": "SPLITCO"}])
         report = report_of(created)
         assert report["ambiguous"] == 1
         assert report["imported"] == 0
         row = arr(report["rows"])[0]
         assert row["status"] == "ambiguous"
         candidates = arr(row["candidates"])
-        assert sorted(str(candidate["series"]) for candidate in candidates) == ["BE", "EQ"]
+        assert sorted(str(candidate["symbol"]) for candidate in candidates) == [
+            "SPLITCO-A",
+            "SPLITCO-B",
+        ]
+
+    async def test_one_symbol_can_no_longer_exist_under_two_series(
+        self, screener_session: AsyncSession
+    ) -> None:
+        """The state the test above used to build, now refused by the database (0039).
+
+        Worth keeping as its own assertion: the ambiguity that broke GAYAPROJ is not handled
+        better, it is unrepresentable — which is why the sync stopped reporting real holdings as
+        unrecognised.
+        """
+        screener_session.add(
+            Instrument(
+                exchange_id=NSE_EXCHANGE_ID,
+                symbol="TWINCO",
+                name="TWIN COMPANY EQ",
+                series="EQ",
+                instrument_type="EQ",
+                is_active=True,
+            )
+        )
+        await screener_session.flush()
+
+        # Inside a savepoint: the failed flush poisons the transaction it happens in, and this
+        # session is shared with every other test in the module. Without the nesting, whichever
+        # test ran next would fail for a reason that has nothing to do with it.
+        with pytest.raises(IntegrityError):
+            async with screener_session.begin_nested():
+                screener_session.add(
+                    Instrument(
+                        exchange_id=NSE_EXCHANGE_ID,
+                        symbol="TWINCO",
+                        name="TWIN COMPANY BE",
+                        series="BE",
+                        instrument_type="EQ",
+                        is_active=True,
+                    )
+                )
+                await screener_session.flush()
 
     async def test_a_renamed_symbol_resolves_through_its_alias(
         self, api: httpx.AsyncClient, screener_session: AsyncSession

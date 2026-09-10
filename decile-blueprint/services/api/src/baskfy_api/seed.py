@@ -227,7 +227,9 @@ async def seed_reference_fixture(session: AsyncSession, rows: ReferenceRows | No
     stmt = insert(Instrument).values(instrument_values)
     await session.execute(
         stmt.on_conflict_do_update(
-            index_elements=[Instrument.exchange_id, Instrument.symbol, Instrument.series],
+            # 0039: `series` left the instrument's key — it is an attribute NSE changes, not
+            # part of a listing's identity.
+            index_elements=[Instrument.exchange_id, Instrument.symbol],
             set_={"name": stmt.excluded.name, "instrument_type": stmt.excluded.instrument_type},
         )
     )
@@ -317,7 +319,9 @@ async def seed_fixture_bars(session: AsyncSession, provider: FixtureProvider | N
     stmt = insert(Instrument).values(instrument_values)
     await session.execute(
         stmt.on_conflict_do_update(
-            index_elements=[Instrument.exchange_id, Instrument.symbol, Instrument.series],
+            # 0039: `series` left the instrument's key — it is an attribute NSE changes, not
+            # part of a listing's identity.
+            index_elements=[Instrument.exchange_id, Instrument.symbol],
             set_={
                 "name": stmt.excluded.name,
                 "instrument_type": stmt.excluded.instrument_type,

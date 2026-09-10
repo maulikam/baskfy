@@ -47,7 +47,12 @@ class Instrument(Base):
 
     __tablename__ = "instrument"
     __table_args__ = (
-        UniqueConstraint("exchange_id", "symbol", "series"),
+        # 0039: `series` left this key, because it is an attribute of a listing rather than part
+        # of its identity. NSE moves a stock between EQ and BE whenever trade-to-trade
+        # surveillance turns on or off, and while `series` was in the key each move inserted a
+        # SECOND active row — 120 of them, every one of which `resolve_symbols` then answered
+        # AMBIGUOUS for, which the holdings sync reports as "symbol not recognised".
+        UniqueConstraint("exchange_id", "symbol"),
         CheckConstraint("instrument_type IN ('EQ', 'ETF', 'INDEX')", name="instrument_type_known"),
         Index("ix_instrument_symbol", "symbol"),
         Index("ix_instrument_kite_token", "kite_token"),

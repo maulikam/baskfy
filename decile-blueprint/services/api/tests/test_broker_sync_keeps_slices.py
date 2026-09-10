@@ -42,7 +42,8 @@ from baskfy_api.broker_holdings_sync import (
     portfolio_for_broker_account,
     sync_holdings_into_portfolio,
 )
-from baskfy_core.allocation_ledger import PortfolioKind, PortfolioSource
+from baskfy_api.routers.portfolio_overview import _apply_allocation, _Ledger, _load_ledger
+from baskfy_core.allocation_ledger import Allocation, HoldingKey, PortfolioKind, PortfolioSource
 from baskfy_core.models import Portfolio, PortfolioHolding
 
 pytestmark = [pytest.mark.db]
@@ -373,7 +374,7 @@ async def test_the_broker_group_is_still_created_and_named_once(db: AsyncSession
 # ===========================================================================================
 
 
-async def _swing_position(
+async def _swing_position(  # noqa: PLR0913 - one keyword per column the desk actually writes
     session: AsyncSession,
     *,
     user_id: int,
@@ -542,3 +543,136 @@ async def test_the_desk_never_takes_shares_the_user_filed_by_hand(db: AsyncSessi
     assert await _slice_in(db, "PF3 Long term", instrument_id) == Decimal("90")
     assert await _slice_in(db, "Swing", instrument_id) == Decimal("10")
     assert await _total_held(db, instrument_id) == Decimal("100")
+
+
+# ===========================================================================================
+# The broker's own group is UNALLOCATED, not a strategy (Maulik, 11 Sep 2026)
+# ===========================================================================================
+#
+# He caught this on the first real screen: every quantity box read "0 of 0 free", because
+# everything he owned had synced into "Zerodha holdings" and that group is CAPITAL — so the code
+# read it as already allocated. His words: "every stock from every strategy in every basket would
+# eventually go to zero holding ... since all the stocks would be held in Zerodha".
+#
+# These assert both halves of the fix: the pile counts as free, and filing out of it DECREMENTS
+# it. The second half is the one that would otherwise re-introduce the sync's double-count from
+# the other direction.
+
+
+async def _ledger_for(session: AsyncSession, user_id: int) -> _Ledger:
+    return await _load_ledger(session, user_id)
+
+
+@pytest.mark.asyncio
+async def test_a_freshly_synced_holding_is_entirely_free_to_file(db: AsyncSession) -> None:
+    """The screenshot bug, as an assertion: 100 synced shares are 100 free shares."""
+    user_id = await _user(db)
+    broker_account_id = await _broker(db, user_id)
+    instrument_id = await _instrument(db)
+    await _sync(db, user_id, broker_account_id)
+
+    ledger = await _ledger_for(db, user_id)
+    position = next(p for p in ledger.positions if p.key.instrument_id == instrument_id)
+
+    assert position.holding.quantity == Decimal("100"), "the position lost its shares"
+    assert position.unallocated_quantity == Decimal("100"), "0 of 0 free — the bug"
+    assert position.capital_slices == {}, "the pile is not a strategy's slice"
+
+
+@pytest.mark.asyncio
+async def test_filing_out_of_the_pile_decrements_the_pile(db: AsyncSession) -> None:
+    """The other half. A remainder backed by a row must be DEBITED, not just recomputed.
+
+    Filing 20 into Long term while leaving the pile at 100 would be 120 shares of a 100-share
+    position — the sync's double-count arriving through the allocation path instead.
+    """
+
+    user_id = await _user(db)
+    broker_account_id = await _broker(db, user_id)
+    instrument_id = await _instrument(db)
+    await _sync(db, user_id, broker_account_id)
+    long_term = await _portfolio(db, user_id, "PF3 Long term")
+
+    ledger = await _ledger_for(db, user_id)
+    await _apply_allocation(
+        db,
+        ledger,
+        Allocation(
+            key=HoldingKey(instrument_id=instrument_id, broker_account_id=broker_account_id),
+            portfolio_id=long_term,
+            quantity=Decimal("20"),
+        ),
+        resolved_on=AS_OF,
+    )
+    await db.flush()
+
+    pile = await portfolio_for_broker_account(
+        db,
+        user_id=user_id,
+        broker_account_id=broker_account_id,
+        broker_name="Zerodha",
+        as_of=AS_OF,
+    )
+    assert await _slice_in(db, "PF3 Long term", instrument_id) == Decimal("20")
+    assert await _total_held(db, instrument_id) == Decimal("100"), "shares were invented"
+
+    rows = (
+        await db.execute(
+            select(PortfolioHolding.quantity).where(
+                PortfolioHolding.portfolio_id == int(pile.id),
+                PortfolioHolding.instrument_id == instrument_id,
+            )
+        )
+    ).all()
+    assert [q for (q,) in rows] == [Decimal("80")], "the pile was not debited"
+
+    after = await _ledger_for(db, user_id)
+    position = next(p for p in after.positions if p.key.instrument_id == instrument_id)
+    assert position.unallocated_quantity == Decimal("80")
+    assert position.capital_slices == {long_term: Decimal("20")}
+
+
+@pytest.mark.asyncio
+async def test_the_same_shares_are_never_counted_twice_across_portfolios(
+    db: AsyncSession,
+) -> None:
+    """Maulik: "when we see all the portfolios in one single place, we do not count the same
+    stock, same quantity twice."
+
+    Filed four ways across his own example, the parts still add to the one position he owns.
+    """
+
+    user_id = await _user(db)
+    broker_account_id = await _broker(db, user_id)
+    instrument_id = await _instrument(db)
+    await _sync(db, user_id, broker_account_id)
+
+    key = HoldingKey(instrument_id=instrument_id, broker_account_id=broker_account_id)
+    for name, quantity in (
+        ("PF3 Long term", "20"),
+        ("PF3 Swing book", "34"),
+        ("PF3 Momentum", "36"),
+        ("PF3 Short term", "10"),
+    ):
+        portfolio_id = await _portfolio(db, user_id, name)
+        ledger = await _ledger_for(db, user_id)
+        await _apply_allocation(
+            db,
+            ledger,
+            Allocation(key=key, portfolio_id=portfolio_id, quantity=Decimal(quantity)),
+            resolved_on=AS_OF,
+        )
+        await db.flush()
+
+    assert await _total_held(db, instrument_id) == Decimal("100")
+
+    final = await _ledger_for(db, user_id)
+    position = next(p for p in final.positions if p.key.instrument_id == instrument_id)
+    assert sorted(position.capital_slices.values()) == [
+        Decimal("10"),
+        Decimal("20"),
+        Decimal("34"),
+        Decimal("36"),
+    ]
+    assert position.unallocated_quantity == Decimal("0"), "the pile should be empty"
+    assert position.holding.quantity == Decimal("100")

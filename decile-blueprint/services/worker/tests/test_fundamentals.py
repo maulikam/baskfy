@@ -9,6 +9,7 @@ from decimal import Decimal
 import pytest
 from helpers import TRADE_DATE, add_bar, make_instrument, requires_db
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import FundamentalDaily
@@ -155,19 +156,25 @@ class TestFetchTask:
 
         assert await fundamentals_scope(session, TRADE_DATE) == [("TRADED", "EQ")]
 
-    async def test_a_symbol_listed_under_two_series_appears_once(
+    async def test_a_symbol_cannot_be_listed_under_two_series_at_all(
         self, session: AsyncSession
     ) -> None:
-        """(exchange_id, symbol, series) is the unique key, so this is a legal row pair. Left
-        alone, both quotes map onto the one instrument_id the symbol lookup returns and the
-        batch's ON CONFLICT DO UPDATE touches that row twice, which PostgreSQL refuses."""
-        eq = await make_instrument(session, "TWICE", series="EQ")
-        be = await make_instrument(session, "TWICE", series="BE")
-        await add_bar(session, eq, TRADE_DATE, "100")
-        await add_bar(session, be, TRADE_DATE, "100")
+        """0039 made the row pair this used to build **unrepresentable**, which is the better fix.
+
+        This test read: "(exchange_id, symbol, series) is the unique key, so this is a legal row
+        pair. Left alone, both quotes map onto the one instrument_id the symbol lookup returns and
+        the batch's ON CONFLICT DO UPDATE touches that row twice, which PostgreSQL refuses." All
+        true — and it was a workaround for a schema that let one listing exist twice.
+
+        The key is `(exchange_id, symbol)` now, because `series` is an attribute NSE changes
+        rather than part of a listing's identity. So the duplicate cannot be created, the scope
+        cannot contain it, and `fundamentals_scope`'s own de-duplication becomes a belt rather
+        than the only thing standing between the batch and an error. 120 symbols were in this
+        state on the live box before 0039 merged them.
+        """
+        await make_instrument(session, "TWICE", series="EQ")
         await session.flush()
 
-        scope = await fundamentals_scope(session, TRADE_DATE)
-
-        assert [symbol for symbol, _ in scope].count("TWICE") == 1
-        assert ("TWICE", "BE") in scope  # deterministic: first series alphabetically
+        with pytest.raises(IntegrityError):
+            await make_instrument(session, "TWICE", series="BE")
+            await session.flush()

@@ -282,6 +282,37 @@ for them would be asking them to re-enter data the product wrote. The slice is *
 and it is capped at what the user has not already claimed, so the desk never takes shares filed
 by hand.
 
+### 11.2b The broker's own group is Unallocated (11 Sep 2026)
+
+**The bug.** Maulik opened §6.7's picker on a freshly synced account and every quantity box read
+`0 of 0 free`. `broker_holdings_sync` files a synced account's shares into a portfolio it owns —
+"Zerodha holdings", `source=HOLDING_GROUP`, `kind=CAPITAL`, because the shares are real money and
+must sum into net worth — so §11.2a's arithmetic read every share as already allocated. His
+diagnosis was the fix: *"every stock from every strategy in every basket would eventually go to
+zero holding ... since all the stocks would be held in Zerodha"*.
+
+**So the pile is Unallocated, and it is marked as such.** `portfolio.is_broker_pile` (0038). Its
+rows are counted in the position's quantity — the total is unchanged — and excluded from
+`capital_slices`, so "free to file" means what a person means by it. It is drawn as §6.6's
+Unallocated section and **not** listed beside Long term and Swing, which answers the third thing
+he asked for: *"when we see all the portfolios in one single place, we do not count the same
+stock, same quantity twice."*
+
+**Two things this exposed, both worse than the symptom.**
+
+*The remainder is a row, and rows must be debited.* `_apply_allocation` treated Unallocated as a
+derived number, so filing 20 into Long term would have written a 20-share slice beside an
+untouched 100-share pile — 120 shares of a 100-share position, §11.2a's double-count arriving
+through the allocation path instead of the sync. The pile's rows are donors now, taken from first.
+
+*Inferring the pile is not safe.* The first attempt identified it as `source=HOLDING_GROUP AND
+broker_account_id IS NOT NULL`. `POST /portfolio` sets `broker_account_id` on any group whose
+holdings share one account, and HOLDING_GROUP is one of §6.7's offered sources — so a user
+grouping their IT stocks at Zerodha matched exactly, and lost its entire value. A test caught it.
+`portfolio_for_broker_account` had been looking the pile up the same way since M75, which means a
+sync could have chosen a user's own portfolio and written over it; 0038's partial unique index
+makes two piles per account unrepresentable.
+
 3. Every displayed return number carries a label stating what it is (TWR / XIRR / since-grouped) and its start date on hover.
 4. A sell detected by sync either auto-attributes (**single-slice** case) or creates a reconciliation item — it never silently alters a return series. Amended 10 Sep 2026 with §11.2a: a sell out of a *split* holding always asks, carrying a pro-rata pre-fill it never applies.
 5. Model performance and the user's actual performance are never combined into one figure.

@@ -476,7 +476,15 @@ class TestASeriesLessInstrumentCannotBeInsertedTwice:
     3,998 real securities — so a screener was ranking a universe where 1,387 names appeared up to
     five times, and the data-quality gate read the inflation as health.
 
-    `NULLS NOT DISTINCT` (Postgres 15+, the box runs 16) makes the constraint mean what it says.
+    `NULLS NOT DISTINCT` (Postgres 15+, the box runs 16) made the constraint mean what it says.
+
+    **0039 removed `series` from the key altogether**, which subsumes this whole class of bug: a
+    column that is not in the key cannot be NULL *in* the key. The property below is unchanged and
+    now holds for a simpler reason — `(exchange_id, symbol)` is two NOT NULL columns, so there is
+    no NULL semantics to get right. M80's own diagnosis is kept because it is the evidence for why
+    `series` was the wrong thing to key on: NSE moving a stock between EQ and BE produced exactly
+    the same duplication for *non*-NULL series, 120 times, and nobody noticed until a holdings
+    sync could not resolve GAYAPROJ.
     """
 
     async def test_the_second_insert_of_a_seriesless_symbol_is_refused(
@@ -492,9 +500,9 @@ class TestASeriesLessInstrumentCannotBeInsertedTwice:
     ) -> None:
         """The other half: the nightly must still run, not start erroring every night instead.
 
-        `refresh_instruments` conflicts on (exchange_id, symbol, series). With NULLs distinct that
-        target never matched a seriesless row and every run inserted; with `NULLS NOT DISTINCT` it
-        matches and updates, which is what the upsert was written to do all along.
+        `refresh_instruments` conflicts on `(exchange_id, symbol)` since 0039. A seriesless row
+        matches that target like any other — there is no NULL in it — and is updated in place,
+        which is what the upsert was written to do all along.
         """
         await make_instrument(session, "UPSER", token=8002, series=None)
         await session.flush()
@@ -503,7 +511,7 @@ class TestASeriesLessInstrumentCannotBeInsertedTwice:
                 text(
                     "insert into instrument (exchange_id, symbol, name, instrument_type, series,"
                     " kite_token, is_active) values (:e,'UPSER','Renamed','EQ',null,8002,true)"
-                    " on conflict (exchange_id, symbol, series) do update set name = excluded.name"
+                    " on conflict (exchange_id, symbol) do update set name = excluded.name"
                     " returning id"
                 ),
                 {"e": NSE_EXCHANGE_ID},

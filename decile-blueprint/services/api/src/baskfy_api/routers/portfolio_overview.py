@@ -1171,6 +1171,10 @@ class _Position:
     key: HoldingKey
     holding: Holding
     capital_slices: Mapping[int, Decimal]
+    #: The broker-owned pile's rows for this position — the UNALLOCATED shares, which are backed
+    #: by real rows rather than derived. `_apply_allocation` takes from these first, and must
+    #: decrement them: a remainder that is a row and is not decremented is a double-count.
+    pile_slices: Mapping[int, Decimal]
     monitoring_portfolio_ids: tuple[int, ...]
     first_bought_on: dt.date | None
     history_source: str
@@ -1221,6 +1225,9 @@ class _Ledger:
     entries: tuple[InboxEntry, ...]
     item_rows: Mapping[int, ReconciliationItem]
     rebalance_due_portfolio_ids: frozenset[int]
+    #: Broker-owned holding groups. Their rows are Unallocated, not a strategy's slice — see
+    #: `_load_ledger`. Empty for a user with no synced broker.
+    pile_ids: frozenset[int]
     #: ``portfolio_id -> the basket it tracks``, for subscribed portfolios linked to one.
     baskets: Mapping[int, CbBasket]
     #: ``portfolio_id -> the publisher's name``. §9's ``{publisher}``.
@@ -1318,6 +1325,28 @@ async def _load_ledger(session: AsyncSession, user_id: int) -> _Ledger:
         (await session.scalars(select(Portfolio).where(Portfolio.user_id == user_id))).all()
     )
     rows_by_id = {int(row.id): row for row in portfolio_rows}
+    # THE BROKER'S OWN GROUP IS UNALLOCATED, NOT A STRATEGY (11 Sep 2026).
+    #
+    # `broker_holdings_sync` files a synced account's shares into a portfolio it owns —
+    # `source=HOLDING_GROUP` with a `broker_account_id`, named "Zerodha holdings" — and that
+    # portfolio is CAPITAL, because the shares are real money and must sum into net worth.
+    #
+    # Which meant every share was "already allocated" the moment it synced, and §6.7's picker
+    # offered `0 of 0 free` on every row. Maulik caught it on the first real screen and named the
+    # cause exactly: "every stock from every strategy in every basket would eventually go to zero
+    # holding ... since all the stocks would be held in Zerodha".
+    #
+    # So a pile is identified here, once, and every surface below reads it: its rows are the
+    # UNALLOCATED remainder, not a slice. Nothing about the totals changes — the shares are still
+    # counted, still exactly once — but "free to file" now means what the user means by it, and
+    # the pile no longer appears beside Long term and Swing as if it were one of them.
+    #
+    # Read from `is_broker_pile` (0038) rather than inferred from `source` + `broker_account_id`.
+    # The inference was tried first and a test caught it: `POST /portfolio` sets
+    # `broker_account_id` on any group whose legs share one account, and HOLDING_GROUP is one of
+    # §6.7's offered sources — so a user grouping their IT stocks at Zerodha matched it exactly,
+    # and lost its whole value the moment it was created.
+    pile_ids = frozenset(int(row.id) for row in portfolio_rows if row.is_broker_pile)
     portfolios = {
         int(row.id): LedgerPortfolio(
             portfolio_id=int(row.id),
@@ -1343,7 +1372,7 @@ async def _load_ledger(session: AsyncSession, user_id: int) -> _Ledger:
             )
         ).all()
     )
-    positions = _positions_from(holding_rows)
+    positions = _positions_from(holding_rows, pile_ids)
 
     instrument_ids = sorted({position.key.instrument_id for position in positions})
     prices = await _load_prices(session, instrument_ids)
@@ -1451,6 +1480,7 @@ async def _load_ledger(session: AsyncSession, user_id: int) -> _Ledger:
         entries=tuple(_entry_from(row) for row in item_rows),
         item_rows={int(row.id): row for row in item_rows},
         rebalance_due_portfolio_ids=await _rebalance_due(session, user_id, sleeve_rows),
+        pile_ids=pile_ids,
         baskets=baskets,
         publishers=publishers,
         screens=screens,
@@ -1458,16 +1488,24 @@ async def _load_ledger(session: AsyncSession, user_id: int) -> _Ledger:
     )
 
 
-def _positions_from(rows: Sequence[PortfolioHolding]) -> tuple[_Position, ...]:
+def _positions_from(
+    rows: Sequence[PortfolioHolding], pile_ids: frozenset[int] = frozenset()
+) -> tuple[_Position, ...]:
     """Gather ``portfolio_holding`` rows back into the physical positions they describe.
 
-    A position's quantity and average price are taken from its CAPITAL row when it has one. Every
-    row for a position should agree — a lens is a view of the same shares, and §4.5's fan-out is
-    what keeps that true through a split — but the schema permits only one CAPITAL row and any
-    number of MONITORING ones, so exactly one of them is the allocation and it is the one that
-    answers for the money. When there is no capital row at all, the largest monitoring quantity
-    stands in: disagreeing lenses are a bug somewhere upstream, and the reading that loses the
-    fewest shares is the one that does not quietly shrink the user's net worth.
+    A position's quantity is the SUM of its CAPITAL rows (0035) — a holding filed 20/34/36 is
+    three rows and ninety shares. ``pile_ids`` names the broker-owned groups whose rows are the
+    UNALLOCATED remainder rather than a strategy's slice: they are counted in the quantity, so
+    the total is right, and left out of `capital_slices`, so `unallocated_quantity` reports what
+    is actually free to file. Without that, a freshly synced account has every share "allocated"
+    to "Zerodha holdings" and the picker offers nothing.
+
+    A position's average price is taken from a capital row when it has one. Every row for a
+    position should agree about the price — a lens is a view of the same shares, and §4.5's
+    fan-out is what keeps that true through a split. When there is no capital row at all, the
+    largest monitoring quantity stands in: disagreeing lenses are a bug somewhere upstream, and
+    the reading that loses the fewest shares is the one that does not quietly shrink the user's
+    net worth.
 
     A NULL quantity becomes zero rather than being dropped. Migration 0019's column is nullable
     and a row imported without a quantity column is a real state — a position we know about and
@@ -1492,21 +1530,26 @@ def _positions_from(rows: Sequence[PortfolioHolding]) -> tuple[_Position, ...]:
         # wrong by the rest. Monitoring rows are excluded from the sum for the reason they are
         # excluded from every total (§4.1) — a lens sees the same shares again, it does not add
         # more of them.
-        slices = {
+        filed = {
             int(row.portfolio_id): row.quantity
             for row in sorted(capital, key=lambda r: int(r.portfolio_id))
             if row.quantity is not None
         }
         quantity = (
-            sum(slices.values(), ZERO)
-            if slices
+            sum(filed.values(), ZERO)
+            if filed
             else (source_row.quantity if source_row.quantity is not None else ZERO)
         )
+        # The pile's rows are counted above and excluded here: they are the remainder, and
+        # `unallocated_quantity` derives them back as `quantity - sum(capital_slices)`.
+        slices = {pid: qty for pid, qty in filed.items() if pid not in pile_ids}
+        piles = {pid: qty for pid, qty in filed.items() if pid in pile_ids}
         positions.append(
             _Position(
                 key=key,
                 holding=Holding(key=key, quantity=quantity, avg_price=source_row.avg_price),
                 capital_slices=slices,
+                pile_slices=piles,
                 monitoring_portfolio_ids=tuple(int(row.portfolio_id) for row in monitoring),
                 first_bought_on=source_row.first_bought_on,
                 history_source=source_row.history_source,
@@ -2348,6 +2391,17 @@ async def portfolio_overview(
     capital_rows: list[PortfolioRowOut] = []
     monitoring_rows: list[PortfolioRowOut] = []
     for portfolio_id, portfolio in sorted(ledger.portfolios.items()):
+        # The broker's own group is Unallocated and is drawn as Unallocated (11 Sep 2026). Listing
+        # it here too would put "Zerodha holdings" beside "Long term" and "Swing" as though it
+        # were a fourth strategy, and its shares would be read twice by anyone adding up the
+        # page — once in the row and once in §6.6's section. Maulik asked for exactly this: "when
+        # we see all the portfolios in one single place, we do not count the same stock, same
+        # quantity twice."
+        #
+        # The shares are not lost: `_unallocated_out` counts them, and `consolidated_value` walks
+        # the holdings rather than the rows, so the total is unchanged either way.
+        if portfolio_id in ledger.pile_ids:
+            continue
         members = _members_of(ledger, portfolio)
         row = PortfolioRowOut(
             portfolio_id=portfolio_id,
@@ -3194,13 +3248,24 @@ async def _apply_allocation(
             f"{existing.holding.quantity} are held"
         )
 
-    # (1) the free shares, then (2) other slices smallest first. The target's own slice is never a
-    # source — taking from it to give to it would be a no-op that also deleted the row.
-    outstanding = wanted - min(wanted, existing.unallocated_quantity)
-    donors = sorted(
-        ((pid, qty) for pid, qty in existing.capital_slices.items() if pid != target_id),
-        key=lambda pair: (pair[1], pair[0]),
-    )
+    # (1) the broker's pile — the unfiled shares, spoken for by nobody — then (2) other slices
+    # smallest first. The target's own slice is never a source: taking from it to give to it
+    # would be a no-op that also deleted the row.
+    #
+    # The pile's rows are DONORS, not a derived remainder, and that distinction is the whole of
+    # this fix (11 Sep 2026). `unallocated_quantity` is a computed number; the shares behind it
+    # sit in "Zerodha holdings" as real rows, and filing 20 into Long term has to decrement one
+    # of them. Subtracting the computed remainder and leaving the rows alone would have written
+    # a 20-share slice beside an untouched 100-share pile — 120 shares of a 100-share position,
+    # the same double-count the sync was fixed for, arriving through the other door.
+    outstanding = wanted
+    donors = [
+        *sorted(existing.pile_slices.items(), key=lambda pair: pair[0]),
+        *sorted(
+            ((pid, qty) for pid, qty in existing.capital_slices.items() if pid != target_id),
+            key=lambda pair: (pair[1], pair[0]),
+        ),
+    ]
     for donor_id, donor_quantity in donors:
         if outstanding <= ZERO:
             break

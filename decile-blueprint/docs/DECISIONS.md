@@ -1818,3 +1818,60 @@ Recovery here was only possible because `docs/09` §"NSE specifics" requires the
 archived before it is parsed — re-running the ingest from `.archive` restored them with no network
 call. That is the archive earning its keep exactly as documented. It is still a schema gap: either
 store the three raw columns, or never rewrite the three adjusted ones.
+
+---
+
+## §39 — `series` is an attribute of a listing, not part of its identity (11 Sep 2026)
+
+**How it surfaced.** Maulik synced his Zerodha holdings and got *"18 holdings synced. 1 symbol(s)
+not recognised: GAYAPROJ."* GAYAPROJ was not missing. It was in `instrument` **twice** — id 1088
+`series='BE'` and id 83745 `series='EQ'`, same ISIN, same Kite token, both `is_active`.
+`portfolios.resolve_symbols` answers AMBIGUOUS for a symbol with two active candidates, and an
+ambiguous resolution carries no `instrument_id`, so the sync dropped one of his eighteen holdings
+and reported it as unrecognised.
+
+**120 symbols were in that state.** Every one the same shape: one ISIN, two rows, differing only
+in `series` — EQ/BE where NSE moved a stock in or out of trade-to-trade surveillance, ST/SM in the
+SME segment. Any of the other 119 would have failed identically the moment he held one.
+
+**The cause.** `refresh_instruments` upserted on `(exchange_id, symbol, series)` and did not list
+`series` among its mutable columns, making it part of the instrument's identity. When NSE moves
+GAYAPROJ from BE to EQ the key `(NSE, GAYAPROJ, 'EQ')` matches nothing, so a new row is inserted;
+the old BE row is absent from the dump, so nothing updates it, and `is_active` stays true forever
+— deactivation only ever happens by a row being *present and changed*, never by being absent.
+
+`tasks/instruments.py`'s own docstring said the two sources are "merged onto `instrument`, keyed
+by symbol". That was the intent all along; the index disagreed with the sentence.
+
+**M80 saw this and fixed half of it.** On 2 Sep it found 7,937 symbols with more than one live
+row, diagnosed the mechanism correctly, and made the constraint `NULLS NOT DISTINCT` — which
+fixes it for the 38,542 instruments Kite sends with no series, and leaves every *non*-NULL series
+change doing exactly the same thing. Those are the 120.
+
+**The decision.** `series` leaves the key: `UNIQUE (exchange_id, symbol)`. One symbol on one
+exchange is one instrument, whatever series it happens to trade in today. `series` becomes a
+mutable column in both upserts, which is what a stock moving between EQ and BE actually is.
+
+Migration `0039` merges the 120 groups onto the **lowest id** — the oldest row, carrying the
+longest price history and the most references — repointing every foreign key by walking
+`pg_constraint` rather than naming tables, and dropping rows that would collide with one the
+keeper already holds (a bar for the same instrument on the same date is one bar, not two). The
+keeper inherits the current series and anything it was missing. It **refuses to run** if any group
+spans two ISINs: that would be two companies sharing a ticker, and merging them would corrupt both
+price histories.
+
+**Three tests changed premise rather than expectation**, and all three had opened with a variant
+of "one symbol under two series is a real state":
+
+* `test_fundamentals.py` de-duplicated the scope so a batch upsert would not touch one row twice —
+  now the pair cannot exist, so it asserts the refusal and the de-duplication becomes a belt;
+* `test_pipeline_steps.py` (M80's) pinned `NULLS NOT DISTINCT` — subsumed, because a column that
+  is not in the key cannot be NULL in the key;
+* `test_api_portfolios.py` built its ambiguity from two series. The *behaviour* — two candidates
+  produce a question, never a guess — is still right and still wanted, so it is exercised through
+  `symbol_alias`, where one retired ticker genuinely can map to two instruments (a demerger, or a
+  backfill that recorded both successors). A second test asserts the old state is now refused.
+
+**Reversal.** `downgrade()` restores the old key. The merged rows are **not** recreated and cannot
+be: nothing records which bar came from which row, and inventing a split would be worse than
+leaving them merged. A database rolled back will, in time, grow the same duplicates again.

@@ -152,6 +152,23 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "sw_catalyst": ("id",),
     # SW15 (docs/swing/03 §12, migration 0033): one row per press of "Scan now".
     "sw_scan_run": ("id",),
+    # The volume-breakout sleeve — docs/vbt/03-data-model.md (VB3, migration 0037). Twelve
+    # tables, every one keyed with `user_id` (docs/vbt/02 Track C §6), the same shape the swing
+    # book uses above and for the same reason: a sleeve is one person's book. `vb_signal_daily`
+    # and `vb_breadth_daily` carry the user in the primary key rather than beside it
+    # (DECISIONS-VB VB3.1); `vb_backtest_run` is append-only (docs/vbt/03 §11).
+    "vb_config": ("user_id",),
+    "vb_config_audit": ("id",),
+    "vb_signal_daily": ("user_id", "date", "instrument_id"),
+    "vb_breadth_daily": ("user_id", "date"),
+    "vb_order": ("id",),
+    "vb_position": ("id",),
+    "vb_fill": ("id",),
+    "vb_plan": ("id",),
+    "vb_plan_line": ("id",),
+    "vb_plan_skip": ("id",),
+    "vb_session": ("user_id", "session_date"),
+    "vb_backtest_run": ("id",),
 }
 
 #: docs/04 opening paragraph: "Money in numeric, never float."
@@ -267,6 +284,30 @@ def test_swing_tables_are_recorded_in_docs() -> None:
         "sw_scan_run",
     ):
         assert table in swing_model, f"{table} is not described in docs/swing/03"
+
+
+def test_vbt_tables_are_recorded_in_docs() -> None:
+    """VB3 tables live in docs/vbt/03, by the same rule as the swing book's above.
+
+    Written out rather than derived, for the reason the swing version gives: a derived list
+    asserts only that this file agrees with itself.
+    """
+    vbt_model = (MONOREPO_ROOT / "docs" / "vbt" / "03-data-model.md").read_text(encoding="utf-8")
+    for table in (
+        "vb_config",
+        "vb_config_audit",
+        "vb_signal_daily",
+        "vb_breadth_daily",
+        "vb_order",
+        "vb_position",
+        "vb_fill",
+        "vb_plan",
+        "vb_plan_line",
+        "vb_plan_skip",
+        "vb_session",
+        "vb_backtest_run",
+    ):
+        assert table in vbt_model, f"{table} is not described in docs/vbt/03"
 
 
 @pytest.mark.parametrize(

@@ -21,6 +21,7 @@ line; update it the first time you use it, and paste the real output in.
 | [bad-data-published.md](bad-data-published.md) | `data_quality_gate_failed`, or a human noticing wrong numbers |
 | [restore-from-backup.md](restore-from-backup.md) | data loss; also the monthly drill |
 | [razorpay-webhook-replay.md](razorpay-webhook-replay.md) | a payment that took money and granted nothing |
+| [08-vbt-evening.md](08-vbt-evening.md) | the four `VBT_*` rules: an order past its three-session window, a naked position, a stale detect, a held name that stopped printing (VB7) |
 | [06-swing-morning.md](06-swing-morning.md) | the five `SWING_*` rules: a naked position, the monitor not starting, a stale detect, an order open after 10:45, a GTT missing at 15:15 (SW11) |
 
 ## Before anything else

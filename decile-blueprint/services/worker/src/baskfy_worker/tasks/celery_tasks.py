@@ -57,6 +57,7 @@ from baskfy_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
 from baskfy_worker.providers import build_cache, build_pipeline_dependencies, sole_user_id
 from baskfy_worker.settings import get_worker_settings
 from baskfy_worker.steps import StepOutcome
+from baskfy_worker.tasks import vbt_ops
 from baskfy_worker.tasks.adjustments import instruments_with_actions, reprocess_instrument
 from baskfy_worker.tasks.alerts import SWEEP_BATCH, run_alert_dispatch, run_webhook_sweep
 from baskfy_worker.tasks.backtests import (
@@ -1355,6 +1356,61 @@ def swing_timing_probe_task() -> JsonObject:
 
 def _swing_check(check: Callable[[AsyncSession], Awaitable[JsonObject]]) -> JsonObject:
     return run_in_session(check)
+
+
+def _vbt_check(
+    check: Callable[[AsyncSession, int], Awaitable[JsonObject]],
+) -> JsonObject:
+    """VB7: the sleeve's checks all need its user id, and none of them runs without one.
+
+    A box with no `BASKFY_SOLE_USER_ID` has no sleeve to check, so the honest answer is `skipped`
+    rather than a check that queries user zero and reports all-clear.
+    """
+    deps = build_pipeline_dependencies()
+    if deps.vbt_user_id is None:
+        return {"skipped": "no BASKFY_SOLE_USER_ID configured"}
+    user_id = int(deps.vbt_user_id)
+    return run_in_session(lambda session: check(session, user_id))
+
+
+@shared_task(name="baskfy.vbt.check_orders_past_expiry")
+def vbt_check_orders_past_expiry_task() -> JsonObject:
+    """21:40: VBT_ORDER_PAST_EXPIRY for a limit still working past its third session."""
+    return _vbt_check(
+        lambda session, user_id: vbt_ops.check_orders_past_expiry(
+            session, now=dt.datetime.now(tz=IST), user_id=user_id
+        )
+    )
+
+
+@shared_task(name="baskfy.vbt.check_naked_positions")
+def vbt_check_naked_positions_task() -> JsonObject:
+    """21:40: VBT_POSITION_NAKED for shares open with no resting GTT."""
+    return _vbt_check(
+        lambda session, user_id: vbt_ops.check_naked_positions(
+            session, now=dt.datetime.now(tz=IST), user_id=user_id
+        )
+    )
+
+
+@shared_task(name="baskfy.vbt.check_positions_without_bars")
+def vbt_check_positions_without_bars_task() -> JsonObject:
+    """21:40: VBT_POSITION_NO_BAR for a held name that has stopped printing."""
+    return _vbt_check(
+        lambda session, user_id: vbt_ops.check_positions_without_bars(
+            session, now=dt.datetime.now(tz=IST), user_id=user_id
+        )
+    )
+
+
+@shared_task(name="baskfy.vbt.check_detect_fresh")
+def vbt_check_detect_fresh_task() -> JsonObject:
+    """21:30: VBT_DETECT_STALE when the detector has written nothing for four days."""
+    return _vbt_check(
+        lambda session, user_id: vbt_ops.check_detect_fresh(
+            session, now=dt.datetime.now(tz=IST), user_id=user_id
+        )
+    )
 
 
 @shared_task(name="baskfy.swing.check_monitor_started")

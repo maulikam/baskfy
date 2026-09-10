@@ -65,6 +65,8 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # and take the default queue for the same reason `baskfy.ops.*` does. The swing *jobs*
     # (`baskfy.swing.detect`, `.eod`, `.premarket`, …) name their queue on their Beat entry.
     "baskfy.swing.check_*": {"queue": QUEUE_DEFAULT},
+    # VB7: the same argument for the volume-breakout sleeve's four.
+    "baskfy.vbt.check_*": {"queue": QUEUE_DEFAULT},
     # SW15: "Scan now". The scan itself is the nightly's body over the liquid universe — a few
     # minutes of Polars — and takes the compute queue; the sweep that publishes the desk's
     # queued rows is one SELECT a minute and takes the default queue for the reason the
@@ -363,6 +365,33 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
     "swing-check-detect-fresh": {
         "task": "baskfy.swing.check_detect_fresh",
         "schedule": crontab(hour=21, minute=30, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    # --- VB7: the checks behind the volume-breakout alerts (docs/vbt/05 §4) -----------
+    #
+    # 21:30 for the detector, 21:40 for the book — after the 21:10 detect and the 21:15 evening,
+    # so each asks about a night that has finished rather than one still running. The expiry
+    # check is the sleeve's own: the evening writes a cancel line and a person confirms it, so a
+    # limit still working past its third session means the confirm never happened
+    # (`docs/runbooks/08-vbt-evening.md`).
+    "vbt-check-detect-fresh": {
+        "task": "baskfy.vbt.check_detect_fresh",
+        "schedule": crontab(hour=21, minute=30, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    "vbt-check-orders-past-expiry": {
+        "task": "baskfy.vbt.check_orders_past_expiry",
+        "schedule": crontab(hour=21, minute=40, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    "vbt-check-naked-positions": {
+        "task": "baskfy.vbt.check_naked_positions",
+        "schedule": crontab(hour=21, minute=40, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    "vbt-check-positions-without-bars": {
+        "task": "baskfy.vbt.check_positions_without_bars",
+        "schedule": crontab(hour=21, minute=40, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT},
     },
     # --- SW11B: the catalyst feed (docs/swing/STANDING-ANSWERS A3) ----------------------

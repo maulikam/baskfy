@@ -117,7 +117,20 @@ the gate and its number, tonight's `PLACE_LIMIT` lines with levels and quantitie
 `SELL_AT_OPEN` lines, **the working orders that expire tonight**, positions with a naked GTT
 (always, separately, in red), and the DRY_RUN session count against 20.
 
-Prometheus rules, in the M20 pattern, in runbook 6: `VBT_POSITION_NAKED` (a position without a
-resting GTT — the one state the method forbids), `VBT_DETECT_STALE` (no `vb_signal_daily` row for
-the published session by 21:30), `VBT_ORDER_PAST_EXPIRY` (a `vb_order` still working after its
-third session — the sweep did not run), `VBT_POSITION_NO_BAR` (`04` §6.5).
+Four alert names, in the M20 pattern: `VBT_POSITION_NAKED` (a position without a resting GTT —
+the one state the method forbids), `VBT_DETECT_STALE` (no `vb_breadth_daily` row for the
+published session by 21:30), `VBT_ORDER_PAST_EXPIRY` (a `vb_order` still working after its third
+session — the sweep did not run, or its cancel line was never confirmed), `VBT_POSITION_NO_BAR`
+(`04` §6.5).
+
+**Built at VB7, and not the way this section predicted it.** The runbook is
+[`docs/runbooks/08-vbt-evening.md`](../runbooks/08-vbt-evening.md), not runbook 6 — 6 is the
+swing book's morning and 7 is the Phase-A deploy, both of which already existed. And the four are
+raised **in-process**, by `baskfy.vbt.check_*` tasks on Beat (21:30 and 21:40), rather than by
+Prometheus rules: the same argument `alerts.py` makes for `publish_late`, which is that an alert
+depending on a Prometheus that is not deployed is an alert nobody gets. `VBT_DETECT_STALE` reads
+`vb_breadth_daily` rather than `vb_signal_daily` because a session with no signals still writes
+its breadth row, and that is exactly the distinction the alert is for. See DECISIONS-VB VB7.2.
+
+`AlertName.VBT_EVENING` — the nightly summary email above — is **not built**. The four checks
+are; the digest is not, and STATUS says so.

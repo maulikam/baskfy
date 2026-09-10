@@ -3,7 +3,7 @@
 The status page for the volume-breakout run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: VB6 green — the desk plans it and a click confirms it. VB7–VB10 not started.** Started 10 Sep 2026 on branch
+**Run state: VB7 green — a limit stops being an order after its third session, and something says so if it does not. VB8–VB10 not started.** Started 10 Sep 2026 on branch
 `developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
@@ -18,7 +18,7 @@ what is NOT done**. A fresh session resumes from the first module not marked ✅
 | VB4 — The nightly job | ✅ | `baskfy.vbt.detect` writes `vb_signal_daily` + `vb_breadth_daily`, wired in as the chain's **thirteenth** step (unable to fail the night), with a 21:10 retry that asks before it works and `make vbt DATE=…` |
 | VB5 — The sleeve's cash and book | ✅ | `baskfy_core.vbt.sleeve` states the arithmetic once; `baskfy_api.vbt_sleeve` loads it from `vb_` rows and nothing else. A holding this sleeve did not buy is invisible to it, and a resting limit commits cash without spending it |
 | VB6 — Desk plan and `/vbt/execute` | ✅ | The evening job writes a plan with its skips and settles the session; the desk page shows it in three panels; one click per line goes through the real gateway and **0 orders reach a broker** |
-| VB7 — The working order and its expiry | ⬜ | |
+| VB7 — The working order and its expiry | ✅ | The window is a field, proven at 1/2/3/5/10 sessions over random calendars with holidays in them; four `VBT_*` alerts raised in-process at 21:30 and 21:40, runbook 8, and **not one of the four writes a row** |
 | VB8 — The pages | ⬜ | |
 | VB9 — The backtest on the page | ⬜ | |
 | VB10 — Safety, and the claims become theorems | ⬜ | |
@@ -343,7 +343,7 @@ count is still two. `VB6.2` what counts as one of `02` §3.1's twenty DRY_RUN se
 * **No order has ever been placed, simulated or otherwise, outside a test.** The desk page has
   never been opened against a database with `vb_` rows in it.
 * The evening job has never run against the plant's real bars.
-* `VBT_ORDER_PAST_EXPIRY` and the rest of `05` §4's alerts do not exist yet (VB7, VB8).
+* `VBT_ORDER_PAST_EXPIRY` and the rest of `05` §4's alerts do not exist yet (VB7, VB8). *(Done at VB7 — see below.)*
 * No web page reads any of this (VB8).
 * The desk's `vbt.html` renders in the test suite's shape but has not been seen in a browser.
 
@@ -352,3 +352,63 @@ count is still two. `VB6.2` what counts as one of `02` §3.1's twenty DRY_RUN se
 Read `/CLAUDE.md` → `docs/README.md` → `research/volume-breakout/STRATEGY.md` → `docs/vbt/README.md`
 → `02` → `06`, then start at VB1. `docs/vbt/04-business-rules.md` is the contract the tests
 assert; `DECISIONS-VB.md` VB0.2 is the one thing that will otherwise be re-derived from scratch.
+
+---
+
+## VB7 — The working order and its expiry ✅ (10 Sep 2026)
+
+The sweep itself shipped inside VB6's evening job (`sweep_expired_orders`), because a cancel line
+that is not in the plan a person confirms is not a cancel. What VB7 adds is **the proof and the
+alarm**: a property test that the window behaves, and four checks that say so when it did not.
+
+### The proof
+
+`packages/core/tests/test_vbt_expiry_property.py` — **9 tests**, hypothesis over random session
+calendars with gaps of one to twelve days, so holidays and long weekends are in every case rather
+than in a fixture someone chose:
+
+* nothing fills on the **fourth** session, and nothing expires before its **third** has closed;
+* a holiday consumes no session — the count is over published sessions, never over dates;
+* a `SENT` or `PARTIAL` order ends `CANCELLED` (it is live at a broker) while a `PROPOSED` or
+  `CONFIRMED` one ends `EXPIRED` (it never got there);
+* the window is **parametrised over 1, 2, 3, 5 and 10**, so nothing in the suite compares against
+  a literal three (DECISIONS-VB VB7.1). `04` §7.2 is the parameter with a cliff — two sessions
+  returns 11.4% a year where three returns 18.2% — which is exactly why it is worth proving
+  rather than sampling.
+
+### The alarm
+
+`services/worker/src/baskfy_worker/tasks/vbt_ops.py` — four checks, four Beat entries, one
+runbook ([`docs/runbooks/08-vbt-evening.md`](../runbooks/08-vbt-evening.md)):
+
+| Alert | When | Fires on |
+|---|---|---|
+| `VBT_DETECT_STALE` | 21:30 | no `vb_breadth_daily` row in four days — the detector did not run |
+| `VBT_ORDER_PAST_EXPIRY` | 21:40 | a live limit past its `expires_after_session` — nobody confirmed the cancel |
+| `VBT_POSITION_NAKED` | 21:40 | shares open, no `gtt_id` — the one state the method forbids |
+| `VBT_POSITION_NO_BAR` | 21:40 | a held name silent for more than seven days (`04` §6.5) |
+
+`services/worker/tests/test_vbt_ops.py` — **31 passed**. Every live order state can be late and
+no terminal one ever is; another user's late order is not this sleeve's; a null window is not a
+late order; each check is silent on a Saturday; and the last test runs all four against a book in
+its worst state and asserts **the row counts do not move**. The checks tell; the desk fixes.
+
+### What is NOT done at VB7
+
+* **`AlertName.VBT_EVENING` — the nightly digest email `05` §4 describes — does not exist.** The
+  four condition alerts do. Nobody gets a summary of a quiet, correct evening, and for the paper
+  run that is arguably right; it is still a gap against the spec, recorded here rather than
+  quietly dropped.
+* No alert has ever been delivered outside a test. No sink is configured on any box this run
+  touched, and `dispatch` says so once per process when none is.
+* Runbook 8 carries `**Verified against:** NOT YET`, like the seven before it. Every command in
+  it is written from the code it drives and should be assumed wrong in some detail.
+* **A VB3 miss, found at VB7 and fixed here:** `packages/core/tests/test_schema_matches_docs.py`
+  keeps a hand-written list of every table in the model, and the twelve `vb_` tables were never
+  added to it — so `test_no_undocumented_tables` had been red since VB3 in the *full* core run
+  (the VB modules ran their own files). The twelve are now listed with their primary keys, and a
+  `test_vbt_tables_are_recorded_in_docs` asserts `03` names each one, matching the swing book's.
+  The lesson is the boring one: run the whole suite, not the files you touched.
+* The sweep has still never run against real bars, so the expiry path's evidence is entirely
+  synthetic — 761 reproduced trades' worth of it in the backtest, and none of it from the desk.
+

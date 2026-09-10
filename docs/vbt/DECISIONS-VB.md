@@ -629,3 +629,108 @@ covers a Thursday-to-Monday holiday weekend without a page.
 Rejected: reading `pipeline_run_step` for `compute_vbt` (it records that the step ran, not that
 it produced anything); a one-day tolerance (it pages every long weekend, and a check that cries
 wolf on the calendar gets muted).
+
+---
+
+## VB8 — the pages
+
+### VB8.1 — The modelled fill rate is 83.8%, and `04` §7.3's 91% was invented · ⚠ UNREVIEWED
+
+`05` §2's fill-rate line compares the live book against "the study's modelled rate". VB0 wrote
+that rate as **91%** in `04` §7.3. Nothing measured it, and nothing in STRATEGY says it — it was
+a plausible-sounding number in a document whose whole purpose is to be the contract the tests
+assert. VB8 measured it instead and the doc now carries the measurement.
+
+**The measurement.** `BacktestResult.orders_offered` counts the distinct `(name, signal session)`
+pairs that ever reached the fill comparison — past the three-a-session cap and the ten slots,
+with a bar, and not locked at a circuit. 761 of 908 filled: **83.8%**.
+
+**The denominator is the whole argument.** The engine makes a working order out of *every*
+signal, and 5,193 of them expired unfilled; filled over all of those is 12.8%. But an order that
+never got a slot was never an order anybody placed, so 12.8% measures the slot count, not the
+market. The live book only ever writes a `vb_order` for a line the plan produced under the same
+caps, so 83.8% is the number the two books can honestly be compared on.
+
+Rejected: keeping 91% and calling it approximate (a contract document with a made-up number in it
+is worse than no number, and this run's own rule is that tests assert `04`); showing no modelled
+rate until VB9 (the comparison is the point of the line, and the measurement cost one run).
+Reversal: `PUBLISHED.modelled_fill_rate_pct`, one field.
+
+**What this says about the rest of `04`.** Every *rule* in it is asserted by a test and every
+threshold is a config field checked both ways by §12. This number was neither — it lived in prose
+as a comparison figure. It is worth reading the remaining prose numbers in that light; §12's
+table covers the thresholds, and the study's own results are now in
+`baskfy_core.vbt.published`, which the goldens check against `out/final_metrics.json`.
+
+### VB8.2 — `DRY_RUN_SESSIONS_REQUIRED` moves to the core, as a constant and not a config field · ⚠ UNREVIEWED
+
+`02` §3's twenty sessions was a literal in `kite-momentum-rebalancer/app/vbt_desk.py`. The web
+page and the API's settings view both print it too, so it is now
+`baskfy_core.vbt.config.DRY_RUN_SESSIONS_REQUIRED` and the desk imports it.
+
+A module constant rather than a field of `VbtConfig`, the way `TICK_INR` is: nothing in the
+method reads it, it is not a knob anybody may turn — only Maulik can shorten the paper run
+(`NEEDS-MAULIK.md` V4) — and putting it in the dataclass would add a row to `04` §12's table of
+*strategy* thresholds, where a governance number does not belong.
+
+Rejected: an environment variable (a gate you can shorten by editing a `.env` is not a gate);
+leaving three copies (they had already diverged in kind — the desk's was a number, `02`'s was a
+sentence).
+
+### VB8.3 — The regenerated API artefacts carry another session's changes, unavoidably · ⚠ UNREVIEWED
+
+`packages/api-client/openapi.json` and `src/generated/schema.ts` are generated from the whole
+FastAPI app, and while VB8 ran, a concurrent portfolio-redesign session had staged source changes
+in the same tree. Regenerating therefore picked up its field-level edits along with the six
+`/vbt` paths and twelve `Vbt*` schemas.
+
+They are committed anyway. CI asserts `git diff --exit-code` on both files, so leaving them stale
+would turn a generated artefact into a red build for everybody; and the alternative — hand-editing
+a generated file to exclude a neighbour's work — is worse than the overlap. Verified before
+committing that the only *structural* additions are this run's: six paths added, none removed,
+twelve schemas added, none removed.
+
+Every other VB commit named its own paths explicitly (`git commit -- <paths>`) and left the
+other session's index untouched. This one could not, for these two files only. Reversal: the
+other session regenerates, which it must do anyway.
+
+### VB8.4 — The per-row **Dismiss** note is not built · ⚠ UNREVIEWED
+
+`05` §2 ends the Today tab with "No row action changes money. **Dismiss** (a note on the row) is
+the only mutation." It does not exist.
+
+`03`'s data model has twelve tables and none of them holds a note. Building the affordance would
+have meant a thirteenth table, a migration, an API write and a server action — in service of a
+control nobody has asked for, on a surface whose entire safety argument is that it cannot write.
+The swing hub's watchlist earns its writes because a person curates it over days; a volume
+breakout is a one-session event whose row is gone by the next evening, so there is little to
+dismiss.
+
+**What this buys.** The hub now has *no* server actions at all, and
+`__tests__/read-only.test.tsx` asserts the strongest available claim: nothing under `/vbt` is a
+`use server` module and nothing under it renders a form. That is a better safety property than
+the one `05` §2 described.
+
+Rejected: building it to match the spec (a migration in service of a drawing); leaving a dead
+control on the page. Reversal: a `vb_note` table and one action, if a real week of use asks for
+it. Recorded in `05` §2 and STATUS as not done, rather than quietly dropped.
+
+### VB8.5 — The middle tab reads "Positions", not "Book" · ⚠ UNREVIEWED
+
+`05` §2 names the hub's three tabs "Today | Book | Backtest". The label rendered is **Positions**;
+the route keeps its documented `/vbt/book` path.
+
+`PORTFOLIO_REDESIGN.md` §8 retires "book", "box" and "sleeve" from what a reader sees, and
+`apps/web/src/lib/__tests__/no-jargon.test.ts` enforces it across the app. The swing hub already
+calls its equivalent tab "Positions". Two allocations that show the same thing should not name it
+two different ways, and the word this run uses in its own documents is not automatically the word
+a reader wants.
+
+The same rule rewrote several sentences on these pages: "the live book has no intraday data"
+became "trading live, there is no intraday data", "this box" became "here", and "the sleeve holds
+nothing" became "nothing is held". None of it changes a number or a claim.
+
+Rejected: adding "book" to the jargon test's exception list (that list is for words used in a
+meaning §8 never legislated over — a trading book is exactly the meaning it did); renaming the
+route as well (a documented path changed to satisfy a copy rule is over-reach, and `05` §2 names
+`/vbt/book`).

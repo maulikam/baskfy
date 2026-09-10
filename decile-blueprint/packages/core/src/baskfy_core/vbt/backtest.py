@@ -283,9 +283,21 @@ class BacktestResult:
     equity: tuple[Decimal, ...]
     open_positions: tuple[int, ...]
     skipped: dict[str, int] = field(default_factory=dict)
+    #: How many distinct working orders ever reached the fill test — past the session cap and
+    #: the slot count, with a bar, not locked at a circuit. **This, not the signal count, is the
+    #: denominator of a fill rate** (`04` §7.3): a signal that never got a slot was never an
+    #: order anybody placed, and counting it as a missed fill would make the modelled rate a
+    #: statement about the slot count rather than about the market.
+    orders_offered: int = 0
 
     def stats(self) -> BacktestStats | None:
         return summarise(self)
+
+    def fill_rate_pct(self) -> float | None:
+        """Filled over offered, or ``None`` before anything was offered."""
+        if not self.orders_offered:
+            return None
+        return round(100 * len(self.trades) / self.orders_offered, 1)
 
 
 @dataclass(slots=True)
@@ -352,6 +364,7 @@ def run_backtest(  # noqa: PLR0912, PLR0915 - the sequencing is the module, and 
     cash = params.sleeve_inr
     positions: dict[int, _Position] = {}
     working: dict[int, _Working] = {}
+    offered: set[tuple[int, int]] = set()
     trades: list[BacktestTrade] = []
     equity = [Decimal(0)] * total_sessions
     open_count = [0] * total_sessions
@@ -465,6 +478,12 @@ def run_backtest(  # noqa: PLR0912, PLR0915 - the sequencing is the module, and 
                         skipped["locked"] += 1
                         continue
                     order = working[row]
+                    # It reached the test: caps allowed it, it printed a bar and it was not
+                    # locked. Whether it fills now is the market's answer, which is the only
+                    # thing a fill rate should be measuring. Keyed by **(name, signal session)**
+                    # and not by name: the same instrument signals many times over nine years,
+                    # and a set of names would count nine orders as one.
+                    offered.add((row, order.signal_col))
                     if not math.isfinite(low) or _dec(low) > _fill_threshold(
                         order.limit, fill_through
                     ):
@@ -536,6 +555,7 @@ def run_backtest(  # noqa: PLR0912, PLR0915 - the sequencing is the module, and 
         equity=tuple(equity[first : last + 1]),
         open_positions=tuple(open_count[first : last + 1]),
         skipped=skipped,
+        orders_offered=len(offered),
     )
 
 

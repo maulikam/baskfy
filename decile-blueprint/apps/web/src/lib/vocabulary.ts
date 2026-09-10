@@ -90,6 +90,20 @@ export const PAGES = {
     title: "Journal · Swing",
     blurb: "What the closed trades add up to in R, and whether the ladder says press or sit.",
   },
+  /* —— The volume-breakout hub (VB8, docs/vbt/05 §2). Read-only, like the swing hub and for
+     the same reason: every order here is confirmed by hand, in the desk console. —— */
+  "/vbt": {
+    title: "Volume breakout",
+    blurb: "Which names printed a real volume breakout, what the tape allows, and where the limit sits.",
+  },
+  "/vbt/book": {
+    title: "Positions · Volume breakout",
+    blurb: "The limits still working, what is open with its stop, and how often the fills arrive.",
+  },
+  "/vbt/backtest": {
+    title: "Backtest · Volume breakout",
+    blurb: "What the rule did over nine years, with the caveats before the numbers.",
+  },
   /* The settings live under Me, not the hub (docs/swing/05 §2): they are about the person's
      money and limits, not today's tape. */
   "/me/swing": {

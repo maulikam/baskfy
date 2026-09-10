@@ -3,7 +3,7 @@
 The status page for the volume-breakout run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: VB7 green — a limit stops being an order after its third session, and something says so if it does not. VB8–VB10 not started.** Started 10 Sep 2026 on branch
+**Run state: VB8 green — the whole thing is on a page, and not one of those pages can write. VB9–VB10 not started.** Started 10 Sep 2026 on branch
 `developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
@@ -19,7 +19,7 @@ what is NOT done**. A fresh session resumes from the first module not marked ✅
 | VB5 — The sleeve's cash and book | ✅ | `baskfy_core.vbt.sleeve` states the arithmetic once; `baskfy_api.vbt_sleeve` loads it from `vb_` rows and nothing else. A holding this sleeve did not buy is invisible to it, and a resting limit commits cash without spending it |
 | VB6 — Desk plan and `/vbt/execute` | ✅ | The evening job writes a plan with its skips and settles the session; the desk page shows it in three panels; one click per line goes through the real gateway and **0 orders reach a broker** |
 | VB7 — The working order and its expiry | ✅ | The window is a field, proven at 1/2/3/5/10 sessions over random calendars with holidays in them; four `VBT_*` alerts raised in-process at 21:30 and 21:40, runbook 8, and **not one of the four writes a row** |
-| VB8 — The pages | ⬜ | |
+| VB8 — The pages | ✅ | Six read routes and one settings write; three Next.js pages with **no server actions at all**; `GET /vbt/today` p95 **140.7 ms** against a 300 ms budget over 2,500 rows |
 | VB9 — The backtest on the page | ⬜ | |
 | VB10 — Safety, and the claims become theorems | ⬜ | |
 
@@ -411,4 +411,62 @@ its worst state and asserts **the row counts do not move**. The checks tell; the
   The lesson is the boring one: run the whole suite, not the files you touched.
 * The sweep has still never run against real bars, so the expiry path's evidence is entirely
   synthetic — 761 reproduced trades' worth of it in the backtest, and none of it from the desk.
+
+---
+
+## VB8 — The pages ✅ (10 Sep 2026)
+
+### The API
+
+`services/api/src/baskfy_api/vbt.py` (the read layer) and `routers/vbt.py` (six paths). Every
+route resolves the caller through `scoped_sole_user_id`, so a principal who is not the sole
+tenant is **refused** rather than served somebody else's positions.
+
+| | |
+|---|---|
+| Tests | `test_api_vbt.py` **21 passed**, `test_vbt_readonly.py` **11 passed**, `test_api_vbt_benchmark.py` **1 passed** |
+| Budget | `GET /vbt/today` p95 **140.7 ms** (median 92 ms) over 2,500 instruments each with a signal row — the route's worst case, not a typical evening. Budget is 300 ms |
+| The one write | `PATCH /vbt/config`, four numbers, bounded by server ceilings. It cannot name `dry_run_sessions` or `first_live_sessions_left`, and an unknown field is **refused**, not ignored |
+
+### The pages
+
+`apps/web/src/app/(app)/vbt/` — Today, Positions and Backtest, plus `lib/vbt/fetch.ts`.
+**20 tests**, and the read-only assertion is stronger than the swing hub's: this tree has *no*
+`use server` module, renders *no* form, and names no execution package, broker or order-shaped
+verb. There was nothing to make read-only, because nothing here writes (DECISIONS-VB VB8.4).
+
+The four things the acceptance criteria asked a rendered DOM to prove are each a test: the funnel
+line at zero candidates, the gate badge in both states with the SHUT copy saying the positions
+are still managed, the caveats **above** the numbers (asserted by document order, because the
+placement is the claim), and the fill-rate line.
+
+### The number that changed
+
+**`04` §7.3 had carried an invented 91% modelled fill rate since VB0.** VB8 measured it:
+`BacktestResult.orders_offered` counts the orders that actually reached a fill test, and 761 of
+908 filled — **83.8%**. The document is corrected, `baskfy_core.vbt.published` carries the study's
+numbers as a checked transcription, and `test_vbt_goldens.py` asserts every one of them against
+`out/final_metrics.json`. DECISIONS-VB VB8.1 explains why the denominator is offers and not
+signals (over all 5,954 working orders the rate is 12.8%, which measures the slot count rather
+than the market).
+
+### Two red tests that were not this run's, fixed here
+
+* `test_api_artifacts.py::test_nothing_undocumented_is_exposed` had been red since SC6 shipped
+  `/explore/{slug}/constituents` (9 Sep) without a `docs/07` entry. Added.
+* `test_schema_matches_docs.py::test_no_undocumented_tables` was VB3's own miss, found at VB7.
+
+### What is NOT done at VB8
+
+* **The pages have never been rendered in a browser.** They pass in jsdom against mocked reads;
+  no `pnpm dev` was run, no screenshot was taken, and nobody has looked at them.
+* **The per-row Dismiss note of `05` §2 does not exist** and no table backs it (VB8.4).
+* `distance_to_ema_pct` and `ema_21` on an open position come back **null**: the read layer does
+  not recompute indicators, and `vb_position` does not store them. The column renders an em dash.
+  `05` §2 asks for "the 21-EMA and today's distance to it"; that is a gap, not an oversight, and
+  VB9's re-run is the natural place to fill it.
+* The backtest page has **no equity curve and no yearly table** — `05` §2 asks for both. They
+  need `vb_backtest_run.stats` to carry the series, which VB9 writes. The page renders the
+  headline comparison, the drift banner and the two halves.
+* The generated API artefacts carry a concurrent session's field changes (VB8.3).
 

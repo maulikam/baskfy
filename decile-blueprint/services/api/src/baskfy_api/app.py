@@ -94,6 +94,7 @@ from baskfy_api.routers import (
     support,
     swing,
     track_b,
+    vbt,
     webhook_endpoints,
 )
 from baskfy_api.schemas import HealthOut, ProblemOut
@@ -598,3 +599,7 @@ def _mount_routers(versioned: APIRouter) -> None:
     # SW4: the swing book's read surfaces and its one settings write. Read-only otherwise, and
     # `test_swing_readonly.py` asserts that over the source and the OpenAPI document.
     versioned.include_router(swing.router)
+    # VB8: the volume-breakout sleeve's read surfaces and its one settings write. There is no
+    # execute route here and there is not going to be one (`docs/vbt/02` Track C §4);
+    # `test_vbt_readonly.py` asserts that over the source and the OpenAPI document.
+    versioned.include_router(vbt.router)

@@ -206,6 +206,11 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/explore/managers/{slug}": {"get"},
     "/explore/collections": {"get"},
     "/explore/collections/{slug}": {"get"},
+    # SC6 (9 Sep 2026, `496b7b4`): the basket's constituents as of its newest published version.
+    # Read-only, same visibility predicate as the card. **Not this run's route** — VB8 found it
+    # missing from this table, which had made `test_nothing_undocumented_is_exposed` red since
+    # SC6 shipped, and added it rather than leaving a red test in the tree.
+    "/explore/{slug}/constituents": {"get"},
     # SC2 watchlist. User-scoped writes to the sole tenant's own watchlist -- a bookmark, not an
     # order; `test_explore_no_orders.py` fails if an order-shaped verb ever appears here.
     "/watchlist": {"get", "post"},
@@ -304,6 +309,19 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # from live Kite quotes and labels every row provisional; `/swing/setups` carries the label.
     "/swing/scan": {"post"},
     "/swing/scan/{run_id}": {"get"},
+    # VB8 (docs/vbt/05 §2, docs/vbt/02 Track C §4): the volume-breakout sleeve, as a surface.
+    # Every route is a GET except the settings form, which writes four numbers and cannot name
+    # the DRY_RUN counter or the first-live countdown. `test_vbt_readonly.py` asserts that
+    # structurally and asserts the surface names no broker. There is no `/vbt/execute` here and
+    # there is not going to be one: a line becomes an order in the desk console, on a click, and
+    # nowhere else. This sleeve has no auto-execute flag at all — non-negotiable #1's exception
+    # belongs to the swing book alone.
+    "/vbt/today": {"get"},
+    "/vbt/today/{instrument_id}/bars": {"get"},
+    "/vbt/breadth": {"get"},
+    "/vbt/book": {"get"},
+    "/vbt/backtest": {"get"},
+    "/vbt/config": {"get", "patch"},
     # NOT LISTED, and deliberately: nothing under `/api/public/v1`. The public tier's router is
     # not mounted while the data-redistribution review docs/11 §Compliance requires is
     # outstanding, so it is absent from this document by construction —

@@ -40,6 +40,7 @@ from baskfy_core.vbt.breadth import breadth_series
 from baskfy_core.vbt.calendar import SessionCalendar
 from baskfy_core.vbt.config import DEFAULT_VBT_CONFIG, EntryConfig
 from baskfy_core.vbt.indicators import with_vbt_indicators
+from baskfy_core.vbt.published import PUBLISHED
 from baskfy_core.vbt.signals import with_signal_columns
 
 REPO = Path(__file__).resolve().parents[4]
@@ -362,3 +363,61 @@ class TestTheNeighbourhood:
         stats = summarise(run)
         assert stats is not None
         assert round(stats.cagr_pct, 1) == 0.8
+
+
+class TestThePublishedRecord:
+    """`baskfy_core.vbt.published` is a transcription, so something has to check the copy.
+
+    The page and VB9's drift flag read `PUBLISHED`; the study's own `final_metrics.json` is the
+    original. A number that drifted in the module would otherwise quietly become the new truth,
+    which is exactly the failure `04`'s invented 91% fill rate was (DECISIONS-VB VB8.1).
+    """
+
+    @pytest.mark.parametrize(
+        ("field", "key"),
+        [
+            ("cagr_pct", "cagr_pct"),
+            ("max_drawdown_pct", "max_dd_pct"),
+            ("trades", "trades"),
+            ("win_rate_pct", "win_rate_pct"),
+            ("profit_factor", "profit_factor"),
+            ("avg_hold_sessions", "avg_hold"),
+            ("exposure_pct", "exposure_pct"),
+            ("sharpe", "sharpe"),
+            ("years", "years"),
+            ("in_sample_cagr_pct", "is_cagr"),
+            ("in_sample_dd_pct", "is_dd"),
+            ("out_of_sample_cagr_pct", "oos_cagr"),
+            ("out_of_sample_dd_pct", "oos_dd"),
+        ],
+    )
+    def test_every_published_number_is_the_studys_own(self, field: str, key: str) -> None:
+        stored = json.loads((RESULTS / "final_metrics.json").read_text(encoding="utf-8"))
+        assert float(getattr(PUBLISHED, field)) == float(stored[key]), field
+
+    def test_the_window_is_the_studys_own(self) -> None:
+        stored = json.loads((RESULTS / "final_metrics.json").read_text(encoding="utf-8"))
+        assert (PUBLISHED.start, PUBLISHED.end) == (stored["start"], stored["end"])
+
+    def test_the_modelled_fill_rate_is_what_the_engine_measures(
+        self, result: BacktestResult
+    ) -> None:
+        """VB8.1: 761 fills out of the 908 orders the engine offered a fill test.
+
+        `final_metrics.json` does not carry this one — the research never computed it — so the
+        run itself is the original, and this is the assertion that keeps the page's number and
+        the engine's in step.
+        """
+        assert result.orders_offered == 908
+        assert result.fill_rate_pct() == PUBLISHED.modelled_fill_rate_pct
+
+    def test_the_denominator_is_offers_and_not_signals(self, result: BacktestResult) -> None:
+        """The distinction VB8.1 turns on: most working orders never got a slot.
+
+        Filled over every working order is 12.8%, which measures the slot count rather than the
+        market. A page that showed that beside a live book's rate would be comparing two
+        different things and calling the difference a warning.
+        """
+        every_order = len(result.trades) + result.skipped["expired"]
+        assert every_order > 5_000
+        assert result.orders_offered < every_order // 5

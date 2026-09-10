@@ -282,3 +282,10 @@ DEFAULT_VBT_CONFIG: Final = VbtConfig()
 #: The tick the exchange quotes NSE cash equities in, and the tick every level the desk sends is
 #: snapped to. Not a setting: it is the exchange's.
 TICK_INR: Final[str] = "0.05"
+
+#: How many DRY_RUN sessions the sleeve must rehearse before real money is even discussable
+#: (``docs/vbt/02`` §3, condition 1). Not a strategy parameter and not a field of
+#: :class:`VbtConfig` — nothing in the method reads it — but it is a number the desk page, the
+#: web page and the settings view all print, and three copies of it is two too many. Only Maulik
+#: can shorten it, and `NEEDS-MAULIK.md` V4 is where that decision goes.
+DRY_RUN_SESSIONS_REQUIRED: Final[int] = 20

@@ -90,11 +90,27 @@ describe("the primary consumer IA", () => {
     // Create moved here out of Discover: it builds a strategy, which is this hub's job.
     /* SW4 added Swing: `docs/swing/05` §1 puts the swing hub inside Build rather than adding a
        sixth primary destination, because HOME1 fixes the primary chrome at five. */
+    /* VB8 added the third: `docs/vbt/05` §1 puts the volume-breakout hub inside Build for the
+       same reason the swing hub is there — HOME1 fixes the primary chrome at five. */
     expect(SECTION_TABS.build.map((t) => t.label)).toEqual([
       "Screens",
       "Backtests",
       "Create",
       "Swing",
+      "Volume breakout",
+    ]);
+    /* `docs/vbt/05` §2's "Today | Book | Backtest". The middle tab reads **Positions**, matching
+       the swing hub's and PORTFOLIO_REDESIGN.md §8's retirement of "book" from reader-facing
+       copy; the route keeps its documented path (DECISIONS-VB VB8.5). */
+    expect(SECTION_TABS.vbt.map((t) => t.label)).toEqual([
+      "Today",
+      "Positions",
+      "Backtest",
+    ]);
+    expect(SECTION_TABS.vbt.map((t) => t.href)).toEqual([
+      "/vbt",
+      "/vbt/book",
+      "/vbt/backtest",
     ]);
     expect(SECTION_TABS.swing.map((t) => t.label)).toEqual([
       "Setups",

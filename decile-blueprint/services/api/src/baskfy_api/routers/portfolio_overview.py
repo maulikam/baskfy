@@ -1044,23 +1044,34 @@ class SuggestionsOut(BaseModel):
 
 
 class HoldingKeyIn(BaseModel):
-    """One holding to allocate. **There is no quantity field and there must not be one** (§4.2).
+    """One holding to allocate, and **how many of it** (Phase 3, 10 Sep 2026).
 
-    v1 allocates a holding *whole* to one capital portfolio. The rule is not "a partial quantity
-    is rejected" — a rejected field is a field a client can send, a field a future patch can
-    start honouring, and a field a reader believes the product supports. It is absent, and
-    ``extra="forbid"`` makes sending one a 422 rather than a silently ignored key.
+    This class used to say, at length, that there was no quantity field and there must not be
+    one — that v1 allocated a holding whole, and that partial allocation was a Phase-3 item which
+    would arrive "as a migration and a new field, not as a quantity that was here all along".
+    This is that migration and that field.
 
-    §4.2's own rationale is worth keeping in front of whoever next edits this class: partial
-    allocation breaks sell attribution (§4.3) and corporate-action math (§4.5). It is a Phase-3
-    item, gated on the ledger being stable, and it arrives — if it arrives — as a migration and a
-    new field, not as a quantity that was here all along.
+    Maulik asked for it in his own words: *"one stock can appear in multiple portfolios, so if
+    stock a bought 100 qty for shortterm 20 for long term 34 for some swing 36 for momentum"*.
+    The old text was right that the ledger had to be stable first; it is, and
+    :func:`~baskfy_core.allocation_ledger.validate_against_holdings` is what now carries the
+    invariant the whole-holding rule used to carry for free.
+
+    ``quantity`` is **optional, and omitting it means "all of it"** — which keeps every existing
+    client working unchanged and makes the common case ("file this whole holding into Long term")
+    the shortest thing to write. It is not defaulted to a number here because the number depends
+    on the position, which this schema cannot see; the route resolves it against the ledger.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     instrument_id: int = Field(gt=0)
     broker_account_id: int = Field(gt=0)
+    #: How many shares of this holding to file. ``None`` means the unallocated remainder of the
+    #: position — everything not already filed elsewhere. A quantity larger than that remainder
+    #: is refused by name and number rather than clamped: silently filing fewer shares than the
+    #: user asked for would leave them believing a portfolio holds something it does not.
+    quantity: Decimal | None = Field(default=None, gt=0)
 
 
 class NewPortfolioIn(BaseModel):
@@ -1175,11 +1186,20 @@ class _Ledger:
 
     @property
     def allocations(self) -> list[Allocation]:
-        """One allocation per position. Absence means Unallocated, so only capital rows appear."""
+        """One allocation per capital position, carrying that slice's quantity.
+
+        Absence means Unallocated: since 10 Sep 2026 the remainder is derived
+        (``held - sum(slices)``) rather than stored, so an explicit unallocated row is refused by
+        `Allocation` itself and would have been double-counting waiting to happen.
+        """
         return [
-            Allocation(key=position.key, portfolio_id=position.capital_portfolio_id)
+            Allocation(
+                key=position.key,
+                portfolio_id=position.capital_portfolio_id,
+                quantity=position.holding.quantity,
+            )
             for position in self.positions
-            if position.capital_portfolio_id is not UNALLOCATED
+            if position.capital_portfolio_id is not UNALLOCATED and position.holding.quantity > 0
         ]
 
     @property
@@ -3511,7 +3531,11 @@ async def new_portfolio(
                     await _apply_allocation(
                         session,
                         ledger,
-                        Allocation(key=position.key, portfolio_id=portfolio_id),
+                        Allocation(
+                            key=position.key,
+                            portfolio_id=portfolio_id,
+                            quantity=position.holding.quantity,
+                        ),
                         resolved_on=today,
                     )
                 else:

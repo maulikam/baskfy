@@ -83,9 +83,9 @@ from baskfy_core.allocation_ledger import (
     PortfolioKind,
     ReconciliationItem,
     SellAttribution,
-    allocation_of,
     apply_corporate_action,
     cost_basis,
+    slices_of,
     unallocated_holdings,
 )
 from baskfy_core.gst import money
@@ -596,7 +596,9 @@ def resolve(
             resolved_portfolio_id=portfolio_id,
             resolved_on=resolved_on,
         ),
-        implied_allocation=Allocation(key=entry.key, portfolio_id=portfolio_id),
+        implied_allocation=Allocation(
+            key=entry.key, portfolio_id=portfolio_id, quantity=entry.quantity
+        ),
     )
 
 
@@ -636,12 +638,21 @@ def positions_from_allocations(
     each monitoring view it appears in.
 
     A convenience, and it is written the slow way on purpose. It asks the ledger
-    (:func:`~baskfy_core.allocation_ledger.allocation_of`) where each holding sits rather than
+    (:func:`~baskfy_core.allocation_ledger.slices_of`) how each holding is divided rather than
     building its own index, which makes it O(holdings x allocations). The fast version means a
-    second copy of criterion 2's duplicate check living in a second module, and the copy is the
-    one that goes stale — a set of allocations the ledger would refuse must not be able to
-    produce a position set this module happily accepts. A user's holdings number in the tens; the
+    second copy of the duplicate check living in a second module, and the copy is the one that
+    goes stale — a set of allocations the ledger would refuse must not be able to produce a
+    position set this module happily accepts. A user's holdings number in the tens; the
     correctness is worth more than the walk.
+
+    **One capital row per SLICE since 10 Sep 2026**, not one per holding. A 100-share ITC filed
+    20/34/36 produces three capital positions carrying 20, 34 and 36 shares, plus a fourth
+    carrying the unallocated 10. Reconciliation compares the ledger against the broker, and a
+    ledger that reported one 100-share row per holding would agree with the broker while hiding
+    every fact the split was created to record.
+
+    A monitoring view still sees the WHOLE holding: a lens answers "which names", not "how many"
+    (§4.1), and it enters no total, so there is nothing here to double-count.
 
     ``views`` maps a holding to the monitoring portfolios it appears in. Absent means none, which
     is the right default: a lens is something the user built deliberately.
@@ -649,9 +660,18 @@ def positions_from_allocations(
     lenses = views or {}
     positions: list[LedgerPosition] = []
     for holding in holdings:
-        positions.append(
-            LedgerPosition(portfolio_id=allocation_of(allocations, holding.key), holding=holding)
-        )
+        slices = slices_of(allocations, holding.key)
+        for portfolio_id, quantity in sorted(slices.items()):
+            positions.append(
+                LedgerPosition(
+                    portfolio_id=portfolio_id, holding=replace(holding, quantity=quantity)
+                )
+            )
+        remaining = holding.quantity - sum(slices.values(), Decimal("0"))
+        if remaining > 0 or not slices:
+            positions.append(
+                LedgerPosition(portfolio_id=None, holding=replace(holding, quantity=remaining))
+            )
         for view_id in lenses.get(holding.key, ()):
             positions.append(LedgerPosition(portfolio_id=view_id, holding=holding))
     return positions

@@ -107,6 +107,7 @@ from baskfy_core.allocation_ledger import (
     Portfolio,
     PortfolioKind,
     holding_value,
+    validate_against_holdings,
     validate_allocations,
 )
 from baskfy_core.gst import FINANCIAL_YEAR_START_MONTH, financial_year, money
@@ -678,24 +679,69 @@ def suggest_groupings(
 # ---------------------------------------------------------------------------
 
 
-def _capital_index(
-    allocations: Sequence[Allocation], portfolios: Mapping[int, Portfolio]
-) -> dict[HoldingKey, int | None]:
-    """``{holding -> capital portfolio}``, built only after the ledger has approved the set.
+def _apportion(total: Decimal, shares: Mapping[int | None, Decimal]) -> dict[int | None, Decimal]:
+    """Divide ``total`` by ``shares`` into paise that sum to ``total`` **exactly**.
 
-    :func:`~baskfy_core.allocation_ledger.validate_allocations` is the public gate that catches a
-    holding allocated twice, a holding allocated to a monitoring view and a holding allocated to
-    a portfolio that does not exist. Calling it first and then indexing locally means this module
-    can never report an overlap or a contribution derived from an allocation set the consolidated
-    total would refuse — the parts and the whole are never allowed to disagree about whether the
-    data is even legal.
+    The residue goes to the last slice in the same deterministic order the caller emits rows in,
+    so the report's invariant — parts equal whole, to the paisa — holds by construction rather
+    than by luck. :class:`ContributionReport` refuses to exist otherwise, and it should: a
+    breakdown whose rows miss their own total by a paisa teaches a user not to believe the page.
+
+    Handles a negative ``total`` unchanged, because a down day is the same arithmetic.
+    """
+    order = sorted(shares, key=lambda pid: (pid is None, pid or 0))
+    out: dict[int | None, Decimal] = {}
+    running = Decimal("0")
+    for portfolio_id in order[:-1]:
+        part = money(total * shares[portfolio_id])
+        out[portfolio_id] = part
+        running += part
+    out[order[-1]] = money(total - running)
+    return out
+
+
+def _capital_shares(
+    holdings: Sequence[Holding],
+    allocations: Sequence[Allocation],
+    portfolios: Mapping[int, Portfolio],
+) -> dict[HoldingKey, dict[int | None, Decimal]]:
+    """``{holding -> {capital portfolio (or None for Unallocated) -> fraction}}``.
+
+    Built only after the ledger has approved the set. :func:`validate_allocations` catches a
+    duplicated pair, a slice in a monitoring view and a slice in a portfolio that does not exist;
+    :func:`validate_against_holdings` catches slices that claim more shares than are held. Both
+    are called here so this module can never report an overlap or a contribution derived from an
+    allocation set the consolidated total would refuse — the parts and the whole are never
+    allowed to disagree about whether the data is even legal.
+
+    **Fractions, not quantities, and that is the Phase-3 change.** Before 10 Sep 2026 a holding
+    had one owner, so both read-outs could put its whole value in one row. A holding split
+    20/34/36/10 belongs in four rows at a fifth, a third, a third and a tenth of its value — so
+    what this returns is each portfolio's *share* of the position, and the caller multiplies it
+    by whatever it is reporting (a value, a day's move). Doing it in one place is what keeps the
+    two read-outs agreeing about how a split holding divides.
+
+    Unallocated appears under the ``None`` key when there is a remainder, exactly as it does in
+    the ledger's own valuation.
     """
     validate_allocations(allocations, portfolios)
-    return {
-        allocation.key: allocation.portfolio_id
-        for allocation in allocations
-        if allocation.portfolio_id is not UNALLOCATED
-    }
+    validate_against_holdings(holdings, allocations)
+    held = {holding.key: holding.quantity for holding in holdings}
+    shares: dict[HoldingKey, dict[int | None, Decimal]] = {}
+    for allocation in allocations:
+        quantity = held.get(allocation.key)
+        if not quantity:
+            continue
+        bucket = shares.setdefault(allocation.key, {})
+        bucket[allocation.portfolio_id] = allocation.quantity / quantity
+    for key, quantity in held.items():
+        if not quantity:
+            continue
+        bucket = shares.setdefault(key, {})
+        remainder = Decimal("1") - sum(bucket.values(), Decimal("0"))
+        if remainder > 0:
+            bucket[UNALLOCATED] = remainder
+    return shares
 
 
 def monitoring_overlaps(
@@ -724,7 +770,7 @@ def monitoring_overlaps(
     (``portfolio_id`` is ``None``), which on a first run is both the commonest row and the most
     actionable one: a lens over unsorted holdings is a §6.7 grouping waiting to be accepted.
     """
-    index = _capital_index(allocations, portfolios)
+    shares = _capital_shares(holdings, allocations, portfolios)
     known = {holding.key: holding for holding in holdings}
 
     rows: list[MonitoringOverlap] = []
@@ -738,18 +784,29 @@ def monitoring_overlaps(
                 "its allocations (spec section 4.1); passing it as a monitoring view would give "
                 "the same holding two places to be recorded"
             )
+        # A SPLIT HOLDING OVERLAPS EVERY PORTFOLIO IT IS FILED INTO (Phase 3, 10 Sep 2026). A
+        # lens containing a 100-share ITC filed 20/34/36/10 produces four rows, each worth its
+        # own slice — because the question the report answers is "which of my real portfolios is
+        # this money actually sitting in", and after a split the honest answer is "four of them,
+        # in these proportions". Before slices this was one row and the whole position.
         by_portfolio: dict[int | None, list[HoldingKey]] = {}
+        value_by_portfolio: dict[int | None, Decimal] = {}
         for key in keys:
             if key not in known:
                 raise KeyError(
                     f"{view.name!r} includes {key}, which is not in the holdings supplied; a "
                     "lens over a position we cannot value would report an overlap of no size"
                 )
-            by_portfolio.setdefault(index.get(key, UNALLOCATED), []).append(key)
+            whole = holding_value(known[key], prices)
+            for portfolio_id, share in shares.get(key, {UNALLOCATED: Decimal("1")}).items():
+                by_portfolio.setdefault(portfolio_id, []).append(key)
+                value_by_portfolio[portfolio_id] = value_by_portfolio.get(
+                    portfolio_id, Decimal("0")
+                ) + money(whole * share)
 
         for portfolio_id, shared in by_portfolio.items():
             ordered = _sorted_keys(shared)
-            value = money(sum((holding_value(known[key], prices) for key in ordered), Decimal("0")))
+            value = money(value_by_portfolio[portfolio_id])
             rows.append(
                 MonitoringOverlap(
                     view_id=view_id,
@@ -815,8 +872,11 @@ def contribution_breakdown(
     giving a lens its own contribution row would attribute the same rupees twice — §4.1's
     exclusion from totals, applied to a total made of moves.
     """
-    index = _capital_index(allocations, portfolios)
+    shares = _capital_shares(holdings, allocations, portfolios)
 
+    # ONE ROW PER SLICE (Phase 3, 10 Sep 2026), not one per holding. A 100-share ITC filed
+    # 20/34/36/10 moved four portfolios today, and a single row attributing the whole move to one
+    # of them would be the answer this read-out exists to stop being wrong about.
     rows: list[HoldingContribution] = []
     for holding in holdings:
         if holding.key not in values:
@@ -826,14 +886,18 @@ def contribution_breakdown(
                 f"no day change supplied for {holding.key}; treating it as flat would understate "
                 "the move while leaving the breakdown looking complete"
             )
-        rows.append(
-            HoldingContribution(
-                key=holding.key,
-                portfolio_id=index.get(holding.key, UNALLOCATED),
-                value=money(values[holding.key]),
-                contribution=money(day_changes[holding.key]),
+        split = shares.get(holding.key, {UNALLOCATED: Decimal("1")})
+        by_value = _apportion(money(values[holding.key]), split)
+        by_move = _apportion(money(day_changes[holding.key]), split)
+        for portfolio_id in sorted(split, key=lambda pid: (pid is None, pid or 0)):
+            rows.append(
+                HoldingContribution(
+                    key=holding.key,
+                    portfolio_id=portfolio_id,
+                    value=by_value[portfolio_id],
+                    contribution=by_move[portfolio_id],
+                )
             )
-        )
 
     total_move = sum((row.contribution for row in rows), Decimal("0"))
 

@@ -336,6 +336,37 @@ class Settings(BaseSettings):
     #: detect budget (B9: < 3 min for 2,500 names).
     swing_scan_stale_after_seconds: int = Field(default=600, gt=0)
 
+    # --- The volume-breakout sleeve (docs/vbt) -------------------------------
+    #
+    # Two flags and three ceilings, and the split is the same one the swing block above draws.
+    #
+    # ``vbt_execution_enabled`` is Track B in ``docs/vbt/02-scope-and-gating.md``: the code behind
+    # it is written, tested and unreachable. ``docs/vbt/02`` §3 lists the five things that must be
+    # true before it flips — **twenty DRY_RUN sessions**, VB10 green, the backtest on the page,
+    # Maulik's written risk decision, and half risk for the first five live sessions — and the
+    # swing sleeve's delegation of its own flag does not extend here (DECISIONS-VB PACK.7). With
+    # it false, ``/vbt/execute`` still runs the whole path and journals ``simulated=true``
+    # **regardless of DRY_RUN**, which is what makes a DRY_RUN session a rehearsal rather than a
+    # different code path.
+    #
+    # ``vbt_nightly_enabled`` defaults **true**, and that is not an inconsistency: detection moves
+    # no money, and a sleeve with no history is a sleeve with no evidence for the gate above.
+    #
+    # There is no third flag. Non-negotiable 1's named exception is the swing sleeve's, and this
+    # run neither widens it nor adds a second one: no ``vbt_auto_execute`` exists, and VB10
+    # asserts that no setting of that shape can appear.
+    vbt_execution_enabled: bool = False
+    vbt_nightly_enabled: bool = True
+    #: ``vb_config.max_open_positions`` may not exceed this. The strategy's own ten slots are the
+    #: measured optimum (eight cost 2.7 CAGR points, fifteen cost 5.3); the ceiling leaves room to
+    #: lower the book, never to widen it past what ``SizingConfig.max_slots`` allows.
+    vbt_max_open_positions_max: int = Field(default=15, gt=0, le=30)
+    #: ``vb_config.max_position_pct`` may not exceed this. The slot is 10% and the setting 12.5%.
+    vbt_max_position_pct_max: Decimal = Field(default=Decimal("15.0"), gt=0, le=100)
+    #: ``vb_config.stop_pct`` may not exceed this. STRATEGY §4 measured 10% and 15% and found the
+    #: stop to be insurance either way; wider than 15% is a different instrument.
+    vbt_stop_pct_max: Decimal = Field(default=Decimal("15.0"), gt=0, le=50)
+
     # --- Rate limits (docs/07 §Conventions) ----------------------------------
     rate_limit_anonymous_per_minute: int = Field(default=10, gt=0)
     rate_limit_authenticated_per_minute: int = Field(default=60, gt=0)

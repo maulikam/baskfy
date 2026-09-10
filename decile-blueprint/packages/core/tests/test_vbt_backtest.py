@@ -16,6 +16,19 @@ from decimal import Decimal
 import numpy as np
 import polars as pl
 import pytest
+from vbt_backtest_fixtures import (
+    CLOSED_BELOW_EMA_ON,
+    EXPECTED_ENTRY,
+    EXPECTED_EXIT,
+    EXPECTED_LIMIT,
+    EXPECTED_QUANTITY,
+    EXPECTED_STOP,
+    FILLED_ON,
+    SIGNAL_ON,
+    SLEEVE,
+    SOLD_ON,
+    planted_bars,
+)
 
 from baskfy_core.vbt.backtest import (
     BacktestParams,
@@ -33,19 +46,6 @@ from baskfy_core.vbt.exits import ExitReason
 from baskfy_core.vbt.indicators import with_vbt_indicators
 from baskfy_core.vbt.signals import with_signal_columns
 from baskfy_core.vbt.sizing import SizeCap
-from vbt_backtest_fixtures import (
-    CLOSED_BELOW_EMA_ON,
-    EXPECTED_ENTRY,
-    EXPECTED_EXIT,
-    EXPECTED_LIMIT,
-    EXPECTED_QUANTITY,
-    EXPECTED_STOP,
-    FILLED_ON,
-    SIGNAL_ON,
-    SLEEVE,
-    SOLD_ON,
-    planted_bars,
-)
 
 
 def tagged(config: VbtConfig = DEFAULT_VBT_CONFIG) -> pl.DataFrame:
@@ -120,9 +120,7 @@ class TestThePlantedTrade:
         """`04` §6.1 — 12% below **the fill**, floored to the paise."""
         trade = go().trades[0]
         risk = EXPECTED_ENTRY - EXPECTED_STOP
-        expected = (trade.pnl_inr / (EXPECTED_ENTRY * EXPECTED_QUANTITY)) / (
-            risk / EXPECTED_ENTRY
-        )
+        expected = (trade.pnl_inr / (EXPECTED_ENTRY * EXPECTED_QUANTITY)) / (risk / EXPECTED_ENTRY)
         assert trade.r_multiple is not None
         assert float(trade.r_multiple) == pytest.approx(float(expected), abs=1e-9)
         assert float(trade.r_multiple) == pytest.approx(-0.55, abs=0.005)
@@ -144,9 +142,7 @@ class TestTheSequencing:
 
     def test_a_shut_gate_lets_no_entry_through(self) -> None:
         """`04` §4.3 — and the position that never opened is not a trade."""
-        impossible = VbtConfig(
-            breadth=type(DEFAULT_VBT_CONFIG.breadth)(min_pct_above_dma=99.0)
-        )
+        impossible = VbtConfig(breadth=type(DEFAULT_VBT_CONFIG.breadth)(min_pct_above_dma=99.0))
         assert go(impossible) == go(impossible)
         assert len(go(impossible).trades) == 0
 
@@ -178,29 +174,43 @@ class TestTheCurveAndTheStatistics:
         result = go()
         assert result.equity[-1] < SLEEVE  # the planted trade loses money
         stats = summarise(result)
-        assert stats["trades"] == 1
-        assert stats["win_rate_pct"] == 0.0
+        assert stats is not None
+        assert stats.trades == 1
+        assert stats.win_rate_pct == 0.0
 
     def test_the_drawdown_is_measured_against_the_running_peak(self) -> None:
         stats = summarise(go())
-        assert float(stats["max_drawdown_pct"]) < 0
-        assert stats["drawdown_peak_on"] <= stats["drawdown_trough_on"]
+        assert stats is not None
+        assert stats.max_drawdown_pct < 0
+        assert stats.drawdown_peak_on <= stats.drawdown_trough_on
 
     def test_the_exit_reasons_are_counted(self) -> None:
-        assert summarise(go())["by_reason"] == {ExitReason.EMA_EXIT.value: 1}
+        stats = summarise(go())
+        assert stats is not None
+        assert stats.by_reason == {ExitReason.EMA_EXIT.value: 1}
+
+    def test_the_statistics_survive_a_round_trip_through_json(self) -> None:
+        """``vb_backtest_run.stats`` stores this shape; a float in it would be a lie about money."""
+        stats = summarise(go())
+        assert stats is not None
+        payload = stats.to_json()
+        assert payload["trades"] == 1
+        assert isinstance(payload["final_equity_inr"], str)
+        assert payload["start"] == stats.start.isoformat()
 
     def test_the_yearly_table_credits_the_year_the_trade_closed_in(self) -> None:
         """The planted run straddles a new year, so this also pins that a trade is counted in
         the year it **exited**, which is the year whose return it moved."""
-        rows = {int(row["year"]): row for row in yearly(go())}
-        assert rows[SOLD_ON.year]["trades"] == 1
-        assert sum(int(row["trades"]) for row in rows.values()) == 1
+        rows = {row.year: row for row in yearly(go())}
+        assert rows[SOLD_ON.year].trades == 1
+        assert sum(row.trades for row in rows.values()) == 1
 
     def test_an_empty_run_summarises_to_nothing_rather_than_raising(self) -> None:
+        """``None``, not a record of zeros: zeros would claim the book was measured."""
         empty = BacktestResult(
             params=BacktestParams(), trades=(), sessions=(), equity=(), open_positions=()
         )
-        assert summarise(empty) == {"trades": 0}
+        assert summarise(empty) is None
 
 
 class TestThePanel:

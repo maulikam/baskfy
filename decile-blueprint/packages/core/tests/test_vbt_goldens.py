@@ -178,7 +178,8 @@ class TestTheSignals:
         joined = ours.join(theirs, on="date", how="inner")
         assert joined.height == ours.height
         gap = (joined["pct_above_dma"] / 100.0 - joined["fraction"]).abs().max()
-        assert float(gap or 0.0) < 0.001
+        assert isinstance(gap, float)
+        assert gap < 0.001
 
     def test_the_forty_percent_gate_verdict_is_identical_on_every_session(
         self, tagged: pl.DataFrame
@@ -235,9 +236,10 @@ class TestTheTrades:
 
     def test_the_exits_are_the_ones_strategy_describes(self, result: BacktestResult) -> None:
         """688 left on the EMA and 62 hit the stop — the shape of the whole strategy."""
-        counts = summarise(result)["by_reason"]
-        assert counts["EMA_EXIT"] == 688
-        assert counts["STOP_HIT"] == 62
+        stats = summarise(result)
+        assert stats is not None
+        assert stats.by_reason["EMA_EXIT"] == 688
+        assert stats.by_reason["STOP_HIT"] == 62
 
 
 class TestTheMetrics:
@@ -245,14 +247,15 @@ class TestTheMetrics:
 
     def test_every_headline_number_is_within_its_tolerance(self, result: BacktestResult) -> None:
         stats = summarise(result)
+        assert stats is not None
         ours = {
-            "cagr_pct": float(stats["cagr_pct"]),
-            "max_dd_pct": float(stats["max_drawdown_pct"]),
-            "trades": float(stats["trades"]),
-            "win_rate_pct": float(stats["win_rate_pct"]),
-            "profit_factor": float(stats["profit_factor"] or 0.0),
-            "avg_hold": float(stats["avg_hold_sessions"]),
-            "exposure_pct": float(stats["exposure_pct"]),
+            "cagr_pct": stats.cagr_pct,
+            "max_dd_pct": stats.max_drawdown_pct,
+            "trades": float(stats.trades),
+            "win_rate_pct": stats.win_rate_pct,
+            "profit_factor": stats.profit_factor or 0.0,
+            "avg_hold": stats.avg_hold_sessions,
+            "exposure_pct": stats.exposure_pct,
         }
         theirs = study_metrics()
         outside = {
@@ -267,8 +270,9 @@ class TestTheMetrics:
     ) -> None:
         """The number STRATEGY §0 leads with, spelled out so a reader of this file sees it."""
         stats = summarise(result)
-        assert round(float(stats["cagr_pct"]), 1) == 18.2
-        assert round(float(stats["max_drawdown_pct"]), 1) == -27.9
+        assert stats is not None
+        assert round(stats.cagr_pct, 1) == 18.2
+        assert round(stats.max_drawdown_pct, 1) == -27.9
 
     def test_the_yearly_table_reproduces_strategy_section_four(
         self, result: BacktestResult
@@ -285,14 +289,16 @@ class TestTheMetrics:
             2025: 1.2,
             2026: 6.3,
         }
-        ours = {int(row["year"]): round(float(row["return_pct"]), 1) for row in yearly(result)}
+        ours = {row.year: round(row.return_pct, 1) for row in yearly(result)}
         assert ours == published
 
     def test_the_book_is_invested_about_sixty_three_percent_of_the_time(
         self, result: BacktestResult
     ) -> None:
         """The gate's whole point: it *leaves*. An always-invested book is a different product."""
-        assert 62.0 < float(summarise(result)["exposure_pct"]) < 64.0
+        stats = summarise(result)
+        assert stats is not None
+        assert 62.0 < stats.exposure_pct < 64.0
 
 
 class TestTheNeighbourhood:
@@ -306,7 +312,9 @@ class TestTheNeighbourhood:
         panel = panel_from_frame(tagged, "state")
         gate = gate_vector(breadth_series(tagged, config), panel.sessions)
         run = run_backtest(panel, gate, BacktestParams(start=FIRST_SESSION, config=config))
-        assert round(float(summarise(run)["cagr_pct"]), 1) == expected
+        stats = summarise(run)
+        assert stats is not None
+        assert round(stats.cagr_pct, 1) == expected
 
     def test_the_gate_halves_the_drawdown_for_the_same_return(self, tagged: pl.DataFrame) -> None:
         """STRATEGY §4: no gate is 18.5% at -48.8%. The gate does not buy return; it buys the
@@ -318,8 +326,9 @@ class TestTheNeighbourhood:
             BacktestParams(start=FIRST_SESSION, config=DEFAULT_VBT_CONFIG),
         )
         stats = summarise(off)
-        assert round(float(stats["cagr_pct"]), 1) == 18.5
-        assert round(float(stats["max_drawdown_pct"]), 1) == -48.8
+        assert stats is not None
+        assert round(stats.cagr_pct, 1) == 18.5
+        assert round(stats.max_drawdown_pct, 1) == -48.8
 
     def test_the_raw_chartink_scan_traded_the_same_way_is_flat(self, tagged: pl.DataFrame) -> None:
         """STRATEGY §0's central claim: **the scan as given is not a strategy.** 0.8% a year at
@@ -329,4 +338,6 @@ class TestTheNeighbourhood:
         run = run_backtest(
             panel, gate, BacktestParams(start=FIRST_SESSION, config=DEFAULT_VBT_CONFIG)
         )
-        assert round(float(summarise(run)["cagr_pct"]), 1) == 0.8
+        stats = summarise(run)
+        assert stats is not None
+        assert round(stats.cagr_pct, 1) == 0.8

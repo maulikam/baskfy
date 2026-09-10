@@ -3,7 +3,7 @@
 The status page for the volume-breakout run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: VB2 green — the core reproduces the study exactly. VB3–VB10 not started.** Started 10 Sep 2026 on branch
+**Run state: VB3 green — the schema exists and is bounded. VB4–VB10 not started.** Started 10 Sep 2026 on branch
 `developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
@@ -14,7 +14,7 @@ what is NOT done**. A fresh session resumes from the first module not marked ✅
 | VB0 — The pack | ✅ | Eight documents, the seven pre-taken decisions, the standing defaults, and the two measurements that settled how the strategy is read |
 | VB1 — The pure core | ✅ | Nine modules, 43 named thresholds and **245 tests**; law 1 asserted over the source, and no rule module spells out a number that is not 0, 1, 2 or 100 |
 | VB2 — Goldens: reproduce the study | ✅ | **All 761 trades, to the paisa.** 32,929 scan hits, 6,293 signals, CAGR 18.23%, drawdown −27.94%, the yearly table to one decimal, and eleven of twelve neighbourhood cases to a tenth of a point |
-| VB3 — Schema and settings | ⬜ | |
+| VB3 — Schema and settings | ✅ | Twelve `vb_` tables in migration **`0037_vbt`**, generated from the models and verified against them by Alembic's own comparison — 0 differences, and a downgrade/upgrade round trip; four settings, three ceilings, two flags, and a sleeve seeded at ₹0 |
 | VB4 — The nightly job | ⬜ | |
 | VB5 — The sleeve's cash and book | ⬜ | |
 | VB6 — Desk plan and `/vbt/execute` | ⬜ | |
@@ -184,6 +184,38 @@ must not pass through Decimal arithmetic first.
 * No migration, no task, no router, no page, no desk route. `vb_config` still does not exist.
 * The **262 missing instrument-days** and the sparse pre-2024 corporate actions are unchanged
   (NEEDS-MAULIK § VBT, V2). Reproducing the study exactly reproduces its data gaps exactly.
+
+---
+
+## VB3 — Schema and settings ✅ (10 Sep 2026)
+
+| | |
+|---|---|
+| Migration | **`0037_vbt.py`**, revising `0036_check_name` — **not** `0036` as the pack said; a concurrent session landed a migration mid-run and `alembic heads` reported two (DECISIONS-VB **VB3.2**) |
+| Tables | Twelve: `vb_config`, `vb_config_audit`, `vb_signal_daily`, `vb_breadth_daily`, `vb_position`, `vb_order`, `vb_fill`, `vb_plan`, `vb_plan_line`, `vb_plan_skip`, `vb_session`, `vb_backtest_run` |
+| Models | `packages/core/src/baskfy_core/models/vbt.py`, every state string **imported from** `baskfy_core.vbt` rather than retyped |
+| Verified | Alembic's own `compare_metadata` over a scratch database: **0 `vb_` differences**; downgrade drops all twelve and upgrade restores them with the comparison still clean |
+| Settings | `vbt_settings.py` — four editable fields, three ceilings, two system-owned, one audit row per field that moves |
+| Flags | `BASKFY_VBT_EXECUTION_ENABLED=false`, `BASKFY_VBT_NIGHTLY_ENABLED=true`, in `.env.example`, the API, the worker and the desk's `config.py` |
+| Tests | `services/api/tests/test_vbt_schema_and_settings.py` — **75 passed** (structural + database) |
+
+**The safety property of this module**: `vb_config` is seeded with `sleeve_capital_inr = 0`, and
+a test proves what that means — `size_entry` against a freshly seeded row returns quantity 0 with
+`NO_SLEEVE_CAPITAL`. A newly seeded system detects, ranks, stores and plans **nothing to buy**
+until a person writes the number (`02` §3.4).
+
+**And what is deliberately absent**: `test_no_auto_execute_setting_exists_anywhere` scans both
+settings classes for a `vbt_*auto*` field and finds none, and the desk's `config.py` carries the
+reason in a comment above `VBT_EXECUTION_ENABLED`.
+
+### What is NOT done at VB3
+
+* **Nothing writes to these tables yet.** VB4 is the first module that inserts a row.
+* Nothing is deployed and no box has run `0037`.
+* The `vb_config` row exists only where `make seed` has run — the private `baskfy_vb_test`
+  database this module's tests used, and nowhere else.
+* `baskfy_vb3_check` and `baskfy_vb_test` are scratch databases in the local dev Postgres. They
+  are this run's, and dropping them costs nothing.
 
 ### Resume instructions for a fresh session
 

@@ -200,6 +200,82 @@ class BacktestTrade:
 
 
 @dataclass(frozen=True, slots=True)
+class YearRow:
+    """One calendar year of the equity curve, and the trades that closed inside it."""
+
+    year: int
+    return_pct: float
+    trades: int
+    win_rate_pct: float
+
+    def to_json(self) -> dict[str, object]:
+        return {
+            "year": self.year,
+            "return_pct": self.return_pct,
+            "trades": self.trades,
+            "win_rate_pct": self.win_rate_pct,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class BacktestStats:
+    """``04`` §11's reported statistics, as a typed record rather than a bag of ``object``.
+
+    A dictionary would be shorter here and worse everywhere else: the page reads these, the drift
+    flag compares them, ``vb_backtest_run.stats`` stores them, and the tests assert them. Three
+    consumers reaching into a ``dict[str, object]`` is three places that each cast, and the day a
+    key is renamed none of them says so.
+    """
+
+    start: dt.date
+    end: dt.date
+    years: float
+    final_equity_inr: Decimal
+    cagr_pct: float
+    max_drawdown_pct: float
+    drawdown_peak_on: dt.date
+    drawdown_trough_on: dt.date
+    calmar: float | None
+    sharpe: float
+    trades: int
+    win_rate_pct: float
+    profit_factor: float | None
+    avg_win_pct: float
+    avg_loss_pct: float
+    avg_trade_pct: float
+    avg_hold_sessions: float
+    avg_open_positions: float
+    exposure_pct: float
+    by_reason: dict[str, int]
+
+    def to_json(self) -> dict[str, object]:
+        """The JSONB shape ``vb_backtest_run.stats`` stores. Money as a string of its exact
+        decimal, dates as ISO — nothing here goes through a float on its way to the database."""
+        return {
+            "start": self.start.isoformat(),
+            "end": self.end.isoformat(),
+            "years": self.years,
+            "final_equity_inr": str(self.final_equity_inr),
+            "cagr_pct": self.cagr_pct,
+            "max_drawdown_pct": self.max_drawdown_pct,
+            "drawdown_peak_on": self.drawdown_peak_on.isoformat(),
+            "drawdown_trough_on": self.drawdown_trough_on.isoformat(),
+            "calmar": self.calmar,
+            "sharpe": self.sharpe,
+            "trades": self.trades,
+            "win_rate_pct": self.win_rate_pct,
+            "profit_factor": self.profit_factor,
+            "avg_win_pct": self.avg_win_pct,
+            "avg_loss_pct": self.avg_loss_pct,
+            "avg_trade_pct": self.avg_trade_pct,
+            "avg_hold_sessions": self.avg_hold_sessions,
+            "avg_open_positions": self.avg_open_positions,
+            "exposure_pct": self.exposure_pct,
+            "by_reason": dict(self.by_reason),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class BacktestResult:
     params: BacktestParams
     trades: tuple[BacktestTrade, ...]
@@ -208,7 +284,7 @@ class BacktestResult:
     open_positions: tuple[int, ...]
     skipped: dict[str, int] = field(default_factory=dict)
 
-    def stats(self) -> dict[str, object]:
+    def stats(self) -> BacktestStats | None:
         return summarise(self)
 
 
@@ -519,11 +595,15 @@ def _budget(  # noqa: PLR0913, PLR0917 - the four budgets and what they are meas
     return min(budgets, key=lambda pair: pair[0])
 
 
-def summarise(result: BacktestResult) -> dict[str, object]:
-    """``04`` §11's reported statistics, computed once so a page and a test cannot disagree."""
+def summarise(result: BacktestResult) -> BacktestStats | None:
+    """``04`` §11's statistics, computed once so a page and a test cannot disagree.
+
+    ``None`` for a run with no equity curve — a window with no sessions in it. Returning a record
+    of zeros instead would be a claim that the book was measured and made nothing.
+    """
     curve = [value for value in result.equity if value != _ZERO]
     if len(curve) < _TWO_POINTS or not result.sessions:
-        return {"trades": 0}
+        return None
     start, end = result.sessions[0], result.sessions[-1]
     years = Decimal((end - start).days) / DAYS_A_YEAR
     total = curve[-1] / curve[0]
@@ -545,9 +625,10 @@ def summarise(result: BacktestResult) -> dict[str, object]:
     returns = [
         float(later / earlier - _ONE) for earlier, later in pairwise(curve) if earlier != _ZERO
     ]
+    deviation = float(np.std(returns, ddof=1)) if len(returns) > 1 else 0.0
     sharpe = (
-        float(np.mean(returns)) / float(np.std(returns, ddof=1)) * math.sqrt(SESSIONS_A_YEAR)
-        if len(returns) > 1 and float(np.std(returns, ddof=1)) > 0
+        float(np.mean(returns)) / deviation * math.sqrt(SESSIONS_A_YEAR)
+        if deviation > 0
         else float("nan")
     )
     wins = [trade for trade in result.trades if trade.pnl_inr > _ZERO]
@@ -555,49 +636,40 @@ def summarise(result: BacktestResult) -> dict[str, object]:
     gross_win = sum((trade.pnl_inr for trade in wins), _ZERO)
     gross_loss = -sum((trade.pnl_inr for trade in losses), _ZERO)
     count = len(result.trades)
-    return {
-        "start": start.isoformat(),
-        "end": end.isoformat(),
-        "years": float(years),
-        "final_equity_inr": str(curve[-1].quantize(PAISE)),
-        "cagr_pct": float(cagr),
-        "max_drawdown_pct": float(drawdown),
-        "drawdown_peak_on": peak_at.isoformat(),
-        "drawdown_trough_on": trough_at.isoformat(),
-        "calmar": float(cagr / abs(drawdown)) if drawdown < _ZERO else None,
-        "sharpe": sharpe,
-        "trades": count,
-        "win_rate_pct": (len(wins) / count * 100) if count else 0.0,
-        "profit_factor": float(gross_win / gross_loss) if gross_loss > _ZERO else None,
-        "avg_win_pct": float(sum((t.return_pct for t in wins), _ZERO) / len(wins)) if wins else 0.0,
-        "avg_loss_pct": (
+    sessions_seen = len(result.open_positions) or 1
+    average_open = sum(result.open_positions) / sessions_seen
+    return BacktestStats(
+        start=start,
+        end=end,
+        years=float(years),
+        final_equity_inr=curve[-1].quantize(PAISE),
+        cagr_pct=float(cagr),
+        max_drawdown_pct=float(drawdown),
+        drawdown_peak_on=peak_at,
+        drawdown_trough_on=trough_at,
+        calmar=float(cagr / abs(drawdown)) if drawdown < _ZERO else None,
+        sharpe=sharpe,
+        trades=count,
+        win_rate_pct=(len(wins) / count * 100) if count else 0.0,
+        profit_factor=float(gross_win / gross_loss) if gross_loss > _ZERO else None,
+        avg_win_pct=float(sum((t.return_pct for t in wins), _ZERO) / len(wins)) if wins else 0.0,
+        avg_loss_pct=(
             float(sum((t.return_pct for t in losses), _ZERO) / len(losses)) if losses else 0.0
         ),
-        "avg_trade_pct": (
+        avg_trade_pct=(
             float(sum((t.return_pct for t in result.trades), _ZERO) / count) if count else 0.0
         ),
-        "avg_hold_sessions": (
+        avg_hold_sessions=(
             sum(trade.hold_sessions for trade in result.trades) / count if count else 0.0
         ),
-        "avg_open_positions": (
-            sum(result.open_positions) / len(result.open_positions)
-            if result.open_positions
-            else 0.0
-        ),
-        "exposure_pct": (
-            sum(result.open_positions)
-            / len(result.open_positions)
-            / result.params.config.sizing.max_slots
-            * 100
-            if result.open_positions
-            else 0.0
-        ),
-        "by_reason": {
+        avg_open_positions=average_open,
+        exposure_pct=average_open / result.params.config.sizing.max_slots * 100,
+        by_reason={
             reason.value: sum(1 for trade in result.trades if trade.reason is reason)
             for reason in ExitReason
             if any(trade.reason is reason for trade in result.trades)
         },
-    }
+    )
 
 
 def gate_vector(breadth: pl.DataFrame, sessions: tuple[dt.date, ...]) -> np.ndarray:
@@ -609,26 +681,26 @@ def gate_vector(breadth: pl.DataFrame, sessions: tuple[dt.date, ...]) -> np.ndar
     return np.array([lookup.get(session, False) for session in sessions], dtype=bool)
 
 
-def yearly(result: BacktestResult) -> list[dict[str, object]]:
+def yearly(result: BacktestResult) -> list[YearRow]:
     """Calendar-year returns off the equity curve, and the trades that closed in each."""
     by_year: dict[int, list[Decimal]] = {}
     for session, value in zip(result.sessions, result.equity, strict=True):
         if value != _ZERO:
             by_year.setdefault(session.year, []).append(value)
     opening = result.equity[0]
-    out: list[dict[str, object]] = []
+    out: list[YearRow] = []
     for year in sorted(by_year):
         values = by_year[year]
         closing = values[-1]
         closed = [trade for trade in result.trades if trade.exit_date.year == year]
         wins = sum(1 for trade in closed if trade.pnl_inr > _ZERO)
         out.append(
-            {
-                "year": year,
-                "return_pct": float((closing / opening - _ONE) * _HUNDRED) if opening else 0.0,
-                "trades": len(closed),
-                "win_rate_pct": (wins / len(closed) * 100) if closed else 0.0,
-            }
+            YearRow(
+                year=year,
+                return_pct=float((closing / opening - _ONE) * _HUNDRED) if opening else 0.0,
+                trades=len(closed),
+                win_rate_pct=(wins / len(closed) * 100) if closed else 0.0,
+            )
         )
         opening = closing
     return out

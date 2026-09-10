@@ -121,8 +121,9 @@ papered over.
 
 **Goal:** the `vb_` schema of `03`, migrated, seeded, idempotent, with the ceiling boundary intact.
 
-- Migration `0036_vbt.py` (re-check the head first): every table in `03` §1–§8, indexes, FKs,
-  `user_id` everywhere, the `SkipReason` and state check-constraints.
+- Migration `0037_vbt.py` (re-check the head first — it moved while this run was in flight):
+  every table in `03` §1–§8, indexes, FKs, `user_id` everywhere, the `SkipReason` and state
+  check-constraints.
 - Models in `packages/core/src/baskfy_core/models/vbt.py`; `vb_config` seeded for
   `BASKFY_SOLE_USER_ID` with `sleeve_capital_inr = 0` and the `04` defaults.
 - `BASKFY_VBT_EXECUTION_ENABLED`, `BASKFY_VBT_NIGHTLY_ENABLED`,

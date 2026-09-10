@@ -1,0 +1,109 @@
+panel: 4186 instruments x 2396 sessions, 2017-01-02 → 2026-09-09, etf-flagged 349  [10s]
+scan (literal Chartink rules): 32929 signals, 1874 names  [10s]
+overlap window 2026-01-20→2026-09-09: chartink 3407, mine 3081, both 3055 (recall 89.7%, precision 99.2%)
+  chartink-only: 352, of which symbol absent from panel: 0 (e.g. [])
+  why chartink-only: {'no_bar_that_day': 262, 'vol_sma_nan(<50 bars or gaps)': 81, 'fails_a_rule': 9, 'etf': 0}
+
+EVENT STUDY (buy next open, mark at close of +k sessions), % :
+                count   mean    50%    10%    90%  win_rate
+gap_open_pct  32882.0   0.99   0.69  -1.14   3.49     69.11
+r1            32882.0  -0.61  -1.06  -5.57   4.86     38.18
+r2            32806.0  -0.85  -1.55  -7.48   6.52     37.01
+r3            32633.0  -0.92  -1.67  -8.70   7.60     37.75
+r5            32433.0  -0.91  -1.87 -10.32   9.53     38.77
+r10           32151.0  -0.62  -2.04 -12.98  13.30     40.58
+r20           31677.0  -0.03  -2.07 -16.60  18.95     41.95
+r40           31085.0   1.24  -2.16 -21.61  27.85     42.84
+r60           30511.0   2.88  -1.74 -25.05  35.59     43.51
+mae20         32882.0 -11.44 -10.12 -21.87  -2.47      0.00
+mfe20         32882.0  13.47   9.24   1.41  30.78     97.15
+
+by year:
+        r5                r10                r20             
+      mean median count  mean median count  mean median count
+year                                                         
+2017  0.05  -1.38  2400  0.85  -0.90  2400  2.63  -0.43  2399
+2018 -2.70  -3.35  1701 -4.36  -5.37  1699 -6.90  -8.06  1696
+2019 -1.59  -2.49  1513 -2.48  -3.09  1513 -3.81  -4.28  1513
+2020 -1.70  -2.49  3394 -0.87  -2.20  3395 -0.57  -2.02  3395
+2021 -0.26  -1.84  4376  0.51  -1.54  4376  2.80  -0.38  4376
+2022 -1.62  -2.44  3683 -1.57  -2.83  3683 -2.39  -4.22  3683
+2023 -0.14  -1.08  4083  0.74  -0.60  4081  2.79   0.91  4068
+2024 -0.77  -1.79  4851 -0.73  -2.51  4726 -0.02  -2.59  4561
+2025 -1.01  -1.78  3373 -1.15  -2.28  3323 -1.19  -2.83  3264
+2026 -0.63  -1.29  3059 -0.04  -1.40  2955  0.51  -1.85  2722
+
+by rvol:
+                        r5         r10         r20      
+                      mean count  mean count  mean count
+rvol                                                    
+(3.0, 4.0]           -0.51  6089 -0.26  6048  0.31  5976
+(4.0, 6.0]           -0.56  8841 -0.31  8785  0.42  8685
+(6.0, 10.0]          -0.65  9171 -0.30  9108  0.24  8969
+(10.0, 1000000000.0] -1.85  8332 -1.58  8210 -1.06  8047
+
+by change_pct:
+                        r5         r10         r20      
+                      mean count  mean count  mean count
+change_pct                                              
+(6.5, 8.0]           -0.48  9255 -0.05  9199  0.52  9072
+(8.0, 10.0]          -0.73  9142 -0.42  9070  0.33  8930
+(10.0, 15.0]         -0.98  8922 -0.73  8836 -0.03  8720
+(15.0, 20.0]         -1.84  4914 -1.82  4848 -1.68  4757
+(20.0, 1000000000.0] -2.34   200 -2.22   198 -1.12   198
+
+by close_pos:
+                r5          r10          r20       
+              mean  count  mean  count  mean  count
+close_pos                                          
+(0.0, 0.5]   -1.41   2049 -1.24   2035 -1.06   2011
+(0.5, 0.8]   -0.79  13828 -0.37  13716  0.23  13534
+(0.8, 0.95]  -0.49  12631 -0.14  12539  0.56  12353
+(0.95, 1.01] -2.41   3925 -2.73   3861 -2.34   3779
+
+by turnover_cr:
+                        r5          r10          r20       
+                      mean  count  mean  count  mean  count
+turnover_cr                                                
+(0.0, 1.0]           -2.01    475 -2.64    470 -2.64    457
+(1.0, 5.0]           -1.95   3689 -1.83   3648 -1.78   3580
+(5.0, 20.0]          -1.64   7205 -1.43   7120 -1.03   7022
+(20.0, 1000000000.0] -0.45  21064 -0.09  20913  0.67  20618
+
+by gap_open_pct:
+                         r5          r10          r20       
+                       mean  count  mean  count  mean  count
+gap_open_pct                                                
+(-1000000000.0, -2.0] -0.38   1544 -0.43   1527 -0.06   1506
+(-2.0, 0.0]           -0.69   8456 -0.43   8382 -0.15   8255
+(0.0, 2.0]            -0.57  15775 -0.18  15670  0.62  15447
+(2.0, 5.0]            -1.75   5035 -1.56   4974 -0.81   4893
+(5.0, 1000000000.0]   -3.15   1623 -3.22   1598 -3.26   1576
+A_hold5_close                gate=none       CAGR  -21.9%  DD  -90.4%  Sharpe -1.74  trades 928  win 32.5%  PF 0.57  [1s]
+A_hold5_close                gate=idx_10_20  CAGR  -22.1%  DD  -90.7%  Sharpe -2.14  trades 721  win 28.3%  PF 0.49  [0s]
+A_hold10_close               gate=none       CAGR  -22.1%  DD  -90.7%  Sharpe -1.29  trades 844  win 37.1%  PF 0.6  [0s]
+A_hold10_close               gate=idx_10_20  CAGR  -22.2%  DD  -91.0%  Sharpe -2.14  trades 472  win 29.2%  PF 0.37  [0s]
+A_hold20_close               gate=none       CAGR  -19.5%  DD  -90.3%  Sharpe -0.68  trades 1129  win 38.9%  PF 0.71  [0s]
+A_hold20_close               gate=idx_10_20  CAGR  -21.5%  DD  -90.4%  Sharpe -0.99  trades 918  win 38.3%  PF 0.53  [0s]
+B_stop8_hold10               gate=none       CAGR  -22.0%  DD  -90.6%  Sharpe -1.79  trades 814  win 27.4%  PF 0.52  [0s]
+B_stop8_hold10               gate=idx_10_20  CAGR  -22.1%  DD  -90.7%  Sharpe -2.23  trades 673  win 25.6%  PF 0.44  [0s]
+B_stop8_hold20               gate=none       CAGR  -21.8%  DD  -90.5%  Sharpe -1.55  trades 723  win 24.8%  PF 0.5  [0s]
+B_stop8_hold20               gate=idx_10_20  CAGR  -22.1%  DD  -90.8%  Sharpe -2.2  trades 514  win 18.5%  PF 0.35  [0s]
+B_siglow_hold20              gate=none       CAGR  -22.5%  DD  -91.1%  Sharpe -1.58  trades 731  win 22.7%  PF 0.54  [0s]
+B_siglow_hold20              gate=idx_10_20  CAGR  -22.2%  DD  -90.8%  Sharpe -2.16  trades 523  win 19.7%  PF 0.38  [0s]
+C_siglow_chand3_be1          gate=none       CAGR  -22.3%  DD  -90.8%  Sharpe -1.65  trades 705  win 20.9%  PF 0.43  [0s]
+C_siglow_chand3_be1          gate=idx_10_20  CAGR  -22.4%  DD  -91.0%  Sharpe -1.8  trades 658  win 19.0%  PF 0.39  [0s]
+C_siglow_ema10               gate=none       CAGR  -21.9%  DD  -90.5%  Sharpe -1.84  trades 826  win 22.8%  PF 0.46  [0s]
+C_siglow_ema10               gate=idx_10_20  CAGR  -21.7%  DD  -90.3%  Sharpe -1.95  trades 708  win 21.0%  PF 0.39  [0s]
+C_siglow_ema21               gate=none       CAGR  -22.2%  DD  -90.8%  Sharpe -1.23  trades 1110  win 24.3%  PF 0.52  [0s]
+C_siglow_ema21               gate=idx_10_20  CAGR  -22.3%  DD  -91.0%  Sharpe -1.48  trades 787  win 19.6%  PF 0.43  [0s]
+C_siglow_ema10_partial2R     gate=none       CAGR  -21.9%  DD  -90.5%  Sharpe -1.93  trades 880  win 23.8%  PF 0.5  [0s]
+C_siglow_ema10_partial2R     gate=idx_10_20  CAGR  -21.9%  DD  -90.4%  Sharpe -2.07  trades 777  win 21.6%  PF 0.44  [0s]
+C_stop8_trail10pct           gate=none       CAGR  -22.0%  DD  -90.5%  Sharpe -1.68  trades 977  win 25.1%  PF 0.52  [0s]
+C_stop8_trail10pct           gate=idx_10_20  CAGR  -22.0%  DD  -90.6%  Sharpe -2.26  trades 715  win 20.7%  PF 0.4  [0s]
+D_target2R_stop              gate=none       CAGR  -21.9%  DD  -90.5%  Sharpe -1.66  trades 829  win 26.4%  PF 0.52  [0s]
+D_target2R_stop              gate=idx_10_20  CAGR  -22.1%  DD  -90.7%  Sharpe -2.21  trades 599  win 21.4%  PF 0.43  [0s]
+D_target3R_be1               gate=none       CAGR  -21.9%  DD  -90.6%  Sharpe -1.62  trades 733  win 16.9%  PF 0.47  [0s]
+D_target3R_be1               gate=idx_10_20  CAGR  -21.7%  DD  -90.3%  Sharpe -1.84  trades 643  win 16.3%  PF 0.44  [0s]
+
+done [23s]

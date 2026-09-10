@@ -1,0 +1,14 @@
+aws/
+data/panel.pkl
+data/sig2.pkl
+data/synth*/
+out/signal_features.pkl
+out/g2_*
+out/trades_*
+out/equity_*
+out/yearly_*
+__pycache__/
+
+# The superseded *local Docker* export (export_bars.sh). Near-empty next to aws/, which is what
+# every script actually reads; regenerate either with its script. VB0.1.
+/*.csv.gz

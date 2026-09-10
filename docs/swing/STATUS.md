@@ -2780,10 +2780,14 @@ Today's gate is **RED** on both indices, so nothing would have fired today in an
 - **No auto-executed order has ever been placed**, in any environment, live or dry. The first
   one will be the first — there was no drill morning (SW-5, waived) and the flag has never been
   on for a session.
-- **`verify-swing.sh` now FAILS by design.** It asserts `DRY_RUN=true` and the swing flags
-  `false`, which encoded "this box is not live". It is now wrong about a box that is. It has not
-  been rewritten, so the next reader will meet a red gate that is telling the truth about a
-  state Maulik chose.
+- ~~**`verify-swing.sh` now FAILS by design.**~~ **Fixed 10 Sep 2026 (SW26.1).** It asserted
+  `DRY_RUN=true` and the swing flags `false`, which encoded "this box is not live", and so failed
+  five checks on every healthy deploy for five days. The posture is now one named constant
+  (`POSTURE=live|simulated`) that every flag check reads, and the run is **SWING OK** against the
+  live box — the first green since 5 Sep. It also gained the three checks it could not make
+  before: the desk and the monitor must agree on the execution flags, the trigger window is read
+  from the running image and asserted as an ordering, and `AUTO_EXECUTE` is reported with an
+  explicit "** UNATTENDED LIVE ORDERS ARMED **" line.
 - **The box is still a t4g.large (2 vCPU / 8 GB)** that one background job took offline for
   forty minutes on 4 Sep. With orders now firing unattended, a box that can be starved is a box
   that can miss a 10:45 cutoff or a 15:15 stop sweep. Raised twice, not selected, recorded here.
@@ -2833,3 +2837,42 @@ day. Both pinned in `test_swing_monitor.py`.
   re-run over the wider window is the honest next check and has not happened.
 - The t4g.large concern from SW25 is now larger, not smaller: the monitor holds a websocket and
   polls for six and a quarter hours instead of ninety minutes on the same 2 vCPU.
+
+---
+
+## SW26 — DEPLOYED (10 Sep 2026, 15:14 IST, deploy #16)
+
+`e077324` is live on the box; `e6d9889` (SW26.1) is the verifier that can now see it.
+
+| | |
+|---|---|
+| Read out of the running `swing-monitor` | `session_open (9,15)` · **`monitor_close (15,30)`** · `pending_cutoff_at (10,45)` · `gtt_sweep_at (15,15)` |
+| Flags on both desk and monitor | `DRY_RUN=false`, `BASKFY_SWING_EXECUTION_ENABLED=true`, `BASKFY_SWING_AUTO_EXECUTE=true`, `BASKFY_SWING_MONITOR_ENABLED=true` |
+| `verify-swing.sh` | **SWING OK** — first green since 5 Sep (SW26.1) |
+| Migration / schema | `0034_swing_intraday_plan` (head), desk schema 20 tables |
+| Suites at the commit | core **1,731 passed** · desk **1,790 passed, 17 skipped** (70 s, single process) · ruff + format + mypy (537 files) clean |
+
+**Today was not watched, and Friday 11 Sep is the first session on the wider window.** The
+monitor's entrypoint schedules the process at the session open rather than starting mid-session,
+so the restart printed `next run Fri 2026-09-11 09:14 IST`. At 15:16 that cost nothing.
+
+### What Thursday 10 Sep actually was, for the record
+
+**The morning was lost to a dead Kite token, not to the market.** From the open until the monitor
+closed at 10:45 every websocket connect answered `1006 … WebSocket connection upgrade failed
+(403 - Forbidden)` and every fallback quote answered `Incorrect api_key or access_token`. The
+session ended `monitor close reached; 0 signals raised`. Maulik logged in at **13:10** — the
+token blob's mtime — so the file on the box is fresh, but the morning was already gone. This is
+a different failure from the one SW26 fixes and it will happen again on any morning the login is
+late; SW18's `refresh_token_if_changed` re-reads the blob without a restart, which is why the
+13:10 login is enough for the *desk*, but the monitor had already finished its window.
+
+### Still NOT done
+
+- **No afternoon trigger has ever been taken**, live or dry. Friday's first 11:00-and-later break
+  will be the first, and it will be unattended.
+- **The wider window is unmeasured.** SW23's backtest was run on the 09:15–10:45 window. Whether
+  taking the afternoon is additive or dilutive has not been tested; SW26 records this rather than
+  glossing it, and a re-run over the wider window is the honest next check.
+- The t4g.large concern compounds: the monitor now holds a websocket and polls for six and a
+  quarter hours instead of ninety minutes, on the same 2 vCPU.

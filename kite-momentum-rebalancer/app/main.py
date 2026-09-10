@@ -133,6 +133,12 @@ logging.info("observability: %s", _tel.install())
 from . import swing_desk                                             # noqa: E402
 app.include_router(swing_desk.router)
 
+# VB6: the volume-breakout sleeve's operator page and its one confirm route. Mounted the same
+# way and for the same reason: the desk console is the only place a line of this sleeve becomes
+# an order (docs/vbt/02 Track C §3, §4 — the web app gets no route that can reach the gateway).
+from . import vbt_desk                                               # noqa: E402
+app.include_router(vbt_desk.router)
+
 PLANS: dict[str, dict] = {}          # plan_id -> plan (in-memory, session-scoped)
 _kite: Kite | None = None
 _gateway: OrderGateway | None = None

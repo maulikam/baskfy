@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Volume breakout{% endblock %}
+
+{% block heading %}Volume breakout{% endblock %}
+{% block heading_aside %}
+  <span class="pill {{ 'warn' if v.dry_run else 'bad' }}" id="vbMode">
+    {{ 'SIMULATED' if v.dry_run else 'LIVE' }}</span>
+{% endblock %}
+
+{#- Money and prices. Decimal in, a string out; never a float on the way. -#}
+{% macro inr(x) -%}{% if x is none %}—{% else %}₹{{ '{:,.2f}'.format(x) }}{% endif %}{%- endmacro %}
+{% macro pct(x) -%}{% if x is none %}—{% else %}{{ '{:.2f}'.format(x) }}%{% endif %}{%- endmacro %}
+
+{#- ONE form per line. It carries exactly one line_id and posts exactly one line; there is no
+    control anywhere on this page that posts more than one, and there must never be one
+    (docs/vbt/05 §3: "There is no 'confirm all'"). -#}
+{% macro confirm_form(line) -%}
+  {% if line.confirmable %}
+  <form method="post" action="/vbt/execute" class="vb-confirm" data-line-id="{{ line.id }}">
+    <input type="hidden" name="plan_id" value="{{ line.plan_id }}">
+    <input type="hidden" name="line_id" value="{{ line.id }}">
+    <input type="hidden" name="confirm" value="true">
+    <button type="submit" class="{{ 'btn-saffron' if v.dry_run else 'btn-danger' }}"
+            title="{{ line.label }}">Confirm</button>
+  </form>
+  {% else %}
+  <span class="muted">{{ 'plan expired' if line.expired else line.state | lower }}</span>
+  {% endif %}
+  <div class="vb-outcome muted" data-outcome-for="{{ line.id }}" aria-live="polite"></div>
+{%- endmacro %}
+
+{% block content %}
+
+{#- ============================== status bar ============================== -#}
+<div class="banner {{ 'warn' if v.dry_run else 'bad' }}" id="vbStatus">
+  <span class="tag">status</span>
+  <span>
+    <b>DRY_RUN</b>=<code>{{ 'true' if v.desk_dry_run else 'false' }}</code> ·
+    <b>BASKFY_VBT_EXECUTION_ENABLED</b>=<code>{{ 'true' if v.execution_enabled else 'false' }}</code> ·
+    <b>DRY_RUN sessions</b>: {{ v.dry_run_sessions }} of {{ v.dry_run_sessions_required }}
+    {% if v.breadth %}
+      · <b>gate</b>:
+      <span class="pill {{ 'ok' if v.breadth.gate == 'OPEN' else 'warn' }}">{{ v.breadth.gate }}</span>
+      {{ pct(v.breadth.pct_above_dma) }} of {{ v.breadth.measured_count }} names above their
+      200-day average
+    {% endif %}
+    <span class="muted" style="display:block;margin-top:5px">
+      This sleeve is end-of-day. The plan is built after the close and rebuilt before the open;
+      nothing on this page fires inside a session, and there is no auto-execute flag for it.
+    </span>
+  </span>
+</div>
+
+{% if not v.available %}
+  <div class="banner bad">
+    <span class="tag">unavailable</span>
+    <span>{{ v.reason or 'this desk has no vb_ tables' }}</span>
+  </div>
+{% else %}
+
+{#- ============================== the plan ============================== -#}
+<section class="card" id="vbPlan">
+  <h2>Plan
+    {% if v.plan %}
+      <span class="muted">{{ v.plan.source | lower }} · session {{ v.plan.session_date }} ·
+        sleeve {{ inr(v.plan.sleeve_equity_inr) }} · {{ v.countdown }}</span>
+    {% endif %}
+  </h2>
+  {% if not v.plan %}
+    <p class="muted">No plan yet. The evening job builds one after the detector runs.</p>
+  {% else %}
+  <table class="tbl">
+    <thead><tr>
+      <th>line</th><th>symbol</th><th>qty</th><th>limit</th><th>stop</th><th>value</th>
+      <th>note</th><th>state</th><th></th>
+    </tr></thead>
+    <tbody>
+      {% for line in v.lines %}
+      <tr class="vb-line vb-{{ line.kind | lower }}">
+        <td><b>{{ line.label }}</b></td>
+        <td>{{ line.symbol }}</td>
+        <td>{{ line.quantity }}</td>
+        <td>{{ line.limit_text }}</td>
+        <td>{{ line.stop_text }}</td>
+        <td>{{ line.value_text }}</td>
+        <td class="muted">{{ line.note or '' }}</td>
+        <td>{{ line.state }}</td>
+        <td>{{ confirm_form(line) }}</td>
+      </tr>
+      {% endfor %}
+      {% if not v.lines %}
+      <tr><td colspan="9" class="muted">Nothing to confirm on this plan.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  {#- A plan is not honest without its skips (docs/vbt/04 §9.1). -#}
+  <h3>Passed over <span class="muted">{{ v.skips | length }}</span></h3>
+  <table class="tbl">
+    <thead><tr><th>symbol</th><th>reason</th><th>detail</th></tr></thead>
+    <tbody>
+      {% for skip in v.skips %}
+      <tr><td>{{ skip.symbol }}</td><td>{{ skip.reason }}</td>
+        <td class="muted">{{ skip.detail or '' }}</td></tr>
+      {% endfor %}
+      {% if not v.skips %}
+      <tr><td colspan="3" class="muted">Nothing was passed over.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+{#- ============================== working orders ============================== -#}
+<section class="card" id="vbWorking">
+  <h2>Working orders <span class="muted">a limit works three sessions, then it is cancelled</span></h2>
+  <table class="tbl">
+    <thead><tr>
+      <th>symbol</th><th>limit</th><th>qty</th><th>filled</th><th>sessions</th>
+      <th>state</th><th>broker id</th>
+    </tr></thead>
+    <tbody>
+      {% for order in v.working %}
+      <tr class="{{ 'warn' if order.expires_tonight else '' }}">
+        <td>{{ order.symbol }}</td>
+        <td>{{ order.limit_text }}</td>
+        <td>{{ order.quantity }}</td>
+        <td>{{ order.filled_quantity }}</td>
+        <td>{{ order.sessions_text }}{% if order.expires_tonight %}
+          <span class="pill warn">cancels tonight</span>{% endif %}</td>
+        <td>{{ order.state }}</td>
+        <td class="muted">{{ order.broker_order_id or '—' }}</td>
+      </tr>
+      {% endfor %}
+      {% if not v.working %}
+      <tr><td colspan="7" class="muted">No limit is resting.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</section>
+
+{#- ============================== the book ============================== -#}
+<section class="card" id="vbBook">
+  <h2>Book <span class="muted">what this sleeve bought, and nothing else</span></h2>
+  <table class="tbl">
+    <thead><tr>
+      <th>symbol</th><th>entered</th><th>entry</th><th>qty</th><th>stop</th><th>GTT</th>
+      <th>tomorrow</th>
+    </tr></thead>
+    <tbody>
+      {% for position in v.book %}
+      <tr>
+        <td>{{ position.symbol }}{% if position.simulated %}
+          <span class="pill warn">simulated</span>{% endif %}</td>
+        <td>{{ position.entry_date }}</td>
+        <td>{{ position.entry_text }}</td>
+        <td>{{ position.quantity_open }}</td>
+        <td>{{ position.stop_text }}</td>
+        <td>{% if position.naked %}<span class="pill bad">naked</span>
+            {% else %}{{ position.gtt_id }}{% endif %}</td>
+        <td>{% if position.sells_tomorrow %}sells at the open
+            {% else %}<span class="muted">hold</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      {% if not v.book %}
+      <tr><td colspan="7" class="muted">The book is empty.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</section>
+
+{% endif %}
+
+<script>
+// One form, one line, one inline answer. Nothing here can post two lines, and there is no
+// control that posts none — docs/vbt/02 Track C §3.
+document.querySelectorAll('form.vb-confirm').forEach(function (form) {
+  form.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    var button = form.querySelector('button');
+    var target = document.querySelector('[data-outcome-for="' + form.dataset.lineId + '"]');
+    button.disabled = true;
+    try {
+      var response = await fetch('/vbt/execute', { method: 'POST', body: new FormData(form) });
+      var body = await response.json();
+      target.textContent = (body.status || response.status) + (body.reason ? ' — ' + body.reason : '');
+    } catch (error) {
+      target.textContent = 'the request failed: ' + error;
+      button.disabled = false;
+    }
+  });
+});
+</script>
+{% endblock %}

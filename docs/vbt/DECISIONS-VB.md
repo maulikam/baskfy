@@ -476,3 +476,81 @@ this loader that matters most **is** the evening job, which is the worker's.
 Rejected: a hand-rolled engine fixture in the API tree (a fourth copy of a fixture three trees
 already have). Reversal: move the file when the API's seeder is fixed; the test body does not
 change.
+
+---
+
+## VB6 — the plan, and the click that turns it into an order
+
+### VB6.1 — The evening's session counts are derived, not incremented · ⚠ UNREVIEWED
+
+`vb_order.sessions_worked` is **recomputed** every evening from the calendar
+(`sessions_between(signal_date, today)`) rather than incremented by one.
+
+An incrementing counter has to remember whether tonight already ran — and the evening job runs
+again on a retry, on a manual `make vbt-plan`, and on the morning rebuild. A derived count cannot
+be wrong however many times the job runs, and that is the difference between a rule and a
+bookkeeping convention. A test runs the evening three times and asserts the count is still two.
+
+Rejected: an increment guarded by a "did tonight run" flag (a second piece of state to keep
+right, and the flag is the thing that goes wrong). Reversal: none wanted.
+
+### VB6.2 — What counts as a DRY_RUN session · ⚠ UNREVIEWED
+
+`02` §3.1 asks for **twenty** DRY_RUN sessions before the execution flag may flip, so what
+counts as one is a decision rather than a detail.
+
+A session counts when it closed in `DRY_RUN` mode **and** either a line was confirmed on it, or
+the plan had no executable line at all. The second clause is not a loophole: a shut gate with an
+empty book produces nothing to confirm, and a gate that could only be satisfied on days the
+market cooperated would never be satisfied — the sleeve is in cash 37% of the time by design.
+What it refuses is the case the gate is actually about: **a session with lines on the page that
+nobody rehearsed.**
+
+Rejected: counting every session the job ran (twenty of those prove the *job* runs, which the
+nightly step already proves); counting only sessions with a confirm (unreachable in a quiet
+market, and the rule would then push a person to confirm something in order to satisfy it —
+exactly the wrong incentive).
+
+### VB6.3 — A sell without a live price goes; a buy without one does not · ⚠ UNREVIEWED
+
+A `MARKET` order carries no price, and the gateway's risk layer refuses to value one without a
+`reference_price`. The desk reads a live price per confirm. When there is none — no Kite session,
+a sqlite desk, a token that expired overnight — the `SELL_AT_OPEN` still goes, valued at the
+position's entry.
+
+The swing sleeve refuses a *buy* in that situation and is right to (A8): no price means no
+protection percentage, and a chased entry carries risk the sizing never saw. An **exit** is the
+opposite case. Blocking a sell for want of a quote leaves a position the rules have decided to
+close sitting in the book overnight, which is precisely the failure the exit rule exists to
+prevent. The reference price affects the risk layer's valuation, never the fill.
+
+This sleeve has no live buy path at all to make the symmetric mistake with: a `PLACE_LIMIT` is a
+LIMIT at a level the plan already knows (`04` §7.1), so it needs no quote.
+
+Rejected: blocking both (a stuck position); guessing a price for the buy too (the level *is* the
+strategy). Reversal: one fallback expression.
+
+### VB6.4 — The sweep produces a cancel **line**; it does not cancel · ⚠ UNREVIEWED
+
+When a working order finishes its third session, the evening writes a `CANCEL_LIMIT` line and
+leaves the `vb_order` row in `SENT`. Only a confirmed line calls the gateway's `cancel_order`.
+
+A `SENT` order is live at a broker, and marking it `CANCELLED` in the database without telling
+the broker would leave a real order resting against a book that believes it is gone — the worst
+of the available states. An order that never reached a broker (`PROPOSED`, `CONFIRMED`) has
+nothing to cancel and is marked `EXPIRED` by the sweep itself.
+
+Rejected: cancelling in the sweep (a job that places or cancels orders without a person is the
+thing `02` Track C §3 forbids, whatever direction it moves exposure in). Reversal: none.
+
+### VB6.5 — The desk page does not poll · ⚠ UNREVIEWED
+
+The swing page refreshes every five seconds because its triggers arrive inside a session. This
+one refreshes on demand.
+
+The plan is built twice a day and nothing about this sleeve fires while the market is open, so a
+five-second poll would be motion without information — and a page that looks live invites a
+person to sit in front of it during a session, which is not how this strategy is traded.
+`05` §3 says so; this records that it is a choice. Rejected: matching the swing page for
+consistency (consistency of *behaviour* between two sleeves that behave differently is a
+disguise, not a virtue).

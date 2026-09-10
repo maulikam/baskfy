@@ -3,7 +3,7 @@
 The status page for the volume-breakout run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: VB5 green — the sleeve has its own money. VB6–VB10 not started.** Started 10 Sep 2026 on branch
+**Run state: VB6 green — the desk plans it and a click confirms it. VB7–VB10 not started.** Started 10 Sep 2026 on branch
 `developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
@@ -17,7 +17,7 @@ what is NOT done**. A fresh session resumes from the first module not marked ✅
 | VB3 — Schema and settings | ✅ | Twelve `vb_` tables in migration **`0037_vbt`**, generated from the models and verified against them by Alembic's own comparison — 0 differences, and a downgrade/upgrade round trip; four settings, three ceilings, two flags, and a sleeve seeded at ₹0 |
 | VB4 — The nightly job | ✅ | `baskfy.vbt.detect` writes `vb_signal_daily` + `vb_breadth_daily`, wired in as the chain's **thirteenth** step (unable to fail the night), with a 21:10 retry that asks before it works and `make vbt DATE=…` |
 | VB5 — The sleeve's cash and book | ✅ | `baskfy_core.vbt.sleeve` states the arithmetic once; `baskfy_api.vbt_sleeve` loads it from `vb_` rows and nothing else. A holding this sleeve did not buy is invisible to it, and a resting limit commits cash without spending it |
-| VB6 — Desk plan and `/vbt/execute` | ⬜ | |
+| VB6 — Desk plan and `/vbt/execute` | ✅ | The evening job writes a plan with its skips and settles the session; the desk page shows it in three panels; one click per line goes through the real gateway and **0 orders reach a broker** |
 | VB7 — The working order and its expiry | ⬜ | |
 | VB8 — The pages | ⬜ | |
 | VB9 — The backtest on the page | ⬜ | |
@@ -292,6 +292,60 @@ sleeve's equity does not move.
   on). It is not this run's, and it is why VB5's database tests are in the worker tree
   (DECISIONS-VB **VB5.3**). A fresh session seeing `there is no unique or exclusion constraint
   matching the ON CONFLICT specification` should look there rather than at the `vb_` schema.
+
+---
+
+## VB6 — The desk plan and its confirm ✅ (10 Sep 2026)
+
+Two halves, and neither can place anything on its own.
+
+### The worker half — `baskfy.vbt.evening` and `baskfy.vbt.morning`
+
+`services/worker/src/baskfy_worker/tasks/vbt_evening.py`. In order: expire the working limits
+(VB7's sweep), manage the book with the session's bar and its 21-day EMA, list the naked stops,
+then build the entries from the session's `SIGNAL` rows against the gate, the sleeve's own money
+and the book — every name passed over recorded as a `vb_plan_skip`. Then the session row.
+
+| | |
+|---|---|
+| Beat | `vbt-evening` **21:15 IST** (after the 21:10 detect), `vbt-morning` **09:00** |
+| CLI | `make vbt-plan DATE=2026-09-09 [SOURCE=MORNING]` — it places nothing |
+| Tests | `services/worker/tests/test_vbt_evening.py` — **26 passed** |
+
+**Every line it writes is `PROPOSED`.** A test asserts that and that `vb_order` is still empty
+after an evening: the job writes intentions, and an order needs a person.
+
+### The desk half — `/vbt`, `/vbt/data`, `POST /vbt/execute`
+
+`kite-momentum-rebalancer/app/vbt_execute.py` (the confirm) and `app/vbt_desk.py` (the store,
+the view and the route), with `app/templates/vbt.html`.
+
+| | |
+|---|---|
+| Tests | `tests/test_vbt_execute.py` **22 passed**, `tests/test_vbt_desk.py` **21 passed** |
+| The gateway | Its own instance, its own journal (`vbt_orders_journal.jsonl`), its own band (0.5–15%), sharing the desk's one risk manager so this sleeve cannot spend a limit the weekly book already used |
+| The evidence | Every execute test runs the **real** gateway over a broker client whose every method raises. **0 orders reach a broker.** |
+
+The four refusals are tested through the route's own vocabulary: no confirm → **400**, unknown
+plan → **404**, past thirty minutes → **410**, a line confirmed twice → **409**. And the two
+Track C claims: a `SELL_AT_OPEN` for a name the sleeve does not own is `BLOCKED` with "did not
+buy", and one for more than it owns is `BLOCKED` with the two numbers.
+
+### Five decisions worth reading
+
+`VB6.1` session counts are derived, not incremented — a test runs the evening three times and the
+count is still two. `VB6.2` what counts as one of `02` §3.1's twenty DRY_RUN sessions.
+`VB6.3` a sell without a live price goes and a buy does not. `VB6.4` the sweep produces a cancel
+*line* and never cancels. `VB6.5` the page does not poll.
+
+### What is NOT done at VB6
+
+* **No order has ever been placed, simulated or otherwise, outside a test.** The desk page has
+  never been opened against a database with `vb_` rows in it.
+* The evening job has never run against the plant's real bars.
+* `VBT_ORDER_PAST_EXPIRY` and the rest of `05` §4's alerts do not exist yet (VB7, VB8).
+* No web page reads any of this (VB8).
+* The desk's `vbt.html` renders in the test suite's shape but has not been seen in a browser.
 
 ### Resume instructions for a fresh session
 

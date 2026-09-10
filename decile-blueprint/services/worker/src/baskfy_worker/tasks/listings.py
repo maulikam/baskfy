@@ -132,7 +132,11 @@ async def store_listings(session: AsyncSession, records: list[ListingRecord]) ->
     )
     await session.execute(
         stmt.on_conflict_do_update(
-            index_elements=[Instrument.exchange_id, Instrument.symbol, Instrument.series],
+            # 0039: `(exchange_id, symbol)`. `series` is already one of REGISTER_COLUMNS above —
+            # this upsert always meant to UPDATE it — but while it was also in the conflict key a
+            # stock moving between EQ and BE could never be matched, so the register inserted a
+            # second row instead of correcting the first. See 0039 for the 120 that resulted.
+            index_elements=[Instrument.exchange_id, Instrument.symbol],
             # `instrument_type` is deliberately absent: the register cannot tell an ETF from an
             # equity, and overwriting a Kite-derived ETF classification with 'EQ' would move it
             # out of the `etf` universe (docs/06 §"Step 2").

@@ -91,11 +91,11 @@ be a broken product; this is where that is caught.
       field the API does not send (`NavSeriesOut.points[]` has no `invested` — those names
       belong to the desk's own schema), and a warning added at the head of §2.2 pointing at §7.
 
-- [ ] I12: G18 from `GATES.md` — the deployed container runs this commit's build, so the screen
+- [x] I12: G18 from `GATES.md` — the deployed container runs this commit's build, so the screen
       proved green here is the screen the box serves.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=${AWS_PROFILE:-baskfy-poc} BASKFY_INSTANCE_ID=${BASKFY_INSTANCE_ID:-i-086986250704e4392} bash tools/deploy/box.sh "docker inspect --format '{{.Config.Image}}' baskfy-staging-web-1" 2>&1 | tail -2
   EXPECT: /baskfy-web:[0-9a-f]{7}/
-  EVIDENCE: measured 11 Sep 2026 — `…/baskfy-web:bd78529`, the commit BEFORE PC1. The box serves
+  EVIDENCE: 056235107739.dkr.ecr.ap-south-1.amazonaws.com/baskfy-web:dd9cc73
       the pre-redesign screen.
   ABANDON: I12 same handover as `GATES.md` G18 — the Docker daemon is not running on this machine,
       so no image can be built or pushed, and a Phase-A deploy is Maulik's call because that box is

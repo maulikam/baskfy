@@ -3,7 +3,7 @@ import "server-only";
 import type { Schemas } from "@baskfy/api-client";
 
 import { serverApiOrigin } from "@/lib/api/config";
-import { serverFetchJsonOrNull } from "@/lib/api/server-fetch";
+import { serverFetchJson, serverFetchJsonOrNull } from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 import type { GroupingSuggestion } from "@/lib/portfolio/organize";
 
@@ -51,6 +51,39 @@ async function tryJson(path: string): Promise<unknown> {
 export async function fetchPortfolioOverview(): Promise<OverviewOut | null> {
   const data = await tryJson("/portfolio/overview");
   return data === null ? null : (data as OverviewOut);
+}
+
+/**
+ * Why the overview is missing, when it is — because "could not load" and "you are not allowed to
+ * see this" are different sentences and need different next actions.
+ *
+ * `serverFetchJsonOrNull` collapses every failure to `null`, which is right for a surface that
+ * prefers an empty state to a crash and wrong for a screen that has to TELL a person what
+ * happened. A reader who has lost access should be told to ask the account owner; a reader
+ * looking at an outage should be told to try again. Offering "try again" to the first is a loop
+ * they cannot exit.
+ *
+ * The status is read off the message `serverFetchJson` throws (`"<url> responded 403"`), which is
+ * the only place it survives. Brittle, and better than the alternative of not distinguishing them
+ * at all — if that message changes this falls back to "unreachable", which is the safe direction.
+ */
+export type OverviewFailure = "restricted" | "unreachable" | null;
+
+export async function readPortfolioOverview(): Promise<{
+  overview: OverviewOut | null;
+  failure: OverviewFailure;
+}> {
+  try {
+    const data = await serverFetchJson({
+      url: `${serverApiOrigin()}/api/v1/portfolio/overview`,
+      headers: await authHeaders(),
+    });
+    return { overview: data as OverviewOut, failure: null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const restricted = /responded 40[13]$/.test(message);
+    return { overview: null, failure: restricted ? "restricted" : "unreachable" };
+  }
 }
 
 /** The flat broker-level truth (§2), or `null` when the API did not answer. */

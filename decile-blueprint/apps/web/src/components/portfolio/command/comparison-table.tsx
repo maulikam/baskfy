@@ -361,6 +361,10 @@ export function ComparisonTable({
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span className="cursor-help">
+                              {/* Already a percentage — `allocationAnalytics` converts the API's
+                                  fraction once, where the slice is built. This used to render
+                                  `headline_return.value` verbatim, so a 12.5% return read
+                                  "0.125%". */}
                               {slice.returnPct}%
                               <Info aria-hidden="true" className="ml-1 inline size-3 opacity-50" />
                             </span>

@@ -1579,3 +1579,110 @@ minutes, DECISIONS-VB **VB9.4** gets its number and the open item closes.
 box does not know this sleeve exists. When it is time, the sleeve needs `0036` applied, the two
 `BASKFY_VBT_*` flags in the box's env files (both leaving execution false), and the `vbt-detect`
 Beat entry.
+
+---
+
+## TWT — the three-weeks-tight sleeve
+
+Raised by the pack, 11 Sep 2026 (`docs/twt/`). The run does not wait on any of these; each has a
+standing default in `docs/twt/QUESTIONS.md`, and every module that does not depend on an answer is
+built anyway. **Three of them need your hands rather than your opinion**, and they are T1, T2 and
+T3 below.
+
+### T1 — The daily Kite login (blocks every live morning, nothing before one)
+
+Kite's access tokens die around **06:00 IST** every day, so the desk cannot place an order, arm a
+GTT or ratchet a stop on a morning nobody has logged in for. `RUN-AND-TEST.md` carries the
+sequence and it is unchanged by this run.
+
+This sleeve makes the login matter slightly more than the other two do. TWT-1's exit **is** a
+ratcheting GTT: on a rising book of ten lines, most sessions carry `RAISE_GTT_STOP` lines, and a
+morning without a login is a morning on which every one of those stops stays where it was. That is
+not a loss — the old stop is still resting and the position is still protected — but a week of it
+means the trail is a week behind the highs, which on this strategy is the difference between the
+measured book and a looser one.
+
+**What would close it:** nothing an agent can build. `docs/twt/FIRST-LIVE-MORNING.md` (TW10) puts
+the login first in the sequence and gives the one command that checks whether the token is alive
+before the plan is built.
+
+### T2 — The execution flag, by your hand and only yours
+
+`BASKFY_TWT_EXECUTION_ENABLED=true`. It does not exist yet; TW3 creates it defaulting **false**,
+and no module of this run ever sets it. The five conditions are in `docs/twt/02` §3 and their
+evidence will be in `TW-FINAL-REPORT.md`: TW10 green, both trees green, the backtest on the page,
+the written runbook, and your flip.
+
+**The swing sleeve's delegation does not extend here.** `docs/swing/02` §3.5 (5 Sep 2026) lets an
+agent set the *swing* flag on your written decision; VBT-1's §3 says the same about its own
+(V3, answered 11 Sep). If you want the same for this sleeve, one line here says so and an agent
+records it in `docs/twt/DECISIONS-TW.md` before acting on it. Until then no agent touches it.
+
+### T3 — The sleeve's capital, which is your keystroke
+
+`tw_config.sleeve_capital_inr` is seeded at **0** and the run never writes it. A sleeve at ₹0 plans
+nothing: every signal is skipped `NO_SLEEVE_CAPITAL`, which is the intended behaviour and not a
+fault to debug on the first morning.
+
+The standing default is **₹25,00,000** (your 11 Sep decision, `QUESTIONS.md` Q1). One consequence
+worth your eye before you type it: **no backtest in this repository was produced at ₹25 lakh.**
+Every number in `docs/twt/01` was measured at ₹10 lakh, where the 1 %-of-turnover cap fires on
+nothing. At ₹25 lakh over ten slots a line is ₹2.5 lakh and that cap binds until a name turns over
+₹2.5 crore a day — which is why this sleeve ships a ₹5 crore liquidity floor rather than the
+research's ₹2 crore (DECISIONS-TW **TW0.3**). The floor is the pack's answer to the size change; it
+is not a measurement at the new size.
+
+### T4 — The plant's missing instrument-days, which will make the live scan look thin
+
+Not yours to fix and not this run's either — it is the data plant's — but it is yours to **expect**,
+because the first time it shows up it will look like a bug.
+
+`docs/twt/01` §1: verified against Chartink's export over 21 Jan → 9 Sep 2026, the point-in-time
+reading reproduces **64.9 %** of Chartink's stock-days. The gap is not mostly logic. **832 are days
+on which Baskfy has no bar at all** for the instrument and **602 names lack a clean 50-session
+volume window**; the rest are near-misses at the 3.01 % edge and Chartink's own universe
+differences. Read with look-ahead — the current week's final close on every day of that week, which
+is what Chartink's *backtester* does — the same panel reproduces **83.1 % at 97.8 % precision**,
+which is what identifies the gap as candle semantics rather than a defect here.
+
+**So: on some sessions `/twt` will list fewer tight names than Chartink's live scan shows, and both
+will be right about their own data.** The page says so in its own words (`05` §1.2).
+
+**What would close it:** the same backfill V2 asks for — the missing instrument-days and the
+pre-2024 corporate actions (403 rows, 2024 →). Both are `docs/07` §4b territory and both are
+Kite-rate limited, not agent-limited. TW9's drift flag makes the re-run a button rather than a
+project.
+
+### What this run will never ask you for
+
+An agent placing an order, confirming a line on your behalf, widening the sleeve or a ceiling,
+setting the capital, or setting the flag. Those are the root `CLAUDE.md` safety rails and this
+sleeve does not touch them.
+
+---
+
+## PC — the Portfolio Command Center is built and green, and the box is still serving the old screen (11 Sep 2026)
+
+**What is needed:** a deploy of the Phase-A box.
+
+**Why it is yours:** two reasons, and only the first is about permission.
+
+1. The box is the live auto-execute host — `BASKFY_SWING_AUTO_EXECUTE=true` since 7 Sep. A deploy
+   there restarts the containers that sit behind a flag that trades. That is not an agent's call.
+2. This session cannot do it anyway. The Docker daemon on this machine is not running, so the web
+   image cannot be built or pushed to ECR. `docker info` fails; `aws sts get-caller-identity`
+   succeeds, so the credentials are fine and the daemon is the whole blocker.
+
+**The measurement.** `docker inspect baskfy-staging-web-1` on the box reports
+`…/baskfy-web:bd78529`. `bd78529` is VB13.5, 10 Sep — the commit *before* PC1. So the Portfolios
+screen a person sees at `staging.baskfy.com/portfolio/portfolios` today is the pre-redesign one.
+`GATES.md` G17 read 307 and was correct: the box is serving. It is serving the previous build.
+
+**What it blocks:** `GATES.md` G18 and `gates/pc-integration.md` I12, and nothing else. Every gate
+that is about the code is green against this working tree.
+
+**What was done meanwhile:** the G18 check was repaired. It named a container called `baskfy-web`,
+which does not exist on the box — the compose project names it `baskfy-staging-web-1` — so the
+probe had been failing on a missing object rather than on a stale deploy, and would have gone on
+reporting "unprovable" after a deploy fixed it. It now reads the running image tag and compares it
+to HEAD.

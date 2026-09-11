@@ -1,4 +1,9 @@
-import { allocationAnalytics, percentOf, type AllocationAnalytics } from "@/lib/portfolio/analytics";
+import {
+  allocationAnalytics,
+  percentOf,
+  type AllocationAnalytics,
+  type AllocationSlice,
+} from "@/lib/portfolio/analytics";
 import type { Unallocated } from "@/lib/portfolio/organize";
 import type { Overview, PortfolioRow } from "@/lib/portfolio/overview";
 
@@ -28,7 +33,16 @@ import type { Overview, PortfolioRow } from "@/lib/portfolio/overview";
 
 /** A number the screen may show, or the reason it cannot. Never both, never neither. */
 export interface Metric {
-  /** Decimal string, exactly as the API sent it. `null` only ever means "see `unavailable`". */
+  /**
+   * Decimal string. `null` only ever means "see `unavailable`".
+   *
+   * **A rate here is a PERCENTAGE, not the fraction the API stores.** The server sends
+   * `pct = money / base` quantized — `0.019900` for a 1.99% day, `0.187000` for an 18.7% return —
+   * and the conversion happens once, where the metric is built, using `percentOf(x, "1")` so it
+   * is done on scaled integers rather than through a float. A renderer therefore formats and
+   * never scales. That division mattered: when the component scaled instead, PC1's band and PC2's
+   * read-out disagreed by a factor of a hundred depending on which one had already converted.
+   */
   readonly value: string | null;
   /** Why there is no value. Non-null whenever `value` is null — the type is the contract. */
   readonly unavailable: string | null;
@@ -36,7 +50,7 @@ export interface Metric {
   readonly label: string;
   /** One sentence on how it is calculated, for the tooltip. */
   readonly definition: string;
-  /** Percent form where the API supplies one, e.g. today's move. */
+  /** Percent form where the API supplies one, e.g. today's move. A percentage, as above. */
   readonly pct?: string | null;
   /** What the figure is measured from, when it has a start date. */
   readonly since?: string | null;
@@ -50,6 +64,17 @@ export interface Metric {
  * cannot fail is not a guard. This is the seam where the rule actually lives, so this is where it
  * is asserted.
  */
+/**
+ * The API's stored fraction as a percentage, exactly.
+ *
+ * `percentOf(x, "1")` is `x / 1 * 100` on scaled integers, borrowed rather than rewritten so this
+ * module and `overview.formatRate` cannot drift. Doing it with `Number(x) * 100` would make a
+ * 1.99% day `1.9900000000000002`, which is house rule 9's whole point.
+ */
+export function asPercent(fraction: string | null | undefined): string | null {
+  return percentOf(fraction ?? null, "1");
+}
+
 export function metric(
   label: string,
   definition: string,
@@ -289,7 +314,7 @@ export function commandCenter(
       "The change in the value of what you hold since the previous close. Deposits and withdrawals are not part of it.",
       hero?.todays_pnl?.amount,
       hero?.todays_pnl?.unavailable_reason ?? "No previous close to compare against yet.",
-      { pct: hero?.todays_pnl?.pct ?? null },
+      { pct: asPercent(hero?.todays_pnl?.pct) },
     ),
     unrealisedPnl: metric(
       "Unrealised",
@@ -307,21 +332,21 @@ export function commandCenter(
     xirr: metric(
       hero?.xirr?.label ?? "XIRR",
       "The annualised return that accounts for when money went in and came out — the honest one to compare against a fixed deposit.",
-      hero?.xirr?.value,
+      asPercent(hero?.xirr?.value),
       hero?.xirr?.unavailable_reason ?? "Needs dated deposits and withdrawals to solve for.",
       { since: hero?.xirr?.since ?? null },
     ),
     twr: metric(
       hero?.twr?.label ?? "Time-weighted return",
       "Return with the effect of deposits and withdrawals stripped out — the one to compare against an index.",
-      hero?.twr?.value,
+      asPercent(hero?.twr?.value),
       hero?.twr?.unavailable_reason ?? "Needs a daily value series to compute.",
       { since: hero?.twr?.since ?? null },
     ),
     drawdown: metric(
       "Drawdown",
       "How far below its own peak the portfolio is now. Zero means it is at a high.",
-      overview.chart?.max_drawdown?.drawdown,
+      asPercent(overview.chart?.max_drawdown?.drawdown),
       "No value history yet, so there is no peak to measure from.",
     ),
     peak: metric(
@@ -342,6 +367,71 @@ function peakValue(overview: Overview): string | null {
   // The peak the drawdown series is measured against — the last one is the running maximum, which
   // is the figure the brief means by "peak portfolio value".
   return points[points.length - 1]?.peak ?? null;
+}
+
+/* ------------------------------------------------------------------ *
+ * Export the view a person is looking at
+ * ------------------------------------------------------------------ *
+ *
+ * Brief: *"Export current view to CSV/PDF."* This is the CSV half, and it exports exactly what is
+ * on screen — the rows of the mode being shown, in the order the table has them — rather than a
+ * separate server-side report that could disagree with it.
+ *
+ * TWO THINGS IT DOES NOT DO, both deliberate.
+ *
+ * It does not write an empty string where a figure is missing. `AllocationSlice.value` is `null`
+ * when a row could not be priced, and an empty CSV cell is read by a spreadsheet as zero — which
+ * would turn "we could not price this" into "this is worth nothing", the same lie the screen's
+ * no-bare-dash rule exists to prevent. The word goes in the cell instead.
+ *
+ * And it does not export views and capital into one file. They are different models and summing
+ * them is the single worst number this product can produce; a file with both in it invites
+ * exactly that sum in a spreadsheet where no notice can follow it.
+ */
+
+/** RFC 4180: a field containing a comma, a quote or a newline is quoted, and quotes are doubled. */
+function csvField(value: string): string {
+  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+/** What a spreadsheet gets where the screen shows a reason. Never blank, which reads as zero. */
+const CSV_UNAVAILABLE = "not available";
+
+export const CSV_COLUMNS = [
+  "Portfolio",
+  "Value (INR)",
+  "Share of total (%)",
+  "Today (INR)",
+  "Return label",
+  "Return (%)",
+  "Cash (INR)",
+  "Holdings",
+] as const;
+
+export function commandCenterCsv(
+  slices: readonly AllocationSlice[],
+  mode: CommandMode,
+): string {
+  const header = [
+    `# Baskfy — ${mode === "capital" ? "capital portfolios" : "monitoring views"}`,
+    mode === "views"
+      ? "# Monitoring views may contain overlapping holdings. These rows do not sum to net worth."
+      : "# Capital portfolios own their holdings exclusively. These rows sum to net worth.",
+  ];
+  const cell = (value: string | null) => csvField(value ?? CSV_UNAVAILABLE);
+  const rows = slices.map((slice) =>
+    [
+      csvField(slice.name),
+      cell(slice.value),
+      cell(slice.weightPct),
+      cell(slice.todaysPnl),
+      cell(slice.returnLabel),
+      cell(slice.returnPct),
+      csvField(slice.cash),
+      String(slice.holdingsCount),
+    ].join(","),
+  );
+  return [...header, CSV_COLUMNS.join(","), ...rows].join("\n");
 }
 
 /** A portfolio's share of capital, for the comparison table. Re-exported so the table has one

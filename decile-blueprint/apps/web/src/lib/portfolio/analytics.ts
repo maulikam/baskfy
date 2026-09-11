@@ -60,6 +60,7 @@ export interface AllocationSlice {
   cash: string;
   /** The labelled headline return, carried through so the table can print its label (§5.2). */
   returnLabel: string | null;
+  /** The headline return as a PERCENTAGE, two decimals — not the fraction the API stores. */
   returnPct: string | null;
 }
 
@@ -143,7 +144,13 @@ export function allocationAnalytics(
     holdingsCount: row.holdings_count ?? 0,
     cash: row.cash ?? "0",
     returnLabel: row.headline_return?.label ?? null,
-    returnPct: row.headline_return?.value ?? null,
+    /* A PERCENTAGE, like every other `*Pct` on this slice — `headline_return.value` arrives as a
+       stored FRACTION (`0.125000` for 12.5%) and it used to be carried through unconverted. The
+       comparison table then printed it verbatim with a `%` appended, so every portfolio appeared
+       to have returned a tenth of what it did. One field on this interface meaning something
+       different from its three neighbours is how that survived review. `percentOf(x, "1")` is the
+       decimal-safe conversion: `0.0199 * 100` is `1.9900000000000002` in a float. */
+    returnPct: percentOf(row.headline_return?.value ?? null, "1"),
   }));
 
   const priced = slices.filter((slice) => slice.value !== null);

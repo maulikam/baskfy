@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   commandCenter,
+  commandCenterCsv,
+  CSV_COLUMNS,
   metric,
   NOT_YET_MEASURED,
   VIEWS_NOTICE,
   viewsNotice,
   type Metric,
 } from "@/lib/portfolio/command-center";
+import type { AllocationSlice } from "@/lib/portfolio/analytics";
 import type { Unallocated } from "@/lib/portfolio/organize";
 import type { Overview, PortfolioRow } from "@/lib/portfolio/overview";
 
@@ -65,10 +68,10 @@ function overview(over: Partial<Overview> = {}): Overview {
       invested: "3100000.00",
       holdings_without_cost_basis: 0,
       pending_reconciliation: false,
-      todays_pnl: { amount: "72029.56", label: "today", pct: "1.99" },
+      todays_pnl: { amount: "72029.56", label: "today", pct: "0.019900" },
       total_pnl: { amount: "580509.37", label: "total" },
-      twr: { label: "TWR since created", since: "2026-01-01", value: "18.7" },
-      xirr: { label: "XIRR", since: "2026-01-01", value: "21.4" },
+      twr: { label: "TWR since created", since: "2026-01-01", value: "0.187000" },
+      xirr: { label: "XIRR", since: "2026-01-01", value: "0.214000" },
       secondary: {
         broker_count: 2,
         cash: "120000.00",
@@ -80,8 +83,8 @@ function overview(over: Partial<Overview> = {}): Overview {
     chart: {
       pending_reconciliation: false,
       range: "1Y",
-      total_return: { label: "Total return", since: "2026-01-01", value: "18.7" },
-      max_drawdown: { drawdown: "-8.2", peak_on: "2026-06-01", trough_on: "2026-07-10" },
+      total_return: { label: "Total return", since: "2026-01-01", value: "0.187000" },
+      max_drawdown: { drawdown: "-0.082000", peak_on: "2026-06-01", trough_on: "2026-07-10" },
       drawdown: [{ drawdown: "-2.1", index: "97.9", peak: "3750000.00", on: "2026-09-10" }],
     },
     prices_label: "Prices: close of 2026-09-10",
@@ -124,12 +127,14 @@ describe("the executive snapshot", () => {
     expect(c!.snapshot.invested.value).toBe("3100000.00");
     expect(c!.snapshot.cash.value).toBe("120000.00");
     expect(c!.snapshot.todaysPnl.value).toBe("72029.56");
+    /* The server stores FRACTIONS and the snapshot converts once, here, so a renderer formats
+       and never scales. `0.019900` in, `1.99` out. */
     expect(c!.snapshot.todaysPnl.pct).toBe("1.99");
     expect(c!.snapshot.unrealisedPnl.value).toBe("566509.37");
     expect(c!.snapshot.realisedPnl.value).toBe("14000.00");
-    expect(c!.snapshot.xirr.value).toBe("21.4");
-    expect(c!.snapshot.twr.value).toBe("18.7");
-    expect(c!.snapshot.drawdown.value).toBe("-8.2");
+    expect(c!.snapshot.xirr.value).toBe("21.40");
+    expect(c!.snapshot.twr.value).toBe("18.70");
+    expect(c!.snapshot.drawdown.value).toBe("-8.20");
     expect(c!.snapshot.peak.value).toBe("3750000.00");
   });
 
@@ -347,5 +352,70 @@ describe("a missing payload", () => {
     for (const m of allMetrics(c!)) {
       expect(m.value !== null || m.unavailable !== null).toBe(true);
     }
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Exporting the current view — `gates/pc-integration.md` I14
+ * ------------------------------------------------------------------ */
+
+function slice(over: Partial<AllocationSlice> = {}): AllocationSlice {
+  return {
+    portfolioId: 1,
+    name: "Swing Manual",
+    value: "1250000.00",
+    weightPct: "34.00",
+    todaysPnl: "12500.00",
+    holdingsCount: 7,
+    cash: "40000.00",
+    returnLabel: "Since grouped",
+    returnPct: "12.50",
+    ...over,
+  };
+}
+
+describe("exporting the view a person is looking at", () => {
+  it("interaction: the CSV carries every column the comparison table shows", () => {
+    const csv = commandCenterCsv([slice()], "capital");
+    const lines = csv.split("\n");
+    const header = lines.find((line) => line.startsWith("Portfolio,"));
+
+    expect(header).toBe(CSV_COLUMNS.join(","));
+    expect(lines.at(-1)).toBe(
+      "Swing Manual,1250000.00,34.00,12500.00,Since grouped,12.50,40000.00,7",
+    );
+  });
+
+  it("unavailable: a figure with no value exports the WORD, never an empty cell", () => {
+    /* An empty CSV cell is read as zero by every spreadsheet there is. A portfolio that could
+       not be priced would then be worth nothing, which is the same lie the screen's
+       no-bare-dash rule exists to prevent — just laundered through a file. */
+    const csv = commandCenterCsv(
+      [slice({ value: null, weightPct: null, todaysPnl: null, returnLabel: null, returnPct: null })],
+      "capital",
+    );
+    const row = csv.split("\n").at(-1)!;
+
+    expect(row).toBe("Swing Manual,not available,not available,not available,not available,not available,40000.00,7");
+    expect(row).not.toMatch(/,,/);
+  });
+
+  it("monitoring: a views export says on its own first lines that it does not sum to net worth", () => {
+    const capital = commandCenterCsv([slice()], "capital");
+    const views = commandCenterCsv([slice({ name: "High Momentum" })], "views");
+
+    expect(views).toMatch(/^# Baskfy — monitoring views/);
+    expect(views).toMatch(/do not sum to net worth/);
+    expect(capital).toMatch(/sum to net worth/);
+    expect(capital).not.toMatch(/overlapping/);
+  });
+
+  it("interaction: a name containing a comma or a quote cannot break the row apart", () => {
+    const csv = commandCenterCsv([slice({ name: 'Long-term, "core"' })], "capital");
+    const row = csv.split("\n").at(-1)!;
+
+    expect(row.startsWith('"Long-term, ""core""",')).toBe(true);
+    // Eight columns survive the punctuation: seven commas outside the quoted field.
+    expect(row.slice(row.indexOf('",') + 2).split(",")).toHaveLength(7);
   });
 });

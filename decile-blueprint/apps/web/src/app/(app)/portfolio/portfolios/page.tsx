@@ -1,11 +1,22 @@
 import type { Metadata } from "next";
 import type { SleeveListOut } from "@baskfy/api-client";
 
+import {
+  createPortfolioAction,
+  deletePortfolioAction,
+  loadSleevesAction,
+  reattributePortfolioAction,
+  renamePortfolioAction,
+  saveSleevesAction,
+  transferHoldingsAction,
+} from "@/app/actions/portfolio";
 import { CommandCenterScreen } from "@/components/portfolio/command/command-center-screen";
 import { PortfoliosList } from "@/components/portfolios/portfolios-list";
 import { serverApi } from "@/lib/api/server";
+import { DeskUnavailable, fetchRegime, type Regime } from "@/lib/desk/fetch";
 import { fetchInvestments } from "@/lib/investments/fetch";
-import { fetchPortfolioOverview } from "@/lib/portfolio/fetch";
+import { fetchPortfolioHoldings, readPortfolioOverview } from "@/lib/portfolio/fetch";
+import { isMarketOpen } from "@/lib/market/session";
 import type { BookInvestment } from "@/lib/portfolios/book";
 import { PAGES } from "@/lib/vocabulary";
 
@@ -29,11 +40,14 @@ export default async function PortfolioPortfoliosPage() {
   // basket book, which is why this page could show "15 holdings filed here" beside an "Overall"
   // panel reading "—": the grouping came from one source and the money from another that knew
   // nothing about grouped holdings. Maulik reported exactly that on 11 Sep 2026.
-  const [{ data, error }, investments, overview] = await Promise.all([
+  const [{ data, error }, investments, overviewRead, holdings, regimeRead] = await Promise.all([
     api.GET("/api/v1/portfolios"),
     fetchInvestments(),
-    fetchPortfolioOverview(),
+    readPortfolioOverview(),
+    fetchPortfolioHoldings(),
+    readRegime(),
   ]);
+  const overview = overviewRead.overview;
   const list = data?.data ?? [];
   const initialSleeves: Record<number, SleeveListOut> = {};
   await Promise.all(
@@ -70,7 +84,25 @@ export default async function PortfolioPortfoliosPage() {
       <CommandCenterScreen
         overview={overview}
         unallocated={overview?.unallocated ?? null}
-        error={overview ? null : "The portfolio service did not answer."}
+        error={overviewRead.failure === "unreachable" ? "The portfolio service did not answer." : null}
+        failure={overviewRead.failure}
+        marketOpen={isMarketOpen()}
+        regime={regimeRead.regime}
+        regimeError={regimeRead.error}
+        /* EXCHANGE time, not the server's. The panel is pure and takes no clock, so the caller
+           supplies the day — and a box in another zone must not make yesterday's evaluation look
+           like today's. */
+        regimeToday={exchangeToday()}
+        holdings={holdings?.rows ?? []}
+        manageHandlers={{
+          create: createPortfolioAction,
+          rename: renamePortfolioAction,
+          transfer: transferHoldingsAction,
+          loadSleeves: loadSleevesAction,
+          saveSleeves: saveSleevesAction,
+          reattribute: reattributePortfolioAction,
+          remove: deletePortfolioAction,
+        }}
       />
 
       {/* The grouping forest, sub-portfolios and the basket book are a different job from the
@@ -91,4 +123,35 @@ export default async function PortfolioPortfoliosPage() {
       </details>
     </div>
   );
+}
+
+/**
+ * The desk's stance, or the sentence saying why there is none.
+ *
+ * `null` is never "risk-on by default" — an unreachable desk shows no tier at all, because a tier
+ * from a market the screen cannot currently see is worse than no tier. The panel holds that rule;
+ * this only has to avoid throwing the page away when the desk is down.
+ */
+async function readRegime(): Promise<{ regime: Regime | null; error: string | null }> {
+  try {
+    return { regime: await fetchRegime(), error: null };
+  } catch (error) {
+    return {
+      regime: null,
+      error:
+        error instanceof DeskUnavailable
+          ? `The desk did not answer: ${error.message}`
+          : "The desk did not answer.",
+    };
+  }
+}
+
+/** Today in IST as `YYYY-MM-DD`. The exchange's day, which is the only one a stance is about. */
+function exchangeToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }

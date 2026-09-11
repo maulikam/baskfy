@@ -283,9 +283,19 @@ DEFAULT_VBT_CONFIG: Final = VbtConfig()
 #: snapped to. Not a setting: it is the exchange's.
 TICK_INR: Final[str] = "0.05"
 
-#: How many DRY_RUN sessions the sleeve must rehearse before real money is even discussable
-#: (``docs/vbt/02`` §3, condition 1). Not a strategy parameter and not a field of
-#: :class:`VbtConfig` — nothing in the method reads it — but it is a number the desk page, the
-#: web page and the settings view all print, and three copies of it is two too many. Only Maulik
-#: can shorten it, and `NEEDS-MAULIK.md` V4 is where that decision goes.
-DRY_RUN_SESSIONS_REQUIRED: Final[int] = 20
+#: How many DRY_RUN sessions the sleeve must rehearse before real money is discussable.
+#:
+#: **Zero — the paper gate was withdrawn by Maulik on 11 Sep 2026** (`NEEDS-MAULIK.md` V4,
+#: DECISIONS-VB VB11.4). It was twenty; `docs/vbt/02` §3 records what it was and who struck it.
+#: The other conditions of `02` §3 are unchanged: his written risk decision, the backtest on the
+#: page, and half risk for the first live sessions.
+#:
+#: **The counter itself still counts.** `vb_config.dry_run_sessions` keeps incrementing and the
+#: pages keep showing it, because "this sleeve has rehearsed three sessions" stays worth knowing
+#: after it stops being a condition. A page reads this constant as the target and renders no
+#: target at all when it is zero.
+#:
+#: Not a strategy parameter and not a field of :class:`VbtConfig` — nothing in the method reads
+#: it — but the desk page, the web page and the settings view all print it, and three copies is
+#: two too many.
+DRY_RUN_SESSIONS_REQUIRED: Final[int] = 0

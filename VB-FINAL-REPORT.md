@@ -103,7 +103,8 @@ Nothing here is a surprise; all of it is in `STATUS.md` under its module.
   in 23 seconds from the research export; the `ohlcv_daily` read for 4,186 names over nine years
   is unmeasured, because no database this run could reach holds that history. VB9's "under 30
   minutes" is therefore *made likely*, not met. One command settles it — `NEEDS-MAULIK.md` V6.
-* The DRY_RUN session counter stands at **zero of twenty**.
+* The DRY_RUN session counter stands at **zero**, and since 11 Sep it is information rather than
+  a gate — Maulik withdrew the twenty-session condition (DECISIONS-VB VB11.4).
 
 **Spec gaps, recorded rather than quietly dropped.**
 * `05` §2's per-row **Dismiss** note does not exist: `03` has no table to put a note in, and the
@@ -125,18 +126,49 @@ In `NEEDS-MAULIK.md` under **VBT**, and nothing there can be done by an agent:
 
 | | |
 |---|---|
-| **V1** | The risk decision, in writing. Blocks the real-money gate and nothing before it |
+| **V1** | ✅ **₹25 lakh**, equal weight, ten slots (11 Sep). The risk decision *in prose* is still to write — the capital is the number, not the decision |
 | **V2** | The 262 missing instrument-days and the six thin sessions |
-| **V3** | `BASKFY_VBT_EXECUTION_ENABLED`. **The swing sleeve's delegation does not extend here** — no agent touches this flag without a line from you first |
-| **V4** | Twenty DRY_RUN sessions, or the shorter gate you gave the swing book |
+| **V3** | ✅ **Not delegated, and it stays that way** (11 Sep). No agent may set `BASKFY_VBT_EXECUTION_ENABLED` under any circumstances. Yours, by hand |
+| **V4** | ✅ **No paper gate at all** (11 Sep) — *"i dont want to have dry run at all go live"*. `02` §3's condition 1 is struck and `DRY_RUN_SESSIONS_REQUIRED` is 0 |
 | **V5** | Deploys. This run deployed nothing; the box does not know this sleeve exists |
 | **V6** | One timing: how long `make vbt-backtest` takes against the real plant |
 
 ---
 
-## 5. The first DRY_RUN morning, exactly
+## 4a. What Maulik decided on 11 Sep 2026
+
+Four answers, recorded in `DECISIONS-VB.md` as VB11.1–VB11.4 and in `QUESTIONS.md` beside the
+defaults they replaced.
+
+| | |
+|---|---|
+| **Capital** | ₹25 lakh, equal weight, ten slots — slots of ₹2.5 lakh |
+| **The paper gate** | Withdrawn. No DRY_RUN session count is required before real money |
+| **The execution flag** | Not delegated, and it stays that way. No agent may set it, ever |
+| **The fill-rate denominator** | Offers, not every working order. 83.8% stands |
+
+**One measured consequence of the capital.** `04` §5's 1%-of-turnover cap binds below a turnover
+of `slot ÷ 0.01`. At the study's ₹10 lakh that is ₹1 crore — below filter F's ₹2 crore floor, so
+the cap could never fire. At ₹25 lakh it is **₹2.5 crore**, which is inside the admitted range, so
+the sleeve will now shorten slots on names between ₹2 crore and ₹2.5 crore of 20-day turnover.
+The plan labels those lines `SizeCap.TURNOVER`, so it will be visible. **No backtest in this
+repository was produced at ₹25 lakh** — the study, the goldens and VB9's three books all run the
+₹10 lakh frame where the cap never fires.
+
+**What withdrawing the paper gate did and did not do.** It struck a *condition* on the execution
+flag. It did not flip the flag, and no agent may: V3 was answered "not delegated" minutes before
+V4 was answered "no gate", and both are recorded. The flag is false everywhere it is defined.
+
+---
+
+## 5. The first morning, exactly
 
 Nothing below can place an order. Every step is safe to stop after.
+
+Written for a DRY_RUN first morning, which is still the safe way to do it whatever the gate says.
+To go live instead, everything below is the same and step 5's check becomes "the flag is true,
+by your hand". **The prerequisites in `NEEDS-MAULIK.md` V4 come first either way** — the sleeve is
+not on the box at all yet.
 
 **The evening before (any weekday after the chain has published).**
 

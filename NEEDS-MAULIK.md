@@ -1471,7 +1471,14 @@ Raised by the pack, 10 Sep 2026 (`docs/vbt/`). The run does not wait on any of t
 standing default in `docs/vbt/QUESTIONS.md`, and every module that does not depend on an answer
 is built anyway.
 
-### V1 — The risk decision, in writing (blocks the real-money gate, nothing before it)
+### V1 — ✅ ANSWERED 11 Sep 2026: ₹25 lakh, equal weight, ten slots (DECISIONS-VB VB11.1)
+
+**Still to write:** the risk decision itself, in prose, as `02` §3.4 requires — the capital is the
+number, not the decision. Note that ₹25 lakh makes the 1%-of-turnover cap live for the first
+time (it never fires at the study's ₹10 lakh), so the paper run will show `SizeCap.TURNOVER` on
+thin names and no backtest in this repository was produced at that size.
+
+### V1a — The risk decision, in writing (blocks the real-money gate, nothing before it)
 
 The sleeve's capital, the slot count, whether equal weight stands, and the stop percentage.
 Write it as an entry in `docs/vbt/DECISIONS-VB.md`; `vb_config.sleeve_capital_inr` is seeded at
@@ -1496,7 +1503,12 @@ than a project, and the page says which bars produced the number.
 corporate-action backfill before 2024. Both are `docs/07` §4b territory, and both are Kite-rate
 limited, not agent-limited.
 
-### V3 — The execution flag (blocks real orders, nothing else)
+### V3 — ✅ ANSWERED 11 Sep 2026: NOT delegated, and it stays that way (DECISIONS-VB VB11.2)
+
+No agent may set `BASKFY_VBT_EXECUTION_ENABLED` under any circumstances, whatever the paper run
+shows. This is now a standing instruction rather than an open question.
+
+### V3a — The execution flag (blocks real orders, nothing else)
 
 `BASKFY_VBT_EXECUTION_ENABLED=true`, by your hand, after `docs/vbt/02` §3's five conditions hold
 and their evidence is in `VB-FINAL-REPORT.md`: twenty DRY_RUN sessions, VB10 green, the backtest
@@ -1507,7 +1519,21 @@ agent set the *swing* flag on your written decision. If you want the same for th
 line here says so and an agent records it in `DECISIONS-VB.md` before acting on it. Until then
 no agent touches this flag.
 
-### V4 — Twenty DRY_RUN sessions, or the shorter gate you gave the swing book?
+### V4 — ✅ ANSWERED 11 Sep 2026: no paper gate at all (DECISIONS-VB VB11.4)
+
+*"i dont want to have dry run at all go live"*. `02` §3's condition 1 is struck and
+`DRY_RUN_SESSIONS_REQUIRED` is 0. The counter still counts; it is no longer a condition.
+
+**What still stands between here and a live order** — none of it caution, all of it software that
+has not been deployed:
+
+1. migration `0037_vbt` has never been applied to the box;
+2. `vb_config.sleeve_capital_inr` is 0 there and needs the ₹25 lakh set;
+3. the box's env files have no `BASKFY_VBT_*` names in them yet;
+4. the `vbt-detect` / `vbt-evening` Beat entries are not scheduled there;
+5. `BASKFY_VBT_EXECUTION_ENABLED=true`, **by your hand** — no agent may set it (V3).
+
+### V4a — The original question, for the record
 
 You withdrew the twenty-session paper gate for the swing sleeve (STANDING-ANSWERS A11) because
 its code work was complete and one real DRY_RUN morning bought the same rehearsal. The pack keeps

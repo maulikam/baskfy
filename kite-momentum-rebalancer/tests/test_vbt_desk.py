@@ -324,7 +324,8 @@ class TestTheView:
         view = W.build_view(store, now=NOW)
         assert view["breadth"]["gate"] == "OPEN"
         assert view["dry_run_sessions"] == 7
-        assert view["dry_run_sessions_required"] == 20
+        # 0 since 11 Sep 2026: the paper gate was withdrawn (DECISIONS-VB VB11.4).
+        assert view["dry_run_sessions_required"] == 0
         assert view["execution_enabled"] is False
         assert view["dry_run"] is True
 

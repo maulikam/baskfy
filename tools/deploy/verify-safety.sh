@@ -49,6 +49,22 @@ grep -q 'BASKFY_PUBLIC_API_ENABLED: "false"' "$C" || fail "the public API is not
 grep -q 'BASKFY_FREE_TIER_ENABLED: "false"'  "$C" || fail "a Track B flag is not false"
 grep -q 'DRY_RUN=true' "$BLUE/infra/docker/Dockerfile.python" || fail "DRY_RUN is not baked into the image"
 
+# 3b. VB13 — the volume-breakout sleeve's rails, as compose defaults.
+#
+# `BASKFY_VBT_EXECUTION_ENABLED` must default false wherever it is named, and it must be **named**
+# — a variable this file does not name never reaches the container, so an env file that sets it
+# would look like a decision and do nothing. That was the sleeve's state until 11 Sep 2026.
+#
+# And there must be no auto-execute for it, here or anywhere: non-negotiable 1's named exception
+# belongs to the swing sleeve alone. The repository-wide version of this check is
+# `kite-momentum-rebalancer/tests/test_vbt_safety.py`; this is the deployed-config half.
+grep -q 'BASKFY_VBT_EXECUTION_ENABLED: "${BASKFY_VBT_EXECUTION_ENABLED:-false}"' "$C"   || fail "BASKFY_VBT_EXECUTION_ENABLED is not named-and-false in compose.prod.yml"
+# Comment lines are stripped first: the block above states the prohibition in prose
+# ("THERE IS NO BASKFY_VBT_AUTO_EXECUTE"), and a prohibition must not trip the check that
+# states it. A real assignment survives the strip and still fails.
+! sed 's/^[[:space:]]*#.*$//' "$C" | grep -qiE 'VBT[_A-Z]*AUTO[_A-Z]*EXECUTE' \
+  || fail "compose.prod.yml sets a VBT auto-execute flag — there is no such thing"
+
 # 4. Postgres and Redis must not be published to the host. On a box with a public EIP, 5432 is
 #    the most-scanned port on the internet.
 python3 - "$C" <<'PY' || exit 1
@@ -61,4 +77,4 @@ for svc in ("postgres:", "redis:"):
         raise SystemExit(1)
 PY
 
-echo "SAFETY OK — no tracked secrets, DRY_RUN true, public API shut, data ports unpublished"
+echo "SAFETY OK — no tracked secrets, DRY_RUN true, VBT execution false and no auto-execute, public API shut, data ports unpublished"

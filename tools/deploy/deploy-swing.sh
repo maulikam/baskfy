@@ -4,6 +4,16 @@
 # `push-images.sh` has pushed this commit's three images and `tf.sh apply` has added the
 # `desk.` A record + the desk ECR pull grant:
 #
+# THE NAME UNDERSELLS IT: THIS IS THE WHOLE-STACK DEPLOY (noted 11 Sep 2026)
+# --------------------------------------------------------------------------
+# It ships compose, pins the three image tags, runs the migration and restarts every service, so
+# it is what deploys the weekly book, the swing book AND the volume-breakout sleeve — all three
+# ride the same three images and the same compose file. There is no `deploy-vbt.sh` and there
+# should not be: a second script would be a second place for the image tags and the nightly
+# guards to drift. The only sleeve-specific step in here is the swing seed at step 4; VBT's
+# equivalent is one settings write and is deliberately Maulik's, not a deploy's
+# (DECISIONS-VB VB11.1 — a sleeve with no money cannot trade by accident).
+#
 #     AWS_PROFILE=baskfy-poc bash tools/deploy/deploy-swing.sh
 #
 # What it does, in order, every step idempotent:
@@ -70,6 +80,53 @@ MSG
   exit 1
 }
 nightly_window_guard
+
+# --------------------------------------------------------------------------- the trading session
+# WHY A DEPLOY ALSO REFUSES TO RUN BETWEEN 09:15 AND 15:30 IST ON A WEEKDAY (11 Sep 2026)
+#
+# The guard above stops a deploy killing the nightly chain. This one stops it killing a **live
+# trading session**, and it exists because the first one did not cover the case.
+#
+# Step 5 runs `up -d ... swing-monitor`, which recreates the monitor. Since SW26 (5 Sep 2026) the
+# swing monitor confirms its own triggers any time between 09:15 and 15:30 with
+# `BASKFY_SWING_AUTO_EXECUTE=true` — which is the box's live setting. Recreating it mid-session
+# drops whatever it was holding: `docs/swing/STATUS.md` records that a monitor which starts late
+# loses the signals from before it started, and there is no replay.
+#
+# The gap was harmless when the nightly guard was written and stopped being harmless on 5 Sep,
+# when auto-execute widened from the opening ninety minutes to the whole session. It was found on
+# 11 Sep 2026 by a VBT deploy that checked the box's flags before restarting anything, and the
+# check is here so the next one does not have to remember.
+#
+# Time only, no network call: a guard that has to reach AWS to decide is a guard that fails open
+# when the network is slow. `DEPLOY_DURING_SESSION=1` overrides it for a deliberate emergency.
+session_window_guard() {
+  local now day hhmm
+  now="$(TZ=Asia/Kolkata date '+%u %H%M')"; day="${now%% *}"; hhmm="${now##* }"
+  [ "$day" -le 5 ] || return 0                      # Sat/Sun: the exchange is shut
+  [ "$hhmm" -ge 0915 ] && [ "$hhmm" -le 1530 ] || return 0
+  if [ "${DEPLOY_DURING_SESSION:-0}" = "1" ]; then
+    printf '\n!! %s IST is inside the trading session and DEPLOY_DURING_SESSION=1 is set.\n' "$hhmm"
+    printf '   Recreating swing-monitor now drops whatever it is holding. There is no replay.\n\n'
+    return 0
+  fi
+  cat >&2 <<MSG
+
+REFUSING TO DEPLOY: it is $hhmm IST, inside the trading session (09:15-15:30, Mon-Fri).
+
+  Step 5 recreates \`swing-monitor\`, and since SW26 that monitor confirms its own triggers
+  through the whole session when BASKFY_SWING_AUTO_EXECUTE=true — the box's live setting. A
+  restart drops what it was holding and the signals from before it are lost; there is no replay.
+
+  Wait until after 15:30, or deploy at the weekend. Between 15:30 and 18:40 is the clear window
+  on a weekday — after the close, before the nightly.
+
+  If this is an emergency and losing a trigger is the lesser cost:
+      DEPLOY_DURING_SESSION=1 bash tools/deploy/deploy-swing.sh
+MSG
+  exit 1
+}
+session_window_guard
 
 say "preflight"
 ACCOUNT="$(aws sts get-caller-identity --query Account --output text)" \

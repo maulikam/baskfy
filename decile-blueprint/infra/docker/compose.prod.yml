@@ -55,6 +55,23 @@ x-python-image: &python-image
   environment:
     # docs/08 §1: the whole schedule is IST wall-clock tied to the NSE session.
     TZ: Asia/Kolkata
+    # VB13 — the volume-breakout sleeve's two flags, named HERE and not only in the env file.
+    #
+    # The desk block below says why at length, and it applies with more force to a sleeve that
+    # has never traded: **a variable this file does not name never reaches the container.** Until
+    # 11 Sep 2026 neither of these was named anywhere in this file, so the sleeve ran on its code
+    # defaults — which happen to be the safe ones, and which nobody could have verified by
+    # reading the box.
+    #
+    # `..._EXECUTION_ENABLED` false is the rail: with it false a confirmed VBT line runs the whole
+    # gateway path and journals `simulated=true`, whatever DRY_RUN says. Only Maulik sets it, by
+    # hand, and no agent may (NEEDS-MAULIK V3, answered 11 Sep 2026).
+    #
+    # `..._NIGHTLY_ENABLED` defaults **true** and that is not an inconsistency: detection writes
+    # `vb_signal_daily` and `vb_breadth_daily`, moves no money, and a sleeve with no history is a
+    # sleeve with no evidence for the gate above it.
+    BASKFY_VBT_EXECUTION_ENABLED: "${BASKFY_VBT_EXECUTION_ENABLED:-false}"
+    BASKFY_VBT_NIGHTLY_ENABLED: "${BASKFY_VBT_NIGHTLY_ENABLED:-true}"
     # Where the nightly pipeline borrows a Kite session from. Empty would disable the pull; the
     # day's bars would still arrive from the bhavcopy, but history and holdings would not.
     BASKFY_KITE_DESK_SSH_TARGET: ${BASKFY_KITE_DESK_SSH_TARGET:-desk@65.0.226.77}
@@ -353,6 +370,16 @@ services:
       # actually fires the orders and the page that shows them read the same value.
       BASKFY_SWING_AUTO_EXECUTE: "${BASKFY_SWING_AUTO_EXECUTE:-false}"
       BASKFY_SWING_EP_PREMARKET_ENABLED: "${BASKFY_SWING_EP_PREMARKET_ENABLED:-false}"
+      # VB13 — the volume-breakout sleeve on the desk. `BASKFY_VBT_EXECUTION_ENABLED` is the
+      # switch that lets a confirmed VBT line reach a broker, and it is **deliberately
+      # independent of DRY_RUN and of every BASKFY_SWING_* above**: going live and turning this
+      # sleeve on are separate decisions and either can be reversed without the other.
+      #
+      # THERE IS NO BASKFY_VBT_AUTO_EXECUTE, here or anywhere. Non-negotiable 1's named exception
+      # belongs to the swing sleeve alone; this sleeve confirms every order by hand, one click per
+      # line, and `tests/test_vbt_safety.py` asserts across both trees that no setting of that
+      # shape exists.
+      BASKFY_VBT_EXECUTION_ENABLED: "${BASKFY_VBT_EXECUTION_ENABLED:-false}"
       BASKFY_SWING_TIMING_PROBE: "${BASKFY_SWING_TIMING_PROBE:-false}"
       # BASKFY_SOLE_USER_ID / BASKFY_SOLE_BROKER_ACCOUNT_ID (P4.3, the tenant pair every order
       # carries) come from `.env.staging` through env_file, exactly as the api reads them —

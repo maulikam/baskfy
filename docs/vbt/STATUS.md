@@ -3,7 +3,7 @@
 The status page for the volume-breakout run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: VB12 green — the run is complete, plus Maulik's four answers (VB11) and the desk's Re-detect button (VB12).** Started 10 Sep 2026 on branch
+**Run state: VB13 green — the deploy tooling is fixed and the box is inspected; the deploy itself waits on a window and two answers.** Started 10 Sep 2026 on branch
 `developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
@@ -618,4 +618,37 @@ asserted, over its own source with the docstring stripped, to name no broker and
 * The sweep runs every minute, seven days a week. If that proves noisy on the box it should be
   narrowed to evenings, but guessing the window before it has run once would be inventing a
   number.
+
+---
+
+## VB13 — The deploy, and three things trying it found ✅ (11 Sep 2026)
+
+Asked to deploy. I did not, and the reason was not about this sleeve: the box had
+`BASKFY_SWING_AUTO_EXECUTE=true` and `swing-monitor Up 41 minutes` at 13:46 on a Friday. Step 5
+of the deploy recreates that monitor, which since SW26 confirms its own triggers through the whole
+session. Deploying would have killed a live trading process to ship a re-detect button.
+
+### What was fixed
+
+| | |
+|---|---|
+| **The guard gap** | A deploy now refuses 09:15–15:30 Mon–Fri, not only 18:40–21:15. Same shape as the nightly guard, same escape hatch (`DEPLOY_DURING_SESSION=1`) |
+| **The tag lied** | `push-images.sh` tagged from HEAD and built from the working tree. It now exports HEAD to a temporary worktree, so the tag is the contents. It nearly shipped a concurrent session's uncommitted files under this run's tag |
+| **The flags were invisible** | `compose.prod.yml` named no `BASKFY_VBT_*` at all, so the sleeve ran on code defaults. Both flags are now named on all six services that read them, and `verify-safety.sh` asserts it |
+
+### What the box actually looks like
+
+The database is at `0039` and **all twelve `vb_` tables are already on it** — the portfolio
+session's deploy today carried migration `0037` along with it. So the deploy that was feared —
+running someone else's unreviewed migration that deletes 120 instrument rows — has already
+happened, by them. What is left is `0040`: one additive table, with a downgrade.
+
+### What is NOT done at VB13
+
+* **Nothing was deployed.** The box still runs `fe723d4`; HEAD is two VBT commits ahead.
+* The deploy waits on a window (after 15:30 on a weekday, or the weekend) and on two answers:
+  whether to set the sleeve's ₹25 lakh on the box as part of it, and whether the nightly
+  detection should start on the first night.
+* `compute_vbt` has still never run against the real plant, so `NEEDS-MAULIK.md` V6's timing is
+  still unmeasured — and the first deploy is when it stops being.
 

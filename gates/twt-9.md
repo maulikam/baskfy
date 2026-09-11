@@ -10,18 +10,18 @@ them named rather than explained away.
       **shipped** ₹5 crore floor, sized against `params.sleeve_inr` and **never** against
       `tw_config.sleeve_capital_inr` — asserted by a spy, because reading the live capital into a
       backtest is how a research number quietly becomes a claim about the user's money.
-  CHECK: cd decile-blueprint && uv run pytest -q -k "twt and backtest and (capital or spy or sleeve_inr)" 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest -k "twt and backtest and (capital or spy or sleeve_inr)" 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: pending
 
 - [ ] G2: **Append-only.** Two runs of the same date produce two rows and edit nothing.
-  CHECK: cd decile-blueprint && uv run pytest -q -k "twt and backtest and (append or two_runs)" 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest -k "twt and backtest and (append or two_runs)" 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: pending
 
 - [ ] G3: A run that raises writes `finished_at` and `error` **and re-raises** — a failed run that
       looks finished is worse than one that is obviously broken.
-  CHECK: cd decile-blueprint && uv run pytest -q -k "twt and backtest and (raises or error)" 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest -k "twt and backtest and (raises or error)" 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: pending
 
@@ -39,14 +39,14 @@ them named rather than explained away.
 - [ ] G6: `tw_backtest_run.stats` carries every key TW8's page reads — including
       **`gate_off_cagr_pct`, the one number that justifies the gate**, whose slot on the card
       nothing else fills.
-  CHECK: cd decile-blueprint && uv run pytest -q -k "twt and backtest and stats" 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest -k "twt and backtest and stats" 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: pending
 
 - [ ] G7: **TW2.2's warning is honoured.** The research panel's ETFs carry so few bars that
       including them in the breadth denominator measured as zero difference; that is a property of
       the sparse export and **not of the plant**. This run must not inherit the assumption.
-  CHECK: cd decile-blueprint && uv run pytest -q -k "twt and (etf or denominator)" 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest -k "twt and (etf or denominator)" 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: pending
 

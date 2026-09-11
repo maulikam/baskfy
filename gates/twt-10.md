@@ -10,7 +10,7 @@ be true before Maulik flips a flag on ₹25 lakh of real money.
 - [ ] G1: **With `BASKFY_TWT_EXECUTION_ENABLED=false`, no TWT code path reaches
       `OrderGateway.place` or `place_gtt_stop` with `DRY_RUN=false`** — a property test over every
       route and every task, not a spot check.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_safety_properties.py -q 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_safety_properties.py 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: pending
 
@@ -23,7 +23,7 @@ be true before Maulik flips a flag on ₹25 lakh of real money.
 
 - [ ] G3: `exit_lines` **never emits `SELL_AT_OPEN`** over a generated book (`04` §10.2) — there is
       no end-of-day sell rule in TWT-1 and the GTT is the exit.
-  CHECK: cd decile-blueprint && uv run pytest -q -k "twt and sell_at_open" 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest -k "twt and sell_at_open" 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: pending
 

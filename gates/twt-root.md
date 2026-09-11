@@ -79,7 +79,7 @@ fully checked **with evidence**, its tests are green, and its commit exists.
 
 - [ ] R12: **Both trees still green.** The decile suite and the desk suite pass at the end of the
       run, and neither the weekly book, R1–R4, the swing book nor VBT-1 changed behaviour.
-  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run pytest packages/core -q 2>&1 | tail -2
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run pytest packages/core 2>&1 | tail -2
   EXPECT: /passed/
   EVIDENCE: pending
 

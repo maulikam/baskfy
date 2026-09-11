@@ -12,6 +12,7 @@ Usage:
     python -m baskfy_api.seed market             # index snapshots + market-health breadth
     python -m baskfy_api.seed swing              # sw_config for the sole tenant (SW2)
     python -m baskfy_api.seed vbt                # vb_config for the sole tenant (VB3)
+    python -m baskfy_api.seed twt                # tw_config for the sole tenant (TW3)
     python -m baskfy_api.seed swing --capital 2500000 --risk 0.5   # ...and set the sleeve (SW13)
     python -m baskfy_api.seed e2e                # everything the browser acceptance suite needs
 
@@ -64,6 +65,7 @@ from baskfy_core.models import (
     Subscription,
     SwConfig,
     TradingDay,
+    TwConfig,
     VbConfig,
 )
 from baskfy_core.reference_export import ReferenceRows, to_rows
@@ -716,6 +718,43 @@ async def seed_vbt_config(session: AsyncSession) -> int:
     return 1
 
 
+async def seed_twt_config(session: AsyncSession) -> int:
+    """One ``tw_config`` row for the sole tenant, with ``sleeve_capital_inr = 0`` (TW3).
+
+    **Zero capital is the point, not an oversight**, and for the same reason it is for the swing
+    book and VBT-1 above. ``docs/twt/04-business-rules.md`` §9.3: *"A sleeve at ₹0 plans nothing:
+    every signal is skipped ``NO_SLEEVE_CAPITAL``."* So a freshly seeded database has a
+    three-weeks-tight sleeve that detects, ranks, stores and plans **nothing to buy** until a
+    person decides what it may risk.
+
+    **And on this sleeve the zero is a safety rail with a name on it.** ``docs/twt/02`` §3 and the
+    root ``CLAUDE.md`` both say it in the same words: *an agent never sets
+    ``tw_config.sleeve_capital_inr``.* Maulik enters the capital himself on the first live
+    morning. ``sleeve_capital_inr`` is therefore written here **explicitly as zero** rather than
+    left to the column's server default — not because the default would be wrong, but because
+    the one number this function must never get wrong should be visible in it.
+
+    The other five defaults are the column defaults, which are ``docs/twt/04``'s: ten slots,
+    12.5 % per position, a 20 % stop, a 20 % trail, ten first-live entries.
+
+    Idempotent: ``ON CONFLICT DO NOTHING`` rather than ``DO UPDATE``, because this is the row's
+    *creation* and not its management (house rule 7). Re-running never resets a capital, a stop
+    or a trail a person has already chosen — and on this sleeve resetting the trail would rearm
+    every stop in the book at a different level.
+
+    Seeded rather than written by migration ``0041_twt`` because the user id comes from
+    ``BASKFY_SOLE_USER_ID``, and an environment variable does not belong in schema history.
+    """
+    user_id = await _sole_user_id(session)
+    if user_id is None:
+        return 0
+    statement = insert(TwConfig).values(
+        user_id=user_id, sleeve_capital_inr=Decimal("0"), updated_by="seed"
+    )
+    await session.execute(statement.on_conflict_do_nothing(index_elements=[TwConfig.user_id]))
+    return 1
+
+
 async def set_swing_sleeve(
     session: AsyncSession,
     *,
@@ -840,6 +879,9 @@ async def _run(
         if command in ("all", "vbt"):
             # Same placement and the same reason as the swing row above.
             counts["vb_config"] = await seed_vbt_config(session)
+        if command in ("all", "twt"):
+            # Same placement and the same reason again.
+            counts["tw_config"] = await seed_twt_config(session)
         if command in ("all", "market"):
             await seed_reference(session)
             counts["index_snapshot_daily"] = await seed_index_snapshots(session)
@@ -870,6 +912,7 @@ async def _run(
             # Last: they need the account the line above creates.
             counts["sw_config"] = await seed_swing_config(session)
             counts["vb_config"] = await seed_vbt_config(session)
+            counts["tw_config"] = await seed_twt_config(session)
         return counts
 
 
@@ -886,6 +929,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "market",
             "swing",
             "vbt",
+            "twt",
             "e2e",
         ),
         help="which seed set to apply",

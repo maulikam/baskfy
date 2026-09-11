@@ -171,6 +171,27 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "vb_backtest_run": ("id",),
     # VB12 (docs/vbt/03 §13, migration 0040): one row per press of the desk's Re-detect button.
     "vb_scan_run": ("id",),
+    # The three-weeks-tight sleeve — docs/twt/03-data-model.md (TW3, migration 0041). Thirteen
+    # tables, every one keyed with `user_id` (docs/twt/02 Track C §6), the same shape the swing
+    # book and VBT-1 use above and for the same reason: a sleeve is one person's book. Three
+    # carry the user in the primary key rather than beside it — `tw_state_daily`,
+    # `tw_signal_daily` and `tw_breadth_daily` — because each is a snapshot of what one user's
+    # system saw. `tw_state_daily` is the one with no sibling in the other two sleeves: TWT-1's
+    # scan is a *state* and its signal is the first day of one, so the state is stored too
+    # (docs/twt/03 §2). `tw_backtest_run` is append-only (docs/twt/03 §9).
+    "tw_config": ("user_id",),
+    "tw_config_audit": ("id",),
+    "tw_state_daily": ("user_id", "date", "instrument_id"),
+    "tw_signal_daily": ("user_id", "date", "instrument_id"),
+    "tw_breadth_daily": ("user_id", "date"),
+    "tw_position": ("id",),
+    "tw_order": ("id",),
+    "tw_fill": ("id",),
+    "tw_plan": ("id",),
+    "tw_plan_line": ("id",),
+    "tw_plan_skip": ("id",),
+    "tw_session": ("user_id", "session_date"),
+    "tw_backtest_run": ("id",),
 }
 
 #: docs/04 opening paragraph: "Money in numeric, never float."
@@ -311,6 +332,171 @@ def test_vbt_tables_are_recorded_in_docs() -> None:
         "vb_scan_run",
     ):
         assert table in vbt_model, f"{table} is not described in docs/vbt/03"
+
+
+def test_twt_tables_are_recorded_in_docs() -> None:
+    """TW3 tables live in docs/twt/03, by the same rule as the swing book's and VBT-1's above.
+
+    Written out rather than derived, for the reason the swing version gives: a derived list
+    asserts only that this file agrees with itself.
+    """
+    twt_model = (MONOREPO_ROOT / "docs" / "twt" / "03-data-model.md").read_text(encoding="utf-8")
+    for table in (
+        "tw_config",
+        "tw_config_audit",
+        "tw_state_daily",
+        "tw_signal_daily",
+        "tw_breadth_daily",
+        "tw_position",
+        "tw_order",
+        "tw_fill",
+        "tw_plan",
+        "tw_plan_line",
+        "tw_plan_skip",
+        "tw_session",
+        "tw_backtest_run",
+    ):
+        assert table in twt_model, f"{table} is not described in docs/twt/03"
+
+
+#: Every column `docs/twt/03` names in prose, table by table. The point is not coverage for its
+#: own sake: each of these is a column some later module reads by name, and a schema that drifts
+#: from the document by one column is a module that needs a migration on the morning it runs.
+TWT_DOCUMENTED_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("tw_config", "sleeve_capital_inr"),
+    ("tw_config", "max_open_positions"),
+    ("tw_config", "max_position_pct"),
+    ("tw_config", "stop_pct"),
+    ("tw_config", "trail_pct"),
+    ("tw_config", "first_live_entries_left"),
+    ("tw_config", "dry_run_sessions"),
+    ("tw_state_daily", "close_raw"),
+    ("tw_state_daily", "adj_factor"),
+    ("tw_state_daily", "week_close_0"),
+    ("tw_state_daily", "week_close_1"),
+    ("tw_state_daily", "week_close_2"),
+    ("tw_state_daily", "week_range_pct"),
+    ("tw_state_daily", "month_low_3"),
+    ("tw_state_daily", "month_low_ratio"),
+    ("tw_state_daily", "vol_sma_50"),
+    ("tw_state_daily", "turnover_inr"),
+    ("tw_state_daily", "turnover_avg_20"),
+    ("tw_state_daily", "sma_dma"),
+    ("tw_state_daily", "sessions_in_state"),
+    ("tw_state_daily", "bars_in_window"),
+    ("tw_state_daily", "locked_upper_circuit"),
+    ("tw_state_daily", "pipeline_run_id"),
+    ("tw_signal_daily", "state"),
+    ("tw_signal_daily", "failed_filters"),
+    ("tw_signal_daily", "entry_reference_close"),
+    ("tw_signal_daily", "stop_preview"),
+    ("tw_signal_daily", "sessions_out_before"),
+    ("tw_signal_daily", "rank_key"),
+    ("tw_signal_daily", "turnover_avg_20"),
+    ("tw_breadth_daily", "universe_count"),
+    ("tw_breadth_daily", "measured_count"),
+    ("tw_breadth_daily", "above_count"),
+    ("tw_breadth_daily", "pct_above_dma"),
+    ("tw_breadth_daily", "gate"),
+    ("tw_breadth_daily", "dma_bars"),
+    ("tw_breadth_daily", "thin_session"),
+    ("tw_breadth_daily", "detail"),
+    ("tw_position", "order_id"),
+    ("tw_position", "signal_date"),
+    ("tw_position", "entry_date"),
+    ("tw_position", "entry_avg"),
+    ("tw_position", "quantity_entered"),
+    ("tw_position", "initial_stop"),
+    ("tw_position", "stop_price"),
+    ("tw_position", "high_since"),
+    ("tw_position", "high_since_date"),
+    ("tw_position", "gtt_id"),
+    ("tw_position", "gtt_trigger"),
+    ("tw_position", "gtt_armed_at"),
+    ("tw_position", "next_trigger"),
+    ("tw_position", "next_trigger_for"),
+    ("tw_position", "quantity_open"),
+    ("tw_position", "closed_on"),
+    ("tw_position", "exit_avg"),
+    ("tw_position", "close_reason"),
+    ("tw_position", "pnl_inr"),
+    ("tw_position", "return_pct"),
+    ("tw_position", "r_multiple"),
+    ("tw_position", "hold_sessions"),
+    ("tw_position", "simulated"),
+    ("tw_position", "half_size"),
+    ("tw_fill", "journal_ref"),
+    ("tw_order", "signal_date"),
+    ("tw_order", "side"),
+    ("tw_order", "stop_price"),
+    ("tw_order", "broker_order_id"),
+    ("tw_order", "client_id"),
+    ("tw_order", "filled_quantity"),
+    ("tw_order", "avg_fill_price"),
+    ("tw_order", "position_id"),
+    ("tw_plan", "plan_id"),
+    ("tw_plan", "built_at"),
+    ("tw_plan", "expires_at"),
+    ("tw_plan", "plan_hash"),
+    ("tw_plan", "gate"),
+    ("tw_plan", "sleeve_equity_inr"),
+    ("tw_plan", "total_new_exposure_inr"),
+    ("tw_plan_line", "kind"),
+    ("tw_plan_line", "value_inr"),
+    ("tw_plan_line", "stop_price"),
+    ("tw_plan_line", "high_since"),
+    ("tw_plan_line", "journal_ref"),
+    ("tw_plan_skip", "reason"),
+    ("tw_session", "mode"),
+    ("tw_session", "plan_ids"),
+    ("tw_session", "ratchets"),
+    ("tw_session", "naked_at_1515"),
+    ("tw_session", "first_live_entries_counted"),
+    ("tw_session", "counted_for_dry_run"),
+    ("tw_backtest_run", "params"),
+    ("tw_backtest_run", "started_at"),
+    ("tw_backtest_run", "finished_at"),
+    ("tw_backtest_run", "source"),
+    ("tw_backtest_run", "stats"),
+    ("tw_backtest_run", "drift"),
+    ("tw_backtest_run", "error"),
+)
+
+
+#: Four columns `docs/twt/03` names in a shorthand rather than one backticked name each. The
+#: literal the document uses is given here instead of loosening the check for every column: a
+#: test that accepted a bare substring would pass on `date` appearing in a sentence.
+TWT_DOC_SPELLING: dict[str, str] = {
+    # §2 writes the three weekly closes as one row of its table.
+    "week_close_0": "`week_close_0/1/2`",
+    "week_close_1": "`week_close_0/1/2`",
+    "week_close_2": "`week_close_0/1/2`",
+    # §7 gives the plan's expiry as the arithmetic that produces it.
+    "expires_at": "`expires_at = built_at\n+ 30 min`",
+}
+
+
+@pytest.mark.parametrize(("table", "column"), TWT_DOCUMENTED_COLUMNS)
+def test_twt_columns_are_modelled_and_recorded_in_docs(table: str, column: str) -> None:
+    """TW3: the model has each column `docs/twt/03` names, and the document still names it."""
+    twt_model = (MONOREPO_ROOT / "docs" / "twt" / "03-data-model.md").read_text(encoding="utf-8")
+    assert column in Base.metadata.tables[table].c, f"{table}.{column} is not modelled"
+    spelled = TWT_DOC_SPELLING.get(column, f"`{column}`")
+    assert spelled in twt_model, f"{table}.{column} is not described in docs/twt/03"
+
+
+def test_twt_position_carries_the_factor_its_split_rule_reads() -> None:
+    """`tw_position.entry_adj_factor` is the one TW3 column `docs/twt/03` §5 does not list.
+
+    `docs/twt/04` §7.3 and DECISIONS-TW TW0.7 both read it by name — the evening job notices a
+    corporate action by comparing the as-of row's `adj_factor` with *the position's* — and §5's
+    column table simply omits it. A rule that needs a column the schema does not have is a rule
+    that needs a migration on the morning of a split, so the column is here and this test says
+    which document asked for it. DECISIONS-TW TW3.2.
+    """
+    assert "entry_adj_factor" in Base.metadata.tables["tw_position"].c
+    rules = (MONOREPO_ROOT / "docs" / "twt" / "04-business-rules.md").read_text(encoding="utf-8")
+    assert "entry_adj_factor" in rules
 
 
 @pytest.mark.parametrize(

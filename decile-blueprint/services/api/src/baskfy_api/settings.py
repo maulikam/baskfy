@@ -367,6 +367,45 @@ class Settings(BaseSettings):
     #: stop to be insurance either way; wider than 15% is a different instrument.
     vbt_stop_pct_max: Decimal = Field(default=Decimal("15.0"), gt=0, le=50)
 
+    # --- The three-weeks-tight sleeve (docs/twt) -----------------------------
+    #
+    # Two flags and four bounds, and one of the four is a FLOOR rather than a ceiling.
+    #
+    # ``twt_execution_enabled`` is Track B in ``docs/twt/02-scope-and-gating.md``: the code
+    # behind it is written, tested and unreachable. ``02`` §3 lists the six things that must be
+    # true before it flips — TW10 green, a green tree in both repositories, the backtest on the
+    # page, ``docs/twt/FIRST-LIVE-MORNING.md`` written, **Maulik's own hand**, and half size for
+    # the first ten live entries — and the swing sleeve's delegation of its own flag does not
+    # extend here. With it false, ``/twt/execute`` still runs the whole path and journals
+    # ``simulated=true`` **regardless of DRY_RUN**, which is what makes a DRY_RUN session a
+    # rehearsal rather than a different code path.
+    #
+    # ``twt_nightly_enabled`` defaults **true**: detection moves no money, and a sleeve with no
+    # history is a sleeve with no evidence.
+    #
+    # There is no third flag. Non-negotiable 1's named exception is the *swing* sleeve's, by
+    # Maulik's own hand, and this run neither widens it nor adds a second one: no
+    # ``twt_auto_execute`` exists, and TW10 asserts that no setting of that shape can appear.
+    twt_execution_enabled: bool = False
+    twt_nightly_enabled: bool = True
+    #: ``tw_config.max_open_positions`` may not exceed this. ``SizingConfig.max_slots`` [10] is
+    #: the strategy's own measured optimum (eight returns 26.3% CAGR, fifteen returns 14.7%);
+    #: the ceiling leaves room to lower the book, never to widen it into a different instrument.
+    twt_max_open_positions_max: int = Field(default=15, gt=0, le=30)
+    #: ``tw_config.max_position_pct`` may not exceed this. The slot is 10% and the setting 12.5%.
+    twt_max_position_pct_max: Decimal = Field(default=Decimal("15.00"), gt=0, le=100)
+    #: ``tw_config.stop_pct`` may not exceed this. ``docs/twt/01`` §7 measured 15-30% and found
+    #: the band flat, which is why the stop is a setting at all; past 25% it stops being a
+    #: disaster stop.
+    twt_stop_pct_max: Decimal = Field(default=Decimal("25.00"), gt=0, le=50)
+    #: ``tw_config.trail_pct`` may not fall **below** this — a floor, not a ceiling, and the one
+    #: bound in this file that is easy to implement backwards. The trail is TWT-1's only exit
+    #: (137 of the research's 164 exits) and the measured cliff is in the tightening direction:
+    #: 20% -> 15% took the CAGR from 20.9% to 9.6% and the drawdown from -24.7% to -43%.
+    #: Widening it is merely unprofitable; tightening it is the failure mode.
+    #: DECISIONS-TW **TW0.5**.
+    twt_trail_pct_min: Decimal = Field(default=Decimal("18.00"), gt=0, le=100)
+
     # --- Rate limits (docs/07 §Conventions) ----------------------------------
     rate_limit_anonymous_per_minute: int = Field(default=10, gt=0)
     rate_limit_authenticated_per_minute: int = Field(default=60, gt=0)

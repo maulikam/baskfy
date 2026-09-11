@@ -51,7 +51,13 @@ unexplained difference survives, so nothing here blocks TW9.**
 
 - [x] G3: **House rule 9.** No money and no price level is a float. TW1's G9 grep over the whole
       package still returns **0** with this module in it.
-  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && grep -rnE ": *float|float\(" packages/core/src/baskfy_core/twt/ | grep -viE "ratio|pct|share|weight|tolerance|#" | wc -l
+      ⚠️ **Repaired 12 Sep 2026, identically to `gates/twt-1.md` G9.** The six hits are
+      `published.py`'s `years`, `calmar`, `sharpe`, `profit_factor`, `avg_hold_sessions` and
+      `drift.py`'s `_points` — the study's published metrics, which are ratios and counts. House
+      rule 9 governs money and prices; a Sharpe ratio is neither. Excluded by name, not by widening
+      the pattern, and checked for vacuity: the filter still returns 2 against a planted
+      `entry_price: float`.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && grep -rnE ": *float|float\(" packages/core/src/baskfy_core/twt/ | grep -viE "ratio|pct|share|weight|tolerance|#|years|calmar|sharpe|profit_factor|avg_hold|_points" | wc -l
   EXPECT: /^\s*0\s*$/
   EVIDENCE: `0`. Every statistic that is a ratio is named one (`sharpe_ratio`, and the `ratios`
   list its deviation is taken over); `years`, `calmar`, `profit_factor`, `avg_hold_sessions` and
@@ -71,7 +77,10 @@ unexplained difference survives, so nothing here blocks TW9.**
 
 - [x] G5: **To the tick.** Five of the eight compared fields carry **no difference at all**, so
       entry and exit prices agree to the paisa on both legs of every trade.
-  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run python ../tools/twt/twt_goldens.py 2>&1 | sed -n '1,4p'
+      ⚠️ **Repaired 12 Sep 2026: the line moved out of the window.** The check sliced lines 1–4;
+      the tool now prints a `seam:` line first — because the seam **closed**, which is TW2's whole
+      achievement — and `by field:` slid to line 5. Grepping the line it wants cannot drift again.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run python ../tools/twt/twt_goldens.py 2>&1 | grep "by field:"
   EXPECT: /by field: \{'pnl_inr': 153, 'return_pct': 164, 'entry_price': 44\}/
   EVIDENCE: `by field: {'pnl_inr': 153, 'return_pct': 164, 'entry_price': 44}` —
   **`exit_date`, `exit_price`, `quantity`, `hold_sessions` and `reason` are absent from the map**,
@@ -82,12 +91,11 @@ unexplained difference survives, so nothing here blocks TW9.**
 
 - [x] G6: **Every remaining difference is named and sized** — cause and magnitude, never a widened
       tolerance. A difference that survived investigation would be a blocker for TW9.
-  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run python -c "import sys; sys.path.insert(0, '../tools/twt')
-  from twt_goldens import run
-  from twt_compare import COMPARED_FIELDS
-  c = run().trade_comparison
-  print('passes', c.passes, 'outside tolerance', len(c.outside_tolerance()))
-  [print(f, c.by_field().get(f, 0), 'largest', 'none' if c.largest(f) is None else c.largest(f).size) for f in COMPARED_FIELDS]"
+      ⚠️ **Repaired 12 Sep 2026: this CHECK could not execute at all.** It was a multi-line
+      `python -c`; the runner hands a CHECK to `sh -c` as a single line, so everything after the
+      first line was lost and the command died on a syntax error — a failure that says nothing
+      about the tolerances. Rewritten as one line. Same fault as `gates/twt-11-funding-clock.md` F6.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run python -c "import sys; sys.path.insert(0, '../tools/twt'); from twt_goldens import run; c = run().trade_comparison; print('passes', c.passes, 'outside tolerance', len(c.outside_tolerance()))"
   EXPECT: /passes True outside tolerance 0/
   EVIDENCE: `passes True outside tolerance 0`, then per field:
 
@@ -190,8 +198,10 @@ unexplained difference survives, so nothing here blocks TW9.**
 
 - [x] G13: **Every difference from the research is in `docs/twt/DECISIONS-TW.md`**, numbered,
       `⚠ UNREVIEWED`, with its cause and its size.
+      ⚠️ **Repaired 12 Sep 2026: missing `m` flag**, so an anchored `/^13$/` could not match a
+      `13\n` the runner appends a newline to. The count has been 13 all along.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && grep -c "^## TW2\." docs/twt/DECISIONS-TW.md
-  EXPECT: /^13$/
+  EXPECT: /^13$/m
   EVIDENCE: `13` — the harness's eight, plus **TW2.9** (the shortest-repr conversion, and why
   `Decimal(x)` would have been a bug here where it is a virtue in VBT-1), **TW2.10** (the three
   float-epsilon fields, the table above, and the statement that none of them blocks TW9),
@@ -216,7 +226,11 @@ unexplained difference survives, so nothing here blocks TW9.**
 
 - [x] G15: **Both suites and `make lint` green**, and this leaf broke nothing.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run pytest packages/core/tests 2>&1 | tail -1 && make lint >/dev/null 2>&1; echo "make lint exit $?"
-  EXPECT: /passed.*make lint exit 0/
+      ⚠️ **Repaired 12 Sep 2026: the EXPECT spanned two lines with `.*`.** The runner tests the
+      regex against `stdout + "\n" + stderr` and `.` does not cross a newline, so a two-command
+      CHECK could never match however green both halves were. `[\s\S]*` is the fix, and it is
+      the same fault `gates/twt-root.md` R13 records about a missing `m` flag.
+  EXPECT: /passed[\s\S]*make lint exit 0/
   EVIDENCE: **`4077 passed, 5 skipped in 247.92s`** against the baseline `4012 passed, 8 skipped`
   — +65 tests (52 in `test_twt_backtest.py`, the four seam-gated reproduction tests that now run,
   and the extra parametrised purity cases for the eleventh module), and the skip count falls from

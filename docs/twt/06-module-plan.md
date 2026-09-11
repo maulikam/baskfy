@@ -203,6 +203,9 @@ first ten live entries.
 
 ### TW6a — The six routes the runbook needs, and one of them is the stop switch
 
+**Goal:** every command `FIRST-LIVE-MORNING.md` tells a person to run exists and is reachable, and
+the sleeve can be stopped from a phone in one call that removes no protection.
+
 **Added 11 Sep 2026, by the module that wrote `FIRST-LIVE-MORNING.md` before the code.** Writing
 the first live morning down turned up six commands a person needs and no module was planned to
 build. That is the whole reason the runbook was written first; it is cheaper to find a missing

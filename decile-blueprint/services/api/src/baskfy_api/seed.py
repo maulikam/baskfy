@@ -14,6 +14,7 @@ Usage:
     python -m baskfy_api.seed vbt                # vb_config for the sole tenant (VB3)
     python -m baskfy_api.seed twt                # tw_config for the sole tenant (TW3)
     python -m baskfy_api.seed swing --capital 2500000 --risk 0.5   # ...and set the sleeve (SW13)
+    python -m baskfy_api.seed twt --capital 2500000   # ...and fund the tight sleeve (TW11)
     python -m baskfy_api.seed e2e                # everything the browser acceptance suite needs
 
 ``bars`` is the local-development dataset docs/03 §Environments describes: "100-instrument
@@ -46,6 +47,8 @@ from baskfy_api.db import session_scope
 from baskfy_api.security import hash_password
 from baskfy_api.settings import get_settings
 from baskfy_api.swing_settings import SwingCeilings, SwingConfigPatch, apply_patch
+from baskfy_api.twt_settings import TwtCeilings, TwtConfigPatch
+from baskfy_api.twt_settings import apply_patch as apply_patch_twt
 from baskfy_core.breadth import breadth_query
 from baskfy_core.models import (
     AppUser,
@@ -799,6 +802,56 @@ async def set_swing_sleeve(
     return 1
 
 
+async def set_twt_sleeve(
+    session: AsyncSession,
+    *,
+    capital_inr: Decimal | None = None,
+    changed_by: str = "seed",
+) -> int:
+    """Write the three-weeks-tight sleeve's capital for the sole tenant (TW11, `NEEDS-MAULIK` T3).
+
+    **This function does not decide the number and never supplies one.** It is the place a person
+    types one into, which until now did not exist: `NEEDS-MAULIK.md` T3 recorded that the sleeve's
+    capital is "your keystroke" and that there was nowhere to put it — no `PATCH
+    /api/v1/twt/config`, no `me/twt` form, and a `--capital` flag that `seed.py` refused for every
+    command but `swing`. The only thing that worked was a direct `UPDATE` on `tw_config`, which is
+    the worse option precisely because it bypasses this path: no `tw_config_audit` row, no author,
+    no trail, on a sleeve whose whole design is that a person decided each number.
+
+    So this is the swing book's :func:`set_swing_sleeve` for `tw_config`, and it is the *same*
+    :func:`twt_settings.apply_patch` the settings form would use — the engine's bounds first (a
+    negative capital is a 400 before anything is written), then the server ceilings, then the row,
+    then one audit row per field that actually moved.
+
+    Idempotent the way the form is: a capital already in force changes nothing and audits nothing,
+    so a deploy that runs twice does not write two rows. `apply_patch` decides "moved" on the
+    string form, so the value is quantised to the column's own 2 dp first (house rule 8) — without
+    it, `2500000` against a stored `2500000.00` would audit a change every single deploy.
+
+    Returns 1 when the row exists (whether or not anything moved) and 0 when there is no
+    `tw_config` row yet. It never creates the row: :func:`seed_twt_config` owns creation, and owns
+    the ₹0 that creation writes.
+    """
+    user_id = await _sole_user_id(session)
+    if user_id is None:
+        return 0
+    patch = TwtConfigPatch(
+        sleeve_capital_inr=None if capital_inr is None else capital_inr.quantize(Decimal("0.01"))
+    )
+    if not patch.changes():
+        return 1
+    await apply_patch_twt(
+        session,
+        user_id=user_id,
+        patch=patch,
+        ceilings=TwtCeilings.from_settings(get_settings()),
+        changed_by=changed_by,
+        now=dt.datetime.now(tz=dt.UTC),
+        note="baskfy_api.seed twt",
+    )
+    return 1
+
+
 async def _sole_user_id(session: AsyncSession) -> int | None:
     """The tenant ``sw_config`` belongs to, or ``None`` when no account exists yet.
 
@@ -882,6 +935,10 @@ async def _run(
         if command in ("all", "twt"):
             # Same placement and the same reason again.
             counts["tw_config"] = await seed_twt_config(session)
+            # TW11: and the same shape as the swing pair above — creation seeds ₹0, and only an
+            # explicit `--capital` funds the sleeve, through the audited settings path.
+            if capital is not None:
+                counts["tw_config_sleeve"] = await set_twt_sleeve(session, capital_inr=capital)
         if command in ("all", "market"):
             await seed_reference(session)
             counts["index_snapshot_daily"] = await seed_index_snapshots(session)
@@ -938,14 +995,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     # `swing` only: the sleeve's capital and risk per trade, through the settings write path with
     # its ceilings and its audit — the deploy's stand-in for PATCH /swing/config (SW13).
     parser.add_argument(
-        "--capital", type=Decimal, default=None, help="swing: sleeve_capital_inr, e.g. 2500000"
+        "--capital",
+        type=Decimal,
+        default=None,
+        help="swing|twt: sleeve_capital_inr, e.g. 2500000",
     )
     parser.add_argument(
         "--risk", type=Decimal, default=None, help="swing: risk_per_trade_pct, e.g. 0.5"
     )
     args = parser.parse_args(argv)
-    if (args.capital is not None or args.risk is not None) and args.command != "swing":
-        parser.error("--capital/--risk apply to the `swing` command only")
+    # TW11: `--capital` now reaches the three-weeks-tight sleeve too. It was refused here for
+    # every command but `swing`, which is why `NEEDS-MAULIK.md` T3 could say the sleeve's capital
+    # was "your keystroke" and, in the same entry, that there was nowhere to type it. `--risk`
+    # stays swing-only because `tw_config` has no risk-per-trade column: this book sizes by slot
+    # (`max_position_pct`), not by stop distance.
+    if args.capital is not None and args.command not in ("swing", "twt"):
+        parser.error("--capital applies to the `swing` and `twt` commands only")
+    if args.risk is not None and args.command != "swing":
+        parser.error("--risk applies to the `swing` command only")
 
     counts = asyncio.run(
         _run(args.command, args.database_url, capital=args.capital, risk=args.risk)

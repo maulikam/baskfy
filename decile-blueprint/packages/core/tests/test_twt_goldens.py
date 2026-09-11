@@ -92,6 +92,9 @@ OPERATOR_TOOLS: Final[tuple[str, ...]] = (
     "backtest.py",
     #: TW7's 15:15 chore: every open line has a resting GTT before 15:30.
     "sweep.py",
+    #: TW10's DRY_RUN drill: a whole session end to end, reporting 0 orders reaching a broker.
+    #: `docs/twt/FIRST-LIVE-MORNING.md` tells Maulik to run it the night before he goes live.
+    "drill.py",
 )
 
 #: Calls that put bytes on disk. Nothing in ``tools/twt`` may write to ``research/`` — it is the

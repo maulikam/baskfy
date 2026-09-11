@@ -305,6 +305,42 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=21, minute=0, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_COMPUTE},
     },
+    # --- TW11: the tight sleeve's plan, evening and morning (docs/twt/06 § TW6) --------
+    #
+    # `baskfy.twt.evening` and `baskfy.twt.morning` were registered tasks with no Beat entry from
+    # TW6 until 12 Sep 2026, while `twt-detect` above has had one since TW4 and the VBT pair has
+    # had both. `docs/twt/FIRST-LIVE-MORNING.md` tells a person to open the desk and read a plan
+    # that nothing was building; `make twt-plan` was the only thing that made one.
+    #
+    # 21:20 rather than the VBT pair's 21:15, for two reasons and both are ordering. The plan is
+    # built from the session's signals and the session's gate, so an evening that ran before
+    # `twt-detect` at 21:00 would plan against yesterday's tape — the same argument the swing pair
+    # makes at 21:00/21:05. And `twt-detect` densifies 260 sessions over the whole cash universe,
+    # so it wants the compute queue to itself rather than sharing it with `vbt-evening`.
+    #
+    # **Nothing either job writes is an order.** `tasks/twt_evening.py`: *"Nothing here places an
+    # order. Every line is `PROPOSED`; a person confirms it on the desk."* That is what makes
+    # these two schedulable at all, and it is why the 15:15 sweep is NOT scheduled beside them —
+    # see the note under `vbt-rescan-sweep`.
+    "twt-evening": {
+        "task": "baskfy.twt.evening",
+        "schedule": crontab(hour=21, minute=20, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
+    # The same plan rebuilt before the open, re-sized against the sleeve as it stands: the desk's
+    # plans expire in thirty minutes, so last night's cannot be confirmed at 09:20. 09:05 — after
+    # `vbt-morning` at 09:00, after the morning's Kite login window, and before the 09:15 open.
+    "twt-morning": {
+        "task": "baskfy.twt.morning",
+        "schedule": crontab(hour=9, minute=5, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
+    # **The 15:15 sweep is deliberately not here, and this comment is the record of that.** The
+    # sweep re-arms GTT stops, so it is order flow, and a Beat entry for it would be the desk
+    # placing orders on a timer. The root `CLAUDE.md`'s first non-negotiable allows exactly one
+    # named auto-execute exception and it is the *swing* sleeve's, flagged and Maulik's; an agent
+    # may not add a second. The sweep stays `POST /twt/sweep` and `tools/twt/sweep.py`, which is
+    # what `docs/twt/FIRST-LIVE-MORNING.md` §9 already tells a person to run. TW11.
     # VB6: the plan, five minutes after the detector. The order matters and is the same argument
     # the swing pair makes at 21:00/21:05 — the plan is built from the session's signals and the
     # session's gate, so an evening that ran first would plan against yesterday's tape.

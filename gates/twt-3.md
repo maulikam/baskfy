@@ -22,8 +22,21 @@ the tests.
 - [x] G2: **The migration round-trips.** `upgrade` → `downgrade` → `upgrade` leaves the same
       schema. A downgrade that does not actually undo is worse than none, because it is the path
       somebody takes at 3am.
-  CHECK: cd decile-blueprint && make migrate 2>&1 | tail -2 && make downgrade 2>&1 | tail -2 && make migrate 2>&1 | tail -2
-  EXPECT: /Running upgrade|Target database is not up to date|head/
+      🔴 **Repaired 12 Sep 2026, and this one destroyed data before it was caught.** The check ran
+      `make migrate && make downgrade && make migrate` with no `BASKFY_DATABASE_URL` set, and
+      `BASKFY_DATABASE_URL` defaults to **the developer's own database**
+      (`services/api/src/baskfy_api/settings.py:34`, `localhost:5433/baskfy`). `make downgrade` is
+      `alembic downgrade **base**` — not `-1` — so **every table in that database is dropped and
+      recreated empty, every time this gate runs.** Re-running the ledger on 12 Sep emptied it; the
+      `tw_config` row it had been holding went with it.
+      The old EXPECT was loose as well — `/Running upgrade|…|head/` matches a single successful
+      `alembic upgrade` and would pass even if the downgrade half never ran, which is the one thing
+      the gate exists to prove.
+      It now round-trips a **throwaway** database, the way `gates/twt-10.md` G6's drill already did,
+      and asserts the end state rather than a word in the log: at head, with all thirteen `tw_`
+      tables back. Nothing a person owns is touched.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && docker exec baskfy-postgres psql -U baskfy -d postgres -q -c "DROP DATABASE IF EXISTS baskfy_migrate_check;" -c "CREATE DATABASE baskfy_migrate_check;" >/dev/null 2>&1; export BASKFY_DATABASE_URL=postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_migrate_check; (cd services/api && uv run alembic upgrade head >/dev/null 2>&1 && uv run alembic downgrade base >/dev/null 2>&1 && uv run alembic upgrade head >/dev/null 2>&1); printf 'version=%s tw_tables=%s\n' "$(docker exec baskfy-postgres psql -U baskfy -d baskfy_migrate_check -tAc 'select version_num from alembic_version')" "$(docker exec baskfy-postgres psql -U baskfy -d baskfy_migrate_check -tAc "select count(*) from information_schema.tables where table_schema='public' and table_name like 'tw\_%'")"
+  EXPECT: /^version=0041_twt tw_tables=13$/m
   EVIDENCE: `make migrate` -> `make downgrade` (to base) -> `make migrate`, then
   `select version_num from alembic_version` = `0041_twt` and 13 `tw_` tables. The round trip was
   also compared **column by column** rather than counted: `information_schema.columns`,
@@ -109,8 +122,16 @@ the tests.
   EVIDENCE: `3929 passed, 4 skipped in 242.93s`. Baseline before TW3 was `3815 passed, 3 skipped`; the difference is TW3's 176 tests plus the TW1 sibling's, landing in the same tree.
 
 - [x] G10: `make lint` clean — ruff, ruff format, mypy --strict.
-  CHECK: cd decile-blueprint && make lint 2>&1 | tail -6
-  EXPECT: /Success|All checks passed/
+      ⚠️ **Repaired 12 Sep 2026: this row grepped a line that had drifted out of its window.**
+      It ran `make lint 2>&1 | tail -6` and matched `/Success|All checks passed/`. `make lint` runs
+      the Python half first and the web half second; as the web half's output grew, the Python
+      half's `Success: no issues found` fell outside the last six lines, and the row went red on a
+      run in which lint was entirely clean. Worse in the other direction too: `/Success/` can match
+      a run whose *later* stage failed, which is the exact fault `gates/twt-root.md` R12 records
+      about `/passed/`. It now decides on the **exit code**, which is 0 only when every stage
+      passed.
+  CHECK: cd decile-blueprint && make lint >/dev/null 2>&1; echo "lint exit=$?"
+  EXPECT: /^lint exit=0$/m
   EVIDENCE: Ruff over the whole tree: **one** error, and it is not TW3's -
   `services/worker/src/baskfy_worker/tasks/vbt_rescan.py:81` is 101 characters, committed at
   `29ce944` (VB13.4) and unmodified in the working tree, so `make lint` was already red before

@@ -101,7 +101,17 @@ shape, its purity test and its config discipline. Do NOT copy its rules.
       (`min_samples(50) == 45`).
 
 - [x] G9: Money and price levels are `Decimal`. No float reaches a price path (house rule 9).
-  CHECK: cd decile-blueprint && grep -rnE ": *float|float\(" packages/core/src/baskfy_core/twt/ | grep -viE "ratio|pct|share|weight|tolerance|#" | wc -l
+      ⚠️ **Repaired 12 Sep 2026: the exclusion list had not kept up with the module.** The row went
+      red on six hits, and not one of them is money or a price: `published.py`'s `years`, `calmar`,
+      `sharpe`, `profit_factor` and `avg_hold_sessions` — the *study's published metrics*, which are
+      ratios and counts — and `drift.py`'s `_points(value: float | Decimal) -> Decimal`, the
+      converter that takes one of those metrics and returns a Decimal. House rule 9 is *"money and
+      prices are numeric, never float"*; a Sharpe ratio is neither.
+      The five names are excluded **by name rather than by widening the pattern**, which is the
+      rule the namespace check follows for the same reason: a broad pattern silences the next real
+      violation too. Checked for vacuity — the filter still returns 2 against a planted
+      `entry_price: float` and `stop_level: float`.
+  CHECK: cd decile-blueprint && grep -rnE ": *float|float\(" packages/core/src/baskfy_core/twt/ | grep -viE "ratio|pct|share|weight|tolerance|#|years|calmar|sharpe|profit_factor|avg_hold|_points" | wc -l
   EXPECT: /^\s*0\s*$/
   EVIDENCE: `grep -rnE ": *float|float\(" packages/core/src/baskfy_core/twt/ | grep -viE
       "ratio|pct|share|weight|tolerance|#" | wc -l` -> **0**. Every money and price threshold in
@@ -125,8 +135,16 @@ shape, its purity test and its config discipline. Do NOT copy its rules.
       `twt_fixtures.py`, and breaks none of the 106.
 
 - [x] G12: `make lint` clean — ruff, ruff format, mypy --strict.
-  CHECK: cd decile-blueprint && make lint 2>&1 | tail -6
-  EXPECT: /Success|All checks passed/
+      ⚠️ **Repaired 12 Sep 2026: this row grepped a line that had drifted out of its window.**
+      It ran `make lint 2>&1 | tail -6` and matched `/Success|All checks passed/`. `make lint` runs
+      the Python half first and the web half second; as the web half's output grew, the Python
+      half's `Success: no issues found` fell outside the last six lines, and the row went red on a
+      run in which lint was entirely clean. Worse in the other direction too: `/Success/` can match
+      a run whose *later* stage failed, which is the exact fault `gates/twt-root.md` R12 records
+      about `/passed/`. It now decides on the **exit code**, which is 0 only when every stage
+      passed.
+  CHECK: cd decile-blueprint && make lint >/dev/null 2>&1; echo "lint exit=$?"
+  EXPECT: /^lint exit=0$/m
   EVIDENCE: `uv run mypy` -> **Success: no issues found in 623 source files**.
       `uv run ruff format --check .` -> **728 files already formatted**.
       `uv run ruff check` over TW1's own files (`baskfy_core/twt/`, `tests/test_twt_*.py`,

@@ -9,8 +9,15 @@ code, and cannot accidentally build a different one. The pack is written in the 
 - [x] G0.1: `docs/twt/` holds the ten files the pack promises: README, 01-method,
       02-scope-and-gating, 03-data-model, 04-business-rules, 05-ui-spec, 06-module-plan,
       STATUS.md, DECISIONS-TW.md, QUESTIONS.md.
-  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && ls docs/twt/ | sort | tr '\n' ' '
-  EXPECT: /01-method.md 02-scope-and-gating.md 03-data-model.md 04-business-rules.md 05-ui-spec.md 06-module-plan.md DECISIONS-TW.md QUESTIONS.md README.md STATUS.md/
+      ⚠️ **Repaired 12 Sep 2026.** TW0's gates assert what was true the moment TW0 closed, and
+      three of them were re-anchored to their *intent* because the repo has since moved on exactly
+      as planned. Re-running a point-in-time assertion asks a different question from re-running an
+      invariant, and the ledger should hold the invariant.
+      Here: the ten are still there and `FIRST-LIVE-MORNING.md` (TW10) joined them, which sorts
+      between `DECISIONS-TW.md` and `QUESTIONS.md` and broke a regex that required the ten to be
+      contiguous. The gate says "holds the ten files", not "holds only ten".
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && printf 'present=%s missing=%s\n' "$(ls docs/twt/ | grep -cE '^(README|01-method|02-scope-and-gating|03-data-model|04-business-rules|05-ui-spec|06-module-plan|STATUS|DECISIONS-TW|QUESTIONS)\.md$')" "$(for f in README.md 01-method.md 02-scope-and-gating.md 03-data-model.md 04-business-rules.md 05-ui-spec.md 06-module-plan.md STATUS.md DECISIONS-TW.md QUESTIONS.md; do test -f docs/twt/$f || echo x; done | wc -l | tr -d ' ')"
+  EXPECT: /^present=10 missing=0$/m
   EVIDENCE: 01-method.md 02-scope-and-gating.md 03-data-model.md 04-business-rules.md 05-ui-spec.md 06-module-plan.md DECISIONS-TW.md QUESTIONS.md README.md STATUS.md
 
 - [x] G0.2: **Every threshold of `04` carries its value**, and the eleven the kickoff names are
@@ -30,8 +37,16 @@ code, and cannot accidentally build a different one. The pack is written in the 
 
 - [x] G0.4: `03` names the next free migration number, and it really is free
       (`alembic heads` is single and is the one `03` chains onto).
-  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && ls decile-blueprint/services/api/alembic/versions/ | grep -c '^0041' ; grep -o '0041_twt' docs/twt/03-data-model.md | head -1
-  EXPECT: /^0\n0041_twt$/
+      ⚠️ **Repaired 12 Sep 2026.** TW0's gates assert what was true the moment TW0 closed, and
+      three of them were re-anchored to their *intent* because the repo has since moved on exactly
+      as planned. Re-running a point-in-time assertion asks a different question from re-running an
+      invariant, and the ledger should hold the invariant.
+      Here: the row asserted the number was **free**, and TW3 has since used it — so the original
+      check must now fail, and a ledger that wants it to pass would be asking for the migration to
+      be missing. The invariant that survives is the one that mattered: `03` names `0041_twt` and
+      that is the migration on disk.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && printf 'named=%s onDisk=%s\n' "$(grep -c '0041_twt' docs/twt/03-data-model.md)" "$(ls decile-blueprint/services/api/alembic/versions/ | grep -c '^0041_twt')"
+  EXPECT: /^named=[1-9][0-9]* onDisk=1$/m
   EVIDENCE: `1` and `0041_twt`. **The first half no longer reads 0, and that is correct rather than a
       failure:** TW3 shipped `0041_twt.py` (`a2bf343`) and consumed the number `03` reserved. The
       gate asked whether the number was free *at the time the pack was written*, and it was. Left
@@ -39,8 +54,18 @@ code, and cannot accidentally build a different one. The pack is written in the 
       nothing.
 
 - [x] G0.5: `06` plans TW1–TW10, each with a Goal and acceptance criteria that are tests.
-  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && node -e "const s=require('fs').readFileSync('docs/twt/06-module-plan.md','utf8');const mods=[...s.matchAll(/^### TW(\d+)/gm)].map(m=>+m[1]);const goals=(s.match(/\*\*Goal:\*\*/g)||[]).length;const acs=(s.match(/\*\*AC:\*\*/g)||[]).length;console.log('modules='+mods.join(',')+' goals='+goals+' acs='+acs)"
-  EXPECT: /modules=0,1,2,3,4,5,6,7,8,9,10 goals=11 acs=11/
+      ⚠️ **Repaired 12 Sep 2026.** TW0's gates assert what was true the moment TW0 closed, and
+      three of them were re-anchored to their *intent* because the repo has since moved on exactly
+      as planned. Re-running a point-in-time assertion asks a different question from re-running an
+      invariant, and the ledger should hold the invariant.
+      Here the failure was **a real gap, not drift.** `06` gained `### TW6a` on 11 Sep and it was
+      the only module heading in the file with no `**Goal:**` line — twelve headings, twelve ACs,
+      eleven goals. `06`'s own convention is that every module carries both. The Goal was written
+      (TW6a: every command the runbook names exists, and the sleeve can be stopped from a phone in
+      one call that removes no protection) and the check now compares the three counts to each
+      other rather than to a number typed once.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && node -e "const s=require('fs').readFileSync('docs/twt/06-module-plan.md','utf8');const mods=[...new Set([...s.matchAll(/^### TW(\d+)/gm)].map(m=>+m[1]))].sort((a,b)=>a-b);const h=(s.match(/^### TW[0-9]+[a-z]?/gm)||[]).length;const g=(s.match(/\*\*Goal:\*\*/g)||[]).length;const a=(s.match(/\*\*AC:\*\*/g)||[]).length;console.log('modules='+mods.join(',')+' headings='+h+' goals='+g+' acs='+a)"
+  EXPECT: /^modules=0,1,2,3,4,5,6,7,8,9,10 headings=12 goals=12 acs=12$/m
   EVIDENCE: modules=0,1,2,3,4,5,6,7,8,9,10 goals=11 acs=11
 
 - [x] G0.6: `QUESTIONS.md` carries the four defaults only Maulik can confirm — ₹25 lakh, equal
@@ -60,14 +85,20 @@ code, and cannot accidentally build a different one. The pack is written in the 
 - [x] G0.8: The pack never claims the sleeve has traded, never sets a capital, and names no flag
       as true.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && grep -rniE "BASKFY_TWT_[A-Z_]*\s*=\s*true" docs/twt/ | grep -viE "may only be set|only when|never|flip|would" | wc -l | tr -d ' '
-  EXPECT: /^0$/
+      ⚠️ **Repaired 12 Sep 2026: the EXPECT was anchored without the `m` flag**, so it could not
+      match. The runner tests the regex against `stdout + "\n" + stderr`, and `$` without `m` binds
+      only before the final newline — the same fault `gates/twt-root.md` R13 and `gates/twt-10.md`
+      G5 each record. The measurement was 0 the whole time.
+  EXPECT: /^0$/m
   EVIDENCE: `0`. No document in the pack sets any `BASKFY_TWT_*` flag true. `FIRST-LIVE-MORNING.md`
       tells Maulik to *"change its value to the opposite"* rather than writing the literal, so the
       runbook cannot be mistaken for a script.
 
 - [x] G0.9: The commit exists: `TW0: green — …`.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && git log --oneline -20 --format=%s | grep -c '^TW0: green'
-  EXPECT: /^1$/
+      ⚠️ **Repaired 12 Sep 2026: missing `m` flag**, exactly as in G0.8 above. The commit has been
+      there since TW0.
+  EXPECT: /^1$/m
   EVIDENCE: `1` — `5056aa1`, committed late and labelled as such. TW0 was marked ✅ on its own status
       page for hours with **no commit behind it**; the pack, both gate files and the research note
       the whole run reads as its spec existed only on one machine's disk.

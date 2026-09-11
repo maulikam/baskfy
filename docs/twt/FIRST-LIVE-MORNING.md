@@ -88,12 +88,27 @@ R1–R4, the swing book and VBT-1 all still running. **If either suite is red, s
 not a "known failure to work around" on the morning you first put ₹25 lakh behind a new sleeve.
 
 ```bash
-cd /Users/maulikdave/Documents/projects/baskfy && uv run python tools/twt/drill.py --database-url postgresql+asyncpg://.../a_scratch_database
+# the scratch database first — the drill migrates it and leaves it behind
+docker exec baskfy-postgres psql -U baskfy -d postgres -q \
+  -c "DROP DATABASE IF EXISTS baskfy_drill;" -c "CREATE DATABASE baskfy_drill;"
+
+cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run python ../tools/twt/drill.py \
+  --database-url postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_drill
 ```
 
-`[NOT YET REAL — TW10]` The full `DRY_RUN` drill: evening plan, morning plan, confirm every line,
-a fill, a GTT, a ratchet, the sweep. It must end with **`0 orders reached a broker.`** Anything
-else and the flag does not get flipped.
+`[REAL — TW10, 12 Sep 2026]` The full `DRY_RUN` drill: evening plan, morning plan, confirm every
+line, a fill, a GTT, a ratchet, the sweep. It must end with **`0 orders reached a broker.`**
+Anything else and the flag does not get flipped.
+
+⚠️ **The command above was wrong until 12 Sep 2026 and this is the corrected one.** It read
+`cd <repo root> && uv run python tools/twt/drill.py`, and there is no `pyproject.toml` at the repo
+root — `uv run` there resolves a bare environment and the drill dies on
+`ModuleNotFoundError: No module named 'sqlalchemy'` before it does anything. `uv run` must be
+invoked from `decile-blueprint/`, which is where the project and its dependencies live, with the
+drill named by a relative path out of it. It also passed no `--database-url`, which the drill
+cannot run without. **This was the one command in this file that a person would run cold, at
+night, with nobody to ask** — which is why it is corrected here in place rather than noted
+elsewhere.
 
 ### 2.2 The schema is migrated and the sleeve has been seeded
 
@@ -112,8 +127,10 @@ deliberate: a sleeve with no money cannot trade by accident, and every signal is
 cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && make twt DATE=<the last published session>
 ```
 
-`[NOT YET REAL — TW4]` The nightly chain's `COMPUTE_TWT` step runs this itself after
+`[REAL — TW4]` The nightly chain's `COMPUTE_TWT` step runs this itself after
 `COMPUTE_VBT`, and Beat retries it at 21:00 IST. Run it by hand only if the chain did not.
+(Marker corrected 12 Sep 2026: `make twt` has existed since TW4 and this line still said it did
+not.)
 
 Expect a funnel, in these words: universe → with a bar today → clearing the ₹30 close and the
 10,000-share volume average → holding the tight state → **first day of the state after five
@@ -274,23 +291,53 @@ pressed Confirm on an unexpired plan.
 every signal is skipped `NO_SLEEVE_CAPITAL` — **that is the intended behaviour and not a fault to
 debug at 09:10.**
 
+**This is the command. It is real and it is the one to use** (TW11, 12 Sep 2026):
+
 ```bash
-curl -fsS -X PATCH $WEB/api/v1/twt/config -H "Authorization: Bearer $BASKFY_TOKEN" -H 'Content-Type: application/json' -d '{"sleeve_capital_inr": "2500000.00"}'
+cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run python -m baskfy_api.seed twt --capital 2500000
 ```
 
-`[NOT YET REAL — TW3/TW8]` The `PATCH /api/v1/vbt/config` shape, for `tw_config`. Or use the
-settings form at `$WEB/me/twt`. The value travels as **a string**, the way the swing form sends
-its decimals: `Number("2500000.00")` is a float and money is never a float (house rule 9).
+It prints `tw_config_sleeve: 1 rows`. The write goes through the same `apply_patch` the settings
+form would use — the engine's bounds first, the server ceilings second — and leaves a
+`tw_config_audit` row carrying the old value, the new value and an author. Run it twice with the
+same number and the second run writes nothing, so it is safe to repeat if you are unsure whether
+the first one took.
+
+**`uv run` from `decile-blueprint/`, not from the repo root.** There is no `pyproject.toml` at the
+root and the command dies on `ModuleNotFoundError: No module named 'sqlalchemy'` — the same trap
+§2.1 and §9.2 carried until 12 Sep.
 
 Read it back before you trust it:
 
 ```bash
-curl -fsS $WEB/api/v1/twt/config -H "Authorization: Bearer $BASKFY_TOKEN"
+docker exec baskfy-postgres psql -U baskfy -d baskfy -c \
+  "select sleeve_capital_inr, max_open_positions, max_position_pct, stop_pct, trail_pct, first_live_entries_left, updated_by from tw_config;"
 ```
 
-`[NOT YET REAL — TW3/TW8]` Expect `sleeve_capital_inr: 2500000.00`, `max_open_positions: 10`,
-`max_position_pct: 12.50`, `stop_pct: 20.00`, `trail_pct: 20.00`,
-**`first_live_entries_left: 10`**. Every write is audited into `tw_config_audit`.
+Expect `2500000.00 | 10 | 12.50 | 20.00 | 20.00 | 10 | seed`. And the trail that proves it went
+through the audited path rather than round it:
+
+```bash
+docker exec baskfy-postgres psql -U baskfy -d baskfy -c \
+  "select key, old_value, new_value, changed_by, note from tw_config_audit order by id desc limit 3;"
+```
+
+One row reading `sleeve_capital_inr | 0.00 | 2500000.00 | seed | baskfy_api.seed twt`. **If that
+row is absent, something wrote the capital around the audit** — the raw `UPDATE` this step used to
+be the only alternative to. Do not proceed on a capital with no trail.
+
+#### The two surfaces this step used to name, and why they are still tagged
+
+```bash
+curl -fsS -X PATCH $WEB/api/v1/twt/config -H "Authorization: Bearer $BASKFY_TOKEN" -H 'Content-Type: application/json' -d '{"sleeve_capital_inr": "2500000.00"}'
+```
+
+`[NOT YET REAL — TW3/TW8]` The `PATCH /api/v1/vbt/config` shape, for `tw_config`. Still unbuilt:
+`baskfy_api/twt_settings.py` has the functions and no `APIRouter`. The settings form at
+`$WEB/me/twt` is unbuilt too. **Neither blocks you** — the command above is the surface that exists
+where you actually type at 09:05, and it audits identically. If the route is built later, the value
+travels as **a string**, the way the swing form sends its decimals: `Number("2500000.00")` is a
+float and money is never a float (house rule 9).
 
 **One thing worth your eye before you type it** (`NEEDS-MAULIK.md` T3): **no backtest in this
 repository was produced at ₹25 lakh.** Every number in `docs/twt/01` was measured at ₹10 lakh. The
@@ -572,10 +619,16 @@ it by hand or confirm it ran. It is idempotent and keyed on the day, so running 
 Or from the laptop:
 
 ```bash
-cd /Users/maulikdave/Documents/projects/baskfy && uv run python tools/twt/sweep.py --date <today>
+cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run python ../tools/twt/sweep.py --date <today>
 ```
 
-`[NOT YET REAL — TW7]`
+`[REAL — TW7, corrected 12 Sep 2026]` ⚠️ **This command had the same fault as the drill's**: it
+ran `uv run` from the repo root, where there is no `pyproject.toml`, so it died on
+`ModuleNotFoundError: No module named 'sqlalchemy'` before reading a single row. `uv run` belongs
+in `decile-blueprint/`. **And read §9.2 step 3 before you rely on it:** the standalone sweep's
+`build_rearm()` still returns `unavailable_rearm`, so today it can *find* a naked line and cannot
+*fix* one. `POST $DESK/twt/sweep` on the desk can, because the desk wires
+`twt_execute.rearm_callable`.
 
 Expect `naked: 0`. The sweep re-arms anything it finds naked and raises
 **`TWT_GTT_MISSING_AT_1515`** for anything it could not fix. **`TWT_POSITION_NAKED` fires on any
@@ -744,24 +797,26 @@ this strategy can provoke; the 20 % give-back is routine and is how the method w
 ## 11. What is not real yet — the inventory
 
 Every command tagged `[NOT YET REAL]` above, in one table, so the modules that follow build to
-these exact spellings.
+these exact spellings. **Re-checked against the tree on 12 Sep 2026** — the four rows that had
+gone stale are marked BUILT, and the two that have not are marked so in bold, because this table
+is the one place a reader looks to find out what exists.
 
 | Command / route | Owner | Note |
 |---|---|---|
-| `make twt DATE=…` | TW4 | Named in `06`. The nightly chain runs `COMPUTE_TWT` itself. |
+| `make twt DATE=…` | TW4 | **BUILT** (`Makefile` `twt:`). The nightly chain runs `COMPUTE_TWT` itself. |
 | `make twt-plan DATE=… [SOURCE=EVENING\|MORNING]` | **TW6** | **BUILT.** `baskfy_worker.twt_cli --plan`. Writes `tw_plan`; places nothing. |
-| `make twt-backtest` | TW9 | Named in `06`. |
+| `make twt-backtest` | TW9 | **BUILT** (`Makefile` `twt-backtest:`). |
 | `GET $DESK/twt`, `GET $DESK/twt/data` | TW6/TW8 | **BUILT** (TW6's shape; TW8's polish went to the web page). |
 | `POST $DESK/twt/execute` | TW6 | **BUILT.** `04` §10.4. Needs `Origin`. 400 / 404 / 410 / 409, and a `SELL_AT_OPEN` is a 400 (TW6.4). |
 | `POST $DESK/twt/rearm` | **TW6** | **BUILT**, and exported as the callable TW7's sweep injects (`twt_execute.rearm_callable`). |
 | `POST $DESK/twt/sweep` | **TW6/TW7** | **BUILT.** Idempotent, keyed on the day. **No clock runs it yet.** |
 | `POST $DESK/twt/reconcile` | **TW6** | **BUILT.** Never met a real GTT list — see §9.2 step 3. |
 | **`POST $DESK/twt/halt`** | **TW6** | **BUILT to §7's four behaviours.** The third — protection is never removed — is pinned twice: directly, and through the mounted route. |
-| `GET` / `PATCH $WEB/api/v1/twt/config` | TW3/TW8 | Mirrors `/api/v1/vbt/config`. `sleeve_capital_inr` travels as a string. |
-| `$WEB/me/twt` settings form | TW8 | The bounded settings of `02` only. |
-| `tools/twt/sweep.py` | TW7 | Named in `06`. |
-| `tools/twt/drill.py` | TW10 | Named in `06`. Must end `0 orders reached a broker.` |
-| `BASKFY_TWT_EXECUTION_ENABLED` | TW3 | Created **false**, in both env files on the box. |
+| `GET` / `PATCH $WEB/api/v1/twt/config` | TW3/TW8 | **STILL NOT BUILT.** `baskfy_api/twt_settings.py` has `read_config` / `apply_patch` / `record_system_change` and **no `APIRouter`**; nothing mounts it. This is why the sleeve cannot be funded — NEEDS-MAULIK T3. |
+| `$WEB/me/twt` settings form | TW8 | **STILL NOT BUILT.** No `me/twt` route in the web app. The bounded settings of `02` only, when it is. |
+| `tools/twt/sweep.py` | TW7 | **BUILT.** Run it from `decile-blueprint/` — `uv run python ../tools/twt/sweep.py`. Its `build_rearm()` still returns `unavailable_rearm`, so it finds naked lines and cannot fix one; `POST $DESK/twt/sweep` can. |
+| `tools/twt/drill.py` | TW10 | **BUILT.** Run it from `decile-blueprint/` — `uv run python ../tools/twt/drill.py --database-url …`. Must end `0 orders reached a broker.` |
+| `BASKFY_TWT_EXECUTION_ENABLED` | TW3 | **BUILT false** — `app/config.py` defaults it false and both `.env.example` files carry it. Setting it on the box is yours (T2). |
 | `TWT_EVENING`, `TWT_POSITION_NAKED`, `TWT_GTT_MISSING_AT_1515`, `TWT_ADJUSTMENT_RESET` | TW4/TW6/TW7 | **BUILT** in `baskfy_worker.alerts.AlertName`, one runbook behind all four: `decile-blueprint/docs/runbooks/09-twt-morning.md`. |
 
 **Real today:** `make test`, `make lint`, `make migrate`, `make token-sync`, the Kite login and its

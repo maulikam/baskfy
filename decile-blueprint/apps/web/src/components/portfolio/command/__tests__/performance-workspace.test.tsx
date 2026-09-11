@@ -486,15 +486,18 @@ describe("what the panel refuses to invent", () => {
     renderWorkspace();
     const blocked = screen.getByTestId("attribution-blocked");
 
+    /* Four, not five. Fees left this list on 11 Sep 2026 — its own entry said the cost model
+       existed and only the wiring was missing, which is an unbuilt thing sitting in a list of
+       impossible ones. It is wired; see `estimated-costs` below. */
     for (const name of [
       "Contribution by sector",
       "Allocation effect",
       "Security-selection effect",
       "Cash drag",
-      "Fees, brokerage and taxes",
     ]) {
       expect(blocked).toHaveTextContent(name);
     }
+    expect(blocked.textContent ?? "").not.toContain("Fees, brokerage and taxes");
     /* The reason now says what a READER needs, not which table lacks a column. `instrument` is a
        schema name and it reached the screen because the no-internals scan looks for snake_case,
        paths and routes — a bare table name that is also an English word walked straight through
@@ -643,5 +646,73 @@ describe("every state explains itself", () => {
     const text = screen.getByTestId("performance-workspace").textContent ?? "";
     expect(text).not.toMatch(/place (an )?order|buy now|execute/i);
     expect(screen.queryByRole("button", { name: /order|execute/i })).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------ fees, once it was wired
+ *
+ * This was the sixth entry in "what this cannot be broken down by", and its own text gave the
+ * game away: *"Needs: wiring the existing cost model through the portfolio rebalance path."* Not
+ * missing data — unbuilt. The cost model was measured against 163 real fills and reproduces every
+ * component exactly, and `portfolio_cash_flow` already held the buys and sells.
+ *
+ * The figure is now computed server-side. **What these tests hold is the honesty**, because the
+ * danger the old entry named is precisely the one shipping a number creates: the value series is
+ * still not net of these charges, and a reader who reads this as a net-of-fees return is wrong. */
+
+const COSTS = {
+  stt: "7349.55",
+  exchange: "218.28",
+  sebi: "12.30",
+  stamp: "840.73",
+  gst: "47.95",
+  dp: "127.44",
+  brokerage: "0.00",
+  total: "8596.25",
+  turnover: "7349552.00",
+  trades: 163,
+  sell_scrip_days: 8,
+  bps_of_turnover: "11.70",
+  caveat:
+    "An estimate of what these trades cost at current statutory rates, not a billed amount. " +
+    "Returns shown elsewhere are before these charges, not after them.",
+};
+
+describe("fees, brokerage and taxes", () => {
+  it("fees: the figure is shown with its components rather than one opaque total", () => {
+    renderWorkspace({ estimatedCosts: COSTS });
+    const panel = screen.getByTestId("estimated-costs");
+
+    expect(panel).toHaveTextContent("Securities transaction tax");
+    expect(panel).toHaveTextContent("Stamp duty");
+    expect(panel).toHaveTextContent("Depository charge");
+    /* Brokerage is genuinely nothing for delivery, and saying so is worth a line — omitting it
+       would leave a reader assuming it was folded into the total. */
+    expect(panel).toHaveTextContent("Brokerage");
+  });
+
+  it("fees: the caveat says the returns shown elsewhere are NOT net of these", () => {
+    /* The gate the whole feature turns on. Without this sentence the panel implies a net-of-fees
+       return that no series behind it actually is. */
+    renderWorkspace({ estimatedCosts: COSTS });
+    const panel = screen.getByTestId("estimated-costs");
+
+    expect(panel).toHaveTextContent("not a billed amount");
+    expect(panel).toHaveTextContent("before these charges, not after them");
+  });
+
+  it("fees: a book with no recorded trades says why, and never shows zero", () => {
+    renderWorkspace({ estimatedCosts: null });
+    const absent = screen.getByTestId("estimated-costs-absent");
+
+    expect(absent).toHaveTextContent("No buys or sells are recorded");
+    expect(absent).toHaveTextContent("broker sync");
+    expect(absent.textContent ?? "").not.toMatch(/₹\s*0(\.00)?\b/);
+  });
+
+  it("fees: it is no longer listed as something that cannot be broken down", () => {
+    renderWorkspace({ estimatedCosts: COSTS });
+    const blocked = screen.getByTestId("attribution-blocked");
+    expect(blocked.textContent ?? "").not.toContain("Fees, brokerage and taxes");
   });
 });

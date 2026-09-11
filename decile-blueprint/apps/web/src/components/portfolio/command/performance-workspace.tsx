@@ -33,6 +33,7 @@ import {
   type PlotLine,
   type SeriesSpan,
 } from "@/lib/portfolio/performance";
+import type { EstimatedCosts } from "@/lib/portfolio/performance";
 import { cn } from "@/lib/utils";
 
 /**
@@ -131,6 +132,14 @@ export interface PerformanceWorkspaceProps {
   onRangeChange?: ((range: NavRange) => void) | undefined;
   /** True while a new range is in flight; the drawn series is still the previous one. */
   loading?: boolean | undefined;
+  /**
+   * `OverviewOut.estimated_costs` — what the recorded trades cost, from the desk's cost model.
+   *
+   * `null` means the server computed none because nothing was traded, which is a different
+   * statement from `undefined`, which means this caller does not supply it at all. Both render,
+   * and neither renders ₹0.
+   */
+  estimatedCosts?: EstimatedCosts | null | undefined;
 }
 
 export function PerformanceWorkspace({
@@ -142,6 +151,7 @@ export function PerformanceWorkspace({
   seriesByPortfolio,
   onRangeChange,
   loading = false,
+  estimatedCosts,
 }: PerformanceWorkspaceProps) {
   const series = useMemo(() => performanceSeries(chart), [chart]);
   const [view, setView] = useState<PerformanceView>("VALUE");
@@ -280,7 +290,7 @@ export function PerformanceWorkspace({
         ) : null}
       </section>
 
-      <Attribution attribution={bands} />
+      <Attribution attribution={bands} costs={estimatedCosts} />
     </div>
   );
 }

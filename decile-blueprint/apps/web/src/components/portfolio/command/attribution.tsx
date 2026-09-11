@@ -5,9 +5,14 @@ import Link from "next/link";
 import { CircleAlert, Info, Lock } from "lucide-react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { CONTRIBUTION_BY_HOLDING_IS_ELSEWHERE } from "@/lib/portfolio/performance";
+import {
+  CONTRIBUTION_BY_HOLDING_IS_ELSEWHERE,
+  COST_COMPONENTS,
+  NO_TRADES_COSTED,
+} from "@/lib/portfolio/performance";
 import type {
   Attribution as AttributionModel,
+  EstimatedCosts,
   AttributionBand,
   ContributionRow,
 } from "@/lib/portfolio/performance";
@@ -244,13 +249,77 @@ function Band({ band, testId }: { band: AttributionBand; testId: string }) {
   );
 }
 
-export function Attribution({ attribution }: { attribution: AttributionModel }) {
+/**
+ * What the recorded trades cost, and the sentence that keeps it honest.
+ *
+ * This used to be the sixth entry in the blocked list below. The model was always there — measured
+ * against 163 real fills — and only the wiring was missing. **The caveat is not decoration:** the
+ * value series is still not net of these charges, so a reader who took this as a net-of-fees
+ * return would be wrong, and the old blocked entry said exactly that would be the danger.
+ */
+function EstimatedCostsPanel({ costs }: { costs: EstimatedCosts | null }) {
+  if (costs === null) {
+    return (
+      <p
+        data-testid="estimated-costs-absent"
+        className="rounded-xl border border-border bg-card px-4 py-2.5 text-xs leading-relaxed text-muted-foreground"
+      >
+        <span className="font-medium text-foreground">Fees, brokerage and taxes.</span>{" "}
+        {NO_TRADES_COSTED}
+      </p>
+    );
+  }
+  return (
+    <section
+      data-testid="estimated-costs"
+      aria-label="Estimated charges on recorded trades"
+      className="rounded-xl border border-border bg-card px-4 py-3"
+    >
+      <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
+        <span className="font-medium">Fees, brokerage and taxes</span>
+        <span className="font-semibold tabular-nums">{formatRupees(costs.total)}</span>
+        {costs.bps_of_turnover ? (
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {costs.bps_of_turnover} bps of {formatRupees(costs.turnover)} traded
+          </span>
+        ) : null}
+      </p>
+      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{costs.caveat}</p>
+      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+        {COST_COMPONENTS.map((component) => (
+          <div key={component.key} className="flex items-baseline justify-between gap-2">
+            <dt className="text-xs text-muted-foreground" title={component.note}>
+              {component.label}
+            </dt>
+            <dd className="text-xs tabular-nums">{formatRupees(costs[component.key])}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+export function Attribution({
+  attribution,
+  costs,
+}: {
+  attribution: AttributionModel;
+  /** `null` when nothing was traded; `undefined` when the caller does not supply it. */
+  costs?: EstimatedCosts | null | undefined;
+}) {
   return (
     <section aria-label="Performance attribution" data-testid="attribution" className="space-y-4">
       <Band band={attribution.today} testId="attribution-today" />
       <Band band={attribution.period} testId="attribution-period" />
 
-      {/* The six the brief names and Baskfy cannot compute. Named on the surface that would have
+      {/* Fees sits OUTSIDE the disclosure below, and that placement is the point: it is a figure
+          this screen has, not one it lacks. It spent a day inside that list — first as an entry
+          saying "Needs: wiring the existing cost model", then briefly inside the folded panel
+          after the wiring landed, which put an available number under a heading that says
+          unavailable. Out here it is what it is. */}
+      {costs === undefined ? null : <EstimatedCostsPanel costs={costs} />}
+
+      {/* The four the brief names and Baskfy cannot compute. Named on the surface that would have
           shown them, each with what is missing and what would unblock it — never as a dash, and
           never as a plausible figure. Baskfy places live orders.
 

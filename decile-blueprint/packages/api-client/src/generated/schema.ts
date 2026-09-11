@@ -5535,6 +5535,47 @@ export interface components {
             /** Equity */
             equity: string;
         };
+        /**
+         * EstimatedCostsOut
+         * @description What the recorded trades cost, at current statutory rates.
+         *
+         *     **An estimate, and the panel says so.** `portfolio_nav_daily` is not net of these charges, so a
+         *     return shown beside this figure is still gross. `baskfy_core.portfolio_costs` carries the full
+         *     reasoning; the short version is that presenting this as a net-of-fees return would be the gross
+         *     number under a different name, which is the complaint that made this figure worth building.
+         *
+         *     Absent — the whole object is ``None`` — when the portfolio has no recorded buys or sells.
+         *     A portfolio whose holdings arrived by broker sync has no trade history until a statement is
+         *     imported, and ₹0 would read as "you were charged nothing".
+         */
+        EstimatedCostsOut: {
+            /** Bps Of Turnover */
+            bps_of_turnover?: string | null;
+            /** Brokerage */
+            brokerage: string;
+            /** Caveat */
+            caveat: string;
+            /** Dp */
+            dp: string;
+            /** Exchange */
+            exchange: string;
+            /** Gst */
+            gst: string;
+            /** Sebi */
+            sebi: string;
+            /** Sell Scrip Days */
+            sell_scrip_days: number;
+            /** Stamp */
+            stamp: string;
+            /** Stt */
+            stt: string;
+            /** Total */
+            total: string;
+            /** Trades */
+            trades: number;
+            /** Turnover */
+            turnover: string;
+        };
         /** ExitBody */
         ExitBody: {
             /** Holdings */
@@ -7009,6 +7050,7 @@ export interface components {
             /** Attention */
             attention?: components["schemas"]["AttentionOut"][];
             chart: components["schemas"]["NavSeriesOut"];
+            estimated_costs?: components["schemas"]["EstimatedCostsOut"] | null;
             hero: components["schemas"]["HeroOut"];
             /** Holdings Synced Label */
             holdings_synced_label: string;

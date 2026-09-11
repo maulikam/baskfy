@@ -53,6 +53,7 @@ PIPELINE_TABLES = (
     # left behind by one test made the next one's fixture fail at setup.
     "vb_signal_daily, vb_breadth_daily, vb_config_audit, vb_config, vb_fill, vb_order, "
     "vb_position, vb_plan_line, vb_plan_skip, vb_plan, vb_session, vb_backtest_run, "
+    "vb_scan_run, "
     # Prompt 12's account purge is a worker task too, and it writes `app_user` — which nothing
     # else here truncates, so without these a second test run finds the first one's accounts.
     "index_def"

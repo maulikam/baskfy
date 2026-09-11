@@ -19,6 +19,7 @@ import contextlib
 import dataclasses
 import datetime as dt
 import decimal
+import json
 import logging
 import uuid
 from collections.abc import Iterator
@@ -43,6 +44,20 @@ router = APIRouter()
 #: the number in `baskfy_core.vbt.config` because the desk page, the web page and the API's
 #: settings view all print it, and three copies is two too many.
 DRY_RUN_SESSIONS_REQUIRED: Final = _DRY_RUN_SESSIONS_REQUIRED
+
+#: VB12's two refusals, mirrored from `baskfy_worker.tasks.vbt_rescan` — the desk cannot import
+#: the worker (different venv, no Celery), so the numbers are copied and
+#: `tests/test_vbt_rescan_desk.py` asserts the two copies agree.
+RESCAN_IN_FLIGHT: Final[tuple[str, ...]] = ("QUEUED", "RUNNING")
+RESCAN_STALE_AFTER_SECONDS: Final = 600
+RESCAN_MIN_INTERVAL_SECONDS: Final = 60
+IN_FLIGHT: Final[tuple[str, ...]] = RESCAN_IN_FLIGHT
+
+
+def _as_datetime(value: Any) -> dt.datetime:  # noqa: ANN401 - a driver's timestamp
+    """A timestamp from either driver, always tz-aware. sqlite hands back a string."""
+    stamp = dt.datetime.fromisoformat(value) if isinstance(value, str) else value
+    return stamp if stamp.tzinfo else stamp.replace(tzinfo=dt.UTC)
 
 #: The order `04` §9.3 renders a plan in: risk coming off before risk going on.
 KIND_ORDER: Final[tuple[str, ...]] = (
@@ -490,6 +505,48 @@ class PgVbtStore:
         ).fetchall()
         return [self._position_row(row) for row in rows]
 
+    def newest_scan(self) -> dict | None:
+        """This user's most recent **Re-detect** request, whatever state it is in (VB12).
+
+        The page shows it so a press has visible consequences: QUEUED means the sweep has not
+        run yet, RUNNING means a worker has it, DONE carries the funnel and FAILED the reason.
+        """
+        row = self.conn.execute(
+            f"SELECT id, requested_at, started_at, finished_at, session_date, status, source, "
+            f"detail, error, task_id FROM {self.t('vb_scan_run')} "
+            "WHERE user_id = ? ORDER BY requested_at DESC, id DESC LIMIT 1",
+            (self.user_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        detail = row["detail"]
+        return {
+            "id": int(row["id"]),
+            "requested_at": row["requested_at"],
+            "started_at": row["started_at"],
+            "finished_at": row["finished_at"],
+            "session_date": row["session_date"],
+            "status": row["status"],
+            "source": row["source"],
+            "detail": json.loads(detail) if isinstance(detail, str) else detail,
+            "error": row["error"],
+            "task_id": row["task_id"],
+        }
+
+    def request_scan(self, *, now: dt.datetime) -> int:
+        """Insert one `QUEUED` row and return its id. The worker's sweep publishes it.
+
+        **The desk has no Celery client**, so this is the whole of the button's write: a row.
+        The two refusals the caller applies — one in flight, one a minute — are answered from
+        `newest_scan()` above, from the same table, so the rule holds with no cache configured.
+        """
+        row = self.conn.execute(
+            f"INSERT INTO {self.t('vb_scan_run')} (user_id, requested_at, status, source) "
+            "VALUES (?, ?, 'QUEUED', 'desk') RETURNING id",
+            (self.user_id, now),
+        ).fetchone()
+        return int(row["id"])
+
     def session(self, day: dt.date) -> dict | None:
         row = self.conn.execute(
             f"SELECT session_date, mode, gate, signals, confirms, fills, exits "
@@ -636,6 +693,7 @@ def build_view(store: PgVbtStore, *, now: dt.datetime) -> dict:
         "desk_dry_run": gates["desk_dry_run"],
         "dry_run_sessions": config.get("dry_run_sessions", 0),
         "dry_run_sessions_required": DRY_RUN_SESSIONS_REQUIRED,
+        "scan": store.newest_scan(),
         "reason": "",
     }
 
@@ -672,6 +730,7 @@ def unavailable_view(reason: str, *, now: dt.datetime) -> dict:
         "desk_dry_run": gates["desk_dry_run"],
         "dry_run_sessions": 0,
         "dry_run_sessions_required": DRY_RUN_SESSIONS_REQUIRED,
+        "scan": None,
         "reason": reason,
     }
 
@@ -762,6 +821,57 @@ def vbt_page(request: Request) -> Any:  # noqa: ANN401 - a TemplateResponse
 @router.get("/vbt/data")
 def vbt_data() -> Any:  # noqa: ANN401 - a JSON-able dict
     return _jsonable(_view())
+
+
+@router.post("/vbt/rescan")
+def vbt_rescan(request: Request) -> Any:  # noqa: ANN401, ARG001 - a JSON-able dict
+    """VB12: ask for the latest **published** session to be detected again. Places nothing.
+
+    The night the chain's step was skipped because the quality gate refused the day, and the
+    morning after a threshold changed, this is the way to get the funnel recomputed without
+    waiting for 21:10 or reaching for a shell.
+
+    **It is not the swing book's "Scan now".** That one scans *today* from live quotes; this one
+    cannot and should not — three of VBT-1's five Chartink lines read the day's volume against
+    its 50-day average, the close's position inside the day's range and the day's change, and the
+    entry limit *is* the signal bar's close. `04` §10's clock is the published session's.
+
+    Two refusals, both answered from `vb_scan_run` rather than from a cache, so the rule holds on
+    a box with no Redis and is testable against the database alone:
+
+    * **one in flight** — a `QUEUED`/`RUNNING` row younger than the stale window gets its own id
+      back with `accepted=false`, rather than starting a second detection over the same bars;
+    * **one a minute** — a request inside the interval is `too soon`, with the seconds to wait.
+
+    It writes one row. It cannot size, place or cancel anything, and the module it hands off to
+    names no broker.
+    """
+    now = _now()
+    with open_store() as store:
+        newest = store.newest_scan()
+        if newest is not None:
+            age = (now - _as_datetime(newest["requested_at"])).total_seconds()
+            if newest["status"] in IN_FLIGHT and age < RESCAN_STALE_AFTER_SECONDS:
+                return _jsonable(
+                    {
+                        "accepted": False,
+                        "reason": "a re-detect is already in flight",
+                        "run_id": newest["id"],
+                        "status": newest["status"],
+                    }
+                )
+            if age < RESCAN_MIN_INTERVAL_SECONDS:
+                return _jsonable(
+                    {
+                        "accepted": False,
+                        "reason": "too soon",
+                        "retry_after_seconds": int(RESCAN_MIN_INTERVAL_SECONDS - age) + 1,
+                        "run_id": newest["id"],
+                        "status": newest["status"],
+                    }
+                )
+        run_id = store.request_scan(now=now)
+    return _jsonable({"accepted": True, "run_id": run_id, "status": "QUEUED"})
 
 
 @router.post("/vbt/execute")

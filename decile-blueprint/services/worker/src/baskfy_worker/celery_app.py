@@ -70,6 +70,10 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # VB9: the backtest is a compute job — minutes of Polars and NumPy over nine years of bars —
     # so it takes the compute queue like the detectors, not the default one the checks use.
     "baskfy.vbt.backtest": {"queue": QUEUE_COMPUTE},
+    # VB12: the re-detect itself is compute (it reads the whole universe); the sweep that
+    # publishes it is one indexed SELECT and takes the default queue, like the checks.
+    "baskfy.vbt.rescan": {"queue": QUEUE_COMPUTE},
+    "baskfy.vbt.rescan_sweep": {"queue": QUEUE_DEFAULT},
     # SW15: "Scan now". The scan itself is the nightly's body over the liquid universe — a few
     # minutes of Polars — and takes the compute queue; the sweep that publishes the desk's
     # queued rows is one SELECT a minute and takes the default queue for the reason the
@@ -368,6 +372,16 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
     "swing-check-detect-fresh": {
         "task": "baskfy.swing.check_detect_fresh",
         "schedule": crontab(hour=21, minute=30, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    # --- VB12: the desk's Re-detect button (docs/vbt/05 §3) --------------------------
+    #
+    # The desk has no Celery client, so its button writes a QUEUED `vb_scan_run` row and this
+    # sweep publishes it. Every minute, seven days a week: the button's whole point is the night
+    # the chain's step was skipped, and that night is often a Friday whose fix happens Saturday.
+    "vbt-rescan-sweep": {
+        "task": "baskfy.vbt.rescan_sweep",
+        "schedule": crontab(minute="*"),
         "options": {"queue": QUEUE_DEFAULT},
     },
     # --- VB7: the checks behind the volume-breakout alerts (docs/vbt/05 §4) -----------

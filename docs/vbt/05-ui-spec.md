@@ -118,6 +118,23 @@ bar says so), and the session's counters from `vb_session`.
 The desk's existing login, CSRF and `websec` middleware cover the page; `DRY_RUN` is already in
 every desk page's header and stays so.
 
+### The **Re-detect** button (VB12, added 11 Sep 2026)
+
+In the status bar, beside the DRY_RUN counter: **Re-detect the last session**. It asks for the
+latest *published* session to be detected again, and shows the last request's state beside it —
+`QUEUED` (waiting for the worker's sweep, up to a minute), `RUNNING`, `DONE` with the signal
+count, or `FAILED` with the reason.
+
+**It is not the swing hub's "Scan now" and must not read like one.** That control scans *today*
+from live quotes and labels its rows provisional. This one cannot: `04` §10's clock is the
+published session's, and three of the five Chartink lines are meaningless before the close. What
+this button is for is the night the chain's `compute_vbt` step was skipped because the quality
+gate refused the day, and the morning after a threshold changed.
+
+It writes one `vb_scan_run` row (`03` §8a) and nothing else — no plan, no order, no broker. The
+desk has no Celery client, so the row is the whole write and `baskfy.vbt.rescan_sweep` publishes
+it. Two refusals, both from the table: one in flight, and one a minute.
+
 ## 4. Alerts
 
 The evening job sends one email through the existing alert path (a new `AlertName.VBT_EVENING`):

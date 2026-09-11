@@ -58,6 +58,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -108,6 +109,15 @@ VB_FILL_SIDES: tuple[str, ...] = ("BUY", "SELL")
 #: the open, or a rebuild a person asked the desk for. There is no live-trigger source: this is
 #: an end-of-day strategy and nothing about it fires inside a session (``02`` Track C §3).
 VB_PLAN_SOURCES: tuple[str, ...] = ("EVENING", "MORNING", "MANUAL")
+
+#: ``vb_scan_run.status`` — the same four the swing book's scan uses, and for the same reason:
+#: a row that is QUEUED has been asked for, RUNNING has been picked up, and DONE or FAILED has
+#: finished. Nothing distinguishes "never asked" from "asked and lost" except this column.
+VB_SCAN_STATUSES: tuple[str, ...] = ("QUEUED", "RUNNING", "DONE", "FAILED")
+
+#: Who pressed the button. The desk is the only surface that has one (``05`` §3); ``cli`` is
+#: ``make vbt`` writing a row so a command-line re-detect is auditable beside a button press.
+VB_SCAN_SOURCES: tuple[str, ...] = ("desk", "cli")
 VB_LINE_STATES: tuple[str, ...] = (
     "PROPOSED",
     "CONFIRMED",
@@ -626,4 +636,63 @@ class VbBacktestRun(Base):
     #: The comparison against STRATEGY §4, and whether it is more than a CAGR point out (VB9).
     drift: Mapped[JsonObject | None] = mapped_column(JSONB, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[CreatedAt]
+
+
+class VbScanRun(Base):
+    """One press of **Re-detect** on the desk (VB12; ``docs/vbt/03`` §13).
+
+    **This is not the swing book's "Scan now" and the difference is the whole design.** That one
+    scans *today* from live quotes and labels its rows provisional, because a base and a pivot are
+    readable from a partial bar. VBT-1's signal is not: three of the five Chartink lines read the
+    day's volume against its 50-day average, the close's position inside the day's range, and the
+    day's change — all meaningless before 15:30 — and the entry limit **is** the signal bar's
+    close, so an intraday hit would name a price that does not exist yet.
+
+    So this row asks for one thing only: **re-run the detector over a session that has already
+    closed.** It is for the night the chain's step was skipped because the quality gate refused
+    the day, and for the morning after a threshold changed. There is no provisional column here
+    because there is nothing provisional to record.
+
+    The desk inserts the row ``QUEUED`` and the worker's sweep publishes it, because the desk has
+    no Celery client (`app/vbt_desk.py`). The worker marks it ``RUNNING``, re-detects, and writes
+    ``DONE`` with the funnel in ``detail`` — or ``FAILED`` with the reason in ``error`` and
+    nothing else written. Detection is idempotent per ``(user_id, date)`` (house rule 7), so a
+    re-run overwrites its own rows and moves no counter.
+
+    **It cannot place, size or cancel anything.** It writes ``vb_signal_daily`` and
+    ``vb_breadth_daily`` and nothing else; the plan is still the evening's and the confirm is
+    still Maulik's.
+    """
+
+    __tablename__ = "vb_scan_run"
+    __table_args__ = (
+        _in_check("status_known", "status", VB_SCAN_STATUSES),
+        _in_check("source_known", "source", VB_SCAN_SOURCES),
+        CheckConstraint(
+            "finished_at IS NULL OR started_at IS NULL OR finished_at >= started_at",
+            name="finished_after_started",
+        ),
+        Index("ix_vb_scan_run_user_id_requested_at", "user_id", "requested_at"),
+    )
+
+    id: Mapped[BigIntPk]
+    user_id: Mapped[int] = _user_fk()
+    requested_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Which published session was re-detected. Null until the worker has decided, because the
+    #: desk asks for "the latest" and only the worker knows which that is.
+    session_date: Mapped[dt.date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="QUEUED")
+    source: Mapped[str] = mapped_column(String(8), nullable=False, server_default="desk")
+    #: ``{"funnel": {...}, "signals": n, "scan_only": n, "gate": "OPEN"}`` — the same funnel the
+    #: nightly writes, so the two are read the same way.
+    detail: Mapped[JsonObject | None] = mapped_column(JSONB)
+    error: Mapped[str | None] = mapped_column(Text)
+    #: The broker's message id once published. A row without one has not been picked up yet, and
+    #: the sweep is what publishes it — which is how the desk's button works with no Celery.
+    task_id: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[CreatedAt]

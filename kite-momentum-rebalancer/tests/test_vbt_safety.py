@@ -274,10 +274,19 @@ class TestOnlyAConfirmedRequestCanProduceAnOrder:
         assert "confirm" in signature.parameters
         assert "plan_id" in signature.parameters
 
-    def test_the_desk_router_exposes_one_post_and_it_is_the_execute(self) -> None:
+    def test_the_desk_router_exposes_two_posts_and_only_one_can_order(self) -> None:
+        """VB12 added `/vbt/rescan`. Two POSTs, and the count is not the property — the property
+        is that exactly one of them reaches `execute_line`, which is the only doorway to the
+        gateway. The other writes one `vb_scan_run` row and hands off to a worker with no order
+        path at all (`test_vbt_desk.py::test_the_rescan_route_cannot_reach_an_order`)."""
         source = inspect.getsource(D)
-        assert source.count("@router.post(") == 1
+        assert source.count("@router.post(") == 2
         assert '@router.post("/vbt/execute"' in source
+        assert '@router.post("/vbt/rescan"' in source
+        # Over code, not prose (the docstring names `execute_line` when explaining that it is
+        # the single doorway), and matching the **call** rather than the bare name — the handler
+        # is itself called `vbt_execute_line`, so a substring count finds two and means one.
+        assert _strip_prose(source).count("_execute.execute_line(") == 1
 
     def test_no_get_on_the_desk_page_can_execute(self) -> None:
         """A confirm behind a GET is a confirm a link preview can fire."""

@@ -224,6 +224,46 @@ re-run never displaces the last good number.
 
 ---
 
+## 8a. `vb_scan_run` — one row per press of **Re-detect** (VB12)
+
+`BigIntPk`. Added 11 Sep 2026, after the run, when the question "what about the scan-now feature?"
+was asked and the honest answer was that this sleeve had no button and needed a different one.
+
+**It is deliberately narrower than the swing book's `sw_scan_run`.** That table carries a
+`provisional` flag because its scan can run *inside* a session against live quotes. This one
+cannot and should not: three of VBT-1's five Chartink lines read the day's volume against its
+50-day average, the close's position inside the day's range and the day's change — none of which
+means anything before 15:30 — and the entry limit **is** the signal bar's close, so an intraday
+hit would name a price that does not exist yet. There is no `provisional` column here because
+there is nothing provisional to record. The row asks for one thing: **re-detect a session that
+has already closed.**
+
+| Column | Meaning |
+|---|---|
+| `user_id` | Track C §6, and the detection is written for that user |
+| `requested_at` | when the button was pressed; the two refusals are measured from it |
+| `started_at`, `finished_at` | the worker's claim and its finish. `finished_at` is set on failure too |
+| `session_date` | which published session was re-detected. **Null until the worker decides** — the desk asks for "the latest" and only the worker reads the exchange calendar |
+| `status` | `QUEUED` → `RUNNING` → `DONE` \| `FAILED` |
+| `source` | `desk` (the button) or `cli` |
+| `detail` | the funnel, the same shape the nightly step writes, so both are read the same way |
+| `error` | the reason on `FAILED`, because the button has to be able to show what went wrong |
+| `task_id` | the broker's message id once published. **A row without one is what the sweep looks for** — the desk has no Celery client, so its button writes a row and `baskfy.vbt.rescan_sweep` publishes it a minute later |
+
+Index `(user_id, requested_at)`: the page's one query is this user's newest row.
+
+**Two refusals, both answered from this table** rather than from a cache, so the rule holds on a
+box with no Redis and is testable against the database alone: a `QUEUED`/`RUNNING` row younger
+than ten minutes is *one in flight* (a second press gets its id back), and a request inside sixty
+seconds of the newest row is *too soon*. Past ten minutes a `RUNNING` row is a worker that died,
+and a new request is allowed — one crash must not cost an afternoon.
+
+**It cannot place, size or cancel anything.** It writes `vb_signal_daily` and `vb_breadth_daily`
+through the same `run_detect_vbt` the nightly step calls, and detection is idempotent per
+`(user_id, date)` (house rule 7), so pressing twice overwrites the same rows and moves no counter.
+
+---
+
 ## 9. What the worker reads to compute a session
 
 ```

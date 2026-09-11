@@ -80,6 +80,10 @@ PRODUCER_TASK_ROUTES: dict[str, dict[str, str]] = {
     # their queue from their Beat entries' `options`, and `baskfy.vbt.check_*` routes to
     # `default` on the worker, which is this table's default too — so both sides already agree.
     "baskfy.vbt.backtest": {"queue": "compute"},
+    # VB12: the desk's re-detect and the sweep that publishes it. Mirrored for the anti-drift
+    # test's sake; the API publishes neither.
+    "baskfy.vbt.rescan": {"queue": "compute"},
+    "baskfy.vbt.rescan_sweep": {"queue": "default"},
 }
 
 #: The queue an unrouted name lands on. Must match the worker's ``task_default_queue``, which is

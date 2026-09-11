@@ -505,7 +505,26 @@ async def run_detect_vbt(
 
     kept, calendar = drop_thin_sessions(bars, config)
     thin = trade_date in calendar.dropped
-    if thin or trade_date not in calendar.sessions:
+    if not thin and trade_date not in calendar.sessions:
+        # The bars do not reach this date at all — an unpublished session, or a date in the
+        # future. **Write nothing.** `03` §3 has this table record what the sleeve *saw* on a
+        # session, and a row saying "0 of 0 names were above their average, gate SHUT" for a day
+        # that has not closed is a false record in the table the evening job reads as its
+        # calendar. A thin session below is different: it happened, it was thin, and the record
+        # that the sleeve did not trade it is worth keeping.
+        #
+        # Found on the box, 11 Sep 2026: VB13.4's bug asked for today at 14:14 and left exactly
+        # such a row behind. The nightly chain cannot reach here — it only ever runs the
+        # published date — but `make vbt DATE=<anything>` can.
+        outcome.status = StepStatus.SKIPPED
+        outcome.note(
+            skipped_reason=f"{trade_date} is not a session the bars know about",
+            instruments=len(universe),
+            bars=bars.height,
+        )
+        return 0
+
+    if thin:
         funnel = VbtFunnel(
             instruments=len(universe),
             bars=bars.height,
@@ -532,8 +551,6 @@ async def run_detect_vbt(
                 "a thin session — only "
                 f"{calendar.counts.get(trade_date, 0)} names printed, so 04 §2.1 removed it from "
                 "the rolling calendar and the sleeve did not trade it"
-                if thin
-                else f"{trade_date} is not a session the bars know about"
             ),
             **funnel.as_detail(),
         )

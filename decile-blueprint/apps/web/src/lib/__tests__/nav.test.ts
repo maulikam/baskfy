@@ -92,12 +92,16 @@ describe("the primary consumer IA", () => {
        sixth primary destination, because HOME1 fixes the primary chrome at five. */
     /* VB8 added the third: `docs/vbt/05` §1 puts the volume-breakout hub inside Build for the
        same reason the swing hub is there — HOME1 fixes the primary chrome at five. */
+    /* TW8 added the fourth, for the same reason again (`docs/twt/05` §1). The list is asserted
+       in full rather than by `toContain` deliberately: a sixth strategy tab inside Build is an
+       IA decision and it should have to change a test that says so out loud. */
     expect(SECTION_TABS.build.map((t) => t.label)).toEqual([
       "Screens",
       "Backtests",
       "Create",
       "Swing",
       "Volume breakout",
+      "Three weeks tight",
     ]);
     /* `docs/vbt/05` §2's "Today | Book | Backtest". The middle tab reads **Positions**, matching
        the swing hub's and PORTFOLIO_REDESIGN.md §8's retirement of "book" from reader-facing
@@ -112,6 +116,13 @@ describe("the primary consumer IA", () => {
       "/vbt/book",
       "/vbt/backtest",
     ]);
+    /* `docs/twt/05` §1's hub is two tabs: the open positions sit on the hub itself, so there is
+       no third. TW8, DECISIONS-TW TW8.6. */
+    expect(SECTION_TABS.twt.map((t) => t.label)).toEqual(["Today", "Backtest"]);
+    expect(SECTION_TABS.twt.map((t) => t.href)).toEqual(["/twt", "/twt/backtest"]);
+    for (const tab of SECTION_TABS.twt) {
+      expect(PAGES[tab.href as keyof typeof PAGES], `${tab.href} has no page record`).toBeDefined();
+    }
     expect(SECTION_TABS.swing.map((t) => t.label)).toEqual([
       "Setups",
       "Watchlist",

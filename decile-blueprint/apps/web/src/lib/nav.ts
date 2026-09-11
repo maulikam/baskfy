@@ -185,6 +185,9 @@ export const SECTION_TABS = {
        new hub. It is read-only here — a volume-breakout line becomes an order in the desk
        console and nowhere else (`docs/vbt/02` Track C §4). */
     { href: "/vbt" as Route, label: "Volume breakout" },
+    /* `docs/twt/05` §1: the fourth allocation, by the same argument as the third. Build is where
+       the strategies live, and HOME1 fixes the primary chrome at five destinations. */
+    { href: "/twt" as Route, label: "Three weeks tight" },
   ],
   /*
     The swing hub (SW4, `docs/swing/05` §2): "Setups | Watchlist | Market | Positions | Journal".
@@ -211,6 +214,16 @@ export const SECTION_TABS = {
        documented `/vbt/book` path. DECISIONS-VB VB8.5. */
     { href: "/vbt/book" as Route, label: "Positions" },
     { href: "/vbt/backtest" as Route, label: "Backtest" },
+  ],
+  /*
+    The three-weeks-tight hub (TW8, `docs/twt/05` §1 and §3): "Today | Backtest". Two tabs, not
+    three — `05` §1 puts the open positions on the hub itself rather than on a page of their own,
+    because this strategy holds about ten lines for about a year each and a second page to hold
+    ten rows is a click in front of the thing the reader came for.
+  */
+  twt: [
+    { href: "/twt" as Route, label: "Today" },
+    { href: "/twt/backtest" as Route, label: "Backtest" },
   ],
   /*
     PORTFOLIO_REDESIGN.md §2, in order. Overview first because it is the default landing tab —
@@ -253,6 +266,7 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   build: "Build",
   swing: "Build",
   vbt: "Build",
+  twt: "Build",
   portfolio: "Portfolio",
   me: "Me",
 };
@@ -318,6 +332,8 @@ export function primarySection(pathname: string): SectionKey | null {
   // `docs/vbt/05` §1: the third sleeve, by the same argument. It lights Build too, and for the
   // same reason — the primary nav stays at five.
   if (pathname === "/vbt" || pathname.startsWith("/vbt/")) return "vbt";
+  // `docs/twt/05` §1: the fourth sleeve, by the same argument again.
+  if (pathname === "/twt" || pathname.startsWith("/twt/")) return "twt";
   /* `/portfolios` (plural, the desk's rebalance sub-pages) must not match here — hence the exact
      compare and the trailing slash, never a bare `startsWith("/portfolio")`. */
   if (pathname === "/portfolio" || pathname.startsWith("/portfolio/")) return "portfolio";

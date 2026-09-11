@@ -104,6 +104,18 @@ export const PAGES = {
     title: "Backtest · Volume breakout",
     blurb: "What the rule did over nine years, with the caveats before the numbers.",
   },
+  /* —— The three-weeks-tight hub (TW8, docs/twt/05 §1). Read-only, like the other two sleeve
+     hubs and for the same reason: a plan line becomes an order in the desk console, on a click,
+     and nowhere else (docs/twt/02 Track C §4). "Three weeks tight" is the pattern's own name —
+     O'Neil's, not this product's coinage — so it is what a reader is shown. —— */
+  "/twt": {
+    title: "Three weeks tight",
+    blurb: "Which names have gone quiet after a run, and where every open stop is sitting.",
+  },
+  "/twt/backtest": {
+    title: "Backtest · Three weeks tight",
+    blurb: "What the rule did over nine years, with the conditions on it read first.",
+  },
   /* The settings live under Me, not the hub (docs/swing/05 §2): they are about the person's
      money and limits, not today's tape. */
   "/me/swing": {

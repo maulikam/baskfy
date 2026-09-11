@@ -37,6 +37,22 @@ class ProblemType(StrEnum):
     #: returning HTML or a bare 500 body from a service that promises problem+json everywhere
     #: would be worse than naming it.
     INTERNAL_ERROR = "internal-error"
+    #: TW3, not in docs/07's table, and the mirror image of the one below. Every other bounded
+    #: setting in this repository is capped above, because the risk being managed is somebody
+    #: making a position bigger than the book can carry. `tw_config.trail_pct` is not: the trail
+    #: is TWT-1's only exit and the measured cliff is in the *tightening* direction (20% -> 15%
+    #: took the research's CAGR from 20.9% to 9.6% and its drawdown from -24.7% to -43%), so its
+    #: bound is a FLOOR. It is a separate type rather than a reused one because a refusal typed
+    #: "above-ceiling" for a value that was too small is exactly the confusion DECISIONS-TW TW0.5
+    #: exists to prevent.
+    #:
+    #: IT SITS BEFORE `SETTING_ABOVE_CEILING`, AND THE ORDER IS LOAD-BEARING. `_DOCUMENTED_ERRORS`
+    #: in `app.py` builds one OpenAPI response per *status*, so several types sharing 422 collapse
+    #: to whichever is declared last — which is how 422 came to be described as the ceiling's
+    #: refusal rather than `NO_TRADING_DAY`'s. Declaring this one after it would silently rewrite
+    #: the 422 description on every route in the published contract and in the generated
+    #: TypeScript client. Adding a 422 type? Put it above this line.
+    SETTING_BELOW_FLOOR = "setting-below-floor"
     #: SW2, also not in docs/07's table. A settings write that exceeds a server-side ceiling is
     #: not "your JSON is wrong" (400) — the payload is well formed and the value is a number a
     #: person can legitimately want. It is the M4.1 boundary refusing, and the caller needs the
@@ -62,6 +78,7 @@ STATUS_FOR: Final[Mapping[ProblemType, int]] = {
     ProblemType.RATE_LIMITED: 429,
     ProblemType.PIPELINE_DEGRADED: 503,
     ProblemType.INTERNAL_ERROR: 500,
+    ProblemType.SETTING_BELOW_FLOOR: 422,
     ProblemType.SETTING_ABOVE_CEILING: 422,
     ProblemType.SCAN_IN_FLIGHT: 409,
 }
@@ -76,6 +93,7 @@ TITLE_FOR: Final[Mapping[ProblemType, str]] = {
     ProblemType.RATE_LIMITED: "Too many requests",
     ProblemType.PIPELINE_DEGRADED: "Data pipeline is degraded",
     ProblemType.INTERNAL_ERROR: "Internal server error",
+    ProblemType.SETTING_BELOW_FLOOR: "Setting is below the server's floor",
     ProblemType.SETTING_ABOVE_CEILING: "Setting exceeds the server's ceiling",
     ProblemType.SCAN_IN_FLIGHT: "A scan is already in flight",
 }
@@ -205,5 +223,28 @@ def setting_above_ceiling(*, field: str, value: object, ceiling: object, env_var
         field=field,
         requested=str(value),
         ceiling=str(ceiling),
+        env_var=env_var,
+    )
+
+
+def setting_below_floor(*, field: str, value: object, floor: object, env_var: str) -> Problem:
+    """TW3 / DECISIONS-TW TW0.5: a user setting may not fall below its server-side minimum.
+
+    The mirror of :func:`setting_above_ceiling`, and it exists because one setting in this
+    repository is bounded in the other direction. ``tw_config.trail_pct`` is the three-weeks-tight
+    sleeve's **only** exit, and tightening it is the failure mode rather than widening it, so the
+    bound that matters is a floor.
+
+    Like the ceiling's refusal, this one names the limit and the environment variable that sets
+    it. A refusal that says only "too small" makes the person bisect their way to the limit and
+    tells them nothing about *who* set it.
+    """
+    return Problem(
+        ProblemType.SETTING_BELOW_FLOOR,
+        f"{field} may not be below {floor}; {value} was requested. "
+        f"This floor is server configuration ({env_var}) and is not editable here.",
+        field=field,
+        requested=str(value),
+        floor=str(floor),
         env_var=env_var,
     )

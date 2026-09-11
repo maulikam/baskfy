@@ -94,6 +94,25 @@ class WorkerSettings(BaseSettings):
     vbt_max_position_pct_max: float = Field(default=15.0, gt=0, le=100)
     vbt_stop_pct_max: float = Field(default=15.0, gt=0, le=50)
 
+    # --- The three-weeks-tight sleeve (docs/twt) -----------------------------
+    #
+    # The worker reads both flags at startup, not per task (``docs/twt/02``: "A flag is read once
+    # per process at startup and never from a form"). ``twt_execution_enabled`` appears here even
+    # though the worker places nothing, because the evening job writes the plan a confirm will
+    # execute and has to know whether that confirm would be real: it is what decides the
+    # session's ``mode``, whether the first-live halving applies, and whether the DRY_RUN counter
+    # moves.
+    twt_execution_enabled: bool = False
+    #: Detection moves no money, so this is on. Set it false to silence the nightly step and the
+    #: 21:00 retry without removing them.
+    twt_nightly_enabled: bool = True
+    twt_max_open_positions_max: int = Field(default=15, gt=0, le=30)
+    twt_max_position_pct_max: float = Field(default=15.00, gt=0, le=100)
+    twt_stop_pct_max: float = Field(default=25.00, gt=0, le=50)
+    #: A FLOOR, not a ceiling: ``tw_config.trail_pct`` may not fall below it (DECISIONS-TW
+    #: TW0.5). The API mirrors the same four bounds.
+    twt_trail_pct_min: float = Field(default=18.00, gt=0, le=100)
+
     # --- SW18: the 08:45 Kite login nudge (docs/swing/DECISIONS-SW SW18.1) ------
     #
     # Kite kills the access token every morning and nothing on this box may hold a Zerodha

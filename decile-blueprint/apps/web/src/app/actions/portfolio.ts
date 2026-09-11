@@ -18,7 +18,11 @@ import type { PortfolioDraft } from "@/lib/portfolio/organize";
  * work and do it again.
  */
 export async function createPortfolioAction(draft: PortfolioDraft): Promise<CreateResult> {
-  if (!draft.name.trim()) {
+  // The name is required to CREATE a portfolio and meaningless when adding to one that exists —
+  // it already has a name, and the EXISTING flow never asks for one. Guarding unconditionally
+  // refused every add before it reached the route, which is why the button did nothing at all
+  // (11 Sep 2026).
+  if (draft.start !== "EXISTING" && !draft.name.trim()) {
     return { ok: false, reason: "Give the portfolio a name first." };
   }
   const result = await createPortfolio(draft);

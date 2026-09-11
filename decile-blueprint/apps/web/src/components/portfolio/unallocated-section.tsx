@@ -118,6 +118,13 @@ export function UnallocatedSection({
         setSeed(null);
       }}
       onCreate={onCreate}
+      // Without this the flow stayed open on a SUCCESSFUL write, showing the same selection it
+      // had just filed — indistinguishable from nothing having happened. The server action
+      // revalidates these paths, so closing is enough to show the new state.
+      onCreated={() => {
+        setOpen(false);
+        setSeed(null);
+      }}
     />
   ) : null;
 

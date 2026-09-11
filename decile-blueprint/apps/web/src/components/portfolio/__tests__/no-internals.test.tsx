@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { CommandCenterScreen } from "@/components/portfolio/command/command-center-screen";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Unallocated } from "@/lib/portfolio/organize";
-import type { Overview } from "@/lib/portfolio/overview";
+import { MONITORING_NOTE, type Overview } from "@/lib/portfolio/overview";
 
 /**
  * Nothing internal reaches a reader's eyes.
@@ -67,14 +67,23 @@ function emptyOverview(): Overview {
       xirr: { label: "XIRR" },
       secondary: {
         broker_count: 0,
+        cash: "0",
+        dividends: "0",
         realised_pnl: { label: "realised" },
         unrealised_pnl: { label: "unrealised" },
       },
+    },
+    chart: {
+      pending_reconciliation: false,
+      range: "1Y",
+      total_return: { label: "Total return", since: null },
     },
     prices_label: "No closing prices yet",
     holdings_synced_label: "Holdings not synced yet",
     portfolios: [],
     monitoring_views: [],
+    monitoring_excluded_note: MONITORING_NOTE,
+    open_reconciliation_count: 0,
     sync_status: [],
     attention: [],
     unallocated: EMPTY_PILE,

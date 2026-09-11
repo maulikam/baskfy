@@ -16,35 +16,35 @@ fully checked **with evidence**, its tests are green, and its commit exists.
 
 ---
 
-- [ ] R0: TW0 — the docs pack. `docs/twt/` exists in the shape of `docs/swing/` / `docs/vbt/`.
+- [x] R0: TW0 — the docs pack. `docs/twt/` exists in the shape of `docs/swing/` / `docs/vbt/`.
   CHECK: node /Users/maulikdave/.claude/skills/unlazy/scripts/gate-check.mjs gates/twt-0.md 2>&1 | tail -3
   EXPECT: /0 unchecked/
-  EVIDENCE: pending
+  EVIDENCE: 9/10, one scoped — the commit also carries `research/tight-close/`, which was untracked and which the golden fixtures derive from.
 
-- [ ] R1: TW1 — the pure core, `baskfy_core.twt`, law 1 asserted.
+- [x] R1: TW1 — the pure core, `baskfy_core.twt`, law 1 asserted.
   CHECK: node /Users/maulikdave/.claude/skills/unlazy/scripts/gate-check.mjs gates/twt-1.md 2>&1 | tail -3
   EXPECT: /0 unchecked/
-  EVIDENCE: pending
+  EVIDENCE: 12/12. Cross-checked out of band against the research's own scanner: **9,600 cells, 0 mismatches**.
 
-- [ ] R2: TW2 — the goldens: the research's 164 trades and its metrics reproduced or explained.
+- [x] R2: TW2 — the goldens: the research's 164 trades and its metrics reproduced or explained.
   CHECK: node /Users/maulikdave/.claude/skills/unlazy/scripts/gate-check.mjs gates/twt-2.md 2>&1 | tail -3
   EXPECT: /0 unchecked/
-  EVIDENCE: pending
+  EVIDENCE: 15/15 (plus the harness's own 15/15). **All 164 golden trades matched, zero missing, zero extra**; every remaining difference is the study's float64 rounding, sized in ulps.
 
-- [ ] R3: TW3 — the `tw_` schema and its migration.
+- [x] R3: TW3 — the `tw_` schema and its migration.
   CHECK: node /Users/maulikdave/.claude/skills/unlazy/scripts/gate-check.mjs gates/twt-3.md 2>&1 | tail -3
   EXPECT: /0 unchecked/
-  EVIDENCE: pending
+  EVIDENCE: 10/10. Downgrade round-tripped for real: 193 columns, 103 constraints, 28 indexes, empty diff.
 
-- [ ] R4: TW4 — the nightly job, the published-session clock, tomorrow's trailing trigger.
+- [x] R4: TW4 — the nightly job, the published-session clock, tomorrow's trailing trigger.
   CHECK: node /Users/maulikdave/.claude/skills/unlazy/scripts/gate-check.mjs gates/twt-4.md 2>&1 | tail -3
   EXPECT: /0 unchecked/
-  EVIDENCE: pending
+  EVIDENCE: 10/10. The look-ahead test shifts the panel one session and requires every gate, signal and trigger to move by exactly one.
 
-- [ ] R5: TW5 — the sleeve's own cash and book, the half-size counter.
+- [x] R5: TW5 — the sleeve's own cash and book, the half-size counter.
   CHECK: node /Users/maulikdave/.claude/skills/unlazy/scripts/gate-check.mjs gates/twt-5.md 2>&1 | tail -3
   EXPECT: /0 unchecked/
-  EVIDENCE: pending
+  EVIDENCE: 8/8, 33 db-marked tests run against a live Postgres rather than skipped.
 
 - [ ] R6: TW6 — the desk plan, `/twt/execute`, the GTT ratchet, the 15:15 sweep.
   CHECK: node /Users/maulikdave/.claude/skills/unlazy/scripts/gate-check.mjs gates/twt-6.md 2>&1 | tail -3
@@ -56,10 +56,10 @@ fully checked **with evidence**, its tests are green, and its commit exists.
   EXPECT: /0 unchecked/
   EVIDENCE: pending
 
-- [ ] R8: TW8 — the desk page and the read-only web page.
+- [x] R8: TW8 — the desk page and the read-only web page.
   CHECK: node /Users/maulikdave/.claude/skills/unlazy/scripts/gate-check.mjs gates/twt-8.md 2>&1 | tail -3
   EXPECT: /0 unchecked/
-  EVIDENCE: pending
+  EVIDENCE: 9/9, built against the contract ahead of its data; both reads answer null so every page renders its empty state.
 
 - [ ] R9: TW9 — the backtest on the page, from the plant's bars, drift flagged.
   CHECK: node /Users/maulikdave/.claude/skills/unlazy/scripts/gate-check.mjs gates/twt-9.md 2>&1 | tail -3

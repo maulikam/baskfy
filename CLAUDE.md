@@ -162,9 +162,21 @@ M3's acceptance criterion.
    diverged from the spec.
 5. **No look-ahead, ever.** Anything referencing a past date uses point-in-time index membership
    and point-in-time factor rows. Asserted by tests, not by discipline.
-   ⚠️ **This rule is currently violated and the violation is known:** `apply_adjustments` applies
-   corporate actions with a *future* ex-date (`decile-blueprint/docs/DECISIONS.md` §21.9). It is
-   M10's to fix. Do not add a second one.
+   ⚠️ **This warning was stale and is rewritten (11 Sep 2026).** It said the rule "is currently
+   violated" because `apply_adjustments` applies actions with a future ex-date, and that M10 would
+   fix it. **M10 ran** (`c4c424f`) and added the fix: `reprocess_instrument` takes an `as_of` that
+   bounds actions to `ex_date <= as_of`.
+   What is true now is narrower and worth stating exactly, because reading the old wording as a
+   one-line bug leads straight to "fixing" a deliberate decision. `ohlcv_daily.close` is an **"as
+   of today" series** on purpose: the nightly passes no `as_of` and gets every action known now,
+   which is what today's screen should be served — the function's own docstring says so. §21.9
+   **declined to settle** whether to store one adjusted series per as-of date, and that is still
+   open.
+   So the obligation sits with the **reader**, not the writer. Anything reconstructing a past date
+   — a parity harness, a point-in-time export — passes the `as_of` it is reproducing. A backtest
+   cannot, today, so `BacktestResult.adjustment_coverage` makes it say so instead of printing a
+   confident number in silence. **Do not "fix" the nightly's unbounded call.** Do not add a second
+   look-ahead.
 6. **Adjusted by default.** `close` is adjusted; `close_raw` is the exchange print. Factors read
    `close`; display uses `close_raw` where the user expects a real price.
    ⚠️ Also open: adjusting `open`/`high`/`low` is destructive because no raw counterpart is
